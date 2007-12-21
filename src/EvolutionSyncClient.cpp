@@ -623,13 +623,7 @@ void EvolutionSyncClient::fatalError(void *object, const char *error)
     exit(1);
 }
 
-/*
- * There have been segfaults inside glib in the background
- * thread which ran the second event loop. Disabled it again,
- * even though the synchronous EDS API calls will block then
- * when EDS dies.
- */
-#if 0 && defined(HAVE_GLIB) && defined(HAVE_EDS)
+#if defined(HAVE_GLIB) && defined(HAVE_EDS)
 # define RUN_GLIB_LOOP
 #endif
 
