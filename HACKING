@@ -130,17 +130,18 @@ to add more for your system.
 Building a Release
 ------------------
 
-- increase version number in configure.in/AM_INIT_AUTOMAKE
+- increase version number in configure-pre.in/AM_INIT_AUTOMAKE
 - ensure files were updated:
   ./ChangeLog ./NEWS debian/changelog
+
+  To update the ChangeLog file use "./svn2cl.sh". It invokes
+  svn2cl with the right options.
 
   For prereleases use "old version"+"new prerelease"-1 as
   package version. That ensures that package versions are
   higher than the old release, but lower than the final
-  release.
-
-  To update the ChangeLog file use "./svn2cl.sh". It invokes
-  svn2cl with the right options.
+  release. Avoid hyphens as part of the release names, i.e.
+  use "0.7+0.8beta1" instead of "0.7+0.8-beta1".
 
 - make distcheck
 - compile binary .tar.gz packages for different Evolution versions;
@@ -204,6 +205,7 @@ Compiling for Mac OS X
   <path>/configure --with-sync4j-src=<path> \
               --enable-addressbook \
               SYNCEVOLUTION_CXXFLAGS="-Wall -Werror -Wno-unknown-pragmas" \
+              LDFLAGS="-framework Addressbook -framework CoreServices" \
               CXXFLAGS=-g \
               CFLAGS=-g
 
@@ -213,7 +215,8 @@ Compiling for Mac OS X
   ./configure --enable-addressbook \
               CXXFLAGS="-O -g -arch i386 -arch ppc" \
               CFLAGS="-O -g -arch i386 -arch ppc" \
-              LDFLAGS="-arch i386 -arch ppc" --disable-dependency-tracking
+              LDFLAGS="-arch i386 -arch ppc -framework Addressbook -framework CoreServices" \
+              --disable-dependency-tracking
   make BINSUFFIX=mac-os-x distbin
 
   Fine-grained memory checking:
