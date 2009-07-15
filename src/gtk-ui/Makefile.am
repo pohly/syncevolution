@@ -11,7 +11,7 @@ glade_DATA = \
 themercdir = $(datadir)/syncevolution/
 themerc_DATA = \
 	close.png close_hover.png settings.png settings_hover.png \
-	sync-generic.png \
+	sync-generic.png throbber-medium.gif \
 	sync-ui.rc
 
 desktopdir = $(datadir)/applications

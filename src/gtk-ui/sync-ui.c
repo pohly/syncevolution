@@ -17,26 +17,6 @@
  * 02110-1301  USA
  */
 
-/*
- * TODO
- * 
- * * redesign main window? (talk with nick/patrick). Issues:
-      - sync types (other than two-way) should maybe be available somewhere 
-        else than main window?
-      - showing usable statistic
-      - sync errors can flood the ui... need to dicuss with nick.
-        Possible solution: show only a few errors, but have a linkbutton to open a
-        separate error window
- * * get history data from syncevolution
- * * backup/restore ? 
- * * GTK styling missing:
- *    - current implementation of MuxFrame results in a slight flicker on window open
- * * notes on dbus API:
- *    - a more cleaner solution would be to have StartSync return a 
- *      dbus path that could be used to connect to signals related to that specific
- *      sync
- */
-
 
 #include <stdlib.h>
 #include <math.h>
@@ -147,6 +127,7 @@ typedef struct app_data {
     GtkWidget *offline_label;
     GtkWidget *progress;
     GtkWidget *sync_status_label;
+    GtkWidget *sync_throbber;
     GtkWidget *sync_btn;
     GtkWidget *edit_service_btn;
     GtkWidget *change_service_btn;
@@ -854,6 +835,7 @@ set_app_state (app_data *data, app_state state)
         gtk_widget_hide (data->server_failure_box);
         gtk_widget_hide (data->no_server_box);
         gtk_label_set_text (GTK_LABEL (data->sync_status_label), "");
+        gtk_widget_hide (data->sync_throbber);
 
         gtk_widget_set_sensitive (data->main_frame, TRUE);
         gtk_widget_set_sensitive (data->sync_btn, FALSE);
@@ -865,6 +847,7 @@ set_app_state (app_data *data, app_state state)
         gtk_widget_hide (data->server_failure_box);
         gtk_widget_show (data->no_server_box);
         gtk_label_set_text (GTK_LABEL (data->sync_status_label), "");
+        gtk_widget_hide (data->sync_throbber);
 
         gtk_widget_set_sensitive (data->main_frame, TRUE);
         gtk_widget_set_sensitive (data->sync_btn, FALSE);
@@ -877,6 +860,7 @@ set_app_state (app_data *data, app_state state)
         gtk_widget_hide (data->no_server_box);
         gtk_widget_show (data->server_failure_box);
         gtk_label_set_text (GTK_LABEL (data->sync_status_label), "");
+        gtk_widget_hide (data->sync_throbber);
 
         gtk_widget_set_sensitive (data->main_frame, FALSE);
         gtk_widget_set_sensitive (data->sync_btn, FALSE);
@@ -899,6 +883,7 @@ set_app_state (app_data *data, app_state state)
             gtk_button_set_label (GTK_BUTTON (data->sync_btn), _("Sync again"));
         else
             gtk_button_set_label (GTK_BUTTON (data->sync_btn), _("Sync now"));
+        gtk_widget_hide (data->sync_throbber);
         gtk_window_set_focus (GTK_WINDOW (data->sync_win), data->sync_btn);
 
         data->syncing = FALSE;
@@ -908,6 +893,7 @@ set_app_state (app_data *data, app_state state)
         clear_error_info (data);
         gtk_widget_show (data->progress);
         gtk_label_set_text (GTK_LABEL (data->sync_status_label), _("Syncing"));
+        gtk_widget_show (data->sync_throbber);
         gtk_widget_set_sensitive (data->main_frame, FALSE);
         gtk_widget_set_sensitive (data->change_service_btn, FALSE);
 
@@ -1020,6 +1006,7 @@ init_ui (app_data *data)
     GError *error = NULL;
     GObject *radio;
     GtkWidget *frame, *service_save_btn, *setup_service_btn , *image;
+    GdkPixbufAnimation *anim;
 
     gtk_rc_parse (THEMEDIR "sync-ui.rc");
 
@@ -1052,6 +1039,13 @@ init_ui (app_data *data)
     data->change_service_btn = GTK_WIDGET (gtk_builder_get_object (builder, "change_service_btn"));
     data->sync_btn = GTK_WIDGET (gtk_builder_get_object (builder, "sync_btn"));
     data->sync_status_label = GTK_WIDGET (gtk_builder_get_object (builder, "sync_status_label"));
+
+    data->sync_throbber = GTK_WIDGET (gtk_builder_get_object (builder, "sync_throbber"));
+    anim = gdk_pixbuf_animation_new_from_file (THEMEDIR "throbber-medium.gif", NULL);
+    if (anim) {
+        gtk_image_set_from_animation (GTK_IMAGE (data->sync_throbber), anim);
+        g_object_unref (anim);
+    }
 
     data->server_label = GTK_WIDGET (gtk_builder_get_object (builder, "sync_service_label"));
     data->last_synced_label = GTK_WIDGET (gtk_builder_get_object (builder, "last_synced_label"));
@@ -1985,6 +1979,7 @@ server_shutdown_cb (SyncevoService *service,
 
         gtk_label_set_text (GTK_LABEL (data->sync_status_label), 
                             _("Sync Failed"));
+        gtk_widget_hide (data->sync_throbber);
         set_sync_progress (data, 1.0 , "");
         set_app_state (data, SYNC_UI_STATE_SERVER_OK);
     }
@@ -2028,14 +2023,17 @@ sync_progress_cb (SyncevoService *service,
             data->synced_this_session = TRUE;
             gtk_label_set_text (GTK_LABEL (data->sync_status_label), 
                                 _("Sync complete"));
+            gtk_widget_hide (data->sync_throbber);
             break;
         case LOCERR_USERABORT:
         case LOCERR_USERSUSPEND:
             gtk_label_set_text (GTK_LABEL (data->sync_status_label), 
                                 _("Sync canceled"));
+            gtk_widget_hide (data->sync_throbber);
         default:
             gtk_label_set_text (GTK_LABEL (data->sync_status_label), 
                                 _("Sync Failed"));
+            gtk_widget_hide (data->sync_throbber);
         }
         /* get sync report */
         refresh_statistics (data);
