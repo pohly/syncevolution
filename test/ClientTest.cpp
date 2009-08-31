@@ -190,6 +190,11 @@ void LocalTests::addTests() {
                 ADD_TEST(LocalTests, testLinkedItemsInsertBothUpdateChild);
                 ADD_TEST(LocalTests, testLinkedItemsInsertBothUpdateParent);
             }
+
+          if(config.atomicModification) {
+              ADD_TEST(LocalTests, testAtomicUpdate);
+              ADD_TEST(LocalTests, testAtomicDelete);
+          }
         }
     }
 }
@@ -735,6 +740,44 @@ void LocalTests::testManyChanges() {
     CPPUNIT_ASSERT_NO_THROW(copy.reset());
 }
 
+void LocalTests::testAtomicUpdate () {
+    std::auto_ptr<TestingSyncSource> sourceA, sourceB;
+    CPPUNIT_ASSERT(config.createSourceA);
+    CPPUNIT_ASSERT(config.insertItem);
+    std::string uid = insert(createSourceA, config.insertItem, config.itemType);
+    
+    SOURCE_ASSERT_NO_FAILURE(sourceA.get(), sourceA.reset(createSourceA()));
+    SOURCE_ASSERT_NO_FAILURE(sourceA.get(), sourceA->open());
+    SOURCE_ASSERT_NO_FAILURE(sourceA.get(), sourceA->beginSync("",""));
+    SOURCE_ASSERT_NO_FAILURE(sourceB.get(), sourceB.reset(createSourceA()));
+    update(createSourceA, config.updateItem, uid);
+    //do not end sync, i.e not flush the revision information
+    SOURCE_ASSERT_NO_FAILURE(sourceB.get(), sourceB->open());
+    //avoid call beginSync, because during change detecting the revision will
+    //because changes from the revision read from database.
+    //this update should fail when atomic update is checked
+    SOURCE_ASSERT_FAILURE(sourceB.get(), sourceB->insertItemRaw(uid, config.updateItem));
+}
+
+void LocalTests::testAtomicDelete () {
+    std::auto_ptr<TestingSyncSource> sourceA, sourceB;
+    CPPUNIT_ASSERT(config.createSourceA);
+    CPPUNIT_ASSERT(config.insertItem);
+    //deleteAll(createSourceA);
+    std::string uid = insert(createSourceA, config.insertItem, config.itemType);
+    
+    SOURCE_ASSERT_NO_FAILURE(sourceA.get(), sourceA.reset(createSourceA()));
+    SOURCE_ASSERT_NO_FAILURE(sourceA.get(), sourceA->open());
+    SOURCE_ASSERT_NO_FAILURE(sourceA.get(), sourceA->beginSync("",""));
+    SOURCE_ASSERT_NO_FAILURE(sourceB.get(), sourceB.reset(createSourceA()));
+    update(createSourceA, config.updateItem, uid);
+    //do not end sync, i.e not flush the revision information
+    SOURCE_ASSERT_NO_FAILURE(sourceB.get(), sourceB->open());
+    //avoid call beginSync, because during change detecting the revision will
+    //because changes from the revision read from database.
+    //this update should fail when atomic update is checked
+    SOURCE_ASSERT_FAILURE(sourceB.get(), sourceB->deleteItem(uid));
+}
 template<class T, class V> int countEqual(const T &container,
                                           const V &value) {
     return count(container.begin(),
@@ -1515,6 +1558,11 @@ void SyncTests::addTests() {
             addTest(FilterTest(resendTests));
         }
 
+        if (config.atomicModification) {
+                    ADD_TEST(SyncTests, testAtomicUpdate);
+                    ADD_TEST(SyncTests, testAtomicDelete);
+        }
+
     }
 }
 
@@ -2212,6 +2260,92 @@ void SyncTests::testOneWayFromClient() {
             CPPUNIT_ASSERT_NO_THROW(source.reset());
         }
     }
+}
+
+/**
+ * Simulates a server side update and client side update conflict
+ */
+void SyncTests::testAtomicUpdate() {
+    CPPUNIT_ASSERT(sources.begin() != sources.end());
+    CPPUNIT_ASSERT(sources.begin()->second->config.updateItem);
+
+    // setup client A, B and server so that they all contain the same item
+    doCopy();
+
+    source_it it ;
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
+        it->second->update(it->second->createSourceA, it->second->config.mergeItem1);
+    }
+
+    doSync("updateA",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 0,1,0, true, SYNC_TWO_WAY)));
+
+    SyncOptions::Callback_t callback = boost::bind(&SyncTests::doAtomicModifyCallback, this,  _1, _2);
+    accessClientB->doSync("updateB1",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(0,1,0, 0,0,0, true, SYNC_TWO_WAY).setClientRejected(1))
+                          .setStartSyncCallback(callback)
+                          );
+    //sync again, should be the same as testmerge
+    accessClientB->doSync("updateB2",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(-1,-1,-1, -1,-1,-1, true, SYNC_TWO_WAY)));
+
+    // figure out how the conflict during ".conflict" was handled
+    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+        TestingSyncSourcePtr copy;
+        SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(it->second->createSourceA()));
+        int numItems = 0;
+        SOURCE_ASSERT_NO_FAILURE(copy.get(), numItems = countItems(copy.get()));
+        CPPUNIT_ASSERT(numItems >= 1);
+        CPPUNIT_ASSERT(numItems <= 2);
+        std::cout << " \"" << it->second->config.sourceName << ": " << (numItems == 1 ? "conflicting items were merged" : "both of the conflicting items were preserved") << "\" ";
+        std::cout.flush();
+        CPPUNIT_ASSERT_NO_THROW(copy.reset());   
+    }
+}
+
+
+bool SyncTests::doAtomicModifyCallback(EvolutionSyncClient &syncClient,
+                                     SyncOptions &options) {
+    sleep (1);
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+        it->second->update(it->second->createSourceB, it->second->config.mergeItem2, true);
+    }
+    return false;
+}
+
+/**
+ * Simulates a server side delete and client side update conflict
+ */
+void SyncTests::testAtomicDelete() {
+    CPPUNIT_ASSERT(sources.begin() != sources.end());
+    CPPUNIT_ASSERT(sources.begin()->second->config.updateItem);
+
+    // setup client A, B and server so that they all contain the same item
+    doCopy();
+
+    source_it it ;
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
+        it->second->deleteAll(it->second->createSourceA);
+    }
+
+    doSync("deleteA",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
+
+    SyncOptions::Callback_t callback = boost::bind(&SyncTests::doAtomicModifyCallback, this,  _1, _2);
+    accessClientB->doSync("deleteB1",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(0,0,1, 0,0,0, true, SYNC_TWO_WAY).setClientRejected(1))
+                          .setStartSyncCallback(callback)
+                          );
+    //sync again, this time sync should be successful
+    //server side may treat this as add or update. 
+    accessClientB->doSync("deleteB2",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(0,0,0, -1,-1,0, true, SYNC_TWO_WAY)));
 }
 
 // get engine ready, then use it to convert our test items
@@ -3264,6 +3398,7 @@ void ClientTest::getTestData(const char *type, Config &config)
     config.import = import;
     config.dump = dump;
     config.compare = compare;
+    config.atomicModification = false;
 
     if (!strcmp(type, "vcard30")) {
         config.sourceName = "vcard30";
@@ -3742,7 +3877,7 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
         if (mustSucceed) {
             CLIENT_TEST_EQUAL(name, STATUS_OK, source.getStatus());
         }
-        CLIENT_TEST_EQUAL(name, 0, source.getItemStat(SyncSourceReport::ITEM_LOCAL,
+        CLIENT_TEST_EQUAL(name, clientRejected, source.getItemStat(SyncSourceReport::ITEM_LOCAL,
                                                       SyncSourceReport::ITEM_ANY,
                                                       SyncSourceReport::ITEM_REJECT));
         CLIENT_TEST_EQUAL(name, 0, source.getItemStat(SyncSourceReport::ITEM_REMOTE,

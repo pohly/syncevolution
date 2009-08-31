@@ -605,7 +605,7 @@ void SyncSourceRevisions::restoreData(const string &dir, const ConfigNode &node,
                                          report.ITEM_TOTAL);
                 if (!dryrun) {
                     m_raw->insertItemRaw(it == revisions.end() ? "" : uid,
-                                         data);
+                                         data, true);
                 }
             } catch (...) {
                 report.incrementItemStat(report.ITEM_LOCAL,

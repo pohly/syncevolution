@@ -64,9 +64,9 @@ class SQLiteContactSource : public TrackingSyncSource
 
     /* implementation of TrackingSyncSource interface */
     virtual void listAllItems(RevisionMap_t &revisions);
-    virtual InsertItemResult insertItem(const string &uid, const std::string &item, bool raw);
+    virtual InsertItemResult insertItem(const string &uid, const string rev, const std::string &item, bool raw, bool restore=false);
     void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual void removeItem(const string &uid);
+    virtual void removeItem(const string &uid, const string rev);
 
  private:
     /** encapsulates access to database */

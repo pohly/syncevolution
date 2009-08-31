@@ -113,10 +113,10 @@ void EvolutionMemoSource::readItem(const string &luid, std::string &item, bool r
     }
 }
 
-EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const string &luid, const std::string &item, bool raw)
+EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const string &luid, const string rev, const std::string &item, bool raw, bool restore)
 {
     if (raw) {
-        return EvolutionCalendarSource::insertItem(luid, item, false);
+        return EvolutionCalendarSource::insertItem(luid, rev, item, false, restore);
     }
     
     bool update = !luid.empty();
@@ -185,7 +185,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
         } else {
             ItemID id(uid, "");
             newluid = id.getLUID();
-            modTime = getItemModTime(id);
+            modTime = m_returnRev ? getItemModTime (subcomp) : getItemModTime(id);
         }
     }
 
@@ -197,12 +197,12 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
             icalcomponent_set_uid(subcomp, id.m_uid.c_str());
         }
 
-        if (!e_cal_modify_object(m_calendar, subcomp, CALOBJ_MOD_ALL, &gerror)) {
+        if (!ecalModifyObject(m_calendar, subcomp, CALOBJ_MOD_ALL, restore, &gerror)) {
             throwError(string("updating memo item ") + luid, gerror);
         }
         ItemID newid = getItemID(subcomp);
         newluid = newid.getLUID();
-        modTime = getItemModTime(newid);
+        modTime = m_returnRev ? getItemModTime(subcomp) : getItemModTime(newid);
     }
 
     return InsertItemResult(newluid, modTime, merged);

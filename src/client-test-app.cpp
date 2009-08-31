@@ -311,6 +311,15 @@ public:
                 }
             }
 
+            void displaySourceProgress(sysync::TProgressEventEnum type,
+                                                SyncSource &source,
+                                                int32_t extra1, int32_t extra2, int32_t extra3) {
+                if (type == sysync::PEV_PREPARING) {
+                    m_options.m_startSyncCallback(*this, m_options);
+                }
+                EvolutionSyncClient::displaySourceProgress(type, source, extra1, extra2, extra3);
+            }
+
             virtual bool checkForAbort() { return m_options.m_isAborted; }
             virtual bool checkForSuspend() {return m_options.m_isSuspended;}
 

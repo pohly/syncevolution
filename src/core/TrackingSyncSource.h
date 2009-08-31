@@ -123,11 +123,12 @@ class TrackingSyncSource : public TestingSyncSource, virtual public SyncSourceRe
      * not be stored" error.
      *
      * @param luid     identifies the item to be modified, empty for creating
+     * @param rev      revision string identifies the last modification time ancor
      * @param item     contains the new content of the item
      * @param raw      item has internal format instead of engine format
      * @return the result of inserting the item
      */
-    virtual InsertItemResult insertItem(const std::string &luid, const std::string &item, bool raw) = 0;
+    virtual InsertItemResult insertItem(const std::string &luid, const std::string rev, const std::string &item, bool raw, bool restore=false) = 0;
 
     /**
      * Return item data in engine format.
@@ -139,9 +140,9 @@ class TrackingSyncSource : public TestingSyncSource, virtual public SyncSourceRe
     virtual void readItem(const std::string &luid, std::string &item, bool raw) = 0;
 
     /**
-     * delete the item (renamed so that it can be wrapped by deleteItem())
+     * delete the item 
      */
-    virtual void removeItem(const string &luid) = 0;
+    virtual void deleteItem(const string &luid, const string rev) = 0;
 
     /**
      * optional: write all changes, throw error if that fails
@@ -185,7 +186,7 @@ class TrackingSyncSource : public TestingSyncSource, virtual public SyncSourceRe
     virtual void deleteItem(const string &luid);
     virtual InsertItemResult insertItem(const std::string &luid, const std::string &item);
     virtual void readItem(const std::string &luid, std::string &item);
-    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item);
+    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item, bool restore=false);
     virtual void readItemRaw(const std::string &luid, std::string &item);
 
     boost::shared_ptr<ConfigNode> m_trackingNode;

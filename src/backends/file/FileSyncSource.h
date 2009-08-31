@@ -68,9 +68,9 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
 
     /* implementation of TrackingSyncSource interface */
     virtual void listAllItems(RevisionMap_t &revisions);
-    virtual InsertItemResult insertItem(const string &luid, const std::string &item, bool raw);
+    virtual InsertItemResult insertItem(const string &luid, const string rev, const std::string &item, bool raw, bool restore);
     void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual void removeItem(const string &uid);
+    virtual void deleteItem(const string &uid, const string rev);
 
  private:
     /**

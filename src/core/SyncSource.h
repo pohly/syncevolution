@@ -857,8 +857,11 @@ class SyncSourceRaw : virtual public SyncSourceBase {
         bool m_merged;
     };
 
-    /** same as SyncSourceSerialize::insertItem(), but with internal format */
-    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item) = 0;
+    /** same as SyncSourceSerialize::insertItem(), but with internal format 
+     *  Also adds another parameter to indicate whether this is a restore,
+     *  in which case it would be nice if the revision of the item not changed.
+     * */
+    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item, bool restore = false) = 0;
 
     /** same as SyncSourceSerialize::readItem(), but with internal format */
     virtual void readItemRaw(const std::string &luid, std::string &item) = 0;
@@ -951,7 +954,7 @@ class SyncSourceSerialize : virtual public SyncSourceBase, virtual public SyncSo
     virtual void readItem(const std::string &luid, std::string &item) = 0;
 
     /* implement SyncSourceRaw under the assumption that the internal and engine format are identical */
-    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item) { return insertItem(luid, item); }
+    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item, bool restore = false) { return insertItem(luid, item); }
     virtual void readItemRaw(const std::string &luid, std::string &item) { return readItem(luid, item); }
 
     /** set Synthesis DB Interface operations */

@@ -63,14 +63,16 @@ std::string TrackingSyncSource::endSync(bool success)
 
 TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItem(const std::string &luid, const std::string &item)
 {
-    InsertItemResult res = insertItem(luid, item, false);
+    std::string rev = m_trackingNode->readProperty(luid);
+    InsertItemResult res = insertItem(luid, rev, item, false, false);
     updateRevision(*m_trackingNode, luid, res.m_luid, res.m_revision);
     return res;
 }
 
-TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItemRaw(const std::string &luid, const std::string &item)
+TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItemRaw(const std::string &luid, const std::string &item, bool restore)
 {
-    InsertItemResult res = insertItem(luid, item, true);
+    std::string rev = m_trackingNode->readProperty(luid);
+    InsertItemResult res = insertItem(luid, rev, item, true, restore);
     updateRevision(*m_trackingNode, luid, res.m_luid, res.m_revision);
     return res;
 }
@@ -87,6 +89,7 @@ void TrackingSyncSource::readItemRaw(const std::string &luid, std::string &item)
 
 void TrackingSyncSource::deleteItem(const std::string &luid)
 {
-    removeItem(luid);
+    std::string rev = m_trackingNode->readProperty(luid);
+    deleteItem(luid, rev);
     deleteRevision(*m_trackingNode, luid);
 }

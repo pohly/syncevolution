@@ -136,7 +136,7 @@ void FileSyncSource::readItem(const string &uid, std::string &item, bool raw)
     }
 }
 
-TrackingSyncSource::InsertItemResult FileSyncSource::insertItem(const string &uid, const std::string &item, bool raw)
+TrackingSyncSource::InsertItemResult FileSyncSource::insertItem(const string &uid, const string rev, const std::string &item, bool raw, bool restore)
 {
     string newuid = uid;
     string creationTime;
@@ -192,7 +192,7 @@ TrackingSyncSource::InsertItemResult FileSyncSource::insertItem(const string &ui
 }
 
 
-void FileSyncSource::removeItem(const string &uid)
+void FileSyncSource::deleteItem(const string &uid, const string rev)
 {
     string filename = createFilename(uid);
 

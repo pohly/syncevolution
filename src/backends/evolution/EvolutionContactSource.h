@@ -57,9 +57,9 @@ class EvolutionContactSource : public EvolutionSyncSource,
     // implementation of TrackingSyncSource callbacks
     //
     virtual void listAllItems(RevisionMap_t &revisions);
-    virtual InsertItemResult insertItem(const string &uid, const std::string &item, bool raw);
+    virtual InsertItemResult insertItem(const string &uid, const string rev, const std::string &item, bool raw, bool restore =false);
     void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual void removeItem(const string &uid);
+    virtual void deleteItem(const string &uid, const string rev);
 
     // implementation of SyncSourceLogging callback
     virtual std::string getDescription(const string &luid);
@@ -83,6 +83,15 @@ class EvolutionContactSource : public EvolutionSyncSource,
 
     /** the format of vcards that new items are expected to have */
     const EVCardFormat m_vcardFormat;
+
+    const char *RETURN_REV_CAP;
+    const char *ATOMIC_MODIFICATION_CAP;
+    //TODO work out a better way to define this flag
+    const int E_BOOK_CHECK_REVISION;
+    const int E_BOOK_SET_REVISION;
+
+    bool m_returnRev;
+    bool m_atomicModification;
 
     /**
      * a list of Evolution vcard properties which have to be encoded

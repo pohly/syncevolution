@@ -66,7 +66,8 @@ class CheckSyncReport {
         serverUpdated(srUpdated),
         serverDeleted(srDeleted),
         mustSucceed(mstSucceed),
-        syncMode(mode)
+        syncMode(mode),
+        clientRejected(0)
         {}
 
     virtual ~CheckSyncReport() {}
@@ -75,6 +76,7 @@ class CheckSyncReport {
         serverAdded, serverUpdated, serverDeleted;
     bool mustSucceed;
     SyncMode syncMode;
+    int clientRejected;
 
     /**
      * checks that the sync completed as expected and throws
@@ -84,6 +86,7 @@ class CheckSyncReport {
      * @param report  the sync report stored in the SyncClient
      */
     virtual void check(SyncMLStatus status, SyncReport &report) const;
+    CheckSyncReport setClientRejected (int reject) {clientRejected = reject; return *this;} 
 };
 
 /**
@@ -121,6 +124,11 @@ struct SyncOptions {
      */
     Callback_t m_startCallback;
 
+    /**
+     * Callback to be invoked after PEV_PREPARING
+     */
+    Callback_t m_startSyncCallback;
+
     boost::shared_ptr<SyncEvolution::TransportAgent> m_transport;
 
     SyncOptions(SyncMode syncMode = SYNC_NONE,
@@ -130,6 +138,7 @@ struct SyncOptions {
                 bool loSupport = false,
                 bool isWBXML = defaultWBXML(),
                 Callback_t startCallback = EmptyCallback,
+                Callback_t startSyncCallback = EmptyCallback,
                 boost::shared_ptr<SyncEvolution::TransportAgent> transport =
                 boost::shared_ptr<SyncEvolution::TransportAgent>()) :
         m_syncMode(syncMode),
@@ -141,6 +150,7 @@ struct SyncOptions {
         m_isSuspended(false),
         m_isAborted(false),
         m_startCallback(startCallback),
+        m_startSyncCallback(startSyncCallback),
         m_transport (transport)
     {}
 
@@ -151,6 +161,7 @@ struct SyncOptions {
     SyncOptions &setLOSupport(bool loSupport) { m_loSupport = loSupport; return *this; }
     SyncOptions &setWBXML(bool isWBXML) { m_isWBXML = isWBXML; return *this; }
     SyncOptions &setStartCallback(const Callback_t &callback) { m_startCallback = callback; return *this; }
+    SyncOptions &setStartSyncCallback(const Callback_t &callback) { m_startSyncCallback = callback; return *this; }
     SyncOptions &setTransportAgent(const boost::shared_ptr<SyncEvolution::TransportAgent> transport)
                                   {m_transport = transport; return *this;}
 
@@ -443,6 +454,11 @@ class ClientTest {
          * iCalendar 2.0 event and a detached recurrence.
          */
         const char *parentItem, *childItem;
+
+        /**
+         * Backends atomic modification tests
+         */
+        bool atomicModification;
 
         /**
          * define to 0 to disable tests which slightly violate the
@@ -742,6 +758,8 @@ public:
     virtual void testLinkedItemsUpdateChild();
     virtual void testLinkedItemsInsertBothUpdateChild();
     virtual void testLinkedItemsInsertBothUpdateParent();
+    virtual void testAtomicUpdate();
+    virtual void testAtomicDelete();
 
 };
 
@@ -877,6 +895,10 @@ protected:
                               EvolutionSyncClient &client,
                               SyncOptions &options);
     virtual void testConversion();
+    bool doAtomicModifyCallback(EvolutionSyncClient &client,
+                              SyncOptions &options);
+    virtual void testAtomicUpdate();
+    virtual void testAtomicDelete();
     virtual void testItems();
     virtual void testItemsXML();
     virtual void testAddUpdate();
@@ -1009,6 +1031,12 @@ public:
 #define SOURCE_ASSERT_NO_FAILURE(_source, _x) \
 { \
     CPPUNIT_ASSERT_NO_THROW(_x); \
+    CPPUNIT_ASSERT((_source)); \
+}
+
+#define SOURCE_ASSERT_FAILURE(_source, _x) \
+{ \
+    CPPUNIT_ASSERT_THROW(_x, runtime_error); \
     CPPUNIT_ASSERT((_source)); \
 }
 

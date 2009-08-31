@@ -39,7 +39,7 @@ class EvolutionMemoSource : public EvolutionCalendarSource
     //
     // implementation of SyncSource
     //
-    virtual InsertItemResult insertItem(const string &uid, const std::string &item, bool raw);
+    virtual InsertItemResult insertItem(const string &uid, const string rev, const std::string &item, bool raw, bool restore=false);
     void readItem(const std::string &luid, std::string &item, bool raw);
     virtual const char *getMimeType() const { return "text/plain"; }
     virtual const char *getMimeVersion() const { return "1.0"; }

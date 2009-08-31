@@ -67,9 +67,9 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
     // implementation of TrackingSyncSource callbacks
     //
     virtual void listAllItems(RevisionMap_t &revisions);
-    virtual InsertItemResult insertItem(const string &uid, const std::string &item, bool raw);
+    virtual InsertItemResult insertItem(const string &uid, const string rev, const std::string &item, bool raw, bool restore=false);
     void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual void removeItem(const string &uid);
+    virtual void deleteItem(const string &uid, const string rev);
 
     // implementation of SyncSourceLogging callback
     virtual std::string getDescription(const string &luid);
@@ -82,7 +82,22 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
     string m_typeName;             /**< "calendar", "task list", "memo list" */
     ECal *(*m_newSystem)(void);    /**< e_cal_new_system_calendar, etc. */
     
+    bool m_returnRev;
+    bool m_atomicModification;
 
+    /** The capability string used by eds to identify the two capabilities, 
+     *  does not use include from e-book.h because older version does not
+     *  define them */
+    const char *RETURN_REV_CAP ;
+    const char *ATOMIC_MODIFICATION_CAP;
+    const int E_CAL_CHECK_REVISION;
+    const int E_CAL_SET_REVISION;
+
+    /**Wraps around e_cal_modify_object or e_cal_modify_object_instance */
+    bool ecalModifyObject(ECal *ecal, icalcomponent *icalcomp, CalObjModType mod, bool restore, GError **error); 
+
+    /** set last modified field */
+    bool updateLastModified (icalcomponent *icomp, const string& lm);
     /**
      * An item is identified in the calendar by
      * its UID (unique ID) and RID (recurrence ID).
@@ -165,6 +180,12 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
     string getItemModTime(const ItemID &id);
 
     /**
+     * Extract modification string from icalcomponent
+     * @return empty string if no time was available
+     */
+    string getItemModTime (icalcomponent *icomp);
+
+    /**
      * Convert to string in canonical representation.
      */
     string icalTime2Str(const struct icaltimetype &tt);
@@ -198,7 +219,7 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      *
      * @param returnOnlyChildren    only return children in list, even if parent is also removed
      */
-    ICalComps_t removeEvents(const string &uid, bool returnOnlyChildren);
+    ICalComps_t removeEvents(const string &uid, const string modTime, bool returnOnlyChildren);
 };
 
 #else

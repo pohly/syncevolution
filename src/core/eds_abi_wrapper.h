@@ -106,6 +106,9 @@ struct EDSAbiWrapper {
     GQuark (*e_book_error_quark) (void);
     gboolean (*e_book_remove_contact) (EBook *book, const char *id, GError **error);
     char* (*e_vcard_to_string) (EVCard *evc, EVCardFormat format);
+    gboolean (*e_book_check_static_capability) (EBook *book, const char *cap);
+    gboolean (*e_book_commit_contact_instance) (EBook *book, EContact *contact, int flags, GError **error);
+    gboolean (*e_book_remove_contact_instance) (EBook *book, const char *id, const char *rev, GError **error);
 # endif /* ENABLE_EBOOK */
 
 # ifdef ENABLE_ECAL
@@ -165,6 +168,10 @@ struct EDSAbiWrapper {
     char* (*icaltimezone_get_tzid) (icaltimezone *zone);
     icaltimezone *(*icaltimezone_new) (void);
     int (*icaltimezone_set_component) (icaltimezone *zone, icalcomponent *comp);
+    gboolean (*e_cal_get_static_capability) (ECal *cal, const char *cap);
+    gboolean (*e_cal_modify_object_instance) (ECal *ecal, icalcomponent *icalcomp, CalObjModType mod, int flags, GError **error);
+    gboolean (*e_cal_remove_object_instance) (ECal *ecal, const char *uid, const char *last_modified, GError **error);
+    gboolean (*e_cal_remove_object_with_mod_instance) (ECal *ecal, const char *uid, const char *rid, const char *last_modified, CalObjModType mod, GError **error);
 # endif /* ENABLE_ECAL */
 
     int initialized;
@@ -209,6 +216,9 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define e_book_query_unref EDSAbiWrapperSingleton.e_book_query_unref
 #   define e_book_remove_contact EDSAbiWrapperSingleton.e_book_remove_contact
 #   define e_vcard_to_string EDSAbiWrapperSingleton.e_vcard_to_string
+#   define e_book_get_check_capability EDSAbiWrapperSingleton.e_book_check_static_capability
+#   define e_book_commit_contact_instance EDSAbiWrapperSingleton.e_book_commit_contact_instance
+#   define e_book_remove_contact_instance EDSAbiWrapperSingleton.e_book_remove_contact_instance
 #  endif /* ENABLE_EBOOK */
 
 #  ifdef ENABLE_ECAL
@@ -266,6 +276,10 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define icaltimezone_get_tzid EDSAbiWrapperSingleton.icaltimezone_get_tzid
 #   define icaltimezone_new EDSAbiWrapperSingleton.icaltimezone_new
 #   define icaltimezone_set_component EDSAbiWrapperSingleton.icaltimezone_set_component
+#   define e_cal_get_static_capability EDSAbiWrapperSingleton.e_cal_get_static_capability
+#   define e_cal_modify_object_instance EDSAbiWrapperSingleton.e_cal_modify_object_instance
+#   define e_cal_remove_object_instance EDSAbiWrapperSingleton.e_cal_remove_object_instance
+#   define e_cal_remove_object_with_mod_instance EDSAbiWrapperSingleton.e_cal_remove_object_with_mod_instance
 #  endif /* ENABLE_ECAL */
 # endif /* EDS_ABI_WRAPPER_NO_REDEFINE */
 

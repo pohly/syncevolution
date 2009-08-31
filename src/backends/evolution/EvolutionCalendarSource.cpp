@@ -74,7 +74,11 @@ static int granularity()
 EvolutionCalendarSource::EvolutionCalendarSource(ECalSourceType type,
                                                  const SyncSourceParams &params) :
     EvolutionSyncSource(params, granularity()),
-    m_type(type)
+    m_type(type),
+    RETURN_REV_CAP("return-rev"),
+    ATOMIC_MODIFICATION_CAP("atomic-modification"),
+    E_CAL_CHECK_REVISION(1<<1),
+    E_CAL_SET_REVISION(1<<2)
 {
     switch (m_type) {
      case E_CAL_SOURCE_TYPE_EVENT:
@@ -199,6 +203,9 @@ void EvolutionCalendarSource::open()
         }
     }
 
+    m_returnRev = e_cal_get_static_capability (m_calendar, RETURN_REV_CAP);
+    m_atomicModification = e_cal_get_static_capability (m_calendar, ATOMIC_MODIFICATION_CAP);
+
     g_signal_connect_after(m_calendar,
                            "backend-died",
                            G_CALLBACK(EvolutionSyncClient::fatalError),
@@ -233,6 +240,8 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 void EvolutionCalendarSource::close()
 {
     m_calendar = NULL;
+    m_returnRev = false;
+    m_atomicModification = false;
 }
 
 void EvolutionCalendarSource::readItem(const string &luid, std::string &item, bool raw)
@@ -241,7 +250,7 @@ void EvolutionCalendarSource::readItem(const string &luid, std::string &item, bo
     item = retrieveItemAsString(id);
 }
 
-EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(const string &luid, const std::string &item, bool raw)
+EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(const string &luid, string modTimeIn, const std::string &item, bool raw, bool restore)
 {
     bool update = !luid.empty();
     bool merged = false;
@@ -332,9 +341,13 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
     // Remove LAST-MODIFIED: the Evolution Exchange Connector does not
     // properly update this property if it is already present in the
     // incoming data.
-    icalproperty *modprop;
-    while ((modprop = icalcomponent_get_first_property(subcomp, ICAL_LASTMODIFIED_PROPERTY)) != NULL) {
-        icalcomponent_remove_property(subcomp, modprop);
+    // We assume m_atomicModification = False for Evolution Exchange Connector
+    if (!m_atomicModification) {
+        icalproperty *modprop;
+        while ((modprop = icalcomponent_get_first_property
+                    (subcomp, ICAL_LASTMODIFIED_PROPERTY)) != NULL) {
+            icalcomponent_remove_property(subcomp, modprop);
+        }
     }
 
     if (!update) {
@@ -358,6 +371,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         // which should never happen.
         newluid = id.getLUID();
         if (m_allLUIDs.find(newluid) != m_allLUIDs.end()) {
+            modTimeIn = getItemModTime(id);
             merged = true;
         } else {
             // if this is a detached recurrence, then we
@@ -377,7 +391,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // saved children.
                 ICalComps_t children;
                 if (id.m_rid.empty()) {
-                    children = removeEvents(id.m_uid, true);
+                    children = removeEvents(id.m_uid, modTimeIn, true);
                 }
 
                 // creating new objects works for normal events and detached occurrences alike
@@ -387,7 +401,12 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     // shouldn't have changed either.
                     ItemID newid(!id.m_uid.empty() ? id.m_uid : uid, id.m_rid);
                     newluid = newid.getLUID();
-                    modTime = getItemModTime(newid);
+                    if (m_returnRev) {
+                        modTime = getItemModTime (subcomp);
+                    } else {
+                        //retrieve again
+                        modTime = getItemModTime(newid);
+                    }
                     m_allLUIDs.insert(newluid);
                 } else {
                     throwError("storing new item", gerror);
@@ -434,7 +453,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // Use CALOBJ_MOD_ALL and temporarily remove
                 // the children, then add them again. Otherwise they would
                 // get deleted.
-                ICalComps_t children = removeEvents(id.m_uid, true);
+                ICalComps_t children = removeEvents(id.m_uid, modTimeIn, true);
 
                 // Parent is gone, too, and needs to be recreated.
                 const char *uid = NULL;
@@ -444,6 +463,8 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
+                // We don't need check revision here, becasue we are not
+                // modifing the children, we just want to add them back.
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
                     if (!e_cal_modify_object(m_calendar, *icalcomp,
                                              CALOBJ_MOD_THIS,
@@ -453,16 +474,17 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 }
             } else {
                 // no children, updating is simple
-                if (!e_cal_modify_object(m_calendar, subcomp,
-                                         CALOBJ_MOD_ALL,
-                                         &gerror)) {
+                updateLastModified (subcomp, modTimeIn);
+                if (!ecalModifyObject (m_calendar, subcomp, CALOBJ_MOD_ALL, restore, &gerror)) {
                     throwError(string("updating item ") + luid, gerror);
                 }
             }
-        } else {
+        }
+         else {
             // child event
-            if (!e_cal_modify_object(m_calendar, subcomp,
-                                     CALOBJ_MOD_THIS,
+            updateLastModified (subcomp, modTimeIn);
+            if (!ecalModifyObject(m_calendar, subcomp,
+                                     CALOBJ_MOD_THIS, restore,
                                      &gerror)) {
                 throwError(string("updating item ") + luid, gerror);
             }
@@ -470,13 +492,13 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
         ItemID newid = getItemID(subcomp);
         newluid = newid.getLUID();
-        modTime = getItemModTime(newid);
+        modTime = m_returnRev? getItemModTime(subcomp): getItemModTime(newid);
     }
 
     return InsertItemResult(newluid, modTime, merged);
 }
 
-EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const string &uid, bool returnOnlyChildren)
+EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const string &uid, const string modTime, bool returnOnlyChildren)
 {
     ICalComps_t events;
 
@@ -497,9 +519,14 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
 
     // removes all events with that UID, including children
     GError *gerror = NULL;
-    if(!e_cal_remove_object(m_calendar,
-                            uid.c_str(),
-                            &gerror)) {
+    gboolean res = TRUE;
+    if (m_atomicModification) {
+        res = e_cal_remove_object_instance (m_calendar, uid.c_str(), modTime.c_str(), &gerror);
+    } else {
+        res = e_cal_remove_object(m_calendar, uid.c_str(), &gerror);
+    }
+    if (!res)
+    {
         if (gerror->domain == E_CALENDAR_ERROR &&
             gerror->code == E_CALENDAR_STATUS_OBJECT_NOT_FOUND) {
             SE_LOG_DEBUG(this, NULL, "%s: request to delete non-existant item ignored",
@@ -513,10 +540,11 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
     return events;
 }
 
-void EvolutionCalendarSource::removeItem(const string &luid)
+void EvolutionCalendarSource::deleteItem(const string &luid, const string modTime)
 {
     GError *gerror = NULL;
     ItemID id(luid);
+    gboolean res = TRUE;
 
     if (id.m_rid.empty()) {
         /*
@@ -526,7 +554,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
          * remove all items with the given uid and if we only wanted to
          * delete the parent, then recreate the children.
          */
-        ICalComps_t children = removeEvents(id.m_uid, true);
+        ICalComps_t children = removeEvents(id.m_uid, modTime, true);
 
         // recreate children
         BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
@@ -536,18 +564,23 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                 throwError(string("recreating item ") + luid, gerror);
             }
         }
-    } else if(!e_cal_remove_object_with_mod(m_calendar,
-                                            id.m_uid.c_str(),
-                                            id.m_rid.c_str(),
-                                            CALOBJ_MOD_THIS,
-                                            &gerror)) {
-        if (gerror->domain == E_CALENDAR_ERROR &&
-            gerror->code == E_CALENDAR_STATUS_OBJECT_NOT_FOUND) {
-            SE_LOG_DEBUG(this, NULL, "%s: %s: request to delete non-existant item ignored",
-                      getName(), luid.c_str());
-            g_clear_error(&gerror);
+    } else {
+        if( m_atomicModification) {
+            res = e_cal_remove_object_with_mod_instance (m_calendar, 
+                    id.m_uid.c_str(), id.m_rid.c_str(), modTime.c_str(), CALOBJ_MOD_THIS, &gerror);
         } else {
-            throwError(string("deleting item " ) + luid, gerror);
+            res = e_cal_remove_object_with_mod(m_calendar,
+                    id.m_uid.c_str(), id.m_rid.c_str(),CALOBJ_MOD_THIS, &gerror);
+        }
+        if (!res) {
+            if (gerror->domain == E_CALENDAR_ERROR &&
+                    gerror->code == E_CALENDAR_STATUS_OBJECT_NOT_FOUND) {
+                SE_LOG_DEBUG(this, NULL, "%s: %s: request to delete non-existant item ignored",
+                        getName(), luid.c_str());
+                g_clear_error(&gerror);
+            } else {
+                throwError(string("deleting item " ) + luid, gerror);
+            }
         }
     }
     m_allLUIDs.erase(luid);
@@ -718,6 +751,17 @@ string EvolutionCalendarSource::getItemModTime(ECalComponent *ecomp)
     }
 }
 
+string EvolutionCalendarSource::getItemModTime(icalcomponent *icomp)
+{
+    icalproperty *lastModified = icalcomponent_get_first_property(icomp, ICAL_LASTMODIFIED_PROPERTY);
+    if (!lastModified) {
+        return "";
+    } else {
+        struct icaltimetype modTime = icalproperty_get_lastmodified(lastModified);
+        return icalTime2Str(modTime);
+    }
+}
+
 string EvolutionCalendarSource::getItemModTime(const ItemID &id)
 {
     eptr<icalcomponent> icomp(retrieveItem(id));
@@ -744,6 +788,30 @@ string EvolutionCalendarSource::icalTime2Str(const icaltimetype &tt)
     }
 }
 
+bool EvolutionCalendarSource::ecalModifyObject(ECal *ecal, icalcomponent *icalcomp, CalObjModType mod, bool restore, GError **error) 
+{
+    if (m_atomicModification) {
+        return e_cal_modify_object_instance (ecal, icalcomp, mod, restore?E_CAL_SET_REVISION:E_CAL_CHECK_REVISION, error);
+    } else {
+        return e_cal_modify_object (ecal, icalcomp, mod, error);
+    }
+}
+
+bool EvolutionCalendarSource::updateLastModified (icalcomponent *icomp, const string& lm)
+{
+    if (lm.empty()) {
+        return false;
+    }
+    struct icaltimetype modified = icaltime_from_string(lm.c_str());
+    icalproperty *lastModified = icalcomponent_get_first_property(icomp, ICAL_LASTMODIFIED_PROPERTY);
+    if (lastModified) {
+        icalproperty_set_lastmodified (lastModified, modified);
+    } else {
+        lastModified = icalproperty_new_lastmodified (modified);
+        icalcomponent_add_property (icomp, lastModified);
+    }
+    return true;
+}
 #endif /* ENABLE_ECAL */
 
 #ifdef ENABLE_MODULES

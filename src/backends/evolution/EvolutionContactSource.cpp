@@ -63,7 +63,11 @@ const EvolutionContactSource::unique EvolutionContactSource::m_uniqueProperties;
 EvolutionContactSource::EvolutionContactSource(const SyncSourceParams &params,
                                                EVCardFormat vcardFormat) :
     EvolutionSyncSource(params),
-    m_vcardFormat(vcardFormat)
+    m_vcardFormat(vcardFormat),
+    RETURN_REV_CAP("return-rev"),
+    ATOMIC_MODIFICATION_CAP("atomic-modification"),
+    E_BOOK_CHECK_REVISION(1<<1),
+    E_BOOK_SET_REVISION(1<<2)
 {
     SyncSourceLogging::init(InitList<std::string>("N_FIRST") + "N_MIDDLE" + "N_LAST",
                             " ",
@@ -184,6 +188,10 @@ void EvolutionContactSource::open()
         }
     }
 
+    //detect whether backend supply return-rev and atomic-modification
+    m_returnRev = e_book_check_static_capability (m_addressbook, RETURN_REV_CAP);
+    m_atomicModification = e_book_check_static_capability (m_addressbook, ATOMIC_MODIFICATION_CAP);
+
     g_signal_connect_after(m_addressbook,
                            "backend-died",
                            G_CALLBACK(EvolutionSyncClient::fatalError),
@@ -226,6 +234,8 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
 void EvolutionContactSource::close()
 {
     m_addressbook = NULL;
+    m_returnRev = false;
+    m_atomicModification = false;
 }
 
 string EvolutionContactSource::getRevision(const string &luid)
@@ -270,23 +280,32 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
 }
 
 TrackingSyncSource::InsertItemResult
-EvolutionContactSource::insertItem(const string &uid, const std::string &item, bool raw)
+EvolutionContactSource::insertItem(const string &uid, string rev, const std::string &item, bool raw, bool restore)
 {
     eptr<EContact, GObject> contact(e_contact_new_from_vcard(item.c_str()));
     if (contact) {
         GError *gerror = NULL;
+        gboolean res = TRUE;
         e_contact_set(contact, E_CONTACT_UID,
                       uid.empty() ?
                       NULL :
                       const_cast<char *>(uid.c_str()));
-        if (uid.empty() ?
-            e_book_add_contact(m_addressbook, contact, &gerror) :
-            e_book_commit_contact(m_addressbook, contact, &gerror)) {
+        if (uid.empty()) {
+            res = e_book_add_contact(m_addressbook, contact, &gerror);
+        } else {
+            if (m_atomicModification) {
+                e_contact_set (contact, E_CONTACT_REV, const_cast <char *> (rev.c_str()));
+                res = e_book_commit_contact_instance(m_addressbook, contact, restore?E_BOOK_SET_REVISION:E_BOOK_CHECK_REVISION, &gerror);
+            } else {
+                res = e_book_commit_contact(m_addressbook, contact, &gerror);
+            }
+        }
+        if (res) {
             const char *newuid = (const char *)e_contact_get_const(contact, E_CONTACT_UID);
             if (!newuid) {
                 throwError("no UID for contact");
             }
-            string newrev = getRevision(newuid);
+            string newrev = m_returnRev ? (const char *) e_contact_get_const (contact, E_CONTACT_REV) : getRevision(newuid);
             return InsertItemResult(newuid, newrev, false);
         } else {
             throwError(uid.empty() ?
@@ -301,10 +320,12 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
     return InsertItemResult("", "", false);
 }
 
-void EvolutionContactSource::removeItem(const string &uid)
+void EvolutionContactSource::deleteItem(const string &uid, const string rev)
 {
     GError *gerror = NULL;
-    if (!e_book_remove_contact(m_addressbook, uid.c_str(), &gerror)) {
+    if (m_atomicModification ? 
+            !e_book_remove_contact_instance (m_addressbook, uid.c_str(), rev.c_str(), &gerror) 
+            :!e_book_remove_contact(m_addressbook, uid.c_str(), &gerror)) {
         if (gerror->domain == E_BOOK_ERROR &&
             gerror->code == E_BOOK_ERROR_CONTACT_NOT_FOUND) {
             SE_LOG_DEBUG(this, NULL, "%s: %s: request to delete non-existant contact ignored",
