@@ -524,6 +524,7 @@ class TestDBusServer(unittest.TestCase, DBusUtil):
                                        "Google",
                                        "Memotoo",
                                        "Mobical",
+                                       "Oracle",
                                        "ScheduleWorld",
                                        "Synthesis",
                                        "ZYB"])
