@@ -241,6 +241,19 @@
           if (ALARM_MSG==EMPTY) ALARM_MSG="alarm";
         }
       }
+
+      // force lazy evaluation...
+      if (ORIGSTART) {
+        if(SESSIONVAR("mangleuid")) {
+          // Oracle server a) does not support RECURRENCE-ID and
+          // b) expects that UID is different between all VEVENTs,
+          // even those belonging to the same recurring event.
+          // Achieve that by attaching the RECURRENCE-ID (= ORIGSTART)
+          // to the UID and not sending it separately.
+          UID=UID + "-rid-" + ORIGSTART;
+          ORIGSTART=EMPTY;
+        }
+      }
     ]]></macro>
 
   </scripting>
@@ -1354,6 +1367,12 @@
           <model>ZYB</model>
           <!-- information to disable anchors checking -->
           <lenientmode>yes</lenientmode>
+      </remoterule>
+
+      <remoterule name="ORACLE">
+        <manufacturer>Oracle</manufacturer>
+        <model>Beehive R1</model>
+        <rulescript>mangleuid = TRUE;</rulescript>
       </remoterule>
   </client>
 

@@ -1516,6 +1516,10 @@ void SyncContext::getConfigXML(string &xml, string &configname)
              "  </server>\n"
              :
              "  <client type='plugin'>\n"
+             "    <sessioninitscript><![CDATA[\n"
+             "      INTEGER mangleuid;\n"
+             "      mangleuid = FALSE;\n"
+             "    ]]></sessioninitscript>\n"
              "    <binfilespath>$(binfilepath)</binfilespath>\n"
              "    <defaultauth/>\n"
              "\n"
