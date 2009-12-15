@@ -1539,47 +1539,57 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     size_t index;
     unsigned long hash = 0;
 
+    const char *sessioninitscript =
+        "    <sessioninitscript><![CDATA[\n"
+        "      // these variables are possibly modified by rule scripts\n"
+        "      TIMESTAMP mindate; // earliest date remote party can handle\n"
+        "      INTEGER retransfer_body; // if set to true, body is re-sent to client when message is moved from outbox to sent\n"
+        "      mindate=EMPTY; // no limit by default\n"
+        "      retransfer_body=FALSE; // normally, do not retransfer email body (and attachments) when moving items to sent box\n"
+        "      INTEGER delayedabort;\n"
+        "      delayedabort = FALSE;\n"
+        "    ]]></sessioninitscript>\n";
+
+    ostringstream clientorserver;
+    if (m_serverMode) {
+        clientorserver <<
+            "  <server type='plugin'>\n"
+            "    <plugin_module>SyncEvolution</plugin_module>\n"
+            "    <plugin_sessionauth>yes</plugin_sessionauth>\n"
+            "    <plugin_deviceadmin>yes</plugin_deviceadmin>\n"
+            "\n" <<
+            sessioninitscript <<
+            "    <sessiontimeout>300</sessiontimeout>\n"
+            "\n"
+            "    <defaultauth/>\n"
+            "\n"
+            "    <datastore/>\n"
+            "\n"
+            "    <remoterules/>\n"
+            "  </server>\n";
+    } else {
+        clientorserver <<
+            "  <client type='plugin'>\n"
+            "    <binfilespath>$(binfilepath)</binfilespath>\n"
+            "    <defaultauth/>\n"
+            "\n" <<
+            sessioninitscript <<
+            // SyncEvolution has traditionally not folded long lines in
+            // vCard.  Testing showed that servers still have problems with
+            // it, so avoid it by default
+            "    <donotfoldcontent>yes</donotfoldcontent>\n"
+            "\n"
+            "    <fakedeviceid/>\n"
+            "\n"
+            "    <datastore/>\n"
+            "\n"
+            "    <remoterules/>\n"
+            "  </client>\n";
+    }
     substTag(xml,
              "clientorserver",
-             m_serverMode ?
-             "  <server type='plugin'>\n"
-             "    <plugin_module>SyncEvolution</plugin_module>\n"
-             "    <plugin_sessionauth>yes</plugin_sessionauth>\n"
-             "    <plugin_deviceadmin>yes</plugin_deviceadmin>\n"
-             "\n"
-             "    <sessioninitscript><![CDATA[\n"
-             "      // these variables are possibly modified by rule scripts\n"
-             "      TIMESTAMP mindate; // earliest date remote party can handle\n"
-             "      INTEGER retransfer_body; // if set to true, body is re-sent to client when message is moved from outbox to sent\n"
-             "      mindate=EMPTY; // no limit by default\n"
-             "      retransfer_body=FALSE; // normally, do not retransfer email body (and attachments) when moving items to sent box\n"
-             "    ]]></sessioninitscript>\n"
-             "    <sessiontimeout>300</sessiontimeout>\n"
-             "\n"
-             "    <defaultauth/>\n"
-             "\n"
-             "    <datastore/>\n"
-             "\n"
-             "    <remoterules/>\n"
-             "  </server>\n"
-             :
-             "  <client type='plugin'>\n"
-             "    <binfilespath>$(binfilepath)</binfilespath>\n"
-             "    <defaultauth/>\n"
-             "\n"
-             // SyncEvolution has traditionally not folded long lines in
-             // vCard.  Testing showed that servers still have problems with
-             // it, so avoid it by default
-             "    <donotfoldcontent>yes</donotfoldcontent>\n"
-             "\n"
-             "    <fakedeviceid/>\n"
-             "\n"
-             "    <datastore/>\n"
-             "\n"
-             "    <remoterules/>\n"
-             "  </client>\n",
-             true
-             );
+             clientorserver.str(),
+             true);
 
     tag = "<debug/>";
     index = xml.find(tag);
@@ -1649,17 +1659,40 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             }
             datastores << "    <datastore name='" << source->getName() << "' type='plugin'>\n" <<
                 "      <dbtypeid>" << hash << "</dbtypeid>\n" <<
-                fragment ;
+                fragment;
 
+            string mode = source->getSync();
             if (m_sourceListPtr->m_forceSlow[source->getName()]) {
-                datastores << " <alertscript> FORCESLOWSYNC(); </alertscript>\n";
+                // we *want* a slow sync, but couldn't tell the client -> force it server-side
+                datastores << "      <alertscript> FORCESLOWSYNC(); </alertscript>\n";
+            } else if (mode != "slow" &&
+                       mode != "refresh-from-server" && // is implemented as "delete local data" + "slow sync",
+                                                        // so a slow sync is acceptable in this case
+                       !m_serverMode) {
+                // We are not expecting a slow sync => refuse to execute one.
+                // This is the client check for this, server must be handled
+                // differently (TODO).
+                datastores <<
+                    "      <alertscript><![CDATA[\n"
+                    "INTEGER alertcode;\n"
+                    "alertcode = ALERTCODE();\n"
+                    "if (alertcode == 201) {\n" // SLOWSYNC() cannot be used here, refresh-from-client also sets it
+                    "   DEBUGMESSAGE(\"slow sync not expected by SyncEvolution, disabling datastore\");\n"
+                    "   ABORTDATASTORE(" << STATUS_UNEXPECTED_SLOW_SYNC <<
+                    ");\n"
+                    "   // tell UI to abort instead of sending the next message\n"
+                    "   SETSESSIONVAR(\"delayedabort\", 1);\n"
+                    "}\n"
+                    "]]></alertscript>\n";
             }
-            datastores <<    "    </datastore>\n\n";
+
+            datastores <<
+                "    </datastore>\n\n";
         }
 
         /*If there is super datastore, add it here*/
-        //TODO generate specific superdatastore contents
-        //Now only works for synthesis built-in events+tasks 
+        //TODO generate specific superdatastore contents (MB #8753)
+        //Now only works for synthesis built-in events+tasks
         BOOST_FOREACH (boost::shared_ptr<VirtualSyncSource> vSource, m_sourceListPtr->m_virtualDS) {
             std::string superType = vSource->getSourceType().m_format;
             std::string evoSyncSource = vSource->getDatabaseID();
@@ -2405,13 +2438,46 @@ SyncMLStatus SyncContext::doSync()
                 reportStepCmd(stepCmd);
             }
 
-            //During suspention we actually insert a STEPCMD_SUSPEND cmd
-            //Should restore to the original step here
-            if(suspending == 1)
-            {
+            // catch outgoing message and abort if requested by script
+            if (stepCmd == sysync::STEPCMD_SENDDATA &&
+                checkForScriptAbort(session)) {
+                // report which sources are affected, based on their status code
+                list<string> sources;
+                BOOST_FOREACH(SyncSource *source, *m_sourceListPtr) {
+                    if (source->getStatus() == STATUS_UNEXPECTED_SLOW_SYNC) {
+                        sources.push_back(source->getName());
+                    }
+                }
+                if (!sources.empty()) {
+                    string sourceparam = boost::join(sources, " ");
+                    SE_LOG_ERROR(NULL, NULL,
+                                 "Aborting because of unexpected slow sync for source(s): %s",
+                                 sourceparam.c_str());
+                    SE_LOG_INFO(NULL, NULL,
+                                "Doing a slow synchronization may lead to duplicated items or\n"
+                                "lost data when the server merges items incorrectly. Choosing\n"
+                                "a different synchronization mode may be the better alternative.\n"
+                                "Restart synchronization of affected source(s) with one of the\n"
+                                "following sync modes to recover from this problem:\n"
+                                "    slow, refresh-from-server, refresh-from-client\n\n"
+                                "Analyzing the current state:\n"
+                                "    syncevolution --status %s %s\n\n"
+                                "Running with one of the three modes:\n"
+                                "    syncevolution --sync [slow|refresh-from-server|refresh-from-client] %s %s\n",
+                                m_server.c_str(), sourceparam.c_str(),
+                                m_server.c_str(), sourceparam.c_str());
+                } else {
+                    SE_LOG_ERROR(NULL, NULL, "aborting as requested by script");
+                }
+                stepCmd = sysync::STEPCMD_ABORT;
+                continue;
+            } else if (suspending == 1) {
+                //During suspention we actually insert a STEPCMD_SUSPEND cmd
+                //Should restore to the original step here
                 stepCmd = previousStepCmd;
                 continue;
             }
+
             switch (stepCmd) {
             case sysync::STEPCMD_OK:
                 // no progress info, call step again
@@ -2775,6 +2841,22 @@ int SyncContext::sleep (int intervals)
         }
     }
     return intervals;
+}
+
+bool SyncContext::checkForScriptAbort(SharedSession session)
+{
+    try {
+        SharedKey sessionKey = m_engine.OpenSessionKey(session);
+        SharedKey contextKey = m_engine.OpenKeyByPath(sessionKey, "/sessionvars");
+        bool abort = m_engine.GetInt32Value(contextKey, "delayedabort");
+        return abort;
+    } catch (NoSuchKey) {
+        // this is necessary because the session might already have
+        // been closed, which removes the variable
+        return false;
+    } catch (BadSynthesisResult) {
+        return false;
+    }
 }
 
 void SyncContext::restore(const string &dirname, RestoreDatabase database)
