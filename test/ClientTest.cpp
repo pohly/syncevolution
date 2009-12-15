@@ -2296,7 +2296,8 @@ void SyncTests::testItems() {
     }
 
     // transfer from client A to server to client B
-    doSync("send", SyncOptions(SYNC_TWO_WAY).setWBXML(true));
+    doSync("send", SyncOptions(SYNC_TWO_WAY,
+                               CheckSyncReport(0,0,0, -1,0,0, true, SYNC_TWO_WAY)).setWBXML(true));
     accessClientB->refreshClient(SyncOptions().setWBXML(true));
 
     compareDatabases();
@@ -2315,7 +2316,8 @@ void SyncTests::testItemsXML() {
     }
 
     // transfer from client A to server to client B using the non-default XML format
-    doSync("send", SyncOptions(SYNC_TWO_WAY).setWBXML(false));
+    doSync("send", SyncOptions(SYNC_TWO_WAY,
+                               CheckSyncReport(0,0,0, -1,0,0, true, SYNC_TWO_WAY)).setWBXML(false));
     accessClientB->refreshClient(SyncOptions().setWBXML(false));
 
     compareDatabases();
