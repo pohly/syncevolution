@@ -2218,6 +2218,33 @@ bool SyncContext::initSAN(int retries)
     return false;
 }
 
+static string Step2String(sysync::uInt16 stepcmd)
+{
+    switch (stepcmd) {
+    case sysync::STEPCMD_CLIENTSTART: return "STEPCMD_CLIENTSTART";
+    case sysync::STEPCMD_CLIENTAUTOSTART: return "STEPCMD_CLIENTAUTOSTART";
+    case sysync::STEPCMD_STEP: return "STEPCMD_STEP";
+    case sysync::STEPCMD_GOTDATA: return "STEPCMD_GOTDATA";
+    case sysync::STEPCMD_SENTDATA: return "STEPCMD_SENTDATA";
+    case sysync::STEPCMD_SUSPEND: return "STEPCMD_SUSPEND";
+    case sysync::STEPCMD_ABORT: return "STEPCMD_ABORT";
+    case sysync::STEPCMD_TRANSPFAIL: return "STEPCMD_TRANSPFAIL";
+    case sysync::STEPCMD_TIMEOUT: return "STEPCMD_TIMEOUT";
+    case sysync::STEPCMD_SAN_CHECK: return "STEPCMD_SAN_CHECK";
+    case sysync::STEPCMD_AUTOSYNC_CHECK: return "STEPCMD_AUTOSYNC_CHECK";
+    case sysync::STEPCMD_OK: return "STEPCMD_OK";
+    case sysync::STEPCMD_PROGRESS: return "STEPCMD_PROGRESS";
+    case sysync::STEPCMD_ERROR: return "STEPCMD_ERROR";
+    case sysync::STEPCMD_SENDDATA: return "STEPCMD_SENDDATA";
+    case sysync::STEPCMD_NEEDDATA: return "STEPCMD_NEEDDATA";
+    case sysync::STEPCMD_RESENDDATA: return "STEPCMD_RESENDDATA";
+    case sysync::STEPCMD_DONE: return "STEPCMD_DONE";
+    case sysync::STEPCMD_RESTART: return "STEPCMD_RESTART";
+    case sysync::STEPCMD_NEEDSYNC: return "STEPCMD_NEEDSYNC";
+    default: return StringPrintf("STEPCMD %d", stepcmd);
+    }
+}
+
 SyncMLStatus SyncContext::doSync()
 {
     // install signal handlers only if default behavior
@@ -2395,17 +2422,26 @@ SyncMLStatus SyncContext::doSync()
             // After exception occurs, stepCmd will be set to abort to force
             // aborting, must avoid to change it back to suspend cmd.
             if (checkForSuspend() && stepCmd == sysync::STEPCMD_GOTDATA) {
+                SE_LOG_DEBUG(NULL, NULL, "suspending before SessionStep() in STEPCMD_GOTDATA as requested by user");
                 stepCmd = sysync::STEPCMD_SUSPEND;
             }
 
-            //check for abort, if so, modify step command for next step.
-            //We think abort is useful when the server is unresponsive or 
-            //too slow to the user; therefore, we can delay abort at other
-            //points to this two points (before sending and before receiving
-            //the data).
-            if (checkForAbort() && (stepCmd == sysync::STEPCMD_RESENDDATA
-                        || stepCmd ==sysync::STEPCMD_SENDDATA 
-                        || stepCmd == sysync::STEPCMD_NEEDDATA)) {
+            // Aborting is useful while waiting for a reply and before
+            // sending a message (which will just lead to us waiting
+            // for the reply, but possibly after doing some slow network
+            // IO for setting up the message send).
+            //
+            // While processing a message we let the engine run, because
+            // that is a) likely to be done soon and b) may reduce the
+            // breakage caused by aborting a running sync.
+            //
+            // This check here covers the "waiting for reply" case.
+            if ((stepCmd == sysync::STEPCMD_RESENDDATA ||
+                 stepCmd == sysync::STEPCMD_SENTDATA ||
+                 stepCmd == sysync::STEPCMD_NEEDDATA) &&
+                checkForAbort()) {
+                SE_LOG_DEBUG(NULL, NULL, "aborting before SessionStep() in %s as requested by script",
+                             Step2String(stepCmd).c_str());
                 stepCmd = sysync::STEPCMD_ABORT;
             }
 
@@ -2413,6 +2449,8 @@ SyncMLStatus SyncContext::doSync()
             // let engine contine with its shutdown
             if (stepCmd == sysync::STEPCMD_ABORT) {
                 if (aborting) {
+                    SE_LOG_DEBUG(NULL, NULL, "engine already notified of abort request, reverting to %s",
+                                 Step2String(previousStepCmd).c_str());
                     stepCmd = previousStepCmd;
                 } else {
                     aborting = true;
@@ -2421,6 +2459,8 @@ SyncMLStatus SyncContext::doSync()
             // same for suspending
             if (stepCmd == sysync::STEPCMD_SUSPEND) {
                 if (suspending) {
+                    SE_LOG_DEBUG(NULL, NULL, "engine already notified of suspend request, reverting to %s",
+                                 Step2String(previousStepCmd).c_str());
                     stepCmd = previousStepCmd;
                     suspending++;
                 } else {
@@ -2438,10 +2478,12 @@ SyncMLStatus SyncContext::doSync()
                 reportStepCmd(stepCmd);
             }
 
-            // catch outgoing message and abort if requested by script
             if (stepCmd == sysync::STEPCMD_SENDDATA &&
                 checkForScriptAbort(session)) {
-                // report which sources are affected, based on their status code
+                SE_LOG_DEBUG(NULL, NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by script");
+
+                // Catch outgoing message and abort if requested by script.
+                // Report which sources are affected, based on their status code.
                 list<string> sources;
                 BOOST_FOREACH(SyncSource *source, *m_sourceListPtr) {
                     if (source->getStatus() == STATUS_UNEXPECTED_SLOW_SYNC) {
@@ -2467,8 +2509,15 @@ SyncMLStatus SyncContext::doSync()
                                 m_server.c_str(), sourceparam.c_str(),
                                 m_server.c_str(), sourceparam.c_str());
                 } else {
+                    // we should not get here, but if we do, at least log something
                     SE_LOG_ERROR(NULL, NULL, "aborting as requested by script");
                 }
+                stepCmd = sysync::STEPCMD_ABORT;
+                continue;
+            } else if (stepCmd == sysync::STEPCMD_SENDDATA &&
+                       checkForAbort()) {
+                // Catch outgoing message and abort if requested by user.
+                SE_LOG_DEBUG(NULL, NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by user");
                 stepCmd = sysync::STEPCMD_ABORT;
                 continue;
             } else if (suspending == 1) {
@@ -2648,9 +2697,11 @@ SyncMLStatus SyncContext::doSync()
                         // Send might have failed because of abort or
                         // suspend request.
                         if (checkForSuspend()) {
+                            SE_LOG_DEBUG(NULL, NULL, "suspending after TransportAgent::FAILED as requested by user");
                             stepCmd = sysync::STEPCMD_SUSPEND;
                             break;
                         } else if (checkForAbort()) {
+                            SE_LOG_DEBUG(NULL, NULL, "aborting after TransportAgent::FAILED as requested by user");
                             stepCmd = sysync::STEPCMD_ABORT;
                             break;
                         }
@@ -2660,8 +2711,10 @@ SyncMLStatus SyncContext::doSync()
                         if (leftTime >0 ) {
                             if (sleep (leftTime) > 0) {
                                 if (checkForSuspend()) {
+                                    SE_LOG_DEBUG(NULL, NULL, "suspending after premature exit from sleep() caused by user suspend");
                                     stepCmd = sysync::STEPCMD_SUSPEND;
                                 } else {
+                                    SE_LOG_DEBUG(NULL, NULL, "aborting after premature exit from sleep() caused by user abort");
                                     stepCmd = sysync::STEPCMD_ABORT;
                                 }
                                 break;
@@ -2695,10 +2748,12 @@ SyncMLStatus SyncContext::doSync()
                 stepCmd = sysync::STEPCMD_DONE;
             } else {
                 Exception::handle(&status);
+                SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
                 stepCmd = sysync::STEPCMD_ABORT;
             }
         } catch (...) {
             Exception::handle(&status);
+            SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
             stepCmd = sysync::STEPCMD_ABORT;
         }
     } while (stepCmd != sysync::STEPCMD_DONE && stepCmd != sysync::STEPCMD_ERROR);
