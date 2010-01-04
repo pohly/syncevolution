@@ -469,7 +469,7 @@ class TestRegistry : public vector<const RegisterSyncSourceTest *>
                 return test;
             }
         }
-        throw out_of_range(string("test config registry: ") + configName);
+        boost::throw_exception(out_of_range(string("test config registry: ") + configName));
         return NULL;
     }
 };

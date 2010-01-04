@@ -26,6 +26,7 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/function.hpp>
+#include <boost/throw_exception.hpp>
 
 #include <stdarg.h>
 
@@ -246,8 +247,25 @@ std::vector<std::string> unescapeJoinedString (const std::string &src, char sepa
 
 /** throw a class which accepts file, line, what parameters */
 #define SE_THROW_EXCEPTION(_class,  _what) \
-    throw _class(__FILE__, __LINE__, _what)
-
+    boost::throw_exception(_class(__FILE__, __LINE__, _what))
 
 SE_END_CXX
+
+#ifdef BOOST_NO_EXCEPTIONS
+namespace boost {
+    void throw_exception(std::exception const & e) __attribute__((noreturn));
+    void throw_exception(SyncEvo::Exception const & e) __attribute__((noreturn));
+}
+
+# define SE_TRY
+# define SE_CATCH_ANY() while(false)
+# define SE_CATCH(_type, _var) for(const _type &_var = *(_type *)0; &_var;)
+# define SE_RETHROW()
+#else
+# define SE_TRY try
+# define SE_CATCH_ANY() catch(...)
+# define SE_CATCH(_type, _var) catch(const _type &_var)
+# define SE_RETHROW() throw
+#endif
+
 #endif // INCL_SYNCEVOLUTION_UTIL

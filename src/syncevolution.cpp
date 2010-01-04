@@ -129,7 +129,7 @@ int main( int argc, char **argv )
     }
     free(exe);
 
-    try {
+    SE_TRY {
         EDSAbiWrapperInit();
 
         /*
@@ -145,9 +145,9 @@ int main( int argc, char **argv )
         } else {
             return 1;
         }
-    } catch ( const std::exception &ex ) {
+    } SE_CATCH(std::exception, ex) {
         SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
-    } catch (...) {
+    } SE_CATCH_ANY() {
         SE_LOG_ERROR(NULL, NULL, "unknown error");
     }
 

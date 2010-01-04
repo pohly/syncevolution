@@ -39,6 +39,7 @@ using namespace std;
 #include <boost/scoped_array.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include <syncevo/util.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -97,7 +98,7 @@ template<class T, class base = T, class R = Unref > class eptr {
         m_pointer( pointer )
     {
         if (!pointer && objectName ) {
-            throw std::runtime_error(std::string("Error allocating ") + objectName);
+            SE_THROW(std::string("Error allocating ") + objectName);
         }
     };
     ~eptr()

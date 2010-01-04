@@ -440,11 +440,11 @@ TSyError SyncEvolution_LoadAdminData( CContext aContext, cAppCharP aLocDB,
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    try {
+    SE_TRY {
         if (source->getOperations().m_loadAdminData) {
             res = source->getOperations().m_loadAdminData(aLocDB, aRemDB, adminData);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -463,11 +463,11 @@ TSyError SyncEvolution_SaveAdminData( CContext aContext, cAppCharP adminData )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    try {
+    SE_TRY {
         if (source->getOperations().m_saveAdminData) {
             res = source->getOperations().m_saveAdminData(adminData);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -485,11 +485,11 @@ bool SyncEvolution_ReadNextMapItem( CContext aContext, MapID mID, bool aFirst )
         return LOCERR_WRONGUSAGE;
     }
     bool res = false;
-    try {
+    SE_TRY {
         if (source->getOperations().m_readNextMapItem) {
             res = source->getOperations().m_readNextMapItem(mID, aFirst);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -508,11 +508,11 @@ TSyError SyncEvolution_InsertMapItem( CContext aContext, cMapID mID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    try {
+    SE_TRY {
         if (source->getOperations().m_insertMapItem) {
             res = source->getOperations().m_insertMapItem(mID);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -531,11 +531,11 @@ TSyError SyncEvolution_UpdateMapItem( CContext aContext, cMapID mID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    try {
+    SE_TRY {
         if (source->getOperations().m_updateMapItem) {
             res = source->getOperations().m_updateMapItem(mID);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -555,11 +555,11 @@ TSyError SyncEvolution_DeleteMapItem( CContext aContext, cMapID mID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    try {
+    SE_TRY {
         if (source->getOperations().m_deleteMapItem) {
             res = source->getOperations().m_deleteMapItem(mID);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -636,7 +636,7 @@ TSyError SyncEvolution_StartDataRead( CContext aContext, cAppCharP   lastToken,
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = LOCERR_OK;
-    try {
+    SE_TRY {
         if (source->getOperations().m_startDataRead) {
             res = source->getOperations().m_startDataRead(lastToken, resumeToken);
         }
@@ -644,7 +644,7 @@ TSyError SyncEvolution_StartDataRead( CContext aContext, cAppCharP   lastToken,
                       source->getOperations().m_startSession) {
             callback();
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 
@@ -667,9 +667,9 @@ TSyError SyncEvolution_ReadNextItemAsKey( CContext aContext, ItemID aID, KeyH aI
     *aStatus = 0;
     memset(aID, 0, sizeof(*aID));
     if (source->getOperations().m_readNextItem) {
-        try {
+        SE_TRY {
             res = source->getOperations().m_readNextItem(aID, aStatus, aFirst);
-        } catch (...) {
+        } SE_CATCH_ANY() {
             res = source->handleException();
         }
     }
@@ -688,9 +688,9 @@ TSyError SyncEvolution_ReadItemAsKey( CContext aContext, cItemID aID, KeyH aItem
     }
     TSyError res = LOCERR_OK;
     if (source->getOperations().m_readItemAsKey) {
-        try {
+        SE_TRY {
             res = source->getOperations().m_readItemAsKey(aID, aItemKey);
-        } catch (...) {
+        } SE_CATCH_ANY() {
             res = source->handleException();
         }
     }
@@ -739,9 +739,9 @@ TSyError SyncEvolution_EndDataRead( CContext aContext )
     }
     TSyError res = LOCERR_OK;
     if (source->getOperations().m_endDataRead) {
-        try {
+        SE_TRY {
             res = source->getOperations().m_endDataRead();
-        } catch (...) {
+        } SE_CATCH_ANY() {
             res = source->handleException();
         }
     }
@@ -775,9 +775,9 @@ TSyError SyncEvolution_InsertItemAsKey( CContext aContext, KeyH aItemKey, ItemID
     }
     TSyError res = LOCERR_OK;
     if (source->getOperations().m_insertItemAsKey) {
-        try {
+        SE_TRY {
             res = source->getOperations().m_insertItemAsKey(aItemKey, newID);
-        } catch (...) {
+        } SE_CATCH_ANY() {
             res = source->handleException();
         }
     }
@@ -797,9 +797,9 @@ TSyError SyncEvolution_UpdateItemAsKey( CContext aContext, KeyH aItemKey, cItemI
     }
     TSyError res = LOCERR_OK;
     if (source->getOperations().m_updateItemAsKey) {
-        try {
+        SE_TRY {
             res = source->getOperations().m_updateItemAsKey(aItemKey, aID, updID);
-        } catch (...) {
+        } SE_CATCH_ANY() {
             res = source->handleException();
         }
     }
@@ -835,9 +835,9 @@ TSyError SyncEvolution_DeleteItem( CContext aContext, cItemID aID )
     }
     TSyError res = LOCERR_OK;
     if (source->getOperations().m_deleteItem) {
-        try {
+        SE_TRY {
             res = source->getOperations().m_deleteItem (aID);
-        } catch (...) {
+        } SE_CATCH_ANY() {
             res = source->handleException();
         }
     }
@@ -919,7 +919,7 @@ TSyError SyncEvolution_EndDataWrite( CContext aContext, bool success, appCharP *
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = LOCERR_OK;
-    try {
+    SE_TRY {
         BOOST_FOREACH(const SyncSource::Operations::CallbackFunctor_t &callback,
                       source->getOperations().m_endSession) {
             callback();
@@ -927,7 +927,7 @@ TSyError SyncEvolution_EndDataWrite( CContext aContext, bool success, appCharP *
         if (source->getOperations().m_endDataWrite) {
             res = source->getOperations().m_endDataWrite(success, newToken);
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         res = source->handleException();
     }
 

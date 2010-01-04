@@ -18,6 +18,7 @@
  * 02110-1301  USA
  */
 
+#include <syncevo/util.h>
 #include <syncevo/Logging.h>
 #include <syncevo/LogStdout.h>
 
@@ -46,7 +47,7 @@ void LoggerBase::pushLogger(LoggerBase *logger)
 void LoggerBase::popLogger()
 {
     if (loggers.empty()) {
-        throw "too many popLogger() calls";
+        SE_THROW("too many popLogger() calls");
     } else {
         loggers.pop_back();
     }

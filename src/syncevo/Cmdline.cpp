@@ -411,12 +411,12 @@ bool Cmdline::run() {
                     if (syncSource.get() == NULL) {
                         disable = "no backend available";
                     } else {
-                        try {
+                        SE_TRY {
                             SyncSource::Databases databases = syncSource->getDatabases();
                             if (databases.empty()) {
                                 disable = "no database to synchronize";
                             }
-                        } catch (...) {
+                        } SE_CATCH_ANY() {
                             disable = "backend failed";
                         }
                     }

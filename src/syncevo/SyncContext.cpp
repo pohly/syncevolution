@@ -250,11 +250,11 @@ public:
      * @return full path of previous log directory, empty string if not found
      */
     string previousLogdir(const char *path) throw() {
-        try {
+        SE_TRY {
             vector<string> dirs;
             previousLogdirs(path, dirs);
             return dirs.empty() ? "" : dirs.back();
-        } catch (...) {
+        } SE_CATCH_ANY() {
             Exception::handle();
             return "";
         }
@@ -835,9 +835,9 @@ public:
         if (m_doLogging) {
             // dump database after sync, but not if already dumping it at the beginning didn't complete
             if (m_reportTodo && m_prepared) {
-                try {
+                SE_TRY {
                     dumpDatabases("after", &SyncSourceReport::m_backupAfter);
-                } catch (...) {
+                } SE_CATCH_ANY() {
                     Exception::handle();
                     m_prepared = false;
                 }
@@ -990,6 +990,7 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent()
     }
 
     SE_THROW("unsupported transport type is specified in the configuration");
+    return boost::shared_ptr<TransportAgent>();
 }
 
 void SyncContext::displayServerMessage(const string &message)
@@ -1270,7 +1271,7 @@ void SyncContext::throwError(const string &error)
      */
     fatalError(NULL, error.c_str());
 #else
-    throw runtime_error(error);
+    boost::throw_exception(runtime_error(error));
 #endif
 }
 
@@ -1474,12 +1475,12 @@ void SyncContext::setSyncModes(const std::vector<SyncSource *> &sources,
 
 void SyncContext::getConfigTemplateXML(string &xml, string &configname)
 {
-    try {
+    SE_TRY {
         configname = "syncclient_sample_config.xml";
         if (ReadFile(configname, xml)) {
             return;
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         Exception::handle();
     }
 
@@ -1926,16 +1927,16 @@ void SyncContext::initEngine(bool logXML)
 {
     string xml, configname;
     getConfigXML(xml, configname);
-    try {
+    SE_TRY {
         m_engine.InitEngineXML(xml.c_str());
-    } catch (const BadSynthesisResult &ex) {
+    } SE_CATCH(BadSynthesisResult, ex) {
         SE_LOG_ERROR(NULL, NULL,
                      "internal error, invalid XML configuration (%s):\n%s",
                      m_sourceListPtr && !m_sourceListPtr->empty() ?
                      "with datastores" :
                      "without datastores",
                      xml.c_str());
-        throw;
+        SE_RETHROW();
     }
     if (logXML) {
         SE_LOG_DEV(NULL, NULL, "Full XML configuration:\n%s", xml.c_str());
@@ -1958,7 +1959,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
                            SourceList::LOGGING_SUMMARY);
 
     SwapContext syncSentinel(this);
-    try {
+    SE_TRY {
         m_sourceListPtr = &sourceList;
 
         if (getenv("SYNCEVOLUTION_GNUTLS_DEBUG")) {
@@ -2008,7 +2009,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
         SwapEngine swapengine(*this);
         initEngine(false);
 
-        try {
+        SE_TRY {
             // dump some summary information at the beginning of the log
             SE_LOG_DEV(NULL, NULL, "SyncML server account: %s", getUsername());
             SE_LOG_DEV(NULL, NULL, "client: SyncEvolution %s for %s", getSwv(), getDevType());
@@ -2066,17 +2067,17 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             // ready to go: dump initial databases and prepare for final report
             sourceList.syncPrepare();
             status = doSync();
-        } catch (...) {
+        } SE_CATCH_ANY() {
             // handle the exception here while the engine (and logging!) is still alive
             Exception::handle(&status);
             goto report;
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         Exception::handle(&status);
     }
 
  report:
-    try {
+    SE_TRY {
         // Print final report before cleaning up.
         // Status was okay only if all sources succeeded.
         sourceList.updateSyncReport(*report);
@@ -2088,7 +2089,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             }
         }
         sourceList.syncDone(status, report);
-    } catch(...) {
+    } SE_CATCH_ANY() {
         Exception::handle(&status);
     }
 
@@ -2182,7 +2183,7 @@ bool SyncContext::initSAN(int retries)
     }
 
     /* Create the transport agent */
-    try {
+    SE_TRY {
         m_agent = createTransportAgent();
         //register transport callback
         if (m_retryInterval) {
@@ -2215,7 +2216,7 @@ bool SyncContext::initSAN(int retries)
                 }
             }
         }
-    } catch (TransportException e) {
+    } SE_CATCH(TransportException, e) {
         SE_LOG_ERROR (NULL, NULL, "TransportException while sending SAN package");
     }
     return false;
@@ -2413,7 +2414,7 @@ SyncMLStatus SyncContext::doSync()
     time_t sendStart = 0, resendStart = 0;
     sysync::uInt16 previousStepCmd = stepCmd;
     do {
-        try {
+        SE_TRY {
             // check for suspend, if so, modify step command for next step
             // Since the suspend will actually be committed until it is
             // sending out a message, we can safely delay the suspend to
@@ -2732,7 +2733,7 @@ SyncMLStatus SyncContext::doSync()
             }
             previousStepCmd = stepCmd;
             // loop until session done or aborted with error
-        } catch (const BadSynthesisResult &result) {
+        } SE_CATCH(BadSynthesisResult, result) {
             if (result.result() == sysync::LOCERR_USERABORT && aborting) {
                 SE_LOG_INFO(NULL, NULL, "Aborted as requested.");
                 stepCmd = sysync::STEPCMD_DONE;
@@ -2750,7 +2751,7 @@ SyncMLStatus SyncContext::doSync()
                 SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
                 stepCmd = sysync::STEPCMD_ABORT;
             }
-        } catch (...) {
+        } SE_CATCH_ANY() {
             Exception::handle(&status);
             SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
             stepCmd = sysync::STEPCMD_ABORT;
@@ -2760,14 +2761,14 @@ SyncMLStatus SyncContext::doSync()
     // If we get here without error, then close down connection normally.
     // Otherwise destruct the agent without further communication.
     if (!status && !checkForAbort()) {
-        try {
+        SE_TRY {
             m_agent->shutdown();
             // TODO: implement timeout for peers which fail to respond
             while (!checkForAbort() &&
                    m_agent->wait(true) == TransportAgent::ACTIVE) {
                 // TODO: allow aborting the sync here
             }
-        } catch (...) {
+        } SE_CATCH_ANY() {
             status = handleException();
         }
     }
@@ -2822,11 +2823,11 @@ void SyncContext::status()
     bool found = access(prevLogdir.c_str(), R_OK|X_OK) == 0;
 
     if (found) {
-        try {
+        SE_TRY {
             sourceList.setPath(prevLogdir);
             sourceList.dumpDatabases("current", NULL);
             sourceList.dumpLocalChanges(sourceList.getPrevLogdir(), "after", "current");
-        } catch(...) {
+        } SE_CATCH_ANY() {
             Exception::handle();
         }
     } else {
@@ -2947,10 +2948,10 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
     }
 
     SyncReport report;
-    try {
+    SE_TRY {
         BOOST_FOREACH(SyncSource *source, sourceList) {
             SyncSourceReport sourcereport;
-            try {
+            SE_TRY {
                 SE_LOG_DEBUG(NULL, NULL, "Restoring %s...", source->getName());
                 sourceList.restoreDatabase(*source,
                                            datadump,
@@ -2958,15 +2959,15 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
                                            sourcereport);
                 SE_LOG_DEBUG(NULL, NULL, "... %s restored.", source->getName());
                 report.addSyncSourceReport(source->getName(), sourcereport);
-            } catch (...) {
+            } SE_CATCH_ANY() {
                 sourcereport.recordStatus(STATUS_FATAL);
                 report.addSyncSourceReport(source->getName(), sourcereport);
-                throw;
+                SE_RETHROW();
             }
         }
-    } catch (...) {
+    } SE_CATCH_ANY() {
         logRestoreReport(report, m_dryrun);
-        throw;
+        SE_RETHROW();
     }
     logRestoreReport(report, m_dryrun);
 }

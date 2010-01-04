@@ -646,7 +646,7 @@ void SyncSourceRevisions::restoreData(const string &dir, const ConfigNode &node,
                 it == revisions.end() ?
                 SyncSourceReport::ITEM_ADDED :   // not found in database, create anew
                 SyncSourceReport::ITEM_UPDATED;  // found, update existing item
-            try {
+            SE_TRY {
                 report.incrementItemStat(report.ITEM_LOCAL,
                                          state,
                                          report.ITEM_TOTAL);
@@ -654,11 +654,11 @@ void SyncSourceRevisions::restoreData(const string &dir, const ConfigNode &node,
                     m_raw->insertItemRaw(it == revisions.end() ? "" : uid,
                                          data);
                 }
-            } catch (...) {
+            } SE_CATCH_ANY() {
                 report.incrementItemStat(report.ITEM_LOCAL,
                                          state,
                                          report.ITEM_REJECT);
-                throw;
+                SE_RETHROW();
             }
         }
 
@@ -673,18 +673,18 @@ void SyncSourceRevisions::restoreData(const string &dir, const ConfigNode &node,
 
     // now remove items that were not in the backup
     BOOST_FOREACH(const StringPair &mapping, revisions) {
-        try {
+        SE_TRY {
             report.incrementItemStat(report.ITEM_LOCAL,
                                      report.ITEM_REMOVED,
                                      report.ITEM_TOTAL);
             if (!dryrun) {
                 m_del->deleteItem(mapping.first);
             }
-        } catch(...) {
+        } SE_CATCH_ANY() {
             report.incrementItemStat(report.ITEM_LOCAL,
                                      report.ITEM_REMOVED,
                                      report.ITEM_REJECT);
-            throw;
+            SE_RETHROW();
         }
     }
 }
@@ -785,7 +785,7 @@ void SyncSourceRevisions::init(SyncSourceRaw *raw,
 
 std::string SyncSourceLogging::getDescription(sysync::KeyH aItemKey)
 {
-    try {
+    SE_TRY {
         std::list<std::string> values;
 
         BOOST_FOREACH(const std::string &field, m_fields) {
@@ -798,7 +798,7 @@ std::string SyncSourceLogging::getDescription(sysync::KeyH aItemKey)
 
         std::string description = boost::join(values, m_sep);
         return description;
-    } catch (...) {
+    } SE_CATCH_ANY() {
         // Instead of failing we log the error and ask
         // the caller to log the UID. That way transient
         // errors or errors in the logging code don't

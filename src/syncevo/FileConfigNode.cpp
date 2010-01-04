@@ -67,7 +67,7 @@ void FileBaseConfigNode::flush()
     }
 
     if (m_readonly) {
-        throw std::runtime_error(m_path + "/" + m_fileName + ": internal error: flushing read-only file config node not allowed");
+        SE_THROW(m_path + "/" + m_fileName + ": internal error: flushing read-only file config node not allowed");
     }
 
     mkdir_p(m_path);

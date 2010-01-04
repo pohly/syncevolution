@@ -19,6 +19,7 @@
  */
 
 #include <syncevo/LogStdout.h>
+#include <syncevo/util.h>
 #include <string.h>
 #include <errno.h>
 
@@ -36,7 +37,7 @@ LoggerStdout::LoggerStdout(const std::string &filename) :
     m_closeFile(true)
 {
     if (!m_file) {
-        throw std::string(filename + ": " + strerror(errno));
+        SE_THROW(filename + ": " + strerror(errno));
     }
 }
 

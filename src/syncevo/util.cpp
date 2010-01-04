@@ -199,7 +199,7 @@ ReadDir::ReadDir(const string &path, bool throwError) : m_path(path)
 {
     DIR *dir = NULL;
 
-    try {
+    SE_TRY {
         dir = opendir(path.c_str());
         if (!dir) {
             SyncContext::throwError(path, errno);
@@ -216,12 +216,12 @@ ReadDir::ReadDir(const string &path, bool throwError) : m_path(path)
         if (errno) {
             SyncContext::throwError(path, errno);
         }
-    } catch(...) {
+    } SE_CATCH_ANY() {
         if (dir) {
             closedir(dir);
         }
         if (throwError) {
-            throw;
+            SE_RETHROW();
         } else {
             return;
         }
@@ -316,6 +316,9 @@ SyncMLStatus Exception::handle(SyncMLStatus *status, Logger *logger)
 {
     SyncMLStatus new_status = STATUS_FATAL;
 
+#ifdef BOOST_NO_EXCEPTIONS
+    SE_LOG_ERROR(logger, NULL, "unknown exception caught");
+#else
     try {
         throw;
     } catch (const TransportException &ex) {
@@ -332,6 +335,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status, Logger *logger)
     } catch (...) {
         SE_LOG_ERROR(logger, NULL, "unknown error");
     }
+#endif // BOOST_NO_EXCEPTIONS
 
     if (status && *status == STATUS_OK) {
         *status = new_status;
@@ -409,5 +413,23 @@ std::vector<std::string> unescapeJoinedString (const std::string& src, char sep)
     return splitStrings;
 }
 
-
 SE_END_CXX
+
+#ifdef BOOST_NO_EXCEPTIONS
+namespace boost {
+    using namespace SyncEvo;
+    void throw_exception(std::exception const & e)
+    {
+        SE_LOG_ERROR(NULL, NULL, "encountered fatal exception: %s", e.what());
+        exit(1);
+    }
+    void throw_exception(SyncEvo::Exception const & e)
+    {
+        SE_LOG_ERROR(NULL, NULL, "encountered fatal exception: %s:%d: %s",
+                     e.m_file.c_str(),
+                     e.m_line,
+                     e.what());
+        exit(1);
+    }
+}
+#endif
