@@ -92,7 +92,7 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
     getSynthesisInfo(info, fragments);
 
     xmlstream <<
-        "      <plugin_module>SyncEvolution</plugin_module>\n"
+        "      <plugin_module>" << SynthesisDBPlugin() << "</plugin_module>\n"
         "      <plugin_datastoreadmin>" <<
         (serverModeEnabled() ? "yes" : "no") <<
         "</plugin_datastoreadmin>\n"

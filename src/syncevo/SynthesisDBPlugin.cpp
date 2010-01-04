@@ -950,4 +950,86 @@ TSyError SyncEvolution_DeleteContext( CContext aContext )
   return LOCERR_OK;
 }
 
+static struct {
+    const char *sym;
+    void *func;
+} SyncEvoSyms[] = {
+    { "AdaptItem", (void *)SyncEvolution_AdaptItem },
+    { "ContextSupport", (void *)SyncEvolution_ContextSupport },
+    { "CreateContext", (void *)SyncEvolution_CreateContext },
+#if 0
+    { "DeleteBlob", (void *)SyncEvolution_DeleteBlob },
+#endif
+    { "DeleteContext", (void *)SyncEvolution_DeleteContext },
+    { "DeleteItem", (void *)SyncEvolution_DeleteItem },
+    { "DeleteMapItem", (void *)SyncEvolution_DeleteMapItem },
+    { "DeleteSyncSet", (void *)SyncEvolution_DeleteSyncSet },
+    { "DispItems", (void *)SyncEvolution_DispItems },
+    { "DisposeObj", (void *)SyncEvolution_DisposeObj },
+    { "EndDataRead", (void *)SyncEvolution_EndDataRead },
+    { "EndDataWrite", (void *)SyncEvolution_EndDataWrite },
+    { "EndDataWrite", (void *)SyncEvolution_EndDataWrite },
+    { "FilterSupport", (void *)SyncEvolution_FilterSupport },
+    { "FinalizeLocalID", (void *)SyncEvolution_FinalizeLocalID },
+    { "InsertItemAsKey", (void *)SyncEvolution_InsertItemAsKey },
+    { "InsertMapItem", (void *)SyncEvolution_InsertMapItem },
+    { "LoadAdminData", (void *)SyncEvolution_LoadAdminData },
+    { "Module_Capabilities", (void *)SyncEvolution_Module_Capabilities },
+    { "Module_CreateContext", (void *)SyncEvolution_Module_CreateContext },
+    { "Module_DeleteContext", (void *)SyncEvolution_Module_DeleteContext },
+    { "Module_DisposeObj", (void *)SyncEvolution_Module_DisposeObj },
+    { "Module_PluginParams", (void *)SyncEvolution_Module_PluginParams },
+    { "Module_Version", (void *)SyncEvolution_Module_Version },
+    { "MoveItem", (void *)SyncEvolution_MoveItem },
+#if 0
+    { "ReadBlob", (void *)SyncEvolution_ReadBlob },
+#endif
+    { "ReadItemAsKey", (void *)SyncEvolution_ReadItemAsKey },
+    { "ReadNextItemAsKey", (void *)SyncEvolution_ReadNextItemAsKey },
+    { "ReadNextMapItem", (void *)SyncEvolution_ReadNextMapItem },
+    { "SaveAdminData", (void *)SyncEvolution_SaveAdminData },
+    { "Session_AdaptItem", (void *)SyncEvolution_Session_AdaptItem },
+    { "Session_CheckDevice", (void *)SyncEvolution_Session_CheckDevice },
+    { "Session_CreateContext", (void *)SyncEvolution_Session_CreateContext },
+    { "Session_DeleteContext", (void *)SyncEvolution_Session_DeleteContext },
+    { "Session_DispItems", (void *)SyncEvolution_Session_DispItems },
+    { "Session_DisposeObj", (void *)SyncEvolution_Session_DisposeObj },
+    { "Session_GetDBTime", (void *)SyncEvolution_Session_GetDBTime },
+    { "Session_GetNonce", (void *)SyncEvolution_Session_GetNonce },
+    { "Session_Login", (void *)SyncEvolution_Session_Login },
+    { "Session_Logout", (void *)SyncEvolution_Session_Logout },
+    { "Session_PasswordMode", (void *)SyncEvolution_Session_PasswordMode },
+    { "Session_SaveDeviceInfo", (void *)SyncEvolution_Session_SaveDeviceInfo },
+    { "Session_SaveNonce", (void *)SyncEvolution_Session_SaveNonce },
+    { "Session_ThreadMayChangeNow", (void *)SyncEvolution_Session_ThreadMayChangeNow },
+    { "StartDataRead", (void *)SyncEvolution_StartDataRead },
+    { "StartDataWrite", (void *)SyncEvolution_StartDataWrite },
+    { "ThreadMayChangeNow", (void *)SyncEvolution_ThreadMayChangeNow },
+    { "UpdateItemAsKey", (void *)SyncEvolution_UpdateItemAsKey },
+    { "UpdateMapItem", (void *)SyncEvolution_UpdateMapItem },
+#if 0
+    { "WriteBlob", (void *)SyncEvolution_WriteBlob },
+#endif
+    { "WriteLogData", (void *)SyncEvolution_WriteLogData },
+    { NULL }
+};
+
+std::string SynthesisDBPlugin()
+{
+    // prepare special modules name, using the 
+    // "static: <sym>=<addr>" syntax
+    static std::string syms;
+    if (syms.empty()) {
+        std::ostringstream out;
+        out << "//static/";
+        for (int i = 0; SyncEvoSyms[i].sym; i++) {
+            out << SyncEvoSyms[i].sym << "=" <<
+                (sysync::uIntPtr)SyncEvoSyms[i].func << "/";
+        }
+        syms = out.str();
+        SE_LOG_DEBUG(NULL, NULL, "syms: %s", syms.c_str());
+    }
+    return syms;
+}
+
 SE_END_CXX

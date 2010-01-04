@@ -37,6 +37,9 @@ using namespace std;
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+/** returns "static: <sym>=<addr>" description of all plugin functions */
+std::string SynthesisDBPlugin();
+
 class TransportAgent;
 class SourceList;
 class SyncSource;

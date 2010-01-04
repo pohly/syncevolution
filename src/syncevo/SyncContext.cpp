@@ -1555,7 +1555,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     if (m_serverMode) {
         clientorserver <<
             "  <server type='plugin'>\n"
-            "    <plugin_module>SyncEvolution</plugin_module>\n"
+            "    <plugin_module>" << SynthesisDBPlugin() << "</plugin_module>\n"
             "    <plugin_sessionauth>yes</plugin_sessionauth>\n"
             "    <plugin_deviceadmin>yes</plugin_deviceadmin>\n"
             "\n" <<
