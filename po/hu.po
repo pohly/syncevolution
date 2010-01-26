@@ -3,494 +3,540 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#: ../src/gtk-ui/sync-ui.c:610
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: syncevolution\n"
 "Report-Msgid-Bugs-To: http://moblin.org/projects/syncevolution\n"
-"POT-Creation-Date: 2009-07-08 09:17+0000\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"POT-Creation-Date: 2009-11-30 18:15+0000\n"
+"PO-Revision-Date: 2010-01-26 16:16+0100\n"
+"Last-Translator: Gergely Lónyai <aleph@mandriva.org>\n"
+"Language-Team: Hungarian <aleph@mandriva.org>\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n!=1;\n"
+"X-Poedit-Language: Hungarian\n"
+"X-Poedit-Country: HUNGARY\n"
+"X-Poedit-SourceCharset: utf-8\n"
 
-#: ../src/gtk-ui/sync-ui.c:254
+#. TRANSLATORS: this is the application name that may be used by e.g.
+#. the windowmanager
+#: ../src/gtk-ui/main.c:31
+#: ../src/gtk-ui/ui.glade.h:28
+#: ../src/gtk-ui/sync.desktop.in.h:1
+msgid "Sync"
+msgstr "Szinkronizálás"
+
+#: ../src/gtk-ui/sync-ui.c:259
 msgid "Addressbook"
-msgstr ""
+msgstr "Címjegyzék"
 
-#: ../src/gtk-ui/sync-ui.c:256
+#: ../src/gtk-ui/sync-ui.c:261
 msgid "Calendar"
-msgstr ""
+msgstr "Naptár"
 
-#: ../src/gtk-ui/sync-ui.c:258
+#: ../src/gtk-ui/sync-ui.c:263
 msgid "Todo"
-msgstr ""
+msgstr "Teendők listája"
 
-#: ../src/gtk-ui/sync-ui.c:260
+#: ../src/gtk-ui/sync-ui.c:265
 msgid "Memo"
-msgstr ""
+msgstr "Feljegyzés"
 
-#: ../src/gtk-ui/sync-ui.c:315
+#: ../src/gtk-ui/sync-ui.c:320
 msgid "Failed to save current service in GConf configuration system"
-msgstr ""
+msgstr "Hiba a jelenlegi szolgáltatás beállításainak a GConf rendszerbe történő mentése közben"
 
-#: ../src/gtk-ui/sync-ui.c:326
+#: ../src/gtk-ui/sync-ui.c:331
 msgid "Failed to save service configuration to SyncEvolution"
-msgstr ""
+msgstr "Hiba a szolgáltatás beállításainak a SyncEvolution-ba történő mentése közben"
 
-#: ../src/gtk-ui/sync-ui.c:353
+#: ../src/gtk-ui/sync-ui.c:416
 msgid "Failed to get service configuration from SyncEvolution"
-msgstr ""
+msgstr "Hiba a szolgáltatás beállításainak a SyncEvolution-ból történő betöltése közben"
 
-#: ../src/gtk-ui/sync-ui.c:390
+#: ../src/gtk-ui/sync-ui.c:480
 msgid "Failed to remove service configuration from SyncEvolution"
-msgstr ""
+msgstr "Hiba a távoli szolgáltatás beállításainak a SyncEvolution-ból történő betöltése közben"
 
-#: ../src/gtk-ui/sync-ui.c:486
-msgid "Service must have a name"
-msgstr ""
+#: ../src/gtk-ui/sync-ui.c:600
+msgid "Service must have a name and server URL"
+msgstr "A szolgáltatáshoz adj meg egy nevet és egy kiszolgáló URL címét"
 
 #. sync is no longer in progress for some reason
-#: ../src/gtk-ui/sync-ui.c:522
+#: ../src/gtk-ui/sync-ui.c:676
 msgid "Failed to cancel: sync was no longer in progress"
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:526
+#: ../src/gtk-ui/sync-ui.c:680
 msgid "Failed to cancel sync"
-msgstr ""
+msgstr "A szinkronizálás megszakítása nem sikerült"
 
-#: ../src/gtk-ui/sync-ui.c:530
+#: ../src/gtk-ui/sync-ui.c:684
 msgid "Canceling sync"
-msgstr ""
+msgstr "Szinkronizálás megszakítása"
 
-#: ../src/gtk-ui/sync-ui.c:544
+#: ../src/gtk-ui/sync-ui.c:698
 msgid "Trying to cancel sync"
-msgstr ""
+msgstr "Kísérlet a szinkronizálás leállítására"
 
-#: ../src/gtk-ui/sync-ui.c:551
+#: ../src/gtk-ui/sync-ui.c:705
 #, c-format
-msgid ""
-"Do you want to delete all local data and replace it with data from %s? This "
-"is not usually advised."
+msgid "Do you want to delete all local data and replace it with data from %s? This is not usually advised."
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:556
+#: ../src/gtk-ui/sync-ui.c:710
 #, c-format
-msgid ""
-"Do you want to delete all data in %s and replace it with your local data? "
-"This is not usually advised."
+msgid "Do you want to delete all data in %s and replace it with your local data? This is not usually advised."
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:572
+#: ../src/gtk-ui/sync-ui.c:727
 msgid "No, cancel sync"
-msgstr ""
+msgstr "Állítsd le a szinkronizálást"
 
-#: ../src/gtk-ui/sync-ui.c:573
+#: ../src/gtk-ui/sync-ui.c:728
 msgid "Yes, delete and replace"
-msgstr ""
+msgstr "Töröld vagy cseréld le"
 
-#: ../src/gtk-ui/sync-ui.c:595
+#: ../src/gtk-ui/sync-ui.c:750
 msgid "No sources are enabled, not syncing"
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:612
+#: ../src/gtk-ui/sync-ui.c:767
 msgid "A sync is already in progress"
-msgstr ""
+msgstr "Már folyamatban van egy szinkronizálás"
 
-#: ../src/gtk-ui/sync-ui.c:614
+#: ../src/gtk-ui/sync-ui.c:769
 msgid "Failed to start sync"
-msgstr ""
+msgstr "Nem sikerült a szinkronizálás elindítása"
 
-#: ../src/gtk-ui/sync-ui.c:619
+#: ../src/gtk-ui/sync-ui.c:774
 msgid "Starting sync"
-msgstr ""
+msgstr "Szinkronizálás elindítása"
 
-#: ../src/gtk-ui/sync-ui.c:644
+#: ../src/gtk-ui/sync-ui.c:799
 msgid "Last synced just seconds ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás pár másodperce volt"
 
-#: ../src/gtk-ui/sync-ui.c:647
+#: ../src/gtk-ui/sync-ui.c:802
 msgid "Last synced a minute ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás egy perce volt"
 
-#: ../src/gtk-ui/sync-ui.c:650
+#: ../src/gtk-ui/sync-ui.c:805
 #, c-format
 msgid "Last synced %ld minutes ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás %ld perce volt"
 
-#: ../src/gtk-ui/sync-ui.c:653
+#: ../src/gtk-ui/sync-ui.c:808
 msgid "Last synced an hour ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás pár órája volt"
 
-#: ../src/gtk-ui/sync-ui.c:656
+#: ../src/gtk-ui/sync-ui.c:811
 #, c-format
 msgid "Last synced %ld hours ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás %ld órája volt"
 
-#: ../src/gtk-ui/sync-ui.c:659
+#: ../src/gtk-ui/sync-ui.c:814
 msgid "Last synced a day ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás egy napja volt"
 
-#: ../src/gtk-ui/sync-ui.c:662
+#: ../src/gtk-ui/sync-ui.c:817
 #, c-format
 msgid "Last synced %ld days ago"
-msgstr ""
+msgstr "Az utolsó szinkronizálás %ld napja volt"
 
-#: ../src/gtk-ui/sync-ui.c:747
+#: ../src/gtk-ui/sync-ui.c:902
 msgid "Sync again"
-msgstr ""
+msgstr "Szinkronizálás újra"
 
-#: ../src/gtk-ui/sync-ui.c:749 ../src/gtk-ui/ui.glade.h:29
+#: ../src/gtk-ui/sync-ui.c:904
+#: ../src/gtk-ui/ui.glade.h:29
 msgid "Sync now"
-msgstr ""
+msgstr "Szinkronizálás most"
 
-#: ../src/gtk-ui/sync-ui.c:758
+#: ../src/gtk-ui/sync-ui.c:913
 msgid "Syncing"
-msgstr ""
+msgstr "Szinkronizálás"
 
-#: ../src/gtk-ui/sync-ui.c:764
+#: ../src/gtk-ui/sync-ui.c:919
 msgid "Cancel sync"
-msgstr ""
+msgstr "Szinkronizálás leállítása"
 
 #. TRANSLATORS: placeholder is a source name, shown with checkboxes in main window
-#: ../src/gtk-ui/sync-ui.c:1108
+#: ../src/gtk-ui/sync-ui.c:1266
 #, c-format
 msgid "%s (not supported by this service)"
-msgstr ""
+msgstr "%s (nem támogatott ezen az eszközön)"
 
-#: ../src/gtk-ui/sync-ui.c:1141
+#: ../src/gtk-ui/sync-ui.c:1299
 #, c-format
 msgid "There was one remote rejection."
 msgid_plural "There were %d remote rejections."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../src/gtk-ui/sync-ui.c:1146
+#: ../src/gtk-ui/sync-ui.c:1304
 #, c-format
 msgid "There was one local rejection."
 msgid_plural "There were %d local rejections."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../src/gtk-ui/sync-ui.c:1151
+#: ../src/gtk-ui/sync-ui.c:1309
 #, c-format
 msgid "There were %d local rejections and %d remote rejections."
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:1156
+#: ../src/gtk-ui/sync-ui.c:1314
 #, c-format
 msgid "Last time: No changes."
-msgstr ""
+msgstr "Utolsó időpont: nincs változás."
 
-#: ../src/gtk-ui/sync-ui.c:1158
+#: ../src/gtk-ui/sync-ui.c:1316
 #, c-format
 msgid "Last time: Sent one change."
 msgid_plural "Last time: Sent %d changes."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Utolsó bejegyzés: Egy változtatás elküldve."
+msgstr[1] "Utolsó bejegyzés: %d változtatás elküldve."
 
-#: ../src/gtk-ui/sync-ui.c:1163
-#, c-format
-msgid "Last time: Received one change."
-msgid_plural "Last time: Received %d changes."
-msgstr[0] ""
-msgstr[1] ""
-
-#: ../src/gtk-ui/sync-ui.c:1168
-#, c-format
-msgid "Last time: Received %d changes and sent %d changes."
-msgstr ""
-
-#: ../src/gtk-ui/sync-ui.c:1237
-msgid "Failed to get server configuration from SyncEvolution"
-msgstr ""
-
-#: ../src/gtk-ui/sync-ui.c:1283
-msgid "New service"
-msgstr ""
-
+#. This is about changes made to the local data. Not all of these
+#. changes were requested by the remote server, so "applied"
+#. is a better word than "received" (bug #5185).
 #: ../src/gtk-ui/sync-ui.c:1324
-msgid "Server URL"
+#, c-format
+msgid "Last time: Applied one change."
+msgid_plural "Last time: Applied %d changes."
+msgstr[0] "Utolsó bejegyzés: Egy változtatás alkalmazva."
+msgstr[1] "Utolsó bejegyzés: %d változtatás alkalmazva."
+
+#: ../src/gtk-ui/sync-ui.c:1329
+#, c-format
+msgid "Last time: Applied %d changes and sent %d changes."
+msgstr "Utolsó bejegyzés: %d változtatás alkalmazva, %d változtatás elküldve"
+
+#: ../src/gtk-ui/sync-ui.c:1421
+msgid "Failed to get server configuration from SyncEvolution"
+msgstr "Hiba a kiszolgáló beállításainak a SyncEvolution-ból történő betöltése közben"
+
+#: ../src/gtk-ui/sync-ui.c:1473
+msgid "ScheduleWorld enables you to keep your contacts, events, tasks, and notes in sync."
 msgstr ""
+
+#: ../src/gtk-ui/sync-ui.c:1476
+msgid "Google Sync can backup and synchronize your Address Book with your Gmail contacts."
+msgstr "A Google Sync a Címjegyzéket szinkronizálja a Google kapcsolatokkal"
+
+#. TRANSLATORS: Please include the word "demo" (or the equivalent in
+#. your language): Funambol is going to be a 90 day demo service
+#. in the future
+#: ../src/gtk-ui/sync-ui.c:1482
+msgid "Backup your contacts and calendar. Sync with a singleclick, anytime, anywhere (DEMO)."
+msgstr "Kapcsolatok és a naptár mentése. Szinkronizálj egy klikkel bármikor, bárhol (DEMO)."
+
+#: ../src/gtk-ui/sync-ui.c:1510
+msgid "New service"
+msgstr "Új szolgáltatás"
+
+#: ../src/gtk-ui/sync-ui.c:1557
+msgid "Server URL"
+msgstr "Kiszolgáló URL"
 
 #. TRANSLATORS: placeholder is a source name in settings window
-#: ../src/gtk-ui/sync-ui.c:1344
+#: ../src/gtk-ui/sync-ui.c:1579
 #, c-format
 msgid "%s URI"
-msgstr ""
+msgstr "URI: %s"
 
-#: ../src/gtk-ui/sync-ui.c:1474 ../src/gtk-ui/ui.glade.h:17
+#: ../src/gtk-ui/sync-ui.c:1716
+#: ../src/gtk-ui/ui.glade.h:17
 msgid "Launch website"
-msgstr ""
+msgstr "Weboldal futtatása"
 
-#: ../src/gtk-ui/sync-ui.c:1478
+#: ../src/gtk-ui/sync-ui.c:1720
 msgid "Setup and use"
-msgstr ""
+msgstr "Mentés és használat"
 
-#: ../src/gtk-ui/sync-ui.c:1524
+#: ../src/gtk-ui/sync-ui.c:1766
 msgid "Failed to get list of manually setup services from SyncEvolution"
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:1565
+#: ../src/gtk-ui/sync-ui.c:1807
 msgid "Failed to get list of supported services from SyncEvolution"
 msgstr ""
 
 #. TODO: this is a hack... SyncEnd should be a signal of it's own,
 #. not just hacked on top of the syncevolution error codes
-#: ../src/gtk-ui/sync-ui.c:1719
+#: ../src/gtk-ui/sync-ui.c:1968
 msgid "Service configuration not found"
-msgstr ""
+msgstr "A szolgáltatás beállítása nem található"
 
-#: ../src/gtk-ui/sync-ui.c:1725
+#: ../src/gtk-ui/sync-ui.c:1974
 msgid "Not authorized"
-msgstr ""
+msgstr "Nincs jogosultság"
 
-#: ../src/gtk-ui/sync-ui.c:1727
+#: ../src/gtk-ui/sync-ui.c:1976
 msgid "Forbidden"
-msgstr ""
+msgstr "Visszautasítva"
 
-#: ../src/gtk-ui/sync-ui.c:1729
+#: ../src/gtk-ui/sync-ui.c:1978
 msgid "Not found"
-msgstr ""
+msgstr "Nem található"
 
-#: ../src/gtk-ui/sync-ui.c:1731
+#: ../src/gtk-ui/sync-ui.c:1980
 msgid "Fatal database error"
-msgstr ""
+msgstr "Végzetes adatbázishiba"
 
-#: ../src/gtk-ui/sync-ui.c:1733
+#: ../src/gtk-ui/sync-ui.c:1982
 msgid "Database error"
-msgstr ""
+msgstr "Adatbázishiba"
 
-#: ../src/gtk-ui/sync-ui.c:1735
+#: ../src/gtk-ui/sync-ui.c:1984
 msgid "No space left"
-msgstr ""
+msgstr "Nincs több szabad hely"
 
 #. TODO identify problem item somehow ?
-#: ../src/gtk-ui/sync-ui.c:1738
+#: ../src/gtk-ui/sync-ui.c:1987
 msgid "Failed to process SyncML"
-msgstr ""
+msgstr "SyncML feldolgozása sikertelen"
 
-#: ../src/gtk-ui/sync-ui.c:1740
+#: ../src/gtk-ui/sync-ui.c:1989
 msgid "Server authorization failed"
-msgstr ""
+msgstr "A szerver azonosítása sikertelen"
 
-#: ../src/gtk-ui/sync-ui.c:1742
+#: ../src/gtk-ui/sync-ui.c:1991
 msgid "Failed to parse configuration file"
-msgstr ""
+msgstr "A konfigurációs fájl feldolgozása sikertelen"
 
-#: ../src/gtk-ui/sync-ui.c:1744
+#: ../src/gtk-ui/sync-ui.c:1993
 msgid "Failed to read configuration file"
-msgstr ""
+msgstr "Nem sikerült olvasni a konfigurációs fájlból"
 
-#: ../src/gtk-ui/sync-ui.c:1746
+#: ../src/gtk-ui/sync-ui.c:1995
 msgid "No configuration found"
-msgstr ""
+msgstr "A beállítások nem találhatóak"
 
-#: ../src/gtk-ui/sync-ui.c:1748
+#: ../src/gtk-ui/sync-ui.c:1997
 msgid "No configuration file found"
-msgstr ""
+msgstr "A konfigurációs fájl nem található"
 
-#: ../src/gtk-ui/sync-ui.c:1750
+#: ../src/gtk-ui/sync-ui.c:1999
 msgid "Server sent bad content"
-msgstr ""
+msgstr "A kiszolgáló hibás tartalmat küldött"
 
-#: ../src/gtk-ui/sync-ui.c:1752
+#: ../src/gtk-ui/sync-ui.c:2001
 msgid "Transport failure (no connection?)"
-msgstr ""
+msgstr "Az átvitel nem sikerült (nincs kapcsolat?)"
 
-#: ../src/gtk-ui/sync-ui.c:1754
+#: ../src/gtk-ui/sync-ui.c:2003
 msgid "Connection timed out"
-msgstr ""
+msgstr "Időtúllépés a kapcsolatban"
 
-#: ../src/gtk-ui/sync-ui.c:1756
+#: ../src/gtk-ui/sync-ui.c:2005
 msgid "Connection certificate has expired"
-msgstr ""
+msgstr "A kapcsolat tanúsítványa lejárt"
 
-#: ../src/gtk-ui/sync-ui.c:1758
+#: ../src/gtk-ui/sync-ui.c:2007
 msgid "Connection certificate is invalid"
-msgstr ""
+msgstr "A kapcsolat tanúsítványa érvénytelen."
 
-#: ../src/gtk-ui/sync-ui.c:1761
+#: ../src/gtk-ui/sync-ui.c:2010
 msgid "Connection failed"
-msgstr ""
+msgstr "A kapcsolódás sikertelen"
 
-#: ../src/gtk-ui/sync-ui.c:1763
+#: ../src/gtk-ui/sync-ui.c:2012
 msgid "URL is bad"
-msgstr ""
+msgstr "Az URL hibás"
 
-#: ../src/gtk-ui/sync-ui.c:1765
+#: ../src/gtk-ui/sync-ui.c:2014
 msgid "Server not found"
-msgstr ""
+msgstr "A kiszolgáló nem található"
 
-#: ../src/gtk-ui/sync-ui.c:1767
+#: ../src/gtk-ui/sync-ui.c:2016
 #, c-format
 msgid "Error %d"
-msgstr ""
+msgstr "Hiba %d"
 
-#: ../src/gtk-ui/sync-ui.c:1777
+#: ../src/gtk-ui/sync-ui.c:2026
 msgid "Sync D-Bus service exited unexpectedly"
 msgstr ""
 
-#: ../src/gtk-ui/sync-ui.c:1780 ../src/gtk-ui/sync-ui.c:1831
+#: ../src/gtk-ui/sync-ui.c:2029
+#: ../src/gtk-ui/sync-ui.c:2080
 msgid "Sync Failed"
-msgstr ""
+msgstr "Szinkronizáció sikertelen"
 
-#: ../src/gtk-ui/sync-ui.c:1823
+#: ../src/gtk-ui/sync-ui.c:2072
 msgid "Sync complete"
-msgstr ""
+msgstr "A szinkronizálás kész"
 
-#: ../src/gtk-ui/sync-ui.c:1828
+#: ../src/gtk-ui/sync-ui.c:2077
 msgid "Sync canceled"
-msgstr ""
+msgstr "Szinkronizálás megszakítva"
 
 #. NOTE extra1 can be error here
-#: ../src/gtk-ui/sync-ui.c:1846
+#: ../src/gtk-ui/sync-ui.c:2095
 msgid "Ending sync"
-msgstr ""
+msgstr "A szinkronizálás befejeződött"
 
 #. TRANSLATORS: placeholder is a source name (e.g. 'Calendar') in a progress text
-#: ../src/gtk-ui/sync-ui.c:1870
+#: ../src/gtk-ui/sync-ui.c:2119
 #, c-format
 msgid "Preparing '%s'"
-msgstr ""
+msgstr "'%s' előkészítése"
 
 #. TRANSLATORS: placeholder is a source name in a progress text
-#: ../src/gtk-ui/sync-ui.c:1882
+#: ../src/gtk-ui/sync-ui.c:2131
 #, c-format
 msgid "Sending '%s'"
-msgstr ""
+msgstr "'%s' küldése"
 
 #. TRANSLATORS: placeholder is a source name in a progress text
-#: ../src/gtk-ui/sync-ui.c:1894
+#: ../src/gtk-ui/sync-ui.c:2143
 #, c-format
 msgid "Receiving '%s'"
-msgstr ""
+msgstr "'%s' fogadása"
 
 #: ../src/gtk-ui/ui.glade.h:1
 msgid "<b>Data</b>"
-msgstr ""
+msgstr "<b>Adat</b>"
 
 #: ../src/gtk-ui/ui.glade.h:2
 msgid "<b>No sync service in use</b>"
-msgstr ""
+msgstr "<b>Nincs használva sznkronizálás</b>"
 
 #: ../src/gtk-ui/ui.glade.h:3
 msgid "<b>Sync failure</b>"
-msgstr ""
+msgstr "<b>Szinkronizáció sikertelen</b>"
 
 #: ../src/gtk-ui/ui.glade.h:4
 msgid "<b>Type of Sync</b>"
-msgstr ""
+msgstr "<b>Szinkronizálás típusa</b>"
 
 #: ../src/gtk-ui/ui.glade.h:5
 msgid "<big>Manual setup</big>"
-msgstr ""
+msgstr "<big>Kézi beállítás</big>"
 
 #: ../src/gtk-ui/ui.glade.h:6
 msgid "<big>Supported services</big>"
-msgstr ""
+msgstr "<big>Támogatott eszközök</big>"
 
 #: ../src/gtk-ui/ui.glade.h:7
 msgid "Add new service"
-msgstr ""
+msgstr "Új szolgáltatás felvétele"
 
 #: ../src/gtk-ui/ui.glade.h:8
 msgid "Back to sync"
-msgstr ""
+msgstr "Vissza a szinkronizációhoz"
 
 #: ../src/gtk-ui/ui.glade.h:9
 msgid ""
 "Change sync\n"
 "service"
 msgstr ""
+"Szinkronizációs szolgáltatás\n"
+"megváltoztatása"
 
 #: ../src/gtk-ui/ui.glade.h:11
 msgid "Delete all local data and replace it with remote data"
-msgstr ""
+msgstr "Minden helyi adat törlése, és a távoli adatok letöltése"
 
 #: ../src/gtk-ui/ui.glade.h:12
 msgid "Delete all remote data and replace it with local data"
-msgstr ""
+msgstr "Minden távoli adat törlése, és minden helyi adat letöltése"
 
 #: ../src/gtk-ui/ui.glade.h:13
 msgid "Delete this service"
-msgstr ""
+msgstr "Ennek a szolgáltatásnak a törlése"
 
 #: ../src/gtk-ui/ui.glade.h:14
 msgid "Edit service settings"
-msgstr ""
+msgstr "A szolgáltatás beállításainak módosítása"
 
 #: ../src/gtk-ui/ui.glade.h:15
 msgid ""
-"If you don't see your service above but know that your sync provider uses "
-"SyncML\n"
+"If you don't see your service above but know that your sync provider uses SyncML\n"
 "you can setup a service manually."
 msgstr ""
 
 #: ../src/gtk-ui/ui.glade.h:18
 msgid "Merge local and remote data (recommended)"
-msgstr ""
+msgstr "A helyi és távoli adatok összefésülése (ajánlott)"
 
 #: ../src/gtk-ui/ui.glade.h:19
 msgid "Password"
-msgstr ""
+msgstr "Jelszó"
 
 #: ../src/gtk-ui/ui.glade.h:20
 msgid "Reset original server settings"
-msgstr ""
+msgstr "Visszatérés az eredeti beállításokhoz"
 
 #: ../src/gtk-ui/ui.glade.h:21
 msgid "Save and use this service"
-msgstr ""
+msgstr "Elment és a ennek a szolgáltatásnak a használata"
 
 #: ../src/gtk-ui/ui.glade.h:22
-msgid "Server settings"
-msgstr ""
+msgid "Select sync service"
+msgstr "Szinkronizációs szolgáltatás kiválasztása"
 
 #: ../src/gtk-ui/ui.glade.h:23
-msgid "Service name"
-msgstr ""
+msgid "Server settings"
+msgstr "Kiszolgáló beállításai"
 
 #: ../src/gtk-ui/ui.glade.h:24
-msgid "Setup sync service"
-msgstr ""
+msgid "Service name"
+msgstr "Szolgáltatás neve"
 
 #: ../src/gtk-ui/ui.glade.h:25
 msgid ""
 "Sorry, you need an internet\n"
 "connection to sync."
 msgstr ""
+"Bocsi, de kell egy internetkapcsolat\n"
+"a szinkronizáláshoz."
 
 #: ../src/gtk-ui/ui.glade.h:27
 msgid "Stop using this service"
-msgstr ""
-
-#: ../src/gtk-ui/ui.glade.h:28
-msgid "Sync"
-msgstr ""
+msgstr "Ennek a szolgáltatásnak a megszakítása"
 
 #: ../src/gtk-ui/ui.glade.h:30
-msgid ""
-"Synchronization is not available (D-Bus service does not answer), sorry."
-msgstr ""
+msgid "Synchronization is not available (D-Bus service does not answer), sorry."
+msgstr "Bocsi, a szinkronizálás jelenleg nem elérhető (a D-Bus szolgáltatás nem válaszol)."
 
 #: ../src/gtk-ui/ui.glade.h:31
 msgid ""
-"To sync you'll need a network connection and an account with a sync "
-"service.\n"
+"To sync you'll need a network connection and an account with a sync service.\n"
 "We support the following services: "
 msgstr ""
 
 #: ../src/gtk-ui/ui.glade.h:33
 msgid "Username"
-msgstr ""
+msgstr "Felhasználónév"
 
 #: ../src/gtk-ui/ui.glade.h:34
 msgid ""
-"You haven't set up a sync service yet. Sync services let you \n"
+"You haven't selected a sync service yet. Sync services let you \n"
 "synchronize your data between your netbook and a web service."
 msgstr ""
+
+#: ../src/gtk-ui/sync.desktop.in.h:2
+#: ../src/gtk-ui/sync-gtk.desktop.in.h:2
+msgid "Up to date"
+msgstr "Friss"
+
+#: ../src/gtk-ui/sync-gtk.desktop.in.h:1
+msgid "Sync (GTK)"
+msgstr "Sync (GTK)"
+
+#~ msgid "Contacts"
+#~ msgstr "Kapcsolatok"
+#~ msgid "Waiting for current operation to finish..."
+#~ msgstr "Várakozás az aktuális művelet befejeződésére..."
+#~ msgid "Sync settings"
+#~ msgstr "Szinkronizációs beállítások"
+#~ msgid "Reset service"
+#~ msgstr "Szolgáltatás újraindítása"
+#~ msgid "%s - manually setup"
+#~ msgstr "%s - kézi beállítás"
+#~ msgid "Setup now"
+#~ msgstr "Beállítás most"
+
