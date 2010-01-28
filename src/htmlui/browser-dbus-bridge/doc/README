@@ -1,0 +1,10 @@
+The Browser D-Bus Bridge
+-------------------------
+
+The Browser D-Bus Bridge allows privileged JavaScript code to talk
+to the D-Bus, both session and system bus (if allowed).
+
+A more detailed description and other documentation is found on
+Movial's Sandbox wiki:
+
+  http://sandbox.movial.com/wiki/index.php/Browser_DBus_Bridge

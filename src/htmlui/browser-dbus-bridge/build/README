@@ -1,0 +1,10 @@
+This is a simple C/C++ build system based on GNU Make.  Supports (at least) the
+GNU toolchain and ELF platforms.  Meant to be used in place of Automake and
+Libtool.  Can be used with Autoconf.
+
+URL: http://iki.fi/timo.savola/git/?p=maker.git
+
+Original version is copyright (c) 2008 Timo Savola.
+Distributable under the terms of the Boost Software License 1.0:
+    http://boost.org/LICENSE_1_0.txt
+    http://opensource.org/licenses/bsl1.0.html

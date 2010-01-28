@@ -1,0 +1,437 @@
+<!--
+ Copyright © 2008 Movial Creative Technologies Inc
+ Feel free to use the contents of this file in any way you want
+ If you can make money with it, please contact info@movial.com
+ and you have almost-guaranteed sales position waiting for you!
+ -->
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>test</title>
+<script type='text/javascript' src='dbus.js'></script>
+<script type='text/javascript'>
+
+var n_tests = 0;
+var good = 0;
+var bad = 0;
+var current_test = null;
+
+function Test(method_name, arg, convert, xfail, signature, variant_signature)
+{
+  this.method_name = method_name;
+  this.arg = arg;
+  this.convert = convert;
+  this.signature = signature;
+  this.variant_signature = variant_signature;
+  this.xfail = xfail;
+  n_tests++;
+  if (!xfail)
+    n_tests++;
+
+}
+
+Test.prototype =
+{
+  method_name: null,
+  arg: null,
+  convert: null,
+  xfail: false,
+  signature: null,
+  variant_signature: null,
+  signal: null,
+  next: null,
+
+  run: function ()
+  {
+    current_test = null;
+    if (!this.method_name)
+    {
+      alert("Test error: No method name specified!");
+      bad++;
+      return;
+    }
+    if (typeof this.arg != 'boolean' && !this.arg)
+    {
+      alert("Test error: No argument specified!");
+      bad++;
+      return;
+    }
+    var method = dbus.getMethod(dbus.SESSION, 'org.movial.Unit',
+                                '/org/movial/Unit',
+                                this.method_name, 'org.movial.Unit', this.signature,
+                                this);
+    this.signal = dbus.getSignal(dbus.SESSION, 'org.movial.Unit', this.method_name,
+                                null, null, this);
+    this.signal.onemit = this.onemit;
+
+    // We need to receive replies as we go to get a meaningful report
+    // but do test with async replies too!
+    method.async = false;
+
+    var status = document.getElementById('status');
+
+    var send_arg;
+    if (typeof this.convert === "function")
+    {
+      if (this.convert == dbus.Variant)
+      {
+        send_arg = this.convert(this.variant_signature, this.arg);
+      } else {
+        send_arg = this.convert(this.arg);
+      }
+
+      if (!send_arg)
+      {
+        var color = 'red';
+        if (this.xfail)
+        {
+          color = 'green';
+          good++;
+        } else {
+          bad++;
+        }
+        status.innerHTML += '<p>Result: <span style="color: ' + color + ';">Converting "' + this.arg + '" failed</span>';
+        current_test = this.next;
+        setTimeout(run_next, 10);
+        return;
+      }
+    } else {
+      send_arg = this.arg;
+    }
+
+    method.onreply = this.method_reply;
+    method.onerror = this.error_reply;
+
+    var argstr = get_argstr(this.arg);
+
+    status.innerHTML += '<p>Sending ' + this.method_name + ':<span style="color: blue; padding-left: 1em;">' + argstr + ' of type ' + typeof send_arg + ' with signature ' + this.signature + '</span>';
+
+    this.signal.enabled = !this.xfail;
+    method(send_arg);
+  },
+
+  onemit: function (reply_arg)
+  {
+    var status = document.getElementById('status');
+    status.innerHTML += '<p>Got signal "' + this.method_name + '"';
+    this.signal.enabled = false;
+    this.method_reply(reply_arg);
+    
+    current_test = this.next;
+    setTimeout(run_next, 10);
+    show_results();
+  },
+  
+  method_reply: function (reply_arg)
+  {
+    var status = document.getElementById('status');
+
+    if (this.xfail)
+    {
+      status.innerHTML += '<p style="margin-top: -0.5em"><span style="color:red; padding-left: 1em;">This test should have failed, but did not!</span>';
+      bad++;
+      current_test = this.next;
+      setTimeout(run_next, 10);
+      show_results();
+      return;
+    }
+    
+    var color = 'green';
+    if (!is_equal(this.arg, reply_arg))
+      color = 'red';
+
+    var argstr = get_argstr(reply_arg);
+
+    if (color == 'red')
+    {
+      bad++;
+    } else {
+      good++;
+    }
+    
+    status.innerHTML += '<p style="margin-top: -0.5em">Result: <span style="color: ' + color + '; padding-left: 1em;">' + argstr + ', ' + typeof reply_arg + '</span>';
+
+    show_results();
+  },
+
+  error_reply: function (error_name, error_message)
+  {
+    var status = document.getElementById('status');
+
+    this.signal.enabled = false;
+
+    if (this.xfail)
+    {
+      status.innerHTML += '<p style="color: green;">Expected failure:';
+      good++;
+    } else {
+      status.innerHTML += '<p style="color: red;">' + error_name + ':';
+      bad++;
+    }
+    status.innerHTML += '<span style="color: red; padding-left: 1em;">' + error_message + '</span>';
+
+    current_test = this.next;
+    setTimeout(run_next, 10);
+    show_results();
+  }
+
+};
+
+function get_argstr(arg)
+{
+  var argstr;
+
+  if (arg instanceof Array || arg instanceof Object)
+  {
+      var first = true;
+      argstr = '['
+      for (var propname in arg)
+      {
+        if (first) {
+            first = false;
+        } else {
+            argstr += ", ";
+        }
+        argstr += propname + ":" + get_argstr(arg[propname]);
+      }
+      argstr += ']';
+  } else {
+      if (typeof arg == 'boolean')
+      {
+        argstr = arg.toString();
+      } else if (arg) {
+        argstr = arg.toString();
+      } else {
+        argstr = '';
+      }
+  }
+
+  return argstr;
+}
+
+function is_equal(a, b)
+{
+  if ((a instanceof Array && b instanceof Array)
+    || (a instanceof Object && b instanceof Object))
+  {
+    for (var i in a)
+    {
+      if (!is_equal(a[i], b[i]))
+      {
+        return false;
+      }
+    }
+
+  } else if (a != b) {
+    return false;
+  }
+  
+  return true;
+}
+
+function run_next()
+{
+  if (current_test) {
+    current_test.run();
+    return;
+  }
+
+  var status = document.getElementById('status');
+  status.innerHTML += "<p>Ending test...";
+  var end = dbus.getMethod(dbus.SESSION, 'org.movial.Unit',
+                                '/org/movial/Unit',
+                                "end", 'org.movial.Unit');
+  end();
+  show_results();
+}
+
+function show_results()
+{
+  var results = document.getElementById('results');
+  results.innerHTML = '<p>Total of ' + n_tests + ' tests, <span style="color: green">passed ' + good + '</span>, <span style="color:red">failed ' + bad + '</span>, unknown ' + (n_tests - good - bad) + ", " + Math.round((good/n_tests)*100) + '% success rate';
+}
+
+var tests = new Array();
+
+function do_unit()
+{
+  var status = document.getElementById('status');
+  
+  if (!window.dbus)
+  {
+    status.innerHTML += "<p>Browser D-Bus Bridge not available, cannot run tests.";
+    return;
+  }
+
+  setTimeout(show_results, 1000);
+  
+  status.innerHTML += "<p>Starting test...";
+  var start = dbus.getMethod(dbus.SESSION, 'org.movial.Unit',
+                                '/org/movial/Unit',
+                                "start", 'org.movial.Unit');
+  start();
+
+  var i = 0;
+
+  tests[i++] = new Test('Boolean', true, null, false);
+  tests[i++] = new Test('Boolean', true, null, false, 'b');
+
+  tests[i++] = new Test('Int16', 32767, dbus.Int16, false);
+  tests[i++] = new Test('Int16', 32767, null, true);
+  tests[i++] = new Test('Int16', 32767, dbus.Int16, false, 'n');
+  tests[i++] = new Test('Int16', 32767, null, false, 'n');
+
+  tests[i++] = new Test('Int32', 2147483647, dbus.Int32, false);
+  tests[i++] = new Test('Int32', 2147483647, null, true);
+  tests[i++] = new Test('Int32', 2147483647, dbus.Int32, false, 'i');
+  tests[i++] = new Test('Int32', 2147483647, null, false, 'i');
+
+  // There's problems with the (u)int64 types since doubles can't hold
+  // large enough values accurately.
+  tests[i++] = new Test('Int64', 17179869176, dbus.Int64, false);
+  tests[i++] = new Test('Int64', 17179869176, null, true);
+  tests[i++] = new Test('Int64', 17179869176, dbus.Int64, false, 'x');
+  tests[i++] = new Test('Int64', 17179869176, null, false, 'x');
+
+  tests[i++] = new Test('UInt16', 32767, dbus.UInt16, false);
+  tests[i++] = new Test('UInt16', 32767, null, true);
+  tests[i++] = new Test('UInt16', 32767, dbus.UInt16, false, 'q');
+  tests[i++] = new Test('UInt16', 32767, null, false, 'q');
+
+  tests[i++] = new Test('UInt32', 2147483647, dbus.UInt32, false);
+  tests[i++] = new Test('UInt32', 2147483647, null, true);
+  tests[i++] = new Test('UInt32', 2147483647, dbus.UInt32, false, 'u');
+  tests[i++] = new Test('UInt32', 2147483647, null, false, 'u');
+
+  tests[i++] = new Test('UInt64', 17179869176, dbus.UInt64, false);
+  tests[i++] = new Test('UInt64', 17179869176, null, true);
+  tests[i++] = new Test('UInt64', 17179869176, dbus.UInt64, false, 't');
+  tests[i++] = new Test('UInt64', 17179869176, null, false, 't');
+
+  tests[i++] = new Test('Double', 1024.1024, null, false);
+  tests[i++] = new Test('Double', 1024.1024, null, false, 'd');
+
+  tests[i++] = new Test('Byte', 1, dbus.Byte, false);
+  tests[i++] = new Test('Byte', 1, null, true);
+  tests[i++] = new Test('Byte', 1, dbus.Byte, false, 'y');
+  tests[i++] = new Test('Byte', 1, null, false, 'y');
+
+  tests[i++] = new Test('String', "abc åäö", null, false);
+  tests[i++] = new Test('String', "abc åäö", null, false, 's');
+
+  tests[i++] = new Test('ObjectPath', "/org/movial/Unit", dbus.ObjectPath, false);
+  tests[i++] = new Test('ObjectPath', "/org/movial/Unit", null, true);
+  tests[i++] = new Test('ObjectPath', "/org/movial/Unit", dbus.ObjectPath, false, 'o');
+  tests[i++] = new Test('ObjectPath', "I'm invalid object path", dbus.ObjectPath, true);
+  tests[i++] = new Test('ObjectPath', "/not//valid/either", dbus.ObjectPath, true);
+
+  tests[i++] = new Test('Signature', "sib", dbus.Signature, false);
+  tests[i++] = new Test('Signature', "sib", null, true);
+  tests[i++] = new Test('Signature', "sib", dbus.Signature, false, 'g');
+  tests[i++] = new Test('Signature', "sib", null, false, 'g');
+
+  tests[i++] = new Test("Array", ["a", "b", "äöÄÖ"], null, false, null);
+  tests[i++] = new Test("Array", [1, 2, 3], null, false, null);
+  tests[i++] = new Test("Array", ["a", "b", "äöÄÖ"], null, false, 'as');
+  tests[i++] = new Test("Array", [1, 2, 3], null, false, 'ai');
+
+  var dict = new Object();
+  dict["abc åäö"] = "abc åäö";
+  tests[i++] = new Test("Dict", dict, null, false, 'a{ss}');
+
+  var dict = new Object();
+  dict["test"] = [100.0, 2.0, 3000.0];
+  tests[i++] = new Test("Dict", dict, null, false, 'a{sad}');
+
+  var dict = new Object();
+  dict["test"] = [100, 2, 3000];
+  tests[i++] = new Test("Dict", dict, null, false, 'a{sai}');
+
+  var dict = new Object();
+  var array = new Array("abc", "def", "åäö");
+  dict["abc åäö"] = array;
+  tests[i++] = new Test("Dict", dict, null, false, 'a{sas}');
+
+  var dict = new Object();
+  var dict2 = new Object();
+  dict2["abc"] = "åäö";
+  dict["åäö"] = dict2;
+  tests[i++] = new Test("Dict", dict, null, false, 'a{sa{ss}}');
+
+  var dict = new Object();
+  var dict2 = new Object();
+  dict2["åäö"] = ["abc", "def", "åäö"];
+  dict["abc"] = dict2;
+  tests[i++] = new Test("Dict", dict, null, false, 'a{sa{sas}}');
+
+  // Test for very deep container structure
+  var deep = new Object();
+  var deep_sig = "a{s";
+  function add_dict(o, d, depth)
+  {
+    o[0] = new Object();
+    deep_sig += "a{s";
+    if (d == depth)
+    {
+      o[0]["abc"] = "åäö";
+      deep_sig += "s}";
+      return;
+    }
+    add_array(o[0], d + 1, depth);
+    deep_sig += "}";
+  }
+  function add_array(o, d, depth)
+  {
+    o["abc"] = new Array();
+    deep_sig += "a";
+    if (d == depth)
+    {
+      o["abc"][0] = "åäö";
+      deep_sig += "s";
+      return;
+    }
+    add_dict(o["abc"], d + 1, depth);
+  }
+
+  add_array(deep, 0, 20);
+  deep_sig += "}";
+  tests[i++] = new Test("Dict", deep, null, false, deep_sig);
+
+  tests[i++] = new Test("Variant", "woot", null, false, 'v');
+  tests[i++] = new Test("Variant", ["woot", "bar"], null, false, 'v');
+
+  var dict = new Object();
+  dict["abc åäö"] = "abc åäö";
+  var dict2 = new Object();
+  dict2["def"] = "bleb";
+  tests[i++] = new Test("Variant", [dict, dict2], null, false, 'v');
+
+  var struct = new Array("abc åäö", 1004);
+  var struct2 = new Array("def", [42, 1004, 105]);
+  var dict = new Object();
+  dict["abc åäö"] = struct2;
+
+  tests[i++] = new Test("Struct", struct, null, false, '(si)');
+  tests[i++] = new Test("Array", [struct, struct2], null, false, 'a(sv)');
+  tests[i++] = new Test("Dict", dict, null, false, 'a{s(sv)}');
+
+  for (var j = 0; j < i-1; j++)
+  {
+    tests[j].next = tests[j+1]
+  }
+  current_test = tests[0];
+  run_next();
+
+}
+
+</script>
+</head>
+<body onload='do_unit();'>
+<div><a href="javascript:window.location.reload();">Run again</a> <a href="http://google.fi">Leave the page</a></div>
+<div id='results' style='border: solid blue 0.1em; padding: 1em; margin: 1em;'></div>
+<div id='status' style='border: dashed black 0.1em; padding: 1em;'></div>
+
+</body>
+</html>
+

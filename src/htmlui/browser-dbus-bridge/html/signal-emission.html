@@ -1,0 +1,30 @@
+<!--
+ Copyright © 2008 Movial Creative Technologies Inc
+ Feel free to use the contents of this file in any way you want
+ If you can make money with it, please contact info@movial.com
+ and you have almost-guaranteed sales position waiting for you!
+ -->
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>test</title>
+<script type='text/javascript' src='DBus.js'></script>
+<script type='text/javascript'>
+
+function emit()
+{
+  DBus.emitSignal(DBus.SESSION, '/org/foo/Bar', 'org.foo.Bar', 'Bleh', 'su', 'Test', 3);
+}
+
+</script>
+</head>
+<body>
+<div style="width: 100%; height=100%; text-align: center; vertical-align: middle;">
+<a onclick="emit();" style="width: 25%; height: 25%">Emit signal</a><br>
+<a href="signal-emission.html">Reload</a>
+</div>
+
+</body>
+</html>
+

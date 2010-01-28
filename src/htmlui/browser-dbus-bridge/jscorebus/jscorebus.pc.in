@@ -1,0 +1,11 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: JSCoreBus
+Description: JavaScriptCore bindings for D-Bus
+Version: @VERSION@
+Requires: @REQUIRES@
+Libs: -L${libdir} -l@NAME@
+Cflags: -I${includedir}

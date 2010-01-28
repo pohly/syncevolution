@@ -1,0 +1,61 @@
+<!--
+ Copyright © 2008 Movial Creative Technologies Inc
+ Feel free to use the contents of this file in any way you want
+ If you can make money with it, please contact info@movial.com
+ and you have almost-guaranteed sales position waiting for you!
+ -->
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>test</title>
+<script type='text/javascript' src='dbus.js'></script>
+<script type='text/javascript'>
+
+function test()
+{
+  var args = Array.prototype.slice.call(arguments);
+  var status = document.getElementById('status');
+  var obj = dbus[args[0]].apply(dbus[args[0]], args.slice(1));
+  //var obj = dbus["Boolean"].call("Boolean", false);
+  if (obj == undefined)
+  {
+    status.innerHTML += "<p>" + args[0] + ": <span style='color: #f00'>FAILED</span>";
+  } else {
+    status.innerHTML += "<p>" + args[0] + ": " + obj;
+  }
+}
+
+function do_test()
+{
+
+  test("Boolean", false);
+  test("Double", 0.1);
+  test("String", "test");
+  test("Array", [1, 2, 3]);
+
+  test("Byte", 8);
+  test("Int16", 16);
+  test("UInt16", 16);
+  test("Int32", 32);
+  test("UInt32", 32);
+  test("Int64", 64);
+  test("UInt64", 64);
+
+  test("Signature", "a{sv}");
+  test("ObjectPath", "/org/movial/Unit");
+
+  test("Dict", {"test": 4.2, "other test": 42});
+  test("Variant", "as", ["test", "test2"]);
+  test("Struct", ["test", 4.2, 42]);
+}
+
+</script>
+</head>
+<body onload='do_test();'>
+<div><a href="javascript:window.location.reload();">Run again</a> <a href="http://google.fi">Leave the page</a></div>
+<div id='status' style='border: dashed black 0.1em; margin: 1em; padding: 1em;'></div>
+
+</body>
+</html>
+

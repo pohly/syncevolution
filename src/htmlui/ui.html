@@ -1,0 +1,97 @@
+<HTML>
+<HEAD>
+<script type='text/javascript' src='dbus.js'></script>
+<script Language="JavaScript">
+    // if the parameters are incorrect, possibly cause the firefox crashed.
+    var dbus = new DBus();
+    var server = dbus.getInterface(dbus.SESSION,
+    'org.syncevolution', 
+    '/org/syncevolution/Server',
+    'org.syncevolution.Server');
+    server.Attach();
+
+    function getServerList(){
+        var debug = document.getElementById('debug');
+        var serverslist = document.getElementById('serverslist');
+        server.GetConfigs.onreply = function(configs){
+            for(var item in configs)
+            {
+                var varItem = new Option(configs[item], item);
+                serverslist.options.add(varItem);
+                if(item % 10 == 0)
+                    debug.innerHTML += "<p>";
+                debug.innerHTML += configs[item] + ", ";
+            }
+        };
+        server.GetConfigs(0);
+        server.GetConfigs(1);
+    }
+    var sessionpath;
+    function statusChanged(status, error, sources) {
+        var debug = document.getElementById('debug');
+        debug.innerHTML += "status: " + status + ", ";
+        debug.innerHTML += "error: " + error + ", ";
+        debug.innerHTML += "<p>";
+    }
+    function doSync() {
+        var debug = document.getElementById('debug');
+        debug.innerHTML = "";
+        var serverslist = document.getElementById('serverslist');
+        var index = serverslist.options.selectedIndex;
+        server.StartSession.onreply = function(path){
+            sessionpath = path;
+            var session = dbus.getInterface(dbus.SESSION,
+            'org.syncevolution', 
+            sessionpath,
+            'org.syncevolution.Session');
+            var status = dbus.getSignal(dbus.SESSION,
+            'org.syncevolution.Session', 'StatusChanged',
+            null, null, null);
+            status.onemit = statusChanged;
+            status.enabled = true;
+
+            session.Sync("one-way-from-server", {}); 
+        }
+        server.StartSession(serverslist[index].text);
+    }
+    /*function doSync() {
+        alert(sessionpath);
+        var session = dbus.getInterface(dbus.SESSION,
+        'org.syncevolution', 
+        sessionpath,
+        'org.syncevolution.Session');
+        session.Sync.onreply = function(){
+        }
+        session.Sync("slow",{}); 
+    }*/
+
+</Script>
+<title> Sync UI for SyncEvolution </title>
+<link rel="shrotcut icon" href="sync.png" type="image/x-icon"/>
+<style type="text/css">
+    *{margin:0;padding:0;}
+    #con{width:600px;display:block;margin:100px 0 0 200px;border:1px #ccc solid}
+    #list{height:30px;display:block;width:300px;}
+    #list span{float:left;display:block;width:100px;height:30px;line-height:30px;text-align:center;background:#efefef}
+    #list span.current{background:#fff;}
+    #box{display:block;width:300px;}
+    #box .img{background:url(a.png) no-repeat left top;display:block;width:46px;height:100px;float:left;}
+    #box span#news{display:block;margin-left:10px;}
+    #box #news span{display:block;}
+</style>
+
+</HEAD>
+<BODY OnLoad="getServerList()">
+    <span id=con>
+        <img src="sync-generic.png" alt="generic"/>
+        <a href="http://syncevolution.org">SyncEvolution</a>
+        <p>
+        <font>Available Sync Servers</font>
+        <select id="serverslist"> </select>
+        <button onClick="doSync()">sync</button>
+    </span>
+
+    <p/>
+    <div id='debug' style='border: dashed black 0.1em; margin: 1em; padding: 1em;'></div>
+</BODY>
+</HTML>

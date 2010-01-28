@@ -1,0 +1,110 @@
+/**
+ * Browser D-Bus Bridge, XPCOM version
+ *
+ * Copyright © 2008 Movial Creative Technologies Inc
+ *  Contact: Movial Creative Technologies Inc, <info@movial.com>
+ *  Authors: Lauri Mylläri, <lauri.myllari@movial.com>
+ *
+ * The contents of this file are subject to the Mozilla Public License
+ * Version 1.1 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/
+ *
+ * Software distributed under the License is distributed on an "AS IS"
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
+ * License for the specific language governing rights and limitations
+ * under the License.
+ *
+ * The Original Code is the Browser D-Bus Bridge, XPCOM version.
+ *
+ * The Initial Developer of the Original Code is Movial Creative Technologies
+ * Inc. Portions created by Initial Developer are Copyright (C) 2008
+ * Movial Creative Technologies Inc. All Rights Reserved.
+ *
+ */
+
+#include "nsISupports.idl"
+#include "nsIWeakReference.idl"
+#include "nsIVariant.idl"
+#include "nsIArray.idl"
+#include "nsIXPConnect.idl"
+
+[function, scriptable, uuid(8eeddd8d-6e82-438a-9451-753f92bef2db)]
+interface IDBusMethodCallback : nsISupports
+{
+        void onReply(in nsIVariant args);
+};
+
+[scriptable, uuid(71fd21e1-ca1b-4d42-9435-a32382532820)]
+interface IDBusMethod : nsISupports
+{
+        attribute boolean async;
+        attribute IDBusMethodCallback onReply;
+        attribute IDBusMethodCallback onError;
+
+        void doCall([array, size_is(count)] in nsIVariant args,
+                    in PRUint32 count);
+
+        [noscript] readonly attribute JSContextPtr JSContext;        
+};
+
+[function, scriptable, uuid(0f87e70b-af7b-44c0-b0a3-1df8e3fa66da)]
+interface IDBusSignalObserver : nsISupports
+{
+        void onSignal(in nsIVariant args);
+                      
+};
+
+[scriptable, uuid(d8107805-9980-46ed-bccf-f3e6ac9fe989)]
+interface IDBusSignal : nsISupports
+{
+        attribute IDBusSignalObserver onEmit;
+        attribute boolean enabled;
+
+        readonly attribute PRUint32 busType;
+        readonly attribute ACString interfaceName;
+        readonly attribute ACString signalName;
+        readonly attribute ACString sender;
+        readonly attribute ACString objectPath;
+
+        [noscript] readonly attribute JSContextPtr JSContext;        
+};
+
+[scriptable, uuid(084b9397-0d6b-4c2c-93f9-f929f6b6e9e7)]
+interface IDBusService : nsISupports
+{
+        const PRUint32 SYSTEM = 0;
+        const PRUint32 SESSION = 1;
+
+        IDBusSignal getSignal(in PRUint32 busType,
+                              in ACString interfaceName,
+                              in ACString signalName,
+                              in ACString sender,
+                              in ACString objectPath);
+
+        IDBusMethod getMethod(in PRUint32 busType,
+                              in ACString destination,
+                              in ACString objectPath,
+                              in ACString methodName,
+                              in ACString interfaceName,
+                              in ACString signature);
+
+        boolean emitSignal(in PRUint32 busType,
+                           in ACString objectPath,
+                           in ACString interfaceName,
+                           in ACString signalName,
+                           in ACString signature,
+                           [array, size_is(count)] in nsIVariant args,
+                           in PRUint32 count);
+
+};
+
+[scriptable, uuid(1b4d9698-c1e7-4940-80b9-76bab02149f9)]
+interface IDBusDataCarrier : nsISupports
+{
+        attribute ACString type;
+        attribute ACString signature;
+        attribute nsIVariant value;
+};
+
+/* vim: set cindent ts=8 et sw=8: */
