@@ -1,5 +1,5 @@
 Source: syncevolution
-Section: user/office
+Section: utils
 Priority: extra
 Maintainer: Ove Kaaven <ovek@debian.org>
 Build-Depends: debhelper (>= 5), autotools-dev, libglib2.0-dev, libpcre3-dev,
