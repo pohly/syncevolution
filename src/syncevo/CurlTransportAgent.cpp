@@ -39,6 +39,9 @@ CurlTransportAgent::CurlTransportAgent() :
     m_replyLen(0),
     m_replySize(0)
 {
+#ifdef ENABLE_MAEMO /* hack because Maemo doesn't support IPv6 yet */
+    curl_easy_setopt(m_easyHandle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+#endif
     /*
      * set up for post where message is pushed into curl via
      * its read callback and reply is stored in write callback
