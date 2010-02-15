@@ -193,7 +193,7 @@ void MaemoCalendarSource::readItem(const string &uid, std::string &item, bool ra
         throwError(string("retrieving item: ") + uid);
     }
     if (entry_format == -1) {
-        item = c->getDescription();
+        item = c->getSummary();
         err = CALENDAR_OPERATION_SUCCESSFUL;
     } else {
         item = conv->localToIcalVcal(c, FileType(entry_format), err);
