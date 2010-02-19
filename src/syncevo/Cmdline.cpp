@@ -1118,7 +1118,7 @@ protected:
     }
 
     void removeRandomUUID(string &buffer) {
-        string uuidstr = "deviceId = sc-pim-";
+        string uuidstr = "deviceId = syncevolution-";
         size_t uuid = buffer.find(uuidstr);
         CPPUNIT_ASSERT(uuid != buffer.npos);
         size_t end = buffer.find("\n", uuid + uuidstr.size());
