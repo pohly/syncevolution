@@ -116,7 +116,7 @@
           will return a matching server configuration
         </doc:summary></doc:doc>
       </arg>
-      <arg type="a{sa{ss}}" name="configuration" direction="out">
+      <arg type="a{ss}" name="configuration" direction="out">
         <doc:doc><doc:summary>
           server (or template) configuration
         </doc:summary></doc:doc>

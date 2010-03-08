@@ -195,6 +195,7 @@ public:
 
     /** the double dictionary used to represent configurations */
     typedef std::map< std::string, StringMap > Config_t;
+    typedef std::map< std::string, std::string > ConfigSimple_t;
 
     /** the array of reports filled by getReports() */
     typedef std::vector< StringMap > Reports_t;
@@ -208,7 +209,7 @@ public:
 
     /** implementation of D-Bus GetConfig() for m_configName as server configuration */
     void getConfig(bool getTemplate,
-                   Config_t &config);
+                   ConfigSimple_t &config);
 
     /** implementation of D-Bus GetReports() for m_configName as server configuration */
     void getReports(uint32_t start, uint32_t count,
@@ -974,7 +975,7 @@ class DBusServer : public DBusObjectHelper
     /** Server.GetConfig() */
     void getConfig(const std::string &config_name,
                    bool getTemplate,
-                   ReadOperations::Config_t &config)
+                   ReadOperations::ConfigSimple_t &config)
     {
         ReadOperations ops(config_name, *this);
         ops.getConfig(getTemplate , config);
@@ -1780,7 +1781,7 @@ public:
 
     /** Session.SetConfig() */
     void setConfig(bool update, bool temporary,
-                   const ReadOperations::Config_t &config);
+                   const ReadOperations::ConfigSimple_t &config);
 
     typedef StringMap SourceModes_t;
     /** Session.Sync() */
@@ -2171,8 +2172,9 @@ boost::shared_ptr<DBusUserInterface> ReadOperations::getLocalConfig(const string
 }
 
 void ReadOperations::getConfig(bool getTemplate,
-                               Config_t &config)
+                               ConfigSimple_t &configSimple)
 {
+    Config_t config;
     map<string, string> localConfigs;
     boost::shared_ptr<SyncConfig> dbusConfig;
     boost::shared_ptr<DBusUserInterface> dbusUI;
@@ -2275,6 +2277,18 @@ void ReadOperations::getConfig(bool getTemplate,
             }
         }
         config.insert(pair<string, map<string, string> >( "source/" + name, localConfigs));
+    }
+
+    // quick-and-dirty conversion to .ini format
+    BOOST_FOREACH(const Config_t::value_type &entry, config) {
+        string ini;
+        BOOST_FOREACH(const StringPair &keyvalue, entry.second) {
+            ini += keyvalue.first;
+            ini += " = ";
+            ini += keyvalue.second;
+            ini += "\n";
+        }
+        configSimple[entry.first] = ini;
     }
 }
 
@@ -2593,7 +2607,7 @@ static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNo
     }
 }
 void Session::setConfig(bool update, bool temporary,
-                        const ReadOperations::Config_t &config)
+                        const ReadOperations::ConfigSimple_t &configSimple)
 {
     if (!m_active) {
         SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
@@ -2603,6 +2617,19 @@ void Session::setConfig(bool update, bool temporary,
     }
     if (!update && temporary) {
         throw std::runtime_error("Clearing existing configuration and temporary configuration changes which only affects the duration of the session are mutually exclusive");
+    }
+
+    ReadOperations::Config_t config;
+    BOOST_FOREACH(const StringPair &entry, configSimple) {
+        vector<string> lines;
+        boost::split(lines, entry.second, boost::is_from_range('\n', '\n'));
+        StringMap &props = config[entry.first];
+        BOOST_FOREACH(const string &line, lines) {
+            size_t off = line.find(" = ");
+            if (off != string::npos) {
+                props[line.substr(0, off)] = line.substr(off + 3);
+            }
+        }
     }
 
     m_server.getPresenceStatus().updateConfigPeers (m_configName, config);
@@ -5249,10 +5276,8 @@ void AutoSyncManager::prepare()
     if(m_session && m_session->getActive()) {
         // now a config may contain many urls, so replace it with our own temporarily
         // otherwise it only picks the first one
-        ReadOperations::Config_t config;
-        StringMap stringMap;
-        stringMap["syncURL"] = m_activeTask->m_url;
-        config[""] = stringMap;
+        ReadOperations::ConfigSimple_t config;
+        config[""] = string("syncURL = ") + m_activeTask->m_url + "\n";
         m_session->setConfig(true, true, config);
 
         string mode;
