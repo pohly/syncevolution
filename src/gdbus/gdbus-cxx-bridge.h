@@ -1294,10 +1294,16 @@ template <class V> struct dbus_traits <boost::variant <V> > : public dbus_traits
     static void append(DBusMessageIter &iter, const boost::variant <V>  &value) {
     }
 
-    //append_retval not implemented
-    //static void append_retval(DBusMessageIter &iter, arg_type array)
-    //{
-    //}
+    static void append_retval(DBusMessageIter &iter, const boost::variant<V> &value) {
+        DBusMessageIter sub;
+        if (!dbus_message_iter_open_container(&iter, DBUS_TYPE_VARIANT, dbus_traits<V>::getType().c_str(), &sub)) {
+            throw std::runtime_error("out of memory");
+        }
+        dbus_traits<V>::append_retval(sub, boost::get<V>(value));
+        if (!dbus_message_iter_close_container(&iter, &sub)) {
+            throw std::runtime_error("out of memory");
+        }
+    }
 
     typedef boost::variant<V> host_type;
     typedef const boost::variant<V> &arg_type;
