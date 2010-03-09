@@ -195,7 +195,7 @@ public:
 
     /** the double dictionary used to represent configurations */
     typedef std::map< std::string, StringMap > Config_t;
-    typedef std::map< std::string, std::string > ConfigSimple_t;
+    typedef std::map< std::string, boost::variant < std::string > > ConfigSimple_t;
 
     /** the array of reports filled by getReports() */
     typedef std::vector< StringMap > Reports_t;
@@ -2620,9 +2620,9 @@ void Session::setConfig(bool update, bool temporary,
     }
 
     ReadOperations::Config_t config;
-    BOOST_FOREACH(const StringPair &entry, configSimple) {
+    BOOST_FOREACH(const ConfigSimple_t::value_type &entry, configSimple) {
         vector<string> lines;
-        boost::split(lines, entry.second, boost::is_from_range('\n', '\n'));
+        boost::split(lines, boost::get<string>(entry.second), boost::is_from_range('\n', '\n'));
         StringMap &props = config[entry.first];
         BOOST_FOREACH(const string &line, lines) {
             size_t off = line.find(" = ");

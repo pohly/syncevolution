@@ -11,7 +11,7 @@
       <arg type="b" name="template" direction="in">
         <doc:doc><doc:summary>if TRUE, will return a matching template configuration, otherwise will return a matching server configuration</doc:summary></doc:doc>
       </arg>
-      <arg type="a{ss}" name="configuration" direction="out">
+      <arg type="a{sv}" name="configuration" direction="out">
         <doc:doc><doc:summary>server configuration</doc:summary></doc:doc>
         <doc:doc><doc:description>See Server.GetConfig() for dictionary description.</doc:description></doc:doc>
       </arg>
@@ -57,7 +57,7 @@
             do not affect getting or setting permanent configurations.
         </doc:summary></doc:doc>
       </arg>
-      <arg type="a{ss}" name="configuration" direction="in">
+      <arg type="a{sv}" name="configuration" direction="in">
         <doc:doc><doc:summary>server configuration</doc:summary></doc:doc>
         <doc:doc><doc:description>See Server.GetConfig() for dictionary description.</doc:description></doc:doc>
       </arg>
