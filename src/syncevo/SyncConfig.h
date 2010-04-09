@@ -1318,6 +1318,14 @@ class SyncConfig {
     virtual void setNonce(const string &value);
 
     /**
+     * The configuration name that used for new coming clients,
+     * if empty or the configuration does not exist, the configuration 
+     * will be created automatically.
+     */
+    virtual string getServerConfig() const;
+    virtual void setServerConfig(const string &value);
+
+    /**
      * The opaque per-peer admin data managed by the Synthesis
      * engine. Only used when acting as server.
      */

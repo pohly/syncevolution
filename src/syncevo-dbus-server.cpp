@@ -2101,6 +2101,10 @@ class Connection : public DBusObjectHelper, public Resource
     boost::shared_ptr <SANContent> m_SANContent;
     std::string m_peerBtAddr;
 
+    /*Indicates whether we reused another peer's configuration, records the new
+     * peer's device ID if not empty*/
+    std::string m_reuseConfig;
+
     /**
      * records the reason for the failure, sends Abort signal and puts
      * the connection into the FAILED state.
@@ -3954,12 +3958,32 @@ void Connection::process(const Caller_t &caller,
                         break;
                     }
                 }
+
                 if (config.empty()) {
-                    // TODO: proper exception
-                    throw runtime_error(string("no configuration found for ") +
-                                        info.toString());
+                        //reuse any configuration that was reusable
+                        BOOST_FOREACH(const SyncConfig::ConfigList::value_type &entry,
+                                        SyncConfig::getConfigs()) {
+                                SyncConfig peer(entry.first);
+                                if (entry.first == peer.getServerConfig()) {
+                                        config = entry.first;
+                                        m_reuseConfig = info.m_deviceID;
+                                        SE_LOG_INFO(NULL, NULL, "no suitable configuration found for %s, use existing reusable config %s (%s)",
+                                                        info.toString().c_str(),
+                                                        entry.first.c_str(),
+                                                        entry.second.c_str());
+                                        break;
+                                }
+                        }
                 }
 
+                if (config.empty()) {
+                        config = info.m_deviceID+"_"+getCurrentTime();
+                        SE_LOG_DEBUG(NULL,
+                                     NULL,
+                                     "No client configuration found for remote device %s, falling back to automatically created '%s' config",
+                                        info.m_deviceID.c_str(), config.c_str());
+
+                }
                 // abort previous session of this client
                 m_server.killSessions(info.m_deviceID);
                 peerDeviceID = info.m_deviceID;
@@ -4088,6 +4112,7 @@ Connection::Connection(DBusServer &server,
     m_state(SETUP),
     m_sessionID(sessionID),
     m_loop(NULL),
+    m_reuseConfig(""),
     sendAbort(*this, "Abort"),
     m_abortSent(false),
     reply(*this, "Reply"),
@@ -4128,18 +4153,42 @@ void Connection::ready()
     //if configuration not yet created
     std::string configName = m_session->getConfigName();
     SyncConfig config (configName);
-    if (!config.exists() && m_SANContent) {
-        SE_LOG_DEBUG (NULL, NULL, "Configuration %s not exists for a runnable session in a SAN context, create it automatically", configName.c_str());
-        ReadOperations::Config_t from;
-        const std::string templateName = "SyncEvolution";
-        // TODO: support SAN from other well known servers
-        ReadOperations ops(templateName, m_server);
-        ops.getConfig(true , from);
-        if (!m_peerBtAddr.empty()){
-            from[""]["SyncURL"] = string ("obex-bt://") + m_peerBtAddr;
-        }
+    if (!config.exists()) {
+            ReadOperations::Config_t from;
+            SE_LOG_DEBUG (NULL, NULL, "Configuration %s not exists for a runnable session, create it automatically", configName.c_str());
+            if (m_SANContent) {
+                    // TODO: support SAN from other well known servers
+                    const std::string templateName = "SyncEvolution";
+                    ReadOperations ops(templateName, m_server);
+                    ops.getConfig(true , from);
+                    if (!m_peerBtAddr.empty()){
+                            from[""]["SyncURL"] = string ("obex-bt://") + m_peerBtAddr;
+                    }
+            }
+            else {
+                    const std::string templateName = "SyncEvolution Client";
+                    ReadOperations ops(templateName, m_server);
+                    ops.getConfig(true , from);
+                    size_t pos = configName.find_last_of ('_');
+                    if (pos == string::npos) {
+                            //could not extract the 'deviceID'
+                    }
+                    string peerDeviceID = configName.substr (0, pos);
+                    from[""]["SyncURL"] = "";
+                    from[""]["remoteDeviceID"] = peerDeviceID;
+                    from[""]["preventSlowSync"] = "0";
+                    //also set 'reusable' property
+                    from[""]["serverConfig"] = configName;
+            }
         m_session->setConfig (false, false, from);
+    } else if (!m_reuseConfig.empty()) {
+            SE_LOG_DEBUG (NULL, NULL, "resetting remove device ID for config %s to %s because of configuration reuse",
+                        configName.c_str(), m_reuseConfig.c_str());
+            config.setRemoteDevID(m_reuseConfig);
+            config.setServerConfig(configName);
+            config.flush();
     }
+
     const SyncContext context (configName);
     std::list<std::string> sources = context.getSyncSources();
 

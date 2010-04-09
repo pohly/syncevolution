@@ -1177,6 +1177,14 @@ static SafeConfigProperty syncPropRemoteDevID("remoteDeviceId",
 static SafeConfigProperty syncPropNonce("lastNonce",
                                         "MD5 nonce of our peer, empty if not set yet; do not edit, used internally");
 
+static SafeConfigProperty syncPropServerConfig("serverConfig",
+                                              "The configuration that is used for new coming client,\n"
+                                              "If empty or this configuration does not exist, the configruaiton\n"
+                                              "will be created automatically.\n"
+                                              "Only useful in server mode\n"
+                                              "\n"
+                                              );
+
 // used both as source and sync property, internal in both cases
 static SafeConfigProperty syncPropDeviceData("deviceData",
                                              "information about the peer in the format described in the\n"
@@ -1232,6 +1240,7 @@ static SecondsConfigProperty syncPropAutoSyncDelay("autoSyncDelay",
                                                    "enough to complete the synchronization.\n",
                                                    "5M");
 
+
 ConfigPropertyRegistry &SyncConfig::getRegistry()
 {
     static ConfigPropertyRegistry registry;
@@ -1242,6 +1251,7 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
         registry.push_back(&syncPropUsername);
         registry.push_back(&syncPropPassword);
         registry.push_back(&syncPropLogDir);
+        registry.push_back(&syncPropServerConfig);
         registry.push_back(&syncPropLogLevel);
         registry.push_back(&syncPropPrintChanges);
         registry.push_back(&syncPropMaxLogDirs);
@@ -1297,6 +1307,7 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
         syncPropLogDir.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         syncPropMaxLogDirs.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         syncPropDevID.setSharing(ConfigProperty::SOURCE_SET_SHARING);
+        syncPropServerConfig.setSharing(ConfigProperty::SOURCE_SET_SHARING);
 
         initialized = true;
     }
@@ -1589,6 +1600,8 @@ string SyncConfig::getRemoteDevID() const { return syncPropRemoteDevID.getProper
 void SyncConfig::setRemoteDevID(const string &value) { syncPropRemoteDevID.setProperty(*getNode(syncPropRemoteDevID), value); }
 string SyncConfig::getNonce() const { return syncPropNonce.getProperty(*getNode(syncPropNonce)); }
 void SyncConfig::setNonce(const string &value) { syncPropNonce.setProperty(*getNode(syncPropNonce), value); }
+string SyncConfig::getServerConfig() const { return syncPropServerConfig.getProperty(*getNode(syncPropServerConfig)); }
+void SyncConfig::setServerConfig(const string &value) { syncPropServerConfig.setProperty(*getNode(syncPropServerConfig), value); }
 string SyncConfig::getDeviceData() const { return syncPropDeviceData.getProperty(*getNode(syncPropDeviceData)); }
 void SyncConfig::setDeviceData(const string &value) { syncPropDeviceData.setProperty(*getNode(syncPropDeviceData), value); }
 string SyncConfig::getDefaultPeer() const { return syncPropDefaultPeer.getProperty(*getNode(syncPropDefaultPeer)); }
@@ -1600,7 +1613,6 @@ unsigned int SyncConfig::getAutoSyncInterval() const { return syncPropAutoSyncIn
 void SyncConfig::setAutoSyncInterval(unsigned int value, bool temporarily) { syncPropAutoSyncInterval.setProperty(*getNode(syncPropAutoSyncInterval), value, temporarily); }
 unsigned int SyncConfig::getAutoSyncDelay() const { return syncPropAutoSyncDelay.getPropertyValue(*getNode(syncPropAutoSyncDelay)); }
 void SyncConfig::setAutoSyncDelay(unsigned int value, bool temporarily) { syncPropAutoSyncDelay.setProperty(*getNode(syncPropAutoSyncDelay), value, temporarily); }
-
 std::string SyncConfig::findSSLServerCertificate()
 {
     std::string paths = getSSLServerCertificates();

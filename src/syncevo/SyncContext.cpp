@@ -2798,6 +2798,14 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
     }
 
     m_sourceListPtr = NULL;
+
+    //check whether 'reusable' property should be removed for this configuration
+    //TODO: really remvoe the reusable flag once the status from server side is correct
+
+    if (getServerConfig() == m_server /*&& status != STATUS_UNAUTHORIZED*/) {
+            setServerConfig("");
+            flush();
+    }
     return status;
 }
 

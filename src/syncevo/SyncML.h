@@ -108,6 +108,9 @@ enum SyncMLStatus {
     /** external data has been merged */
     STATUS_DATA_MERGED = 207,
 
+    /** unauthorized */
+    STATUS_UNAUTHORIZED = 401,
+
     /** forbidden / access denied */
     STATUS_FORBIDDEN = 403,
     /** object not found / unassigned field */
