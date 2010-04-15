@@ -48,6 +48,8 @@ class SyncMLSession:
         self.request = None
         self.conpath = None
         self.connection = None
+        self.user = None
+        self.pwd = None
 
     def destruct(self, code, message=""):
         '''Tell both HTTP client and D-Bus server that we are shutting down,
@@ -99,7 +101,7 @@ class SyncMLSession:
             self.connection.Close(False, error)
             self.connection = None
 
-    def start(self, request, config, url):
+    def start(self, request, config, url, user, pwd):
         '''start a new session based on the incoming message'''
         print "requesting new session"
         self.object = dbus.Interface(bus.get_object('org.syncevolution',
@@ -110,7 +112,9 @@ class SyncMLSession:
         self.conpath = self.object.Connect({'description': 'syncevo-server-http.py',
                                             'transport': 'HTTP',
                                             'config': config,
-                                            'URL': url},
+                                            'URL': url,
+                                            'user': user,
+                                            'pwd': pwd},
                                            True,
                                            '')
         self.connection = dbus.Interface(bus.get_object('org.syncevolution',
@@ -155,8 +159,10 @@ class SyncMLSession:
 class SyncMLPost(resource.Resource):
     isLeaf = True
 
-    def __init__(self, url):
+    def __init__(self, url, user, pwd):
         self.url = url
+        self.user = user 
+        self.pwd = pwd
 
     def render_GET(self, request):
         return "<html>SyncEvolution SyncML Server</html>"
@@ -176,7 +182,8 @@ class SyncMLPost(resource.Resource):
         if not sessionid:
             session = SyncMLSession()
             session.start(request, config,
-                          urlparse.urljoin(self.url.geturl(), request.path))
+                          urlparse.urljoin(self.url.geturl(), request.path),
+                          self.user, self.pwd)
             return server.NOT_DONE_YET
         else:
             data = request.content.read()
@@ -208,7 +215,7 @@ class SyncMLPost(resource.Resource):
             raise twisted.web.Error(http.NOT_FOUND)
 
 
-usage =  """usage: %prog http://localhost:<port>/<path>
+usage =  """usage: %prog <options> http://localhost:<port>/<path>
 
 Runs a HTTP server which listens on all network interfaces on
 the given port and answers requests for the given path.
@@ -217,13 +224,19 @@ http://syncevolution.org/development/http-server-howto"""
 
 def main():
     parser = optparse.OptionParser(usage=usage)
+    parser.add_option ("-u", "--username", action="store", type="string", dest="username",
+                       help = "The user name checked by the server when an unknown client connects. Only if the client provides the right credentials, will a new configuration be created for it automatically, using these credenticals", default = "")
+    parser.add_option ("-p", "--password", action="store", type="string", dest="password",
+                       help = "The password accepted by the server, used together with -u", default = "")
     (options, args) = parser.parse_args()
-    if len(args) != 1:
-        print "need exactly on URL as command line parameter"
+    if len(args) < 1:
+        print "need at least URL as command line parameter"
         exit(1)
+    if ((options.username and not options.password) or (not options.username and options.password)):
+        parser.error ("-u must use with -p, username and password must be set or unset together")
     url = urlparse.urlparse(args[0])
     root = resource.Resource()
-    root.putChild(url.path[1:], SyncMLPost(url))
+    root.putChild(url.path[1:], SyncMLPost(url, options.username, options.password))
     site = server.Site(root)
     reactor.listenTCP(url.port, site)
     reactor.run()

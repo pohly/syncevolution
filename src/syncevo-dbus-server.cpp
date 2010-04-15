@@ -3960,7 +3960,15 @@ void Connection::process(const Caller_t &caller,
                 }
 
                 if (config.empty()) {
-                        //reuse any configuration that was reusable
+
+                        StringMap::const_iterator user = m_peer.find("user"),
+                        pwd = m_peer.find("pwd");
+                        if (user == m_peer.end() || user->second.empty() || pwd == m_peer.end() || pwd->second.empty()) {
+                            // TODO: proper exception
+                            throw runtime_error(string("no configuration found for ") +
+                                    info.toString());
+                        }
+                        //reuse any configuration that is reusable
                         BOOST_FOREACH(const SyncConfig::ConfigList::value_type &entry,
                                         SyncConfig::getConfigs()) {
                                 SyncConfig peer(entry.first);
@@ -4177,6 +4185,10 @@ void Connection::ready()
                     from[""]["SyncURL"] = "";
                     from[""]["remoteDeviceID"] = peerDeviceID;
                     from[""]["preventSlowSync"] = "0";
+                    StringMap::const_iterator user = m_peer.find("user"),
+                        pwd = m_peer.find("pwd");
+                    from[""]["username"] = user->second;
+                    from[""]["password"] = pwd->second;
                     //also set 'reusable' property
                     from[""]["serverConfig"] = configName;
             }
@@ -4186,6 +4198,10 @@ void Connection::ready()
                         configName.c_str(), m_reuseConfig.c_str());
             config.setRemoteDevID(m_reuseConfig);
             config.setServerConfig(configName);
+            StringMap::const_iterator user = m_peer.find("user"),
+                pwd = m_peer.find("pwd");
+            config.setUsername(user->second);
+            config.setPassword(pwd->second);
             config.flush();
     }
 
