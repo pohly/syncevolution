@@ -667,7 +667,7 @@ class SyncSourceBase : public Logger {
         /** native datatype (see getNativeDatatypeName()) */
         std::string m_native;
 
-        /** name of the field list used by the datatypes */
+        /** name of the field list used by the datatypes, empty if none */
         std::string m_fieldlist;
 
         /**
