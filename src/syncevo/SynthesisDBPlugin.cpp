@@ -108,11 +108,17 @@ TSyError SyncEvolution_Module_Capabilities( CContext mContext, appCharP *mCapabi
       << DLL_Info << "\n"
       << CA_MinVersion << ":V1.0.6.0\n" /* must not be changed */
       << CA_Manufacturer << ":SyncEvolution\n"
-      << CA_Description << ":SyncEvolution Synthesis DB Plugin\n"
-      << Plugin_DS_Data_Str << ":no\n"
-      << Plugin_DS_Data_Key << ":yes\n"
-      << CA_ItemAsKey << ":yes\n"
-      << Plugin_DS_Blob <<
+      << CA_Description << ":SyncEvolution Synthesis DB Plugin\n";
+    if (source->getOperations().m_readItem) {
+        s << Plugin_DS_Data_Str << ":yes\n"
+          << Plugin_DS_Data_Key << ":no\n"
+          << CA_ItemAsKey << ":no\n";
+    } else {
+        s << Plugin_DS_Data_Str << ":no\n"
+          << Plugin_DS_Data_Key << ":yes\n"
+          << CA_ItemAsKey << ":yes\n";
+    }
+    s << Plugin_DS_Blob <<
         ((source && source->getOperations().m_readBlob) ?
          ":yes\n" :
          ":no\n");
@@ -121,7 +127,7 @@ TSyError SyncEvolution_Module_Capabilities( CContext mContext, appCharP *mCapabi
         s << Plugin_DS_Admin << ":yes\n";
     }
 
-    *mCapabilities= StrAlloc(s.str().c_str());
+    *mCapabilities= strdup(s.str().c_str());
     SE_LOG_DEBUG(NULL, NULL, "Module_Capabilities:\n%s", *mCapabilities);
     return LOCERR_OK;
 } /* Module_Capabilities */
@@ -145,7 +151,7 @@ TSyError SyncEvolution_Module_PluginParams( CContext mContext,
 extern "C"
 void SyncEvolution_Module_DisposeObj( CContext mContext, void* memory )
 {
-    StrDispose(memory);
+    free(memory);
 }
 
 extern "C"
@@ -222,8 +228,8 @@ TSyError SyncEvolution_Session_CheckDevice( CContext sContext,
         res = DB_Forbidden;
     }
 
-    *sDevKey= StrAlloc(aDeviceID);
-    *nonce = StrAlloc(sc->getNonce().c_str());
+    *sDevKey= strdup(aDeviceID);
+    *nonce = strdup(sc->getNonce().c_str());
     SE_LOG_DEBUG(NULL, NULL, "Session_CheckDevice dev='%s' nonce='%s' res=%d",
                  *sDevKey, *nonce, res);
     return res;
@@ -317,7 +323,7 @@ TSyError SyncEvolution_Session_Login( CContext sContext, cAppCharP sUsername, ap
         // nothing to check, accept peer
         res = LOCERR_OK;
     } else if (user == sUsername) {
-        *sPassword=StrAlloc(password.c_str());
+        *sPassword=strdup(password.c_str());
         res = LOCERR_OK;
     }
 
@@ -340,7 +346,7 @@ TSyError SyncEvolution_Session_Logout( CContext sContext )
 extern "C"
 void SyncEvolution_Session_DisposeObj( CContext sContext, void* memory )
 {
-  StrDispose              ( memory );
+  free(memory);
 } /* Session_DisposeObj */
 
 
@@ -660,12 +666,14 @@ TSyError SyncEvolution_StartDataRead( CContext aContext, cAppCharP   lastToken,
     return res;
 }
 
-
-extern "C"
-TSyError SyncEvolution_ReadNextItemAsKey( CContext aContext, ItemID aID, KeyH aItemKey,
-                                          sInt32*    aStatus, bool aFirst )
+/**
+ * Common implementation of ReadNextItem() and ReadNextItemAsKey(): in both cases
+ * no data is returned.
+ */
+static
+TSyError ReadNextItem( CContext aContext, ItemID aID,
+                       sInt32*    aStatus, bool aFirst )
 {
-    /**** CAN BE ADAPTED BY USER ****/
     SyncSource *source = DBC( aContext );
     if (!source) {
         return LOCERR_WRONGUSAGE;
@@ -681,8 +689,43 @@ TSyError SyncEvolution_ReadNextItemAsKey( CContext aContext, ItemID aID, KeyH aI
         }
     }
 
-    SE_LOG_DEBUG(source, NULL, "ReadNextItemAsKey aStatus=%d aID=(%s,%s) res=%d",
+    SE_LOG_DEBUG(source, NULL, "ReadNextItem aStatus=%d aID=(%s,%s) res=%d",
                  *aStatus, aID->item, aID->parent, res);
+    return res;
+}
+
+extern "C"
+TSyError SyncEvolution_ReadNextItem( CContext aContext, ItemID aID, appCharP *aItemData,
+                                     sInt32*    aStatus, bool aFirst )
+{
+    return ReadNextItem(aContext, aID, aStatus, aFirst);
+}
+
+extern "C"
+TSyError SyncEvolution_ReadNextItemAsKey( CContext aContext, ItemID aID, KeyH aItemKey,
+                                          sInt32*    aStatus, bool aFirst )
+{
+    return ReadNextItem(aContext, aID, aStatus, aFirst);
+}
+
+extern "C"
+TSyError SyncEvolution_ReadItem( CContext aContext, cItemID aID, appCharP *aItemData )
+{
+    SyncSource *source = DBC( aContext );
+    if (!source) {
+        return LOCERR_WRONGUSAGE;
+    }
+    TSyError res = LOCERR_OK;
+    if (source->getOperations().m_readItem) {
+        try {
+            res = source->getOperations().m_readItem(aID, *aItemData);
+        } catch (...) {
+            res = source->handleException();
+        }
+    }
+
+    SE_LOG_DEBUG(source, NULL, "ReadItem aID=(%s,%s) res=%d",
+                 aID->item, aID->parent, res);
     return res;
 }
 
@@ -773,6 +816,27 @@ TSyError SyncEvolution_StartDataWrite( CContext aContext )
 }
 
 extern "C"
+TSyError SyncEvolution_InsertItem( CContext aContext, cAppCharP aItemData, ItemID newID )
+{
+    /**** CAN BE ADAPTED BY USER ****/
+    SyncSource *source = DBC( aContext );
+    if (!source) {
+        return LOCERR_WRONGUSAGE;
+    }
+    TSyError res = LOCERR_OK;
+    if (source->getOperations().m_insertItem) {
+        try {
+            res = source->getOperations().m_insertItem(aItemData, newID);
+        } catch (...) {
+            res = source->handleException();
+        }
+    }
+
+    SE_LOG_DEBUG(source, NULL, "InsertItem res=%d\n", res);
+    return res;
+}
+
+extern "C"
 TSyError SyncEvolution_InsertItemAsKey( CContext aContext, KeyH aItemKey, ItemID newID )
 {
     /**** CAN BE ADAPTED BY USER ****/
@@ -793,6 +857,29 @@ TSyError SyncEvolution_InsertItemAsKey( CContext aContext, KeyH aItemKey, ItemID
     return res;
 }
 
+
+extern "C"
+TSyError SyncEvolution_UpdateItem( CContext aContext, cAppCharP aItemData, cItemID   aID, 
+                                   ItemID updID )
+{
+    SyncSource *source = DBC( aContext );
+    if (!source) {
+        return LOCERR_WRONGUSAGE;
+    }
+    TSyError res = LOCERR_OK;
+    if (source->getOperations().m_updateItem) {
+        try {
+            res = source->getOperations().m_updateItem(aItemData, aID, updID);
+        } catch (...) {
+            res = source->handleException();
+        }
+    }
+
+  
+    SE_LOG_DEBUG(source, NULL, "UpdateItem aID=(%s,%s) res=%d",
+                 aID->item,aID->parent, res);
+    return res;
+}
 
 extern "C"
 TSyError SyncEvolution_UpdateItemAsKey( CContext aContext, KeyH aItemKey, cItemID   aID, 

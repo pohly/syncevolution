@@ -940,12 +940,44 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
         typedef sysync::TSyError (EndDataWrite_t)(bool success, char **newToken);
         boost::function<EndDataWrite_t> m_endDataWrite;
 
+
         /** the SynthesisDBPlugin is configured so that this operation
             doesn't have to (and cannot) return the item data */
         typedef sysync::TSyError (ReadNextItem_t)(sysync::ItemID aID,
                                                   sysync::sInt32 *aStatus, bool aFirst);
         boost::function<ReadNextItem_t> m_readNextItem;
+
+        typedef sysync::TSyError (DeleteItem_t)(sysync::cItemID aID);
+        boost::function<DeleteItem_t> m_deleteItem;
         
+        /*
+         * A sync source can choose between using either the *AsKey
+         * variant or the plain version, but cannot mix and match.
+         * If m_readItem is set, then the plain versions are used.
+         *
+         * The normal versions exchange data as a C string. Therefore
+         * payload must not contain nul bytes. Strings allocated by
+         * the plugin in m_readItem will be freed with free() by the
+         * caller.
+         *
+         * The MIME type and version is defined via the data type
+         * definition selected by the source.
+         */
+        typedef sysync::TSyError (ReadItem_t)(sysync::cItemID aID, char *&data);
+        boost::function<ReadItem_t> m_readItem;
+
+        typedef sysync::TSyError (InsertItem_t)(const char *data, sysync::ItemID newID);
+        boost::function<InsertItem_t> m_insertItem;
+        
+        typedef sysync::TSyError (UpdateItem_t)(const char *data, sysync::cItemID aID, sysync::ItemID updID);
+        boost::function<UpdateItem_t> m_updateItem;
+
+        /*
+         * The *AsKey versions get an item handle and can read
+         * individual fields. SyncSourceSerialize uses that handle to
+         * generate a specific string again, formatted for the local
+         * data backend.
+         */
         typedef sysync::TSyError (ReadItemAsKey_t)(sysync::cItemID aID, sysync::KeyH aItemKey);
         boost::function<ReadItemAsKey_t> m_readItemAsKey;
 
@@ -955,8 +987,6 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
         typedef sysync::TSyError (UpdateItemAsKey_t)(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID updID);
         boost::function<UpdateItemAsKey_t> m_updateItemAsKey;
 
-        typedef sysync::TSyError (DeleteItem_t)(sysync::cItemID aID);
-        boost::function<DeleteItem_t> m_deleteItem;
         /**@}*/
 
 

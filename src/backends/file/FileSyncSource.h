@@ -69,6 +69,8 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual Databases getDatabases();
     virtual const char *getMimeType() const;
     virtual const char *getMimeVersion() const;
+    virtual void getSynthesisInfo(SynthesisInfo &info,
+                                  XMLConfigFragments &fragments);
 
     /* implementation of TrackingSyncSource interface */
     virtual void listAllItems(RevisionMap_t &revisions);
@@ -77,6 +79,11 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual void removeItem(const string &uid);
 
  private:
+    /**
+     * if true, then don't use the Synthesis data conversion code
+     */
+    bool m_raw;
+
     /**
      * @name values obtained from the source's type property
      *
@@ -104,6 +111,11 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
      * create full filename from basedir and entry name
      */
     string createFilename(const string &entry);
+
+    /* implementation of Synthesis Update/Insert/ReadItem variant with direct access to SyncML data */
+    sysync::TSyError readItemDirect(sysync::cItemID aID, char *&data) throw();
+    sysync::TSyError insertItemDirect(const char *data, sysync::ItemID newID) throw();
+    sysync::TSyError updateItemDirect(const char *data, sysync::cItemID aID, sysync::ItemID updID) throw();
 };
 
 SE_END_CXX

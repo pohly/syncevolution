@@ -43,6 +43,8 @@
 #include <sstream>
 #include <fstream>
 
+#include <boost/bind.hpp>
+
 #include <syncevo/SyncContext.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -50,8 +52,19 @@ SE_BEGIN_CXX
 FileSyncSource::FileSyncSource(const SyncSourceParams &params,
                                const string &dataformat) :
     TrackingSyncSource(params),
+    m_raw(true),
     m_entryCounter(0)
 {
+    if (m_raw) {
+        // replace default operations from TrackingSyncSource/SyncSourceSerialize
+        m_operations.m_readItemAsKey = 0;
+        m_operations.m_insertItemAsKey = 0;
+        m_operations.m_updateItemAsKey = 0;
+        m_operations.m_readItem = boost::bind(&FileSyncSource::readItemDirect, this, _1, _2);
+        m_operations.m_insertItem = boost::bind(&FileSyncSource::insertItemDirect, this, _1, _2);
+        m_operations.m_updateItem = boost::bind(&FileSyncSource::updateItemDirect, this, _1, _2, _3);
+    }
+
     if (dataformat.empty()) {
         throwError("a data format must be specified");
     }
@@ -72,6 +85,29 @@ const char *FileSyncSource::getMimeType() const
 const char *FileSyncSource::getMimeVersion() const
 {
     return m_mimeVersion.c_str();
+}
+
+void FileSyncSource::getSynthesisInfo(SynthesisInfo &info,
+                                      XMLConfigFragments &fragments)
+{
+    if (m_raw) {
+        // use a new datatype whose name is composed from mime type and version
+        info.m_native = string("file:") + info.m_native + m_mimeType + ":" + m_mimeVersion;
+        info.m_fieldlist = "";
+        info.m_profile = "";
+        info.m_datatypes =
+            string("        <use datatype='") + info.m_native + "' mode='rw' preferred='yes'/>\n";
+        fragments.m_datatypes[info.m_native] =
+            StringPrintf("<datatype name='%s' basetype=\"simple\">\n"
+                         "    <typestring>%s</typestring>\n"
+                         "    <versionstring>%s</versionstring>\n"
+                         "</datatype>\n",
+                         info.m_native.c_str(),
+                         m_mimeType.c_str(),
+                         m_mimeVersion.c_str());
+    } else {
+        TrackingSyncSource::getSynthesisInfo(info, fragments);
+    }
 }
 
 void FileSyncSource::open()
@@ -259,6 +295,41 @@ string FileSyncSource::createFilename(const string &entry)
 {
     string filename = m_basedir + "/" + entry;
     return filename;
+}
+
+sysync::TSyError FileSyncSource::readItemDirect(sysync::cItemID aID, char *&data) throw()
+{
+    sysync::TSyError res = sysync::LOCERR_OK;
+    try {
+        string buffer;
+        res = readItem(aID->item, buffer, true);
+        data = strdup(buffer.c_str());
+    } catch (...) {
+        res = handleException();
+    }
+    return res;
+}
+
+sysync::TSyError FileSyncSource::insertItemDirect(const char *data, sysync::ItemID newID) throw()
+{
+    sysync::TSyError res = sysync::LOCERR_OK;
+    try {
+        res = insertItem("", data, true); 
+    } catch (...) {
+        res = handleException();
+    }
+    return res;
+}
+
+sysync::TSyError FileSyncSource::updateItemDirect(const char *data, sysync::cItemID aID, sysync::ItemID updID) throw()
+{
+    sysync::TSyError res = sysync::LOCERR_OK;
+    try {
+        res = insertItem(aID->item, data, true);
+    } catch (...) {
+        res = handleException();
+    }
+    return res;
 }
 
 SE_END_CXX
