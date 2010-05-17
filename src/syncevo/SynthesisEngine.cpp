@@ -239,26 +239,28 @@ void SharedEngine::doDebug(Logger::Level level,
 sysync::TSyError SDKInterface::setValue(sysync::KeyH aItemKey,
                                         const std::string &field,
                                         const char *data,
-                                        size_t datalen)
+                                        size_t datalen,
+                                        bool raw)
 {
     return this->ui.SetValue(this,
                              aItemKey,
                              field.c_str(),
-                             sysync::VALTYPE_TEXT,
+                             raw ? sysync::VALTYPE_BUF : sysync::VALTYPE_TEXT,
                              data,
                              datalen);
 }
 
 sysync::TSyError SDKInterface::getValue(sysync::KeyH aItemKey,
                                         const std::string &field,
-                                        SharedBuffer &data)
+                                        SharedBuffer &data,
+                                        bool raw)
 {
     sysync::memSize len;
     TSyError res =
         this->ui.GetValue(this,
                           aItemKey,
                           field.c_str(),
-                          sysync::VALTYPE_TEXT,
+                          raw ? sysync::VALTYPE_BUF : sysync::VALTYPE_TEXT,
                           NULL, 0,
                           &len);
     if (!res) {

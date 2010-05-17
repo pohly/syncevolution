@@ -159,13 +159,23 @@ class NoSuchKey : public BadSynthesisResult
  */
 struct SDKInterface : public sysync::SDK_InterfaceType
 {
+    /**
+     * @param raw     set value without line feed and charset conversion
+     */
     sysync::TSyError setValue(sysync::KeyH aItemKey,
                               const std::string &field,
                               const char *data,
-                              size_t datalen);
+                              size_t datalen,
+                              bool raw);
+
+    /**
+     * @param raw     get value without line feed and charset conversion
+     * @retval data   allocated and filled with field content
+     */
     sysync::TSyError getValue(sysync::KeyH aItemKey,
                               const std::string &field,
-                              SharedBuffer &data);
+                              SharedBuffer &data,
+                              bool raw);
 };
 
 

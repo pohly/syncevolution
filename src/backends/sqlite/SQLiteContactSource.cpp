@@ -249,7 +249,7 @@ sysync::TSyError SQLiteContactSource::readItemAsKey(sysync::cItemID aID, sysync:
         string field = map.fieldname;
         if(!field.empty()) {
             string value = m_sqlite.getTextColumn(contact, map.colindex);
-            sysync::TSyError res = getSynthesisAPI()->setValue(aItemKey, field, value.c_str(), value.size());
+            sysync::TSyError res = getSynthesisAPI()->setValue(aItemKey, field, value.c_str(), value.size(), false);
             if (res != sysync::LOCERR_OK) {
                 SE_LOG_WARNING (NULL, NULL, "SQLite backend: set field %s value %s failed", field.c_str(), value.c_str());
             }
@@ -274,7 +274,7 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
         SQLiteUtil::Mapping map = m_sqlite.getMapping(i);
         string field = map.fieldname;
         SharedBuffer data;
-        if (!field.empty() && !getSynthesisAPI()->getValue (aItemKey, field, data)) {
+        if (!field.empty() && !getSynthesisAPI()->getValue (aItemKey, field, data, false)) {
             insValues.push_back (string (data.get()));
             cols << m_sqlite.getMapping(i).colname << ", ";
             values <<"?, ";

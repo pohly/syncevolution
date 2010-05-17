@@ -607,14 +607,14 @@ sysync::TSyError SyncSourceSerialize::readItemAsKey(sysync::cItemID aID, sysync:
     std::string item;
 
     readItem(aID->item, item);
-    TSyError res = getSynthesisAPI()->setValue(aItemKey, "ITEMDATA", item.c_str(), item.size());
+    TSyError res = getSynthesisAPI()->setValue(aItemKey, "ITEMDATA", item.c_str(), item.size(), true);
     return res;
 }
 
 sysync::TSyError SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
     SharedBuffer data;
-    TSyError res = getSynthesisAPI()->getValue(aItemKey, "ITEMDATA", data);
+    TSyError res = getSynthesisAPI()->getValue(aItemKey, "ITEMDATA", data, true);
 
     if (!res) {
         InsertItemResult inserted =
@@ -1004,7 +1004,7 @@ std::string SyncSourceLogging::getDescription(sysync::KeyH aItemKey)
 
         BOOST_FOREACH(const std::string &field, m_fields) {
             SharedBuffer value;
-            if (!getSynthesisAPI()->getValue(aItemKey, field, value) &&
+            if (!getSynthesisAPI()->getValue(aItemKey, field, value, false) &&
                 value.size()) {
                 values.push_back(std::string(value.get()));
             }
