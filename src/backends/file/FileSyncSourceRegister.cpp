@@ -45,7 +45,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
         // parameter in sourceType.m_format.
         if (/* sourceType.m_format == "" || sourceType.m_format == "text/x-vcard" */
             sourceType.m_format.size()) {
-            return new FileSyncSource(params, sourceType.m_format);
+            return new FileSyncSource(params, sourceType.m_format, sourceType.m_forceFormat);
         } else {
             return NULL;
         }
@@ -67,13 +67,18 @@ static RegisterSyncSource registerMe("Files in one directory",
                                      "   It will only be created if the prefix is given, otherwise\n"
                                      "   it must exist already. Only items of the same type can\n"
                                      "   be synchronized and this type must be specified explicitly\n"
-                                     "   with both mime type and version.\n"
+                                     "   with both mime type and version. When 'forcing' a type with\n"
+                                     "   an explicit exclamation mark at the end, data conversion inside\n"
+                                     "   the engine is disabled and items are exchanged literally with\n"
+                                     "   the peer. This does only works when the local side is a SyncML\n"
+                                     "   client.\n"
                                      "   Examples for type:\n"
                                      "      file:text/plain:1.0\n"
                                      "      file:text/x-vcard:2.1\n"
                                      "      file:text/vcard:3.0\n"
                                      "      file:text/x-vcalendar:1.0\n"
                                      "      file:text/calendar:2.0\n"
+                                     "      file:text/calendar:2.0!\n"
                                      "   Examples for evolutionsource:\n"
                                      "      /home/joe/datadir - directory must exist\n"
                                      "      file:///tmp/scratch - directory is created\n",

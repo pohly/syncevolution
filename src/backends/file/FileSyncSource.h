@@ -58,8 +58,8 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
 {
   public:
     FileSyncSource(const SyncSourceParams &params,
-                   const string &dataformat);
-
+                   const string &dataformat,
+                   bool raw);
 
  protected:
     /* implementation of SyncSource interface */
@@ -69,6 +69,8 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual Databases getDatabases();
     virtual const char *getMimeType() const;
     virtual const char *getMimeVersion() const;
+    virtual void getSynthesisInfo(SynthesisInfo &info,
+                                  XMLConfigFragments &fragments);
 
     /* implementation of TrackingSyncSource interface */
     virtual void listAllItems(RevisionMap_t &revisions);
@@ -77,6 +79,11 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual void removeItem(const string &uid);
 
  private:
+    /**
+     * if true, then don't use the Synthesis data conversion code
+     */
+    bool m_raw;
+
     /**
      * @name values obtained from the source's type property
      *

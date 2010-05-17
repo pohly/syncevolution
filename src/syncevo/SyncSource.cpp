@@ -155,7 +155,7 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
             }
             xmlstream <<
                 "        ]]></afterreadscript>\n"
-                "        <map name='data' references='itemdata' type='string'/>\n";
+                "        <map name='itemdata' references='itemdata' type='string'/>\n";
         }
         xmlstream << 
             "        <automap/>\n"
@@ -607,14 +607,14 @@ sysync::TSyError SyncSourceSerialize::readItemAsKey(sysync::cItemID aID, sysync:
     std::string item;
 
     readItem(aID->item, item);
-    TSyError res = getSynthesisAPI()->setValue(aItemKey, "data", item.c_str(), item.size());
+    TSyError res = getSynthesisAPI()->setValue(aItemKey, "ITEMDATA", item.c_str(), item.size());
     return res;
 }
 
 sysync::TSyError SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
     SharedBuffer data;
-    TSyError res = getSynthesisAPI()->getValue(aItemKey, "data", data);
+    TSyError res = getSynthesisAPI()->getValue(aItemKey, "ITEMDATA", data);
 
     if (!res) {
         InsertItemResult inserted =

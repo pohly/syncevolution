@@ -48,8 +48,10 @@
 SE_BEGIN_CXX
 
 FileSyncSource::FileSyncSource(const SyncSourceParams &params,
-                               const string &dataformat) :
+                               const string &dataformat,
+                               bool raw) :
     TrackingSyncSource(params),
+    m_raw(raw),
     m_entryCounter(0)
 {
     if (dataformat.empty()) {
@@ -72,6 +74,36 @@ const char *FileSyncSource::getMimeType() const
 const char *FileSyncSource::getMimeVersion() const
 {
     return m_mimeVersion.c_str();
+}
+
+void FileSyncSource::getSynthesisInfo(SynthesisInfo &info,
+                                      XMLConfigFragments &fragments)
+{
+    if (m_raw) {
+        // use a new datatype whose name is composed from mime type and version
+        info.m_native = string("file:") + info.m_native + m_mimeType + ":" + m_mimeVersion;
+        info.m_fieldlist = "file:raw";
+        info.m_profile = "";
+        info.m_datatypes =
+            string("        <use datatype='") + info.m_native + "' mode='rw' preferred='yes'/>\n";
+        fragments.m_fieldlists["file:raw"] =
+            "<fieldlist name='file:raw'>\n"
+            "    <field name='ITEMDATA' type='string' compare='never'/>\n"
+            "</fieldlist>\n";
+        fragments.m_datatypes[info.m_native] =
+            StringPrintf("<datatype name='%s' basetype=\"raw\">\n"
+                         "    <use fieldlist='file:raw'/>\n"
+                         "    <typestring>%s</typestring>\n"
+                         "    <versionstring>%s</versionstring>\n"
+                         "    <incomingscript>DEBUGSHOWITEM();</incomingscript>\n"
+                         "    <outgoingscript>DEBUGSHOWITEM();</outgoingscript>\n"
+                         "</datatype>\n",
+                         info.m_native.c_str(),
+                         m_mimeType.c_str(),
+                         m_mimeVersion.c_str());
+    } else {
+        TrackingSyncSource::getSynthesisInfo(info, fragments);
+    }
 }
 
 void FileSyncSource::open()
