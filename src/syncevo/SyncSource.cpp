@@ -129,37 +129,39 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
         "           we must make sure this identifier is stored (and not only the sync time) -->\n"
         "      <storesyncidentifiers>yes</storesyncidentifiers>\n"
         "\n";
-    
-    xmlstream <<
-        "      <!-- Mapping of the fields to the fieldlist -->\n"
-        "      <fieldmap fieldlist='" << info.m_fieldlist << "'>\n";
-    if (!info.m_profile.empty()) {
+
+    if (!info.m_fieldlist.empty()) {
         xmlstream <<
-            "        <initscript><![CDATA[\n"
-            "           string itemdata;\n"
-            "        ]]></initscript>\n"
-            "        <beforewritescript><![CDATA[\n";
-        if(!info.m_beforeWriteScript.empty()) {
-            xmlstream << 
-                "           " << info.m_beforeWriteScript << "\n";
+            "      <!-- Mapping of the fields to the fieldlist -->\n"
+            "      <fieldmap fieldlist='" << info.m_fieldlist << "'>\n";
+        if (!info.m_profile.empty()) {
+            xmlstream <<
+                "        <initscript><![CDATA[\n"
+                "           string itemdata;\n"
+                "        ]]></initscript>\n"
+                "        <beforewritescript><![CDATA[\n";
+            if(!info.m_beforeWriteScript.empty()) {
+                xmlstream << 
+                    "           " << info.m_beforeWriteScript << "\n";
+            }
+            xmlstream <<
+                "           itemdata = MAKETEXTWITHPROFILE(" << info.m_profile << ", \"" << info.m_backendRule << "\");\n"
+                "        ]]></beforewritescript>\n"
+                "        <afterreadscript><![CDATA[\n"
+                "           PARSETEXTWITHPROFILE(itemdata, " << info.m_profile << ", \"" << info.m_backendRule << "\");\n";
+            if(!info.m_afterReadScript.empty()) {
+                xmlstream << 
+                    "           " << info.m_afterReadScript<< "\n";
+            }
+            xmlstream <<
+                "        ]]></afterreadscript>\n"
+                "        <map name='data' references='itemdata' type='string'/>\n";
         }
-        xmlstream <<
-            "           itemdata = MAKETEXTWITHPROFILE(" << info.m_profile << ", \"" << info.m_backendRule << "\");\n"
-            "        ]]></beforewritescript>\n"
-            "        <afterreadscript><![CDATA[\n"
-            "           PARSETEXTWITHPROFILE(itemdata, " << info.m_profile << ", \"" << info.m_backendRule << "\");\n";
-        if(!info.m_afterReadScript.empty()) {
-            xmlstream << 
-                "           " << info.m_afterReadScript<< "\n";
-        }
-        xmlstream <<
-            "        ]]></afterreadscript>\n"
-            "        <map name='data' references='itemdata' type='string'/>\n";
+        xmlstream << 
+            "        <automap/>\n"
+            "      </fieldmap>\n"
+            "\n";
     }
-    xmlstream << 
-        "        <automap/>\n"
-        "      </fieldmap>\n"
-        "\n";
 
     xmlstream <<
         "      <!-- datatypes supported by this datastore -->\n"
