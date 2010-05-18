@@ -91,7 +91,10 @@ def step1(input, result, indents, dir, resulturi, shellprefix, srcdir):
     os.chdir(tmpdir)
     for lib in libs:
         fout,fin=popen2.popen2(shellprefix+' pkg-config --modversion '+lib +' |grep -v pkg-config')
-        s = s + lib +': '+fout.read() +'  '
+        temp=fout.read()
+        if temp == '':
+            temp='no'
+        s = s + lib +': '+temp +'  '
     os.chdir(oldpath)
     result.write(indent+s)
     result.write(indent+'''</libraryinfo>\n''')
