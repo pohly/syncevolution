@@ -37,10 +37,28 @@ endif
 CLEANFILES = $(BUILT_SOURCES) stamp-syncevo-dbus-glue.h
 EXTRA_DIST = syncevo-marshal.list \
 	spec-strip-docs.xsl \
+	spec-strip-docs-plus-annotations.xsl \
 	spec-to-docbook.xsl \
 	syncevo-connection-full.xml  \
 	syncevo-server-full.xml \
 	syncevo-session-full.xml
+
+if COND_DBUS
+# Install .xml interface description including Qt <annotation>s,
+# but without <doc:*>, in share/dbus-1/interfaces. We reuse
+# the $(DBUS_SERVICES_DIR) here, based on the assumption that the
+# "services" and "interfaces" directory are in the same directory.
+interfacesdir = $(DBUS_SERVICES_DIR)/../interfaces
+interfaces_DATA = org.syncevolution.Server.xml org.syncevolution.Session.xml org.syncevolution.Connection.xml
+CLEANFILES += $(interfaces_DATA)
+SPEC_TO_INTERFACE = $(XSLT) --stringparam use-annotation yes -o $@ $(srcdir)/spec-strip-docs.xsl $<
+org.syncevolution.Server.xml: syncevo-server-full.xml spec-strip-docs.xsl
+	$(SPEC_TO_INTERFACE)
+org.syncevolution.Session.xml: syncevo-session-full.xml spec-strip-docs.xsl 
+	$(SPEC_TO_INTERFACE)
+org.syncevolution.Connection.xml: syncevo-connection-full.xml spec-strip-docs.xsl
+	$(SPEC_TO_INTERFACE)
+endif
 
 if COND_GUI
 %-bindings.h: stamp-%-bindings.h

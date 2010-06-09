@@ -11,6 +11,9 @@
 	            doctype-system="http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd"
 	            doctype-public="-//freedesktop//DTD D-BUS Object Introspection 1.0//EN" />
 	
+        <!-- preserve annotations -->
+        <xsl:param name="use-annotation" select="'no'"/>
+
 	<xsl:template match="*">
 		<xsl:copy>
 			<xsl:for-each select="@*">
@@ -33,7 +36,15 @@
 		</node>
 	</xsl:template>
 	
-        <xsl:template match="annotation"/>
+        <xsl:template match="annotation">
+          <xsl:if test="$use-annotation='yes'">
+            <xsl:copy>
+	      <xsl:for-each select="@*">
+		<xsl:copy/>
+	      </xsl:for-each>
+	    </xsl:copy>
+          </xsl:if>
+        </xsl:template>
 	<xsl:template match="doc:*"/>
 	<xsl:template match="text()"/>
 </xsl:stylesheet>
