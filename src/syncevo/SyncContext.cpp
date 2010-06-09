@@ -1576,6 +1576,9 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         /* sync started */
         SE_LOG_INFO(NULL, NULL, "%s: started",
                     source.getName());
+        if (source.getFinalSyncMode() == SYNC_NONE) {
+            source.recordFinalSyncMode(SYNC_UNKNOWN);
+        }
         break;
     case sysync::PEV_ITEMRECEIVED:
         /* item received, extra1=current item count,

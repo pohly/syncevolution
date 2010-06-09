@@ -36,6 +36,9 @@ enum SyncMode {
     /** unset or disabled */
     SYNC_NONE,
 
+    /** enabled, but not final yet */
+    SYNC_UNKNOWN,
+
     SYNC_FIRST = 200,
     SYNC_TWO_WAY = 200,
     SYNC_SLOW = 201,

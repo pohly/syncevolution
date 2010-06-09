@@ -42,6 +42,8 @@ std::string PrettyPrintSyncMode(SyncMode mode, bool userVisible)
     switch (mode) {
     case SYNC_NONE:
         return userVisible ? "disabled" : "SYNC_NONE";
+    case SYNC_UNKNOWN:
+        return userVisible ? "unknown" : "SYNC_UNKNOWN";
     case SYNC_TWO_WAY:
     case SA_SYNC_TWO_WAY:
         return userVisible ? "two-way" : "SYNC_TWO_WAY";
@@ -83,6 +85,8 @@ SyncMode StringToSyncMode(const std::string &mode, bool serverAlerted)
         return serverAlerted? SA_SYNC_ONE_WAY_FROM_SERVER: SYNC_ONE_WAY_FROM_SERVER;
     } else if (boost::iequals(mode, "one-way-from-client") || boost::iequals(mode, "SYNC_ONE_WAY_FROM_CLIENT")) {
         return serverAlerted? SA_SYNC_ONE_WAY_FROM_CLIENT: SYNC_ONE_WAY_FROM_CLIENT;
+    } else if (boost::iequals(mode, "unknown") || boost::iequals(mode, "SYNC_UNKNOWN")) {
+        return SYNC_UNKNOWN;
     } else if (boost::iequals(mode, "disabled") || boost::iequals(mode, "SYNC_NONE")) {
         return SYNC_NONE;
     } else {
