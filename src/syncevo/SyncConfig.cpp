@@ -39,6 +39,8 @@
 #include <functional>
 #include <queue>
 
+#include <proxy.h>
+
 #include <unistd.h>
 #include "config.h"
 
@@ -1504,7 +1506,52 @@ void SyncConfig::setUseProxy(bool value, bool temporarily) { syncPropUseProxy.se
 
 /* If http_proxy set in the environment returns it, otherwise configured value */
 const char *SyncConfig::getProxyHost() const {
-    char *proxy = getenv(ProxyString);
+/*    
+      by default  libproxy fetches proxy settings from various
+      resources in the following order:
+      1) ~/.proxy.conf
+      2) Gnome/KDE session proxy configdate
+      3) /etc/proxy.conf
+      4) environment variables -> which was the only one which we were using till now
+      5) wpad://
+      6) direct connection
+      
+      TODO: handle the proxy authentication information provided by libproxy.??
+      it is of the form http://[username:password@]server:port
+*/    
+    
+    char *proxy;
+    int i,skip=-1;
+    string test;
+    pxProxyFactory *pf = px_proxy_factory_new();
+    if (!pf) return NULL;
+    
+    char **proxies = px_proxy_factory_get_proxies(pf, "http://www.google.com");
+    
+    for (i=0;proxies[i];i++){
+      test = proxies[i];
+      if(test.find("http://")==0){
+	  proxy=proxies[i];
+	  skip=i;
+	  break;
+	  }	  
+      if(test.find("https://")==0){
+	  proxy=proxies[i];
+	  skip=i;
+	  break;
+	  }
+      if(test.find("direct://")==0){
+	  skip=i;
+	  proxy=NULL;
+	  break;
+	  }      
+      }
+    
+    for (i=0;proxies[i];i++)
+      if (i!=skip)
+	free (proxies[i]);
+    free(proxies);
+    
     if (!proxy) {
         return m_stringCache.getProperty(*getNode(syncPropUseProxy),syncPropProxyHost); 
     } else {
