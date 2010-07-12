@@ -21,7 +21,7 @@ import sys
 APPNAME             = 'Syncevolution-http-server'
 APP_VERSION         = '0.1'
 SYNCEVO_HTTP_SERVER = "/usr/bin/syncevo-http-server"
-DEFAULT_HTTP_URL    = "http://localhost:8765/"
+DEFAULT_HTTP_URL    = "http://localhost:9000/syncevolution"
 DBUS_OBJECT_PATH    = "/com/meego/syncevolution/ui"
 DBUS_SERVICE_NAME   = "com.meego.syncevolution"
 GCONF_URL_KEY       = "/apps/syncevolution/http_url"
@@ -108,6 +108,8 @@ class HttpServerStatusIcon(gtk.StatusIcon):
     def on_properties_activate(self, data):
 
         url = self.gconf_client.get_string( GCONF_URL_KEY)
+        if not url:
+            url = DEFAULT_HTTP_URL
         self.w_tree.get_widget( "url_entry").set_text( url)
         self.preferences_dialog.show()
 
