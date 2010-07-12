@@ -13,6 +13,7 @@ import gnome.ui
 
 import locale
 import os
+import signal
 import pynotify
 import signal
 import subprocess
@@ -135,7 +136,8 @@ class HttpServerStatusIcon(gtk.StatusIcon):
     def on_stop_activate(self, data = None):
 
         if self.server != None:
-            self.server.kill()
+            # replacement for self.server.kill(), which requires Python 2.6
+            os.kill(self.server.pid, signal.SIGKILL)
             self.server  = None
         self.set_tooltip(_("Server stop under way"))
 
