@@ -36,8 +36,8 @@ STOPPED_ICON        = DATADIR + "/" + "sync-stopped.png"
 GLADE_FILE          = DATADIR + "/" + "syncevo-http-trayicon.glade"
 
 locale.setlocale( locale.LC_ALL, "")
-locale.textdomain( 'syncevo-http-ui')
-gettext.textdomain( 'syncevo-http-ui')
+locale.textdomain( 'syncevolution')
+gettext.textdomain( 'syncevolution')
 _ = gettext.gettext
 
 class HttpServerStatusIcon(gtk.StatusIcon):

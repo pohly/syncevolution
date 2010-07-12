@@ -7,3 +7,6 @@ src/gtk-ui/sync-gtk.desktop.in
 src/gtk-ui/sync-config-widget.c
 src/gnome-bluetooth/syncevolution.c
 src/syncevo-dbus-server.cpp
+src/http-server-ui/syncevo-http-trayicon.glade
+src/http-server-ui/syncevo_http_trayicon.py
+
