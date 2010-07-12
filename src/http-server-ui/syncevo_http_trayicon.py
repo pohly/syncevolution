@@ -19,7 +19,7 @@ import signal
 import subprocess
 import sys
 
-APPNAME             = 'Syncevolution-http-server'
+APPNAME             = 'syncevolution-http-server-ui'
 APP_VERSION         = '0.1'
 SYNCEVO_HTTP_SERVER = "/usr/bin/syncevo-http-server"
 DEFAULT_HTTP_URL    = "http://localhost:9000/syncevolution"
@@ -144,10 +144,10 @@ class HttpServerStatusIcon(gtk.StatusIcon):
     def on_about_activate(self, data):
 
         dialog = gtk.AboutDialog()
-        dialog.set_name('Syncevolution HTTP server')
+        dialog.set_name('SyncEvolution HTTP server')
         dialog.set_version('0.0.1')
         dialog.set_comments(ABOUT_LONG)
-        dialog.set_website('http://synevolution.org')
+        dialog.set_website('http://syncevolution.org')
         dialog.run()
         dialog.destroy()
 
@@ -157,7 +157,7 @@ def notify_already_running():
 
     n = pynotify.Notification(
              _("Already running"),
-             _("Syncevolution http server is already running"),
+             _("SyncEvolution http server is already running"),
              _("dialog-warning")
     )
     n.set_urgency( pynotify.URGENCY_NORMAL)
@@ -193,7 +193,7 @@ def main():
     global status_icon
 
     gobject.threads_init()
-    pynotify.init(_("Syncevolution HTTP server"))
+    pynotify.init(_("SyncEvolution HTTP server"))
     check_already_running()
     signal.signal( signal.SIGCHLD, on_sigchld)
     status_icon = HttpServerStatusIcon()
