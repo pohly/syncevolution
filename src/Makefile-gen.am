@@ -40,6 +40,9 @@ if COND_DOC
 SUBDIRS += dbus
 endif
 endif
+if COND_HTTP_SERVER_UI
+SUBDIRS += http-server-ui
+endif
 
 DIST_SUBDIRS = gdbus dbus syncevo $(BACKENDS) gtk-ui gnome-bluetooth synthesis-includes
 
