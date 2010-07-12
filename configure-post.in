@@ -121,8 +121,6 @@ AC_CHECK_HEADERS(stdarg.h valgrind/valgrind.h execinfo.h)
 
 AC_DEFINE(SYNTHESIS, 1, "using Synthesis engine")
 
-AM_PATH_PYTHON
-
 # fallback for lack of --with-docdir support in older automake
 if test ! "$docdir"; then
    docdir = ${datadir}/doc/syncevolution
