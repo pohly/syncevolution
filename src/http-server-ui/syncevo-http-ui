@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+"""
+
+syncevo-http-ui.py  script: invoke syncevo-http-systray.main()
+
+@bug:        A "manpage" here is needed!
+
+@version:        $Id:$
+
+@copyright:      (C) Alec Leamas 2010
+
+@license:        GPL
+
+"""
+if __name__ == "__main__":
+    import sys
+    import distutils.sysconfig
+
+    path = distutils.sysconfig.get_python_lib() + "/syncevolution"
+    sys.path.append( path  )
+
+    import syncevo_http_trayicon
+    syncevo_http_trayicon.main()

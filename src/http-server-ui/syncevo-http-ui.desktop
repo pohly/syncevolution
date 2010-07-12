@@ -1,0 +1,14 @@
+
+[Desktop Entry]
+Name=Syncevolution SyncML http server
+Name[sv]=Syncevolution SyncML http server
+Comment=Synchronixe contacts, calendars etc using SyncML protocol
+TryExec=syncevo-http-ui
+Exec=syncevo-http-ui
+#Icon path is patched at installation time
+Icon=./syncevo-http-ui.png
+Terminal=false
+Type=Application
+Version=1.0
+Categories=X-Red-Hat-Extra;Network;GTK;
+
