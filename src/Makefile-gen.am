@@ -40,11 +40,13 @@ if COND_DOC
 SUBDIRS += dbus
 endif
 endif
+
+DIST_SUBDIRS = gdbus dbus syncevo $(BACKENDS) gtk-ui gnome-bluetooth synthesis-includes
+
 if COND_HTTP_SERVER_UI
 SUBDIRS += http-server-ui
 endif
-
-DIST_SUBDIRS = gdbus dbus syncevo $(BACKENDS) gtk-ui gnome-bluetooth synthesis-includes
+DIST_SUBDIRS += http-server-ui
 
 AM_CPPFLAGS = $(SUBDIRS:%=-I$(srcdir)/%) -I$(srcdir)/../test -I$(top_srcdir) $(BACKEND_CPPFLAGS)
 
