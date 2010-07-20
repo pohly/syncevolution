@@ -280,6 +280,12 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
 void MaemoCalendarSource::removeItem(const string &uid)
 {
     int err;
+
+    if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
+        // stubbornly refuse to try this
+        throwError(string("can't sync smart calendar ") + cal->getCalendarName());
+    }
+
     cal->deleteComponent(uid, err);
     if (err != CALENDAR_OPERATION_SUCCESSFUL) {
         throwError(string("deleting item: ") + uid);
