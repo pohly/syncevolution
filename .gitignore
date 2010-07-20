@@ -9,6 +9,7 @@ config.h.in
 config.sub
 configure
 configure.in
+compile
 depcomp
 install-sh
 ltmain.sh
@@ -20,3 +21,4 @@ po/LINGUAS
 mkinstalldirs
 intltool-*.in
 /*.patch
+libsynthesis
