@@ -1,8 +1,40 @@
-syncevolution (1:1.0-0) unstable; urgency=low
+syncevolution (1:1.0-1) unstable; urgency=low
 
-  * SyncEvolution 1.0 - not ready for Maemo5 yet
+  * SyncEvolution 1.0 for Maemo.
+    - Not built with Bluetooth support, since that's handled by
+      Nokia's own on-device software.
+    - Not built with D-Bus support, since that does not interact
+      with Nokia's Internet Connectivity Daemon (ICD). For the
+      time being, autosync is best handled by syncevolution-frontend.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Thu, 31 Dec 2009 04:14:37 +0100
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 20 Jul 2010 19:44:08 +0200
+
+syncevolution (1:0.9.2-4) unstable; urgency=low
+
+  * Fixed synchronization of notes.
+  * Forced libcurl to use IPv4 only.
+  * Disable the SSL server certificate verification by default,
+    until someone comes up with a good way to handle CA certificates.
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Mon, 15 Feb 2010 19:17:15 +0100
+
+syncevolution (1:0.9.2-3) unstable; urgency=low
+
+  * Deal with upstream breakage of --enable-maemo-calendar
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 02 Feb 2010 22:04:52 +0100
+
+syncevolution (1:0.9.2-2) unstable; urgency=low
+
+  * Added bug tracker field to debian/control
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 02 Feb 2010 03:50:49 +0100
+
+syncevolution (1:0.9.2-1) unstable; urgency=low
+
+  * SyncEvolution 0.9.2 release
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 02 Feb 2010 02:59:36 +0100
 
 syncevolution (1:0.9.2~beta-1) unstable; urgency=low
 
