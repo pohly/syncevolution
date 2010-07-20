@@ -105,10 +105,13 @@ void MaemoCalendarSource::open()
 
 bool MaemoCalendarSource::isEmpty()
 {
-    // TODO: provide a real implementation. Always returning false
-    // here disables the "allow slow sync when no local data" heuristic
-    // for preventSlowSync=1.
-    return false;
+    int id = cal->getCalendarId(), err;
+    switch (entry_type) {
+    case EVENT:   return !mc->getEventCount(id, err);
+    case TODO:    return !mc->getTodoCount(id, err);
+    case JOURNAL: return !mc->getNoteCount(id, err);
+    default:      return true;
+    }
 }
 
 void MaemoCalendarSource::close()
