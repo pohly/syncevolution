@@ -1,0 +1,9 @@
+#!/bin/sh
+#fakeroot debian/rules binary-arch
+# DEB_BUILD_OPTIONS="noopt" \
+dpkg-buildpackage -rfakeroot
+
+ARCH=`dpkg --print-architecture`
+VERSION=`dpkg-parsechangelog|sed -n 's/Version: \(.*:\)\?\(.*\)/\2/p'`
+maemo-optify-deb ../syncevolution_${VERSION}_${ARCH}.deb ../syncevolution-dev_${VERSION}_${ARCH}.deb
+
