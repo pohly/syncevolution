@@ -28,6 +28,7 @@
 #include <Akonadi/Item>
 
 #include <QtCore/QDateTime>
+#include <QtCore/QStringList>
 
 #include <syncevo/TrackingSyncSource.h>
 
@@ -69,7 +70,7 @@ public:
     virtual void close();
     virtual bool isEmpty();
 private:
-    Akonadi::Collection m_collection;
+    Akonadi::Collection m_collection;   
     const std::string m_subMime;
 
     void start();
@@ -79,11 +80,19 @@ class AkonadiContactSource : public AkonadiSyncSource
 {
  public:
     AkonadiContactSource(const SyncSourceParams &params) :
-        AkonadiSyncSource("text/vcard", params)
-    {}
+        //AkonadiSyncSource("text/vcard", params)	
+	AkonadiSyncSource("text/directory", params)
+    {
+    }
 
-    virtual const char *getMimeType() const { return "text/vcard"; }
-    virtual const char *getMimeVersion() const { return "3.0"; }
+    virtual const char *getMimeType() const { 
+      return "text/vcard";
+      //return "text/directory"; 
+    }
+    virtual const char *getMimeVersion() const { 
+      return "3.0"; 
+      //return "2.0"; 
+    }
 
     void getSynthesisInfo(SynthesisInfo &info,
                           XMLConfigFragments &fragments)
@@ -109,7 +118,8 @@ class AkonadiCalendarSource : public AkonadiSyncSource
  public:
     AkonadiCalendarSource(const SyncSourceParams &params) :
         AkonadiSyncSource("application/x-vnd.akonadi.calendar.event", params)
-    {}
+    {
+    }
 
     // TODO: the items are expected to be complete VCALENDAR with
     // all necessary VTIMEZONEs and one VEVENT (here) resp. VTODO
@@ -122,8 +132,10 @@ class AkonadiTaskSource : public AkonadiSyncSource
 {
  public:
     AkonadiTaskSource(const SyncSourceParams &params) :
-        AkonadiSyncSource("text/x-vnd.akonadi.calendar.todo", params)
-    {}
+        //AkonadiSyncSource("text/x-vnd.akonadi.calendar.todo", params)
+	AkonadiSyncSource("text/calendar", params)
+    {
+    }
 
     virtual const char *getMimeType() const { return "text/calendar"; }
     virtual const char *getMimeVersion() const { return "2.0"; }
@@ -134,11 +146,15 @@ class AkonadiMemoSource : public AkonadiSyncSource
  public:
     AkonadiMemoSource(const SyncSourceParams &params) :
         AkonadiSyncSource("text/x-vnd.akonadi.calendar.journal", params)
-    {}
-
+        //AkonadiSyncSource("text/plain", params)
+    {
+    }
     // TODO: the AkonadiMemoSource is expected to import/export
     // plain text with the summary in the first line; currently
     // the AkonadiSyncSource will use VJOURNAL
+    // Also Currently there is no application which uses akonadi backend
+    // to display notes: probably work for knote??
+
     virtual const char *getMimeType() const { return "text/plain"; }
     virtual const char *getMimeVersion() const { return "1.0"; }
 };

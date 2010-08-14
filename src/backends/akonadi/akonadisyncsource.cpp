@@ -26,11 +26,20 @@
 #include <Akonadi/ItemFetchJob>
 #include <Akonadi/ItemFetchScope>
 #include <Akonadi/ItemModifyJob>
+
 #include <Akonadi/CollectionFetchJob>
+#include <Akonadi/CollectionFetchScope>
+
+#include <Akonadi/CollectionStatistics>
+#include <Akonadi/CollectionStatisticsJob>
+
 #include <Akonadi/Control>
 #include <kurl.h>
 
 #include <QtCore/QCoreApplication>
+#include <QtCore/QStringList>
+
+#include <QtCore/QDebug>
 
 SE_BEGIN_CXX
 using namespace Akonadi;
@@ -46,10 +55,19 @@ AkonadiSyncSource::~AkonadiSyncSource()
 {
 }
 
-bool AkonadiSyncSource::isEmpty(){return false;}
+bool AkonadiSyncSource::isEmpty()
+{ 
+  //To Check if the respective collection is Empty, without actually loading the collections
+    CollectionStatisticsJob *statisticsJob = new CollectionStatisticsJob(m_collection);
+    if(!statisticsJob->exec()){
+	throwError("Error fetching the collection stats");
+	}        
+    return statisticsJob->statistics().count()==0;
+}
+
 void AkonadiSyncSource::start()
 {
-    int argc = 1;
+    int argc = 1;    
     static const char *prog = "syncevolution";
     static char *argv[] = { (char *)&prog, NULL };
     if (!qApp) {
@@ -62,7 +80,9 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
     start();
 
     Databases res;
-    // TODO: insert databases which match the "type"
+    QStringList mimeTypes;
+    mimeTypes<<m_subMime.c_str();
+    // TODO: insert databases which match the "type" : DONE!!!
     // of the source, including a user-visible description
     // and a database IDs. Exactly one of the databases
     // should be marked as the default one used by the
@@ -71,24 +91,27 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
 
     CollectionFetchJob *fetchJob = new CollectionFetchJob(Collection::root(),
                                                           CollectionFetchJob::Recursive);
-    // fetchJob->setMimeTypeFilter(m_subMime.c_str());
+    
+    fetchJob->fetchScope().setContentMimeTypes(mimeTypes);
+    
     if (!fetchJob->exec()) {
         throwError("cannot list collections");
     }
 
     // the first collection of the right type is the default
     // TODO: is there a better way to choose the default?
+    // This decision should go to the GUI: which deals with sync profiles.
+    
     bool isFirst = true;
     Collection::List collections = fetchJob->collections();
     foreach(const Collection &collection, collections) {
         // TODO: filter out collections which contain no items
-        // of the type we sync (m_subMime)
-        if (true) {
+        // of the type we sync (m_subMime): 
+	//Done using filtered out using fetchJob.fetchScope().setContentMimeTypes()        
             res.push_back(Database(collection.name().toUtf8().constData(),
                                    collection.url().url().toUtf8().constData(),
                                    isFirst));
             isFirst = false;
-        }
     }
     return res;
 }
@@ -101,23 +124,28 @@ void AkonadiSyncSource::open()
     // otherwise the collection URL or a name
     string id = getDatabaseID();
 
-    // TODO: support selection by name and empty ID for default
-
+    // TODO: support selection by name and empty ID for default 
+    // Done: using evolutionsource = akonadi:?collection=<number>
     // TODO: check for invalid URL?!
+    // Invalid url=>invalid collection Error at runtime.
     m_collection = Collection::fromUrl(KUrl(id.c_str()));
+
 }
 
 void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisions)
 {
-    // copy all local IDs and the corresponding revision
+    // copy all local IDs and the corresponding revision   
     ItemFetchJob *fetchJob = new ItemFetchJob(m_collection);
+
+    
     if (!fetchJob->exec()) {
         throwError("listing items");
     }
     BOOST_FOREACH(const Item &item, fetchJob->items()) {
         // TODO: filter out items which don't have the right type
         // (for example, VTODO when syncing events)
-        // if (... == m_subMime)
+	//Done: with this if condition
+        if (item.mimeType() == m_subMime.c_str())
         revisions[QByteArray::number(item.id()).constData()] =
                   QByteArray::number(item.revision()).constData();
     }
@@ -131,14 +159,16 @@ void AkonadiSyncSource::close()
 TrackingSyncSource::InsertItemResult
 AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, bool raw)
 {
+  
     Item item;
-
+  
     if (luid.empty()) {
         item.setMimeType(m_subMime.c_str());
         item.setPayloadFromData(QByteArray(data.c_str()));
         ItemCreateJob *createJob = new ItemCreateJob(item, m_collection);
         if (!createJob->exec()) {
-            throwError(string("storing new item ") + luid);
+            throwError(string("storing new item ") + luid);    
+	    return InsertItemResult("", "", false);
         }
         item = createJob->item();
     } else {
@@ -153,11 +183,14 @@ AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, 
         // TODO: check that the item has not been updated in the meantime
         if (!modifyJob->exec()) {
             throwError(string("updating item ") + luid);
+	    return InsertItemResult("", "", false);
         }
         item = modifyJob->item();
     }
 
     // TODO: Read-only datastores may not have actually added something here!
+    // The Jobs themselves throw error , and hence the return statements
+    // above will take care of this
     return InsertItemResult(QByteArray::number(item.id()).constData(),
                             QByteArray::number(item.revision()).constData(),
                             false);
@@ -178,7 +211,7 @@ void AkonadiSyncSource::removeItem(const string &luid)
 void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, bool raw)
 {
     Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
-
+    
     ItemFetchJob *fetchJob = new ItemFetchJob(Item(syncItemId));
     fetchJob->fetchScope().fetchFullPayload();
     if (fetchJob->exec()) {
