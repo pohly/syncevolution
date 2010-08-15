@@ -39,7 +39,9 @@
 #include <functional>
 #include <queue>
 
+#ifdef HAVE_LIBPROXY
 #include <proxy.h>
+#endif
 
 #include <unistd.h>
 #include "config.h"
@@ -1519,8 +1521,9 @@ const char *SyncConfig::getProxyHost() const {
       TODO: handle the proxy authentication information provided by libproxy.??
       it is of the form http://[username:password@]server:port
 */    
+    char *proxy ;
     
-    char *proxy;
+#ifdef HAVE_LIBPROXY
     int i,skip=-1;
     string test;
     pxProxyFactory *pf = px_proxy_factory_new();
@@ -1551,7 +1554,10 @@ const char *SyncConfig::getProxyHost() const {
       if (i!=skip)
 	free (proxies[i]);
     free(proxies);
-    
+#else
+  proxy= getenv(ProxyString);
+#endif
+
     if (!proxy) {
         return m_stringCache.getProperty(*getNode(syncPropUseProxy),syncPropProxyHost); 
     } else {
