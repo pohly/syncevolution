@@ -67,7 +67,7 @@ public:
     virtual void readItem(const std::string &luid, std::string &item, bool raw);
     virtual void removeItem(const string &luid);
     virtual void close();
-
+    virtual bool isEmpty();
 private:
     Akonadi::Collection m_collection;
     const std::string m_subMime;

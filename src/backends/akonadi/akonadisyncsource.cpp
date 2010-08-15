@@ -46,6 +46,7 @@ AkonadiSyncSource::~AkonadiSyncSource()
 {
 }
 
+bool AkonadiSyncSource::isEmpty(){return false;}
 void AkonadiSyncSource::start()
 {
     int argc = 1;
