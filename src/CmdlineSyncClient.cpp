@@ -25,13 +25,12 @@ extern "C" {
 #endif
 
 #ifdef USE_KDE_KWALLET
-
 #include <QtCore/QCoreApplication>
 #include <QtCore/QString>
+#include <QtCore/QLatin1String>
 #include <QtCore/QDebug>
 
 #include <kwallet.h>
-
 #endif
 
 #include <syncevo/declarations.h>
@@ -46,13 +45,13 @@ CmdlineSyncClient::CmdlineSyncClient(const string &server,
     m_keyring(useKeyring)
 {
   
-  #ifdef USE_KDE_KWALLET
+   #ifdef USE_KDE_KWALLET
     QCoreApplication *app;
     if (!qApp) {
         int argc = 1;
         app = new QCoreApplication(argc, (char *[1]){ (char*) "syncevolution"});
     }
-  #endif
+   #endif
 }
 /**
  * GNOME keyring distinguishes between empty and unset
@@ -69,6 +68,49 @@ string CmdlineSyncClient::askPassword(const string &passwordName,
                                       const ConfigPasswordKey &key) 
 {
     string password;
+#ifdef USE_KDE_KWALLET
+    /** here we use server sync url without protocol prefix and
+     * user account name as the key in the keyring */
+     /* Also since the KWallet's API supports only storing (key,passowrd)
+     * or Map<QString,QString> , the former is used */
+    bool isKde=true;
+    #ifdef USE_GNOME_KEYRING
+    //When Both GNOME KEYRING and KWALLET are available, Check if this is a KDE Session 
+    //and Call KWallet if it is. else pick Gnome Keyring by default
+    QByteArray isKdeRunning=getenv("KDE_FULL_SESSION");
+    if(isKdeRunning!="true")
+      isKde=false;
+    #endif
+
+    if (isKde){    
+    if(m_keyring) {
+	QString walletPassword;
+        QString walletKey = QString(passwdStr(key.user)) + ',' +
+			    QString(passwdStr(key.domain))+ ','+
+			    QString(passwdStr(key.server))+','+
+			    QString(passwdStr(key.object))+','+
+			    QString(passwdStr(key.protocol))+','+
+			    QString(passwdStr(key.authtype))+','+
+			    QString::number(key.port);
+                                                          
+	    
+	    QString wallet_name = KWallet::Wallet::NetworkWallet();
+	    //QString folder = QString::fromUtf8("Syncevolution");
+	    const QLatin1String folder("Syncevolution");
+    	  	      
+	    if (!KWallet::Wallet::keyDoesNotExist(wallet_name, folder, walletKey)){
+	    KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, KWallet::Wallet::Synchronous); 
+	
+	    if (wallet){
+	      if (wallet->setFolder(folder))                
+                if (wallet->readPassword(walletKey, walletPassword) == 0)
+		  return walletPassword.toStdString();
+		 }    
+	  }        
+    }
+    }
+#endif    
+
 #ifdef USE_GNOME_KEYRING
     /** here we use server sync url without protocol prefix and
      * user account name as the key in the keyring */
@@ -99,41 +141,6 @@ string CmdlineSyncClient::askPassword(const string &passwordName,
     //if not found, then ask user to interactively input password
 #endif
 
-
-#ifdef USE_KDE_KWALLET
-    /** here we use server sync url without protocol prefix and
-     * user account name as the key in the keyring */
-     /* Also since the KWallet's API supports only storing (key,passowrd)
-     * or Map<QString,QString> , the former is used */
-   
-    if(m_keyring) {
-	QString walletPassword;
-        QString walletKey = QString(passwdStr(key.user)) + "," +
-			    QString(passwdStr(key.domain))+ ","+
-			    QString(passwdStr(key.server))+","+
-			    QString(passwdStr(key.object))+","+
-			    QString(passwdStr(key.protocol))+","
-			    QString(passwdStr(key.authtype))+","+
-			    QString::number(key.port);
-                                                          
-	    
-	    QString wallet_name = KWallet::Wallet::NetworkWallet();
-	    QString folder = QString::fromUtf8("Syncevolution");
-    	  	      
-	    if (!KWallet::Wallet::keyDoesNotExist(wallet_name, folder, walletKey)){
-	    KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, KWallet::Wallet::Synchronous); 
-	
-	    if (wallet){
-	      if (wallet->setFolder(folder))                
-                if (wallet->readPassword(walletKey, walletPassword) == 0)
-		  return walletPassword.toStdString;
-		 }    
-	  }        
-    } 
-    
-    //if not found, then ask user to interactively input password
-#endif
-
     /** if not built with secrets support, directly ask user to
      * input password */
     password = SyncContext::askPassword(passwordName, descr, key);
@@ -144,6 +151,64 @@ bool CmdlineSyncClient::savePassword(const string &passwordName,
                                      const string &password, 
                                      const ConfigPasswordKey &key)
 {
+  
+  
+#ifdef USE_KDE_KWALLET
+
+    bool isKde=true;
+    #ifdef USE_GNOME_KEYRING
+    //When Both GNOME KEYRING and KWALLET are available, Check if this is a KDE Session 
+    //and Call
+    QByteArray isKdeRunning=getenv("KDE_FULL_SESSION");
+    if(isKdeRunning!="true")
+      isKde=false;
+    #endif
+
+    if(m_keyring&&isKde) {
+        /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
+         * but currently only use passed key instead */
+        
+        // write password to keyring
+	QString walletKey = QString(passwdStr(key.user)) + ',' +
+			    QString(passwdStr(key.domain))+ ','+
+			    QString(passwdStr(key.server))+','+
+			    QString(passwdStr(key.object))+','+
+			    QString(passwdStr(key.protocol))+','+
+			    QString(passwdStr(key.authtype))+','+
+			    QString::number(key.port);
+	QString walletPassword = password.c_str();
+	
+	 bool write_success = false;
+	 QString wallet_name = KWallet::Wallet::NetworkWallet();
+	 //QString folder = QString::fromUtf8("Syncevolution");
+	 const QLatin1String folder("Syncevolution");
+	 KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, 
+                                            KWallet::Wallet::Synchronous);
+	  if (wallet){
+	    if (!wallet->hasFolder(folder))
+	      wallet->createFolder(folder);
+	    
+	    if (wallet->setFolder(folder))	      
+	      if (wallet->writePassword(walletKey, walletPassword) == 0)
+                write_success = true;            
+	    
+	}
+	
+        if(!write_success) {
+            SyncContext::throwError("Try to save " + passwordName + " in KWallet but got an error. ");
+        } 
+        
+    return write_success;
+    }
+    
+    if(m_keyring) {
+        SyncContext::throwError("Try to save " + passwordName + " in KWallet but get an error. " +
+                "This syncevolution binary was compiled without support for storing "
+                "passwords in a Wallet. Either store passwords in your configuration "
+                "files or enter them interactively on each program run.\n");
+    }
+#endif
+  
 #ifdef USE_GNOME_KEYRING
     if(m_keyring) {
         /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
@@ -173,46 +238,6 @@ bool CmdlineSyncClient::savePassword(const string &passwordName,
 #endif
         } 
         return true;
-    }
-#endif
-
-
-
-#ifdef USE_KDE_KWALLET
-    if(m_keyring) {
-        /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
-         * but currently only use passed key instead */
-        
-        // write password to keyring
-	QString walletKey = QString(passwdStr(key.user)) + "," +
-			    QString(passwdStr(key.domain))+ ","+
-			    QString(passwdStr(key.server))+","+
-			    QString(passwdStr(key.object))+","+
-			    QString(passwdStr(key.protocol))+","
-			    QString(passwdStr(key.authtype))+","+
-			    QString::number(key.port);
-	QString walletPassword = password.c_str();
-	
-	 bool write_success = false;
-	 QString wallet_name = KWallet::Wallet::NetworkWallet();
-	 QString folder = QString::fromUtf8("Syncevolution");
-	 KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, 
-                                            KWallet::Wallet::Synchronous);
-	  if (wallet){
-	    if (!wallet->hasFolder(folder))
-	      wallet->createFolder(folder);
-	    
-	    if (wallet->setFolder(folder))	      
-	      if (wallet->writePassword(walletKey, walletPassword) == 0)
-                write_success = true;            
-	    
-	}
-	
-        if(!write_success) {
-            SyncContext::throwError("Try to save " + passwordName + " in kde-wallet but got an error. ");
-        } 
-        
-    return write_success;
     }
 #endif
 
