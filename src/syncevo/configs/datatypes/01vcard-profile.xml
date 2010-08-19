@@ -10,7 +10,7 @@
           <value conversion="prodid"/>
         </property>
 
-        <property name="REV">
+        <property name="REV" mandatory="yes">
           <value field="REV"/>
         </property>
 
