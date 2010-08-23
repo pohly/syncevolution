@@ -176,11 +176,14 @@ AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, 
         ItemFetchJob *fetchJob = new ItemFetchJob(Item(syncItemId));
         if (!fetchJob->exec()) {
             throwError(string("checking item ") + luid);
-        }            
+        }
+        item = fetchJob->items().first();
+        item.setPayloadFromData(QByteArray(data.c_str()));
         ItemModifyJob *modifyJob = new ItemModifyJob(item);
         // TODO: SyncEvolution must pass the known revision that
         // we are updating.
         // TODO: check that the item has not been updated in the meantime
+	qDebug()<<"in Item Modify Job akonadi for item : "<<luid.c_str()<<" ; ";
         if (!modifyJob->exec()) {
             throwError(string("updating item ") + luid);
 	    return InsertItemResult("", "", false);
