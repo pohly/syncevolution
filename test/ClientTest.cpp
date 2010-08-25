@@ -55,6 +55,33 @@
 #include <boost/bind.hpp>
 
 #include <syncevo/declarations.h>
+
+#ifdef ENABLE_BUTEO_TESTS
+#include "client-test-buteo.h"
+
+#define RESTORE_STORAGE { \
+if (boost::iequals(config.sourceName,"qt_vcard30")) { \
+    if (client.getClientB()) { \
+        QtContactsSwitcher::restoreStorage("1"); \
+    } else { \
+        QtContactsSwitcher::restoreStorage("2"); \
+    } \
+}}
+#define BACKUP_STORAGE { \
+if (boost::iequals(config.sourceName,"qt_vcard30")) { \
+    if (client.getClientB()) { \
+        QtContactsSwitcher::backupStorage("1"); \
+    } else { \
+        QtContactsSwitcher::backupStorage("2"); \
+    } \
+}}
+#else 
+
+#define RESTORE_STORAGE
+#define BACKUP_STORAGE
+
+#endif
+
 SE_BEGIN_CXX
 
 static set<ClientTest::Cleanup_t> cleanupSet;
@@ -236,6 +263,7 @@ void LocalTests::addTests() {
 }
 
 std::string LocalTests::insert(CreateSource createSource, const char *data, bool relaxed, std::string *inserted) {
+    RESTORE_STORAGE
     // create source
     TestingSyncSourcePtr source(createSource());
 
@@ -264,6 +292,7 @@ std::string LocalTests::insert(CreateSource createSource, const char *data, bool
         CPPUNIT_ASSERT(countUpdatedItems(source.get()) == 0);
         CPPUNIT_ASSERT(countDeletedItems(source.get()) == 0);
     }
+    BACKUP_STORAGE
 
     return res.m_luid;
 }
@@ -335,17 +364,20 @@ void LocalTests::update(CreateSource createSource, const char *data, bool check)
 void LocalTests::update(CreateSource createSource, const char *data, const std::string &luid) {
     CPPUNIT_ASSERT(createSource.createSource);
     CPPUNIT_ASSERT(data);
+    RESTORE_STORAGE
 
     // create source
     TestingSyncSourcePtr source(createSource());
 
     // update it
     SOURCE_ASSERT_NO_FAILURE(source.get(), source->insertItemRaw(luid, config.mangleItem(data).c_str()));
+    BACKUP_STORAGE
 }
 
 /** deletes all items locally via sync source */
 void LocalTests::deleteAll(CreateSource createSource) {
     CPPUNIT_ASSERT(createSource.createSource);
+    RESTORE_STORAGE
 
     // create source
     TestingSyncSourcePtr source(createSource());
@@ -363,6 +395,7 @@ void LocalTests::deleteAll(CreateSource createSource) {
     CPPUNIT_ASSERT_EQUAL( 0, countNewItems(source.get()) );
     CPPUNIT_ASSERT_EQUAL( 0, countUpdatedItems(source.get()) );
     CPPUNIT_ASSERT_EQUAL( 0, countDeletedItems(source.get()) );
+    BACKUP_STORAGE
 }
 
 /** deletes specific item locally via sync source */
@@ -542,6 +575,7 @@ std::list<std::string> LocalTests::insertManyItems(CreateSource createSource, in
 
     CPPUNIT_ASSERT(config.templateItem);
     CPPUNIT_ASSERT(config.uniqueProperties);
+    RESTORE_STORAGE
 
     TestingSyncSourcePtr source;
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
@@ -556,6 +590,7 @@ std::list<std::string> LocalTests::insertManyItems(CreateSource createSource, in
         std::string data = createItem(item, "", size);
         luids.push_back(importItem(source.get(), config, data));
     }
+    BACKUP_STORAGE
 
     return luids;
 }
@@ -754,7 +789,9 @@ void LocalTests::testImport() {
     TestingSyncSourcePtr source;
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
     std::string testcases;
+    RESTORE_STORAGE
     SOURCE_ASSERT_EQUAL(source.get(), 0, config.import(client, *source.get(), config, config.testcases, testcases));
+    BACKUP_STORAGE
     CPPUNIT_ASSERT_NO_THROW(source.reset());
 
     // export again and compare against original file
