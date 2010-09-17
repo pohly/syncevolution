@@ -1766,7 +1766,8 @@ class TestConnection(unittest.TestCase, DBusUtil):
                                 "username" : "test",
                                 "PeerIsClient" : "1",
                                 "RetryInterval" : "1",
-                                "RetryDuration" : "10"
+                                "RetryDuration" : "10",
+                                "GnomeKeyring" : "0"
                               },
                          "source/addressbook" : { "sync" : "two-way",
                                                   "type" : "addressbook",

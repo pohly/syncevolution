@@ -2742,6 +2742,21 @@ bool DBusUserInterface::savePassword(const string &passwordName,
                                      const ConfigPasswordKey &key)
 {
 #ifdef USE_GNOME_KEYRING
+    string useKeyring = getUseKeyring();
+
+    size_t pos = useKeyring.find(':');
+    if (pos != useKeyring.npos) {
+        useKeyring.resize(pos);
+    }
+
+    if (boost::iequals(useKeyring, "f") ||
+        boost::iequals(useKeyring, "0") ||
+        boost::iequals(useKeyring, "off") ||
+        boost::iequals(useKeyring, "false") ||
+        boost::iequals(useKeyring, "no")) {
+        return false;
+    }
+
     /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
      * but currently only use passed key instead */
     guint32 itemId;

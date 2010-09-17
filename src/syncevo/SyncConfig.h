@@ -1317,6 +1317,13 @@ class SyncConfig {
     virtual void setPeerName(const string &name);
 
     /**
+     * get and set keyring status
+     * used to control retrieving and saving password in keyring
+     */
+    virtual string getUseKeyring() const;
+    virtual void setUseKeyring(const string &value);
+
+    /**
      * The Device ID of our peer. Typically only relevant when the
      * peer is a client. Servers don't have a Device ID, just some
      * unique way of contacting them.

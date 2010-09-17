@@ -311,29 +311,37 @@ bool Cmdline::parseBool(int opt, const char *longName, const char *shortName,
                         bool &ok)
 {
     string option = m_argv[opt];
-    string param;
-    size_t pos = option.find('=');
-    if (pos != option.npos) {
-        param = option.substr(pos + 1);
-        option.resize(pos);
+    string paramFirst, paramSecond;
+    size_t posEqual = option.find('=');
+    if (posEqual != option.npos) {
+        size_t posColon = option.find(':');
+        if (posColon != option.npos) {
+            paramFirst = option.substr(posEqual+1, posColon - posEqual - 1);
+            paramSecond = option.substr(posColon+1);
+        } else {
+            paramFirst = option.substr(posEqual + 1);
+        }
+        option.resize(posEqual);
     }
     if ((longName && boost::iequals(option, longName)) ||
         (shortName && boost::iequals(option, shortName))) {
         ok = true;
-        if (param.empty()) {
+        if (paramFirst.empty()) {
             value = def;
-        } else if (boost::iequals(param, "t") ||
-                   boost::iequals(param, "1") ||
-                   boost::iequals(param, "true") ||
-                   boost::iequals(param, "yes")) {
+        } else if (boost::iequals(paramFirst, "t") ||
+                   boost::iequals(paramFirst, "1") ||
+                   boost::iequals(paramFirst, "on") ||
+                   boost::iequals(paramFirst, "true") ||
+                   boost::iequals(paramFirst, "yes")) {
             value = true;
-        } else if (boost::iequals(param, "f") ||
-              boost::iequals(param, "0") ||
-              boost::iequals(param, "false") ||
-              boost::iequals(param, "no")) {
+        } else if (boost::iequals(paramFirst, "f") ||
+                   boost::iequals(paramFirst, "0") ||
+                   boost::iequals(paramFirst, "off") ||
+                   boost::iequals(paramFirst, "false") ||
+                   boost::iequals(paramFirst, "no")) {
             value = false;
         } else {
-            usage(true, string("parameter in '") + m_argv[opt] + "' must be 1/t/true/yes or 0/f/false/no");
+            usage(true, string("parameter in '") + m_argv[opt] + "' must be 1/t/true/yes:GNOME/KDE or 0/f/false/no:GNOME/KDE");
             ok = false;
         }
         // was our option

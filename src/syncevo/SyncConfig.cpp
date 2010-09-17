@@ -1182,6 +1182,10 @@ static BoolConfigProperty syncPropConsumerReady("ConsumerReady",
                                                 "of configurations offered to users.\n"
                                                 "Has no effect in a user's server configuration.\n",
                                                 "0");
+static ConfigProperty syncPropUseKeyring("keyring",
+                                      "enable or disable keyring.\n"
+                                      "options (case insensitive): yes/y/on/1:GNOME/KDE, no/n/off/0:GNOME/KDE\n",
+                                      "yes:GNOME");
 
 static ULongConfigProperty syncPropHashCode("HashCode", "used by the SyncML library internally; do not modify");
 
@@ -1298,6 +1302,7 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
         registry.push_back(&syncPropWebURL);
         registry.push_back(&syncPropIconURI);
         registry.push_back(&syncPropConsumerReady);
+        registry.push_back(&syncPropUseKeyring);
         registry.push_back(&syncPropHashCode);
         registry.push_back(&syncPropConfigDate);
         registry.push_back(&syncPropNonce);
@@ -1318,6 +1323,7 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
 
         // global sync properties
         syncPropDefaultPeer.setSharing(ConfigProperty::GLOBAL_SHARING);
+        syncPropUseKeyring.setSharing(ConfigProperty::GLOBAL_SHARING);
 
         // peer independent sync properties
         syncPropLogDir.setSharing(ConfigProperty::SOURCE_SET_SHARING);
@@ -1584,6 +1590,9 @@ void SyncConfig::setSyncMLVersion(const string &value, bool temporarily) { syncP
 
 string SyncConfig::getPeerName() const { return syncPropPeerName.getProperty(*getNode(syncPropPeerName)); }
 void SyncConfig::setPeerName(const string &name) { syncPropPeerName.setProperty(*getNode(syncPropPeerName), name); }
+
+string SyncConfig::getUseKeyring() const { return syncPropUseKeyring.getProperty(*getNode(syncPropUseKeyring)); }
+void SyncConfig::setUseKeyring(const string &value) { syncPropUseKeyring.setProperty(*getNode(syncPropUseKeyring), value); }
 
 bool SyncConfig::getPrintChanges() const { return syncPropPrintChanges.getPropertyValue(*getNode(syncPropPrintChanges)); }
 void SyncConfig::setPrintChanges(bool value, bool temporarily) { syncPropPrintChanges.setProperty(*getNode(syncPropPrintChanges), value, temporarily); }
