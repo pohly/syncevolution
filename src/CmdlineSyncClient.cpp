@@ -157,21 +157,21 @@ bool CmdlineSyncClient::savePassword(const string &passwordName,
     }
 #endif
 
-    if(m_keyring && isKde) {
+    if (m_keyring && isKde) {
         /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
          * but currently only use passed key instead */
 
         // write password to keyring
-        QString walletKey = QString::fromStdString(key.user + ',' +
+        const QString walletKey = QString::fromStdString(key.user + ',' +
                 key.domain + ',' + key.server + ',' + key.object + ',' +
                 key.protocol + ',' + key.authtype + ',' + key.port;
-        QString walletPassword = password.c_str();
+        const QString walletPassword = QString::fromStdString(password);
 
         bool write_success = false;
-        QString wallet_name = KWallet::Wallet::NetworkWallet();
+        const QString wallet_name = KWallet::Wallet::NetworkWallet();
         const QLatin1String folder("Syncevolution");
         KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1,
-                                                KWallet::Wallet::Synchronous);
+                KWallet::Wallet::Synchronous);
         if (wallet) {
             if (!wallet->hasFolder(folder)) {
               wallet->createFolder(folder);
