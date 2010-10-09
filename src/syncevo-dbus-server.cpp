@@ -31,6 +31,7 @@
 #include <syncevo/SyncSource.h>
 #include <syncevo/SyncML.h>
 #include <syncevo/FileConfigNode.h>
+#include <syncevo/TransportAgent.h>
 #include <syncevo/Cmdline.h>
 
 #include <synthesis/san.h>
