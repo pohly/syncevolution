@@ -143,12 +143,12 @@ public:
         : AkonadiSyncSource("text/x-vnd.akonadi.calendar.journal", params)
     {
     }
+
     // TODO: the AkonadiMemoSource is expected to import/export
     // plain text with the summary in the first line; currently
     // the AkonadiSyncSource will use VJOURNAL
     // Also Currently there is no application which uses akonadi backend
     // to display notes: probably work for knote??
-
     virtual const char *getMimeType() const { return "text/plain"; }
     virtual const char *getMimeVersion() const { return "1.0"; }
 };

@@ -30,7 +30,6 @@ using namespace std;
 #endif
 
 #include <syncevo/Cmdline.h>
-#include "EvolutionSyncSource.h"
 #include <syncevo/SyncContext.h>
 #include <syncevo/LogRedirect.h>
 #include "CmdlineSyncClient.h"

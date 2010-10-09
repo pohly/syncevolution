@@ -104,7 +104,7 @@ void AkonadiSyncSource::start()
     if (!qApp) {
         new KApplication;
     }
-    //Start The Akonadi Server if not already Running.
+    // Start The Akonadi Server if not already Running.
     if (!Akonadi::ServerManager::isRunning()) {
         qDebug() << "Akonadi Server isn't running, and hence starting it.";
         if (!Akonadi::Control::start()) {
@@ -119,12 +119,10 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
 
     Databases res;
     QStringList mimeTypes;
-    mimeTypes<<m_subMime.c_str();
-    // TODO: insert databases which match the "type" : DONE!!!
-    // of the source, including a user-visible description
-    // and a database IDs. Exactly one of the databases
-    // should be marked as the default one used by the
-    // source.
+    mimeTypes << m_subMime.c_str();
+    // Insert databases which match the "type" of the source, including a user-visible
+    // description and a database IDs. Exactly one of the databases  should be marked
+    // as the default one used by the source.
     // res.push_back("Contacts", "some-KDE-specific-ID", isDefault);
 
     CollectionFetchJob *fetchJob = new CollectionFetchJob(Collection::root(),
@@ -136,16 +134,12 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
         throwError("cannot list collections");
     }
 
-    // the first collection of the right type is the default
-    // TODO: is there a better way to choose the default?
+    // Currently, the first collection of the right type is the default
     // This decision should go to the GUI: which deals with sync profiles.
 
     bool isFirst = true;
     Collection::List collections = fetchJob->collections();
     foreach (const Collection &collection, collections) {
-        // TODO: filter out collections which contain no items
-        // of the type we sync (m_subMime):
-        //Done using filtered out using fetchJob.fetchScope().setContentMimeTypes()
         res.push_back(Database(collection.name().toUtf8().constData(),
                                collection.url().url().toUtf8().constData(),
                                isFirst));
@@ -162,10 +156,9 @@ void AkonadiSyncSource::open()
     // otherwise the collection URL or a name
     string id = getDatabaseID();
 
-    // TODO: support selection by name and empty ID for default
-    // Done: using evolutionsource = akonadi:?collection=<number>
-    // TODO: check for invalid URL?!
-    // Invalid url=>invalid collection Error at runtime.
+    // support selection by name and empty ID for default by using
+    // evolutionsource = akonadi:?collection=<number>
+    // invalid url=>invalid collection Error at runtime.
     m_collection = Collection::fromUrl(KUrl(id.c_str()));
 }
 
@@ -178,9 +171,8 @@ void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisio
         throwError("listing items");
     }
     BOOST_FOREACH (const Item &item, fetchJob->items()) {
-        // TODO: filter out items which don't have the right type
-        // (for example, VTODO when syncing events)
-        //Done: with this if condition
+        // Filter out items which don't have the right type (for example, VTODO when
+        // syncing events)
         if (item.mimeType() == m_subMime.c_str()) {
             revisions[QByteArray::number(item.id()).constData()] =
                       QByteArray::number(item.revision()).constData();
@@ -193,8 +185,7 @@ void AkonadiSyncSource::close()
     // TODO: close collection!?
 }
 
-TrackingSyncSource::InsertItemResult
-AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, bool raw)
+TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, bool raw)
 {
     Item item;
 
@@ -219,7 +210,7 @@ AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, 
         // TODO: SyncEvolution must pass the known revision that
         // we are updating.
         // TODO: check that the item has not been updated in the meantime
-        qDebug()<<"in Item Modify Job akonadi for item : "<<luid.c_str()<<" ; ";
+        qDebug() << "In ItemModifyJob for item: " << luid.c_str();
         if (!modifyJob->exec()) {
             throwError(string("updating item ") + luid);
             return InsertItemResult("", "", false);
@@ -227,8 +218,8 @@ AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, 
         item = modifyJob->item();
     }
 
-    // TODO: Read-only datastores may not have actually added something here!
-    // The Jobs themselves throw error , and hence the return statements
+    // Read-only datastores may not have actually added something here!
+    // The Jobs themselves throw errors, and hence the return statements
     // above will take care of this
     return InsertItemResult(QByteArray::number(item.id()).constData(),
                             QByteArray::number(item.revision()).constData(),
