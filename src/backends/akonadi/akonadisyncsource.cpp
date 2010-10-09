@@ -49,9 +49,9 @@ SE_BEGIN_CXX
 using namespace Akonadi;
 
 AkonadiSyncSource::AkonadiSyncSource(const char *submime,
-                                     const SyncSourceParams &params) :
-    TrackingSyncSource(params),
-    m_subMime(submime)
+                                     const SyncSourceParams &params)
+    : TrackingSyncSource(params)
+    , m_subMime(submime)
 {
 }
 
@@ -60,25 +60,24 @@ AkonadiSyncSource::~AkonadiSyncSource()
 }
 
 bool AkonadiSyncSource::isEmpty()
-{ 
-  //To Check if the respective collection is Empty, without actually loading the collections
+{
+    //To Check if the respective collection is Empty, without actually loading the collections
     CollectionStatisticsJob *statisticsJob = new CollectionStatisticsJob(m_collection);
-    if(!statisticsJob->exec()){
-	throwError("Error fetching the collection stats");
-	}        
-    return statisticsJob->statistics().count()==0;
+    if (!statisticsJob->exec()) {
+        throwError("Error fetching the collection stats");
+    }
+    return statisticsJob->statistics().count() == 0;
 }
 
 void AkonadiSyncSource::start()
 {
-    int argc = 1;    
+    int argc = 1;
     static const char *prog = "syncevolution";
     static char *argv[] = { (char *)&prog, NULL };
     //if (!qApp) {
         //new QCoreApplication(argc, argv);
     //}
-    KAboutData aboutData(
-                         // The program name used internally.
+    KAboutData aboutData(// The program name used internally.
                          "syncevolution",
                          // The message catalog name
                          // If null, program name is used instead.
@@ -100,18 +99,18 @@ void AkonadiSyncSource::start()
                          "http://www.syncevolution.org/",
                          // The bug report email address
                          "syncevolution@syncevolution.org");
- 
-    KCmdLineArgs::init( argc, argv, &aboutData );
-    if(!qApp){
-      new KApplication;
+
+    KCmdLineArgs::init(argc, argv, &aboutData);
+    if (!qApp) {
+        new KApplication;
     }
     //Start The Akonadi Server if not already Running.
-    if(!Akonadi::ServerManager::isRunning()){
-      qDebug()<<"Akonadi Server isn't running, and hence starting it.";
-      if(!Akonadi::Control::start()){
-	qDebug()<<"Couldn't Start Akonadi Server: hence the akonadi backend of syncevolution wont work ..";
+    if (!Akonadi::ServerManager::isRunning()) {
+        qDebug() << "Akonadi Server isn't running, and hence starting it.";
+        if (!Akonadi::Control::start()) {
+            qDebug() << "Couldn't Start Akonadi Server: hence the akonadi backend of syncevolution wont work ..";
+        }
     }
-   }
 }
 
 SyncSource::Databases AkonadiSyncSource::getDatabases()
@@ -130,9 +129,9 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
 
     CollectionFetchJob *fetchJob = new CollectionFetchJob(Collection::root(),
                                                           CollectionFetchJob::Recursive);
-    
+
     fetchJob->fetchScope().setContentMimeTypes(mimeTypes);
-    
+
     if (!fetchJob->exec()) {
         throwError("cannot list collections");
     }
@@ -140,17 +139,17 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
     // the first collection of the right type is the default
     // TODO: is there a better way to choose the default?
     // This decision should go to the GUI: which deals with sync profiles.
-    
+
     bool isFirst = true;
     Collection::List collections = fetchJob->collections();
-    foreach(const Collection &collection, collections) {
+    foreach (const Collection &collection, collections) {
         // TODO: filter out collections which contain no items
-        // of the type we sync (m_subMime): 
-	//Done using filtered out using fetchJob.fetchScope().setContentMimeTypes()        
-            res.push_back(Database(collection.name().toUtf8().constData(),
-                                   collection.url().url().toUtf8().constData(),
-                                   isFirst));
-            isFirst = false;
+        // of the type we sync (m_subMime):
+        //Done using filtered out using fetchJob.fetchScope().setContentMimeTypes()
+        res.push_back(Database(collection.name().toUtf8().constData(),
+                               collection.url().url().toUtf8().constData(),
+                               isFirst));
+        isFirst = false;
     }
     return res;
 }
@@ -163,30 +162,29 @@ void AkonadiSyncSource::open()
     // otherwise the collection URL or a name
     string id = getDatabaseID();
 
-    // TODO: support selection by name and empty ID for default 
+    // TODO: support selection by name and empty ID for default
     // Done: using evolutionsource = akonadi:?collection=<number>
     // TODO: check for invalid URL?!
     // Invalid url=>invalid collection Error at runtime.
     m_collection = Collection::fromUrl(KUrl(id.c_str()));
-
 }
 
 void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisions)
 {
-    // copy all local IDs and the corresponding revision   
+    // copy all local IDs and the corresponding revision
     ItemFetchJob *fetchJob = new ItemFetchJob(m_collection);
 
-    
     if (!fetchJob->exec()) {
         throwError("listing items");
     }
-    BOOST_FOREACH(const Item &item, fetchJob->items()) {
+    forearch (const Item &item, fetchJob->items()) {
         // TODO: filter out items which don't have the right type
         // (for example, VTODO when syncing events)
-	//Done: with this if condition
-        if (item.mimeType() == m_subMime.c_str())
-        revisions[QByteArray::number(item.id()).constData()] =
-                  QByteArray::number(item.revision()).constData();
+        //Done: with this if condition
+        if (item.mimeType() == m_subMime.c_str()) {
+            revisions[QByteArray::number(item.id()).constData()] =
+                      QByteArray::number(item.revision()).constData();
+        }
     }
 }
 
@@ -198,16 +196,15 @@ void AkonadiSyncSource::close()
 TrackingSyncSource::InsertItemResult
 AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, bool raw)
 {
-  
     Item item;
-  
+
     if (luid.empty()) {
         item.setMimeType(m_subMime.c_str());
         item.setPayloadFromData(QByteArray(data.c_str()));
         ItemCreateJob *createJob = new ItemCreateJob(item, m_collection);
         if (!createJob->exec()) {
-            throwError(string("storing new item ") + luid);    
-	    return InsertItemResult("", "", false);
+            throwError(string("storing new item ") + luid);
+            return InsertItemResult("", "", false);
         }
         item = createJob->item();
     } else {
@@ -222,10 +219,10 @@ AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, 
         // TODO: SyncEvolution must pass the known revision that
         // we are updating.
         // TODO: check that the item has not been updated in the meantime
-	qDebug()<<"in Item Modify Job akonadi for item : "<<luid.c_str()<<" ; ";
+        qDebug()<<"in Item Modify Job akonadi for item : "<<luid.c_str()<<" ; ";
         if (!modifyJob->exec()) {
             throwError(string("updating item ") + luid);
-	    return InsertItemResult("", "", false);
+            return InsertItemResult("", "", false);
         }
         item = modifyJob->item();
     }
@@ -253,7 +250,7 @@ void AkonadiSyncSource::removeItem(const string &luid)
 void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, bool raw)
 {
     Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
-    
+
     ItemFetchJob *fetchJob = new ItemFetchJob(Item(syncItemId));
     fetchJob->fetchScope().fetchFullPayload();
     if (fetchJob->exec()) {

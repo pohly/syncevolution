@@ -43,7 +43,6 @@ class TimeTrackingObserver;
  * and "engine" formats).
  *
  * Change tracking is done via the item uid/revision attributes.
- * 
  *
  * Databases (collections in Akonadi terminology) are selected via
  * their int64 ID number.
@@ -70,28 +69,25 @@ public:
     virtual void close();
     virtual bool isEmpty();
 private:
-    Akonadi::Collection m_collection;   
-    const std::string m_subMime;
-
     void start();
+
+    Akonadi::Collection m_collection;
+    const std::string m_subMime;
 };
 
 class AkonadiContactSource : public AkonadiSyncSource
 {
- public:
-    AkonadiContactSource(const SyncSourceParams &params) :
-        //AkonadiSyncSource("text/vcard", params)	
-	AkonadiSyncSource("text/directory", params)
+public:
+    AkonadiContactSource(const SyncSourceParams &params)
+        : AkonadiSyncSource("text/directory", params)
     {
     }
 
-    virtual const char *getMimeType() const { 
-      return "text/vcard";
-      //return "text/directory"; 
+    virtual const char *getMimeType() const {
+        return "text/vcard";
     }
-    virtual const char *getMimeVersion() const { 
-      return "3.0"; 
-      //return "2.0"; 
+    virtual const char *getMimeVersion() const {
+        return "3.0";
     }
 
     void getSynthesisInfo(SynthesisInfo &info,
@@ -115,9 +111,9 @@ class AkonadiContactSource : public AkonadiSyncSource
 
 class AkonadiCalendarSource : public AkonadiSyncSource
 {
- public:
-    AkonadiCalendarSource(const SyncSourceParams &params) :
-        AkonadiSyncSource("application/x-vnd.akonadi.calendar.event", params)
+public:
+    AkonadiCalendarSource(const SyncSourceParams &params)
+        : AkonadiSyncSource("application/x-vnd.akonadi.calendar.event", params)
     {
     }
 
@@ -130,10 +126,9 @@ class AkonadiCalendarSource : public AkonadiSyncSource
 
 class AkonadiTaskSource : public AkonadiSyncSource
 {
- public:
-    AkonadiTaskSource(const SyncSourceParams &params) :
-        //AkonadiSyncSource("text/x-vnd.akonadi.calendar.todo", params)
-	AkonadiSyncSource("text/calendar", params)
+public:
+    AkonadiTaskSource(const SyncSourceParams &params)
+        : AkonadiSyncSource("text/calendar", params)
     {
     }
 
@@ -143,10 +138,9 @@ class AkonadiTaskSource : public AkonadiSyncSource
 
 class AkonadiMemoSource : public AkonadiSyncSource
 {
- public:
-    AkonadiMemoSource(const SyncSourceParams &params) :
-        AkonadiSyncSource("text/x-vnd.akonadi.calendar.journal", params)
-        //AkonadiSyncSource("text/plain", params)
+public:
+    AkonadiMemoSource(const SyncSourceParams &params)
+        : AkonadiSyncSource("text/x-vnd.akonadi.calendar.journal", params)
     {
     }
     // TODO: the AkonadiMemoSource is expected to import/export
