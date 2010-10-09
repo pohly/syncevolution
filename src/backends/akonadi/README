@@ -37,6 +37,6 @@ syncevolution --source-property sync=two-way \
 
 Initial run:
 syncevolution --sync slow scheduleworld addressbook
-
+ 
 All following runs:
 syncevolution scheduleworld
