@@ -33,7 +33,11 @@
 #include <Akonadi/CollectionStatistics>
 #include <Akonadi/CollectionStatisticsJob>
 
+#include <Akonadi/ServerManager>
 #include <Akonadi/Control>
+#include <KApplication>
+#include <KAboutData>
+#include <KCmdLineArgs>
 #include <kurl.h>
 
 #include <QtCore/QCoreApplication>
@@ -70,9 +74,44 @@ void AkonadiSyncSource::start()
     int argc = 1;    
     static const char *prog = "syncevolution";
     static char *argv[] = { (char *)&prog, NULL };
-    if (!qApp) {
-        new QCoreApplication(argc, argv);
+    //if (!qApp) {
+        //new QCoreApplication(argc, argv);
+    //}
+    KAboutData aboutData(
+                         // The program name used internally.
+                         "syncevolution",
+                         // The message catalog name
+                         // If null, program name is used instead.
+                         0,
+                         // A displayable program name string.
+                         ki18n("Syncevolution"),
+                         // The program version string.
+                         "1.0",
+                         // Short description of what the app does.
+                         ki18n("Lets Akonadi synchronize with a SyncML Peer"),
+                         // The license this code is released under
+                         KAboutData::License_GPL,
+                         // Copyright Statement
+                         ki18n("(c) 2010"),
+                         // Optional text shown in the About box.
+                         // Can contain any information desired.
+                         ki18n(""),
+                         // The program homepage string.
+                         "http://www.syncevolution.org/",
+                         // The bug report email address
+                         "syncevolution@syncevolution.org");
+ 
+    KCmdLineArgs::init( argc, argv, &aboutData );
+    if(!qApp){
+      new KApplication;
     }
+    //Start The Akonadi Server if not already Running.
+    if(!Akonadi::ServerManager::isRunning()){
+      qDebug()<<"Akonadi Server isn't running, and hence starting it.";
+      if(!Akonadi::Control::start()){
+	qDebug()<<"Couldn't Start Akonadi Server: hence the akonadi backend of syncevolution wont work ..";
+    }
+   }
 }
 
 SyncSource::Databases AkonadiSyncSource::getDatabases()
