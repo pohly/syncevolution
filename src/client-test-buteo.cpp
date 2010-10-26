@@ -17,6 +17,7 @@
  * 02110-1301  USA
  */
 
+#include "syncevo/util.h"
 #include "client-test-buteo.h"
 #include <libsyncprofile/SyncResults.h>
 #include <libsyncprofile/ProfileEngineDefs.h>
@@ -46,7 +47,7 @@ ButeoTest::ButeoTest(const string &server,
         const SyncEvo::SyncOptions &options) :
     m_server(server), m_logbase(logbase), m_options(options), m_dbusWatcher(NULL)
 {
-    initDeviceIds();
+    init();
 }
 
 ButeoTest::~ButeoTest()
@@ -56,7 +57,7 @@ ButeoTest::~ButeoTest()
     }
 }
 
-void ButeoTest::initDeviceIds()
+void ButeoTest::init()
 {
     if (!m_inited) {
         m_inited = true;
@@ -72,6 +73,11 @@ void ButeoTest::initDeviceIds()
         m_source2storage.insert(std::make_pair("kcal_ical20", "hcalendar"));
         m_source2storage.insert(std::make_pair("kcal_itodo20", "htodo"));
         m_source2storage.insert(std::make_pair("kcal_text", "hnotes"));
+
+        //init qcoreapplication
+        static const char *argv[] = { "SyncEvolution" };
+        static int argc = 1;
+        new QCoreApplication(argc, (char **)argv);
     }
 }
 
@@ -92,6 +98,8 @@ void ButeoTest::prepareSources(const int *sources,
 SyncMLStatus ButeoTest::doSync(SyncReport *report) 
 {
     SyncMLStatus status = STATUS_OK;
+
+    killAllMsyncd();
     //set sync options
     setupOptions();
 
@@ -102,14 +110,19 @@ SyncMLStatus ButeoTest::doSync(SyncReport *report)
         QtContactsSwitcher::restoreStorage("2");
     }
     //start msyncd
-    startMsyncd();
+    int pid = startMsyncd();
 
+    //kill 'sh' process which is the parent of 'msyncd'
+    stringstream cmd;
+    cmd << "kill -9 " << pid;
     //run sync
     if (!run()) {
+        Execute(cmd.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
         killAllMsyncd();
         return STATUS_FATAL;
     }
 
+    Execute(cmd.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
     killAllMsyncd();
 
     // save qtcontacts
@@ -224,10 +237,11 @@ void ButeoTest::setupOptions()
         case SYNC_REFRESH_FROM_SERVER:
             syncMode = VALUE_FROM_REMOTE;
             break;
-        case SYNC_SLOW:
+        case SYNC_SLOW: {
             //workaround here since buteo doesn't support explicite slow-sync
             syncMode = VALUE_TWO_WAY;
             break;
+        }
         default:
             break;
         }
@@ -240,12 +254,12 @@ void ButeoTest::killAllMsyncd()
 {
     //firstly killall msyncd
     string cmd = "killall -9 msyncd >/dev/null 2>&1";
-    execCommand(cmd, false);
+    //execCommand(cmd, false);
+    Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
 }
 
-void ButeoTest::startMsyncd()
+int ButeoTest::startMsyncd()
 {
-    killAllMsyncd();
     string cmd;
     int pid = fork();
     if (pid == 0) {
@@ -262,6 +276,7 @@ void ButeoTest::startMsyncd()
     // wait for msyncd get prepared
     cmd = "sleep 2";
     execCommand(cmd);
+    return pid;
 }
 
 bool ButeoTest::run()

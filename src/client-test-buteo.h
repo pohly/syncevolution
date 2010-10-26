@@ -49,9 +49,9 @@ private slots:
 
 private:
 
-    /** init device ids used for 2 clients
+    /** initialize
      */
-    static void initDeviceIds();
+    static void init();
 
     /**
      * 1. set deviceid, max-message-size options to /etc/sync/meego-sync-conf.xml
@@ -63,7 +63,7 @@ private:
     void killAllMsyncd();
 
     // start msyncd  
-    void startMsyncd();
+    int startMsyncd();
 
     // do actually running 
     bool run();
