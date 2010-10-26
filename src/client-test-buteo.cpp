@@ -153,7 +153,12 @@ void ButeoTest::setupOptions()
     if (!boost::ends_with(m_server, "_1")) {
         id = 1; 
     }
-    replaceElement(syncmlContent, "local-device-name",m_deviceIds[id]);
+
+    //specify the db path which saves anchors related info, then we can wipe
+    //out it if want to slow sync.
+    replaceElement(syncmlContent, "dbpath", QString((m_server + ".db").c_str()));
+
+    replaceElement(syncmlContent, "local-device-name", m_deviceIds[id]);
 
     QString msgSize;
     QTextStream(&msgSize) << m_options.m_maxMsgSize;
@@ -239,6 +244,11 @@ void ButeoTest::setupOptions()
             break;
         case SYNC_SLOW: {
             //workaround here since buteo doesn't support explicite slow-sync
+            //wipe out anchors so we will do slow sync
+            string cmd = "rm -f ";
+            cmd += m_server;
+            cmd += ".db";
+            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
             syncMode = VALUE_TWO_WAY;
             break;
         }
