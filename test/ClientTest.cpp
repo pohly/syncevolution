@@ -3698,7 +3698,7 @@ static string mangleICalendar20(const char *data)
     return item;
 }
 
-void ClientTest::getTestData(const char *type, Config &config)
+void ClientTest::getTestData(const char* configType, const char *type, Config &config)
 {
     memset(&config, 0, sizeof(config));
     char *numitems = getenv("CLIENT_TEST_NUM_ITEMS");
@@ -3792,7 +3792,13 @@ void ClientTest::getTestData(const char *type, Config &config)
         config.templateItem = config.insertItem;
         config.uniqueProperties = "FN:N:X-EVOLUTION-FILE-AS";
         config.sizeProperty = "NOTE";
+        //default is to use 'vcard30.vcf'.
         config.testcases = "testcases/vcard30.vcf";
+
+        //qt_vcard30 uses different test file
+        if (!strcmp(configType, "qt_vcard30")) {
+            config.testcases = "testcases/qt_vcard30.vcf";
+        }
     } else if (!strcmp(type, "vcard21")) {
         config.sourceName = "vcard21";
         config.sourceNameServerTemplate = "addressbook";

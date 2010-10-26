@@ -315,8 +315,12 @@ class ClientTest {
      * - ical20 = iCal 2.0 events
      * - vcal10 = vCal 1.0 events
      * - itodo20 = iCal 2.0 tasks
+     *
+     * 'configType' is the testing source type. For different sources,
+     * we have to use different test files since they support different
+     * fields, like qt_contacts.
      */
-    static void getTestData(const char *type, Config &config);
+    static void getTestData(const char* configType, const char *type, Config &config);
 
     /**
      * Data sources are enumbered from 0 to n-1 for the purpose of
