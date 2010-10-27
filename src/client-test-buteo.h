@@ -34,8 +34,6 @@ public:
               const string &logbase,
               const SyncEvo::SyncOptions &options); 
 
-    ~ButeoTest();
-
     // prepare sync sources
     void prepareSources(const int *sources, const vector<string> &source2Config);
 
@@ -85,9 +83,6 @@ private:
     SyncEvo::SyncOptions m_options;
     std::set<string> m_configedSources;
     QString m_syncResults;
-
-    //dbus watcher to watch buteo daemon 
-    QDBusServiceWatcher *m_dbusWatcher;
 
     //device ids
     static QString m_deviceIds[2];

@@ -45,16 +45,9 @@ map<string, string> ButeoTest::m_source2storage;
 ButeoTest::ButeoTest(const string &server,
         const string &logbase,
         const SyncEvo::SyncOptions &options) :
-    m_server(server), m_logbase(logbase), m_options(options), m_dbusWatcher(NULL)
+    m_server(server), m_logbase(logbase), m_options(options)
 {
     init();
-}
-
-ButeoTest::~ButeoTest()
-{
-    if (m_dbusWatcher) {
-        delete m_dbusWatcher;
-    }
 }
 
 void ButeoTest::init()
@@ -304,8 +297,8 @@ bool ButeoTest::run()
     }
 
     // add watcher for watching unregistering service
-    m_dbusWatcher = new QDBusServiceWatcher(msyncdService, conn, QDBusServiceWatcher::WatchForUnregistration);
-    m_dbusWatcher->connect(m_dbusWatcher, SIGNAL(serviceUnregistered(QString)),
+    QDBusServiceWatcher *dbusWatcher = new QDBusServiceWatcher(msyncdService, conn, QDBusServiceWatcher::WatchForUnregistration);
+    dbusWatcher->connect(dbusWatcher, SIGNAL(serviceUnregistered(QString)),
                            this, SLOT(serviceUnregistered(QString)));
 
     //connect signals
@@ -317,6 +310,7 @@ bool ButeoTest::run()
     // start sync
     QDBusReply<bool> reply = interface->call(QString("startSync"), m_server.c_str());
     if (reply.isValid() && !reply.value()) {
+        delete dbusWatcher;
         delete interface;
         return false;
     }
@@ -324,6 +318,7 @@ bool ButeoTest::run()
     // wait sync completed
     int result = QCoreApplication::exec();
 
+    delete dbusWatcher;
     delete interface;
     return result == 0;
 }
@@ -586,6 +581,6 @@ void QtContactsSwitcher::terminate()
 void QtContactsSwitcher::start()
 {
     // sleep one second to let tracker daemon get prepared
-    string cmd = "tracker-control -s >/dev/null 2>&1; sleep 1";
+    string cmd = "tracker-control -s >/dev/null 2>&1; sleep 2";
     execCommand(cmd);
 }
