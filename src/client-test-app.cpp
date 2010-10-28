@@ -324,6 +324,12 @@ public:
         return false;
     }
 
+#ifdef ENABLE_BUTEO_TESTS
+    virtual void setup() {
+        QtContactsSwitcher::prepare(*this);
+    }
+#endif
+
     virtual SyncMLStatus doSync(const int *sources,
                                 const std::string &logbase,
                                 const SyncOptions &options)
@@ -342,7 +348,7 @@ public:
 
         if (useButeo) {
 #ifdef ENABLE_BUTEO_TESTS
-            ButeoTest buteo(server, logbase, options);
+            ButeoTest buteo(*this, server, logbase, options);
             buteo.prepareSources(sources, m_syncSource2Config);
             SyncReport report;
             SyncMLStatus status = buteo.doSync(&report);

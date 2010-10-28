@@ -225,6 +225,9 @@ class ClientTest {
     ClientTest(int serverSleepSec = 0, const std::string &serverLog= "");
     virtual ~ClientTest();
 
+    /** set up before running a test */
+    virtual void setup() { }
+
     /** cleanup function to be called when shutting down testing */
     typedef void (*Cleanup_t)(void);
 
@@ -466,6 +469,9 @@ public:
         createSourceB(co.createSourceB, cl, sourceParam, false)
         {}
 
+    /** set up before running a test */
+    virtual void setUp() { client.setup(); }
+
     /**
      * adds the supported tests to the instance itself;
      * this is the function that a derived class can override
@@ -590,6 +596,9 @@ public:
 
     /** adds the supported tests to the instance itself */
     virtual void addTests();
+
+    /** set up before running a test */
+    virtual void setUp() { client.setup(); }
 
 protected:
     /** list with all local test classes for manipulating the sources and their index in the client */

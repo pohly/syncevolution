@@ -27,10 +27,12 @@
 #include <QDomDocument>
 #include "ClientTest.h"
 
+using namespace SyncEvo;
 class ButeoTest : public QObject {
     Q_OBJECT
 public:
-    ButeoTest(const string &server,
+    ButeoTest(ClientTest &client,
+              const string &server,
               const string &logbase,
               const SyncEvo::SyncOptions &options); 
 
@@ -78,6 +80,7 @@ private:
     // build a dom tree from file
     static void buildDomFromFile(QDomDocument &doc, const QString &filePath);
 
+    ClientTest &m_client;
     string m_server;
     string m_logbase;
     SyncEvo::SyncOptions m_options;
@@ -100,6 +103,11 @@ private:
  */
 class QtContactsSwitcher {
 public:
+    /** do preparation */
+    static void prepare(ClientTest &client);
+
+    static string getId(ClientTest &client);
+
     /**
      * prepare storage:
      * 1. terminate tracker
@@ -107,7 +115,7 @@ public:
      * according to id
      * 3. restart tracker 
      */
-    static void restoreStorage(const string &id);
+    static void restoreStorage(ClientTest &client);
 
     /**
      * backup storage:
@@ -115,10 +123,10 @@ public:
      * 2. copy tracker databases from default place to backup
      * 3. restart tracker
      */
-    static void backupStorage(const string &id);
+    static void backupStorage(ClientTest &client);
 private:
     // get the file path of databases
-    static std::string getDatabasePath();
+    static std::string getDatabasePath(int index = 0);
 
     //terminate tracker daemons
     static void terminate();
@@ -127,9 +135,10 @@ private:
     static void start();
 
     //copy databases between default place and backup place
-    static void copyDatabases(const string &id, bool fromDefault = true);
+    static void copyDatabases(ClientTest &client, bool fromDefault = true);
 
     //databases used by tracker
     static std::string m_databases[];
+    static std::string m_dirs[];
 };
 #endif

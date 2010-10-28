@@ -27,8 +27,8 @@
 #include <QDomDocument>
 #include <QtDBus>
 
-using namespace SyncEvo;
 using namespace Buteo;
+using namespace SyncEvo;
 
 static void execCommand(const std::string &cmd, bool check = true)
 {
@@ -42,10 +42,11 @@ bool ButeoTest::m_inited = false;
 QString ButeoTest::m_deviceIds[2];
 map<string, string> ButeoTest::m_source2storage;
 
-ButeoTest::ButeoTest(const string &server,
-        const string &logbase,
-        const SyncEvo::SyncOptions &options) :
-    m_server(server), m_logbase(logbase), m_options(options)
+ButeoTest::ButeoTest(ClientTest &client, 
+                     const string &server,
+                     const string &logbase,
+                     const SyncEvo::SyncOptions &options) :
+    m_client(client), m_server(server), m_logbase(logbase), m_options(options)
 {
     init();
 }
@@ -97,11 +98,8 @@ SyncMLStatus ButeoTest::doSync(SyncReport *report)
     setupOptions();
 
     // restore qtcontacts
-    if (boost::ends_with(m_server, "_1")) {
-        QtContactsSwitcher::restoreStorage("1");
-    } else {
-        QtContactsSwitcher::restoreStorage("2");
-    }
+    QtContactsSwitcher::restoreStorage(m_client);
+
     //start msyncd
     int pid = startMsyncd();
 
@@ -119,11 +117,7 @@ SyncMLStatus ButeoTest::doSync(SyncReport *report)
     killAllMsyncd();
 
     // save qtcontacts
-    if (boost::ends_with(m_server, "_1")) {
-        QtContactsSwitcher::backupStorage("1");
-    } else {
-        QtContactsSwitcher::backupStorage("2");
-    }
+    QtContactsSwitcher::backupStorage(m_client);
 
     //get sync results
     genSyncResults(m_syncResults, report);
@@ -504,23 +498,56 @@ static bool isButeo()
 }
 
 // 3 databases used by tracker to store contacts
-string QtContactsSwitcher::m_databases[] = {"meta.db", "contents.db", "fulltext.db"};
+// empty string is used as separator
+string QtContactsSwitcher::m_databases[] = {"meta.db", 
+                                            "contents.db",
+                                            "fulltext.db",
+                                            "",
+                                            "hcontacts.db"};
+string QtContactsSwitcher::m_dirs[] = {"/.cache/tracker/",
+                                       "/.sync/sync-app/"};
 
-void QtContactsSwitcher::restoreStorage(const string &id)
+string QtContactsSwitcher::getId(ClientTest &client) {
+    if (client.getClientB()) {
+        return "1";
+    }
+    return "2";
+
+}
+
+void QtContactsSwitcher::prepare(ClientTest &client) {
+    // remove *_1/2.db files
+    int index = 0;
+    for (int i = 0; i < sizeof(m_databases)/sizeof(m_databases[0]); i++) {
+        if (m_databases[i].empty()) {
+            index++;
+            continue;
+        }
+
+        stringstream cmd;
+        cmd << "rm -f " << getDatabasePath(index) << m_databases[i]
+            << "_";
+        Execute(cmd.str() + "1", ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+        Execute(cmd.str() + "2", ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+   }
+}
+
+void QtContactsSwitcher::restoreStorage(ClientTest &client)
 {
     // if CLIENT_TEST_BUTEO is not enabled, skip it for LocalTests may also use it
     if (!isButeo()) {
         return;
     }
+    string id = getId(client);
 
     terminate();
 
     // copy meta.db_1/2 to meta.db
-    string testFile = getDatabasePath() + m_databases[0];
+    //string testFile = getDatabasePath() + m_databases[0];
 
     // for the first time meta.db_1/2 doesn't exist, we
     // copy them from default
-    if (access((testFile + "_" + id).c_str(), F_OK) < 0) {
+    /*if (access((testFile + "_" + id).c_str(), F_OK) < 0) {
         // if default meta.db doesn't exist generate it
         if (access(testFile.c_str(), F_OK) < 0) {
             start();
@@ -530,45 +557,70 @@ void QtContactsSwitcher::restoreStorage(const string &id)
     } else {
         // else copy them to default database used by tracker
         copyDatabases(id, false);
-    }
+    }*/
+    copyDatabases(client, false);
     start();
 }
 
-void QtContactsSwitcher::backupStorage(const string &id)
+void QtContactsSwitcher::backupStorage(ClientTest &client)
 {
     // if CLIENT_TEST_BUTEO is not enabled, skip it for LocalTests may also use it
     if (!isButeo()) {
         return;
     }
 
+    string id = getId(client);
+
     terminate();
     // copy meta.db to meta.db_1/2
-    copyDatabases(id);
+    copyDatabases(client);
     start();
 }
 
-string QtContactsSwitcher::getDatabasePath()
+string QtContactsSwitcher::getDatabasePath(int index)
 {
-    static string m_path = getHome() + "/.cache/tracker/";
+    string m_path = getHome() + m_dirs[index];
     return m_path;
 }
 
-void QtContactsSwitcher::copyDatabases(const string &id, bool fromDefault)
+void QtContactsSwitcher::copyDatabases(ClientTest &client, bool fromDefault)
 {
+    static string m_cmds[] = {"",
+                              "",
+                              "",
+                              "",
+                              "\"delete from deleteditems;\""};
+
+    string id = getId(client);
+
+    int index = 0;
     for (int i = 0; i < sizeof(m_databases)/sizeof(m_databases[0]); i++) {
-        string cmd = "cp -f ";
-        string src = getDatabasePath() + m_databases[i];
+        if (m_databases[i].empty()) {
+            index++;
+            continue;
+        }
+        stringstream cmd;
+        string src = getDatabasePath(index) + m_databases[i];
         string dest = src + "_" + id;
         if (!fromDefault) {
-            string tmp = src;
-            src = dest;
-            dest = tmp;
+            // in this case, we copy *_1/2.db to default db
+            // if *_1/2.db doesn't exist, we copy default with initial commands
+            if (access(dest.c_str(), F_OK) < 0) {
+                if (access(src.c_str(), F_OK) >= 0) {
+                    if (!m_cmds[i].empty()) {
+                        stringstream temp;
+                        temp << "sqlite3 " << src << " " << m_cmds[i];
+                        Execute(temp.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+                    }
+                }
+            } else {
+                string tmp = src;
+                src = dest;
+                dest = tmp;
+            }
         }
-        cmd += src;
-        cmd += " ";
-        cmd += dest;
-        cmd += " >/dev/null 2>&1";
-        execCommand(cmd, false);
+        cmd << "cp -f " << src << " " << dest;
+        Execute(cmd.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
     }
 }
 

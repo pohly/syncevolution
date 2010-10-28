@@ -61,19 +61,11 @@
 
 #define RESTORE_STORAGE { \
 if (boost::iequals(config.sourceName,"qt_vcard30")) { \
-    if (client.getClientB()) { \
-        QtContactsSwitcher::restoreStorage("1"); \
-    } else { \
-        QtContactsSwitcher::restoreStorage("2"); \
-    } \
+    QtContactsSwitcher::restoreStorage(client); \
 }}
 #define BACKUP_STORAGE { \
 if (boost::iequals(config.sourceName,"qt_vcard30")) { \
-    if (client.getClientB()) { \
-        QtContactsSwitcher::backupStorage("1"); \
-    } else { \
-        QtContactsSwitcher::backupStorage("2"); \
-    } \
+    QtContactsSwitcher::backupStorage(client); \
 }}
 #else 
 
