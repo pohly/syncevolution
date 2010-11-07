@@ -77,6 +77,11 @@ static DBusMessage *SyncEvoHandleException(DBusMessage *msg);
 #include <QtCore/QLatin1String>
 #include <QtCore/QByteArray>
 #include <QtCore/QDebug>
+
+#include <KApplication>
+#include <KAboutData>
+#include <KCmdLineArgs>
+
 #include <kwallet.h>
 #endif
 
@@ -2833,10 +2838,43 @@ DBusSync::DBusSync(const std::string &config,
     m_session(session)
 {
     #ifdef USE_KDE_KWALLET
-    QCoreApplication *app;
-    if (!qApp) {
-        int argc = 1;
-        app = new QCoreApplication(argc, (char *[1]){ (char*) "syncevolution"});
+    //QCoreApplication *app;
+    //if (!qApp) {
+        //int argc = 1;
+        //app = new QCoreApplication(argc, (char *[1]){ (char*) "syncevolution"});
+    //}
+    int argc = 1;
+    static const char *prog = "syncevolution";
+    static char *argv[] = { (char *)&prog, NULL };
+    //if (!qApp) {
+        //new QCoreApplication(argc, argv);
+    //}
+    KAboutData aboutData(// The program name used internally.
+                         "syncevolution",
+                         // The message catalog name
+                         // If null, program name is used instead.
+                         0,
+                         // A displayable program name string.
+                         ki18n("Syncevolution"),
+                         // The program version string.
+                         "1.0",
+                         // Short description of what the app does.
+                         ki18n("Lets Akonadi synchronize with a SyncML Peer"),
+                         // The license this code is released under
+                         KAboutData::License_GPL,
+                         // Copyright Statement
+                         ki18n("(c) 2010"),
+                         // Optional text shown in the About box.
+                         // Can contain any information desired.
+                         ki18n(""),
+                         // The program homepage string.
+                         "http://www.syncevolution.org/",
+                         // The bug report email address
+                         "syncevolution@syncevolution.org");
+
+    KCmdLineArgs::init(argc, argv, &aboutData);
+    if (!kapp) {
+        new KApplication;
     }
     #endif
   

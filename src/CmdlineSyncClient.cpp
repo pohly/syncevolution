@@ -30,6 +30,10 @@ extern "C" {
 #include <QtCore/QLatin1String>
 #include <QtCore/QDebug>
 
+#include <KApplication>
+#include <KAboutData>
+#include <KCmdLineArgs>
+
 #include <kwallet.h>
 #endif
 
@@ -45,10 +49,39 @@ CmdlineSyncClient::CmdlineSyncClient(const string &server,
     m_keyring(useKeyring)
 {
 #ifdef USE_KDE_KWALLET
-    QCoreApplication *app;
-    if (!qApp) {
-        int argc = 1;
-        app = new QCoreApplication(argc, (char *[1]){ (char*) "syncevolution"});
+    //QCoreApplication *app;
+    int argc = 1;
+    static const char *prog = "syncevolution";
+    static char *argv[] = { (char *)&prog, NULL };
+    //if (!qApp) {
+        //new QCoreApplication(argc, argv);
+    //}
+    KAboutData aboutData(// The program name used internally.
+                         "syncevolution",
+                         // The message catalog name
+                         // If null, program name is used instead.
+                         0,
+                         // A displayable program name string.
+                         ki18n("Syncevolution"),
+                         // The program version string.
+                         "1.0",
+                         // Short description of what the app does.
+                         ki18n("Lets Akonadi synchronize with a SyncML Peer"),
+                         // The license this code is released under
+                         KAboutData::License_GPL,
+                         // Copyright Statement
+                         ki18n("(c) 2010"),
+                         // Optional text shown in the About box.
+                         // Can contain any information desired.
+                         ki18n(""),
+                         // The program homepage string.
+                         "http://www.syncevolution.org/",
+                         // The bug report email address
+                         "syncevolution@syncevolution.org");
+
+    KCmdLineArgs::init(argc, argv, &aboutData);
+    if (!kapp) {
+        new KApplication;
     }
 #endif
 }
@@ -88,7 +121,7 @@ string CmdlineSyncClient::askPassword(const string &passwordName,
         QString walletPassword;
         const QString walletKey = QString::fromStdString(key.user + ',' +
                 key.domain + ',' + key.server + ',' + key.object + ',' +
-                key.protocol + ',' + key.authtype + ',' + key.port);
+                key.protocol + ',' + key.authtype + ',') + QString::number(key.port);
 
         const QString wallet_name = KWallet::Wallet::NetworkWallet();
         //QString folder = QString::fromUtf8("Syncevolution");
@@ -164,7 +197,7 @@ bool CmdlineSyncClient::savePassword(const string &passwordName,
         // write password to keyring
         const QString walletKey = QString::fromStdString(key.user + ',' +
                 key.domain + ',' + key.server + ',' + key.object + ',' +
-                key.protocol + ',' + key.authtype + ',' + key.port;
+                key.protocol + ',' + key.authtype + ',')+ QString::number(key.port);
         const QString walletPassword = QString::fromStdString(password);
 
         bool write_success = false;

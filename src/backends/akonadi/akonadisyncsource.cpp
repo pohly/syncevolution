@@ -101,7 +101,7 @@ void AkonadiSyncSource::start()
                          "syncevolution@syncevolution.org");
 
     KCmdLineArgs::init(argc, argv, &aboutData);
-    if (!qApp) {
+    if (!kapp) {
         new KApplication;
     }
     // Start The Akonadi Server if not already Running.
