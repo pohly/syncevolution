@@ -226,9 +226,26 @@ void ButeoTest::setupOptions()
             syncMode = VALUE_TO_REMOTE;
             break;
         case SYNC_ONE_WAY_FROM_SERVER:
-        case SYNC_REFRESH_FROM_SERVER:
-            syncMode = VALUE_FROM_REMOTE;
+            syncMode = VALUE_TWO_WAY;
             break;
+        case SYNC_REFRESH_FROM_SERVER: {
+            //workaround here since buteo doesn't support refresh-from-server
+            //wipe out anchors and remove tracker database
+            //so we will do refresh-from-server by slow sync
+            string cmd = "rm -f ";
+            cmd += m_server;
+            cmd += ".db";
+            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+            cmd = "tracker-control -r >/dev/null 2>&1";
+            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+            cmd = "rm -f ";
+            cmd += getHome() + "/.cache/tracker/*.db ";
+            string id = m_client.getClientB() ? "1" : "2";
+            cmd += getHome() + "/.cache/tracker/*.db" + "_" + id;
+            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+            syncMode = VALUE_TWO_WAY;
+            break;
+        }
         case SYNC_SLOW: {
             //workaround here since buteo doesn't support explicite slow-sync
             //wipe out anchors so we will do slow sync

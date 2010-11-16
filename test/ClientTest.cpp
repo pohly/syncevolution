@@ -325,6 +325,7 @@ static void removeItem(CreateSource createSource, const std::string &luid)
 void LocalTests::update(CreateSource createSource, const char *data, bool check) {
     CPPUNIT_ASSERT(createSource.createSource);
     CPPUNIT_ASSERT(data);
+    RESTORE_STORAGE
 
     // create source
     TestingSyncSourcePtr source(createSource());
@@ -351,6 +352,7 @@ void LocalTests::update(CreateSource createSource, const char *data, bool check)
     SOURCE_ASSERT_NO_FAILURE(source.get(), it = source->getAllItems().begin());
     CPPUNIT_ASSERT(it != source->getAllItems().end());
     CPPUNIT_ASSERT_EQUAL(luid, *it);
+    BACKUP_STORAGE
 }
 
 void LocalTests::update(CreateSource createSource, const char *data, const std::string &luid) {
@@ -2677,9 +2679,16 @@ void SyncTests::testComplexRefreshFromServerSemantic()
     testCopy();
 
     // check refresh with one item on server
-    accessClientB->doSync("refresh-one",
-                          SyncOptions(SYNC_REFRESH_FROM_SERVER,
-                                      CheckSyncReport(1,0,1, 0,0,0, true, SYNC_REFRESH_FROM_SERVER)));
+    const char *value = getenv ("CLIENT_TEST_NOREFRESH");
+    // If refresh_from_server or refresh_from_client (depending on this is a
+    // server or client) is not supported, we can still test via slow sync.
+    if (value) {
+        accessClientB->refreshClient();
+    } else {
+        accessClientB->doSync("refresh-one",
+                              SyncOptions(SYNC_REFRESH_FROM_SERVER,
+                                          CheckSyncReport(1,0,1, 0,0,0, true, SYNC_REFRESH_FROM_SERVER)));
+    }
 
     // delete that item via A, check again
     BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
@@ -2688,9 +2697,13 @@ void SyncTests::testComplexRefreshFromServerSemantic()
     doSync("delete-item",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
-    accessClientB->doSync("refresh-none",
-                          SyncOptions(SYNC_REFRESH_FROM_SERVER,
-                                      CheckSyncReport(0,0,1, 0,0,0, true, SYNC_REFRESH_FROM_SERVER)));
+    if (value) {
+        accessClientB->refreshClient();
+    } else {
+        accessClientB->doSync("refresh-none",
+                              SyncOptions(SYNC_REFRESH_FROM_SERVER,
+                                          CheckSyncReport(0,0,1, 0,0,0, true, SYNC_REFRESH_FROM_SERVER)));
+    }
 }
 
 /**
