@@ -1,7 +1,10 @@
-VCard30
+This document is used to show the limitation of qtcontacts
+and interoperability test information between Buteo and Google.
+
+QtContacts
     -- Below properties are lost in Qtcontacts:
        X-AIM X-GROUPWISE X-ICQ 
-       X-YAHOO FBURL CALURI PHOTO LOGO LABEL
+       X-YAHOO FBURL CALURI LOGO LABEL
 
     -- other Qtcontacts limitations
        X-GENDER: Male or Female, first letter in upper-case, others in lower-case
@@ -10,8 +13,9 @@ VCard30
        EMAIL: type INTERNET is not supported
        NICKNAME and X-NICKNAME: the first apprearance will be avaiable. NICKNAME will be exported from Qtcontacts, but X-NICKNAME will be sent in sync msg.
        ORG: only support one level organization name
-       X-IMPP X-NICKNAME  X-JABBER: only supported by the importer, but not the exporter.
+       X-IMPP, X-NICKNAME and X-JABBER: only supported by the importer, but not the exporter.
 
+VCard30 (interoperability)
     -- Google contacts limitations
        birthday and anniversary in google web view will not appear in sync msg.
        ADR: Firstly synced address from qtcontacts, then modified in google contacts, this address would be lost in sync msg sent from google
@@ -21,5 +25,17 @@ VCard30
        AIM, Google Talk, Yahoo, Skype, QQ, MSN, ICQ, Jabber: will be lost in sync msg.
        Phonetic name: will be lost in sync msg.
        File as: will be lost in sync msg.
-       BDAY X-GENDER X-ASSISTANT X-ASSISTANT-TEL URL X-SIP will be received by google, but these properties will not be shown in google web view. 
-       X-IMPP CATEGORIES X-NICKNAME: not support
+       BDAY, X-GENDER, X-ASSISTANT, X-ASSISTANT-TEL, URL and X-SIP will be received by google, but these properties will not be shown in google web view. 
+       X-IMPP, CATEGORIES, X-NICKNAME and ROLE: not support
+
+* Known test failures:
+Client::Sync::vcard21
+  -- Client::Sync::qt_vcard30::testDeleteAllRefresh
+     Client::Sync::qt_vcard30::testRefreshFromClientSync
+     Client::Sync::qt_vcard30::testConversion
+     Client::Sync::qt_vcard30::testRefreshFromClientSemantic
+     Client::Sync::qt_vcard30::testRefreshStatus
+     Client::Sync::qt_vcard30::testComplexUpdate
+     Client::Sync::qt_vcard30::testItemsXML
+     Client::Sync::qt_vcard30::testOneWayFromServer
+     Client::Sync::qt_vcard30::testOneWayFromClient
