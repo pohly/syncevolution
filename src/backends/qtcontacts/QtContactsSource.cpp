@@ -215,10 +215,13 @@ void QtContactsSource::readItem(const string &uid, std::string &item, bool raw)
     for (int i = 0; i < contacts.size(); ++i) {
         QContact &contact = contacts[i];
         const QContactAvatar &avatar = contact.detail(QContactAvatar::DefinitionName);
-        QImage image(avatar.imageUrl().path());
-        QContactThumbnail thumbnail;
-        thumbnail.setThumbnail(image);
-        contact.saveDetail(&thumbnail);
+        const QContactThumbnail thumb = contact.detail(QContactThumbnail::DefinitionName);
+        if (!avatar.isEmpty() && thumb.isEmpty()) {
+            QImage image(avatar.imageUrl().path());
+            QContactThumbnail thumbnail;
+            thumbnail.setThumbnail(image);
+            contact.saveDetail(&thumbnail);
+        }
     }
 
     QVersitContactExporter exporter;
