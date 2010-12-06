@@ -221,12 +221,14 @@ void ButeoTest::setupOptions()
             syncMode = VALUE_TWO_WAY;
             break;
         case SYNC_ONE_WAY_FROM_CLIENT:
-        case SYNC_REFRESH_FROM_CLIENT:
             // work around here since buteo doesn't support refresh mode now
             syncMode = VALUE_TO_REMOTE;
             break;
+        case SYNC_REFRESH_FROM_CLIENT:
+            // don't support, no workaround here
+            throw runtime_error("Buteo doesn't support refresh mode");
         case SYNC_ONE_WAY_FROM_SERVER:
-            syncMode = VALUE_TWO_WAY;
+            syncMode = VALUE_FROM_REMOTE;
             break;
         case SYNC_REFRESH_FROM_SERVER: {
             //workaround here since buteo doesn't support refresh-from-server
