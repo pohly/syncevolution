@@ -28,6 +28,18 @@
 #include "ClientTest.h"
 
 using namespace SyncEvo;
+
+/**
+ * ButeoTest is used to invoke buteo to do client test with the help
+ * of client test framework. The basic idea is to implement doSync and
+ * replace with invocation of buteo's dbus server - 'msyncd'.
+ * The main steps are:
+ * 1) pre-run: This may include set up sync options for local client
+ * and target server, prepare local databases
+ * 2) run: run sync by sending dbus calls to 'msyncd' and wait until
+ * it finishes
+ * 3) post-run: collect sync result and statistics
+ */
 class ButeoTest : public QObject {
     Q_OBJECT
 public:
@@ -70,6 +82,9 @@ private:
 
     // get sync results from buteo and set them to sync report
     void genSyncResults(const QString &text, SyncEvo::SyncReport *report);
+
+    // whether configured sources include contacts
+    bool inclContacts();
 
     // truncate file and write content to file
     static void writeToFile(const QString &filePath, const QString &content );

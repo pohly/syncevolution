@@ -30,10 +30,12 @@
 using namespace Buteo;
 using namespace SyncEvo;
 
-static void execCommand(const std::string &cmd, bool check = true)
+// execute a command. If 'check' is true, throw an exception when
+// execution encounters error(s)
+static void execCmd(const std::string &cmd, bool check = true)
 {
-    bool success = system(cmd.c_str()) == 0;
-    if (!success && check) {
+    int result = Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+    if (result < 0 && check) {
         throw runtime_error("failed to excute command: " + cmd);
     }
 }
@@ -62,13 +64,14 @@ void ButeoTest::init()
             QTextStream(&id) << "sc-pim-" << uuid.c_str();
             m_deviceIds[i] = id;
         }
+
         // insert source -> storage mappings
         m_source2storage.insert(std::make_pair("qt_vcard30", "hcontacts"));
         m_source2storage.insert(std::make_pair("kcal_ical20", "hcalendar"));
         m_source2storage.insert(std::make_pair("kcal_itodo20", "htodo"));
         m_source2storage.insert(std::make_pair("kcal_text", "hnotes"));
 
-        //init qcoreapplication
+        //init qcoreapplication to use qt
         static const char *argv[] = { "SyncEvolution" };
         static int argc = 1;
         new QCoreApplication(argc, (char **)argv);
@@ -76,7 +79,7 @@ void ButeoTest::init()
 }
 
 void ButeoTest::prepareSources(const int *sources,
-        const vector<string> &source2Config) 
+                               const vector<string> &source2Config) 
 {
     for(int i = 0; sources[i] >= 0; i++) {
         string source = source2Config[sources[i]];
@@ -93,35 +96,35 @@ SyncMLStatus ButeoTest::doSync(SyncReport *report)
 {
     SyncMLStatus status = STATUS_OK;
 
+    // kill msyncd
     killAllMsyncd();
     //set sync options
     setupOptions();
-
-    // restore qtcontacts
-    QtContactsSwitcher::restoreStorage(m_client);
+    // restore qtcontacts if needed
+    if (inclContacts()) {
+        QtContactsSwitcher::restoreStorage(m_client);
+    }
 
     //start msyncd
     int pid = startMsyncd();
-
     //kill 'sh' process which is the parent of 'msyncd'
     stringstream cmd;
     cmd << "kill -9 " << pid;
     //run sync
     if (!run()) {
-        Execute(cmd.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+        execCmd(cmd.str(), false);
         killAllMsyncd();
         return STATUS_FATAL;
     }
 
-    Execute(cmd.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+    execCmd(cmd.str(), false);
     killAllMsyncd();
-
-    // save qtcontacts
-    QtContactsSwitcher::backupStorage(m_client);
-
+    // save qtcontacts if needed
+    if (inclContacts()) {
+        QtContactsSwitcher::backupStorage(m_client);
+    }
     //get sync results
     genSyncResults(m_syncResults, report);
-
     return report->getStatus();
 }
 
@@ -144,7 +147,6 @@ void ButeoTest::setupOptions()
     //specify the db path which saves anchors related info, then we can wipe
     //out it if want to slow sync.
     replaceElement(syncmlContent, "dbpath", QString((m_server + ".db").c_str()));
-
     replaceElement(syncmlContent, "local-device-name", m_deviceIds[id]);
 
     QString msgSize;
@@ -161,7 +163,6 @@ void ButeoTest::setupOptions()
                 boost::iequals(source, "htodo") ||
                 boost::iequals(source, "hnotes")) {
             string filePath = storageDir + source + ".xml";
-            //changeAttrValue(content, "Notebook Name", "value", notebookName, filePath);
             QDomDocument doc(m_server.c_str());
             buildDomFromFile(doc, filePath.c_str());
             QString notebookName;
@@ -169,30 +170,24 @@ void ButeoTest::setupOptions()
             Profile profile(doc.documentElement());
             profile.setKey("Notebook Name", notebookName);
             writeToFile(filePath.c_str(), profile.toString());
-        } else if (boost::iequals(source, "hcontacts")) {
-            // TODO: select correct tracker db
         }
     }
     
     // 3. set wbxml option, sync mode, enabled selected sources and disable other sources 
     QDomDocument doc(m_server.c_str());
-
     //copy profile
     string profileDir = getHome() + "/.sync/profiles/sync/";
     string profilePath = profileDir + m_server + ".xml";
     size_t pos = m_server.rfind('_');
     if (pos != m_server.npos) {
         string prefix = m_server.substr(0, pos);
-        string cmd = "cp ";
-        cmd += profileDir;
-        cmd += prefix;
-        cmd += ".xml ";
-        cmd += profilePath;
-        execCommand(cmd);
+        stringstream cmd;
+        cmd << "cp " << profileDir
+            << prefix << ".xml "
+            << profilePath;
+        execCmd(cmd.str());
     }
-
     buildDomFromFile(doc, profilePath.c_str());
-
     SyncProfile syncProfile(doc.documentElement());
     syncProfile.setName(m_server.c_str());
     QList<Profile *> storages = syncProfile.storageProfilesNonConst();
@@ -234,27 +229,27 @@ void ButeoTest::setupOptions()
             //workaround here since buteo doesn't support refresh-from-server
             //wipe out anchors and remove tracker database
             //so we will do refresh-from-server by slow sync
-            string cmd = "rm -f ";
-            cmd += m_server;
-            cmd += ".db";
-            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
-            cmd = "tracker-control -r >/dev/null 2>&1";
-            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
-            cmd = "rm -f ";
-            cmd += getHome() + "/.cache/tracker/*.db ";
-            string id = m_client.getClientB() ? "1" : "2";
-            cmd += getHome() + "/.cache/tracker/*.db" + "_" + id;
-            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+            stringstream cmd1;
+            cmd1 << "rm -f " << m_server << ".db";
+            execCmd(cmd1.str(), false);
+            if (inclContacts()) {
+                execCmd("tracker-control -r", false);
+                stringstream cmd2;
+                cmd2 << "rm -f " 
+                    << getHome() << "/.cache/tracker/*.db "
+                    << getHome() << "/.cache/tracker/*.db_"
+                    << m_client.getClientB() ? "1" : "2";
+                execCmd(cmd2.str(), false);
+            }
             syncMode = VALUE_TWO_WAY;
             break;
         }
         case SYNC_SLOW: {
             //workaround here since buteo doesn't support explicite slow-sync
             //wipe out anchors so we will do slow sync
-            string cmd = "rm -f ";
-            cmd += m_server;
-            cmd += ".db";
-            Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+            stringstream cmd;
+            cmd << "rm -f " << m_server << ".db";
+            execCmd(cmd.str(), false);
             syncMode = VALUE_TWO_WAY;
             break;
         }
@@ -268,30 +263,24 @@ void ButeoTest::setupOptions()
 
 void ButeoTest::killAllMsyncd()
 {
-    //firstly killall msyncd
-    string cmd = "killall -9 msyncd >/dev/null 2>&1";
-    //execCommand(cmd, false);
-    Execute(cmd, ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+    execCmd("killall -9 msyncd", false);
 }
 
 int ButeoTest::startMsyncd()
 {
-    string cmd;
     int pid = fork();
     if (pid == 0) {
-        cmd = "msyncd >";
-        cmd += m_logbase;
-        cmd += ".log 2>&1";
-        //children
-        if (execlp("sh", "sh", "-c", cmd.c_str(), (char *)0) < 0 ) {
+        //child
+        stringstream cmd;
+        cmd << "msyncd >" << m_logbase << ".log 2>&1";
+        if (execlp("sh", "sh", "-c", cmd.str().c_str(), (char *)0) < 0 ) {
             exit(1);
         }
     } else if (pid < 0) {
         throw runtime_error("can't fork process");
     }
     // wait for msyncd get prepared
-    cmd = "sleep 2";
-    execCommand(cmd);
+    execCmd("sleep 2", false);
     return pid;
 }
 
@@ -302,38 +291,31 @@ bool ButeoTest::run()
     static const QString msyncdInterface = "com.meego.msyncd";
 
     QDBusConnection conn = QDBusConnection::sessionBus();
-    QDBusInterface *interface = new QDBusInterface(msyncdService, msyncdObject, msyncdInterface, conn);
+    std::auto_ptr<QDBusInterface> interface(new QDBusInterface(msyncdService, msyncdObject, msyncdInterface, conn));
     if (!interface->isValid()) {
         QString error = interface->lastError().message();
-        delete interface;
         return false;
     }
 
     // add watcher for watching unregistering service
-    QDBusServiceWatcher *dbusWatcher = new QDBusServiceWatcher(msyncdService, conn, QDBusServiceWatcher::WatchForUnregistration);
-    dbusWatcher->connect(dbusWatcher, SIGNAL(serviceUnregistered(QString)),
+    std::auto_ptr<QDBusServiceWatcher> dbusWatcher(new QDBusServiceWatcher(msyncdService, conn, QDBusServiceWatcher::WatchForUnregistration));
+    dbusWatcher->connect(dbusWatcher.get(), SIGNAL(serviceUnregistered(QString)),
                            this, SLOT(serviceUnregistered(QString)));
 
     //connect signals
-    interface->connect(interface, SIGNAL(syncStatus(QString, int, QString, int)),
+    interface->connect(interface.get(), SIGNAL(syncStatus(QString, int, QString, int)),
                        this, SLOT(syncStatus(QString, int, QString, int)));
-    interface->connect(interface, SIGNAL(resultsAvailable(QString, QString)),
+    interface->connect(interface.get(), SIGNAL(resultsAvailable(QString, QString)),
                        this, SLOT(resultsAvailable(QString, QString)));
 
     // start sync
     QDBusReply<bool> reply = interface->call(QString("startSync"), m_server.c_str());
     if (reply.isValid() && !reply.value()) {
-        delete dbusWatcher;
-        delete interface;
         return false;
     }
 
     // wait sync completed
-    int result = QCoreApplication::exec();
-
-    delete dbusWatcher;
-    delete interface;
-    return result == 0;
+    return QCoreApplication::exec() == 0;
 }
 
 void ButeoTest::genSyncResults(const QString &text, SyncReport *report)
@@ -341,7 +323,6 @@ void ButeoTest::genSyncResults(const QString &text, SyncReport *report)
     QDomDocument domResults;
     if (domResults.setContent(text, true)) {
         SyncResults syncResults(domResults.documentElement());
-        // TODO: set minor code
         switch(syncResults.majorCode()) {
         case SyncResults::SYNC_RESULT_SUCCESS:
             report->setStatus(STATUS_OK);
@@ -402,9 +383,7 @@ void ButeoTest::syncStatus(QString profile, int status, QString message, int mor
     if (profile == m_server.c_str()) {
         switch(status) {
         case 0: // QUEUED
-            break;
         case 1: // STARTED
-            break;
         case 2: // PROGRESS
             break;
         case 3: // ERROR
@@ -432,34 +411,42 @@ void ButeoTest::serviceUnregistered(QString service)
     QCoreApplication::exit(1);
 }
 
+bool ButeoTest::inclContacts()
+{
+    set<string>::iterator sit = m_configedSources.find("hcontacts");
+    if (sit != m_configedSources.end()) {
+        return true;
+    }
+    return false;
+}
+
 void ButeoTest::writeToFile(const QString &filePath, const QString &content)
 {
     // clear tempoary file firstly
-    string cmd = "rm -f ";
-    cmd += filePath.toStdString();
-    cmd += "_tmp >/dev/null 2>&1";
-    execCommand(cmd);
+    stringstream rmCmd;
+    rmCmd << "rm -f " << filePath.toStdString() << "_tmp";
+    execCmd(rmCmd.str(), false);
 
     // open temporary file and serialize dom to the file
-    QFile file(filePath+"_tmp");
+    QFile file(filePath + "_tmp");
     if (!file.open(QIODevice::WriteOnly)) {
-        QString msg;
-        QTextStream(&msg) << "can't open file '" << filePath << "' with 'write' mode";
-        throw runtime_error(msg.toStdString());
+        stringstream msg;
+        msg << "can't open file '" << filePath.toStdString() << "' with 'write' mode";
+        throw runtime_error(msg.str());
     }
     if (file.write(content.toUtf8()) == -1) {
         file.close();
-        QString msg;
-        QTextStream(&msg) << "can't write file '" << filePath << "'";
-        throw runtime_error(msg.toStdString());
+        stringstream msg;
+        msg << "can't write file '" << filePath.toStdString() << "'";
+        throw runtime_error(msg.str());
     }
     file.close();
 
     // move temp file to destination file
-    cmd = "mv " + filePath.toStdString() + "_tmp ";
-    cmd += filePath.toStdString();
-    cmd += " >/dev/null 2>&1";
-    execCommand(cmd);
+    stringstream mvCmd;
+    mvCmd << "mv " << filePath.toStdString() << "_tmp "
+          << filePath.toStdString();
+    execCmd(mvCmd.str());
 }
 
 void ButeoTest::replaceElement(QString &xml, const QString &elem, const QString &value)
@@ -484,17 +471,17 @@ void ButeoTest::buildDomFromFile(QDomDocument &doc, const QString &filePath)
     // open it 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
-        QString msg;
-        QTextStream(&msg) << "can't open profile file '" << filePath << "'";
-        throw runtime_error(msg.toStdString());
+        stringstream msg;
+        msg << "can't open profile file '" << filePath.toStdString() << "'";
+        throw runtime_error(msg.str());
     }
 
     // parse it
     if (!doc.setContent(&file)) {
         file.close();
-        QString msg;
-        QTextStream(&msg) << "can't parse profile file '" << filePath << "'";
-        throw runtime_error(msg.toStdString());
+        stringstream msg;
+        msg << "can't parse profile file '" << filePath.toStdString() << "'";
+        throw runtime_error(msg.str());
     }
     file.close();
 }
@@ -520,9 +507,10 @@ static bool isButeo()
 // empty string is used as separator
 string QtContactsSwitcher::m_databases[] = {"meta.db", 
                                             "contents.db",
-                                            "fulltext.db",
-                                            "",
-                                            "hcontacts.db"};
+                                            "fulltext.db", // 3 databases used by tracker
+                                            "", // separator
+                                            "hcontacts.db" // database to record deleted contact items 
+                                            };
 string QtContactsSwitcher::m_dirs[] = {"/.cache/tracker/",
                                        "/.sync/sync-app/"};
 
@@ -531,11 +519,9 @@ string QtContactsSwitcher::getId(ClientTest &client) {
         return "1";
     }
     return "2";
-
 }
 
 void QtContactsSwitcher::prepare(ClientTest &client) {
-    // remove *_1/2.db files
     int index = 0;
     for (int i = 0; i < sizeof(m_databases)/sizeof(m_databases[0]); i++) {
         if (m_databases[i].empty()) {
@@ -546,8 +532,8 @@ void QtContactsSwitcher::prepare(ClientTest &client) {
         stringstream cmd;
         cmd << "rm -f " << getDatabasePath(index) << m_databases[i]
             << "_";
-        Execute(cmd.str() + "1", ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
-        Execute(cmd.str() + "2", ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+        execCmd(cmd.str() + "1", false);
+        execCmd(cmd.str() + "2", false);
    }
 }
 
@@ -557,26 +543,9 @@ void QtContactsSwitcher::restoreStorage(ClientTest &client)
     if (!isButeo()) {
         return;
     }
+
     string id = getId(client);
-
     terminate();
-
-    // copy meta.db_1/2 to meta.db
-    //string testFile = getDatabasePath() + m_databases[0];
-
-    // for the first time meta.db_1/2 doesn't exist, we
-    // copy them from default
-    /*if (access((testFile + "_" + id).c_str(), F_OK) < 0) {
-        // if default meta.db doesn't exist generate it
-        if (access(testFile.c_str(), F_OK) < 0) {
-            start();
-            terminate();
-        } 
-        copyDatabases(id);
-    } else {
-        // else copy them to default database used by tracker
-        copyDatabases(id, false);
-    }*/
     copyDatabases(client, false);
     start();
 }
@@ -589,9 +558,7 @@ void QtContactsSwitcher::backupStorage(ClientTest &client)
     }
 
     string id = getId(client);
-
     terminate();
-    // copy meta.db to meta.db_1/2
     copyDatabases(client);
     start();
 }
@@ -618,7 +585,6 @@ void QtContactsSwitcher::copyDatabases(ClientTest &client, bool fromDefault)
             index++;
             continue;
         }
-        stringstream cmd;
         string src = getDatabasePath(index) + m_databases[i];
         string dest = src + "_" + id;
         if (!fromDefault) {
@@ -629,7 +595,7 @@ void QtContactsSwitcher::copyDatabases(ClientTest &client, bool fromDefault)
                     if (!m_cmds[i].empty()) {
                         stringstream temp;
                         temp << "sqlite3 " << src << " " << m_cmds[i];
-                        Execute(temp.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+                        execCmd(temp.str(), false);
                     }
                 }
             } else {
@@ -638,20 +604,20 @@ void QtContactsSwitcher::copyDatabases(ClientTest &client, bool fromDefault)
                 dest = tmp;
             }
         }
+        stringstream cmd;
         cmd << "cp -f " << src << " " << dest;
-        Execute(cmd.str(), ExecuteFlags(EXECUTE_NO_STDERR | EXECUTE_NO_STDOUT));
+        execCmd(cmd.str(), false);
     }
 }
 
 void QtContactsSwitcher::terminate()
 {
-    string cmd = "tracker-control -t >/dev/null 2>&1";
-    execCommand(cmd);
+    execCmd("tracker-control -t");
 }
 
 void QtContactsSwitcher::start()
 {
     // sleep one second to let tracker daemon get prepared
-    string cmd = "tracker-control -s >/dev/null 2>&1; sleep 2";
-    execCommand(cmd);
+    execCmd("tracker-control -s");
+    execCmd("sleep 2");
 }

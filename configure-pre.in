@@ -136,6 +136,10 @@ fi
 if test "$enable_buteo_tests" = "yes"; then
         AC_DEFINE(ENABLE_BUTEO_TESTS, 1, [enable buteo tests])
         need_qt_modules="$need_qt_modules dbus xml"
+        AC_PATH_PROG(SQLITE3, sqlite3)
+        if test -z "$SQLITE3"; then
+            AC_ERROR([sqlite3 not found, is required for buteo testing])
+        fi
 fi
 AM_CONDITIONAL([ENABLE_UNIT_TESTS], [test "$enable_unit_tests" = "yes"])
 AM_CONDITIONAL([ENABLE_TESTING], [test "$enable_unit_tests" = "yes" || test "$enable_integration_tests" = "yes" ])
