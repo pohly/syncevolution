@@ -77,6 +77,7 @@ static DBusMessage *SyncEvoHandleException(DBusMessage *msg);
 #include <QtCore/QLatin1String>
 #include <QtCore/QByteArray>
 #include <QtCore/QDebug>
+#include <QtDBus/QDBusConnection>
 
 #include <KApplication>
 #include <KAboutData>
@@ -2673,8 +2674,7 @@ string DBusUserInterface::askPassword(const string &passwordName,
     #ifdef USE_GNOME_KEYRING
     //When Both GNOME KEYRING and KWALLET are available, Check if this is a KDE Session 
     //and Call
-    QByteArray isKdeRunning=getenv("KDE_FULL_SESSION");
-    if(isKdeRunning!="true")
+    if(getenv("KDE_FULL_SESSION"))
       isKde=false;
     #endif   
     if (isKde){
@@ -2750,8 +2750,7 @@ bool DBusUserInterface::savePassword(const string &passwordName,
     #ifdef USE_GNOME_KEYRING
     //When Both GNOME KEYRING and KWALLET are available, Check if this is a KDE Session 
     //and Call
-    QByteArray isKdeRunning=getenv("KDE_FULL_SESSION");
-    if(isKdeRunning!="true")
+    if(getenv("KDE_FULL_SESSION"))
       isKde=false;
     #endif
     if(isKde){
@@ -2875,6 +2874,8 @@ DBusSync::DBusSync(const std::string &config,
     KCmdLineArgs::init(argc, argv, &aboutData);
     if (!kapp) {
         new KApplication;
+        //To stop KApplication from spawning it's own DBus Service ... Will have to patch KApplication about this
+        QDBusConnection::sessionBus().unregisterService("org.syncevolution.syncevolution-"+QString::number(getpid()));
     }
     #endif
   
