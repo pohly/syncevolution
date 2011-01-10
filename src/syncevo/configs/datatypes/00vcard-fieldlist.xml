@@ -68,6 +68,7 @@
       <field name="WANTS_HTML"  type="string" compare="conflict"/>
 
       <!-- chat handles: should be turned into one array, like WEB and CALURI/FBURL -->
+      <field name="IM_ADDRESS"        array="yes" type="string" compare="conflict"/>
       <field name="AIM_HANDLE"        array="yes" type="string" compare="conflict"/>
       <field name="AIM_SLOT"          array="yes" type="string" compare="conflict"/>
       <field name="GADUGADU_HANDLE"        array="yes" type="string" compare="conflict"/>
