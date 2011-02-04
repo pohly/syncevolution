@@ -22,6 +22,7 @@
 
 #include <syncevo/SyncConfig.h>
 #include <syncevo/FilterConfigNode.h>
+#include <syncevo/util.h>
 
 #include <set>
 using namespace std;
@@ -33,8 +34,35 @@ using namespace std;
 SE_BEGIN_CXX
 
 class SyncSource;
+class SyncSourceRaw;
 class SyncContext;
 class CmdlineTest;
+
+/**
+ * encodes a locally unique ID (LUID) in such a
+ * way that it is treated as a plain word by shells
+ */
+class CmdlineLUID
+{
+    string m_encodedLUID;
+
+public:
+    /** fill with encoded LUID */
+    void setEncoded(const string &encodedLUID) { m_encodedLUID = encodedLUID; }
+
+    /** return encoded LUID as string */
+    string getEncoded() const { return m_encodedLUID; }
+
+    /** return original LUID */
+    string toLUID() const { return toLUID(m_encodedLUID); }
+    static string toLUID(const string &encoded) { return StringEscape::unescape(encoded, '%'); }
+
+    /** fill with unencoded LUID */
+    void setLUID(const string &luid) { m_encodedLUID = fromLUID(luid); }
+
+    /** convert from unencoded LUID */
+    static string fromLUID(const string &luid) { return StringEscape::escape(luid, '%', StringEscape::STRICT); }
+};
 
 class Cmdline {
 public:
@@ -68,6 +96,9 @@ public:
     bool dontRun() const;
 
     bool run();
+
+    /** the run() call modified configurations (added, updated, removed) */
+    bool configWasModified() const { return m_configModified; }
 
     /**
      * Acts like a boolean, but in addition, can also tell whether the
@@ -133,9 +164,18 @@ protected:
     string m_restore;
     Bool m_before, m_after;
 
+    Bool m_accessItems;
+    string m_itemPath;
+    string m_delimiter;
+    list<string> m_luids;
+    Bool m_printItems, m_update, m_import, m_export, m_deleteItems;
+
     string m_server;
     string m_template;
     set<string> m_sources;
+
+    /** running the command line modified configuration settings (add, update, remove) */
+    Bool m_configModified;
 
     /** compose description of cmd line option with optional parameter */
     static string cmdOpt(const char *opt, const char *param = NULL);
@@ -249,6 +289,22 @@ protected:
     bool parseBool(int opt, const char *longName, const char *shortName,
                    bool def, Bool &value,
                    bool &ok);
+
+    /**
+     * Fill list with all local IDs of the given source.
+     * Unsafe characters are escaped with SafeConfigNode::escape(true,true).
+     * startDataRead() must have been called.
+     */
+    void readLUIDs(SyncSource *source, list<string> &luids);
+
+    /**
+     * Add or update one item.
+     * @param source     SyncSource in write mode (startWriteData must have been called)
+     * @param luid       local ID, empty if item is to be added
+     * @param data       the item data to insert
+     * @return encoded luid of inserted item
+     */
+    CmdlineLUID insertItem(SyncSourceRaw *source, const string &luid, const string &data);
 };
 
 

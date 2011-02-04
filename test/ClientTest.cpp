@@ -42,6 +42,7 @@
 
 #include <memory>
 #include <vector>
+#include <set>
 #include <utility>
 #include <sstream>
 #include <iomanip>
@@ -56,14 +57,24 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+static set<ClientTest::Cleanup_t> cleanupSet;
+
 /**
  * Using this pointer automates the open()/beginSync()/endSync()/close()
  * life cycle: it automatically calls these functions when a new
  * pointer is assigned or deleted.
+ *
+ * Anchors are stored globally in a hash which uses the tracking node
+ * name as key. This name happens to be the unique file path that
+ * is created for each source (see TestEvolution::createSource() and
+ * SyncConfig::getSyncSourceNodes()).
  */
 class TestingSyncSourcePtr : public std::auto_ptr<TestingSyncSource>
 {
     typedef std::auto_ptr<TestingSyncSource> base_t;
+
+    static StringMap m_anchors;
+
 public:
     TestingSyncSourcePtr() {}
     TestingSyncSourcePtr(TestingSyncSource *source) :
@@ -71,7 +82,8 @@ public:
     {
         CPPUNIT_ASSERT(source);
         SOURCE_ASSERT_NO_FAILURE(source, source->open());
-        SOURCE_ASSERT_NO_FAILURE(source, source->beginSync("", ""));
+        string node = source->getTrackingNode()->getName();
+        SOURCE_ASSERT_NO_FAILURE(source, source->beginSync(m_anchors[node], ""));
         const char * serverMode = getenv ("CLIENT_TEST_MODE");
         if (serverMode && !strcmp (serverMode, "server")) {
             SOURCE_ASSERT_NO_FAILURE(source, source->enableServerMode());
@@ -89,13 +101,15 @@ public:
                           get()->getOperations().m_endSession) {
                 callback();
             }
-            SOURCE_ASSERT_NO_FAILURE(get(), get()->endSync(true));
+            string node = get()->getTrackingNode()->getName();
+            SOURCE_ASSERT_NO_FAILURE(get(), (m_anchors[node] = get()->endSync(true)));
             SOURCE_ASSERT_NO_FAILURE(get(), get()->close());
         }
         CPPUNIT_ASSERT_NO_THROW(base_t::reset(source));
         if (source) {
             SOURCE_ASSERT_NO_FAILURE(source, source->open());
-            SOURCE_ASSERT_NO_FAILURE(source, source->beginSync("", ""));
+            string node = source->getTrackingNode()->getName();
+            SOURCE_ASSERT_NO_FAILURE(source, source->beginSync(m_anchors[node], ""));
             const char * serverMode = getenv ("CLIENT_TEST_MODE");
             if (serverMode && !strcmp (serverMode, "server")) {
                 SOURCE_ASSERT_NO_FAILURE(source, source->enableServerMode());
@@ -107,6 +121,8 @@ public:
         }
     }
 };
+
+StringMap TestingSyncSourcePtr::m_anchors;
 
 bool SyncOptions::defaultWBXML()
 {
@@ -188,18 +204,30 @@ void LocalTests::addTests() {
             if (config.parentItem &&
                 config.childItem) {
                 ADD_TEST(LocalTests, testLinkedItemsParent);
-                ADD_TEST(LocalTests, testLinkedItemsChild);
+                if (config.linkedItemsRelaxedSemantic) {
+                    ADD_TEST(LocalTests, testLinkedItemsChild);
+                }
                 ADD_TEST(LocalTests, testLinkedItemsParentChild);
-                ADD_TEST(LocalTests, testLinkedItemsChildParent);
-                ADD_TEST(LocalTests, testLinkedItemsChildChangesParent);
-                ADD_TEST(LocalTests, testLinkedItemsRemoveParentFirst);
+                if (config.linkedItemsRelaxedSemantic) {
+                    ADD_TEST(LocalTests, testLinkedItemsChildParent);
+                }
+                if (config.linkedItemsRelaxedSemantic) {
+                    ADD_TEST(LocalTests, testLinkedItemsChildChangesParent);
+                }
+                if (config.linkedItemsRelaxedSemantic) {
+                    ADD_TEST(LocalTests, testLinkedItemsRemoveParentFirst);
+                }
                 ADD_TEST(LocalTests, testLinkedItemsRemoveNormal);
                 if (config.sourceKnowsItemSemantic) {
                     ADD_TEST(LocalTests, testLinkedItemsInsertParentTwice);
-                    ADD_TEST(LocalTests, testLinkedItemsInsertChildTwice);
+                    if (config.linkedItemsRelaxedSemantic) {
+                        ADD_TEST(LocalTests, testLinkedItemsInsertChildTwice);
+                    }
                 }
                 ADD_TEST(LocalTests, testLinkedItemsParentUpdate);
-                ADD_TEST(LocalTests, testLinkedItemsUpdateChild);
+                if (config.linkedItemsRelaxedSemantic) {
+                    ADD_TEST(LocalTests, testLinkedItemsUpdateChild);
+                }
                 ADD_TEST(LocalTests, testLinkedItemsInsertBothUpdateChild);
                 ADD_TEST(LocalTests, testLinkedItemsInsertBothUpdateParent);
             }
@@ -804,7 +832,6 @@ void LocalTests::testLinkedItemsParent() {
 // test inserting, removing and updating of parent + child item in
 // various order plus change tracking
 void LocalTests::testLinkedItemsChild() {
-#if LINKED_ITEMS_RELAXED_SEMANTIC
     // check additional requirements
     CPPUNIT_ASSERT(config.parentItem);
     CPPUNIT_ASSERT(config.childItem);
@@ -837,7 +864,6 @@ void LocalTests::testLinkedItemsChild() {
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countDeletedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), child));
-#endif
 }
 
 // test inserting, removing and updating of parent + child item in
@@ -883,7 +909,6 @@ void LocalTests::testLinkedItemsParentChild() {
 // test inserting, removing and updating of parent + child item in
 // various order plus change tracking
 void LocalTests::testLinkedItemsChildParent() {
-#if LINKED_ITEMS_RELAXED_SEMANTIC
     // check additional requirements
     CPPUNIT_ASSERT(config.parentItem);
     CPPUNIT_ASSERT(config.childItem);
@@ -919,13 +944,11 @@ void LocalTests::testLinkedItemsChildParent() {
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countDeletedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), child));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), parent));
-#endif
 }
 
 // test inserting, removing and updating of parent + child item in
 // various order plus change tracking
 void LocalTests::testLinkedItemsChildChangesParent() {
-#if LINKED_ITEMS_RELAXED_SEMANTIC
     // check additional requirements
     CPPUNIT_ASSERT(config.parentItem);
     CPPUNIT_ASSERT(config.childItem);
@@ -973,13 +996,11 @@ void LocalTests::testLinkedItemsChildChangesParent() {
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countDeletedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), child));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), parent));
-#endif
 }
 
 // test inserting, removing and updating of parent + child item in
 // various order plus change tracking
 void LocalTests::testLinkedItemsRemoveParentFirst() {
-#if LINKED_ITEMS_RELAXED_SEMANTIC
     // check additional requirements
     CPPUNIT_ASSERT(config.parentItem);
     CPPUNIT_ASSERT(config.childItem);
@@ -1026,7 +1047,6 @@ void LocalTests::testLinkedItemsRemoveParentFirst() {
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countDeletedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), child));
     CPPUNIT_ASSERT_NO_THROW(copy.reset());
-#endif
 }
 
 // test inserting, removing and updating of parent + child item in
@@ -1151,7 +1171,6 @@ void LocalTests::testLinkedItemsInsertChildTwice() {
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countItems(copy.get()));
     CPPUNIT_ASSERT_NO_THROW(copy.reset());
 
-#if LINKED_ITEMS_RELAXED_SEMANTIC
     // add child twice (should be turned into update)
     child = insert(createSourceA, config.childItem);
 
@@ -1181,7 +1200,6 @@ void LocalTests::testLinkedItemsInsertChildTwice() {
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countDeletedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), child));
-#endif
 }
 
 // test inserting, removing and updating of parent + child item in
@@ -1235,7 +1253,6 @@ void LocalTests::testLinkedItemsParentUpdate() {
 // test inserting, removing and updating of parent + child item in
 // various order plus change tracking
 void LocalTests::testLinkedItemsUpdateChild() {
-#if LINKED_ITEMS_RELAXED_SEMANTIC
     // check additional requirements
     CPPUNIT_ASSERT(config.parentItem);
     CPPUNIT_ASSERT(config.childItem);
@@ -1278,8 +1295,6 @@ void LocalTests::testLinkedItemsUpdateChild() {
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countDeletedItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countEqual(listDeletedItems(copy.get()), child));
-    CPPUNIT_ASSERT_NO_THROW(copy.reset());
-#endif
 }
 
 // test inserting, removing and updating of parent + child item in
@@ -3371,6 +3386,18 @@ ClientTest::~ClientTest()
     }
 }
 
+void ClientTest::registerCleanup(Cleanup_t cleanup)
+{
+    cleanupSet.insert(cleanup);
+}
+
+void ClientTest::shutdown()
+{
+    BOOST_FOREACH(Cleanup_t cleanup, cleanupSet) {
+        cleanup();
+    }
+}
+
 LocalTests *ClientTest::createLocalTests(const std::string &name, int sourceParam, ClientTest::Config &co)
 {
     return new LocalTests(name, *this, sourceParam, co);
@@ -3516,6 +3543,7 @@ void ClientTest::getTestData(const char *type, Config &config)
     env = getenv("CLIENT_TEST_SUSPEND");
     config.suspendSync = (env && !strcmp (env, "t")) ?true :false;
     config.sourceKnowsItemSemantic = true;
+    config.linkedItemsRelaxedSemantic = true;
     config.itemType = "";
     config.import = import;
     config.dump = dump;
@@ -3753,7 +3781,12 @@ void ClientTest::getTestData(const char *type, Config &config)
             "END:VEVENT\n"
             "END:VCALENDAR\n";
 
-        if (getenv("CLIENT_TEST_SIMPLE_UID")) {
+        if (getenv("CLIENT_TEST_NO_UID")) {
+            boost::replace_all(insertItem, "UID:1234567890!@#$%^&*()<>@dummy\n", "");
+            boost::replace_all(updateItem, "UID:1234567890!@#$%^&*()<>@dummy\n", "");
+            boost::replace_all(mergeItem1, "UID:1234567890!@#$%^&*()<>@dummy\n", "");
+            boost::replace_all(mergeItem2, "UID:1234567890!@#$%^&*()<>@dummy\n", "");
+        } else if (getenv("CLIENT_TEST_SIMPLE_UID")) {
             boost::replace_all(insertItem, "UID:1234567890!@#$%^&*()<>@dummy", "UID:1234567890@dummy");
             boost::replace_all(updateItem, "UID:1234567890!@#$%^&*()<>@dummy", "UID:1234567890@dummy");
             boost::replace_all(mergeItem1, "UID:1234567890!@#$%^&*()<>@dummy", "UID:1234567890@dummy");

@@ -278,6 +278,7 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.icalparameter_get_tzid, "icalparameter_get_tzid",
                 &EDSAbiWrapperSingleton.icalparameter_set_tzid, "icalparameter_set_tzid",
                 &EDSAbiWrapperSingleton.icalproperty_new_clone, "icalproperty_new_clone",
+                &EDSAbiWrapperSingleton.icalproperty_free, "icalproperty_free",
                 &EDSAbiWrapperSingleton.icalproperty_get_description, "icalproperty_get_description",
                 &EDSAbiWrapperSingleton.icalproperty_get_first_parameter, "icalproperty_get_first_parameter",
                 &EDSAbiWrapperSingleton.icalproperty_get_lastmodified, "icalproperty_get_lastmodified",
@@ -369,3 +370,49 @@ extern "C" void EDSAbiWrapperInit()
 extern "C" const char *EDSAbiWrapperInfo() { EDSAbiWrapperInit(); return lookupInfo.c_str(); }
 extern "C" const char *EDSAbiWrapperDebug() { EDSAbiWrapperInit(); return lookupDebug.c_str(); }
 
+#ifdef ENABLE_DBUS_TIMEOUT_HACK
+/**
+ * There are valid use cases where the (previously hard-coded) default
+ * timeout was too short. For example, libecal and libebook >= 2.30 
+ * implement their synchronous API with synchronous D-Bus method calls,
+ * which inevitably suffers from timeouts on slow hardware with large
+ * amount of data (MBC #4026).
+ *
+ * This function replaces _DBUS_DEFAULT_TIMEOUT_VALUE and - if set -
+ * interprets the content of SYNCEVOLUTION_DBUS_TIMEOUT as number of
+ * milliseconds. 0 disables timeouts, which is also the default if the
+ * env variable is not set.
+ */
+static int _dbus_connection_default_timeout(void)
+{
+    const char *def = getenv("SYNCEVOLUTION_DBUS_TIMEOUT");
+    int timeout = 0;
+
+    if (def) {
+        timeout = atoi(def);
+    }
+    if (timeout == 0) {
+        timeout = INT_MAX - 1; // not infinite, but very long;
+                               // INT_MAX led to a valgrind report in poll()/libdbus,
+                               // avoid it
+    }
+    return timeout;
+}
+
+extern "C" int
+dbus_connection_send_with_reply (void *connection,
+                                 void *message,
+                                 void **pending_return,
+                                 int timeout_milliseconds)
+{
+    static typeof(dbus_connection_send_with_reply) *real_func;
+
+    if (!real_func) {
+        real_func = (typeof(dbus_connection_send_with_reply) *)dlsym(RTLD_NEXT, "dbus_connection_send_with_reply");
+    }
+    return real_func ?
+        real_func(connection, message, pending_return,
+                  timeout_milliseconds == -1 ? _dbus_connection_default_timeout() : timeout_milliseconds) :
+        0;
+}
+#endif // ENABLE_DBUS_TIMEOUT_HACK

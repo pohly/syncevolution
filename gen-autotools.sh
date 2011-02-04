@@ -50,7 +50,8 @@ checksource () {
         dirty=+unclean
     fi
     describe=`git describe --tags`
-    hash=`git show-ref --abbrev --hash HEAD`
+    hash=`cat .git/HEAD | sed -e 's/ref: //'`
+    hash=`git show-ref --abbrev --hash --verify $hash`
     if echo $describe | grep -e '-[0-9]+-[0-9a-f]{8}$' -q; then
         exact=
         tag=`echo $describe | sed -e 's/-[0123456789]*-g.*//'`
@@ -118,7 +119,7 @@ for sub in src/backends/*/configure-sub.in; do
 done
 cat configure-post.in >>configure.in
 
-TEMPLATE_FILES=`cd src && find templates -type f \( -name README -o -name '*.png' -o -name '*.svg' -o -name '*.ini' \)`
+TEMPLATE_FILES=`cd src && find templates -type f \( -name README -o -name '*.png' -o -name '*.svg' -o -name '*.ini' \) | sort`
 TEMPLATE_FILES=`echo $TEMPLATE_FILES`
 
 # create Makefile.am files

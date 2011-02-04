@@ -233,11 +233,18 @@ sub Normalize {
 
     # VTIMEZONE and TZID do not have to be preserved verbatim as long
     # as the replacement is still representing the same timezone.
-    # Reduce TZIDs which follow the Olson database pseudo-standard
+    # Reduce TZIDs which specify a proper location
     # to their location part and strip the VTIMEZONE - makes the
     # diff shorter, too.
-    s;^BEGIN:VTIMEZONE.*?^TZID:/[^/\n]*/[^/\n]*/(\S+).*^END:VTIMEZONE;BEGIN:VTIMEZONE\nTZID:$1 [...]\nEND:VTIMEZONE;gms;
-    s;TZID=/[^/\n]*/[^/\n]*/(.*)$;TZID=$1;gm;
+    my $location = "[^\n]*((?:Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Brazil|Canada|Chile|Egypt|Eire|Europe|Hongkong|Iceland|India|Iran|Israel|Jamaica|Japan|Kwajalein|Libya|Mexico|Mideast|Navajo|Pacific|Poland|Portugal|Singapore|Turkey|Zulu)[-a-zA-Z0-9_/]*)";
+    s;^BEGIN:VTIMEZONE.*?^TZID:$location.*^END:VTIMEZONE;BEGIN:VTIMEZONE\n  TZID:$1 [...]\nEND:VTIMEZONE;gms;
+    s;TZID=$location;TZID=$1;gm;
+
+    # normalize iCalendar 2.0
+    if (/^BEGIN:(VEVENT|VTODO|VJOURNAL)$/m) {
+        # CLASS=PUBLIC is the default, no need to show it
+        s/^CLASS:PUBLIC\r?\n//m;
+    }
 
     if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$google || $mobical || $memotoo) {
       # does not preserve X-EVOLUTION-UI-SLOT=
@@ -617,8 +624,10 @@ if($#ARGV > 1) {
       } else {
           open(IN2, "<:utf8", $file2) || die "$file2: $!";
       }
-      @normal1 = Normalize(join("", <IN1>), $singlewidth);
-      @normal2 = Normalize(join("", <IN2>), $singlewidth);
+      my $buf1 = join("", <IN1>);
+      my $buf2 = join("", <IN2>);
+      @normal1 = Normalize($buf1, $singlewidth);
+      @normal2 = Normalize($buf2, $singlewidth);
       close(IN1);
       close(IN2);
   }
@@ -752,11 +761,17 @@ if($#ARGV > 1) {
   # normalize
   my $in;
   if( $#ARGV >= 0 ) {
-    open(IN, "<$ARGV[0]") || die "$ARGV[0]: $!";
+    my $file1 = $ARGV[0];
+    if (-d $file1) {
+        open(IN, "-|:utf8", "find $file1 -type f -print0 | xargs -0 cat") || die "$file1: $!";
+    } else {
+        open(IN, "<:utf8", $file1) || die "$file1: $!";
+    }
     $in = *IN{IO};
   } else {
     $in = *STDIN{IO};
   }
 
-  print STDOUT join("\n", Normalize(join("", <$in>), $columns)), "\n";
+  my $buf = join("", <$in>);
+  print STDOUT join("\n", Normalize($buf, $columns)), "\n";
 }

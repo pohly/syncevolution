@@ -102,6 +102,23 @@ private:
 };
 
 /**
+ * This is a workaround for libecal/libebook in Evolution >= 2.30.
+ * The storage daemons shut down after only 10 seconds of no client
+ * being attached.  Due to limitations in libecal/libebook this is not
+ * detected when only using the synchronous API ("destroyed" signal
+ * not delivered, see e-cal.c), which then leads to D-Bus errors.
+ *
+ * The workaround consists of keeping one open SyncEvolution backend
+ * around for each of ical20 and vcard21/30, if they ever were used
+ * during testing.
+ */
+static map<string, boost::shared_ptr<TestingSyncSource> > lockEvolution;
+static void CleanupSources()
+{
+    lockEvolution.clear();
+}
+
+/**
  * This code uses the ClientTest and and information provided by
  * the backends in their RegisterSyncSourceTest instances to test
  * real synchronization with a server.
@@ -198,10 +215,10 @@ public:
                 vector<string> subs;
                 boost::split (subs, conf.subConfigs, boost::is_any_of(","));
                 BOOST_FOREACH (string sub, subs) {
-                    m_localSource2Config.push_back (sub);
+                    pushLocalSource2Config(sub);
                 }
             } else {
-                m_localSource2Config.push_back (source);
+                pushLocalSource2Config(source);
             }
         }
         // get configuration and set obligatory fields
@@ -330,6 +347,18 @@ public:
                 setWBXML(m_options.m_isWBXML, true);
                 setRetryDuration(m_options.m_retryDuration, true);
                 setRetryInterval(m_options.m_retryInterval, true);
+                if (m_options.m_syncMode == SYNC_TWO_WAY &&
+                    m_options.m_checkReport.syncMode == SYNC_NONE) {
+                    // For this test, any kind of final sync mode is
+                    // acceptable. Disable slow sync prevention
+                    // temporarily. The check for the requested sync
+                    // mode is perhaps too conservative, but in
+                    // practice the only test where slow sync
+                    // prevention caused a test failure was
+                    // Client::Sync::vcard30::testTwoWaySync after
+                    // some other failed test, so let's be conservative...
+                    setPreventSlowSync(false);
+                }
                 SyncContext::prepare();
             }
 
@@ -372,7 +401,9 @@ public:
         filter[SyncSourceConfig::m_sourcePropSync.getName()] =
             PrettyPrintSyncMode(options.m_syncMode);
         for(int i = 0; sources[i] >= 0; i++) {
-            client.setConfigFilter(false, m_syncSource2Config[sources[i]], filter);
+            std::string &name = m_syncSource2Config[sources[i]];
+            client.setConfigFilter(false, name, filter);
+            checkEvolutionSource(name);
         }
 
         SyncReport report;
@@ -406,26 +437,35 @@ private:
         }
         return m_evoPrefix + configName + "_" + m_clientID;
     }
-    
+
+    /** called by test frame work */
     static TestingSyncSource *createSource(ClientTest &client, int source, bool isSourceA) {
         TestEvolution &evClient((TestEvolution &)client);
         string name = evClient.m_localSource2Config[source];
-        string database = evClient.getDatabaseName(name);
 
+        // implement Evolution shutdown workaround (see lockEvolution above)
+        evClient.checkEvolutionSource(name);
+
+        return evClient.createSource(name, isSourceA);
+    }
+
+    /** called internally in this class */
+    TestingSyncSource *createSource(const string &name, bool isSourceA) {
+        string database = getDatabaseName(name);
         SyncConfig config("client-test-changes");
         SyncSourceNodes nodes = config.getSyncSourceNodes(name,
-                                                          string("_") + ((TestEvolution &)client).m_clientID +
+                                                          string("_") + m_clientID +
                                                           "_" + (isSourceA ? "A" : "B"));
 
         // always set this property: the name might have changes since last test run
         nodes.getProperties()->setProperty("evolutionsource", database.c_str());
-        nodes.getProperties()->setProperty("evolutionuser", evClient.m_evoUser.c_str());
-        nodes.getProperties()->setProperty("evolutionpassword", evClient.m_evoPassword.c_str());
+        nodes.getProperties()->setProperty("evolutionuser", m_evoUser.c_str());
+        nodes.getProperties()->setProperty("evolutionpassword", m_evoPassword.c_str());
 
         SyncSourceParams params(name,
                                 nodes);
 
-        const RegisterSyncSourceTest *test = evClient.m_configs[name];
+        const RegisterSyncSourceTest *test = m_configs[name];
         ClientTestConfig testConfig;
         getSourceConfig(test, testConfig);
 
@@ -436,6 +476,43 @@ private:
         // must ensure that they are indeed TestingSyncSource instances
         SyncSource *ss = SyncSource::createSource(params);
         return static_cast<TestingSyncSource *>(ss);
+    }
+
+    // push source into localsource2config if it doesn't exist in the vector
+    void pushLocalSource2Config(const string &source) {
+        bool finded = false;
+        BOOST_FOREACH(string element, m_localSource2Config) {
+            if (boost::iequals(element, source)) {
+                finded = true;
+                break;
+            }
+        }
+        if (!finded) {
+            m_localSource2Config.push_back (source);
+        }
+    }
+
+    void checkEvolutionSource(std::string &name)
+    {
+        string basename;
+
+        // hard-coded names as used by src/backends/evolution;
+        // if some other backend reuses them, it gets the
+        // same treatment, which shouldn't cause any harm
+        if (name == "vcard21" ||
+            name == "vcard30") {
+            basename = "ebook";
+        } else if (name == "ical20" ||
+                   name == "text") {
+            basename = "ecal";
+        }
+
+        if (!basename.empty() &&
+            lockEvolution.find(basename) == lockEvolution.end()) {
+            lockEvolution[basename].reset(createSource(name, true));
+            lockEvolution[basename]->open();
+            ClientTest::registerCleanup(CleanupSources);
+        }
     }
 };
 

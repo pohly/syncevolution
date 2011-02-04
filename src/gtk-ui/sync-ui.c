@@ -185,7 +185,7 @@ static void update_services_list (app_data *data);
 static void update_service_ui (app_data *data);
 static void setup_new_service_clicked (GtkButton *btn, app_data *data);
 static gboolean source_config_update_widget (source_config *source);
-static void get_presence_cb (SyncevoServer *server, char *status, char *transport,
+static void get_presence_cb (SyncevoServer *server, char *status, char **transport,
                              GError *error, app_data *data);
 static void get_reports_cb (SyncevoServer *server, SyncevoReports *reports, 
                             GError *error, app_data *data);
@@ -419,12 +419,12 @@ refresh_from_server_clicked_cb (GtkButton *btn, app_data *data)
     operation_data *op_data;
     char *message;
 
-    /* TRANSLATORS: confirmation dialog for refresh-from-server. Placeholder
+    /* TRANSLATORS: confirmation dialog for "refresh from peer". Placeholder
      * is service/device name */
     message = g_strdup_printf (_("Do you want to delete all local data and replace it with "
                                  "data from %s? This is not usually advised."),
                                data->current_service->pretty_name);
-    /* TRANSLATORS: refresh-from-server confirmation dialog buttons */
+    /* TRANSLATORS: "refresh from peer" confirmation dialog buttons */
     if (!show_confirmation (data->sync_win, message,
                             _("Yes, delete and replace"), _("No"))) {
         g_free (message);
@@ -434,7 +434,9 @@ refresh_from_server_clicked_cb (GtkButton *btn, app_data *data)
 
     op_data = g_slice_new (operation_data);
     op_data->data = data;
-    op_data->operation = OP_SYNC_REFRESH_FROM_SERVER;
+    op_data->operation = peer_is_client (data->current_service->config) ?
+        OP_SYNC_REFRESH_FROM_CLIENT :
+        OP_SYNC_REFRESH_FROM_SERVER;
     op_data->started = FALSE;
     syncevo_server_start_session (data->server,
                                   data->current_service->name,
@@ -450,12 +452,12 @@ refresh_from_client_clicked_cb (GtkButton *btn, app_data *data)
     operation_data *op_data;
     char *message;
 
-    /* TRANSLATORS: confirmation dialog for refresh-from-client. Placeholder
+    /* TRANSLATORS: confirmation dialog for "refresh from local side". Placeholder
      * is service/device name */
     message = g_strdup_printf (_("Do you want to delete all data in %s and replace it with "
                                  "your local data? This is not usually advised."),
                                data->current_service->pretty_name);
-    /* TRANSLATORS: refresh-from-client confirmation dialog buttons */
+    /* TRANSLATORS: "refresh from local side" confirmation dialog buttons */
     if (!show_confirmation (data->sync_win, message,
                             _("Yes, delete and replace"), _("No"))) {
         g_free (message);
@@ -465,7 +467,9 @@ refresh_from_client_clicked_cb (GtkButton *btn, app_data *data)
 
     op_data = g_slice_new (operation_data);
     op_data->data = data;
-    op_data->operation = OP_SYNC_REFRESH_FROM_CLIENT;
+    op_data->operation = peer_is_client (data->current_service->config) ?
+        OP_SYNC_REFRESH_FROM_SERVER :
+        OP_SYNC_REFRESH_FROM_CLIENT;
     op_data->started = FALSE;
     syncevo_server_start_session (data->server,
                                   data->current_service->name,
@@ -1206,7 +1210,7 @@ autosync_toggle_cb (GtkWidget *widget, gpointer x, app_data *data)
             op_data->data = data;
             op_data->operation = OP_SAVE;
             op_data->started = FALSE;
-            syncevo_server_start_session (data->server,
+            syncevo_server_start_no_sync_session (data->server,
                                           data->current_service->name,
                                           (SyncevoServerStartSessionCb)start_session_cb,
                                           op_data);
@@ -2036,6 +2040,8 @@ typedef struct config_data {
 
 } config_data;
 
+#define LEGAL_CONFIG_NAME_CHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVXYZ1234567890-_"
+
 static void
 get_config_for_config_widget_cb (SyncevoServer *server,
                                  SyncevoConfig *config,
@@ -2060,25 +2066,26 @@ get_config_for_config_widget_cb (SyncevoServer *server,
     if (is_peer && g_strcmp0 ("1", is_peer) == 0) {
         if (url) {
             SyncConfigWidget *w;
-            char *fp, *device_name = NULL;
+            char *fp, *tmp, *template_name, *device_name = NULL;
             char **fpv = NULL;
 
-            /* NOTE: using device_name here means a new config will be saved with
-             * device_name (and not the template name). Not sure if this is
-             * what we really want... */
-
-            syncevo_config_get_value (config, NULL, "templateName", &device_name);
-            if (!device_name) {
+            syncevo_config_get_value (config, NULL, "deviceName", &tmp);
+            if (!tmp) {
+                device_name = g_strdup (c_data->name);
+            } else {
+                device_name = g_strcanon (g_strdup (tmp), LEGAL_CONFIG_NAME_CHARS, '-');
+            }
+            
+            
+            syncevo_config_get_value (config, NULL, "templateName", &template_name);
+            if (!template_name) {
                 syncevo_config_get_value (config, NULL, "fingerPrint", &fp);
                 if (fp) {
                     fpv = g_strsplit_set (fp, ",;", 2);
                     if (g_strv_length (fpv) > 0) {
-                        device_name = fpv[0];
+                        template_name = fpv[0];
                     }
                 }
-            }
-            if (!device_name) {
-                device_name = c_data->name;
             }
 
             /* keep a list of added devices */
@@ -2092,6 +2099,8 @@ get_config_for_config_widget_cb (SyncevoServer *server,
                                                            c_data->has_configuration,
                                                            c_data->data);
                     g_hash_table_insert (c_data->device_templates, url, w);
+                    sync_config_widget_add_alternative_config (w, template_name, config,
+                                                               c_data->has_configuration);
                 }
             } else {
                 /* TODO: might want to add a new widget, if user has created more
@@ -2100,10 +2109,11 @@ get_config_for_config_widget_cb (SyncevoServer *server,
 
                 /* there is a widget for this device already, add this info there*/
                 if (c_data->has_configuration || g_strcmp0 ("1", ready) == 0) {
-                    sync_config_widget_add_alternative_config (w, device_name, config, 
+                    sync_config_widget_add_alternative_config (w, template_name, config,
                                                                c_data->has_configuration);
                 }
             }
+            g_free (device_name);
             g_strfreev (fpv);
         }
     } else {
@@ -3318,7 +3328,7 @@ set_online_status (app_data *data, gboolean online)
 static void
 get_presence_cb (SyncevoServer *server,
                  char *status,
-                 char *transport,
+                 char **transports,
                  GError *error,
                  app_data *data)
 {
@@ -3333,7 +3343,7 @@ get_presence_cb (SyncevoServer *server,
         set_online_status (data, strcmp (status, "") == 0);
     }
     g_free (status);
-    g_free (transport);
+    g_strfreev (transports);
 }
 
 static void
@@ -3446,7 +3456,7 @@ server_presence_changed_cb (SyncevoServer *server,
 {
     if (data->current_service &&
         config_name && status &&
-        strcmp (data->current_service->name, config_name) == 0) {
+        g_strcasecmp (data->current_service->name, config_name) == 0) {
 
         set_online_status (data, strcmp (status, "") == 0);
     }
@@ -3539,9 +3549,9 @@ sync_ui_create ()
                       G_CALLBACK (server_shutdown_cb), data);
     g_signal_connect (data->server, "session-changed",
                       G_CALLBACK (server_session_changed_cb), data);
-    g_signal_connect (data->server, "presence_changed",
+    g_signal_connect (data->server, "presence-changed",
                       G_CALLBACK (server_presence_changed_cb), data);
-    g_signal_connect (data->server, "templates_changed",
+    g_signal_connect (data->server, "templates-changed",
                       G_CALLBACK (server_templates_changed_cb), data);
     g_signal_connect (data->server, "info-request",
                       G_CALLBACK (info_request_cb), data);

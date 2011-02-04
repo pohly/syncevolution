@@ -38,7 +38,24 @@ Restore data from the automatic backups:
   syncevolution --restore <session directory> --before|--after [--dry-run] <config> <source> ...
 
 Modify a configuration:
-  syncevolution --remove|--migrate|--configure <options> <config>
+  syncevolution --configure <options> <config> [<source> ...]
+  syncevolution --remove|--migrate <options> <config>
+
+List items:
+  syncevolution --print-items <config> <source>
+
+Export item(s):
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- <config> <source> [<luid> ...]
+
+Add item(s):
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- <config> <source>
+
+Update item(s)
+  syncevolution --update <dir> <config> <source>
+  syncevolution [--delimiter <string>|none] --update <file>|- <config> <source> <luid> ...
+
+Remove item(s):
+  syncevolution --delete-items <config> <source> (<luid> ... | \*)
 
 DESCRIPTION
 ===========
@@ -70,7 +87,7 @@ peer. Depending on which parameters are given, different operations
 are executed.
 
 Starting with SyncEvolution 1.0, <config> strings can have different
-meanings. Typically, a simple string like `scheduleworld` refers to
+meanings. Typically, a simple string like `memotoo` refers to
 the configuration for that peer, as it did in previous releases. A
 peer is either a SyncML server (the traditional usage of
 SyncEvolution) or a client (the new feature in 1.0).
@@ -82,10 +99,15 @@ synchronized.  In that sense, a configuration context can be seen as a
 set of local databases plus the peer configurations that are
 synchronized against those databases.
 
+The peer-independent properties of a source can be configured by
+giving the context name as <config> parameter ("@default
+addressbook"). Operations manipulating the local data also accept
+the context name.
+
 When different peers are meant to synchronize different local
 databases, then different contexts have to be used when setting up the
 peers by appending a context name after the `at` sign, as in
-`scheduleworld2@other-context`. Later on, if `scheduleworld2` is
+`memotoo2@other-context`. Later on, if `memotoo2` is
 unique, the `@other-context` suffix becomes optional.
 
 Sometimes it is also useful to change configuration options of a
@@ -103,7 +125,7 @@ set a different synchronization mode in its configuration file. ::
 
    syncevolution <config>
 
-Without the optional list of sources all sources which are enabled in
+Without the optional list of sources, all sources which are enabled in
 their configuration file are synchronized. ::
 
    syncevolution <config> <source> ...
@@ -111,8 +133,19 @@ their configuration file are synchronized. ::
 Otherwise only the ones mentioned on the command line are active. It
 is possible to configure sources without activating their
 synchronization: if the synchronization mode of a source is set to
-`none`, the source will be ignored. Explicitly listing such a source
-will synchronize it in `two-way` mode once.
+`disabled`, the source will be ignored. Explicitly listing such a
+source will synchronize it in `two-way` mode once.
+
+In SyncEvolution's predefined configuration templates, the following
+names for sources are used. Different names can be chosen for sources
+that are defined manually. ::
+
+ * addressbook: a list of contacts
+ * calendar: calendar *events*
+ * memo: plain text notes
+ * todo: task list
+ * calendar+todo: a virtual source combining one local "calendar" and
+   one "todo" source (required for synchronizing with some phones)
 
 Progress and error messages are written into a log file that is
 preserved for each synchronization run. Details about that is found in
@@ -183,13 +216,7 @@ These commands print information about existing configurations. When
 printing a configuration a short version without comments can be
 selected with --quiet. When sources are listed, only their
 configuration is shown. `Main` instead or in combination with sources
-lists only the main peer configuration.
-
-With --print-session information about previous synchronization
-sessions for the selected peer or context are printed. This depends on
-the `logdir` option.  The information includes the log directory name
-(useful for --restore) and the synchronization report. In combination
-with --quiet, only the paths are listed. ::
+lists only the main peer configuration. ::
 
    syncevolution --restore <session directory> --before|--after
                  [--dry-run] <config> <source> ...
@@ -210,8 +237,30 @@ A restore tries to minimize the number of item changes (see section
 identical before and after the change will not be transmitted anew to
 the server during the next synchronization. If the server somehow
 needs to get a clean copy of all items on the client then, use "--sync
-refresh-from-client" in the next run.
+refresh-from-client" in the next run. ::
 
+  syncevolution --print-items <config> <source>
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- <config> <source> [<luid> ...]
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- <config> <source>
+  syncevolution --update <dir> <config> <source>
+  syncevolution [--delimiter <string>|none] --update <file>|- <config> <source> <luid> ...
+  syncevolution --delete-items <config> <source> (<luid> ... | *)
+
+Restore depends on the specific format of the automatic backups
+created by SyncEvolution. Arbitrary access to item data is provided
+with additional options. <luid> here is the unique local identifier
+assigned to each item in the source, transformed so that it contains
+only alphanumeric characters, dash and underscore. A star * in
+--delete-items selects all items for deletion.
+
+<config> and <source> must be given, but they do not have to refer to
+existing configurations. In that case, the desired backend and must be
+give via "--source-property type=<backend>", like this::
+
+  syncevolution --print-items --source-property type=evolution-contacts dummy-config dummy-source
+
+The desired backend database can be chosen via "--source-property
+evolutionsource".
 
 OPTIONS
 =======
@@ -230,7 +279,7 @@ a list of valid values.
   Prints the names of all configured peers to stdout. There is no
   difference between these options, the are just aliases.
 
---print-config|-p
+--print-servers|--print-configs|--print-peers|-p
   Prints the complete configuration for the selected <config>
   to stdout, including up-to-date comments for all properties. The
   format is the normal .ini format with source configurations in
@@ -243,13 +292,21 @@ a list of valid values.
   When setting a --template, then the reference configuration for
   that peer is printed instead of an existing configuration.
 
+\--print-sessions
+  Prints information about previous synchronization sessions for the
+  selected peer or context are printed. This depends on the `logdir`
+  option.  The information includes the log directory name (useful for
+  --restore) and the synchronization report. In combination with
+  --quiet, only the paths are listed.
+
 --configure|-c
-  Modify the configuration files for the selected peer. If no such
-  configuration exists, then a new one is created using one of the
-  template configurations (see --template option). When creating
-  a new configuration only the active sources will be set to active
-  in the new configuration, i.e. `syncevolution -c scheduleworld addressbook`
-  followed by `syncevolution scheduleworld` will only synchronize the
+  Modify the configuration files for the selected peer and/or sources.
+  If no such configuration exists, then a new one is created using one
+  of the template configurations (see --template option). When
+  creating a new configuration and listing sources explicitly on the
+  command line, only those sources will be set to active in the new
+  configuration, i.e. `syncevolution -c memotoo addressbook`
+  followed by `syncevolution memotoo` will only synchronize the
   address book. The other sources are created in a disabled state.
   When modifying an existing configuration and sources are specified,
   then the source properties of only those sources are modified.
@@ -267,22 +324,68 @@ a list of valid values.
   layout and rename the <config> into <config>.old to prevent accidental use
   of the old configuration. WARNING: old SyncEvolution releases cannot
   use the new configuration!
-  
+
   The switch can also be used to migrate a configuration in the current
   configuration directory: this preserves all property values, discards
   obsolete properties and sets all comments exactly as if the configuration
   had been created from scratch. WARNING: custom comments in the
   configuration are not preserved.
-  
+
   --migrate implies --configure and can be combined with modifying
   properties.
+
+\--print-items
+  Shows all existing items using one line per item using
+  the format "<luid>[: <short description>]". Whether the description
+  is available depends on the backend and the kind of data that it
+  stores.
+
+\--export
+  Writes all items in the source or all items whose <luid> is
+  given into a directory if the --export parameter exists and is a
+  directory. The <luid> of each item is used as file name. Otherwise it
+  creates a new file under that name and writes the selected items
+  separated by the chosen delimiter string. stdout can be selected with
+  a dash.
+
+  The default delimiter (two line breaks) matches a blank line. As a special
+  case, it also matches a blank line with DOS line ending (line break,
+  carriage return, line break). This works for vCard 3.0 and iCalendar 2.0,
+  which never contain blank lines.
+
+  When exporting, the default delimiter will always insert two line
+  breaks regardless whether the items contain DOS line ends. As a
+  special case, the initial newline of a delimiter is skipped if the
+  item already ends in a newline.
+
+\--import
+  Adds all items found in the directory or input file to the
+  source.  When reading from a directory, each file is treated as one
+  item. Otherwise the input is split at the chosen delimiter. "none" as
+  delimiter disables splitting of the input.
+
+\--update
+  Overwrites the content of existing items. When updating from a
+  directory, the name of each file is taken as its luid. When updating
+  from file or stdin, the number of luids given on the command line
+  must match with the number of items in the input.
+
+\--delete-items
+  Removes the specified items from the source. Most backends print
+  some progress information about this, but besides that, no further
+  output is produced. Trying to remove an item which does not exist
+  typically leads to an ERROR message, but is not reflected in a
+  non-zero result of the command line invocation itself because the
+  situation is not reported as an error by backends (removal of
+  non-existent items is not an error in SyncML). Use a star \* instead
+  or in addition to listing individual luids to delete all items.
 
 --sync-property|-y <property>=<value>|<property>=?|?
   Overrides a source-independent configuration property for the
   current synchronization run or permanently when --configure is used
   to update the configuration. Can be used multiple times.  Specifying
   an unused property will trigger an error message.
-  
+
   When using the configuration layout introduced with 1.0, some of the
   sync properties are shared between peers, for example the directory
   where sessions are logged. Permanently changing such a shared
@@ -295,10 +398,11 @@ a list of valid values.
   Same as --sync-property, but applies to the configuration of all active
   sources. `--sync <mode>` is a shortcut for `--source-property sync=<mode>`.
   
-  When combined with `--configure`, the configuration of all sources is
-  modified. Properties cannot be specified differently for different
-  sources, so if you want to change a source property of just one specific
-  sync source, then use `--configure --source-property ... <server> <source>`.
+  When combined with `--configure`, the configuration of all sources
+  is modified. The value is applied to all sources unless sources are
+  listed explicitly on the command line. So if you want to change a
+  source property of just one specific sync source, then use
+  `--configure --source-property ... <server> <source>`.
   
   As with sync properties, some properties are shared between peers,
   in particular the selection of which local data to synchronize.
@@ -308,14 +412,14 @@ a list of valid values.
   for known SyncML peers. Defaults to the <config> name, so --template
   only has to be specified when creating multiple different configurations
   for the same peer, or when using a template that is named differently
-  than the peer. `default` is an alias for `scheduleworld` and can be
+  than the peer. `default` is an alias for `memotoo` and can be
   used as the starting point for servers which do not have a built-in
   template.
-  
-  Each template contains a pseudo-random device ID. Therefore setting the
-  `deviceId` sync property is only necessary when manually recreating a
+
+  A pseudo-random device ID is generated automatically. Therefore setting
+  the `deviceId` sync property is only necessary when manually recreating a
   configuration or when a more descriptive name is desired.
-  
+
   The available templates for different known SyncML servers are listed when
   using a single question mark instead of template name. When using the
   `?<device>` format, a fuzzy search for a template that might be
@@ -340,21 +444,29 @@ a list of valid values.
   applies to *all* passwords in a configuration, so setting a single
   password as follows moves the other passwords into the keyring, if
   they were not stored there already::
-  
+
      --keyring --configure --sync-property proxyPassword=foo
-  
+
   When passwords were stored in the keyring, their value is set to a single
   hyphen ("-") in the configuration. This means that when running a
   synchronization without the --keyring argument, the password has to be
   entered interactively. The --print-config output always shows "-" instead
   of retrieving the password from the keyring.
 
+--daemon[=yes/no]
+  By default, the SyncEvolution command line is executed inside the
+  syncevo-dbus-server process. This ensures that synchronization sessions
+  started by the command line do not conflict with sessions started
+  via some other means (GUI, automatically). For debugging purposes
+  or very special use cases (running a local sync against a server which
+  executes inside the daemon) it is possible to execute the operation
+  without the daemon (--daemon=no).
+
 --help|-h
   Prints usage information.
 
 \--version
   Prints the SyncEvolution version.
-
 
 EXAMPLES
 ========
@@ -363,38 +475,47 @@ List the known configuration templates::
 
    syncevolution --template ?
 
-Create a new configuration, using the existing ScheduleWorld template::
+Create a new configuration, using the existing Memotoo template::
 
   syncevolution --configure \
                 --sync-property "username=123456" \
                 --sync-property "password=!@#ABcd1234" \
-                scheduleworld
+                memotoo
+
+Note that putting passwords into the command line, even for
+short-lived processes as the one above, is a security risk in shared
+environments, because the password is visible to everyone on the
+machine. To avoid this, remove the password from the command above,
+then add the password to the right config.ini file with a text editor.
+This command shows the directory containing the file::
+
+   syncevolution --print-configs
 
 Review configuration::
 
-   syncevolution --print-config scheduleworld
+   syncevolution --print-config memotoo
 
 Synchronize all sources::
 
-  syncevolution scheduleworld
+  syncevolution memotoo
 
 Deactivate all sources::
 
   syncevolution --configure \
                 --source-property sync=none \
-                scheduleworld
+                memotoo
 
 Activate address book synchronization again, using the --sync shortcut::
 
   syncevolution --configure \
                 --sync two-way \
-                scheduleworld addressbook
+                memotoo addressbook
 
 Change the password for a configuration::
 
   syncevolution --configure \
                 --sync-property password=foo \
-                scheduleworld
+                memotoo
 
 Set up another configuration for under a different account, using
 the same default databases as above::
@@ -402,8 +523,8 @@ the same default databases as above::
   syncevolution --configure \
                 --sync-property username=joe \
                 --sync-property password=foo \
-                --template scheduleworld \
-                scheduleworld_joe
+                --template memotoo \
+                memotoo_joe
 
 Set up another configuration using the same account, but different
 local databases (can be used to simulate synchronizing between two
@@ -413,21 +534,24 @@ clients, see `Exchanging Data`_::
                 --sync-property "username=123456" \
                 --sync-property "password=!@#ABcd1234" \
                 --source-property sync=none \
-                 scheduleworld@other
+                 memotoo@other
   
   syncevolution --configure \
                 --source-property evolutionsource=<name of other address book> \
-                --source-property sync=two-way \
-                scheduleworld@other
+                @other addressbook
 
-  syncevolution scheduleworld 
-  syncevolution scheduleworld@other
+  syncevolution --configure \
+                --source-property sync=two-way \
+                memotoo@other addressbook
+
+  syncevolution memotoo 
+  syncevolution memotoo@other
 
 Migrate a configuration from the <= 0.7 format to the current one
 and/or updates the configuration so that it looks like configurations
 created anew with the current syncevolution::
 
-  syncevolution --migrate scheduleworld
+  syncevolution --migrate memotoo
 
 
 NOTES
@@ -443,20 +567,13 @@ needed. Calendar items and tasks can be sent and received in iCalendar
 2.0 as well as vCalendar 1.0, but vCalendar 1.0 should be avoided if
 possible because it cannot represent all data that Evolution stores.
 
-.. note:: The Evolution backends are mentioned are as examples;
+.. note:: The Evolution backends are mentioned as examples;
    the same applies to other data sources.
 
 How the server stores the items depends on its implementation and
-configuration. In the default Funambol server installation, contacts
-and calendar items are converted into an internal format, but at
-least for contacts it preserves most of the properties used by
-Evolution whereas iCalendar 2.0 items are not preserved properly 
-up to and including Funambol 8.0. ScheduleWorld uses the same format
-as Evolution for calendars and tasks and thus requires no conversion.
-
-To check which data is preserved, one can use this procedure
-(described for contacts, but works the same way for calendars and
-tasks):
+configuration. To check which data is preserved, one can use this
+procedure (described for contacts, but works the same way for
+calendars and tasks):
 
 1. synchronize the address book with the server
 2. create a new address book in Evolution and view it in Evolution

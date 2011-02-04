@@ -353,12 +353,15 @@ class DBusUtil(Timeout):
                                                     '/org/syncevolution/Server'),
                                      'org.syncevolution.Server')
 
-    def createSession(self, config, wait):
+    def createSession(self, config, wait, flags=[]):
         """Return sessionpath and session object for session using 'config'.
         A signal handler calls loop.quit() when this session becomes ready.
         If wait=True, then this call blocks until the session is ready.
         """
-        sessionpath = self.server.StartSession(config)
+        if flags:
+            sessionpath = self.server.StartSessionWithFlags(config, flags)
+        else:
+            sessionpath = self.server.StartSession(config)
 
         def session_ready(object, ready):
             if self.running and ready and object == sessionpath:
@@ -436,6 +439,21 @@ class DBusUtil(Timeout):
                                 'org.syncevolution.Session',
                                 'org.syncevolution',
                                 sessionpath,
+                                byte_arrays=True, 
+                                utf8_strings=True)
+
+    def setUpConfigListeners(self):
+        """records ConfigChanged signal and records it in DBusUtil.events, then quits the loop"""
+
+        def config():
+            if self.running:
+                DBusUtil.events.append("ConfigChanged")
+                loop.quit()
+
+        bus.add_signal_receiver(config,
+                                'ConfigChanged',
+                                'org.syncevolution.Server',
+                                'org.syncevolution',
                                 byte_arrays=True, 
                                 utf8_strings=True)
 
@@ -532,6 +550,19 @@ class TestDBusServer(unittest.TestCase, DBusUtil):
     def run(self, result):
         self.runTest(result)
 
+    def testCapabilities(self):
+        """check the Server.GetCapabilities() call"""
+        capabilities = self.server.GetCapabilities()
+        capabilities.sort()
+        self.failUnlessEqual(capabilities, ['ConfigChanged', 'GetConfigName', 'Notifications', 'SessionAttach', 'SessionFlags', 'Version'])
+
+    def testVersions(self):
+        """check the Server.GetVersions() call"""
+        versions = self.server.GetVersions()
+        self.failIfEqual(versions["version"], "")
+        self.failIfEqual(versions["system"], None)
+        self.failIfEqual(versions["backends"], None)
+
     def testGetConfigsEmpty(self):
         """GetConfigs() with no configurations available"""
         configs = self.server.GetConfigs(False, utf8_strings=True)
@@ -550,8 +581,7 @@ class TestDBusServer(unittest.TestCase, DBusUtil):
                                        "Ovi",
                                        "ScheduleWorld",
                                        "SyncEvolution",
-                                       "Synthesis",
-                                       "ZYB"])
+                                       "Synthesis"])
 
     def testGetConfigScheduleWorld(self):
         """read ScheduleWorld template"""
@@ -877,7 +907,55 @@ class TestDBusSession(unittest.TestCase, DBusUtil):
 
     def testCreateSession(self):
         """ask for session"""
-        pass
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+
+    def testAttachSession(self):
+        """attach to running session"""
+        self.session.Attach()
+        self.session.Detach()
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+
+    @timeout(70)
+    def testAttachOldSession(self):
+        """attach to session which no longer has clients"""
+        self.session.Detach()
+        time.sleep(5)
+        # This used to be impossible with SyncEvolution 1.0 because it
+        # removed the session right after the previous client
+        # left. SyncEvolution 1.1 makes it possible by keeping
+        # sessions around for a minute. However, the session is
+        # no longer listed because it really should only be used
+        # by clients which heard about it before.
+        self.failUnlessEqual(self.server.GetSessions(), [])
+        self.session.Attach()
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+        time.sleep(60)
+        self.failUnlessEqual(self.session.GetFlags(), [])        
+
+    @timeout(70)
+    def testExpireSession(self):
+        """ensure that session stays around for a minute"""
+        self.session.Detach()
+        time.sleep(5)
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+        time.sleep(60)
+        try:
+            self.session.GetFlags()
+        except:
+            pass
+        else:
+            self.fail("Session.GetFlags() should have failed")
+
+    def testCreateSessionWithFlags(self):
+        """ask for session with some specific flags and config"""
+        self.session.Detach()
+        self.sessionpath, self.session = self.createSession("FooBar@no-such-context", True, ["foo", "bar"])
+        self.failUnlessEqual(self.session.GetFlags(), ["foo", "bar"])
+        self.failUnlessEqual(self.session.GetConfigName(), "foobar@no-such-context");
 
     @timeout(20)
     def testSecondSession(self):
@@ -1084,14 +1162,21 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         else:
             self.fail("no exception thrown")
 
+    @timeout(20)
     def testCreateGetConfig(self):
         """ test the config is created successfully. """
+        self.setUpConfigListeners()
         self.config[""]["username"] = "creategetconfig"
         self.config[""]["password"] = "112233445566778"
         self.setupConfig()
         """ get config and compare """
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config, self.config)
+        # terminate session and check whether a "config changed" signal
+        # was sent as required
+        self.session.Detach()
+        loop.run()
+        self.failUnlessEqual(DBusUtil.events, ["ConfigChanged"])
 
     def testUpdateConfig(self):
         """ test the config is permenantly updated correctly. """
@@ -1781,7 +1866,7 @@ class TestConnection(unittest.TestCase, DBusUtil):
             connection.Process('1234', 'invalid message type')
         except dbus.DBusException, ex:
             self.failUnlessEqual(str(ex),
-                                 'org.syncevolution.Exception: message type not supported for starting a sync')
+                                 "org.syncevolution.Exception: message type 'invalid message type' not supported for starting a sync")
         else:
             self.fail("no exception thrown")
         loop.run()

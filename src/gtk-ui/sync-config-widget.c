@@ -58,7 +58,17 @@ enum {
 };
 static guint32 signals[LAST_SIGNAL] = {0, };
 
+typedef struct save_config_data {
+    SyncConfigWidget *widget;
+    gboolean delete;
+    gboolean temporary;
+    source_widgets *widgets;
+    char *basename;
+} save_config_data;
+
+static void start_session_for_config_write_cb (SyncevoServer *server, char *path, GError *error, save_config_data *data);
 static void sync_config_widget_update_label (SyncConfigWidget *self);
+static void sync_config_widget_set_name (SyncConfigWidget *self, const char *name);
 
 static void
 remove_child (GtkWidget *widget, GtkContainer *container)
@@ -116,13 +126,6 @@ update_source_uri (char *name,
     uri = gtk_entry_get_text (GTK_ENTRY (widgets->entry));
     g_hash_table_insert (source_configuration, g_strdup ("uri"), g_strdup (uri));
 }
-
-typedef struct save_config_data {
-    SyncConfigWidget *widget;
-    gboolean delete;
-    gboolean temporary;
-    source_widgets *widgets;
-} save_config_data;
 
 static source_widgets *
 source_widgets_ref (source_widgets *widgets)
@@ -207,20 +210,76 @@ set_config_cb (SyncevoSession *session,
 }
 
 static void
-save_config (save_config_data *data,
-             SyncevoSession *session)
+get_config_for_overwrite_prevention_cb (SyncevoSession *session,
+                                        SyncevoConfig *config,
+                                        GError *error,
+                                        save_config_data *data)
 {
-    if (data->delete) {
-        syncevo_config_free (data->widget->config);
-        data->widget->config = g_hash_table_new (g_str_hash, g_str_equal);
+    static int index = 0;
+    char *name;
+
+    if (error) {
+        index = 0;
+        if (error->code == DBUS_GERROR_REMOTE_EXCEPTION &&
+            dbus_g_error_has_name (error, SYNCEVO_DBUS_ERROR_NO_SUCH_CONFIG)) {
+            /* Config does not exist (as expected), we can now save */
+            syncevo_session_set_config (session,
+                                        data->temporary,
+                                        data->temporary,
+                                        data->widget->config,
+                                        (SyncevoSessionGenericCb)set_config_cb,
+                                        data);
+            return;
+        }
+        g_warning ("Unexpected error in Session.GetConfig: %s", error->message);
+        g_error_free (error);
+        g_object_unref (session);
+        return;
     }
 
-    syncevo_session_set_config (session,
-                                data->temporary,
-                                data->temporary,
-                                data->widget->config,
-                                (SyncevoSessionGenericCb)set_config_cb,
-                                data);
+    /* Config exists when we are trying to create a new config...
+     * Need to start a new session with another name */    
+    g_object_unref (session);
+    name = g_strdup_printf ("%s__%d", data->basename, ++index);
+    sync_config_widget_set_name (data->widget, name);
+    g_free (name);
+
+    syncevo_server_start_no_sync_session (data->widget->server,
+                                  data->widget->config_name,
+                                  (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
+                                  data);
+}
+
+static void
+save_config (save_config_data *data,
+             SyncevoSession *session)
+{   
+    SyncConfigWidget *w = data->widget;
+
+    if (data->delete) {
+        syncevo_config_free (w->config);
+        w->config = g_hash_table_new (g_str_hash, g_str_equal);
+    }
+
+    /* if this is a client peer (a device) and not configured, we
+     * need to test that we aren't overwriting existing
+     * configs */
+    /* TODO: This might be a good thing to do for any configurations.*/
+    if (peer_is_client (w->config) &&
+        !w->configured && !data->temporary) {
+
+        syncevo_session_get_config (session,
+                                    FALSE,
+                                    (SyncevoSessionGetConfigCb)get_config_for_overwrite_prevention_cb,
+                                    data);
+    } else {
+        syncevo_session_set_config (session,
+                                    data->temporary,
+                                    data->temporary,
+                                    data->widget->config,
+                                    (SyncevoSessionGenericCb)set_config_cb,
+                                    data);
+    }
 }
 
 static void
@@ -300,7 +359,7 @@ stop_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     data->widget = self;
     data->delete = FALSE;
     data->temporary = FALSE;
-    syncevo_server_start_session (self->server,
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -319,7 +378,7 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
         return;
     }
 
-    if (strlen (self->config_name) == 0) {
+    if (!self->config_name || strlen (self->config_name) == 0) {
         g_free (self->config_name);
         self->config_name = g_strdup (gtk_entry_get_text (GTK_ENTRY (self->entry)));
     }
@@ -328,6 +387,7 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
         GHashTableIter iter;
         source_widgets *widgets;
         char *name;
+        gboolean client = peer_is_client (self->config);
 
         send = toggle_get_active (self->send_check);
         receive = toggle_get_active (self->receive_check);
@@ -335,9 +395,13 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
         if (send && receive) {
             mode = SYNCEVO_SYNC_TWO_WAY;
         } else if (send) {
-            mode = SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT;
+            mode = client ?
+                SYNCEVO_SYNC_ONE_WAY_FROM_SERVER :
+                SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT;
         } else if (receive) {
-            mode = SYNCEVO_SYNC_ONE_WAY_FROM_SERVER;
+            mode = client ?
+                SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT :
+                SYNCEVO_SYNC_ONE_WAY_FROM_SERVER;
         } else {
             mode = SYNCEVO_SYNC_NONE;
         }
@@ -397,7 +461,8 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     data->widget = self;
     data->delete = FALSE;
     data->temporary = FALSE;
-    syncevo_server_start_session (self->server,
+    data->basename = g_strdup (self->config_name);
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -453,7 +518,8 @@ reset_delete_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     data->widget = self;
     data->delete = TRUE;
     data->temporary = FALSE;
-    syncevo_server_start_session (self->server,
+
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -486,9 +552,7 @@ static void update_buttons (SyncConfigWidget *self)
 
 
     if (self->current && self->config) {
-        char *client;
-        syncevo_config_get_value (self->config, NULL, "PeerIsClient", &client);
-        if (client && g_strcmp0 (client, "1") == 0) {
+        if (peer_is_client (self->config)) {
             gtk_button_set_label (GTK_BUTTON (self->stop_button),
                                               _("Stop using device"));
         } else {
@@ -712,7 +776,8 @@ init_source (char *name,
     data->delete = FALSE;
     data->temporary = TRUE;
     data->widgets = source_widgets_ref (widgets);
-    syncevo_server_start_session (self->server,
+
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -772,10 +837,11 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     char *password = "";
     char *sync_url = "";
     const char *descr;
-    char *str, *device;
+    char *str;
     GtkWidget *label, *align;
     SyncevoSyncMode mode = SYNCEVO_SYNC_NONE;
     gboolean send, receive;
+    gboolean client;
 
     gtk_container_foreach (GTK_CONTAINER (self->server_settings_table),
                            (GtkCallback)remove_child,
@@ -788,8 +854,8 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     gtk_table_resize (GTK_TABLE (self->mode_table),
                       2, 1);
 
-    syncevo_config_get_value (self->config, NULL, "PeerIsClient", &device);
-    if (device && g_strcmp0 (device, "1") == 0) {
+    client = peer_is_client (self->config);
+    if (client) {
         if (!self->device_template_selected) {
             gtk_widget_hide (self->settings_box);
             gtk_widget_show (self->device_selector_box);
@@ -816,12 +882,22 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
         send = receive = TRUE;
         break;
     case SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT:
-        send = TRUE;
-        receive = FALSE;
+        if (client) {
+            send = FALSE;
+            receive = TRUE;
+        } else {
+            send = TRUE;
+            receive = FALSE;
+        }
         break;
     case SYNCEVO_SYNC_ONE_WAY_FROM_SERVER:
-        send = FALSE;
-        receive = TRUE;
+        if (client) {
+            send = TRUE;
+            receive = FALSE;
+        } else {
+            send = FALSE;
+            receive = TRUE;
+        }
         break;
     default:
         gtk_widget_show (self->complex_config_info_bar);
@@ -1040,7 +1116,6 @@ device_selection_btn_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
         gtk_tree_model_get (model, &iter, 1, &config, -1 );
 
         sync_config_widget_set_config (self, config);
-        sync_config_widget_set_name (self, name);
 
         sync_config_widget_update_expander (self);
     }
@@ -1493,8 +1568,6 @@ sync_config_widget_constructor (GType                  gtype,
         g_warning ("No SyncevoServer or Syncevoconfig set for SyncConfigWidget");
         return G_OBJECT (self);
     }
-
-    sync_config_widget_add_config (self, self->config_name, self->config);
 
     if (g_strcmp0 (self->config_name, "default") == 0) {
 
@@ -2109,16 +2182,17 @@ sync_config_widget_get_name (SyncConfigWidget *widget)
 
 void
 sync_config_widget_add_alternative_config (SyncConfigWidget *self,
-                                           const char *name,
+                                           const char *template_name,
                                            SyncevoConfig *config,
                                            gboolean configured)
 {
+    sync_config_widget_add_config (self, template_name, config);
     if (configured) {
         sync_config_widget_set_config (self, config);
-        sync_config_widget_set_name (self, name);
-        sync_config_widget_set_configured (self, TRUE);    
-    } else  {
-        sync_config_widget_add_config (self, name, config);
+        sync_config_widget_set_configured (self, TRUE);
     }
+
+
     sync_config_widget_update_expander (self);
+
 }

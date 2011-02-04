@@ -209,9 +209,6 @@ class Context:
                 # get action
                 action = self.todo.pop(0)
 
-                if action.isserver:
-                    run_servers.append(action.name);
-
                 # check whether it actually needs to be executed
                 if self.enabled and \
                        not action.name in self.enabled and \
@@ -235,6 +232,8 @@ class Context:
                     continue
 
                 # execute it
+                if action.isserver:
+                    run_servers.append(action.name);
                 action.tryexecution(step, not self.nologs)
                 if action.status > status:
                     status = action.status
@@ -260,10 +259,10 @@ class Context:
         #calculate the src dir where client-test can be located
         srcdir = os.path.join(self.tmpdir,"build/src")
         backenddir = os.path.join(self.tmpdir, "install/usr/lib/syncevolution/backends")
-        os.system ("resultchecker.py " +self.resultdir+" "+",".join(run_servers)+" "+self.uri +" "+srcdir + " '" + options.shell + " " + options.testprefix +" '"+" '" +backenddir +"'");
+        self.runCommand("resultchecker.py " +self.resultdir+" "+",".join(run_servers)+" "+self.uri +" "+srcdir + " '" + options.shell + " " + options.testprefix +" '"+" '" +backenddir +"'");
         # transform to html
-        os.system ("xsltproc -o " + self.resultdir + "/cmp_result.xml --stringparam cmp_file " + self.lastresultdir +"/nightly.xml "+self.datadir +"/compare.xsl "+ self.resultdir+"/nightly.xml")
-        os.system ("xsltproc -o " + self.resultdir + "/nightly.html --stringparam cmp_result_file " + self.resultdir + "/cmp_result.xml " + self.datadir +"/generate-html.xsl "+ self.resultdir+"/nightly.xml")
+        self.runCommand("xsltproc -o " + self.resultdir + "/cmp_result.xml --stringparam cmp_file " + self.lastresultdir +"/nightly.xml "+self.datadir +"/compare.xsl "+ self.resultdir+"/nightly.xml")
+        self.runCommand("xsltproc -o " + self.resultdir + "/nightly.html --stringparam cmp_result_file " + self.resultdir + "/cmp_result.xml " + self.datadir +"/generate-html.xsl "+ self.resultdir+"/nightly.xml")
         # report result by email
         if self.recipients:
             server = smtplib.SMTP(self.mailhost)
@@ -371,11 +370,23 @@ class GitCheckout(Action):
         self.basedir = os.path.join(abspath(workdir), name)
 
     def execute(self):
+        url = self.url
+        if url.startswith("git@gitorious.org:"):
+            # use git protocol instead of personal access,
+            # because nightly testing doesn't have ssh access
+            url = url.replace("git@gitorious.org:", "git://gitorious.org/")
         if os.access(self.basedir, os.F_OK):
-            cmd = "cd %s && git fetch" % (self.basedir)
+            cmd = "cd %s && perl -pi -e 's!git\@gitorious.org:!git://gitorious.org/!' .git/config && git fetch" % (self.basedir)
         else:
-            cmd = "git clone %s %s" % (self.url, self.basedir)
+            cmd = "git clone %s %s && chmod -R g+w %s && cd %s && git config core.sharedRepository group " % (url, self.basedir, self.basedir, self.basedir)
         context.runCommand(cmd)
+
+        if (url != self.url):
+            # restore personal access via ssh so that other users
+            # can commit their changes
+            cmd = "cd %s && perl -pi -e 's!git://gitorious.org/!git\@gitorious.org:!' .git/config" % (self.basedir)
+            context.runCommand(cmd)
+
         context.runCommand("set -x; cd %(dir)s && git show-ref &&"
                            "((git tag -l | grep -w -q %(rev)s) && git checkout %(rev)s ||"
                            "((git branch -l | grep -w -q %(rev)s) && git checkout %(rev)s || git checkout -b %(rev)s origin/%(rev)s) && git merge origin/%(rev)s)" %
@@ -563,9 +574,19 @@ if options.recipients and not options.sender:
     print "sending email also requires sender argument"
     sys.exit(1)
 
+# accept --enable foo[=args]
+enabled = {}
+for option in options.enabled:
+    l = option.split("=", 1)
+    if len(l) == 2:
+        enabled[l[0]] = l[1]
+    else:
+        enabled[option] = None
+localtests = enabled.get("evolution", "Client::Source SyncEvolution").split(" ")
+
 context = Context(options.tmpdir, options.resultdir, options.uri, options.workdir,
                   options.subject, options.sender, options.recipients, options.mailhost,
-                  options.enabled, options.skip, options.nologs, options.setupcmd,
+                  enabled, options.skip, options.nologs, options.setupcmd,
                   options.makecmd, options.sanitychecks, options.lastresultdir, options.datadir)
 
 class EvoSvn(Action):
@@ -610,9 +631,11 @@ for prebuilt in options.prebuilt:
     if prebuilt:
         context.add(SyncEvolutionTest("evolution-prebuilt-" + os.path.basename(prebuilt), pre,
                                       "", options.shell,
-                                      [ "Client::Source", "SyncEvolution" ],
+                                      localtests,
                                       [],
                                       testPrefix=options.testprefix))
+        if "evolution" in enabled:
+            del enabled["evolution"]
 
 class SyncEvolutionCheckout(GitCheckout):
     def __init__(self, name, revision):
@@ -622,7 +645,7 @@ class SyncEvolutionCheckout(GitCheckout):
                              # parameter to autogen.sh in SyncEvolution: also
                              # check for clean Synthesis source
                              "env SYNTHESISSRC=../libsynthesis %s" % options.shell,
-                             "git@git.moblin.org:syncevolution.git",
+                             "git@gitorious.org:meego-middleware/syncevolution.git",
                              revision)
 
 class SynthesisCheckout(GitCheckout):
@@ -630,7 +653,7 @@ class SynthesisCheckout(GitCheckout):
         """checkout libsynthesis"""
         GitCheckout.__init__(self,
                              name, context.workdir, options.shell,
-                             "git@git.moblin.org:libsynthesis.git",
+                             "git@gitorious.org:meego-middleware/libsynthesis.git",
                              revision)
 
 class SyncEvolutionBuild(AutotoolsBuild):
@@ -710,7 +733,7 @@ context.add(dist)
 
 evolutiontest = SyncEvolutionTest("evolution", compile,
                                   "", options.shell,
-                                  [ "Client::Source", "SyncEvolution" ],
+                                  localtests,
                                   [],
                                   testPrefix=options.testprefix)
 context.add(evolutiontest)
@@ -933,6 +956,7 @@ googletest = SyncEvolutionTest("google", compile,
                                "Client::Sync::vcard21::testRefreshFromClientSync,"
                                "Client::Sync::vcard21::testRefreshFromClientSemantic,"
                                "Client::Sync::vcard21::testRefreshStatus,"
+                               "Client::Sync::vcard21::testDeleteAllRefresh,"
                                "Client::Sync::vcard21::testOneWayFromClient,"
                                "Client::Sync::vcard21::testItemsXML "
                                "CLIENT_TEST_DELAY=5 "

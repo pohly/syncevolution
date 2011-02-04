@@ -254,8 +254,13 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                     casename = case.rpartition('_')[2].partition('.')[0]
                     result.write(indent+'<'+casename+'>')
                     match=format+'::'+casename
-                    match=match+": okay \*\*\*"
-                    if(os.system("grep -q '" + match + "' "+case)):
+                    matchOk=match+": okay \*\*\*"
+                    matchKnownFailure=match+": \*\*\* failure ignored \*\*\*"
+                    if not os.system("grep -q '" + matchKnownFailure + "' "+case):
+                       result.write('knownfailure')
+                    elif not os.system("tail -10 %s | grep -q 'external transport failure (local, status 20043)'" % case):
+                        result.write('network')
+                    elif os.system("grep -q '" + matchOk + "' "+case):
                        result.write('failed')
                     else:
                         result.write('okay')

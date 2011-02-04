@@ -742,11 +742,11 @@ class SafeConfigProperty : public ConfigProperty {
     {}
 
     void setProperty(ConfigNode &node, const string &value) {
-        ConfigProperty::setProperty(node, SafeConfigNode::escape(value, true, false));
+        ConfigProperty::setProperty(node, StringEscape::escape(value, '!', StringEscape::INI_WORD));
     }
     virtual string getProperty(const ConfigNode &node, bool *isDefault = NULL) const {
         string res = ConfigProperty::getProperty(node, isDefault);
-        res = SafeConfigNode::unescape(res);
+        res = StringEscape::unescape(res, '!');
         return res;
     }
 };
@@ -1111,6 +1111,20 @@ class SyncConfig {
                                             const string &trackName = "") const;
 
     /**
+     * Creates config nodes for a certain node. The nodes are not
+     * yet created in the backend if they do not yet exist.
+     * In contrast to the normal set of nodes, the tracking node
+     * is empty and discards all changes. This is useful when
+     * trying to initialize a SyncSource without a peer (normally
+     * has a tracking node which rejects writes with an exception)
+     * or with a peer without interfering with normal change tracking
+     * (normally SyncSource might overwrite change tracking).
+     *
+     * @param name          the name of the sync source
+     */
+    SyncSourceNodes getSyncSourceNodesNoTracking(const string &name);
+
+    /**
      * initialize all properties with their default value
      */
     void setDefaults(bool force = true);
@@ -1350,7 +1364,6 @@ class SyncConfig {
     virtual const char*  getDevType() const;
     /**@}*/
 
-private:
     enum Layout {
         SYNC4J_LAYOUT,        /**< .syncj4/evolution/<server>, SyncEvolution <= 0.7.x */
         HTTP_SERVER_LAYOUT,   /**< .config/syncevolution/<server> with sources
@@ -1360,6 +1373,7 @@ private:
                                  SyncEvolution >= 1.0 */
     };
 
+private:
     /**
      * scans for peer configurations
      * @param root         absolute directory path
@@ -1456,7 +1470,7 @@ private:
  */
 class SyncSourceNodes {
  public:
-    SyncSourceNodes() {}
+    SyncSourceNodes() : m_havePeerNode(false) {}
 
     /**
      * @param havePeerNode    false when peerNode is a dummy instance which has to
@@ -1483,6 +1497,8 @@ class SyncSourceNodes {
                     const boost::shared_ptr<ConfigNode> &serverNode,
                     const string &cacheDir);
 
+    friend class SyncConfig;
+
     /** true if the peer-specific config node exists */
     bool exists() const { return m_peerNode->exists(); }
 
@@ -1508,6 +1524,7 @@ class SyncSourceNodes {
     string getCacheDir() const { return m_cacheDir; }
 
  protected:
+    const bool m_havePeerNode;
     const boost::shared_ptr<FilterConfigNode> m_sharedNode;
     const boost::shared_ptr<FilterConfigNode> m_peerNode;
     const boost::shared_ptr<ConfigNode> m_hiddenPeerNode;
