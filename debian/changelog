@@ -1,3 +1,11 @@
+syncevolution (1:1.1.1-1) unstable; urgency=low
+
+  * SyncEvolution 1.1.1 for Maemo.
+    - Has workaround for Nokia's calendar-backend not understanding
+      the timezone format of vcalendar 2.0.
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Fri, 04 Feb 2011 19:53:06 +0100
+
 syncevolution (1:1.0-1) unstable; urgency=low
 
   * SyncEvolution 1.0 for Maemo.
