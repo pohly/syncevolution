@@ -12,7 +12,7 @@ AC_INIT([syncevolution], [1.1.1])
 # STABLE_VERSION=1.0.1+
 AC_SUBST(STABLE_VERSION)
 
-AM_INIT_AUTOMAKE([tar-ustar])
+AM_INIT_AUTOMAKE([])
 AC_CONFIG_MACRO_DIR([m4])
 define([SYNTHESISSRC_REPO], [])
 dnl Specify git revisions/branches without prefix, i.e., without 'origin'.
