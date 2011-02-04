@@ -302,6 +302,10 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
         throwError(string("reading contact ") + luid,
                    gerror);
     }
+#ifdef ENABLE_MAEMO
+    // load detached photos etc
+    e_contact_inline_data(contact);
+#endif
     eptr<EContact, GObject> contactptr(contact, "contact");
     eptr<char> vcardstr(e_vcard_to_string(&contactptr->parent,
                                           EVC_FORMAT_VCARD_30));
