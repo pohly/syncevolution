@@ -64,11 +64,14 @@ class SingleFileConfigTree : public ConfigTree {
     /* ConfigTree API */
     virtual string getRootPath() const { return m_data->getName(); }
     virtual void flush();
+    virtual void reload();
     virtual void remove(const std::string &path);
     virtual void reset();
     virtual boost::shared_ptr<ConfigNode> open(const std::string &path,
                                                PropertyType type,
                                                const std::string &otherId = std::string(""));
+    virtual boost::shared_ptr<ConfigNode> add(const string &path,
+                                              const boost::shared_ptr<ConfigNode> &bode);
     list<string> getChildren(const std::string &path);
 
  private:

@@ -21,6 +21,7 @@
 #include <syncevo/Cmdline.h>
 #include <syncevo/FilterConfigNode.h>
 #include <syncevo/VolatileConfigNode.h>
+#include <syncevo/IniConfigNode.h>
 #include <syncevo/SyncSource.h>
 #include <syncevo/SyncContext.h>
 #include <syncevo/util.h>
@@ -44,6 +45,7 @@ using namespace std;
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/foreach.hpp>
+#include <boost/range.hpp>
 #include <fstream>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -75,6 +77,28 @@ Cmdline::Cmdline(const vector<string> &args, ostream &out, ostream &err) :
     m_argv = m_argvArray.get();
 }
 
+Cmdline::Cmdline(ostream &out, ostream &err, const char *arg, ...) :
+    m_out(out),
+    m_err(err),
+    m_validSyncProps(SyncConfig::getRegistry()),
+    m_validSourceProps(SyncSourceConfig::getRegistry())
+{
+    va_list argList;
+    va_start(argList, arg);
+    for (const char *curr = arg;
+         curr;
+         curr = va_arg(argList, const char *)) {
+        m_args.push_back(curr);
+    }
+    va_end(argList);
+    m_argc = m_args.size();
+    m_argvArray.reset(new const char *[m_args.size()]);
+    for (int i = 0; i < m_argc; i++) {
+        m_argvArray[i] = m_args[i].c_str();
+    }
+    m_argv = m_argvArray.get();
+}
+
 bool Cmdline::parse()
 {
     vector<string> parsed;
@@ -98,17 +122,36 @@ bool Cmdline::parse(vector<string> &parsed)
     bool ok;
     while (opt < m_argc) {
         parsed.push_back(m_argv[opt]);
-        if (m_argv[opt][0] != '-') {
+        if (boost::iequals(m_argv[opt], "--")) {
+            // separator between options and <config> <source>:
+            // swallow it and leave option parsing
+            opt++;
             break;
+        }
+        if (m_argv[opt][0] != '-') {
+            if (strchr(m_argv[opt], '=')) {
+                // property assignment
+                if (!parseProp(UNKNOWN_PROPERTY_TYPE,
+                               NULL,
+                               m_argv[opt],
+                               NULL)) {
+                    return false;
+                } else {
+                    opt++;
+                    continue;
+                }
+            } else {
+                break;
+            }
         }
         if (boost::iequals(m_argv[opt], "--sync") ||
             boost::iequals(m_argv[opt], "-s")) {
             opt++;
             string param;
             string cmdopt(m_argv[opt - 1]);
-            if (!parseProp(m_validSourceProps, m_sourceProps,
+            if (!parseProp(SOURCE_PROPERTY_TYPE,
                            m_argv[opt - 1], opt == m_argc ? NULL : m_argv[opt],
-                           SyncSourceConfig::m_sourcePropSync.getName().c_str())) {
+                           "sync")) {
                 return false;
             }
             parsed.push_back(m_argv[opt]);
@@ -119,7 +162,7 @@ bool Cmdline::parse(vector<string> &parsed)
         } else if(boost::iequals(m_argv[opt], "--sync-property") ||
                   boost::iequals(m_argv[opt], "-y")) {
                 opt++;
-                if (!parseProp(m_validSyncProps, m_syncProps,
+                if (!parseProp(SYNC_PROPERTY_TYPE,
                                m_argv[opt - 1], opt == m_argc ? NULL : m_argv[opt])) {
                     return false;
                 }
@@ -127,7 +170,7 @@ bool Cmdline::parse(vector<string> &parsed)
         } else if(boost::iequals(m_argv[opt], "--source-property") ||
                   boost::iequals(m_argv[opt], "-z")) {
             opt++;
-            if (!parseProp(m_validSourceProps, m_sourceProps,
+            if (!parseProp(SOURCE_PROPERTY_TYPE,
                            m_argv[opt - 1], opt == m_argc ? NULL : m_argv[opt])) {
                 return false;
             }
@@ -276,7 +319,7 @@ bool Cmdline::parse(vector<string> &parsed)
                 m_sources.insert(m_argv[opt++]);
             } else {
                 // first additional parameter was source, rest are luids
-                m_luids.push_back(m_argv[opt++]);
+                m_luids.push_back(CmdlineLUID::toLUID(m_argv[opt++]));
             }
         }
     }
@@ -358,7 +401,7 @@ bool Cmdline::isSync()
         !m_restore.empty() ||
         m_accessItems ||
         m_dryrun ||
-        (!m_run && (m_syncProps.size() || m_sourceProps.size()))) {
+        (!m_run && m_props.hasProperties())) {
         return false;
     } else {
         return true;
@@ -377,16 +420,188 @@ bool Cmdline::dontRun() const
     }
 }
 
+void Cmdline::makeObsolete(boost::shared_ptr<SyncConfig> &from)
+{
+    string oldname = from->getRootPath();
+    string newname, suffix;
+    int counter = 0;
+    while (true) {
+        ostringstream newsuffix;
+        newsuffix << ".old";
+        if (counter) {
+            newsuffix << "." << counter;
+        }
+        suffix = newsuffix.str();
+        newname = oldname + suffix;
+        if (!rename(oldname.c_str(),
+                    newname.c_str())) {
+            break;
+        } else if (errno != EEXIST && errno != ENOTEMPTY) {
+            SE_THROW(StringPrintf("renaming %s to %s: %s",
+                                  oldname.c_str(),
+                                  newname.c_str(),
+                                  strerror(errno)));
+        }
+        counter++;
+    }
+
+    string newConfigName;
+    string oldContext = from->getContextName();
+    if (from->hasPeerProperties()) {
+        newConfigName = from->getPeerName() + suffix + oldContext;
+    } else {
+        newConfigName = oldContext + suffix;
+    }
+    from.reset(new SyncConfig(newConfigName));
+}
+
+void Cmdline::copyConfig(const boost::shared_ptr<SyncConfig> &from,
+                         const boost::shared_ptr<SyncConfig> &to,
+                         const set<string> &selectedSources)
+{
+    const set<string> *sources = NULL;
+    set<string> allSources;
+    if (!selectedSources.empty()) {
+        // use explicitly selected sources
+        sources = &selectedSources;
+    } else {
+        // need an explicit list of all sources which will be copied,
+        // for the createFilters() call below
+        BOOST_FOREACH(const std::string &source, from->getSyncSources()) {
+            allSources.insert(source);
+        }
+        sources = &allSources;
+    }
+
+    // Apply config changes on-the-fly. Regardless what we do
+    // (changing an existing config, migrating, creating from
+    // a template), existing shared properties in the desired
+    // context must be preserved unless explicitly overwritten.
+    // Therefore read those, update with command line properties,
+    // then set as filter.
+    ConfigProps syncFilter;
+    SourceProps sourceFilters;
+    m_props.createFilters(to->getContextName(), to->getConfigName(), sources, syncFilter, sourceFilters);
+    from->setConfigFilter(true, "", syncFilter);
+    BOOST_FOREACH(const SourceProps::value_type &entry, sourceFilters) {
+        from->setConfigFilter(false, entry.first, entry.second);
+    }
+
+    // Write into the requested configuration, creating it if necessary.
+    to->prepareConfigForWrite();
+    to->copy(*from, sources);
+}
+
+void Cmdline::finishCopy(const boost::shared_ptr<SyncConfig> &from,
+                         const boost::shared_ptr<SyncContext> &to)
+{
+    // give a change to do something before flushing configs to files
+    to->preFlush(*to);
+
+    // done, now write it
+    m_configModified = true;
+    to->flush();
+
+    // migrating peer?
+    if (m_migrate &&
+        from->hasPeerProperties()) {
+        
+        // also copy .synthesis dir
+        string fromDir, toDir;
+        fromDir = from->getRootPath() + "/.synthesis";
+        toDir = to->getRootPath() + "/.synthesis";
+        if (isDir(fromDir)) {
+            cp_r(fromDir, toDir);
+        }
+
+        // Succeeded so far, remove "ConsumerReady" flag from migrated
+        // config to hide that old config from normal UI users. Must
+        // do this without going through SyncConfig, because that
+        // would bump the version.
+        FileConfigNode node(from->getRootPath(), "config.ini", false);
+        BoolConfigProperty ready("ConsumerReady", "", "0");
+        if (ready.getPropertyValue(node)) {
+            ready.setProperty(node, false);
+        }
+        node.flush();
+
+        // Set ConsumerReady for migrated SyncEvolution < 1.2
+        // configs, because in older releases all existing
+        // configurations where shown. SyncEvolution 1.2 is more
+        // strict and assumes that ConsumerReady must be set
+        // explicitly. The sync-ui always has set the flag for
+        // configs created or modified with it, but the command
+        // line did not. Matches similar code in
+        // syncevo-dbus-server.          
+        if (from->getConfigVersion(CONFIG_LEVEL_PEER, CONFIG_CUR_VERSION) == 0 /* SyncEvolution < 1.2 */) {
+            to->setConsumerReady(true);
+            to->flush();
+        }
+    }
+}
+
+void Cmdline::migratePeer(const std::string &fromPeer, const std::string &toPeer)
+{
+    boost::shared_ptr<SyncConfig> from(new SyncConfig(fromPeer));
+    makeObsolete(from);
+    // hack: move to different target config for createSyncClient()
+    m_server = toPeer;
+    boost::shared_ptr<SyncContext> to(createSyncClient());
+    copyConfig(from, to, set<string>());
+    finishCopy(from, to);
+}
+
+/**
+ * Finds first instance of delimiter string in other string. In
+ * addition, it treats "\n\n" in a special way: that delimiter also
+ * matches "\n\r\n".
+ */
+class FindDelimiter {
+    const string m_delimiter;
+public:
+    FindDelimiter(const string &delimiter) :
+        m_delimiter(delimiter)
+    {}
+    boost::iterator_range<string::iterator> operator()(string::iterator begin,
+                                                       string::iterator end)
+    {
+        if (m_delimiter == "\n\n") {
+            // match both "\n\n" and "\n\r\n"
+            while (end - begin >= 2) {
+                if (*begin == '\n') {
+                    if (*(begin + 1) == '\n') {
+                        return boost::iterator_range<string::iterator>(begin, begin + 2);
+                    } else if (end - begin >= 3 &&
+                               *(begin + 1) == '\r' &&
+                               *(begin + 2) == '\n') {
+                        return boost::iterator_range<string::iterator>(begin, begin + 3);
+                    }
+                }
+                ++begin;
+            }
+            return boost::iterator_range<string::iterator>(end, end);
+        } else {
+            boost::sub_range<string> range(begin, end);
+            return boost::find_first(range, m_delimiter);
+        }
+    }
+};
+
 bool Cmdline::run() {
     // --dry-run is only supported by some operations.
     // Be very strict about it and make sure it is off in all
     // potentially harmful operations, otherwise users might
     // expect it to have an effect when it doesn't.
 
+    // TODO: check filter properties for invalid config and source
+    // names
+
     if (m_usage) {
         usage(true);
     } else if (m_version) {
-        printf("SyncEvolution %s\n", VERSION);
+        printf("SyncEvolution %s%s\n",
+               VERSION,
+               SyncContext::isStableRelease() ? "" : " (pre-release)");
         printf("%s", EDSAbiWrapperInfo());
         printf("%s", SyncSource::backendsInfo().c_str());
     } else if (m_printServers || boost::trim_copy(m_server) == "?") {
@@ -414,12 +629,14 @@ bool Cmdline::run() {
         boost::shared_ptr<FilterConfigNode> trackingNode(new VolatileConfigNode());
         boost::shared_ptr<FilterConfigNode> serverNode(new VolatileConfigNode());
         SyncSourceNodes nodes(true, sharedNode, configNode, hiddenNode, trackingNode, serverNode, "");
-        SyncSourceParams params("list", nodes);
+        SyncSourceParams params("list", nodes, boost::shared_ptr<const SyncConfig>());
         
         BOOST_FOREACH(const RegisterSyncSource *source, registry) {
             BOOST_FOREACH(const Values::value_type &alias, source->m_typeValues) {
                 if (!alias.empty() && source->m_enabled) {
-                    configNode->setProperty("type", *alias.begin());
+                    SourceType type(*alias.begin());
+                    sharedNode->setProperty("backend", type.m_backend);
+                    sharedNode->setProperty("databaseFormat", type.m_localFormat);
                     auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
                     if (source.get() != NULL) {
                         listSources(*source, boost::join(alias, " = "));
@@ -433,7 +650,7 @@ bool Cmdline::run() {
     } else if (m_printConfig) {
         boost::shared_ptr<SyncConfig> config;
         ConfigProps syncFilter;
-        SourceFilters_t sourceFilters;
+        SourceProps sourceFilters;
 
         if (m_template.empty()) {
             if (m_server.empty()) {
@@ -446,8 +663,10 @@ bool Cmdline::run() {
                 return false;
             }
 
-            syncFilter = m_syncProps;
-            sourceFilters[""] = m_sourceProps;
+            // No need to include a context or additional sources,
+            // because reading the m_server config already includes
+            // the right information.
+            m_props.createFilters("", m_server, NULL, syncFilter, sourceFilters);
         } else {
             string peer, context;
             SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(m_template), peer, context);
@@ -458,7 +677,15 @@ bool Cmdline::run() {
                 return false;
             }
 
-            getFilters(context, syncFilter, sourceFilters);
+            // When instantiating a template, include the properties
+            // of the target context as filter to preserve shared
+            // properties, the final name inside that context as
+            // peer config name, and the sources defined in the template.
+            list<string> sourcelist = config->getSyncSources();
+            set<string> sourceset(sourcelist.begin(), sourcelist.end());
+            m_props.createFilters(std::string("@") + context, "",
+                                  &sourceset,
+                                  syncFilter, sourceFilters);
         }
 
         // determine whether we dump a peer or a context
@@ -485,12 +712,7 @@ bool Cmdline::run() {
                 m_out << endl << "[" << name << "]" << endl;
                 SyncSourceNodes nodes = config->getSyncSourceNodes(name);
                 boost::shared_ptr<FilterConfigNode> sourceProps = nodes.getProperties();
-                SourceFilters_t::const_iterator it = sourceFilters.find(name);
-                if (it != sourceFilters.end()) {
-                    sourceProps->setFilter(it->second);
-                } else {
-                    sourceProps->setFilter(sourceFilters[""]);
-                }
+                sourceProps->setFilter(sourceFilters.createSourceFilter(name));
                 dumpProperties(*sourceProps, SyncSourceConfig::getRegistry(),
                                flags | ((name != *(--sources.end())) ? HIDE_LEGEND : DUMP_PROPS_NORMAL));
             }
@@ -512,18 +734,44 @@ bool Cmdline::run() {
 #endif
         }
 
+        // name of renamed config ("foo.old") after migration
+        string newname;
+
+        // True if the target configuration is a context like @default
+        // or @foobar. Relevant in several places in the following
+        // code.
+        bool configureContext = false;
+
         bool fromScratch = false;
         string peer, context;
         SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(m_server), peer, context);
         if (peer.empty()) {
+            configureContext = true;
             checkForPeerProps();
         }
+
+        // Make m_server a fully-qualified name. Useful in error
+        // messages and essential for migrating "foo" where "foo"
+        // happens to map to "foo@bar".  Otherwise "foo" will be
+        // mapped incorrectly to "foo@default" after renaming
+        // "foo@bar" to "foo.old@bar".
+        //
+        // The inverse problem can occur for "foo@default": after
+        // renaming, "foo" without "@default" would be mapped to
+        // "foo@somewhere-else" if such a config exists.
+        m_server = peer + "@" + context;
 
         // Both config changes and migration are implemented as copying from
         // another config (template resp. old one). Migration also moves
         // the old config.
         boost::shared_ptr<SyncConfig> from;
+        string origPeer;
         if (m_migrate) {
+            if (!m_sources.empty()) {
+                m_err << "ERROR: cannot migrate individual sources" << endl;
+                return false;
+            }
+
             string oldContext = context;
             from.reset(new SyncConfig(m_server));
             if (!from->exists()) {
@@ -536,32 +784,42 @@ bool Cmdline::run() {
                 }
             }
 
-            int counter = 0;
-            string oldRoot = from->getRootPath();
-            string suffix;
-            while (true) {
-                string newname;
-                ostringstream newsuffix;
-                newsuffix << ".old";
-                if (counter) {
-                    newsuffix << "." << counter;
+            // Check if we are migrating an individual peer inside
+            // a context which itself is too old. In that case,
+            // the whole context and everything inside it needs to
+            // be migrated.
+            if (!configureContext) {
+                bool obsoleteContext = false;
+                if (from->getLayout() < SyncConfig::SHARED_LAYOUT) {
+                    // check whether @default context exists and is too old;
+                    // in that case migrate it first
+                    SyncConfig target("@default");
+                    if (target.exists() &&
+                        target.getConfigVersion(CONFIG_LEVEL_CONTEXT, CONFIG_CUR_VERSION) <
+                        CONFIG_CONTEXT_MIN_VERSION) {
+                        // migrate all peers inside @default *and* the one outside
+                        origPeer = m_server;
+                        m_server = "@default";
+                        obsoleteContext = true;
+                    }
+                } else {
+                    // config already is inside a context; need to check that context
+                    if (from->getConfigVersion(CONFIG_LEVEL_CONTEXT, CONFIG_CUR_VERSION) <
+                        CONFIG_CONTEXT_MIN_VERSION) {
+                        m_server = string("@") + context;
+                        obsoleteContext = true;
+                    }
                 }
-                suffix = newsuffix.str();
-                newname = oldRoot + suffix;
-                if (!rename(oldRoot.c_str(),
-                            newname.c_str())) {
-                    break;
-                } else if (errno != EEXIST && errno != ENOTEMPTY) {
-                    m_err << "ERROR: renaming " << oldRoot << " to " <<
-                        newname << ": " << strerror(errno) << endl;
-                    return false;
+                if (obsoleteContext) {
+                    // hack: move to different config and back later
+                    from.reset(new SyncConfig(m_server));
+                    peer = "";
+                    configureContext = true;
                 }
-                counter++;
             }
 
-            from.reset(new SyncConfig(peer + suffix +
-                                      (oldContext.empty() ? "" : "@") +
-                                      oldContext));
+            // rename on disk and point "from" to it
+            makeObsolete(from);
         } else {
             from.reset(new SyncConfig(m_server));
             if (!from->exists()) {
@@ -571,7 +829,12 @@ bool Cmdline::run() {
                 if (m_template.empty()) {
                     // template is the peer name
                     configTemplate = m_server;
-                    SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(configTemplate), peer, context);
+                    if (configureContext) {
+                        // configuring a context, template doesn't matter =>
+                        // use default "SyncEvolution" template
+                        configTemplate =
+                            peer = "SyncEvolution";
+                    }
                 } else {
                     // Template is specified explicitly. It must not contain a context,
                     // because the context comes from the config name.
@@ -615,23 +878,33 @@ bool Cmdline::run() {
             }
         }
 
-        // Apply config changes on-the-fly. Regardless what we do
-        // (changing an existing config, migrating, creating from
-        // a template), existing shared properties in the desired
-        // context must be preserved unless explicitly overwritten.
-        // Therefore read those, update with command line properties,
-        // then set as filter.
-        ConfigProps syncFilter;
-        SourceFilters_t sourceFilters;
-        getFilters(context, syncFilter, sourceFilters);
-        from->setConfigFilter(true, "", syncFilter);
-        BOOST_FOREACH(const SourceFilters_t::value_type &entry, sourceFilters) {
-            from->setConfigFilter(false, entry.first, entry.second);
+        // Which sources are configured is determined as follows:
+        // - all sources in the template by default (empty set), except when
+        // - sources are listed explicitly, and either
+        // - updating an existing config or
+        // - configuring a context.
+        //
+        // This implies that when configuring a peer from scratch, all
+        // sources in the template will be created, with command line
+        // source properties applied to all of them. This might not be
+        // what we want, but because this is how we have done it
+        // traditionally, I keep this behavior for now.
+        //
+        // When migrating, m_sources is empty and thus the whole set of
+        // sources will be migrated. Checking it here for clarity's sake.
+        set<string> sources;
+        if (!m_migrate &&
+            !m_sources.empty() &&
+            (!fromScratch || configureContext)) {
+            sources = m_sources;
         }
 
-        // write into the requested configuration, creating it if necessary
+        // copy and filter into the target config: createSyncClient()
+        // creates a SyncContext for m_server, with propert
+        // implementation of the password handling methods in derived
+        // classes (D-Bus server, real command line)
         boost::shared_ptr<SyncContext> to(createSyncClient());
-        to->copy(*from, !fromScratch && !m_sources.empty() ? &m_sources : NULL);
+        copyConfig(from, to, sources);
 
         // Sources are active now according to the server default.
         // Disable all sources not selected by user (if any selected)
@@ -657,7 +930,7 @@ bool Cmdline::run() {
                     }
 
                     // check whether the sync source works
-                    SyncSourceParams params("list", to->getSyncSourceNodes(source));
+                    SyncSourceParams params("list", to->getSyncSourceNodes(source), to);
                     auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
                     if (syncSource.get() == NULL) {
                         disable = "no backend available";
@@ -673,18 +946,27 @@ bool Cmdline::run() {
                     }
                 }
 
+                // Do sanity checking of source (can it be enabled?),
+                // but only set the sync mode if configuring a peer.
+                // A context-only config doesn't have the "sync"
+                // property.
+                string syncMode;
                 if (!disable.empty()) {
                     // abort if the user explicitly asked for the sync source
                     // and it cannot be enabled, otherwise disable it silently
                     if (selected) {
                         SyncContext::throwError(source + ": " + disable);
                     }
-                    sourceConfig->setSync("disabled");
+                    syncMode = "disabled";
                 } else if (selected) {
                     // user absolutely wants it: enable even if off by default
-                    FilterConfigNode::ConfigFilter::const_iterator sync =
-                        m_sourceProps.find(SyncSourceConfig::m_sourcePropSync.getName());
-                    sourceConfig->setSync(sync == m_sourceProps.end() ? "two-way" : sync->second);
+                    ConfigProps filter = m_props.createSourceFilter(m_server, source);
+                    ConfigProps::const_iterator sync = filter.find("sync");
+                    syncMode = sync == filter.end() ? "two-way" : sync->second;
+                }
+                if (!syncMode.empty() &&
+                    !configureContext) {
+                    sourceConfig->setSync(syncMode);
                 }
             }
 
@@ -692,19 +974,17 @@ bool Cmdline::run() {
                 SyncContext::throwError(string("no such source(s): ") + boost::join(sources, " "));
             }
         }
-        // give a change to do something before flushing configs to files
-        to->preFlush(*to);
 
-        // done, now write it
-        to->flush();
+        // flush, move .synthesis dir, set ConsumerReady, ...
+        finishCopy(from, to);
 
-        // also copy .synthesis dir?
-        if (m_migrate) {
-            string fromDir, toDir;
-            fromDir = from->getRootPath() + "/.synthesis";
-            toDir = to->getRootPath() + "/.synthesis";
-            if (isDir(fromDir)) {
-                cp_r(fromDir, toDir);
+        // Now also migrate all peers inside context?
+        if (configureContext && m_migrate) {
+            BOOST_FOREACH(const string &peer, from->getPeers()) {
+                migratePeer(peer + from->getContextName(), peer + to->getContextName());
+            }
+            if (!origPeer.empty()) {
+                migratePeer(origPeer, origPeer + to->getContextName());
             }
         }
     } else if (m_remove) {
@@ -714,8 +994,7 @@ bool Cmdline::run() {
 
         // extra sanity check
         if (!m_sources.empty() ||
-            !m_syncProps.empty() ||
-            !m_sourceProps.empty()) {
+            m_props.hasProperties()) {
             usage(true, "too many parameters for --remove");
             return false;
         } else {
@@ -725,6 +1004,7 @@ bool Cmdline::run() {
                 SyncContext::throwError(string("no such configuration: ") + m_server);
             }
             config->remove();
+            m_configModified = true;
             return true;
         }
     } else if (m_accessItems) {
@@ -733,13 +1013,15 @@ bool Cmdline::run() {
         context.reset(createSyncClient());
         context->setOutput(&m_out);
 
-        // apply filters
-        context->setConfigFilter(true, "", m_syncProps);
-        context->setConfigFilter(false, "", m_sourceProps);
-
+        // operating on exactly one source
         string sourceName = *m_sources.begin();
+
+        // apply filters
+        context->setConfigFilter(true, "", m_props.createSyncFilter(m_server));
+        context->setConfigFilter(false, "", m_props.createSourceFilter(m_server, sourceName));
+
         SyncSourceNodes sourceNodes = context->getSyncSourceNodesNoTracking(sourceName);
-        SyncSourceParams params(sourceName, sourceNodes);
+        SyncSourceParams params(sourceName, sourceNodes, context);
         cxxptr<SyncSource> source(SyncSource::createSource(params, true));
 
         sysync::TSyError err;
@@ -760,19 +1042,26 @@ bool Cmdline::run() {
             BOOST_FOREACH(string &luid, luids) {
                 string description;
                 if (logging) {
-                    description = logging->getDescription(SafeConfigNode::unescape(luid));
+                    description = logging->getDescription(luid);
                     if (!description.empty()) {
                         description.insert(0, ": ");
                     }
                 }
-                m_out << luid << description << std::endl;
+                m_out << CmdlineLUID::fromLUID(luid) << description << std::endl;
             }
         } else if (m_deleteItems) {
             if (!ops.m_deleteItem) {
                 source->throwError("deleting items not supported");
             }
+            list<string> luids;
+            bool deleteAll = std::find(m_luids.begin(), m_luids.end(), "*") != m_luids.end();
             err = ops.m_startDataRead("", "");
             CHECK_ERROR("reading items");
+            if (deleteAll) {
+                readLUIDs(source, luids);
+            } else {
+                luids = m_luids;
+            }
             if (ops.m_endDataRead) {
                 err = ops.m_endDataRead();
                 CHECK_ERROR("stop reading items");
@@ -781,14 +1070,18 @@ bool Cmdline::run() {
                 err = ops.m_startDataWrite();
                 CHECK_ERROR("writing items");
             }
-            BOOST_FOREACH(const string &luid, m_luids) {
+            BOOST_FOREACH(const string &luid, luids) {
                 sysync::ItemIDType id;
-                string tmp = SafeConfigNode::unescape(luid);
-                id.item = (char *)tmp.c_str();
+                id.item = (char *)luid.c_str();
                 err = ops.m_deleteItem(&id);
                 CHECK_ERROR("deleting item");
             }
-            // NO err = ops.m_endDataWrite(), see import/update below.
+            char *token;
+            err = ops.m_endDataWrite(true, &token);
+            if (token) {
+                free(token);
+            }
+            CHECK_ERROR("stop writing items");
         } else {
             SyncSourceRaw *raw = dynamic_cast<SyncSourceRaw *>(source.get());
             if (!raw) {
@@ -825,17 +1118,18 @@ bool Cmdline::run() {
                             }
                         }
                         m_out << "#0: "
-                              << insertItem(raw, luid, content) 
+                              << insertItem(raw, luid, content).getEncoded()
                               << endl;
                     } else {
                         typedef boost::split_iterator<string::iterator> string_split_iterator;
                         int count = 0;
+                        FindDelimiter finder(m_delimiter);
+
                         // when updating, check number of luids in advance
                         if (m_update) {
                             unsigned long total = 0;
                             for (string_split_iterator it =
-                                     boost::make_split_iterator(content,
-                                                                boost::first_finder(m_delimiter, boost::is_iequal()));
+                                     boost::make_split_iterator(content, finder);
                                  it != string_split_iterator();
                                  ++it) {
                                 total++;
@@ -847,8 +1141,7 @@ bool Cmdline::run() {
                         }
                         list<string>::const_iterator luidit = m_luids.begin();
                         for (string_split_iterator it =
-                                 boost::make_split_iterator(content,
-                                                            boost::first_finder(m_delimiter, boost::is_iequal()));
+                                 boost::make_split_iterator(content, finder);
                              it != string_split_iterator();
                              ++it) {
                             m_out << "#" << count << ": ";
@@ -863,7 +1156,7 @@ bool Cmdline::run() {
                             }
                             m_out << insertItem(raw,
                                                 luid,
-                                                string(it->begin(), it->end()))
+                                                string(it->begin(), it->end())).getEncoded()
                                   << endl;
                             count++;
                         }
@@ -878,15 +1171,15 @@ bool Cmdline::run() {
                         if (!ReadFile(path, content)) {
                             SyncContext::throwError(path, errno);
                         }
-                        m_out << insertItem(raw, "", content) << endl;
+                        m_out << insertItem(raw, "", content).getEncoded() << endl;
                     }
                 }
-
-                // NO err = ops.m_endDataWrite()! That's
-                // intentional. It ensures that for most (all?!)
-                // backends the change tracking isn't updated and thus
-                // future syncs see the imports/updates as changes
-                // made by the user.
+                char *token = NULL;
+                err = ops.m_endDataWrite(true, &token);
+                if (token) {
+                    free(token);
+                }
+                CHECK_ERROR("stop writing items");
             } else if (m_export) {
                 err = ops.m_startDataRead("", "");
                 CHECK_ERROR("reading items");
@@ -907,7 +1200,7 @@ bool Cmdline::run() {
                 try {
                     BOOST_FOREACH(const string &luid, m_luids) {
                         string item;
-                        raw->readItemRaw(SafeConfigNode::unescape(luid), item);
+                        raw->readItemRaw(luid, item);
                         if (!out) {
                             // write into directory
                             string fullPath = m_itemPath + "/" + luid;
@@ -953,28 +1246,24 @@ bool Cmdline::run() {
         std::set<std::string> unmatchedSources;
         boost::shared_ptr<SyncContext> context;
         context.reset(createSyncClient());
+        context->setConfigProps(m_props);
         context->setQuiet(m_quiet);
         context->setDryRun(m_dryrun);
-        context->setConfigFilter(true, "", m_syncProps);
+        context->setConfigFilter(true, "", m_props.createSyncFilter(m_server));
         context->setOutput(&m_out);
         if (m_sources.empty()) {
-            if (m_sourceProps.empty()) {
-                // empty source list, empty source filter => run with
-                // existing configuration without filtering it
-            } else {
-                // Special semantic of 'no source selected': apply
-                // filter only to sources which are
-                // *active*. Configuration of inactive sources is left
-                // unchanged. This way we don't activate sync sources
-                // accidentally when the sync mode is modified
-                // temporarily.
-                BOOST_FOREACH(const std::string &source,
-                              context->getSyncSources()) {
-                    boost::shared_ptr<PersistentSyncSourceConfig> source_config =
-                        context->getSyncSourceConfig(source);
-                    if (strcmp(source_config->getSync(), "disabled")) {
-                        context->setConfigFilter(false, source, m_sourceProps);
-                    }
+            // Special semantic of 'no source selected': apply
+            // filter (if any exists) only to sources which are
+            // *active*. Configuration of inactive sources is left
+            // unchanged. This way we don't activate sync sources
+            // accidentally when the sync mode is modified
+            // temporarily.
+            BOOST_FOREACH(const std::string &source,
+                          context->getSyncSources()) {
+                boost::shared_ptr<PersistentSyncSourceConfig> source_config =
+                    context->getSyncSourceConfig(source);
+                if (source_config->getSync() != "disabled") {
+                    context->setConfigFilter(false, source, m_props.createSourceFilter(m_server, source));
                 }
             }
         } else {
@@ -983,33 +1272,32 @@ bool Cmdline::run() {
                           m_sources) {
                 boost::shared_ptr<PersistentSyncSourceConfig> source_config =
                         context->getSyncSourceConfig(source);
+                ConfigProps filter = m_props.createSourceFilter(m_server, source);
                 if (!source_config || !source_config->exists()) {
                     // invalid source name in m_sources, remember and
                     // report this below
                     unmatchedSources.insert(source);
-                } else if (m_sourceProps.find(SyncSourceConfig::m_sourcePropSync.getName()) ==
-                           m_sourceProps.end()) {
+                } else if (filter.find("sync") == filter.end()) {
                     // Sync mode is not set, must override the
                     // "sync=disabled" set below with the original
                     // sync mode for the source or (if that is also
                     // "disabled") with "two-way". The latter is part
                     // of the command line semantic that listing a
                     // source activates it.
-                    FilterConfigNode::ConfigFilter filter = m_sourceProps;
                     string sync = source_config->getSync();
-                    filter[SyncSourceConfig::m_sourcePropSync.getName()] =
+                    filter["sync"] =
                         sync == "disabled" ? "two-way" : sync;
                     context->setConfigFilter(false, source, filter);
                 } else {
                     // sync mode is set, can use m_sourceProps
                     // directly to apply it
-                    context->setConfigFilter(false, source, m_sourceProps);
+                    context->setConfigFilter(false, source, filter);
                 }
             }
 
             // temporarily disable the rest
             FilterConfigNode::ConfigFilter disabled;
-            disabled[SyncSourceConfig::m_sourcePropSync.getName()] = "disabled";
+            disabled["sync"] = "disabled";
             context->setConfigFilter(false, "", disabled);
         }
 
@@ -1060,12 +1348,12 @@ bool Cmdline::run() {
             // safety catch: if props are given, then --run
             // is required
             if (!m_run &&
-                (m_syncProps.size() || m_sourceProps.size())) {
+                (m_props.hasProperties())) {
                 usage(false, "Properties specified, but neither '--configure' nor '--run' - what did you want?");
                 return false;
             }
 
-            return (context->sync() == STATUS_OK);
+            return (context->sync(&m_report) == STATUS_OK);
         }
     }
 
@@ -1080,80 +1368,158 @@ void Cmdline::readLUIDs(SyncSource *source, list<string> &luids)
     sysync::TSyError err = ops.m_readNextItem(&id, &status, true);
     CHECK_ERROR("next item");
     while (status != sysync::ReadNextItem_EOF) {
-        luids.push_back(SafeConfigNode::escape(id.item, true, true));
+        luids.push_back(id.item);
         err = ops.m_readNextItem(&id, &status, false);
         CHECK_ERROR("next item");
     }
 }
 
-string Cmdline::insertItem(SyncSourceRaw *source, const string &luid, const string &data)
+CmdlineLUID Cmdline::insertItem(SyncSourceRaw *source, const string &luid, const string &data)
 {
-    SyncSourceRaw::InsertItemResult res = source->insertItemRaw(SafeConfigNode::unescape(luid), data);
-    return res.m_luid;
+    SyncSourceRaw::InsertItemResult res = source->insertItemRaw(luid, data);
+    CmdlineLUID cluid;
+    cluid.setLUID(res.m_luid);
+    return cluid;
 }
 
 string Cmdline::cmdOpt(const char *opt, const char *param)
 {
     string res = "'";
-    res += opt;
-    if (param) {
+    if (opt) {
+        res += opt;
+    }
+    if (opt && param) {
         res += " ";
+    }
+    if (param) {
         res += param;
     }
     res += "'";
     return res;
 }
 
-bool Cmdline::parseProp(const ConfigPropertyRegistry &validProps,
-                                     FilterConfigNode::ConfigFilter &props,
-                                     const char *opt,
-                                     const char *param,
-                                     const char *propname)
+bool Cmdline::parseProp(PropertyType propertyType,
+                        const char *opt,
+                        const char *param,
+                        const char *propname)
 {
+    std::string args = cmdOpt(opt, param);
+
     if (!param) {
-        usage(true, string("missing parameter for ") + cmdOpt(opt, param));
+        usage(true, string("missing parameter for ") + args);
         return false;
+    }
+
+    // determine property name and parameter for it
+    string propstr;
+    string paramstr;
+    if (propname) {
+        propstr = propname;
+        paramstr = param;
     } else if (boost::trim_copy(string(param)) == "?") {
-        m_dontrun = true;
-        if (propname) {
-            return listPropValues(validProps, propname, opt);
-        } else {
-            return listProperties(validProps, opt);
-        }
+        paramstr = param;
     } else {
-        string propstr;
-        string paramstr;
-        if (propname) {
-            propstr = propname;
-            paramstr = param;
-        } else {
-            const char *equal = strchr(param, '=');
-            if (!equal) {
-                usage(true, string("the '=<value>' part is missing in: ") + cmdOpt(opt, param));
+        const char *equal = strchr(param, '=');
+        if (!equal) {
+            usage(true, string("the '=<value>' part is missing in: ") + args);
+            return false;
+        }
+        propstr.assign(param, equal - param);
+        paramstr.assign(equal + 1);
+    }
+    boost::trim(propstr);
+    boost::trim_left(paramstr);
+
+    // parse full property string
+    PropertySpecifier spec = PropertySpecifier::StringToPropSpec(propstr);
+
+    // determine property type and registry
+    const ConfigPropertyRegistry *validProps = NULL;
+    switch (propertyType) {
+    case SYNC_PROPERTY_TYPE:
+        validProps = &m_validSyncProps;
+        break;
+    case SOURCE_PROPERTY_TYPE:
+        validProps = &m_validSourceProps;
+        break;
+    case UNKNOWN_PROPERTY_TYPE:
+        // must guess based on both registries
+        if (!propstr.empty()) {
+            bool isSyncProp = m_validSyncProps.find(spec.m_property) != NULL;
+            bool isSourceProp = m_validSourceProps.find(spec.m_property) != NULL;
+
+            if (isSyncProp) {
+                if (isSourceProp) {
+                    usage(true, StringPrintf("property '%s' in %s could be both a sync and a source property, use --sync-property or --source-property to disambiguate it", propname, args.c_str()));
+                    return false;
+                } else {
+                    validProps = &m_validSyncProps;
+                }
+            } else if (isSourceProp ||
+                       boost::iequals(spec.m_property, "type")) {
+                validProps = &m_validSourceProps;
+            } else {
+                usage(true, StringPrintf("unrecognized property '%s' in %s", propname, args.c_str()));
                 return false;
             }
-            propstr.assign(param, equal - param);
-            paramstr.assign(equal + 1);
+        } else {
+            usage(true, StringPrintf("a property name must be given in '%s'", args.c_str()));
         }
+    }
 
-        boost::trim(propstr);
-        boost::trim_left(paramstr);
-
+    if (boost::trim_copy(string(param)) == "?") {
+        m_dontrun = true;
+        if (propname) {
+            return listPropValues(*validProps, spec.m_property, opt ? opt : "");
+        } else {
+            return listProperties(*validProps, opt ? opt : "");
+        }
+    } else {
         if (boost::trim_copy(paramstr) == "?") {
             m_dontrun = true;
-            return listPropValues(validProps, propstr, cmdOpt(opt, param));
+            return listPropValues(*validProps, spec.m_property, args);
         } else {
-            const ConfigProperty *prop = validProps.find(propstr);
-            if (!prop) {
-                m_err << "ERROR: " << cmdOpt(opt, param) << ": no such property" << endl;
+            const ConfigProperty *prop = validProps->find(spec.m_property);
+            if (!prop && boost::iequals(spec.m_property, "type")) {
+                // compatiblity mode for "type": map to the properties which
+                // replaced it
+                prop = validProps->find("backend");
+                if (!prop) {
+                    m_err << "ERROR: backend: no such property" << endl;
+                    return false;
+                }
+                SourceType sourceType(paramstr);
+                string error;
+                if (!prop->checkValue(sourceType.m_backend, error)) {
+                    m_err << "ERROR: " << args << ": " << error << endl;
+                    return false;
+                }
+                ContextProps &props = m_props[spec.m_config];
+                props.m_sourceProps[spec.m_source]["backend"] = sourceType.m_backend;
+                props.m_sourceProps[spec.m_source]["databaseFormat"] = sourceType.m_localFormat;
+                props.m_sourceProps[spec.m_source]["syncFormat"] = sourceType.m_format;
+                props.m_sourceProps[spec.m_source]["forceSyncFormat"] = sourceType.m_forceFormat ? "1" : "0";
+                return true;
+            } else if (!prop) {
+                m_err << "ERROR: " << args << ": no such property" << endl;
                 return false;
             } else {
                 string error;
                 if (!prop->checkValue(paramstr, error)) {
-                    m_err << "ERROR: " << cmdOpt(opt, param) << ": " << error << endl;
+                    m_err << "ERROR: " << args << ": " << error << endl;
                     return false;
                 } else {
-                    props[propstr] = paramstr;
+                    ContextProps &props = m_props[spec.m_config];
+                    if (validProps == &m_validSyncProps) {
+                        // complain if sync property includes source prefix
+                        if (!spec.m_source.empty()) {
+                            m_err << "ERROR: " << args << ": source name '" << spec.m_source << "' not allowed in sync property" << endl;
+                            return false;
+                        }
+                        props.m_syncProps[spec.m_property] = paramstr;
+                    } else {
+                        props.m_sourceProps[spec.m_source][spec.m_property] = paramstr;
+                    }
                     return true;                        
                 }
             }
@@ -1166,7 +1532,13 @@ bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
                                           const string &opt)
 {
     const ConfigProperty *prop = validProps.find(propName);
-    if (!prop) {
+    if (!prop && boost::iequals(propName, "type")) {
+        m_out << opt << endl;
+        m_out << "   <backend>[:<format>[:<version][!]]" << endl;
+        m_out << "   legacy property, replaced by 'backend', 'databaseFormat'," << endl;
+        m_out << "   'syncFormat', 'forceSyncFormat'" << endl;
+        return true;
+    } else if (!prop) {
         m_err << "ERROR: "<< opt << ": no such property" << endl;
         return false;
     } else {
@@ -1204,67 +1576,48 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
                 }
                 comment = newComment;
             }
-            m_out << prop->getName() << ":" << endl;
+            m_out << prop->getMainName() << ":" << endl;
         }
     }
     dumpComment(m_out, "   ", comment);
     return true;
 }
 
-void Cmdline::getFilters(const string &context,
-                         ConfigProps &syncFilter,
-                         map<string, ConfigProps> &sourceFilters)
-{
-    // Read from context. If it does not exist, we simply set no properties
-    // as filter. Previously there was a check for existance, but that was
-    // flawed because it ignored the global property "defaultPeer".
-    boost::shared_ptr<SyncConfig> shared(new SyncConfig(string("@") + context));
-    shared->getProperties()->readProperties(syncFilter);
-    BOOST_FOREACH(StringPair entry, m_syncProps) {
-        syncFilter[entry.first] = entry.second;
-    }
-
-    BOOST_FOREACH(std::string source, shared->getSyncSources()) {
-        SyncSourceNodes nodes = shared->getSyncSourceNodes(source, "");
-        ConfigProps &props = sourceFilters[source];
-        nodes.getProperties()->readProperties(props);
-
-        // Special case "type" property: the value in the context
-        // is not preserved. Every new peer must ensure that
-        // its own value is compatible (= same backend) with
-        // the other peers.
-        props.erase("type");
-
-        BOOST_FOREACH(StringPair entry, m_sourceProps) {
-            props[entry.first] = entry.second;
-        }
-    }
-    sourceFilters[""] = m_sourceProps;
-}
-
 static void findPeerProps(FilterConfigNode::ConfigFilter &filter,
                           ConfigPropertyRegistry &registry,
-                          list<string> &peerProps)
+                          set<string> &peerProps)
 {
     BOOST_FOREACH(StringPair entry, filter) {
         const ConfigProperty *prop = registry.find(entry.first);
         if (prop &&
-            prop->getSharing() == ConfigProperty::NO_SHARING &&
-            !(prop->getFlags() & ConfigProperty::SHARED_AND_UNSHARED)) {
-            peerProps.push_back(entry.first);
+            prop->getSharing() == ConfigProperty::NO_SHARING) {
+            peerProps.insert(entry.first);
         }
     }
 }
 
 void Cmdline::checkForPeerProps()
 {
-    list<string> peerProps;
+    set<string> peerProps;
 
-    findPeerProps(m_syncProps, SyncConfig::getRegistry(), peerProps);
-    findPeerProps(m_sourceProps, SyncSourceConfig::getRegistry(), peerProps);
+    BOOST_FOREACH(FullProps::value_type &entry, m_props) {
+        ContextProps &props = entry.second;
+
+        findPeerProps(props.m_syncProps, SyncConfig::getRegistry(), peerProps);
+        BOOST_FOREACH(SourceProps::value_type &entry, props.m_sourceProps) {
+            findPeerProps(entry.second, SyncSourceConfig::getRegistry(), peerProps);
+        }
+    }
     if (!peerProps.empty()) {
-        SyncContext::throwError(string("per-peer (unshared) properties not allowed: ") +
-                                boost::join(peerProps, ", "));
+        string props = boost::join(peerProps, ", ");
+        if (props == "forceSyncFormat, syncFormat") {
+            // special case: these two properties might have been added by the
+            // legacy "sync" property, which applies to both shared and unshared
+            // properties => cannot determine that here anymore, so ignore it
+        } else {
+            SyncContext::throwError(string("per-peer (unshared) properties not allowed: ") +
+                                    props);
+        }
     }
 }
 
@@ -1326,8 +1679,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
     BOOST_FOREACH(const ConfigProperty *prop, allProps) {
         if (prop->isHidden() ||
             ((flags & HIDE_PER_PEER) &&
-             prop->getSharing() == ConfigProperty::NO_SHARING &&
-             !(prop->getFlags() & ConfigProperty::SHARED_AND_UNSHARED))) {
+             prop->getSharing() == ConfigProperty::NO_SHARING)) {
             continue;
         }
         if (!m_quiet) {
@@ -1342,7 +1694,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
         if (isDefault) {
             m_out << "# ";
         }
-        m_out << prop->getName() << " = " << prop->getProperty(configuredProps) << endl;
+        m_out << prop->getMainName() << " = " << prop->getProperty(configuredProps) << endl;
 
         list<string> *type = NULL;
         switch (prop->getSharing()) {
@@ -1357,7 +1709,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
             break;
         }
         if (type) {
-            type->push_back(prop->getName());
+            type->push_back(prop->getMainName());
         }
     }
 
@@ -1482,9 +1834,10 @@ static string lastLine(const string &buffer)
 
 // true if <word> =
 static bool isPropAssignment(const string &buffer) {
-    // ignore these 2 comments
+    // ignore these comments (occur in type description)
     if (boost::starts_with(buffer, "KCalExtended = ") ||
-            boost::starts_with(buffer, "QtContacts = ")) {
+        boost::starts_with(buffer, "mkcal = ") ||
+        boost::starts_with(buffer, "QtContacts = ")) {
         return false;
     }
                                 
@@ -1675,6 +2028,9 @@ class CmdlineTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE(CmdlineTest);
     CPPUNIT_TEST(testFramework);
     CPPUNIT_TEST(testSetupScheduleWorld);
+    CPPUNIT_TEST(testFutureConfig);
+    CPPUNIT_TEST(testPeerConfigMigration);
+    CPPUNIT_TEST(testContextConfigMigration);
     CPPUNIT_TEST(testSetupDefault);
     CPPUNIT_TEST(testSetupRenamed);
     CPPUNIT_TEST(testSetupFunambol);
@@ -1688,6 +2044,7 @@ class CmdlineTest : public CppUnit::TestFixture {
     CPPUNIT_TEST(testAddSource);
     CPPUNIT_TEST(testSync);
     CPPUNIT_TEST(testConfigure);
+    CPPUNIT_TEST(testConfigureSources);
     CPPUNIT_TEST(testOldConfigure);
     CPPUNIT_TEST(testListSources);
     CPPUNIT_TEST(testMigrate);
@@ -1695,94 +2052,8 @@ class CmdlineTest : public CppUnit::TestFixture {
     
 public:
     CmdlineTest() :
-        m_testDir("CmdlineTest"),
-        // properties sorted by the order in which they are defined
-        // in the sync and sync source property registry
-        m_scheduleWorldConfig("peers/scheduleworld/.internal.ini:# HashCode = 0\n"
-                              "peers/scheduleworld/.internal.ini:# ConfigDate = \n"
-                              "peers/scheduleworld/.internal.ini:# lastNonce = \n"
-                              "peers/scheduleworld/.internal.ini:# deviceData = \n"
-                              "peers/scheduleworld/config.ini:syncURL = http://sync.scheduleworld.com/funambol/ds\n"
-                              "peers/scheduleworld/config.ini:username = your SyncML server account name\n"
-                              "peers/scheduleworld/config.ini:password = your SyncML server password\n"
-                              "config.ini:# logdir = \n"
-                              "peers/scheduleworld/config.ini:# loglevel = 0\n"
-                              "peers/scheduleworld/config.ini:# printChanges = 1\n"
-                              "config.ini:# maxlogdirs = 10\n"
-                              "peers/scheduleworld/config.ini:# autoSync = 0\n"
-                              "peers/scheduleworld/config.ini:# autoSyncInterval = 30M\n"
-                              "peers/scheduleworld/config.ini:# autoSyncDelay = 5M\n"
-                              "peers/scheduleworld/config.ini:# preventSlowSync = 1\n"
-                              "peers/scheduleworld/config.ini:# useProxy = 0\n"
-                              "peers/scheduleworld/config.ini:# proxyHost = \n"
-                              "peers/scheduleworld/config.ini:# proxyUsername = \n"
-                              "peers/scheduleworld/config.ini:# proxyPassword = \n"
-                              "peers/scheduleworld/config.ini:# clientAuthType = md5\n"
-                              "peers/scheduleworld/config.ini:# RetryDuration = 5M\n"
-                              "peers/scheduleworld/config.ini:# RetryInterval = 2M\n"
-                              "peers/scheduleworld/config.ini:# remoteIdentifier = \n"
-                              "peers/scheduleworld/config.ini:# PeerIsClient = 0\n"
-                              "peers/scheduleworld/config.ini:# SyncMLVersion = \n"
-                              "peers/scheduleworld/config.ini:# PeerName = \n"
-                              "config.ini:deviceId = fixed-devid\n" /* this is not the default! */
-                              "peers/scheduleworld/config.ini:# remoteDeviceId = \n"
-                              "peers/scheduleworld/config.ini:# enableWBXML = 1\n"
-                              "peers/scheduleworld/config.ini:# maxMsgSize = 150000\n"
-                              "peers/scheduleworld/config.ini:# maxObjSize = 4000000\n"
-                              "peers/scheduleworld/config.ini:# enableCompression = 0\n"
-                              "peers/scheduleworld/config.ini:# SSLServerCertificates = \n"
-                              "peers/scheduleworld/config.ini:# SSLVerifyServer = 1\n"
-                              "peers/scheduleworld/config.ini:# SSLVerifyHost = 1\n"
-                              "peers/scheduleworld/config.ini:WebURL = http://www.scheduleworld.com\n"
-                              "peers/scheduleworld/config.ini:# IconURI = \n"
-                              "peers/scheduleworld/config.ini:ConsumerReady = 1\n"
-
-                              "peers/scheduleworld/sources/addressbook/.internal.ini:# adminData = \n"
-                              "peers/scheduleworld/sources/addressbook/.internal.ini:# synthesisID = 0\n"
-                              "peers/scheduleworld/sources/addressbook/config.ini:sync = two-way\n"
-                              "sources/addressbook/config.ini:type = addressbook:text/vcard\n"
-                              "peers/scheduleworld/sources/addressbook/config.ini:type = addressbook:text/vcard\n"
-                              "sources/addressbook/config.ini:# evolutionsource = \n"
-                              "peers/scheduleworld/sources/addressbook/config.ini:uri = card3\n"
-                              "sources/addressbook/config.ini:# evolutionuser = \n"
-                              "sources/addressbook/config.ini:# evolutionpassword = \n"
-
-                              "peers/scheduleworld/sources/calendar/.internal.ini:# adminData = \n"
-                              "peers/scheduleworld/sources/calendar/.internal.ini:# synthesisID = 0\n"
-                              "peers/scheduleworld/sources/calendar/config.ini:sync = two-way\n"
-                              "sources/calendar/config.ini:type = calendar\n"
-                              "peers/scheduleworld/sources/calendar/config.ini:type = calendar\n"
-                              "sources/calendar/config.ini:# evolutionsource = \n"
-                              "peers/scheduleworld/sources/calendar/config.ini:uri = cal2\n"
-                              "sources/calendar/config.ini:# evolutionuser = \n"
-                              "sources/calendar/config.ini:# evolutionpassword = \n"
-
-                              "peers/scheduleworld/sources/memo/.internal.ini:# adminData = \n"
-                              "peers/scheduleworld/sources/memo/.internal.ini:# synthesisID = 0\n"
-                              "peers/scheduleworld/sources/memo/config.ini:sync = two-way\n"
-                              "sources/memo/config.ini:type = memo\n"
-                              "peers/scheduleworld/sources/memo/config.ini:type = memo\n"
-                              "sources/memo/config.ini:# evolutionsource = \n"
-                              "peers/scheduleworld/sources/memo/config.ini:uri = note\n"
-                              "sources/memo/config.ini:# evolutionuser = \n"
-                              "sources/memo/config.ini:# evolutionpassword = \n"
-
-                              "peers/scheduleworld/sources/todo/.internal.ini:# adminData = \n"
-                              "peers/scheduleworld/sources/todo/.internal.ini:# synthesisID = 0\n"
-                              "peers/scheduleworld/sources/todo/config.ini:sync = two-way\n"
-                              "sources/todo/config.ini:type = todo\n"
-                              "peers/scheduleworld/sources/todo/config.ini:type = todo\n"
-                              "sources/todo/config.ini:# evolutionsource = \n"
-                              "peers/scheduleworld/sources/todo/config.ini:uri = task2\n"
-                              "sources/todo/config.ini:# evolutionuser = \n"
-                              "sources/todo/config.ini:# evolutionpassword = ")
+        m_testDir("CmdlineTest")
     {
-#ifdef ENABLE_LIBSOUP
-        // path to SSL certificates has to be set only for libsoup
-        boost::replace_first(m_scheduleWorldConfig,
-                             "SSLServerCertificates = ",
-                             "SSLServerCertificates = /etc/ssl/certs/ca-certificates.crt:/etc/pki/tls/certs/ca-bundle.crt:/usr/share/ssl/certs/ca-bundle.crt");
-#endif
     }
 
 protected:
@@ -1876,6 +2147,205 @@ protected:
         }
     }
 
+    void expectTooOld() {
+        bool caught = false;
+        try {
+            SyncConfig config("scheduleworld");
+        } catch (const StatusException &ex) {
+            caught = true;
+            if (ex.syncMLStatus() != STATUS_RELEASE_TOO_OLD) {
+                throw;
+            } else {
+                CPPUNIT_ASSERT_EQUAL(StringPrintf("SyncEvolution %s is too old to read configuration 'scheduleworld', please upgrade SyncEvolution.", VERSION),
+                                     string(ex.what()));
+            }
+        }
+        CPPUNIT_ASSERT(caught);
+    }
+
+    void testFutureConfig() {
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
+        rm_r(m_testDir);
+        doSetupScheduleWorld(false);
+        // bump min/cur version to something not supported, then
+        // try to read => should fail
+        IniFileConfigNode root(m_testDir, "/syncevolution/.internal.ini", false);
+        IniFileConfigNode context(m_testDir + "/syncevolution/default", ".internal.ini", false);
+        IniFileConfigNode peer(m_testDir + "/syncevolution/default/peers/scheduleworld", ".internal.ini", false);
+        root.setProperty("rootMinVersion", StringPrintf("%d", CONFIG_ROOT_MIN_VERSION + 1));
+        root.setProperty("rootCurVersion", StringPrintf("%d", CONFIG_ROOT_CUR_VERSION + 1));
+        root.flush();
+        context.setProperty("contextMinVersion", StringPrintf("%d", CONFIG_CONTEXT_MIN_VERSION + 1));
+        context.setProperty("contextCurVersion", StringPrintf("%d", CONFIG_CONTEXT_CUR_VERSION + 1));
+        context.flush();
+        peer.setProperty("peerMinVersion", StringPrintf("%d", CONFIG_PEER_MIN_VERSION + 1));
+        peer.setProperty("peerCurVersion", StringPrintf("%d", CONFIG_PEER_CUR_VERSION + 1));
+        peer.flush();
+
+        expectTooOld();
+
+        root.setProperty("rootMinVersion", StringPrintf("%d", CONFIG_ROOT_MIN_VERSION));
+        root.flush();
+        expectTooOld();
+
+        context.setProperty("contextMinVersion", StringPrintf("%d", CONFIG_CONTEXT_MIN_VERSION));
+        context.flush();
+        expectTooOld();
+
+        // okay now
+        peer.setProperty("peerMinVersion", StringPrintf("%d", CONFIG_PEER_MIN_VERSION));
+        peer.flush();
+        SyncConfig config("scheduleworld");
+    }
+
+    void expectMigration(const std::string &config) {
+        bool caught = false;
+        try {
+            SyncConfig c(config);
+            c.prepareConfigForWrite();
+        } catch (const StatusException &ex) {
+            caught = true;
+            if (ex.syncMLStatus() != STATUS_MIGRATION_NEEDED) {
+                throw;
+            } else {
+                CPPUNIT_ASSERT_EQUAL(StringPrintf("Proceeding would modify config '%s' such that the "
+                                                  "previous SyncEvolution release will not be able to use it. "
+                                                  "Stopping now. Please explicitly acknowledge this step by "
+                                                  "running the following command on the command line: "
+                                                  "syncevolution --migrate '%s'",
+                                                  config.c_str(),
+                                                  config.c_str()),
+                                     string(ex.what()));
+            }
+        }
+        CPPUNIT_ASSERT(caught);
+    }
+
+    void testPeerConfigMigration() {
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
+        rm_r(m_testDir);
+        doSetupScheduleWorld(false);
+        // decrease min/cur version to something no longer supported,
+        // then try to write => should migrate in release mode and fail otherwise
+        IniFileConfigNode peer(m_testDir + "/syncevolution/default/peers/scheduleworld", ".internal.ini", false);
+        peer.setProperty("peerMinVersion", StringPrintf("%d", CONFIG_PEER_CUR_VERSION - 1));
+        peer.setProperty("peerCurVersion", StringPrintf("%d", CONFIG_PEER_CUR_VERSION - 1));
+        peer.flush();
+
+        SyncContext::setStableRelease(false);
+        expectMigration("scheduleworld");
+
+        SyncContext::setStableRelease(true);
+        {
+            SyncConfig config("scheduleworld");
+            config.prepareConfigForWrite();
+        }
+        {
+            TestCmdline cmdline("--print-servers", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
+                                      "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
+                                      "   scheduleworld.old = CmdlineTest/syncevolution/default/peers/scheduleworld.old\n",
+                                      cmdline.m_out.str());
+        }
+
+        // should be okay now
+        SyncContext::setStableRelease(false);
+        {
+            SyncConfig config("scheduleworld");
+            config.prepareConfigForWrite();
+        }
+
+        // do the same migration with command line
+        SyncContext::setStableRelease(false);
+        rm_r(m_testDir + "/syncevolution/default/peers/scheduleworld");
+        CPPUNIT_ASSERT_EQUAL(0, rename((m_testDir + "/syncevolution/default/peers/scheduleworld.old").c_str(),
+                                       (m_testDir + "/syncevolution/default/peers/scheduleworld").c_str()));
+        {
+            TestCmdline cmdline("--migrate", "scheduleworld", NULL);
+            cmdline.doit();
+        }
+        {
+            SyncConfig config("scheduleworld");
+            config.prepareConfigForWrite();
+        }        
+        {
+            TestCmdline cmdline("--print-servers", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
+                                      "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
+                                      "   scheduleworld.old = CmdlineTest/syncevolution/default/peers/scheduleworld.old\n",
+                                      cmdline.m_out.str());
+        }
+    }
+
+    void testContextConfigMigration() {
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
+        rm_r(m_testDir);
+        doSetupScheduleWorld(false);
+        // decrease min/cur version to something no longer supported,
+        // then try to write => should migrate in release mode and fail otherwise
+        IniFileConfigNode context(m_testDir + "/syncevolution/default", ".internal.ini", false);
+        context.setProperty("contextMinVersion", StringPrintf("%d", CONFIG_CONTEXT_CUR_VERSION - 1));
+        context.setProperty("contextCurVersion", StringPrintf("%d", CONFIG_CONTEXT_CUR_VERSION - 1));
+        context.flush();
+
+        SyncContext::setStableRelease(false);
+        expectMigration("@default");
+
+        SyncContext::setStableRelease(true);
+        {
+            SyncConfig config("@default");
+            config.prepareConfigForWrite();
+        }
+        {
+            TestCmdline cmdline("--print-servers", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
+                                      "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
+                                      "   scheduleworld.old@default.old = CmdlineTest/syncevolution/default.old/peers/scheduleworld.old\n",
+                                      cmdline.m_out.str());
+        }
+
+        // should be okay now
+        SyncContext::setStableRelease(false);
+        {
+            SyncConfig config("@default");
+            config.prepareConfigForWrite();
+        }
+
+        // do the same migration with command line
+        SyncContext::setStableRelease(false);
+        rm_r(m_testDir + "/syncevolution/default");
+        CPPUNIT_ASSERT_EQUAL(0, rename((m_testDir + "/syncevolution/default.old/peers/scheduleworld.old").c_str(),
+                                       (m_testDir + "/syncevolution/default.old/peers/scheduleworld").c_str()));
+        CPPUNIT_ASSERT_EQUAL(0, rename((m_testDir + "/syncevolution/default.old").c_str(),
+                                       (m_testDir + "/syncevolution/default").c_str()));
+        {
+            TestCmdline cmdline("--migrate", "@default", NULL);
+            cmdline.doit();
+        }
+        {
+            SyncConfig config("@default");
+            config.prepareConfigForWrite();
+        }        
+        {
+            TestCmdline cmdline("--print-servers", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
+                                      "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
+                                      "   scheduleworld.old@default.old = CmdlineTest/syncevolution/default.old/peers/scheduleworld.old\n",
+                                      cmdline.m_out.str());
+        }
+    }
+
+
     void testSetupDefault() {
         string root;
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
@@ -1897,6 +2367,7 @@ protected:
         boost::replace_all(expected, "/scheduleworld/", "/some-other-server/");
         CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
     }
+
     void testSetupRenamed() {
         string root;
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
@@ -1904,8 +2375,8 @@ protected:
         ScopedEnvChange home("HOME", m_testDir);
 
         root = m_testDir;
-        root += "/syncevolution/default";
         rm_r(root);
+        root += "/syncevolution/default";
         TestCmdline cmdline("--configure",
                             "--template", "scheduleworld",
                             "--sync-property", "deviceID = fixed-devid",
@@ -2150,6 +2621,31 @@ protected:
         {
             // override context and template properties
             TestCmdline cmdline("--print-config", "--template", "scheduleworld",
+                                "syncURL=foo",
+                                "database=Personal",
+                                "--source-property", "sync=disabled",
+                                NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+            string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
+            boost::replace_first(expected,
+                                 "syncURL = http://sync.scheduleworld.com/funambol/ds",
+                                 "syncURL = foo");
+            boost::replace_all(expected,
+                               "# database = ",
+                               "database = Personal");
+            boost::replace_all(expected,
+                               "sync = two-way",
+                               "sync = disabled");
+            string actual = injectValues(filterConfig(cmdline.m_out.str()));
+            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
+            CPPUNIT_ASSERT_EQUAL_DIFF(expected,
+                                      actual);
+        }
+
+        {
+            // override context and template properties, using legacy property name
+            TestCmdline cmdline("--print-config", "--template", "scheduleworld",
                                 "--sync-property", "syncURL=foo",
                                 "--source-property", "evolutionsource=Personal",
                                 "--source-property", "sync=disabled",
@@ -2161,8 +2657,8 @@ protected:
                                  "syncURL = http://sync.scheduleworld.com/funambol/ds",
                                  "syncURL = foo");
             boost::replace_all(expected,
-                               "# evolutionsource = ",
-                               "evolutionsource = Personal");
+                               "# database = ",
+                               "database = Personal");
             boost::replace_all(expected,
                                "sync = two-way",
                                "sync = disabled");
@@ -2188,7 +2684,7 @@ protected:
         {
             // change shared source properties, then check template again
             TestCmdline cmdline("--configure",
-                                "--source-property", "evolutionsource=Personal",
+                                "--source-property", "database=Personal",
                                 "funambol",
                                 NULL);
             cmdline.doit();
@@ -2204,8 +2700,8 @@ protected:
             string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
             // from modified Funambol config
             boost::replace_all(expected,
-                               "# evolutionsource = ",
-                               "evolutionsource = Personal");
+                               "# database = ",
+                               "database = Personal");
             string actual = injectValues(filterConfig(cmdline.m_out.str()));
             CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
             CPPUNIT_ASSERT_EQUAL_DIFF(expected,
@@ -2317,12 +2813,14 @@ protected:
                 "peers/scheduleworld/sources/xyz/.internal.ini:# adminData = \n"
                 "peers/scheduleworld/sources/xyz/.internal.ini:# synthesisID = 0\n"
                 "peers/scheduleworld/sources/xyz/config.ini:# sync = disabled\n"
-                "peers/scheduleworld/sources/xyz/config.ini:# type = select backend\n"
                 "peers/scheduleworld/sources/xyz/config.ini:uri = dummy\n"
-                "sources/xyz/config.ini:# type = select backend\n"
-                "sources/xyz/config.ini:# evolutionsource = \n"
-                "sources/xyz/config.ini:# evolutionuser = \n"
-                "sources/xyz/config.ini:# evolutionpassword = ";
+                "peers/scheduleworld/sources/xyz/config.ini:# syncFormat = \n"
+                "peers/scheduleworld/sources/xyz/config.ini:# forceSyncFormat = 0\n"
+                "sources/xyz/config.ini:# backend = select backend\n"
+                "sources/xyz/config.ini:# database = \n"
+                "sources/xyz/config.ini:# databaseFormat = \n"
+                "sources/xyz/config.ini:# databaseUser = \n"
+                "sources/xyz/config.ini:# databasePassword = ";
             sortConfig(expected);
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
         }
@@ -2342,7 +2840,7 @@ protected:
         TestCmdline help("--sync", " ?", NULL);
         help.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("--sync\n"
-                                  "   requests a certain synchronization mode:\n"
+                                  "   Requests a certain synchronization mode when initiating a sync:\n"
                                   "     two-way             = only send/receive changes since last sync\n"
                                   "     slow                = exchange all items\n"
                                   "     refresh-from-client = discard all remote items and replace with\n"
@@ -2351,7 +2849,13 @@ protected:
                                   "                           the items on the server\n"
                                   "     one-way-from-client = transmit changes from client\n"
                                   "     one-way-from-server = transmit changes from server\n"
-                                  "     none (or disabled)  = synchronization disabled\n",
+                                  "     disabled (or none)  = synchronization disabled\n"
+                                  "   When accepting a sync session in a SyncML server (HTTP server), only\n"
+                                  "   sources with sync != disabled are made available to the client,\n"
+                                  "   which chooses the final sync mode based on its own configuration.\n"
+                                  "   When accepting a sync session in a SyncML client (local sync with\n"
+                                  "   the server contacting SyncEvolution on a device), the sync mode\n"
+                                  "   specified in the client is typically overriden by the server.\n",
                                   help.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("", help.m_err.str());
 
@@ -2360,18 +2864,17 @@ protected:
         CPPUNIT_ASSERT(!filter.m_cmdline->run());
         CPPUNIT_ASSERT_EQUAL_DIFF("", filter.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("sync = refresh-from-server",
-                                  string(filter.m_cmdline->m_sourceProps));
-        CPPUNIT_ASSERT_EQUAL_DIFF("",
-                                  string(filter.m_cmdline->m_syncProps));
+                                  string(filter.m_cmdline->m_props[""].m_sourceProps[""]));
+        CPPUNIT_ASSERT_EQUAL_DIFF("",                                  string(filter.m_cmdline->m_props[""].m_syncProps));
 
         TestCmdline filter2("--source-property", "sync=refresh", NULL);
         CPPUNIT_ASSERT(filter2.m_cmdline->parse());
         CPPUNIT_ASSERT(!filter2.m_cmdline->run());
         CPPUNIT_ASSERT_EQUAL_DIFF("", filter2.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("sync = refresh",
-                                  string(filter2.m_cmdline->m_sourceProps));
+                                  string(filter2.m_cmdline->m_props[""].m_sourceProps[""]));
         CPPUNIT_ASSERT_EQUAL_DIFF("",
-                                  string(filter2.m_cmdline->m_syncProps));
+                                  string(filter2.m_cmdline->m_props[""].m_syncProps));
     }
 
     void testConfigure() {
@@ -2384,36 +2887,48 @@ protected:
         string expected = doConfigure(ScheduleWorldConfig(), "sources/addressbook/config.ini:");
 
         {
-            // updating type for peer must also update type for context
+            // updating "type" for peer is mapped to updating "backend",
+            // "databaseFormat", "syncFormat", "forceSyncFormat"
             TestCmdline cmdline("--configure",
-                                "--source-property", "type=file:text/vcard:3.0",
-                                "scheduleworld", "addressbook",
+                                "--source-property", "addressbook/type=file:text/vcard:3.0",
+                                "scheduleworld",
                                 NULL);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-            boost::replace_all(expected,
-                               "type = addressbook:text/vcard",
-                               "type = file:text/vcard:3.0");
+            boost::replace_first(expected,
+                                 "backend = addressbook",
+                                 "backend = file");
+            boost::replace_first(expected,
+                                 "# databaseFormat = ",
+                                 "databaseFormat = text/vcard");
+            boost::replace_first(expected,
+                                 "# forceSyncFormat = 0",
+                                 "forceSyncFormat = 0");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected,
                                       filterConfig(printConfig("scheduleworld")));
             string shared = filterConfig(printConfig("@default"));
-            CPPUNIT_ASSERT(shared.find("type = file:text/vcard:3.0") != shared.npos);
+            CPPUNIT_ASSERT(shared.find("backend = file") != shared.npos);
+            CPPUNIT_ASSERT(shared.find("databaseFormat = text/vcard") != shared.npos);
         }
 
         {
             // updating type for context must not affect peer
             TestCmdline cmdline("--configure",
-                                "--source-property", "type=file:text/vcard:2.1",
+                                "--source-property", "type=file:text/x-vcard:2.1",
                                 "@default", "addressbook",
                                 NULL);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
+            boost::replace_first(expected,
+                                 "databaseFormat = text/vcard",
+                                 "databaseFormat = text/x-vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected,
                                       filterConfig(printConfig("scheduleworld")));
             string shared = filterConfig(printConfig("@default"));
-            CPPUNIT_ASSERT(shared.find("type = file:text/vcard:2.1") != shared.npos);
+            CPPUNIT_ASSERT(shared.find("backend = file") != shared.npos);
+            CPPUNIT_ASSERT(shared.find("databaseFormat = text/x-vcard") != shared.npos);
         }
 
         string syncProperties("syncURL:\n"
@@ -2427,6 +2942,8 @@ protected:
                               "loglevel:\n"
                               "\n"
                               "printChanges:\n"
+                              "\n"
+                              "dumpData:\n"
                               "\n"
                               "maxlogdirs:\n"
                               "\n"
@@ -2486,14 +3003,20 @@ protected:
                               "defaultPeer:\n");
         string sourceProperties("sync:\n"
                                 "\n"
-                                "type:\n"
-                                "\n"
-                                "evolutionsource:\n"
-                                "\n"
                                 "uri:\n"
                                 "\n"
-                                "evolutionuser:\n"
-                                "evolutionpassword:\n");
+                                "backend:\n"
+                                "\n"
+                                "syncFormat:\n"
+                                "\n"
+                                "forceSyncFormat:\n"
+                                "\n"
+                                "database:\n"
+                                "\n"
+                                "databaseFormat:\n"
+                                "\n"
+                                "databaseUser:\n"
+                                "databasePassword:\n");
 
         {
             TestCmdline cmdline("--sync-property", "?",
@@ -2532,6 +3055,148 @@ protected:
             CPPUNIT_ASSERT_EQUAL_DIFF(syncProperties + sourceProperties,
                                       filterIndented(cmdline.m_out.str()));
         }
+
+        {
+            TestCmdline cmdline("--source-property", "sync=?",
+                                NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+            CPPUNIT_ASSERT_EQUAL_DIFF("'--source-property sync=?'\n",
+                                      filterIndented(cmdline.m_out.str()));
+        }
+
+        {
+            TestCmdline cmdline("sync=?",
+                                NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+            CPPUNIT_ASSERT_EQUAL_DIFF("'sync=?'\n",
+                                      filterIndented(cmdline.m_out.str()));
+        }
+
+        {
+            TestCmdline cmdline("syncURL=?",
+                                NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+            CPPUNIT_ASSERT_EQUAL_DIFF("'syncURL=?'\n",
+                                      filterIndented(cmdline.m_out.str()));
+        }
+    }
+
+    void testConfigureSources() {
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
+        rm_r(m_testDir);
+
+        // create from scratch with only addressbook configured
+        {
+            TestCmdline cmdline("--configure",
+                                "--source-property", "database = file://tmp/test",
+                                "--source-property", "type = file:text/x-vcard",
+                                "@foobar",
+                                "addressbook",
+                                NULL);
+            cmdline.doit();
+        }
+        string root = m_testDir;
+        root += "/syncevolution/foobar";
+        string res = scanFiles(root);
+        removeRandomUUID(res);
+        string expected =
+            StringPrintf(".internal.ini:contextMinVersion = %d\n"
+                         ".internal.ini:contextCurVersion = %d\n"
+                         "config.ini:# logdir = \n"
+                         "config.ini:# maxlogdirs = 10\n"
+                         "config.ini:deviceId = fixed-devid\n"
+                         "sources/addressbook/config.ini:backend = file\n"
+                         "sources/addressbook/config.ini:database = file://tmp/test\n"
+                         "sources/addressbook/config.ini:databaseFormat = text/x-vcard\n"
+                         "sources/addressbook/config.ini:# databaseUser = \n"
+                         "sources/addressbook/config.ini:# databasePassword = \n",
+                         CONFIG_CONTEXT_MIN_VERSION,
+                         CONFIG_CONTEXT_CUR_VERSION);
+        CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
+
+        // add calendar
+        {
+            TestCmdline cmdline("--configure",
+                                "--source-property", "database@foobar = file://tmp/test2",
+                                "--source-property", "backend = calendar",
+                                "@foobar",
+                                "calendar",
+                                NULL);
+            cmdline.doit();
+        }
+        res = scanFiles(root);
+        removeRandomUUID(res);
+        expected +=
+            "sources/calendar/config.ini:backend = calendar\n"
+            "sources/calendar/config.ini:database = file://tmp/test2\n"
+            "sources/calendar/config.ini:# databaseFormat = \n"
+            "sources/calendar/config.ini:# databaseUser = \n"
+            "sources/calendar/config.ini:# databasePassword = \n";
+        CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
+
+        // add ScheduleWorld peer: must reuse existing backend settings
+        {
+            TestCmdline cmdline("--configure",
+                                "scheduleworld@foobar",
+                                NULL);
+            cmdline.doit();
+        }
+        res = scanFiles(root);
+        removeRandomUUID(res);
+        expected = ScheduleWorldConfig();
+        boost::replace_all(expected,
+                           "addressbook/config.ini:backend = addressbook",
+                           "addressbook/config.ini:backend = file");
+        boost::replace_all(expected,
+                           "addressbook/config.ini:# database = ",
+                           "addressbook/config.ini:database = file://tmp/test");
+        boost::replace_all(expected,
+                           "addressbook/config.ini:# databaseFormat = ",
+                           "addressbook/config.ini:databaseFormat = text/x-vcard");
+        boost::replace_all(expected,
+                           "calendar/config.ini:# database = ",
+                           "calendar/config.ini:database = file://tmp/test2");
+        sortConfig(expected);
+        CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
+
+        // disable all sources except for addressbook
+        {
+            TestCmdline cmdline("--configure",
+                                "--source-property", "addressbook/sync=two-way",
+                                "--source-property", "sync=none",
+                                "scheduleworld@foobar",
+                                NULL);
+            cmdline.doit();
+        }
+        res = scanFiles(root);
+        removeRandomUUID(res);
+        boost::replace_all(expected, "sync = two-way", "sync = disabled");
+        boost::replace_first(expected, "sync = disabled", "sync = two-way");
+        CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
+
+        // override type in template while creating from scratch
+        {
+            TestCmdline cmdline("--configure",
+                                "--template", "SyncEvolution",
+                                "--source-property", "addressbook/type=file:text/vcard:3.0",
+                                "--source-property", "calendar/type=file:text/calendar:2.0",
+                                "syncevo@syncevo",
+                                NULL);
+            cmdline.doit();
+        }
+        string syncevoroot = m_testDir + "/syncevolution/syncevo";
+        res = scanFiles(syncevoroot + "/sources/addressbook");
+        CPPUNIT_ASSERT(res.find("backend = file\n") != res.npos);
+        CPPUNIT_ASSERT(res.find("databaseFormat = text/vcard\n") != res.npos);
+        res = scanFiles(syncevoroot + "/sources/calendar");
+        CPPUNIT_ASSERT(res.find("backend = file\n") != res.npos);
+        CPPUNIT_ASSERT(res.find("databaseFormat = text/calendar\n") != res.npos);
     }
 
     void testOldConfigure() {
@@ -2548,6 +3213,12 @@ protected:
             "deviceData" +
             "adminData" +
             "synthesisID" +
+            "rootMinVersion" +
+            "rootCurVersion" +
+            "contextMinVersion" +
+            "contextCurVersion" +
+            "peerMinVersion" +
+            "peerCurVersion" +
             "lastNonce" +
             "last";
         BOOST_FOREACH(string &prop, props) {
@@ -2558,7 +3229,28 @@ protected:
 
         rm_r(m_testDir);
         createFiles(m_testDir + "/.sync4j/evolution/scheduleworld", oldConfig);
-        doConfigure(oldConfig, "spds/sources/addressbook/config.txt:");
+
+        // Cannot read/and write old format anymore.
+        SyncContext::setStableRelease(false);
+        expectMigration("scheduleworld");
+
+        // Migrate explicitly.
+        {
+            TestCmdline cmdline("--migrate", "scheduleworld", NULL);
+            cmdline.doit();
+        }
+
+        // now test with new format
+        string expected = ScheduleWorldConfig();
+        boost::replace_first(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
+        boost::replace_first(expected, "# database = ", "database = xyz");
+        boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
+        boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+        // migrating "type" sets forceSyncFormat (always)
+        // and databaseFormat (if format was part of type, as for addressbook)
+        boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
+        boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
+        doConfigure(expected, "sources/addressbook/config.ini:");
     }
 
     string doConfigure(const string &SWConfig, const string &addressbookPrefix) {
@@ -2604,9 +3296,12 @@ protected:
         {
             TestCmdline cmdline("--configure",
                                 "--sync", "two-way",
-                                "-z", "evolutionsource=source",
-                                "--sync-property", "maxlogdirs=20",
-                                "-y", "LOGDIR=logdir",
+                                "-z", "database=source",
+                                // note priority of suffix: most specific wins
+                                "--sync-property", "maxlogdirs@scheduleworld@default=20",
+                                "--sync-property", "maxlogdirs@default=10",
+                                "--sync-property", "maxlogdirs=5",
+                                "-y", "LOGDIR@default=logdir",
                                 "scheduleworld",
                                 NULL);
             cmdline.doit();
@@ -2619,8 +3314,11 @@ protected:
                                "sync = disabled",
                                "sync = two-way");
             boost::replace_all(expected,
-                               "# evolutionsource = ",
-                               "evolutionsource = source");
+                               "# database = ",
+                               "database = source");
+            boost::replace_all(expected,
+                               "database = xyz",
+                               "database = source");
             boost::replace_all(expected,
                                "# maxlogdirs = 10",
                                "maxlogdirs = 20");
@@ -2667,6 +3365,17 @@ protected:
             string migratedConfig = scanFiles(newRoot);
             string expected = ScheduleWorldConfig();
             sortConfig(expected);
+            // migrating SyncEvolution < 1.2 configs sets
+            // ConsumerReady, to keep config visible in the updated
+            // sync-ui
+            boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
+            boost::replace_first(expected, "# database = ", "database = xyz");
+            boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
+            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            // migrating "type" sets forceSyncFormat (always)
+            // and databaseFormat (if format was part of type, as for addressbook)
+            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
+            boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(oldRoot + ".old");
             CPPUNIT_ASSERT_EQUAL_DIFF(createdConfig, renamedConfig);
@@ -2694,6 +3403,12 @@ protected:
             string migratedConfig = scanFiles(newRoot, "scheduleworld");
             string expected = ScheduleWorldConfig();
             sortConfig(expected);
+            boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
+            boost::replace_first(expected, "# database = ", "database = xyz");
+            boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
+            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
+            boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(newRoot, "scheduleworld.old");
             boost::replace_all(createdConfig, "/scheduleworld/", "/scheduleworld.old/");
@@ -2718,8 +3433,14 @@ protected:
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
 
             string migratedConfig = scanFiles(newRoot);
-            string expected = m_scheduleWorldConfig;
+            string expected = ScheduleWorldConfig();
             sortConfig(expected);
+            boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
+            boost::replace_first(expected, "# database = ", "database = xyz");
+            boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
+            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
+            boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             boost::replace_first(expected,
                                  "peers/scheduleworld/sources/addressbook/config.ini",
                                  "peers/scheduleworld/sources/addressbook/.other.ini:foo = bar\n"
@@ -2753,11 +3474,23 @@ protected:
             string migratedConfig = scanFiles(otherRoot);
             string expected = ScheduleWorldConfig();
             sortConfig(expected);
+            boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
+            boost::replace_first(expected, "# database = ", "database = xyz");
+            boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
+            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
+            boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(oldRoot + ".old");
             CPPUNIT_ASSERT_EQUAL_DIFF(createdConfig, renamedConfig);
 
-            // migrate the migrated config again inside the "other" context
+            // migrate the migrated config again inside the "other" context,
+            // with no "default" context which might interfere with the tests
+            //
+            // ConsumerReady was set as part of previous migration,
+            // must be removed during migration to hide the migrated
+            // config from average users.
+            rm_r(newRoot);
             {
                 TestCmdline cmdline("--migrate",
                                     "scheduleworld@other",
@@ -2769,16 +3502,68 @@ protected:
             migratedConfig = scanFiles(otherRoot, "scheduleworld");
             expected = ScheduleWorldConfig();
             sortConfig(expected);
+            boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
+            boost::replace_first(expected, "# database = ", "database = xyz");
+            boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
+            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
+            boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             renamedConfig = scanFiles(otherRoot, "scheduleworld.old");
             boost::replace_all(expected, "/scheduleworld/", "/scheduleworld.old/");
+            boost::replace_all(expected, "ConsumerReady = 1", "ConsumerReady = 0");
+            CPPUNIT_ASSERT_EQUAL_DIFF(expected, renamedConfig);
+
+            // migrate once more, this time without the explicit context in
+            // the config name => must not change the context, need second .old dir
+            {
+                TestCmdline cmdline("--migrate",
+                                    "scheduleworld",
+                                    NULL);
+                cmdline.doit();
+                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
+            }
+            migratedConfig = scanFiles(otherRoot, "scheduleworld");
+            boost::replace_all(expected, "/scheduleworld.old/", "/scheduleworld/");
+            boost::replace_all(expected, "ConsumerReady = 0", "ConsumerReady = 1");          
+            CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
+            renamedConfig = scanFiles(otherRoot, "scheduleworld.old.1");
+            boost::replace_all(expected, "/scheduleworld/", "/scheduleworld.old.1/");
+            boost::replace_all(expected, "ConsumerReady = 1", "ConsumerReady = 0");
+            CPPUNIT_ASSERT_EQUAL_DIFF(expected, renamedConfig);
+
+            // remove ConsumerReady: must be remain unset when migrating
+            // hidden SyncEvolution >= 1.2 configs
+            {
+                TestCmdline cmdline("--configure",
+                                    "--sync-property", "ConsumerReady=0",
+                                    "scheduleworld",
+                                    NULL);
+                cmdline.doit();
+                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
+            }
+
+            // migrate once more => keep ConsumerReady unset
+            {
+                TestCmdline cmdline("--migrate",
+                                    "scheduleworld",
+                                    NULL);
+                cmdline.doit();
+                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
+                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
+            }
+            migratedConfig = scanFiles(otherRoot, "scheduleworld");
+            boost::replace_all(expected, "/scheduleworld.old.1/", "/scheduleworld/");
+            CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
+            renamedConfig = scanFiles(otherRoot, "scheduleworld.old.2");
+            boost::replace_all(expected, "/scheduleworld/", "/scheduleworld.old.2/");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, renamedConfig);
         }
     }
 
-    const string m_testDir;
-    string m_scheduleWorldConfig;
-        
+    const string m_testDir;        
 
 private:
 
@@ -2827,7 +3612,7 @@ private:
             if (m_err.str().size()) {
                 m_out << endl << m_err.str();
             }
-            CPPUNIT_ASSERT(success);
+            CPPUNIT_ASSERT_MESSAGE(m_out.str(), success);
         }
 
         ostringstream m_out, m_err;
@@ -2838,8 +3623,112 @@ private:
         boost::scoped_array<const char *> m_argv;
     };
 
-    string ScheduleWorldConfig() {
-        string config = m_scheduleWorldConfig;
+    string ScheduleWorldConfig(int contextMinVersion = CONFIG_CONTEXT_MIN_VERSION,
+                               int contextCurVersion = CONFIG_CONTEXT_CUR_VERSION,
+                               int peerMinVersion = CONFIG_PEER_MIN_VERSION,
+                               int peerCurVersion = CONFIG_PEER_CUR_VERSION) {
+        // properties sorted by the order in which they are defined
+        // in the sync and sync source property registry
+        string config =
+            StringPrintf("peers/scheduleworld/.internal.ini:peerMinVersion = %d\n"
+                         "peers/scheduleworld/.internal.ini:peerCurVersion = %d\n"
+                         "peers/scheduleworld/.internal.ini:# HashCode = 0\n"
+                         "peers/scheduleworld/.internal.ini:# ConfigDate = \n"
+                         "peers/scheduleworld/.internal.ini:# lastNonce = \n"
+                         "peers/scheduleworld/.internal.ini:# deviceData = \n"
+                         "peers/scheduleworld/config.ini:syncURL = http://sync.scheduleworld.com/funambol/ds\n"
+                         "peers/scheduleworld/config.ini:username = your SyncML server account name\n"
+                         "peers/scheduleworld/config.ini:password = your SyncML server password\n"
+                         ".internal.ini:contextMinVersion = %d\n"
+                         ".internal.ini:contextCurVersion = %d\n"
+                         "config.ini:# logdir = \n"
+                         "peers/scheduleworld/config.ini:# loglevel = 0\n"
+                         "peers/scheduleworld/config.ini:# printChanges = 1\n"
+                         "peers/scheduleworld/config.ini:# dumpData = 1\n"
+                         "config.ini:# maxlogdirs = 10\n"
+                         "peers/scheduleworld/config.ini:# autoSync = 0\n"
+                         "peers/scheduleworld/config.ini:# autoSyncInterval = 30M\n"
+                         "peers/scheduleworld/config.ini:# autoSyncDelay = 5M\n"
+                         "peers/scheduleworld/config.ini:# preventSlowSync = 1\n"
+                         "peers/scheduleworld/config.ini:# useProxy = 0\n"
+                         "peers/scheduleworld/config.ini:# proxyHost = \n"
+                         "peers/scheduleworld/config.ini:# proxyUsername = \n"
+                         "peers/scheduleworld/config.ini:# proxyPassword = \n"
+                         "peers/scheduleworld/config.ini:# clientAuthType = md5\n"
+                         "peers/scheduleworld/config.ini:# RetryDuration = 5M\n"
+                         "peers/scheduleworld/config.ini:# RetryInterval = 2M\n"
+                         "peers/scheduleworld/config.ini:# remoteIdentifier = \n"
+                         "peers/scheduleworld/config.ini:# PeerIsClient = 0\n"
+                         "peers/scheduleworld/config.ini:# SyncMLVersion = \n"
+                         "peers/scheduleworld/config.ini:# PeerName = \n"
+                         "config.ini:deviceId = fixed-devid\n" /* this is not the default! */
+                         "peers/scheduleworld/config.ini:# remoteDeviceId = \n"
+                         "peers/scheduleworld/config.ini:# enableWBXML = 1\n"
+                         "peers/scheduleworld/config.ini:# maxMsgSize = 150000\n"
+                         "peers/scheduleworld/config.ini:# maxObjSize = 4000000\n"
+                         "peers/scheduleworld/config.ini:# enableCompression = 0\n"
+                         "peers/scheduleworld/config.ini:# SSLServerCertificates = \n"
+                         "peers/scheduleworld/config.ini:# SSLVerifyServer = 1\n"
+                         "peers/scheduleworld/config.ini:# SSLVerifyHost = 1\n"
+                         "peers/scheduleworld/config.ini:WebURL = http://www.scheduleworld.com\n"
+                         "peers/scheduleworld/config.ini:# IconURI = \n"
+                         "peers/scheduleworld/config.ini:# ConsumerReady = 0\n"
+
+                         "peers/scheduleworld/sources/addressbook/.internal.ini:# adminData = \n"
+                         "peers/scheduleworld/sources/addressbook/.internal.ini:# synthesisID = 0\n"
+                         "peers/scheduleworld/sources/addressbook/config.ini:sync = two-way\n"
+                         "peers/scheduleworld/sources/addressbook/config.ini:uri = card3\n"
+                         "sources/addressbook/config.ini:backend = addressbook\n"
+                         "peers/scheduleworld/sources/addressbook/config.ini:syncFormat = text/vcard\n"
+                         "peers/scheduleworld/sources/addressbook/config.ini:# forceSyncFormat = 0\n"
+                         "sources/addressbook/config.ini:# database = \n"
+                         "sources/addressbook/config.ini:# databaseFormat = \n"
+                         "sources/addressbook/config.ini:# databaseUser = \n"
+                         "sources/addressbook/config.ini:# databasePassword = \n"
+
+                         "peers/scheduleworld/sources/calendar/.internal.ini:# adminData = \n"
+                         "peers/scheduleworld/sources/calendar/.internal.ini:# synthesisID = 0\n"
+                         "peers/scheduleworld/sources/calendar/config.ini:sync = two-way\n"
+                         "peers/scheduleworld/sources/calendar/config.ini:uri = cal2\n"
+                         "sources/calendar/config.ini:backend = calendar\n"
+                         "peers/scheduleworld/sources/calendar/config.ini:# syncFormat = \n"
+                         "peers/scheduleworld/sources/calendar/config.ini:# forceSyncFormat = 0\n"
+                         "sources/calendar/config.ini:# database = \n"
+                         "sources/calendar/config.ini:# databaseFormat = \n"
+                         "sources/calendar/config.ini:# databaseUser = \n"
+                         "sources/calendar/config.ini:# databasePassword = \n"
+
+                         "peers/scheduleworld/sources/memo/.internal.ini:# adminData = \n"
+                         "peers/scheduleworld/sources/memo/.internal.ini:# synthesisID = 0\n"
+                         "peers/scheduleworld/sources/memo/config.ini:sync = two-way\n"
+                         "peers/scheduleworld/sources/memo/config.ini:uri = note\n"
+                         "sources/memo/config.ini:backend = memo\n"
+                         "peers/scheduleworld/sources/memo/config.ini:# syncFormat = \n"
+                         "peers/scheduleworld/sources/memo/config.ini:# forceSyncFormat = 0\n"
+                         "sources/memo/config.ini:# database = \n"
+                         "sources/memo/config.ini:# databaseFormat = \n"
+                         "sources/memo/config.ini:# databaseUser = \n"
+                         "sources/memo/config.ini:# databasePassword = \n"
+
+                         "peers/scheduleworld/sources/todo/.internal.ini:# adminData = \n"
+                         "peers/scheduleworld/sources/todo/.internal.ini:# synthesisID = 0\n"
+                         "peers/scheduleworld/sources/todo/config.ini:sync = two-way\n"
+                         "peers/scheduleworld/sources/todo/config.ini:uri = task2\n"
+                         "sources/todo/config.ini:backend = todo\n"
+                         "peers/scheduleworld/sources/todo/config.ini:# syncFormat = \n"
+                         "peers/scheduleworld/sources/todo/config.ini:# forceSyncFormat = 0\n"
+                         "sources/todo/config.ini:# database = \n"
+                         "sources/todo/config.ini:# databaseFormat = \n"
+                         "sources/todo/config.ini:# databaseUser = \n"
+                         "sources/todo/config.ini:# databasePassword = ",
+                         peerMinVersion, peerCurVersion,
+                         contextMinVersion, contextCurVersion);
+#ifdef ENABLE_LIBSOUP
+        // path to SSL certificates has to be set only for libsoup
+        boost::replace_first(config,
+                             "SSLServerCertificates = ",
+                             "SSLServerCertificates = /etc/ssl/certs/ca-certificates.crt:/etc/pki/tls/certs/ca-bundle.crt:/usr/share/ssl/certs/ca-bundle.crt");
+#endif
 
 #if 0
         // Currently we don't have an icon for ScheduleWorld. If we
@@ -2869,6 +3758,7 @@ private:
             "spds/syncml/config.txt:# logdir = \n"
             "spds/syncml/config.txt:# loglevel = 0\n"
             "spds/syncml/config.txt:# printChanges = 1\n"
+            "spds/syncml/config.txt:# dumpData = 1\n"
             "spds/syncml/config.txt:# maxlogdirs = 10\n"
             "spds/syncml/config.txt:# autoSync = 0\n"
             "spds/syncml/config.txt:# autoSyncInterval = 30M\n"
@@ -2902,28 +3792,28 @@ private:
             "spds/syncml/config.txt:# SSLVerifyHost = 1\n"
             "spds/syncml/config.txt:WebURL = http://www.scheduleworld.com\n"
             "spds/syncml/config.txt:# IconURI = \n"
-            "spds/syncml/config.txt:ConsumerReady = 1\n"
+            "spds/syncml/config.txt:# ConsumerReady = 0\n"
             "spds/sources/addressbook/config.txt:sync = two-way\n"
             "spds/sources/addressbook/config.txt:type = addressbook:text/vcard\n"
-            "spds/sources/addressbook/config.txt:# evolutionsource = \n"
+            "spds/sources/addressbook/config.txt:evolutionsource = xyz\n"
             "spds/sources/addressbook/config.txt:uri = card3\n"
-            "spds/sources/addressbook/config.txt:# evolutionuser = \n"
-            "spds/sources/addressbook/config.txt:# evolutionpassword = \n"
+            "spds/sources/addressbook/config.txt:evolutionuser = foo\n"
+            "spds/sources/addressbook/config.txt:evolutionpassword = bar\n"
             "spds/sources/calendar/config.txt:sync = two-way\n"
             "spds/sources/calendar/config.txt:type = calendar\n"
-            "spds/sources/calendar/config.txt:# evolutionsource = \n"
+            "spds/sources/calendar/config.txt:# database = \n"
             "spds/sources/calendar/config.txt:uri = cal2\n"
             "spds/sources/calendar/config.txt:# evolutionuser = \n"
             "spds/sources/calendar/config.txt:# evolutionpassword = \n"
             "spds/sources/memo/config.txt:sync = two-way\n"
             "spds/sources/memo/config.txt:type = memo\n"
-            "spds/sources/memo/config.txt:# evolutionsource = \n"
+            "spds/sources/memo/config.txt:# database = \n"
             "spds/sources/memo/config.txt:uri = note\n"
             "spds/sources/memo/config.txt:# evolutionuser = \n"
             "spds/sources/memo/config.txt:# evolutionpassword = \n"
             "spds/sources/todo/config.txt:sync = two-way\n"
             "spds/sources/todo/config.txt:type = todo\n"
-            "spds/sources/todo/config.txt:# evolutionsource = \n"
+            "spds/sources/todo/config.txt:# database = \n"
             "spds/sources/todo/config.txt:uri = task2\n"
             "spds/sources/todo/config.txt:# evolutionuser = \n"
             "spds/sources/todo/config.txt:# evolutionpassword = \n";
@@ -2931,7 +3821,7 @@ private:
     }
 
     string FunambolConfig() {
-        string config = m_scheduleWorldConfig;
+        string config = ScheduleWorldConfig();
         boost::replace_all(config, "/scheduleworld/", "/funambol/");
 
         boost::replace_first(config,
@@ -2941,6 +3831,10 @@ private:
         boost::replace_first(config,
                              "WebURL = http://www.scheduleworld.com",
                              "WebURL = http://my.funambol.com");
+
+        boost::replace_first(config,
+                             "# ConsumerReady = 0",
+                             "ConsumerReady = 1");
 
         boost::replace_first(config,
                              "# enableWBXML = 1",
@@ -2954,28 +3848,34 @@ private:
                              "addressbook/config.ini:uri = card3",
                              "addressbook/config.ini:uri = card");
         boost::replace_all(config,
-                           "addressbook/config.ini:type = addressbook:text/vcard",
-                           "addressbook/config.ini:type = addressbook");
+                           "addressbook/config.ini:syncFormat = text/vcard",
+                           "addressbook/config.ini:# syncFormat = ");
 
         boost::replace_first(config,
                              "calendar/config.ini:uri = cal2",
                              "calendar/config.ini:uri = event");
         boost::replace_all(config,
-                           "calendar/config.ini:type = calendar",
-                           "calendar/config.ini:type = calendar:text/calendar!");
+                           "calendar/config.ini:# syncFormat = ",
+                           "calendar/config.ini:syncFormat = text/calendar");
+        boost::replace_all(config,
+                           "calendar/config.ini:# forceSyncFormat = 0",
+                           "calendar/config.ini:forceSyncFormat = 1");
 
         boost::replace_first(config,
                              "todo/config.ini:uri = task2",
                              "todo/config.ini:uri = task");
         boost::replace_all(config,
-                           "todo/config.ini:type = todo",
-                           "todo/config.ini:type = todo:text/calendar!");
+                           "todo/config.ini:# syncFormat = ",
+                           "todo/config.ini:syncFormat = text/calendar");
+        boost::replace_all(config,
+                           "todo/config.ini:# forceSyncFormat = 0",
+                           "todo/config.ini:forceSyncFormat = 1");
 
         return config;
     }
 
     string SynthesisConfig() {
-        string config = m_scheduleWorldConfig;
+        string config = ScheduleWorldConfig();
         boost::replace_all(config, "/scheduleworld/", "/synthesis/");
 
         boost::replace_first(config,
@@ -2987,15 +3887,11 @@ private:
                              "WebURL = http://www.synthesis.ch");        
 
         boost::replace_first(config,
-                             "ConsumerReady = 1",
-                             "# ConsumerReady = 0");
-
-        boost::replace_first(config,
                              "addressbook/config.ini:uri = card3",
                              "addressbook/config.ini:uri = contacts");
         boost::replace_all(config,
-                           "addressbook/config.ini:type = addressbook:text/vcard",
-                           "addressbook/config.ini:type = addressbook");
+                           "addressbook/config.ini:syncFormat = text/vcard",
+                           "addressbook/config.ini:# syncFormat = ");
 
         boost::replace_first(config,
                              "calendar/config.ini:uri = cal2",

@@ -10,7 +10,10 @@
           <value conversion="prodid"/>
         </property>
 
-        <property name="REV">
+        <property name="REV" rule="EXTENDED-DATE-FORMAT">
+          <value field="REV" conversion="DATE+EXTFMT"/>
+        </property>
+        <property name="REV" rule="other">
           <value field="REV"/>
         </property>
 
@@ -84,7 +87,7 @@
               <!-- enum mode="prefix" name="X-Synthesis-Ref" value="2.L"/ -->
             </value>
           </parameter>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="TEL_SLOT"/>
           </parameter>
         </property>
@@ -103,7 +106,7 @@
               <!-- enum mode="prefix" name="X-Synthesis-Ref" value="2.L"/ -->
             </value>
           </parameter>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="EMAIL_SLOT"/>
           </parameter>
         </property>
@@ -188,25 +191,25 @@
 
         <property name="X-AIM" suppressempty="yes">
           <value field="AIM_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="AIM_SLOT"/>
           </parameter>
         </property>
         <property name="X-GADUGADU" suppressempty="yes">
           <value field="GADUGADU_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="GADUGADU_SLOT"/>
           </parameter>
         </property>
         <property name="X-GROUPWISE" suppressempty="yes">
           <value field="GROUPWISE_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="GROUPWISE_SLOT"/>
           </parameter>
         </property>
         <property name="X-ICQ" suppressempty="yes">
           <value field="ICQ_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="ICQ_SLOT"/>
           </parameter>
         </property>
@@ -218,27 +221,27 @@
         </property>
         <property name="X-MSN" suppressempty="yes">
           <value field="MSN_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="MSN_SLOT"/>
           </parameter>
         </property>
         <property name="X-YAHOO" suppressempty="yes">
           <value field="YAHOO_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="YAHOO_SLOT"/>
           </parameter>
         </property>
 
         <property name="X-SKYPE" suppressempty="yes"> 
           <value field="SKYPE_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="SKYPE_SLOT"/>
           </parameter>
         </property>
 
         <property name="X-SIP" suppressempty="yes">
           <value field="SIP_HANDLE"/>
-          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="SIP_SLOT"/>
           </parameter>
         </property>
@@ -264,7 +267,11 @@
           </parameter>
         </property>
 
-        <property name="BDAY">
+        
+        <property name="BDAY" rule="EXTENDED-DATE-FORMAT">
+          <value field="BDAY" conversion="DATE+EXTFMT"/>
+        </property>
+        <property name="BDAY" rule="other">
           <value field="BDAY"/>
         </property>
 

@@ -24,7 +24,7 @@
 
 #include "QtContactsSource.h"
 
-#include <QApplication>
+#include <QCoreApplication>
 
 #include <QContact>
 #include <QContactManager>
@@ -33,6 +33,8 @@
 #include <QContactSaveRequest>
 #include <QContactTimestamp>
 #include <QContactLocalIdFilter>
+#include <QContactThumbnail>
+#include <QContactAvatar>
 
 #include <QVersitContactExporter>
 #include <QVersitContactImporter>
@@ -53,19 +55,16 @@ class QtContactsData
     QString m_managerURI;
     cxxptr<QContactManager> m_manager;
 
-    // needed when using Qt code
-    static QApplication *m_app;
-
 public:
     QtContactsData(QtContactsSource *parent,
                    const QString &managerURI) :
         m_parent(parent),
         m_managerURI(managerURI)
     {
-        if (!m_app) {
+        if (!qApp) {
             static const char *argv[] = { "SyncEvolution" };
             static int argc = 1;
-            m_app = new QApplication(argc, (char **)argv);
+            new QCoreApplication(argc, (char **)argv);
         }
     }
 
@@ -115,7 +114,7 @@ public:
             checkError(op, req);
         } else {
             list<string> res;
-            foreach (int index, errors) {
+            foreach (int index, errors.keys()) {
                 res.push_back(StringPrintf("entry #%d failed with error %d", index, errors[index]));
             }
             m_parent->throwError(StringPrintf("%s: failed with error %d, ", op, req.error()) +
@@ -125,8 +124,6 @@ public:
 
     friend class QtContactsSource;
 };
-
-QApplication *QtContactsData::m_app;
 
 QtContactsSource::QtContactsSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
@@ -144,7 +141,7 @@ QtContactsSource::~QtContactsSource()
 
 void QtContactsSource::open()
 {
-    m_data = new QtContactsData(this, "qtcontacts:tracker:query-builder=fetch,save");
+    m_data = new QtContactsData(this, NULL);
     cxxptr<QContactManager> manager(QContactManager::fromUri(m_data->m_managerURI),
                                     "QTContactManager");
     if (manager->error()) {
@@ -213,9 +210,22 @@ void QtContactsSource::readItem(const string &uid, std::string &item, bool raw)
     fetch.setFilter(QtContactsData::createFilter(uid));
     fetch.start();
     fetch.waitForFinished();
-    QContact contact = fetch.contacts().first();
+
+    QList<QContact> contacts = fetch.contacts();
+    for (int i = 0; i < contacts.size(); ++i) {
+        QContact &contact = contacts[i];
+        const QContactAvatar avatar = contact.detail(QContactAvatar::DefinitionName);
+        const QContactThumbnail thumb = contact.detail(QContactThumbnail::DefinitionName);
+        if (!avatar.isEmpty() && thumb.isEmpty()) {
+            QImage image(avatar.imageUrl().path());
+            QContactThumbnail thumbnail;
+            thumbnail.setThumbnail(image);
+            contact.saveDetail(&thumbnail);
+        }
+    }
+
     QVersitContactExporter exporter;
-    if (!exporter.exportContacts(fetch.contacts(), QVersitDocument::VCard30Type)) {
+    if (!exporter.exportContacts(contacts, QVersitDocument::VCard30Type)) {
         throwError(uid + ": encoding as vCard 3.0 failed");
     }
     QByteArray vcard;
@@ -262,8 +272,21 @@ TrackingSyncSource::InsertItemResult QtContactsSource::insertItem(const string &
     QList<QContact> savedContacts = save.contacts();
     QContact &savedContact = savedContacts.first();
 
+    // Saving is not guaranteed to update the time stamp (BMC #5710).
+    // Need to read again.
+    QContactFetchRequest fetch;
+    fetch.setManager(m_data->m_manager.get());
+    fetch.setFilter(QtContactsData::createFilter(QtContactsData::getLUID(savedContact)));
+    QContactFetchHint hint;
+    hint.setOptimizationHints(QContactFetchHint::OptimizationHints(QContactFetchHint::NoRelationships|QContactFetchHint::NoBinaryBlobs));
+    hint.setDetailDefinitionsHint(QStringList() << QContactTimestamp::DefinitionName);
+    fetch.setFetchHint(hint);
+    fetch.start();
+    fetch.waitForFinished();
+    QContact &finalContact = fetch.contacts().first();
+
     return InsertItemResult(QtContactsData::getLUID(savedContact),
-                            QtContactsData::getRev(savedContact),
+                            QtContactsData::getRev(finalContact),
                             false);
 }
 

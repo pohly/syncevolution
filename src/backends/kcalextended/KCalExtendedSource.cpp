@@ -24,18 +24,32 @@
 
 #include "KCalExtendedSource.h"
 
-#include <QApplication>
+#include <QCoreApplication>
 
 #include <event.h>
 #include <journal.h>
 #include <extendedcalendar.h>
 #include <extendedstorage.h>
+#include <sqlitestorage.h>
 #include <icalformat.h>
+#include <memorycalendar.h>
 
 #include <syncevo/SmartPtr.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+/**
+ * All std::string and plain C strings in SyncEvolution are in UTF-8.
+ * QString must be told about that explicitly.
+ */
+static QString std2qstring(const std::string &str) { return QString::fromUtf8(str.c_str()); }
+// static QString std2qstring(const char *str) { return QString::fromUtf8(str); }
+
+/**
+ * Convert back to UTF-8.
+ */
+static std::string qstring2std(const QString str) { return str.toUtf8().constData(); }
 
 class KCalExtendedData
 {
@@ -44,9 +58,6 @@ class KCalExtendedData
     QString m_notebook;
     QString m_notebookUID;
     KCalCore::IncidenceBase::IncidenceType m_type;
-
-    // needed when using Qt code
-    static QApplication *m_app;
 
     mKCal::ExtendedCalendar::Ptr m_calendar;
     mKCal::ExtendedStorage::Ptr m_storage;
@@ -60,10 +71,10 @@ public:
         m_notebook(notebook),
         m_type(type)
     {
-        if (!m_app) {
+        if (!qApp) {
             static const char *argv[] = { "SyncEvolution" };
             static int argc = 1;
-            m_app = new QApplication(argc, (char **)argv);
+            new QCoreApplication(argc, (char **)argv);
         }
     }
 
@@ -73,6 +84,13 @@ public:
     {
         foreach (KCalCore::Incidence::Ptr incidence, incidences) {
             if (incidence->type() == m_type) {
+                SE_LOG_DEBUG(NULL, NULL, "item %s %s",
+                             getItemID(incidence).getLUID().c_str(),
+                             state == SyncSourceChanges::ANY ? "exists" :
+                             state == SyncSourceChanges::NEW ? "is new" :
+                             state == SyncSourceChanges::UPDATED ? "is updated" :
+                             state == SyncSourceChanges::DELETED ? "was deleted" :
+                             "unknown state");
                 changes.addItem(getItemID(incidence).getLUID(),
                                 state);
             }
@@ -101,8 +119,8 @@ public:
 
         const string m_uid, m_rid;
 
-        QString getIDString() const { return QString(m_uid.c_str()); }
-        KDateTime getDateTime() const { return KDateTime::fromString(QString(m_rid.c_str())); }
+        QString getIDString() const { return std2qstring(m_uid); }
+        KDateTime getDateTime() const { return KDateTime::fromString(std2qstring(m_rid)); }
 
         string getLUID() const;
         static string getLUID(const string &uid, const string &rid);
@@ -140,9 +158,9 @@ KCalCore::Incidence::Ptr KCalExtendedData::findIncidence(const string &luid)
     ItemID id(luid);
     QString uid = id.getIDString();
     KDateTime rid = id.getDateTime();
-    if (!m_storage->load(uid, rid)) {
-        m_parent->throwError("failed to load incidence");
-    }
+    // if (!m_storage->load(uid, rid)) {
+    // m_parent->throwError(string("failed to load incidence ") + luid);
+    // }
     KCalCore::Incidence::Ptr incidence = m_calendar->incidence(uid, rid);
     return incidence;
 }
@@ -153,13 +171,10 @@ KCalExtendedData::ItemID KCalExtendedData::getItemID(const KCalCore::Incidence::
     KDateTime rid = incidence->recurrenceId();
     string ridStr;
     if (rid.isValid()) {
-        ridStr = rid.toString().toLocal8Bit().constData();
+        ridStr = qstring2std(rid.toString());
     }
-    return ItemID(uid.toLocal8Bit().constData(),
-                  ridStr);
+    return ItemID(qstring2std(uid), ridStr);
 }
-
-QApplication *KCalExtendedData::m_app;
 
 KCalExtendedSource::KCalExtendedSource(const SyncSourceParams &params) :
     TestingSyncSource(params)
@@ -189,20 +204,75 @@ KCalExtendedSource::~KCalExtendedSource()
 
 void KCalExtendedSource::open()
 {
+    // read specified database name from "database" property
+    std::string databaseID = getDatabaseID();
+
     // TODO: also support todoType
-    m_data = new KCalExtendedData(this, getDatabaseID(),
+    m_data = new KCalExtendedData(this, databaseID.c_str(),
                                   KCalCore::IncidenceBase::TypeEvent);
     m_data->m_calendar = mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
-    m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
 
-    if (!m_data->m_storage->open()) {
-        throwError("failed to open storage");
+    if (databaseID.empty() || boost::starts_with(databaseID, "file://") ) {
+        // if databaseID is empty, create default storage at default location
+        // else if databaseID has a "file://" prefix, create storage at the specified place
+        // use default notebook in default storage
+        if ( boost::starts_with(databaseID, "file://") ) {
+            mKCal::SqliteStorage::Ptr ss(new mKCal::SqliteStorage(m_data->m_calendar,
+                                                                  QString(databaseID.c_str() + strlen("file://")),
+                                                                  false));
+            m_data->m_storage = ss.staticCast<mKCal::ExtendedStorage>();
+        } else {
+            m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
+        }
+        if (!m_data->m_storage->open()) {
+            throwError("failed to open storage");
+        }
+        mKCal::Notebook::Ptr defaultNotebook = m_data->m_storage->defaultNotebook();
+        if (!defaultNotebook) {
+            throwError("no default Notebook");
+        }
+        m_data->m_notebookUID = defaultNotebook->uid();
+    } else {
+        // use databaseID as notebook name to search for an existing notebook
+        // if found use it, otherwise:
+        // 1) with "SyncEvolution_Test_" prefix, create a new notebook with given name and add it to default storage
+        // 2) without a special prefix, throw an error
+        m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
+        if (!m_data->m_storage->open()) {
+            throwError("failed to open storage");
+        }
+        QString name = databaseID.c_str();
+        mKCal::Notebook::Ptr notebook;
+        mKCal::Notebook::List notebookList = m_data->m_storage->notebooks();
+        mKCal::Notebook::List::Iterator it;
+
+        for ( it = notebookList.begin(); it != notebookList.end(); ++it ) {
+            if ( name == (*it)->name() ) {
+                break;
+            }
+        }
+        if ( it == notebookList.end() ) {
+            if ( boost::starts_with(databaseID, "SyncEvolution_Test_") ) {
+                notebook = mKCal::Notebook::Ptr ( new mKCal::Notebook(QString(), name, QString(), QString(), false, true, false, false,true) );
+                if ( !notebook ) {
+                    throwError("failed to create notebook");
+                }
+                m_data->m_storage->addNotebook(notebook, false);
+            } else {
+                throwError(string("no such notebook with name \"") + string(databaseID) + string("\" in default storage"));
+            }
+        } else {
+            notebook = *it;
+        }
+        m_data->m_notebookUID = notebook->uid();
     }
-    mKCal::Notebook::Ptr defaultNotebook = m_data->m_storage->defaultNotebook();
-    if (!defaultNotebook) {
-        throwError("no default Notebook");
+
+    // we are not currently using partial loading because there were
+    // issues with it (BMC #6061); the load() calls elsewhere in this
+    // file are commented out
+    if (!m_data->m_storage->load()) {
+        throwError("failed to load calendar");
     }
-    m_data->m_notebookUID = defaultNotebook->uid();
 }
 
 bool KCalExtendedSource::isEmpty()
@@ -235,8 +305,23 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
 {
     Databases result;
 
-    result.push_back(Database("select database via Notebook name",
-                              ""));
+    m_data = new KCalExtendedData(this, getDatabaseID().c_str(),
+                                  KCalCore::IncidenceBase::TypeEvent);
+    m_data->m_calendar = mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
+    m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
+    if (!m_data->m_storage->open()) {
+        throwError("failed to open storage");
+    }
+    mKCal::Notebook::List notebookList = m_data->m_storage->notebooks();
+    mKCal::Notebook::List::Iterator it;
+    for ( it = notebookList.begin(); it != notebookList.end(); ++it ) {
+        bool isDefault = (*it)->isDefault();
+        result.push_back(Database( (*it)->name().toStdString(), 
+                                   (m_data->m_storage).staticCast<mKCal::SqliteStorage>()->databaseName().toStdString(), 
+                                   isDefault));
+    }
+    m_data->m_storage->close();
+    m_data->m_calendar->close();
     return result;
 }
 
@@ -250,7 +335,8 @@ void KCalExtendedSource::beginSync(const std::string &lastToken, const std::stri
     }
     m_data->extractIncidences(incidences, SyncSourceChanges::ANY, *this);
     if (*anchor) {
-        KDateTime endSyncTime(QDateTime::fromString(QString(anchor), Qt::ISODate));
+        SE_LOG_DEBUG(NULL, NULL, "checking for changes since %s UTC", anchor);
+        KDateTime endSyncTime(QDateTime::fromString(QString(anchor), Qt::ISODate), KDateTime::Spec::UTC());
         KCalCore::Incidence::List added, modified, deleted;
         if (!m_data->m_storage->insertedIncidences(&added, endSyncTime, m_data->m_notebookUID)) {
             throwError("insertedIncidences() failed");
@@ -289,8 +375,7 @@ std::string KCalExtendedSource::endSync(bool success)
     }
 
     QDateTime now = QDateTime::currentDateTime().toUTC();
-    const char *anchor = now.toString(Qt::ISODate).toLocal8Bit().constData();
-
+    string anchor(qstring2std(now.toString(Qt::ISODate)));
     return anchor;
 }
 
@@ -300,20 +385,22 @@ void KCalExtendedSource::readItem(const string &uid, std::string &item)
     if (!incidence) {
         throwError(string("failure extracting ") + uid);
     }
-    KCalCore::Calendar::Ptr calendar(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
+    KCalCore::Calendar::Ptr calendar(new KCalCore::MemoryCalendar(KDateTime::Spec::LocalZone()));
     calendar->addIncidence(incidence);
     KCalCore::ICalFormat formatter;
-    item = formatter.toString(calendar).toLocal8Bit().constData();
+    item = qstring2std(formatter.toString(calendar));
 }
 
 TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string &uid, const std::string &item)
 {
-    mKCal::ExtendedCalendar::Ptr calendar(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
+    KCalCore::Calendar::Ptr calendar(new KCalCore::MemoryCalendar(KDateTime::Spec::LocalZone()));
     KCalCore::ICalFormat parser;
-    parser.fromString(calendar, QString(item.c_str()));
+    if (!parser.fromString(calendar, std2qstring(item))) {
+        throwError("error parsing iCalendar 2.0 item");
+    }
     KCalCore::Incidence::List incidences = calendar->rawIncidences();
     if (incidences.empty()) {
-        throwError("error parsing iCalendar 2.0 item");
+        throwError("iCalendar 2.0 item empty?!");
     }
     bool updated;
     string newUID;
@@ -326,7 +413,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         QString id = incidences[0]->uid();
         KDateTime rid = incidences[0]->recurrenceId();
         if (!id.isEmpty()) {
-            m_data->m_storage->load(id, rid);
+            // m_data->m_storage->load(id, rid);
             KCalCore::Incidence::Ptr incidence = m_data->m_calendar->incidence(id, rid);
             if (incidence) {
                 oldUID = m_data->getItemID(incidence).getLUID();
@@ -334,13 +421,24 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         }
     }
 
+    // Brute-force copying of all time zone definitions. Ignores name
+    // conflicts, which is something better handled in a generic mKCal
+    // API function (BMC #8604).
+    KCalCore::ICalTimeZones *source = calendar->timeZones();
+    if (source) {
+        KCalCore::ICalTimeZones *target = m_data->m_calendar->timeZones();
+        if (target) {
+            BOOST_FOREACH(const KCalCore::ICalTimeZone &zone, source->zones().values()) {
+                target->add(zone);
+            }
+        }
+    }
+
     if (oldUID.empty()) {
-        // addInstance transfers ownership, need a copy
-        KCalCore::Incidence::Ptr tmp(incidences[0]->clone());
-        KCalCore::Incidence::Ptr incidence = tmp;
+        KCalCore::Incidence::Ptr incidence = incidences[0];
 
         updated = false;
-        if (!m_data->m_calendar->addIncidence(tmp)) {
+        if (!m_data->m_calendar->addIncidence(incidence)) {
             throwError("could not add incidence");
         }
         m_data->m_calendar->setNotebook(incidence, m_data->m_notebookUID);
@@ -364,25 +462,14 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
             incidence->setRecurrenceId(original->recurrenceId());
         }
 
-        // also preserve original creation time, unless explicitly
-        // set in update
-        // TODO: if created() == CREATED, then preserving it
-        // unconditionally is right. If created() == DTSTAMP,
-        // then it has to be conditionally.
-        // TODO: handle both DTSTAMP and CREATED
-        if (true || !incidence->created().isValid()) {
-            incidence->setCreated(original->created());
-        }
+        // created() corresponds to the CREATED property (= time when
+        // item was created in the local storage for the first time),
+        // so it can never be modified by our peer and must be
+        // preserved unconditionally in updates.
+        incidence->setCreated(original->created());
 
-        if (original->type() == KCalCore::IncidenceBase::TypeEvent) {
-            // *static_cast<KCalCore::Event *>(original) =
-            //    *static_cast<KCalCore::Event *>(incidence);
-        } else if (original->type() == KCalCore::IncidenceBase::TypeTodo) {
-            // *static_cast<KCalCore::Todo *>(original) =
-            //    *static_cast<KCalCore::Todo *>(incidence);
-        } else {
-            throwError("unknown type");
-        }
+        // now overwrite item in calendar
+        (KCalCore::IncidenceBase &)*original = (KCalCore::IncidenceBase &)*incidence;
         m_data->m_calendar->setNotebook(original, m_data->m_notebookUID);
         // no need to save
     }
@@ -399,10 +486,13 @@ void KCalExtendedSource::deleteItem(const string &uid)
 {
     KCalCore::Incidence::Ptr incidence = m_data->findIncidence(uid);
     if (!incidence) {
-        throwError("incidence not found");
+        // throwError(string("incidence ") + uid + " not found");
+        // don't treat this as error, it can happen, for example
+        // when the master event was removed before (MBC #6061)
+        return;
     }
     if (!m_data->m_calendar->deleteIncidence(incidence)) {
-        throwError("could not delete incidence");
+        throwError(string("could not delete incidence") + uid);
     }
     m_data->m_modified = true;
 }
@@ -430,11 +520,11 @@ std::string KCalExtendedSource::getDescription(const string &luid)
             // for VEVENT
             str = incidence->summary();
             if (!str.isEmpty()) {
-                parts.push_back(str.toLocal8Bit().constData());
+                parts.push_back(qstring2std(str));
             }
             str = incidence->location();
             if (!str.isEmpty()) {
-                parts.push_back(str.toLocal8Bit().constData());
+                parts.push_back(qstring2std(str));
             }
             return boost::join(parts, ", ");
         } else {

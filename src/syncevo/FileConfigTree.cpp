@@ -38,10 +38,10 @@ SE_BEGIN_CXX
 
 FileConfigTree::FileConfigTree(const string &root,
                                const string &peer,
-                               bool oldLayout) :
+                               SyncConfig::Layout layout) :
     m_root(root),
     m_peer(peer),
-    m_oldLayout(oldLayout),
+    m_layout(layout),
     m_readonly(false)
 {
 }
@@ -55,6 +55,19 @@ void FileConfigTree::flush()
 {
     BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
         node.second->flush();
+    }
+    if (m_layout == SyncConfig::SHARED_LAYOUT) {
+        // ensure that "peers" directory exists for new-style configs,
+        // not created by flushing nodes for pure context configs but
+        // needed to detect new-syle configs
+        mkdir_p(getRootPath() + "/peers");
+    }
+}
+
+void FileConfigTree::reload()
+{
+    BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
+        node.second->reload();
     }
 }
 
@@ -141,7 +154,7 @@ boost::shared_ptr<ConfigNode> FileConfigTree::open(const string &path,
     
     fullpath = normalizePath(m_root + "/" + path + "/");
     if (type == other) {
-        if (m_oldLayout) {
+        if (m_layout == SyncConfig::SYNC4J_LAYOUT) {
             fullpath += "/changes";
             if (!otherId.empty()) {
                 fullpath += "_";
@@ -158,7 +171,7 @@ boost::shared_ptr<ConfigNode> FileConfigTree::open(const string &path,
         }
     } else {
         filename = type == server ? ".server.ini" :
-            m_oldLayout ? "config.txt" :
+            m_layout == SyncConfig::SYNC4J_LAYOUT ? "config.txt" :
             type == hidden ? ".internal.ini" :
             "config.ini";
     }
@@ -173,6 +186,18 @@ boost::shared_ptr<ConfigNode> FileConfigTree::open(const string &path,
     } else {
         boost::shared_ptr<ConfigNode> node(new HashFileConfigNode(fullpath, filename, m_readonly));
         return m_nodes[fullname] = node;
+    }
+}
+
+boost::shared_ptr<ConfigNode> FileConfigTree::add(const string &path,
+                                                  const boost::shared_ptr<ConfigNode> &node)
+{
+    NodeCache_t::iterator found = m_nodes.find(path);
+    if (found != m_nodes.end()) {
+        return found->second;
+    } else {
+        m_nodes[path] = node;
+        return node;
     }
 }
 

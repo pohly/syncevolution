@@ -116,6 +116,10 @@ void syncevo_server_start_session (SyncevoServer *syncevo,
                                    const char *config_name, 
                                    SyncevoServerStartSessionCb callback,
                                    gpointer userdata);
+void syncevo_server_start_no_sync_session (SyncevoServer *syncevo,
+                                           const char *config_name, 
+                                           SyncevoServerStartSessionCb callback,
+                                           gpointer userdata);
 
 typedef void (*SyncevoServerGetSessionsCb) (SyncevoServer *syncevo,
                                             SyncevoSessions *sessions,
@@ -127,7 +131,7 @@ void syncevo_server_get_sessions (SyncevoServer *syncevo,
 
 typedef void (*SyncevoServerGetPresenceCb) (SyncevoServer *syncevo,
                                             char *status,
-                                            char *transport,
+                                            char **transports,
                                             GError *error,
                                             gpointer userdata);
 void syncevo_server_get_presence (SyncevoServer *syncevo,

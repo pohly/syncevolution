@@ -40,6 +40,8 @@
 
 #include <Logging.h>
 #include <LogStdout.h>
+#include <syncevo/LogRedirect.h>
+#include "ClientTest.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -125,12 +127,14 @@ public:
 
     void startTest (CppUnit::Test *test) {
         m_currentTest = test->getName();
-        std::cerr << m_currentTest;
-        string logfile = m_currentTest + ".log";
-        simplifyFilename(logfile);
-        m_logger.reset(new LoggerStdout(logfile));
-        m_logger->setLevel(Logger::DEBUG);
-        LoggerBase::pushLogger(m_logger.get());
+        std::cout << m_currentTest << std::flush;
+        if (!getenv("SYNCEVOLUTION_DEBUG")) {
+            string logfile = m_currentTest + ".log";
+            simplifyFilename(logfile);
+            m_logger.reset(new LogRedirect(false, logfile.c_str()));
+            m_logger->setLevel(Logger::DEBUG);
+            LoggerBase::pushLogger(m_logger.get());
+        }
         SE_LOG_DEBUG(NULL, NULL, "*** starting %s ***", m_currentTest.c_str());
         m_failures.reset();
         m_testFailed = false;
@@ -175,7 +179,9 @@ public:
         if (!failure.empty()) {
             SE_LOG_DEBUG(NULL, NULL, "%s", failure.c_str());
         }
-        LoggerBase::popLogger();
+        if (&LoggerBase::instance() == m_logger.get()) {
+            LoggerBase::popLogger();
+        }
         m_logger.reset();
 
         string logfile = m_currentTest + ".log";
@@ -190,10 +196,11 @@ public:
             }
         }
 
-        std::cerr << " " << result << "\n";
+        std::cout << " " << result << "\n";
         if (!failure.empty()) {
-            std::cerr << failure << "\n";
+            std::cout << failure << "\n";
         }
+        std::cout << std::flush;
     }
 
     bool hasFailed() { return m_failed; }
@@ -204,7 +211,7 @@ private:
     bool m_failed, m_testFailed;
     string m_currentTest;
     int m_alarmSeconds;
-    auto_ptr<LoggerStdout> m_logger;
+    auto_ptr<LoggerBase> m_logger;
     CppUnit::TestResultCollector m_failures;
 
     static void alarmTriggered(int signal) {
@@ -251,7 +258,7 @@ int main(int argc, char* argv[])
 
   // Change the default outputter to a compiler error format outputter
   runner.setOutputter( new ClientOutputter( &runner.result(),
-                                            std::cerr ) );
+                                            std::cout ) );
 
   // track current test and failure state
   const char *allowedFailures = getenv("CLIENT_TEST_FAILURES");
@@ -259,6 +266,11 @@ int main(int argc, char* argv[])
       syncListener.addAllowedFailures(allowedFailures);
   }
   runner.eventManager().addListener(&syncListener);
+
+
+  if (getenv("SYNCEVOLUTION_DEBUG")) {
+      LoggerBase::instance().setLevel(Logger::DEBUG);
+  }
 
   try {
       // Run the tests.
@@ -273,12 +285,15 @@ int main(int argc, char* argv[])
       }
 
       // Return error code 1 if the one of test failed.
+      ClientTest::shutdown();
       return syncListener.hasFailed() ? 1 : 0;
   } catch (invalid_argument e) {
       // Test path not resolved
-      std::cerr << std::endl
+      std::cout << std::endl
                 << "ERROR: " << e.what()
                 << std::endl;
+
+      ClientTest::shutdown();
       return 1;
   }
 }
