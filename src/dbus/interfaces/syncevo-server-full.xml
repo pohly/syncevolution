@@ -44,6 +44,87 @@
       </doc:para>
     </doc:doc>
 
+    <method name="GetCapabilities">
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+            Describes which features are implemented by the server. If the method itself
+            is unavailable, then the features correspond to SyncEvolution 1.0. The following
+            capabilities are currently defined:
+            <doc:list>
+              <doc:item><doc:term>ConfigChanged</doc:term>
+                <doc:definition>Server.ConfigChange
+                  signal available; if not, reread config after each
+                  session
+                </doc:definition>
+              </doc:item>
+             
+              <doc:item><doc:term>GetConfigName</doc:term>
+                <doc:definition>Session.GetConfigName()
+                  implemented
+                </doc:definition>
+              </doc:item>
+             
+              <doc:item><doc:term>SessionAttach</doc:term>
+                <doc:definition>Session.Attach()
+                  implemented
+                </doc:definition>
+              </doc:item>
+             
+              <doc:item><doc:term>Notifications</doc:term>
+                <doc:definition>Server.DisableNotifications()
+                  and Server.EnableNotifications() implemented
+                </doc:definition>
+              </doc:item>
+             
+              <doc:item><doc:term>Version</doc:term>
+                <doc:definition>Server.GetVersion()
+                  implemented; note that this is not meant to be used to determine supported
+                  features
+                </doc:definition>
+              </doc:item>
+             
+              <doc:item><doc:term>SessionFlags</doc:term>
+                <doc:definition>Server.StartSessionWithFlags()
+                  and Session.GetFlags() are implemented
+                </doc:definition>
+              </doc:item>
+
+              <doc:item><doc:term>DatabaseProperties</doc:term>
+                <doc:definition>uses "database", "databaseUser", "databasePassword"
+                  source properties instead of the older names "evolutionsource",
+                  "evolutionuser", "evolutionpassword"; semantic is unchanged
+                </doc:definition>
+              </doc:item>
+            </doc:list>
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+      <arg type="a(s)" name="capabilities" direction="out">
+        <doc:doc><doc:summary>
+          set of supported capabilities
+        </doc:summary></doc:doc>
+      </arg>
+    </method>
+
+    <method name="GetVersions">
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+            Returns information about server side implementations.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+      <arg type="a{ss}" name="info" direction="out">
+        <doc:doc><doc:summary>
+            "version" - main SyncEvolution release name (usually a number,
+sometimes also a beta or alpha suffix),
+            "system" - some plain text information about system libraries,
+            "backends" - available backend libraries
+        </doc:summary></doc:doc>
+      </arg>
+    </method>  
+
     <method name="Attach">
       <doc:doc>
         <doc:description>
@@ -74,6 +155,40 @@
       </doc:doc>
     </method>
 
+    <method name="DisableNotifications">
+      <doc:doc>
+        <doc:description>
+          Prevents showing of user visible notifications by the
+          syncevo-dbus-server. Must be called while the client is
+          attached to the server. Notifications will be disabled
+          until the client detaches or calls EnableNotifications().
+          The calls cannot be nested, so calling
+          DisableNotifications()/DisableNoticiations()/EnableNotifications()
+          will enable notifications.
+        </doc:description>
+      </doc:doc>
+      <arg type="s" name="notifications" direction="in">
+        <doc:doc><doc:summary>
+            describes the notifications which are to be disabled; currently
+            ignored by server, pass empty string
+        </doc:summary></doc:doc>
+      </arg>
+    </method>
+
+    <method name="EnableNotifications">
+      <doc:doc>
+        <doc:description>
+          Allows showing of user visible notifications again.
+        </doc:description>
+      </doc:doc>
+      <arg type="s" name="notifications" direction="in">
+        <doc:doc><doc:summary>
+            describes the notifications which are to be ensabled; currently
+            ignored by server, pass empty string
+        </doc:summary></doc:doc>
+      </arg>
+    </method>
+
     <method name ="GetConfigs">
       <doc:doc><doc:description>
         <doc:para>
@@ -98,43 +213,9 @@
 
         <doc:para>
         When retrieving the templates with GetConfig(), several additional
-        properties will be returned:
-        <doc:list>
-          <doc:item>
-            <doc:term>description</doc:term>
-            <doc:definition>the description for the template
-            (non-localized string)</doc:definition>
-          </doc:item>
-          <doc:item>
-            <doc:term>score</doc:term>
-            <doc:definition>the calculated score based on the device
-            name and template (1-5, 5 is best)</doc:definition>
-          </doc:item>
-          <doc:item>
-            <doc:term>deviceName</doc:term>
-            <doc:definition>the device name that the template is for
-            (copied verbatim from that device)</doc:definition>
-          </doc:item>
-            <doc:item>
-              <doc:term>templateName</doc:term>
-              <doc:definition>string identifying the class of devices
-                the templates works for, like "Nokia S40"; meant to be
-                shown to users; optional, fall back to first entry in
-                fingerPrint if not set</doc:definition>
-            </doc:item>
-            <doc:item>
-              <doc:term>fingerPrint</doc:term>
-              <doc:definition>comma separated list of devices which
-                work with this template, typically in "vendor model"
-                format; can be used by D-Bus clients to re-match with
-                user provided device information</doc:definition>
-            </doc:item>
-        </doc:list>
-        </doc:para>
-
-        <doc:para>
-        Together with these changes, a property value is changed: 'syncURL' in the
-        configuration is replaced with the mac address of the device.
+        properties will be returned which can be used to pick the right template for
+        a device, see GetConfig(). The 'syncURL' is already replaced with the mac address of the device
+        and thus can be used to find all templates refering to the same device.
         </doc:para>
       </doc:description></doc:doc>
       <arg type="b" name="tmplate" direction="in">
@@ -152,7 +233,74 @@
 
     <method name="GetConfig">
       <doc:doc><doc:description>
-        Get the configuration of a specific server (or template)
+        <doc:para>Get the configuration of a specific server (or template).</doc:para>
+
+        <doc:para>The dictionary keys are "source/&lt;source name&gt;" for
+        sources and the empty string for the main server
+        configuration. More keys might be added in the future. The
+        values are "configuration dictionaries" which contain keys
+        and values matching those in the SyncEvolution server 
+        configuration files.</doc:para>
+
+        <doc:para>In addition, some special keys for read-only
+        values are added:
+        <doc:list>
+          <doc:item>
+            <doc:term>configName</doc:term>
+            <doc:definition>Normalized configuration. For example,
+            if a session is opened for "FooBar" and there is an
+            existing configuration "foobar@some-context", then the
+            latter is used for the session instead of the "FooBar"
+            shorthand. All configuration names sent by
+            syncevo-dbus-server are normalized. D-Bus clients should
+            compare that against the "configName" value instead of
+            the config name chosen by them or the
+            user.</doc:definition>
+          </doc:item>
+          <doc:item>
+            <doc:term>description</doc:term>
+            <doc:definition>device template: the description for the template
+            (non-localized string)</doc:definition>
+          </doc:item>
+          <doc:item>
+            <doc:term>score</doc:term>
+            <doc:definition>device template: the calculated score based on the device
+            name and template (1-5, 5 is best)</doc:definition>
+          </doc:item>
+          <doc:item>
+            <doc:term>deviceName</doc:term>
+            <doc:definition>device template: the device name that the template is for
+            (copied verbatim from that device)</doc:definition>
+          </doc:item>
+          <doc:item>
+            <doc:term>templateName</doc:term>
+            <doc:definition>device template: string identifying the class of devices
+            the templates works for, like "Nokia S40"; meant to be
+            shown to users; optional, fall back to first entry in
+            fingerPrint if not set</doc:definition>
+          </doc:item>
+          <doc:item>
+            <doc:term>fingerPrint</doc:term>
+            <doc:definition>device template: comma separated list of devices which
+            work with this template, typically in "vendor model"
+            format; can be used by D-Bus clients to re-match with
+            user provided device information</doc:definition>
+          </doc:item>
+        </doc:list>
+        </doc:para>
+
+        <doc:para>Properties which are not set are also not present in the
+        configuration dictionaries. The semantic difference between
+        "not set" and "empty" or "set to default" is that unset
+        values will always use the default value, even after that
+        changed during a software update. Properties that are set
+        always use the chosen value.</doc:para>
+
+        <doc:para>Note that property keys are case insensitive. The D-Bus
+        interface specification would allow to send two
+        properties whose keys only differ in case to the
+        server. The result is undefined.</doc:para>
+
       </doc:description></doc:doc>
       <arg type="s" name="server" direction="in">
         <doc:doc><doc:summary>server name</doc:summary></doc:doc>
@@ -167,25 +315,6 @@
         <doc:doc><doc:summary>
           server (or template) configuration
         </doc:summary></doc:doc>
-        <doc:doc><doc:description>
-          The dictionary keys are "source/&lt;source name&gt;" for
-          sources and the empty string for the main server
-          configuration. More keys might be added in the future. The
-          values are "configuration dictionaries" which contain keys
-          and values matching those in the SyncEvolution server 
-          configuration files. 
-          Properties which are not set are also not present in the
-          configuration dictionaries. The semantic difference between
-          "not set" and "empty" or "set to default" is that unset
-          values will always use the default value, even after that
-          changed during a software update. Properties that are set
-          always use the chosen value.
-
-          Note that property keys are case insensitive. The D-Bus
-          interface specification would allow to send two
-          properties whose keys only differ in case to the
-          server. The result is undefined.
-        </doc:description></doc:doc>
       </arg>
       <annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QStringMultiMap"/>
     </method>
@@ -314,10 +443,36 @@
       <doc:doc><doc:description>
         Start a session. The object is created instantly but will not be
         ready for method calls until status changes from "queueing" to "idle".
-        The Detach() method can be called before that.
+        The Detach() method can be called before that. Same as StartSessionWithFlags()
+        without any flags set.
       </doc:description></doc:doc>
-      <arg type="s" name="server" direction="in">
-        <doc:doc><doc:summary>server name</doc:summary></doc:doc>
+      <arg type="s" name="config" direction="in">
+        <doc:doc><doc:summary>name of configuration to be created or used in session</doc:summary></doc:doc>
+      </arg>
+      <arg type="o" name="session" direction="out">
+        <doc:doc><doc:summary>session D-Bus object path</doc:summary></doc:doc>
+      </arg>
+    </method>
+
+    <method name="StartSessionWithFlags">
+      <doc:doc><doc:description>
+        Start a session. The object is created instantly but will not be
+        ready for method calls until status changes from "queueing" to "idle".
+        The Detach() method can be called before that. Additional flags,
+        identified by strings, can be passed to control the session creation.
+        They can be retrieved with Session.GetFlags(). The following flags are
+        currently defined:
+        <doc:list>
+          <doc:item><doc:term>no-sync</doc:term>
+            <doc:definition>session will not be used for running a synchronization</doc:definition>
+          </doc:item>
+        </doc:list>
+      </doc:description></doc:doc>
+      <arg type="s" name="config" direction="in">
+        <doc:doc><doc:summary>name of configuration to be created or used in session</doc:summary></doc:doc>
+      </arg>
+      <arg type="as" name="flags" direction="in">
+        <doc:doc><doc:summary>optional flags</doc:summary></doc:doc>
       </arg>
       <arg type="o" name="session" direction="out">
         <doc:doc><doc:summary>session D-Bus object path</doc:summary></doc:doc>
@@ -477,6 +632,15 @@
           Template added or removed, for example because a Bluetooth
           peer was paired resp. removed. To find out more, request
           list of templates anew.
+      </doc:description>
+      </doc:doc>
+    </signal>
+
+    <signal name="ConfigChanged">
+      <doc:doc>
+        <doc:description>
+          Configuration added, updated or removed. To find out more,
+          request list of configurations anew.
       </doc:description>
       </doc:doc>
     </signal>
@@ -674,7 +838,7 @@
           </doc:doc>
       </arg>
       <arg type="s" name="level">
-        <doc:doc><doc:summary>the output level (DEBUG/INFO/SHOW/ERROR/WARNING/DEV)</doc:summary></doc:doc>
+        <doc:doc><doc:summary>the output level (DEBUG/INFO/SHOW/ERROR/WARNING/DEVELOPER)</doc:summary></doc:doc>
       </arg>
       <arg type="s" name="output">
         <doc:doc><doc:summary>the output string to be broadcast</doc:summary></doc:doc>

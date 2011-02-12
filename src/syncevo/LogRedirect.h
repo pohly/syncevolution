@@ -23,6 +23,9 @@
 #include <syncevo/LogStdout.h>
 #include <syncevo/util.h>
 
+#include <string>
+#include <set>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -95,6 +98,9 @@ class LogRedirect : public LoggerStdout
         int m_read;         /** the read end of the replacement */
     };
 
+    /** ignore any error output containing "error" */
+    static void addIgnoreError(const std::string &error) { m_knownErrors.insert(error); }
+
  private:
     FDs m_stdout, m_stderr;
     bool m_streams;         /**< using reliable streams instead of UDP */
@@ -104,6 +110,7 @@ class LogRedirect : public LoggerStdout
     size_t m_len;           /** total length of buffer */
     bool m_processing;      /** flag to detect recursive process() calls */
     static LogRedirect *m_redirect; /**< single active instance, for signal handler */
+    static std::set<std::string> m_knownErrors; /** texts contained in errors which are to be ignored */
 
     // non-virtual helper functions which can always be called,
     // including the constructor and destructor
@@ -114,6 +121,13 @@ class LogRedirect : public LoggerStdout
     bool process(FDs &fds) throw();
     static void abortHandler(int sig) throw();
 
+    /**
+     * ignore error messages containing text listed in
+     * SYNCEVOLUTION_SUPPRESS_ERRORS env variable (new-line
+     * separated)
+     */
+    bool ignoreError(const std::string &text);
+
     void init();
 
  public:
@@ -121,8 +135,12 @@ class LogRedirect : public LoggerStdout
      * Redirect both stderr and stdout or just stderr,
      * using UDP so that we don't block when not reading
      * redirected output.
+     *
+     * messagev() only writes messages to the previous stdout
+     * or the optional file which pass the filtering (relevant,
+     * suppress known errors, ...).
      */
-    LogRedirect(bool both = true) throw();
+    LogRedirect(bool both = true, const char *filename = NULL) throw();
     ~LogRedirect() throw();
 
     /**

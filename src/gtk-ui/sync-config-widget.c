@@ -88,17 +88,17 @@ get_service_description (const char *service)
         return _("ScheduleWorld enables you to keep your contacts, events, "
                  "tasks, and notes in sync.");
     }else if (strcmp (service, "Google") == 0) {
-        return _("Google Sync can backup and synchronize your contacts "
+        return _("Google Sync can back up and synchronize your contacts "
                  "with your Gmail contacts.");
     }else if (strcmp (service, "Funambol") == 0) {
         /* TRANSLATORS: Please include the word "demo" (or the equivalent in
            your language): Funambol is going to be a 90 day demo service
            in the future */
-        return _("Backup your contacts and calendar. Sync with a single "
+        return _("Back up your contacts and calendar. Sync with a single "
                  "click, anytime, anywhere (DEMO).");
     }else if (strcmp (service, "Mobical") == 0) {
         return _("Mobical Backup and Restore service allows you to securely "
-                 "backup your personal mobile data for free.");
+                 "back up your personal mobile data for free.");
     }else if (strcmp (service, "ZYB") == 0) {
         return _("ZYB is a simple way for people to store and share mobile "
                  "information online.");
@@ -244,7 +244,7 @@ get_config_for_overwrite_prevention_cb (SyncevoSession *session,
     sync_config_widget_set_name (data->widget, name);
     g_free (name);
 
-    syncevo_server_start_session (data->widget->server,
+    syncevo_server_start_no_sync_session (data->widget->server,
                                   data->widget->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -253,8 +253,7 @@ get_config_for_overwrite_prevention_cb (SyncevoSession *session,
 static void
 save_config (save_config_data *data,
              SyncevoSession *session)
-{
-    char *is_client;
+{   
     SyncConfigWidget *w = data->widget;
 
     if (data->delete) {
@@ -266,8 +265,7 @@ save_config (save_config_data *data,
      * need to test that we aren't overwriting existing
      * configs */
     /* TODO: This might be a good thing to do for any configurations.*/
-    syncevo_config_get_value (w->config, NULL, "PeerIsClient", &is_client);                                
-    if (is_client && g_strcmp0 ("1", is_client) == 0 && 
+    if (peer_is_client (w->config) &&
         !w->configured && !data->temporary) {
 
         syncevo_session_get_config (session,
@@ -361,7 +359,7 @@ stop_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     data->widget = self;
     data->delete = FALSE;
     data->temporary = FALSE;
-    syncevo_server_start_session (self->server,
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -389,6 +387,7 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
         GHashTableIter iter;
         source_widgets *widgets;
         char *name;
+        gboolean client = peer_is_client (self->config);
 
         send = toggle_get_active (self->send_check);
         receive = toggle_get_active (self->receive_check);
@@ -396,9 +395,13 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
         if (send && receive) {
             mode = SYNCEVO_SYNC_TWO_WAY;
         } else if (send) {
-            mode = SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT;
+            mode = client ?
+                SYNCEVO_SYNC_ONE_WAY_FROM_SERVER :
+                SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT;
         } else if (receive) {
-            mode = SYNCEVO_SYNC_ONE_WAY_FROM_SERVER;
+            mode = client ?
+                SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT :
+                SYNCEVO_SYNC_ONE_WAY_FROM_SERVER;
         } else {
             mode = SYNCEVO_SYNC_NONE;
         }
@@ -459,7 +462,7 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     data->delete = FALSE;
     data->temporary = FALSE;
     data->basename = g_strdup (self->config_name);
-    syncevo_server_start_session (self->server,
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -516,7 +519,7 @@ reset_delete_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     data->delete = TRUE;
     data->temporary = FALSE;
 
-    syncevo_server_start_session (self->server,
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -549,9 +552,7 @@ static void update_buttons (SyncConfigWidget *self)
 
 
     if (self->current && self->config) {
-        char *client;
-        syncevo_config_get_value (self->config, NULL, "PeerIsClient", &client);
-        if (client && g_strcmp0 (client, "1") == 0) {
+        if (peer_is_client (self->config)) {
             gtk_button_set_label (GTK_BUTTON (self->stop_button),
                                               _("Stop using device"));
         } else {
@@ -776,7 +777,7 @@ init_source (char *name,
     data->temporary = TRUE;
     data->widgets = source_widgets_ref (widgets);
 
-    syncevo_server_start_session (self->server,
+    syncevo_server_start_no_sync_session (self->server,
                                   self->config_name,
                                   (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
                                   data);
@@ -836,10 +837,11 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     char *password = "";
     char *sync_url = "";
     const char *descr;
-    char *str, *device;
+    char *str;
     GtkWidget *label, *align;
     SyncevoSyncMode mode = SYNCEVO_SYNC_NONE;
     gboolean send, receive;
+    gboolean client;
 
     gtk_container_foreach (GTK_CONTAINER (self->server_settings_table),
                            (GtkCallback)remove_child,
@@ -852,8 +854,8 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     gtk_table_resize (GTK_TABLE (self->mode_table),
                       2, 1);
 
-    syncevo_config_get_value (self->config, NULL, "PeerIsClient", &device);
-    if (device && g_strcmp0 (device, "1") == 0) {
+    client = peer_is_client (self->config);
+    if (client) {
         if (!self->device_template_selected) {
             gtk_widget_hide (self->settings_box);
             gtk_widget_show (self->device_selector_box);
@@ -880,12 +882,22 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
         send = receive = TRUE;
         break;
     case SYNCEVO_SYNC_ONE_WAY_FROM_CLIENT:
-        send = TRUE;
-        receive = FALSE;
+        if (client) {
+            send = FALSE;
+            receive = TRUE;
+        } else {
+            send = TRUE;
+            receive = FALSE;
+        }
         break;
     case SYNCEVO_SYNC_ONE_WAY_FROM_SERVER:
-        send = FALSE;
-        receive = TRUE;
+        if (client) {
+            send = TRUE;
+            receive = FALSE;
+        } else {
+            send = FALSE;
+            receive = TRUE;
+        }
         break;
     default:
         gtk_widget_show (self->complex_config_info_bar);
@@ -1874,7 +1886,7 @@ sync_config_widget_init (SyncConfigWidget *self)
     gtk_box_pack_end (GTK_BOX (hbox), vbox, FALSE, FALSE, 32);
 
     /* TRANSLATORS: button in service configuration form */
-    self->button = gtk_button_new_with_label (_("Setup now"));
+    self->button = gtk_button_new_with_label (_("Set up now"));
     gtk_widget_set_size_request (self->button, SYNC_UI_LIST_BTN_WIDTH, -1);
     g_signal_connect (self->button, "clicked",
                       G_CALLBACK (setup_service_clicked), self);
@@ -1894,10 +1906,10 @@ sync_config_widget_init (SyncConfigWidget *self)
     gtk_widget_show (hbox);
     gtk_box_pack_start (GTK_BOX (self->device_selector_box), hbox,
                         FALSE, TRUE, 8);
-    self->device_text = gtk_label_new (("We don't know what this device is exactly. "
-                                        "Please take a look at the list of "
-                                        "supported devices and pick yours if it "
-                                        "is listed"));
+    self->device_text = gtk_label_new (_("We don't know what this device is exactly. "
+                                         "Please take a look at the list of "
+                                         "supported devices and pick yours if it "
+                                         "is listed"));
     gtk_widget_show (self->device_text);
     gtk_label_set_line_wrap (GTK_LABEL (self->device_text), TRUE);
     gtk_widget_set_size_request (self->device_text, 600, -1);
@@ -1932,7 +1944,7 @@ sync_config_widget_init (SyncConfigWidget *self)
                       G_CALLBACK (device_combo_changed), self);
 
 
-    self->device_select_btn = gtk_button_new_with_label ("Use these settings");
+    self->device_select_btn = gtk_button_new_with_label (_("Use these settings"));
     gtk_widget_set_sensitive (self->device_select_btn, FALSE);
     gtk_widget_show (self->device_select_btn);
     gtk_box_pack_start (GTK_BOX (hbox), self->device_select_btn,

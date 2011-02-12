@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Intel Corporation
+ * Copyright (C) 2011 Symbio, Ville Nummela
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,6 +28,7 @@
 #include <syncevo/LogRedirect.h>
 #include <syncevo/util.h>
 #include <syncevo/SyncContext.h>
+#include <syncevo/TransportAgent.h>
 #include <syncevo/SoupTransportAgent.h>
 #include <syncevo/SyncSource.h>
 #include <syncevo/SyncML.h>
@@ -198,6 +200,65 @@ static DBusMessage* SyncEvoHandleException(DBusMessage *msg)
         return b_dbus_create_error(msg, "org.syncevolution.Exception", "unknown");
     }
 }
+
+/**
+ * Utility class which makes it easier to work with g_timeout_add_seconds().
+ * Instantiate this class with a specific callback. Use boost::bind()
+ * to attach specific parameters to that callback. Then activate
+ * the timeout. Destructing this class will automatically remove
+ * the timeout and thus ensure that it doesn't trigger without
+ * valid parameters.
+ */
+class Timeout
+{
+    guint m_tag;
+    boost::function<bool ()> m_callback;
+
+public:
+    Timeout() :
+        m_tag(0)
+    {
+    }
+
+    ~Timeout()
+    {
+        if (m_tag) {
+            g_source_remove(m_tag);
+        }
+    }
+
+    /**
+     * call the callback at regular intervals until it returns false
+     */
+    void activate(int seconds,
+                  const boost::function<bool ()> &callback)
+    {
+        m_callback = callback;
+        m_tag = g_timeout_add_seconds(seconds, triggered, static_cast<gpointer>(this));
+        if (!m_tag) {
+            SE_THROW("g_timeout_add_seconds() failed");
+        }
+    }
+
+    /**
+     * stop calling the callback, drop callback
+     */
+    void deactivate()
+    {
+        if (m_tag) {
+            g_source_remove(m_tag);
+            m_tag = 0;
+        }
+        m_callback = 0;
+    }
+
+private:       
+    static gboolean triggered(gpointer data)
+    {
+        Timeout *me = static_cast<Timeout *>(data);
+        return me->m_callback();
+    }
+};
 
 /**
  * Implements the read-only methods in a Session and the Server.
@@ -925,7 +986,7 @@ class PresenceStatus {
 };
 
 /*
- * Implements org.moblin.connman.Manager
+ * Implements org.connman.Manager
  * GetProperty  : getPropCb
  * PropertyChanged: propertyChanged
  **/
@@ -933,9 +994,9 @@ class ConnmanClient : public DBusRemoteObject
 {
 public:
     ConnmanClient (DBusServer &server);
-    virtual const char *getDestination() const {return "org.moblin.connman";}
+    virtual const char *getDestination() const {return "net.connman";}
     virtual const char *getPath() const {return "/";}
-    virtual const char *getInterface() const {return "org.moblin.connman.Manager";}
+    virtual const char *getInterface() const {return "net.connman.Manager";}
     virtual DBusConnection *getConnection() const {return m_connmanConn.get();}
 
     void propertyChanged(const string &name,
@@ -949,6 +1010,74 @@ private:
 
     SignalWatch2 <string,boost::variant<vector<string>, string> > m_propertyChanged;
 };
+
+/**
+ * Client for org.freedesktop.NetworkManager
+ * The initial state of NetworkManager is queried via
+ * org.freedesktop.DBus.Properties. Dynamic changes are listened via
+ * org.freedesktop.NetworkManager - StateChanged signal
+ */
+class NetworkManagerClient : public DBusRemoteObject
+{
+public:
+    enum NM_State
+      {
+        NM_STATE_UNKNOWN,
+        NM_STATE_ASLEEP,
+        NM_STATE_CONNECTING,
+        NM_STATE_CONNECTED,
+        NM_STATE_DISCONNECTED
+      };
+public:
+    NetworkManagerClient(DBusServer& server);
+    
+    virtual const char *getDestination() const {
+        return "org.freedesktop.NetworkManager";
+    }
+    virtual const char *getPath() const {
+        return "/org/freedesktop/NetworkManager";
+    }
+    virtual const char *getInterface() const {
+        return "org.freedesktop.NetworkManager";
+    }
+    virtual DBusConnection *getConnection() const {
+        return m_networkManagerConn.get();
+    }
+
+    void stateChanged(uint32_t uiState);
+
+private:
+
+    class NetworkManagerProperties : public DBusRemoteObject
+    {
+    public:
+        NetworkManagerProperties(NetworkManagerClient& manager);
+
+        virtual const char *getDestination() const {
+            return "org.freedesktop.NetworkManager";
+        }
+        virtual const char *getPath() const {
+            return "/org/freedesktop/NetworkManager";
+        }
+        virtual const char *getInterface() const {
+            return "org.freedesktop.DBus.Properties";
+        }
+        virtual DBusConnection* getConnection() const {
+            return m_manager.getConnection();
+        }
+        void get();
+        void getCallback(const boost::variant<uint32_t, std::string> &prop,
+                         const std::string &error);
+    private:
+        NetworkManagerClient &m_manager;
+    };
+    
+    DBusServer &m_server;
+    DBusConnectionPtr m_networkManagerConn;
+    SignalWatch1<uint32_t> m_stateChanged;
+    NetworkManagerProperties m_properties;
+};
+
 
 /**
  * Implements the main org.syncevolution.Server interface.
@@ -966,12 +1095,6 @@ class DBusServer : public DBusObjectHelper,
     uint32_t m_lastSession;
     typedef std::list< std::pair< boost::shared_ptr<Watch>, boost::shared_ptr<Client> > > Clients_t;
     Clients_t m_clients;
-
-    /* clients that attach the server explicitly
-     * the pair is <client id, attached times>. Each attach has
-     * to be matched with one detach.
-     */
-    std::list<std::pair<Caller_t, int> > m_attachedClients;
 
     /* Event source that regurally pool network manager
      * */
@@ -1040,12 +1163,35 @@ class DBusServer : public DBusObjectHelper,
      */
     void clientGone(Client *c);
 
+    /** Server.GetCapabilities() */
+    vector<string> getCapabilities();
+
+    /** Server.GetVersions() */
+    StringMap getVersions();
+
     /** Server.Attach() */
     void attachClient(const Caller_t &caller,
                       const boost::shared_ptr<Watch> &watch);
 
     /** Server.Detach() */
     void detachClient(const Caller_t &caller);
+
+    /** Server.DisableNotifications() */
+    void disableNotifications(const Caller_t &caller,
+                              const string &notifications) {
+        setNotifications(false, caller, notifications);
+    }
+
+    /** Server.EnableNotifications() */
+    void enableNotifications(const Caller_t &caller,
+                             const string &notifications) {
+        setNotifications(true, caller, notifications);
+    }
+
+    /** actual implementation of enable and disable */
+    void setNotifications(bool enable,
+                          const Caller_t &caller,
+                          const string &notifications);
 
     /** Server.Connect() */
     void connect(const Caller_t &caller,
@@ -1059,7 +1205,16 @@ class DBusServer : public DBusObjectHelper,
     void startSession(const Caller_t &caller,
                       const boost::shared_ptr<Watch> &watch,
                       const std::string &server,
-                      DBusObject_t &object);
+                      DBusObject_t &object) {
+        startSessionWithFlags(caller, watch, server, std::vector<std::string>(), object);
+    }
+
+    /** Server.StartSessionWithFlags() */
+    void startSessionWithFlags(const Caller_t &caller,
+                               const boost::shared_ptr<Watch> &watch,
+                               const std::string &server,
+                               const std::vector<std::string> &flags,
+                               DBusObject_t &object);
 
     /** Server.GetConfig() */
     void getConfig(const std::string &config_name,
@@ -1128,12 +1283,6 @@ class DBusServer : public DBusObjectHelper,
     /** remove InfoReq from hash map */
     void removeInfoReq(const InfoReq &req);
 
-    /*
-     * Decrease refs for a client. If allRefs, it tries to remove all refs from 'Attach()'
-     * for the client. Otherwise, decrease one ref for the client.
-     */
-    void detachClientRefs(const Caller_t &caller, bool allRefs);
-
     /** Server.SessionChanged */
     EmitSignal2<const DBusObject_t &,
                 bool> sessionChanged;
@@ -1148,6 +1297,12 @@ class DBusServer : public DBusObjectHelper,
      * input for the templates, is changed
      */
     EmitSignal0 templatesChanged;
+
+    /**
+     * Server.ConfigChanged, triggered each time a session ends
+     * which modified its configuration
+     */
+    EmitSignal0 configChanged;
 
     /** Server.InfoRequest */
     EmitSignal6<const std::string &,
@@ -1166,7 +1321,8 @@ class DBusServer : public DBusObjectHelper,
 
     PresenceStatus m_presence;
     ConnmanClient m_connman;
-
+    NetworkManagerClient m_networkManager;
+    
     /** manager to automatic sync */
     AutoSyncManager m_autoSync;
 
@@ -1176,6 +1332,19 @@ class DBusServer : public DBusObjectHelper,
     //records the parent logger, dbus server acts as logger to 
     //send signals to clients and put logs in the parent logger.
     LoggerBase &m_parentLogger;
+
+    /**
+     * All active timeouts created by addTimeout().
+     * Each timeout which requests to be not called
+     * again will be removed from this list.
+     */
+    list< boost::shared_ptr<Timeout> > m_timeouts;
+
+    /**
+     * called each time a timeout triggers,
+     * removes those which are done
+     */
+    bool callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<bool ()> &callback);
 
 public:
     DBusServer(GMainLoop *loop, const DBusConnectionPtr &conn, int duration);
@@ -1231,6 +1400,15 @@ public:
      */
     void checkQueue();
 
+    /**
+     * Invokes the given callback once in the given amount of seconds.
+     * Keeps a copy of the callback. If the DBusServer is destructed
+     * before that time, then the callback will be deleted without
+     * being called.
+     */
+    void addTimeout(const boost::function<bool ()> &callback,
+                    int seconds);
+
     boost::shared_ptr<InfoReq> createInfoReq(const string &type, 
                                              const std::map<string, string> &parameters,
                                              const Session *session);
@@ -1284,6 +1462,11 @@ public:
     AutoSyncManager &getAutoSyncManager() { return m_autoSync; }
 
     /**
+     * false if any client requested suppression of notifications
+     */
+    bool notificationsEnabled();
+
+    /**
      * implement virtual method from LogStdout.
      * Not only print the message in the console
      * but also send them as signals to clients
@@ -1295,6 +1478,8 @@ public:
                           const char *function,
                           const char *format,
                           va_list args);
+
+    virtual bool isProcessSafe() const { return false; }
 };
 
 /**
@@ -1304,21 +1489,38 @@ public:
  */
 class Client
 {
+    DBusServer &m_server;
+
     typedef std::list< boost::shared_ptr<Resource> > Resources_t;
     Resources_t m_resources;
+
+    /** counts how often a client has called Attach() without Detach() */
+    int m_attachCount;
+
+    /** current client setting for notifications (see HAS_NOTIFY) */
+    bool m_notificationsEnabled;
+
+    /** called 1 minute after last client detached from a session */
+    static bool sessionExpired(const boost::shared_ptr<Session> &session);
 
 public:
     const Caller_t m_ID;
 
-    Client(const Caller_t &ID) :
+    Client(DBusServer &server,
+           const Caller_t &ID) :
+        m_server(server),
+        m_attachCount(0),
+        m_notificationsEnabled(true),
         m_ID(ID)
     {}
+    ~Client();
 
-    ~Client()
-    {
-        SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s is destructing", m_ID.c_str());
-    }
-        
+    void increaseAttachCount() { ++m_attachCount; }
+    void decreaseAttachCount() { --m_attachCount; }
+    int getAttachCount() const { return m_attachCount; }
+
+    void setNotificationsEnabled(bool enabled) { m_notificationsEnabled = enabled; }
+    bool getNotificationsEnabled() const { return m_notificationsEnabled; }
 
     /**
      * Attach a specific resource to this client. As long as the
@@ -1337,20 +1539,8 @@ public:
      * session. It's an error to call detach() more often than
      * attach().
      */
-    void detach(Resource *resource)
-    {
-        for (Resources_t::iterator it = m_resources.begin();
-             it != m_resources.end();
-             ++it) {
-            if (it->get() == resource) {
-                // got it
-                m_resources.erase(it);
-                return;
-            }
-        }
+    void detach(Resource *resource);
 
-        SE_THROW_EXCEPTION(InvalidCall, "cannot detach from resource that client is not attached to");
-    }
     void detach(boost::shared_ptr<Resource> resource)
     {
         detach(resource.get());
@@ -1681,6 +1871,7 @@ class Session : public DBusObjectHelper,
                 private boost::noncopyable
 {
     DBusServer &m_server;
+    std::vector<std::string> m_flags;
     const std::string m_sessionID;
     std::string m_peerDeviceID;
 
@@ -1701,7 +1892,10 @@ class Session : public DBusObjectHelper,
     /** whether dbus clients set temporary configs */
     bool m_tempConfig;
 
-    /** whether dbus clients update or clear configs, not include temporary set */
+    /**
+     * whether the dbus clients updated, removed or cleared configs,
+     * ignoring temporary configuration changes
+     */
     bool m_setConfig;
 
     /**
@@ -1711,6 +1905,11 @@ class Session : public DBusObjectHelper,
      * pointer.
      */
     bool m_active;
+
+    /**
+     * True once done() was called.
+     */
+    bool m_done;
 
     /**
      * Indicates whether this session was initiated by the peer or locally.
@@ -1788,6 +1987,9 @@ class Session : public DBusObjectHelper,
     /** Cmdline to execute command line args */
     boost::shared_ptr<CmdlineWrapper> m_cmdline;
 
+    /** Session.Attach() */
+    void attach(const Caller_t &caller);
+
     /** Session.Detach() */
     void detach(const Caller_t &caller);
 
@@ -1834,12 +2036,37 @@ class Session : public DBusObjectHelper,
     static string syncStatusToString(SyncStatus state);
 
 public:
+    /**
+     * Sessions must always be held in a shared pointer
+     * because some operations depend on that. This
+     * constructor function here ensures that and
+     * also adds a weak pointer to the instance itself,
+     * so that it can create more shared pointers as
+     * needed.
+     */
+    static boost::shared_ptr<Session> createSession(DBusServer &server,
+                                                    const std::string &peerDeviceID,
+                                                    const std::string &config_name,
+                                                    const std::string &session,
+                                                    const std::vector<std::string> &flags = std::vector<std::string>());
+
+    /**
+     * automatically marks the session as completed before deleting it
+     */
+    ~Session();
+
+    /** explicitly mark the session as completed, even if it doesn't get deleted yet */
+    void done();
+
+private:
     Session(DBusServer &server,
             const std::string &peerDeviceID,
             const std::string &config_name,
-            const std::string &session);
-    ~Session();
+            const std::string &session,
+            const std::vector<std::string> &flags = std::vector<std::string>());
+    boost::weak_ptr<Session> m_me;
 
+public:
     enum {
         PRI_CMDLINE = -10,
         PRI_DEFAULT = 0,
@@ -1906,6 +2133,12 @@ public:
     string askPassword(const string &passwordName, 
                        const string &descr, 
                        const ConfigPasswordKey &key);
+
+    /** Session.GetFlags() */
+    std::vector<std::string> getFlags() { return m_flags; }
+
+    /** Session.GetConfigName() */
+    std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
 
     /** Session.SetConfig() */
     void setConfig(bool update, bool temporary,
@@ -2056,6 +2289,8 @@ public:
         // before closing the session
         redirectPtr->flush();
     }
+
+    bool configWasModified() { return m_cmdline.configWasModified(); }
 };
 
 /**
@@ -2197,16 +2432,14 @@ class DBusTransportAgent : public TransportAgent
     std::string m_type;
 
     /*
-     * When the callback is invoked, we always abort the current
+     * When the timeout occurs, we always abort the current
      * transmission.  If it is invoked while we are not in the wait()
      * of this transport, then we remember that in m_eventTriggered
      * and return from wait() right away. The main loop is only
      * quit when the transport is waiting in it. This is a precaution
      * to not interfere with other parts of the code.
      */
-    TransportCallback m_callback;
-    void *m_callbackData;
-    int m_callbackInterval;
+    int m_timeoutSeconds;
     GLibEvent m_eventSource;
     bool m_eventTriggered;
     bool m_waiting;
@@ -2229,11 +2462,9 @@ class DBusTransportAgent : public TransportAgent
     virtual void cancel() {}
     virtual void shutdown();
     virtual Status wait(bool noReply = false);
-    virtual void setCallback (TransportCallback cb, void * udata, int interval)
+    virtual void setTimeout(int seconds)
     {
-        m_callback = cb;
-        m_callbackData = udata;
-        m_callbackInterval = interval;
+        m_timeoutSeconds = seconds;
         m_eventSource = 0;
     }
     virtual void getReply(const char *&data, size_t &len, std::string &contentType);
@@ -2358,6 +2589,66 @@ private:
     /** a timer */
     Timer m_timer;
 };
+
+
+/***************** Client implementation ****************/
+
+Client::~Client()
+{
+    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s is destructing", m_ID.c_str());
+
+    // explicitly detach all resources instead of just freeing the
+    // list, so that the special behavior for sessions in detach() is
+    // triggered
+    while (!m_resources.empty()) {
+        detach(m_resources.front().get());
+    }
+}
+
+bool Client::sessionExpired(const boost::shared_ptr<Session> &session)
+{
+    SE_LOG_DEBUG(NULL, NULL, "session %s expired",
+                 session->getSessionID().c_str());
+    // don't call me again
+    return false;
+}
+
+void Client::detach(Resource *resource)
+{
+    for (Resources_t::iterator it = m_resources.begin();
+         it != m_resources.end();
+         ++it) {
+        if (it->get() == resource) {
+            if (it->unique()) {
+                boost::shared_ptr<Session> session = boost::dynamic_pointer_cast<Session>(*it);
+                if (session) {
+                    // Special behavior for sessions: keep them
+                    // around for another minute after the last
+                    // client detaches. This allows another client
+                    // to attach and/or get information about the
+                    // session.
+                    // This is implemented as a timeout which holds
+                    // a reference to the session. Once the timeout
+                    // fires, it is called and then removed, which
+                    // removes the reference.
+                    m_server.addTimeout(boost::bind(&Client::sessionExpired,
+                                                    session),
+                                        60 /* 1 minute */);
+
+                    // allow other sessions to start
+                    session->done();
+                }
+            }
+            // this will trigger removal of the resource if
+            // the client was the last remaining owner
+            m_resources.erase(it);
+            return;
+        }
+    }
+
+    SE_THROW_EXCEPTION(InvalidCall, "cannot detach from resource that client is not attached to");
+}
+
 
 /***************** ReadOperations implementation ****************/
 
@@ -2519,11 +2810,23 @@ void ReadOperations::getConfig(bool getTemplate,
     BOOST_FOREACH(const ConfigProperty *prop, syncRegistry) {
         bool isDefault = false;
         string value = prop->getProperty(*syncConfig->getProperties(), &isDefault);
-        if(boost::iequals(prop->getName(), "syncURL") && !syncURL.empty() ) {
-            localConfigs.insert(pair<string, string>(prop->getName(), syncURL));
+        if(boost::iequals(prop->getMainName(), "syncURL") && !syncURL.empty() ) {
+            localConfigs.insert(pair<string, string>(prop->getMainName(), syncURL));
         } else if(!isDefault) {
-            localConfigs.insert(pair<string, string>(prop->getName(), value));
+            localConfigs.insert(pair<string, string>(prop->getMainName(), value));
         }
+    }
+
+    // Set ConsumerReady for existing SyncEvolution < 1.2 configs
+    // if not set explicitly,
+    // because in older releases all existing configurations where
+    // shown. SyncEvolution 1.2 is more strict and assumes that
+    // ConsumerReady must be set explicitly. The sync-ui always has
+    // set the flag for configs created or modified with it, but the
+    // command line did not. Matches similar code in the Cmdline.cpp
+    // migration code.
+    if (syncConfig->getConfigVersion(CONFIG_LEVEL_PEER, CONFIG_CUR_VERSION) == 0 /* SyncEvolution < 1.2 */) {
+        localConfigs.insert(make_pair("ConsumerReady", "1"));
     }
 
     // insert 'configName' of the chosen config (m_configName is not normalized)
@@ -2541,7 +2844,7 @@ void ReadOperations::getConfig(bool getTemplate,
             bool isDefault = false;
             string value = prop->getProperty(*sourceNodes.getProperties(), &isDefault);
             if(!isDefault) {
-                localConfigs.insert(pair<string, string>(prop->getName(), value));
+                localConfigs.insert(pair<string, string>(prop->getMainName(), value));
             }
         }
         config.insert(pair<string, map<string, string> >( "source/" + name, localConfigs));
@@ -2609,7 +2912,7 @@ void ReadOperations::checkSource(const std::string &sourceName)
     bool checked = false;
     try {
         // this can already throw exceptions when the config is invalid
-        SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName));
+        SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
         auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, config.get()));
 
         if (syncSource.get()) {
@@ -2630,7 +2933,7 @@ void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &d
     boost::shared_ptr<SyncConfig> config(new SyncConfig(m_configName));
     setFilters(*config);
 
-    SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName));
+    SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
     const SourceRegistry &registry(SyncSource::getSourceRegistry());
     BOOST_FOREACH(const RegisterSyncSource *sourceInfo, registry) {
         SyncSource *source = sourceInfo->m_create(params);
@@ -2893,11 +3196,7 @@ boost::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
         // client (API not designed for it), let's use the hard timeout
         // from RetryDuration here.
         int timeout = getRetryDuration();
-        if (timeout) {
-            agent->setCallback(transport_cb,
-                               reinterpret_cast<void *>(static_cast<uintptr_t>(timeout)),
-                               timeout);
-        }
+        agent->setTimeout(timeout);
         return agent;
     } else {
         // no connection, use HTTP via libsoup/GMainLoop
@@ -2982,6 +3281,19 @@ string DBusSync::askPassword(const string &passwordName,
 
 /***************** Session implementation ***********************/
 
+void Session::attach(const Caller_t &caller)
+{
+    boost::shared_ptr<Client> client(m_server.findClient(caller));
+    if (!client) {
+        throw runtime_error("unknown client");
+    }
+    boost::shared_ptr<Session> me = m_me.lock();
+    if (!me) {
+        throw runtime_error("session already deleted?!");
+    }
+    client->attach(me);
+}
+
 void Session::detach(const Caller_t &caller)
 {
     boost::shared_ptr<Client> client(m_server.findClient(caller));
@@ -2991,24 +3303,62 @@ void Session::detach(const Caller_t &caller)
     client->detach(this);
 }
 
+/**
+ * validate key/value property and copy it to the filter
+ * if okay
+ */
+static void copyProperty(const StringPair &keyvalue,
+                         ConfigPropertyRegistry &registry,
+                         FilterConfigNode::ConfigFilter &filter)
+{
+    const std::string &name = keyvalue.first;
+    const std::string &value = keyvalue.second;
+    const ConfigProperty *prop = registry.find(name);
+    if (!prop) {
+        SE_THROW_EXCEPTION(InvalidCall, StringPrintf("unknown property '%s'", name.c_str()));
+    }
+    std::string error;
+    if (!prop->checkValue(value, error)) {
+        SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid value '%s' for property '%s': '%s'",
+                                                     value.c_str(), name.c_str(), error.c_str()));
+    }
+    filter.insert(keyvalue);
+}                        
+
 static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
 {
     ReadOperations::Config_t::const_iterator it;
     for (it = config.begin(); it != config.end(); it++) {
         map<string, string>::const_iterator sit;
-        if(it->first.empty()) {
+        string name = it->first;
+        if (name.empty()) {
+            ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
             for (sit = it->second.begin(); sit != it->second.end(); sit++) {
-                syncFilter.insert(*sit);
-            }
-        } else {
-            string name = it->first;
-            if(name.find("source/") == 0) {
-                name = name.substr(7); ///> 7 is the length of "source/"
-                FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
-                for (sit = it->second.begin(); sit != it->second.end(); sit++) {
-                    sourceFilter.insert(*sit);
+                // read-only properties can (and have to be) ignored
+                static const char *init[] = {
+                    "configName",
+                    "description",
+                    "score",
+                    "deviceName",
+                    "templateName",
+                    "fingerprint"
+                };
+                static const set< std::string, Nocase<std::string> >
+                    special(init,
+                            init + (sizeof(init) / sizeof(*init)));
+                if (special.find(sit->first) == special.end()) {
+                    copyProperty(*sit, registry, syncFilter);
                 }
             }
+        } else if (boost::starts_with(name, "source/")) {
+            name = name.substr(strlen("source/"));
+            FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
+            ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
+            for (sit = it->second.begin(); sit != it->second.end(); sit++) {
+                copyProperty(*sit, registry, sourceFilter);
+            }
+        } else {
+            SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid config entry '%s'", name.c_str()));
         }
     }
 }
@@ -3022,27 +3372,47 @@ void Session::setConfig(bool update, bool temporary,
         string msg = StringPrintf("%s started, cannot change configuration at this time", runOpToString(m_runOperation).c_str());
         SE_THROW_EXCEPTION(InvalidCall, msg);
     }
-    if (!update && temporary) {
-        throw std::runtime_error("Clearing existing configuration and temporary configuration changes which only affects the duration of the session are mutually exclusive");
-    }
 
     m_server.getPresenceStatus().updateConfigPeers (m_configName, config);
     /** check whether we need remove the entire configuration */
-    if(!update && config.empty()) {
+    if(!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(getConfigName()));
         if(syncConfig.get()) {
             syncConfig->remove();
+            m_setConfig = true;
         }
         return;
     }
-    if(temporary) {
-        /* save temporary configs in session filters */
-        setSyncFilters(config, m_syncFilter, m_sourceFilters);
+
+    /*
+     * validate input config and convert to filters;
+     * if validation fails, no harm was done at this point yet
+     */
+    FilterConfigNode::ConfigFilter syncFilter;
+    SourceFilters_t sourceFilters;
+    setSyncFilters(config, syncFilter, sourceFilters);
+
+    if (temporary) {
+        /* save temporary configs in session filters, either erasing old
+           temporary settings or adding to them */
+        if (update) {
+            m_syncFilter.insert(syncFilter.begin(), syncFilter.end());
+            BOOST_FOREACH(SourceFilters_t::value_type &source, sourceFilters) {
+                SourceFilters_t::iterator it = m_sourceFilters.find(source.first);
+                if (it != m_sourceFilters.end()) {
+                    // add to existing source filter
+                    it->second.insert(source.second.begin(), source.second.end());
+                } else {
+                    // add source filter
+                    m_sourceFilters.insert(source);
+                }
+            }
+        } else {
+            m_syncFilter = syncFilter;
+            m_sourceFilters = sourceFilters;            
+        }
         m_tempConfig = true;
     } else {
-        FilterConfigNode::ConfigFilter syncFilter;
-        std::map<std::string, FilterConfigNode::ConfigFilter> sourceFilters;
-        setSyncFilters(config, syncFilter, sourceFilters);
         /* need to save configurations */
         boost::shared_ptr<SyncConfig> from(new SyncConfig(getConfigName()));
         /* if it is not clear mode and config does not exist, an error throws */
@@ -3081,6 +3451,7 @@ void Session::setConfig(bool update, bool temporary,
             from->setConfigFilter(false, it->first, it->second);
         }
         boost::shared_ptr<DBusSync> syncConfig(new DBusSync(getConfigName(), *this));
+        syncConfig->prepareConfigForWrite();
         syncConfig->copy(*from, NULL);
 
         syncConfig->preFlush(*syncConfig);
@@ -3132,7 +3503,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
     FilterConfigNode::ConfigFilter filter;
     filter = m_sourceFilter;
     if (!mode.empty()) {
-        filter[SyncSourceConfig::m_sourcePropSync.getName()] = mode;
+        filter["sync"] = mode;
     }
     m_sync->setConfigFilter(false, "", filter);
     BOOST_FOREACH(const std::string &source,
@@ -3140,7 +3511,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
         filter = m_sourceFilters[source];
         SourceModes_t::const_iterator it = source_modes.find(source);
         if (it != source_modes.end()) {
-            filter[SyncSourceConfig::m_sourcePropSync.getName()] = it->second;
+            filter["sync"] = it->second;
         }
         m_sync->setConfigFilter(false, source, filter);
     }
@@ -3254,16 +3625,29 @@ string Session::syncStatusToString(SyncStatus state)
     };
 }
 
+boost::shared_ptr<Session> Session::createSession(DBusServer &server,
+                                                  const std::string &peerDeviceID,
+                                                  const std::string &config_name,
+                                                  const std::string &session,
+                                                  const std::vector<std::string> &flags)
+{
+    boost::shared_ptr<Session> me(new Session(server, peerDeviceID, config_name, session, flags));
+    me->m_me = me;
+    return me;
+}
+
 Session::Session(DBusServer &server,
                  const std::string &peerDeviceID,
                  const std::string &config_name,
-                 const std::string &session) :
+                 const std::string &session,
+                 const std::vector<std::string> &flags) :
     DBusObjectHelper(server.getConnection(),
                      std::string("/org/syncevolution/Session/") + session,
                      "org.syncevolution.Session",
                      boost::bind(&DBusServer::autoTermCallback, &server)),
     ReadOperations(config_name, server),
     m_server(server),
+    m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
     m_serverMode(false),
@@ -3271,6 +3655,7 @@ Session::Session(DBusServer &server,
     m_tempConfig(false),
     m_setConfig(false),
     m_active(false),
+    m_done(false),
     m_remoteInitiated(false),
     m_syncStatus(SYNC_QUEUEING),
     m_stepIsWaiting(false),
@@ -3288,7 +3673,10 @@ Session::Session(DBusServer &server,
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
+    add(this, &Session::attach, "Attach");
     add(this, &Session::detach, "Detach");
+    add(this, &Session::getFlags, "GetFlags");
+    add(this, &Session::getNormalConfigName, "GetConfigName");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getConfigs, "GetConfigs");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
     add(this, &Session::setConfig, "SetConfig");
@@ -3307,15 +3695,33 @@ Session::Session(DBusServer &server,
     add(emitProgress);
 }
 
-Session::~Session()
+void Session::done()
 {
+    if (m_done) {
+        return;
+    }
+
     /* update auto sync manager when a config is changed */
-    if(m_setConfig) {
+    if (m_setConfig) {
         m_server.getAutoSyncManager().update(m_configName);
     }
     m_server.dequeue(this);
+
+    // now tell other clients about config change?
+    if (m_setConfig) {
+        m_server.configChanged();
+    }
+
+    // typically set by m_server.dequeue(), but let's really make sure...
+    m_active = false;
+
+    m_done = true;
 }
-    
+
+Session::~Session()
+{
+    done();
+}
 
 void Session::setActive(bool active)
 {
@@ -3510,6 +3916,8 @@ void Session::run()
                         m_error = status;
                     }
                 }
+                m_setConfig = m_cmdline->configWasModified();
+                break;
             default:
                 break;
             };
@@ -3567,12 +3975,12 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     if(!sources.empty()) {
         BOOST_FOREACH(const std::string &source, sources) {
             FilterConfigNode::ConfigFilter filter;
-            filter[SyncSourceConfig::m_sourcePropSync.getName()] = "two-way";
+            filter["sync"] = "two-way";
             m_sync->setConfigFilter(false, source, filter);
         }
         // disable other sources
         FilterConfigNode::ConfigFilter disabled;
-        disabled[SyncSourceConfig::m_sourcePropSync.getName()] = "disabled";
+        disabled["sync"] = "disabled";
         m_sync->setConfigFilter(false, "", disabled);
     }
     m_restoreBefore = before;
@@ -4115,6 +4523,9 @@ void Connection::process(const Caller_t &caller,
                                     info.toString().c_str(),
                                     entry.first.c_str(),
                                     entry.second.c_str());
+                        // Stop searching. Other peer configs might have the same remoteDevID.
+                        // We go with the first one found, which because of the sort order
+                        // of getConfigs() ensures that "foo" is found before "foo.old".
                         break;
                     }
                 }
@@ -4133,10 +4544,10 @@ void Connection::process(const Caller_t &caller,
 
             // run session as client or server
             m_state = PROCESSING;
-            m_session.reset(new Session(m_server,
-                                        peerDeviceID,
-                                        config,
-                                        m_sessionID));
+            m_session = Session::createSession(m_server,
+                                               peerDeviceID,
+                                               config,
+                                               m_sessionID);
             if (serverMode) {
                 m_session->initServer(SharedBuffer(reinterpret_cast<const char *>(message.second),
                                                    message.first),
@@ -4359,7 +4770,7 @@ DBusTransportAgent::DBusTransportAgent(GMainLoop *loop,
     m_loop(loop),
     m_session(session),
     m_connection(connection),
-    m_callback(NULL),
+    m_timeoutSeconds(0),
     m_eventTriggered(false),
     m_waiting(false)
 {
@@ -4392,9 +4803,8 @@ void DBusTransportAgent::send(const char *data, size_t len)
     connection->m_state = Connection::WAITING;
     connection->m_incomingMsg = SharedBuffer();
 
-    // setup regular callback
-    if (m_callback) {
-        m_eventSource = g_timeout_add_seconds(m_callbackInterval, timeoutCallback, static_cast<gpointer>(this));
+    if (m_timeoutSeconds) {
+        m_eventSource = g_timeout_add_seconds(m_timeoutSeconds, timeoutCallback, static_cast<gpointer>(this));
     }
     m_eventTriggered = false;
 
@@ -4426,8 +4836,6 @@ void DBusTransportAgent::shutdown()
 gboolean DBusTransportAgent::timeoutCallback(gpointer transport)
 {
     DBusTransportAgent *me = static_cast<DBusTransportAgent *>(transport);
-    me->m_callback(me->m_callbackData);
-    // TODO: check or remove return code from callback?!
     me->m_eventTriggered = true;
     if (me->m_waiting) {
         g_main_loop_quit(me->m_loop);
@@ -4530,7 +4938,17 @@ void PresenceStatus::init(){
             vector<string> urls = config.getSyncURL();
             m_peers[server.first].clear();
             BOOST_FOREACH (const string &url, urls) {
-                m_peers[server.first].push_back(make_pair(url,MIGHTWORK));
+                // take current status into account,
+                // PresenceStatus::checkPresence() calls init() and
+                // expects up-to-date information
+                PeerStatus status;
+                if ((boost::starts_with(url, "obex-bt") && m_btPresence) ||
+                    (boost::starts_with (url, "http") && m_httpPresence)) {
+                    status = MIGHTWORK;
+                } else {
+                    status = NOTRANSPORT;
+                }
+                m_peers[server.first].push_back(make_pair(url, status));
             }
         }
         m_initiated = true;
@@ -4590,8 +5008,6 @@ void PresenceStatus::updatePresenceStatus (bool newStatus, PresenceStatus::Trans
 void PresenceStatus::updatePresenceStatus (bool httpPresence, bool btPresence) {
     bool httpChanged = (m_httpPresence != httpPresence);
     bool btChanged = (m_btPresence != btPresence);
-    m_httpPresence = httpPresence;
-    m_btPresence = btPresence;
     if(httpChanged) {
         m_httpTimer.reset();
     }
@@ -4604,11 +5020,15 @@ void PresenceStatus::updatePresenceStatus (bool httpPresence, bool btPresence) {
         return;
     }
 
-    //initialize the configured peer list
+    //initialize the configured peer list using old presence status
     bool initiated = m_initiated;
     if (!m_initiated) {
         init();
     }
+
+    // switch to new status
+    m_httpPresence = httpPresence;
+    m_btPresence = btPresence;
 
     //iterate all configured peers and fire singals
     BOOST_FOREACH (StatusPair &peer, m_peers) {
@@ -4729,6 +5149,65 @@ void ConnmanClient::propertyChanged(const string &name,
     }
 }
 
+/***************** NetworkManagerClient implementation *************/
+NetworkManagerClient::NetworkManagerClient(DBusServer &server) :
+    m_server(server),
+    m_stateChanged(*this, "StateChanged"),
+    m_properties(*this)
+{
+    m_networkManagerConn = b_dbus_setup_bus(DBUS_BUS_SYSTEM, NULL, true, NULL);
+    if(m_networkManagerConn) {
+        m_properties.get();
+        m_stateChanged.activate(boost::bind(
+                                    &NetworkManagerClient::stateChanged,
+                                    this, _1));
+    } else {
+        SE_LOG_ERROR(NULL, NULL,
+                     "DBus connection setup for NetworkManager failed");
+    }
+}
+
+void NetworkManagerClient::stateChanged(uint32_t uiState)
+{
+    if(uiState==NM_STATE_CONNECTED) {
+        SE_LOG_DEBUG(NULL, NULL, "NetworkManager connected");
+        m_server.getPresenceStatus().updatePresenceStatus(
+            true, PresenceStatus::HTTP_TRANSPORT);
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "NetworkManager disconnected");
+        m_server.getPresenceStatus().updatePresenceStatus(
+            false, PresenceStatus::HTTP_TRANSPORT);
+    }
+}
+
+NetworkManagerClient::NetworkManagerProperties::NetworkManagerProperties(
+    NetworkManagerClient& manager) :
+    m_manager(manager)
+{
+
+}
+
+void NetworkManagerClient::NetworkManagerProperties::get()
+{
+    DBusClientCall1<boost::variant<uint32_t, std::string> > get(*this, "Get");
+    get(std::string(""), std::string("State"),
+        boost::bind(&NetworkManagerProperties::getCallback, this, _1, _2));    
+}
+
+void NetworkManagerClient::NetworkManagerProperties::getCallback(
+    const boost::variant<uint32_t, std::string> &prop,
+    const std::string &error)
+{
+    if(!error.empty()) {
+        SE_LOG_DEBUG (
+            NULL, NULL,
+            "Error in calling Get of Interface "
+            "org.freedesktop.DBus.Properties : %s", error.c_str());
+    } else {
+        m_manager.stateChanged(boost::get<uint32_t>(prop));
+    }
+}
+
 /********************** DBusServer implementation ******************/
 
 void DBusServer::clientGone(Client *c)
@@ -4739,12 +5218,11 @@ void DBusServer::clientGone(Client *c)
         if (it->second.get() == c) {
             SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s has disconnected",
                          c->m_ID.c_str());
+            autoTermUnref(it->second->getAttachCount());
             m_clients.erase(it);
             return;
         }
     }
-    // remove the client if it attaches the dbus server
-    detachClientRefs(c->m_ID, true);
     SE_LOG_DEBUG(NULL, NULL, "unknown client has disconnected?!");
 }
 
@@ -4760,50 +5238,74 @@ std::string DBusServer::getNextSession()
     return StringPrintf("%u%u", rand(), m_lastSession);
 }
 
+vector<string> DBusServer::getCapabilities()
+{
+    // Note that this is tested by test-dbus.py in
+    // TestDBusServer.testCapabilities, update the test when adding
+    // capabilities.
+    vector<string> capabilities;
+
+    capabilities.push_back("ConfigChanged");
+    capabilities.push_back("GetConfigName");
+    capabilities.push_back("Notifications");
+    capabilities.push_back("Version");
+    capabilities.push_back("SessionFlags");
+    capabilities.push_back("SessionAttach");
+    capabilities.push_back("DatabaseProperties");
+    return capabilities;
+}
+
+StringMap DBusServer::getVersions()
+{
+    StringMap versions;
+
+    versions["version"] = VERSION;
+    versions["system"] = EDSAbiWrapperInfo();
+    versions["backends"] = SyncSource::backendsInfo();
+    return versions;
+}
+
 void DBusServer::attachClient(const Caller_t &caller,
                               const boost::shared_ptr<Watch> &watch)
 {
     boost::shared_ptr<Client> client = addClient(getConnection(),
                                                  caller,
                                                  watch);
-    std::list<std::pair<Caller_t, int> >::iterator it;
-    for(it = m_attachedClients.begin(); it != m_attachedClients.end(); ++it) {
-        if (it->first == caller) {
-            break;
-        }
-    }
     autoTermRef();
-    // if not attach before, then create it
-    if(it == m_attachedClients.end()) {
-        m_attachedClients.push_back(std::pair<Caller_t, int>(caller, 1));
-        watch->setCallback(boost::bind(&DBusServer::clientGone, this, client.get()));
-    } else {
-        it->second++;
-    }
+    client->increaseAttachCount();
 }
 
 void DBusServer::detachClient(const Caller_t &caller)
 {
-    detachClientRefs(caller, false);
+    boost::shared_ptr<Client> client = findClient(caller);
+    if (client) {
+        autoTermUnref();
+        client->decreaseAttachCount();
+    }
 }
 
-void DBusServer::detachClientRefs(const Caller_t &caller, bool allRefs)
+void DBusServer::setNotifications(bool enabled,
+                                  const Caller_t &caller,
+                                  const string & /* notifications */)
 {
-    std::list<std::pair<Caller_t, int> >::iterator it;
-    for(it = m_attachedClients.begin(); it != m_attachedClients.end(); ++it) {
-        if (it->first == caller) {
-            if(allRefs) {
-                autoTermUnref(it->second);
-                m_attachedClients.erase(it);
-            } else if(--it->second == 0) {
-                autoTermUnref();
-                m_attachedClients.erase(it);
-            } else {
-                autoTermUnref();
-            }
-            break;
+    boost::shared_ptr<Client> client = findClient(caller);
+    if (client && client->getAttachCount()) {
+        client->setNotificationsEnabled(enabled);
+    } else {
+        SE_THROW("client not attached, not allowed to change notifications");
+    }
+}
+
+bool DBusServer::notificationsEnabled()
+{
+    for(Clients_t::iterator it = m_clients.begin();
+        it != m_clients.end();
+        ++it) {
+        if (!it->second->getNotificationsEnabled()) {
+            return false;
         }
     }
+    return true;
 }
 
 void DBusServer::connect(const Caller_t &caller,
@@ -4838,19 +5340,21 @@ void DBusServer::connect(const Caller_t &caller,
     object = c->getPath();
 }
 
-void DBusServer::startSession(const Caller_t &caller,
-                              const boost::shared_ptr<Watch> &watch,
-                              const std::string &server,
-                              DBusObject_t &object)
+void DBusServer::startSessionWithFlags(const Caller_t &caller,
+                                       const boost::shared_ptr<Watch> &watch,
+                                       const std::string &server,
+                                       const std::vector<std::string> &flags,
+                                       DBusObject_t &object)
 {
     boost::shared_ptr<Client> client = addClient(getConnection(),
                                                  caller,
                                                  watch);
     std::string new_session = getNextSession();   
-    boost::shared_ptr<Session> session(new Session(*this,
-                                                   "is this a client or server session?",
-                                                   server,
-                                                   new_session));
+    boost::shared_ptr<Session> session = Session::createSession(*this,
+                                                                "is this a client or server session?",
+                                                                server,
+                                                                new_session,
+                                                                flags);
     client->attach(session);
     session->activate();
     enqueue(session);
@@ -4891,10 +5395,12 @@ DBusServer::DBusServer(GMainLoop *loop, const DBusConnectionPtr &conn, int durat
     sessionChanged(*this, "SessionChanged"),
     presence(*this, "Presence"),
     templatesChanged(*this, "TemplatesChanged"),
+    configChanged(*this, "ConfigChanged"),
     infoRequest(*this, "InfoRequest"),
     logOutput(*this, "LogOutput"),
     m_presence(*this),
     m_connman(*this),
+    m_networkManager(*this),
     m_autoSync(*this),
     m_autoTerm(m_autoSync.preventTerm() ? -1 : duration), //if there is any task in auto sync, prevent auto termination
     m_parentLogger(LoggerBase::instance())
@@ -4902,10 +5408,15 @@ DBusServer::DBusServer(GMainLoop *loop, const DBusConnectionPtr &conn, int durat
     struct timeval tv;
     gettimeofday(&tv, NULL);
     srand(tv.tv_usec);
+    add(this, &DBusServer::getCapabilities, "GetCapabilities");
+    add(this, &DBusServer::getVersions, "GetVersions");
     add(this, &DBusServer::attachClient, "Attach");
     add(this, &DBusServer::detachClient, "Detach");
+    add(this, &DBusServer::enableNotifications, "EnableNotifications");
+    add(this, &DBusServer::disableNotifications, "DisableNotifications");
     add(this, &DBusServer::connect, "Connect");
     add(this, &DBusServer::startSession, "StartSession");
+    add(this, &DBusServer::startSessionWithFlags, "StartSessionWithFlags");
     add(this, &DBusServer::getConfigs, "GetConfigs");
     add(this, &DBusServer::getConfig, "GetConfig");
     add(this, &DBusServer::getReports, "GetReports");
@@ -4916,6 +5427,7 @@ DBusServer::DBusServer(GMainLoop *loop, const DBusConnectionPtr &conn, int durat
     add(this, &DBusServer::infoResponse, "InfoResponse");
     add(sessionChanged);
     add(templatesChanged);
+    add(configChanged);
     add(presence);
     add(infoRequest);
     add(logOutput);
@@ -4930,7 +5442,6 @@ DBusServer::~DBusServer()
     m_syncSession.reset();
     m_workQueue.clear();
     m_clients.clear();
-    m_attachedClients.clear();
     LoggerBase::popLogger();
 }
 
@@ -5004,7 +5515,7 @@ boost::shared_ptr<Client> DBusServer::addClient(const DBusConnectionPtr &conn,
     if (client) {
         return client;
     }
-    client.reset(new Client(ID));
+    client.reset(new Client(*this, ID));
     // add to our list *before* checking that peer exists, so
     // that clientGone() can remove it if the check fails
     m_clients.push_back(std::make_pair(watch, client));
@@ -5133,6 +5644,30 @@ void DBusServer::checkQueue()
             return;
         }
     }
+}
+
+bool DBusServer::callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<bool ()> &callback)
+{
+    if (!callback()) {
+        m_timeouts.remove(timeout);
+        return false;
+    } else {
+        return true;
+    }
+}
+
+void DBusServer::addTimeout(const boost::function<bool ()> &callback,
+                            int seconds)
+{
+    boost::shared_ptr<Timeout> timeout(new Timeout);
+    m_timeouts.push_back(timeout);
+    timeout->activate(seconds,
+                      boost::bind(&DBusServer::callTimeout,
+                                  this,
+                                  // avoid copying the shared pointer here,
+                                  // otherwise the Timeout will never be deleted
+                                  boost::ref(m_timeouts.back()),
+                                  callback));
 }
 
 void DBusServer::infoResponse(const Caller_t &caller,
@@ -5788,10 +6323,10 @@ void AutoSyncManager::startTask()
         m_activeTask.reset(new AutoSyncTask(m_workQueue.front()));
         m_workQueue.pop_front();
         string newSession = m_server.getNextSession();   
-        m_session.reset(new Session(m_server,
-                                    "",
-                                    m_activeTask->m_peer,
-                                    newSession));
+        m_session = Session::createSession(m_server,
+                                           "",
+                                           m_activeTask->m_peer,
+                                           newSession);
         m_session->setPriority(Session::PRI_AUTOSYNC);
         m_session->addListener(this);
         m_server.enqueue(m_session);
@@ -5825,10 +6360,12 @@ void AutoSyncManager::syncSuccessStart()
     m_syncSuccessStart = true;
     SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been successfully started.\n", m_activeTask->m_peer.c_str());
 #ifdef HAS_NOTIFY
-    string summary = StringPrintf(_("%s is syncing"), m_activeTask->m_peer.c_str());
-    string body = StringPrintf(_("We have just started to sync your computer with the %s sync service."), m_activeTask->m_peer.c_str());
-    //TODO: set config information for 'sync-ui'
-    m_notify.send(summary.c_str(), body.c_str());
+    if (m_server.notificationsEnabled()) {
+        string summary = StringPrintf(_("%s is syncing"), m_activeTask->m_peer.c_str());
+        string body = StringPrintf(_("We have just started to sync your computer with the %s sync service."), m_activeTask->m_peer.c_str());
+        //TODO: set config information for 'sync-ui'
+        m_notify.send(summary.c_str(), body.c_str());
+    }
 #endif
 }
 
@@ -5836,21 +6373,23 @@ void AutoSyncManager::syncDone(SyncMLStatus status)
 {
     SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been done.\n", m_activeTask->m_peer.c_str());
 #ifdef HAS_NOTIFY
-    // send a notification to notification server
-    string summary, body;
-    if(m_syncSuccessStart && status == STATUS_OK) {
-        // if sync is successfully started and done
-        summary = StringPrintf(_("%s sync complete"), m_activeTask->m_peer.c_str());
-        body = StringPrintf(_("We have just finished syncing your computer with the %s sync service."), m_activeTask->m_peer.c_str());
-        //TODO: set config information for 'sync-ui'
-        m_notify.send(summary.c_str(), body.c_str());
-    } else if(m_syncSuccessStart || (!m_syncSuccessStart && status == STATUS_FATAL)) {
-        //if sync is successfully started and has errors, or not started successful with a fatal problem
-        summary = StringPrintf(_("Sync problem."));
-        body = StringPrintf(_("Sorry, there's a problem with your sync that you need to attend to."));
-        //TODO: set config information for 'sync-ui'
-        m_notify.send(summary.c_str(), body.c_str());
-    } 
+    if (m_server.notificationsEnabled()) {
+        // send a notification to notification server
+        string summary, body;
+        if(m_syncSuccessStart && status == STATUS_OK) {
+            // if sync is successfully started and done
+            summary = StringPrintf(_("%s sync complete"), m_activeTask->m_peer.c_str());
+            body = StringPrintf(_("We have just finished syncing your computer with the %s sync service."), m_activeTask->m_peer.c_str());
+            //TODO: set config information for 'sync-ui'
+            m_notify.send(summary.c_str(), body.c_str());
+        } else if(m_syncSuccessStart || (!m_syncSuccessStart && status == STATUS_FATAL)) {
+            //if sync is successfully started and has errors, or not started successful with a fatal problem
+            summary = StringPrintf(_("Sync problem."));
+            body = StringPrintf(_("Sorry, there's a problem with your sync that you need to attend to."));
+            //TODO: set config information for 'sync-ui'
+            m_notify.send(summary.c_str(), body.c_str());
+        }
+    }
 #endif
     m_session.reset();
     m_activeTask.reset();
@@ -5913,7 +6452,14 @@ void AutoSyncManager::Notification::send(const char *summary,
         notify_notification_clear_actions(m_notification);
         notify_notification_close(m_notification, NULL);
     }
+#ifndef NOTIFY_CHECK_VERSION
+# define NOTIFY_CHECK_VERSION(_x,_y,_z) 0
+#endif
+#if !NOTIFY_CHECK_VERSION(0,7,0)
     m_notification = notify_notification_new(summary, body, NULL, NULL);
+#else
+    m_notification = notify_notification_new(summary, body, NULL);
+#endif
     //if actions are not supported, don't add actions
     //An example is Ubuntu Notify OSD. It uses an alert box
     //instead of a bubble when a notification is appended with actions.
@@ -5998,16 +6544,7 @@ int main(int argc, char **argv)
         opt++;
     }
     try {
-        g_type_init();
-        g_thread_init(NULL);
-        g_set_application_name("SyncEvolution");
-
-        // Initializing a potential use of EDS early is necessary for
-        // libsynthesis when compiled with
-        // --enable-evolution-compatibility: in that mode libical will
-        // only be found by libsynthesis after EDSAbiWrapperInit()
-        // pulls it into the process by loading libecal.
-        EDSAbiWrapperInit();
+        SyncContext::initMain("syncevo-dbus-server");
 
         loop = g_main_loop_new (NULL, FALSE);
 

@@ -29,6 +29,7 @@
 #include <syncevo/DevNullConfigNode.h>
 #include <syncevo/MultiplexConfigNode.h>
 #include <syncevo/SingleFileConfigTree.h>
+#include <syncevo/Cmdline.h>
 #include <syncevo/lcs.h>
 #include <test.h>
 #include <synthesis/timeutil.h>
@@ -47,9 +48,108 @@ SE_BEGIN_CXX
 
 const char *const SourceAdminDataName = "adminData";
 
-static bool SourcePropSourceTypeIsSet(boost::shared_ptr<SyncSourceConfig> source);
+static bool SourcePropBackendIsSet(boost::shared_ptr<SyncSourceConfig> source);
 static bool SourcePropURIIsSet(boost::shared_ptr<SyncSourceConfig> source);
 static bool SourcePropSyncIsSet(boost::shared_ptr<SyncSourceConfig> source);
+
+int ConfigVersions[CONFIG_LEVEL_MAX][CONFIG_VERSION_MAX] =
+{
+    { CONFIG_ROOT_MIN_VERSION, CONFIG_ROOT_CUR_VERSION },
+    { CONFIG_CONTEXT_MIN_VERSION, CONFIG_CONTEXT_CUR_VERSION },
+    { CONFIG_PEER_MIN_VERSION, CONFIG_PEER_CUR_VERSION },
+};    
+
+std::string ConfigLevel2String(ConfigLevel level)
+{
+    switch (level) {
+    case CONFIG_LEVEL_ROOT:
+        return "config root";
+        break;
+    case CONFIG_LEVEL_CONTEXT:
+        return "context config";
+        break;
+    case CONFIG_LEVEL_PEER:
+        return "peer config";
+        break;
+    default:
+        return StringPrintf("config level %d (?)", level);
+        break;
+    }
+}
+
+PropertySpecifier PropertySpecifier::StringToPropSpec(const std::string &spec, int flags)
+{
+    PropertySpecifier res;
+
+    size_t slash = spec.find('/');
+    if (slash != spec.npos) {
+        // no normalization needed at the moment
+        res.m_source = spec.substr(0, slash);
+        slash++;
+    } else {
+        slash = 0;
+    }
+    size_t at = spec.find('@', slash);
+    if (at != spec.npos) {
+        // Context or config?
+        if (spec.find('@', at + 1) != spec.npos) {
+            // has a second @ sign, must be config name
+            res.m_config = spec.substr(at + 1);
+        } else {
+            // context, include leading @ sign
+            res.m_config = spec.substr(at);
+        }
+        if (flags & NORMALIZE_CONFIG) {
+            res.m_config = SyncConfig::normalizeConfigString(res.m_config, false);
+        }
+    } else {
+        at = spec.size();
+    }
+    res.m_property = spec.substr(slash, at - slash);
+
+    return res;
+}
+
+std::string PropertySpecifier::toString()
+{
+    std::string res;
+    res.reserve(m_source.size() + 1 + m_property.size() + 1 + m_config.size());
+    res += m_source;
+    if (!m_source.empty()) {
+        res += '/';
+    }
+    res += m_property;
+    if (!m_config.empty()) {
+        if (m_config[0] != '@') {
+            res += '@';
+        }
+        res += m_config;
+    }
+
+    return res;
+}
+
+string ConfigProperty::getName(const ConfigNode &node) const
+{
+    if (m_names.empty()) {
+        // shouldn't happen
+        return "???";
+    }
+    if (m_names.size() == 1) {
+        // typical case for most properties
+        return m_names.front();
+    }
+    // pick the name already used in the node
+    BOOST_FOREACH(const std::string &name, m_names) {
+        string value;
+        if (node.getProperty(name, value)) {
+            return name;
+        }
+    }
+
+    // main name as fallback
+    return m_names.front();
+}
 
 void ConfigProperty::splitComment(const string &comment, list<string> &commentLines)
 {
@@ -72,7 +172,7 @@ void ConfigProperty::throwValueError(const ConfigNode &node, const string &name,
     SyncContext::throwError(node.getName() + ": " + name + " = " + value + ": " + error);
 }
 
-string SyncConfig::normalizeConfigString(const string &config)
+string SyncConfig::normalizeConfigString(const string &config, bool noDefaultContext)
 {
     string normal = config;
     boost::to_lower(normal);
@@ -85,7 +185,9 @@ string SyncConfig::normalizeConfigString(const string &config)
         }
     }
     if (boost::ends_with(normal, "@default")) {
-        normal.resize(normal.size() - strlen("@default"));
+        if (noDefaultContext) {
+            normal.resize(normal.size() - strlen("@default"));
+        }
     } else if (boost::ends_with(normal, "@")) {
         normal.resize(normal.size() - 1);
     } else {
@@ -104,6 +206,10 @@ string SyncConfig::normalizeConfigString(const string &config)
                     break;
                 }
             }
+        }
+        if (!noDefaultContext && normal.find('@') == normal.npos) {
+            // explicitly include @default context specifier
+            normal += "@default";
         }
     }
 
@@ -130,8 +236,16 @@ bool SyncConfig::splitConfigString(const string &config, string &peer, string &c
     }    
 }
 
+static SyncConfig::ConfigWriteMode defaultConfigWriteMode()
+{
+    return SyncContext::isStableRelease() ?
+        SyncConfig::MIGRATE_AUTOMATICALLY :
+        SyncConfig::ASK_USER_TO_MIGRATE;
+}
+
 SyncConfig::SyncConfig() :
-    m_layout(HTTP_SERVER_LAYOUT) // use more compact layout with shorter paths and less source nodes
+    m_layout(HTTP_SERVER_LAYOUT), // use more compact layout with shorter paths and less source nodes
+    m_configWriteMode(defaultConfigWriteMode())
 {
     // initialize properties
     SyncConfig::getRegistry();
@@ -155,8 +269,11 @@ void SyncConfig::makeVolatile()
 }
 
 SyncConfig::SyncConfig(const string &peer,
-                       boost::shared_ptr<ConfigTree> tree) :
-    m_layout(SHARED_LAYOUT)
+                       boost::shared_ptr<ConfigTree> tree,
+                       const string &redirectPeerRootPath) :
+    m_layout(SHARED_LAYOUT),
+    m_redirectPeerRootPath(redirectPeerRootPath),
+    m_configWriteMode(defaultConfigWriteMode())
 {
     // initialize properties
     SyncConfig::getRegistry();
@@ -189,7 +306,8 @@ SyncConfig::SyncConfig(const string &peer,
             root = getNewRoot();
             path = root + "/" + m_peerPath;
             if (!access((path + "/config.ini").c_str(), F_OK) &&
-                !access((path + "/sources").c_str(), F_OK)) {
+                !access((path + "/sources").c_str(), F_OK) &&
+                access((path + "/peers").c_str(), F_OK)) {
                 m_layout = HTTP_SERVER_LAYOUT;
             } else {
                 // check whether config name specifies a context,
@@ -200,8 +318,9 @@ SyncConfig::SyncConfig(const string &peer,
                 }
             }
         }
-        m_tree.reset(new FileConfigTree(root, m_peerPath,
-                                        m_layout == SYNC4J_LAYOUT));
+        m_tree.reset(new FileConfigTree(root,
+                                        m_peerPath.empty() ? m_contextPath : m_peerPath,
+                                        m_layout));
     }
 
     string path;
@@ -216,6 +335,7 @@ SyncConfig::SyncConfig(const string &peer,
             m_contextNode = m_peerNode;
         m_hiddenPeerNode =
             m_contextHiddenNode =
+            m_globalHiddenNode =
             node;
         m_props[false] = m_peerNode;
         m_props[true].reset(new FilterConfigNode(m_hiddenPeerNode));
@@ -227,6 +347,9 @@ SyncConfig::SyncConfig(const string &peer,
         path = "";
         node = m_tree->open(path, ConfigTree::visible);
         m_globalNode.reset(new FilterConfigNode(node));
+        node = m_tree->open(path, ConfigTree::hidden);
+        m_globalHiddenNode = node;
+
         path = m_peerPath;      
         node = m_tree->open(path, ConfigTree::visible);
         m_peerNode.reset(new FilterConfigNode(node));
@@ -248,9 +371,16 @@ SyncConfig::SyncConfig(const string &peer,
                        m_peerNode);
         mnode->setNode(false, ConfigProperty::NO_SHARING,
                        m_peerNode);
-
-        // no multiplexing necessary for hidden nodes
-        m_props[true].reset(new FilterConfigNode(m_hiddenPeerNode));
+        mnode.reset(new MultiplexConfigNode(m_peerNode->getName(),
+                                            getRegistry(),
+                                            true));
+        m_props[true] = mnode;
+        mnode->setNode(true, ConfigProperty::GLOBAL_SHARING,
+                       m_globalHiddenNode);
+        mnode->setNode(true, ConfigProperty::SOURCE_SET_SHARING,
+                       m_peerNode);
+        mnode->setNode(true, ConfigProperty::NO_SHARING,
+                       m_peerNode);
         break;
     }
     case SHARED_LAYOUT:
@@ -258,10 +388,20 @@ SyncConfig::SyncConfig(const string &peer,
         path = "";
         node = m_tree->open(path, ConfigTree::visible);
         m_globalNode.reset(new FilterConfigNode(node));
+        node = m_tree->open(path, ConfigTree::hidden);
+        m_globalHiddenNode = node;
 
         path = m_peerPath;
         if (path.empty()) {
-            node.reset(new DevNullConfigNode(m_contextPath + " without peer config"));
+            if (!m_redirectPeerRootPath.empty()) {
+                node.reset(new FileConfigNode(m_redirectPeerRootPath,
+                                              ".internal.ini",
+                                              false));
+                node = m_tree->add(m_redirectPeerRootPath + "/.internal.ini",
+                                   node);
+            } else {
+                node.reset(new DevNullConfigNode(m_contextPath + " without peer config"));
+            }
         } else {
             node = m_tree->open(path, ConfigTree::visible);
         }
@@ -305,7 +445,142 @@ SyncConfig::SyncConfig(const string &peer,
                        m_contextHiddenNode);
         mnode->setNode(true, ConfigProperty::NO_SHARING,
                        m_hiddenPeerNode);
+        mnode->setNode(true, ConfigProperty::GLOBAL_SHARING,
+                       m_globalHiddenNode);
         break;
+    }
+
+    // read version check
+    for (ConfigLevel level = CONFIG_LEVEL_ROOT;
+         level < CONFIG_LEVEL_MAX;
+         level = (ConfigLevel)(level + 1)) {
+        if (exists(level)) {
+            if (getConfigVersion(level, CONFIG_MIN_VERSION) > ConfigVersions[level][CONFIG_CUR_VERSION]) {
+                SE_LOG_INFO(NULL, NULL, "config version check failed: %s has format %d, but this SyncEvolution release only supports format %d",
+                            ConfigLevel2String(level).c_str(),
+                            getConfigVersion(level, CONFIG_MIN_VERSION),
+                            ConfigVersions[level][CONFIG_CUR_VERSION]);
+                // our code is too old to read the config, reject it
+                SE_THROW_EXCEPTION_STATUS(StatusException,
+                                          StringPrintf("SyncEvolution %s is too old to read configuration '%s', please upgrade SyncEvolution.",
+                                                       VERSION, peer.c_str()),
+                                          STATUS_RELEASE_TOO_OLD);
+            }
+        }
+    }
+
+    // Note that the version check does not reject old configs because
+    // they are too old; so far, any release must be able to read any
+    // older config.
+}
+
+void SyncConfig::prepareConfigForWrite()
+{
+    // check versions before bumping to something incompatible with the
+    // previous user of the config
+    for (ConfigLevel level = CONFIG_LEVEL_ROOT;
+         level < CONFIG_LEVEL_MAX;
+         level = (ConfigLevel)(level + 1)) {
+        if (getLayout() < SHARED_LAYOUT &&
+            level < CONFIG_LEVEL_PEER) {
+            // old configs do not have explicit root or context,
+            // only check peer config itself
+            continue;
+        }
+        if (exists(level)) {
+            if (getConfigVersion(level, CONFIG_CUR_VERSION) < ConfigVersions[level][CONFIG_MIN_VERSION]) {
+                // release which created config will no longer be able to read
+                // updated config; either alert user or migrate automatically
+                string config;
+                switch (level) {
+                case CONFIG_LEVEL_CONTEXT:
+                    config = getContextName();
+                    break;
+                case CONFIG_LEVEL_PEER:
+                    config = getConfigName();
+                    break;
+                case CONFIG_LEVEL_ROOT:
+                case CONFIG_LEVEL_MAX:
+                    // keep compiler happy, not reached for _MAX
+                    break;
+                }
+                SE_LOG_INFO(NULL, NULL, "must change format of %s '%s' in backward-incompatible way",
+                            ConfigLevel2String(level).c_str(),
+                            config.c_str());
+                if (m_configWriteMode == MIGRATE_AUTOMATICALLY) {
+                    // migrate config and anything beneath it,
+                    // so no further checking needed
+                    migrate(config);
+                    break;
+                } else {
+                    SE_THROW_EXCEPTION_STATUS(StatusException,
+                                              StringPrintf("Proceeding would modify config '%s' such "
+                                                           "that the previous SyncEvolution release "
+                                                           "will not be able to use it. Stopping now. "
+                                                           "Please explicitly acknowledge this step by "
+                                                           "running the following command on the command "
+                                                           "line: syncevolution --migrate '%s'",
+                                                           config.c_str(),
+                                                           config.c_str()),
+                                              STATUS_MIGRATION_NEEDED);
+                }
+            }
+        }
+    }
+
+    // now set current versions at all levels,
+    // but without reducing versions: if a config has format
+    // "cur = 10", then properties or features added in that
+    // format remain even if the config is (temporarily?) used
+    // by a SyncEvolution binary which has "cur = 5".
+    for (ConfigLevel level = CONFIG_LEVEL_ROOT;
+         level < CONFIG_LEVEL_MAX;
+         level = (ConfigLevel)(level + 1)) {
+        if (level == CONFIG_LEVEL_PEER &&
+            m_peerPath.empty()) {
+            // no need (and no possibility) to set per-peer version)
+            break;
+        }
+        for (ConfigLimit limit = CONFIG_MIN_VERSION;
+             limit < CONFIG_VERSION_MAX;
+             limit = (ConfigLimit)(limit + 1)) {
+            // set if equal to ensure that version == 0 (the default)
+            // is set explicitly
+            if (getConfigVersion(level, limit) <= ConfigVersions[level][limit]) {
+                setConfigVersion(level, limit, ConfigVersions[level][limit]);
+            }
+        }
+    }
+    flush();
+}
+
+void SyncConfig::migrate(const std::string &config)
+{
+    if (config.empty()) {
+        // migrating root not yet supported
+        SE_THROW("internal error, migrating config root not implemented");
+    } else {
+        // migrate using the higher-level logic in the Cmdline class
+        ostringstream out, err;
+        Cmdline migrate(out, err,
+                        m_peer.c_str(),
+                        "--migrate",
+                        config.c_str(),
+                        NULL);
+        bool res = migrate.parse() && migrate.run();
+        if (!res) {
+            if (!err.str().empty()) {
+                SE_LOG_ERROR(NULL, NULL, "%s", err.str().c_str());
+            }
+            if (!out.str().empty()) {
+                SE_LOG_INFO(NULL, NULL, "%s", out.str().c_str());
+            }
+            SE_THROW(StringPrintf("migration of config '%s' failed", config.c_str()));
+        }
+
+        // files that our tree access may have changed, refresh our
+        // in-memory copy
+        m_tree->reload();
     }
 }
 
@@ -317,7 +592,7 @@ string SyncConfig::getRootPath() const
 void SyncConfig::addPeers(const string &root,
                           const std::string &configname,
                           SyncConfig::ConfigList &res) {
-    FileConfigTree tree(root, "", false);
+    FileConfigTree tree(root, "", SyncConfig::HTTP_SERVER_LAYOUT);
     list<string> servers = tree.getChildren("");
     BOOST_FOREACH(const string &server, servers) {
         // sanity check: only list server directories which actually
@@ -343,6 +618,23 @@ void SyncConfig::addPeers(const string &root,
     }
 }
 
+/** returns true if a precedes b (strict weak ordering) */
+static bool cmpConfigEntries(const StringPair &a, const StringPair &b)
+{
+    string peerA, contextA, peerB, contextB;
+    SyncConfig::splitConfigString(a.first, peerA, contextA);
+    SyncConfig::splitConfigString(b.first, peerB, contextB);
+    int res;
+    res = contextA.compare(contextB);
+    if (res == 0) {
+        res = peerA.compare(peerB);
+        if (res == 0) {
+            res = a.second.compare(b.second);
+        }
+    }
+    return res < 0;
+}
+
 SyncConfig::ConfigList SyncConfig::getConfigs()
 {
     ConfigList res;
@@ -350,8 +642,13 @@ SyncConfig::ConfigList SyncConfig::getConfigs()
     addPeers(getOldRoot(), "config.txt", res);
     addPeers(getNewRoot(), "config.ini", res);
 
-    // sort the list; better than returning it in random order
-    res.sort();
+    // Sort the list by (context, peer name, path);
+    // better than returning it in random order.
+    // This sort order (compared to simple lexical
+    // sorting based on the full config name) has
+    // the advantage that peer names or contexts with
+    // suffix (foo.old vs. foo) come later.
+    res.sort(cmpConfigEntries);
 
     return res;
 }
@@ -525,8 +822,8 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     config->setSourceDefaults("memo", false);
 
     source = config->getSyncSourceConfig("addressbook");
-    if (!SourcePropSourceTypeIsSet(source)) {
-        source->setSourceType("addressbook");
+    if (!SourcePropBackendIsSet(source)) {
+        source->setBackend("addressbook");
     }
     if (!SourcePropURIIsSet(source)) {
         source->setURI("card");
@@ -536,8 +833,8 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     }
 
     source = config->getSyncSourceConfig("calendar");
-    if (!SourcePropSourceTypeIsSet(source)) {
-        source->setSourceType("calendar");
+    if (!SourcePropBackendIsSet(source)) {
+        source->setBackend("calendar");
     }
     if (!SourcePropURIIsSet(source)) {
         source->setURI("event");
@@ -547,8 +844,8 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     }
 
     source = config->getSyncSourceConfig("todo");
-    if (!SourcePropSourceTypeIsSet(source)) {
-        source->setSourceType("todo");
+    if (!SourcePropBackendIsSet(source)) {
+        source->setBackend("todo");
     }
     if (!SourcePropURIIsSet(source)) {
         source->setURI("task");
@@ -558,8 +855,8 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     }
 
     source = config->getSyncSourceConfig("memo");
-    if (!SourcePropSourceTypeIsSet(source)) {
-        source->setSourceType("memo");
+    if (!SourcePropBackendIsSet(source)) {
+        source->setBackend("memo");
     }
     if (!SourcePropURIIsSet(source)) {
         source->setURI("note");
@@ -600,10 +897,15 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
         boost::iequals(server, "default")) {
         config->setSyncURL("http://sync.scheduleworld.com/funambol/ds");
         config->setWebURL("http://www.scheduleworld.com");
-        config->setConsumerReady(true);
+        // ScheduleWorld was shut down end of November 2010.
+        // Completely removing all traces of it from SyncEvolution
+        // source code is too intrusive for the time being, so
+        // just disable it in the UI.
+        // config->setConsumerReady(false);
         source = config->getSyncSourceConfig("addressbook");
         source->setURI("card3");
-        source->setSourceType("addressbook:text/vcard");
+        source->setBackend("addressbook");
+        source->setSyncFormat("text/vcard");
         source = config->getSyncSourceConfig("calendar");
         source->setURI("cal2");
         source = config->getSyncSourceConfig("todo");
@@ -619,11 +921,13 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
         source = config->getSyncSourceConfig("calendar");
         source->setSync("two-way");
         source->setURI("event");
-        source->setSourceType("calendar:text/calendar!");
+        source->setSyncFormat("text/calendar");
+        source->setForceSyncFormat(true);
         source = config->getSyncSourceConfig("todo");
         source->setSync("two-way");
         source->setURI("task");
-        source->setSourceType("todo:text/calendar!");
+        source->setSyncFormat("text/calendar");
+        source->setForceSyncFormat(true);
     } else if (boost::iequals(server, "synthesis")) {
         config->setSyncURL("http://www.synthesis.ch/sync");
         config->setWebURL("http://www.synthesis.ch");
@@ -664,7 +968,7 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
 #endif
         source = config->getSyncSourceConfig("addressbook");
         source->setURI("contacts");
-        source->setSourceType("addressbook:text/x-vcard");
+        source->setSyncFormat("text/x-vcard");
         /* Google support only addressbook sync via syncml */
         source = config->getSyncSourceConfig("calendar");
         source->setSync("none");
@@ -710,22 +1014,23 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
 #endif
         //prefer vcard 3.0
         source = config->getSyncSourceConfig("addressbook");
-        source->setSourceType("addressbook:text/vcard");
+        source->setSyncFormat("text/vcard");
         source->setURI("./Contact/Unfiled");
         source = config->getSyncSourceConfig("calendar");
         source->setSync("none");
         source->setURI("");
         //prefer vcalendar 1.0
-        source->setSourceType("calendar:text/x-vcalendar");
+        source->setSyncFormat("text/x-vcalendar");
         source = config->getSyncSourceConfig("todo");
         source->setSync("none");
         source->setURI("");
         //prefer vcalendar 1.0
-        source->setSourceType("todo:text/x-vcalendar");
+        source->setSyncFormat("text/x-vcalendar");
         //A virtual datastore combining calendar and todo
         source = config->getSyncSourceConfig("calendar+todo");
         source->setURI("./EventTask/Tasks");
-        source->setSourceType("virtual:text/x-vcalendar");
+        source->setBackend("virtual");
+        source->setSyncFormat("text/x-vcalendar");
         source->setDatabaseID("calendar,todo");
         source->setSync("two-way");
         //Memo is disabled
@@ -767,6 +1072,49 @@ bool SyncConfig::exists() const
     return m_peerPath.empty() ?
         m_contextNode->exists() :
         m_peerNode->exists();
+}
+
+bool SyncConfig::exists(ConfigLevel level) const
+{
+    switch (level) {
+    case CONFIG_LEVEL_ROOT:
+        return m_globalNode->exists();
+        break;
+    case CONFIG_LEVEL_CONTEXT:
+        return m_contextNode->exists();
+        break;
+    case CONFIG_LEVEL_PEER:
+        return m_peerNode->exists();
+        break;
+    default:
+        return false;
+    }
+}
+
+string SyncConfig::getContextName() const
+{
+    string peer, context;
+    splitConfigString(getConfigName(), peer, context);
+    return string("@") + context;
+}
+
+string SyncConfig::getPeerName() const
+{
+    string peer, context;
+    splitConfigString(getConfigName(), peer, context);
+    return peer;
+}
+
+list<string> SyncConfig::getPeers() const
+{
+    list<string> res;
+
+    if (!hasPeerProperties()) {
+        FileConfigTree tree(getRootPath(), "", SHARED_LAYOUT);
+        res = tree.getChildren("peers");
+    }
+
+    return res;
 }
 
 void SyncConfig::preFlush(ConfigUserInterface &ui)
@@ -853,9 +1201,14 @@ list<string> SyncConfig::getSyncSources() const
                                        "/sources"));
     }
     // get sources from filter and union them into returned sources
-    BOOST_FOREACH(const SourceFilters_t::value_type &value, m_sourceFilters) {
+    BOOST_FOREACH(const SourceProps::value_type &value, m_sourceFilters) {
+        if (value.first.empty()) {
+            // ignore filter for all sources
+            continue;
+        }
         list<string>::iterator it = std::find(sources.begin(), sources.end(), value.first);
-        if ( it == sources.end()) {
+        if (it == sources.end()) {
+            // found a filter for a source which does not exist yet
             sources.push_back(value.first); 
         }
     }
@@ -866,6 +1219,11 @@ list<string> SyncConfig::getSyncSources() const
 SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
                                                const string &changeId)
 {
+    if (m_nodeCache.find(name) != m_nodeCache.end()) {
+        // reuse existing set of nodes
+        return m_nodeCache[name];
+    }
+
     /** shared source properties */
     boost::shared_ptr<FilterConfigNode> sharedNode;
     /** per-peer source properties */
@@ -897,6 +1255,26 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         break;
     }
 
+    // Compatibility mode for reading configs which have "type" instead
+    // of "backend/databaseFormat/syncFormat/forceSyncFormat": determine
+    // the new values based on the old property, then inject the new
+    // values into the SyncSourceNodes by adding an intermediate layer
+    // of FilterConfigNodes. The top FilterConfigNode layer is the one
+    // which might get modified, the one underneath remains hidden and
+    // thus preserves the new values even if the caller does a setFilter().
+    bool compatMode = getConfigVersion(CONFIG_LEVEL_CONTEXT, CONFIG_CUR_VERSION) < 1;
+    SourceType sourceType;
+    if (compatMode) {
+        node = m_tree->open(peerPath.empty() ? sharedPath : peerPath, ConfigTree::visible);
+        string type;
+        if (node->getProperty("type", type)) {
+            sourceType = SourceType(type);
+        } else {
+            // not set: avoid compatibility mode
+            compatMode = false;
+        }
+    }
+
     if (peerPath.empty()) {
         node.reset(new DevNullConfigNode(m_contextPath + " without peer configuration"));
         peerNode.reset(new FilterConfigNode(node));
@@ -909,30 +1287,58 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         cacheDir = m_tree->getRootPath() + "/" + peerPath + "/.cache";
 
         node = m_tree->open(peerPath, ConfigTree::visible);
-        peerNode.reset(new FilterConfigNode(node, m_sourceFilter));
-        SourceFilters_t::const_iterator filter = m_sourceFilters.find(name);
-        if (filter != m_sourceFilters.end()) {
-            peerNode =
-                boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(peerNode), filter->second));
+        if (compatMode) {
+            boost::shared_ptr<FilterConfigNode> compat(new FilterConfigNode(node));
+            compat->addFilter("syncFormat", sourceType.m_format);
+            compat->addFilter("forceSyncFormat", sourceType.m_forceFormat ? "1" : "0");
+            if (sharedPath.empty()) {
+                compat->addFilter("databaseFormat", sourceType.m_localFormat);
+                compat->addFilter("backend", sourceType.m_backend);
+            }
+            node = compat;
         }
+        peerNode.reset(new FilterConfigNode(node, m_sourceFilters.createSourceFilter(name)));
         hiddenPeerNode = m_tree->open(peerPath, ConfigTree::hidden);
         trackingNode = m_tree->open(peerPath, ConfigTree::other, changeId);
         serverNode = m_tree->open(peerPath, ConfigTree::server, changeId);
+    }
+
+    if (!m_redirectPeerRootPath.empty()) {
+        // Local sync: overwrite per-peer nodes with nodes inside the
+        // parents tree. Otherwise different configs syncing locally
+        // against the same context end up sharing .internal.ini and
+        // .other.ini files inside that context.
+        string path = m_redirectPeerRootPath + "/sources/" + lower;
+        trackingNode.reset(new HashFileConfigNode(path,
+                                                  ".other.ini",
+                                                  false));
+        trackingNode = m_tree->add(path + "/.other.ini", trackingNode);
+        boost::shared_ptr<ConfigNode> node(new HashFileConfigNode(path,
+                                                                  ".internal.ini",
+                                                                  false));
+        hiddenPeerNode.reset(new FilterConfigNode(node));
+        hiddenPeerNode = boost::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
+        if (peerPath.empty()) {
+            hiddenPeerNode = peerNode;
+        }
     }
 
     if (sharedPath.empty()) {
         sharedNode = peerNode;
     } else {
         node = m_tree->open(sharedPath, ConfigTree::visible);
-        sharedNode.reset(new FilterConfigNode(node, m_sourceFilter));
-        SourceFilters_t::const_iterator filter = m_sourceFilters.find(name);
-        if (filter != m_sourceFilters.end()) {
-            sharedNode =
-                boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(sharedNode), filter->second));
+        if (compatMode) {
+            boost::shared_ptr<FilterConfigNode> compat(new FilterConfigNode(node));
+            compat->addFilter("databaseFormat", sourceType.m_localFormat);
+            compat->addFilter("backend", sourceType.m_backend);
+            node = compat;
         }
+        sharedNode.reset(new FilterConfigNode(node, m_sourceFilters.createSourceFilter(name)));
     }
 
-    return SyncSourceNodes(!peerPath.empty(), sharedNode, peerNode, hiddenPeerNode, trackingNode, serverNode, cacheDir);
+    SyncSourceNodes nodes(!peerPath.empty(), sharedNode, peerNode, hiddenPeerNode, trackingNode, serverNode, cacheDir);
+    m_nodeCache.insert(make_pair(name, nodes));
+    return nodes;
 }
 
 ConstSyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
@@ -1088,6 +1494,10 @@ static BoolConfigProperty syncPropPrintChanges("printChanges",
                                                "enables or disables the detailed (and sometimes slow) comparison\n"
                                                "of database content before and after a sync session",
                                                "1");
+static BoolConfigProperty syncPropDumpData("dumpData",
+                                           "enables or disables the automatic backup of database content\n"
+                                           "before and after a sync session (always enabled if printChanges is enabled)",
+                                           "1");
 static SecondsConfigProperty syncPropRetryDuration("RetryDuration",
                                           "The total amount of time in seconds in which the client\n"
                                           "tries to get a response from the server.\n"
@@ -1256,6 +1666,49 @@ static SecondsConfigProperty syncPropAutoSyncDelay("autoSyncDelay",
                                                    "enough to complete the synchronization.\n",
                                                    "5M");
 
+/* config and on-disk file versionsing */
+static IntConfigProperty syncPropRootMinVersion("rootMinVersion", "");
+static IntConfigProperty syncPropRootCurVersion("rootCurVersion", "");
+static IntConfigProperty syncPropContextMinVersion("contextMinVersion", "");
+static IntConfigProperty syncPropContextCurVersion("contextCurVersion", "");
+static IntConfigProperty syncPropPeerMinVersion("peerMinVersion", "");
+static IntConfigProperty syncPropPeerCurVersion("peerCurVersion", "");
+
+static const IntConfigProperty *configVersioning[CONFIG_LEVEL_MAX][CONFIG_VERSION_MAX] = {
+    { &syncPropRootMinVersion, &syncPropRootCurVersion },
+    { &syncPropContextMinVersion, &syncPropContextCurVersion },
+    { &syncPropPeerMinVersion, &syncPropPeerCurVersion }
+};
+
+static const IntConfigProperty &getConfigVersionProp(ConfigLevel level, ConfigLimit limit)
+{
+    if (level < 0 || level >= CONFIG_LEVEL_MAX ||
+        limit < 0 || limit >= CONFIG_VERSION_MAX) {
+        SE_THROW("getConfigVersionProp: invalid args");
+    }
+    return *configVersioning[level][limit];
+}
+
+int SyncConfig::getConfigVersion(ConfigLevel level, ConfigLimit limit) const
+{
+    const IntConfigProperty &prop = getConfigVersionProp(level, limit);
+    return prop.getPropertyValue(*getNode(prop));
+}
+
+void SyncConfig::setConfigVersion(ConfigLevel level, ConfigLimit limit, int version)
+{
+    if (m_layout != SHARED_LAYOUT) {
+        // old-style layouts have version 0 by default, no need
+        // (and sometimes no possibility) to set this explicitly
+        if (version != 0) {
+            SE_THROW(StringPrintf("cannot bump config version in old-style config %s", m_peer.c_str()));
+        }
+    } else {
+        const IntConfigProperty &prop = getConfigVersionProp(level, limit);
+        prop.setProperty(*getNode(prop), version);
+    }
+}
+
 ConfigPropertyRegistry &SyncConfig::getRegistry()
 {
     static ConfigPropertyRegistry registry;
@@ -1268,6 +1721,7 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
         registry.push_back(&syncPropLogDir);
         registry.push_back(&syncPropLogLevel);
         registry.push_back(&syncPropPrintChanges);
+        registry.push_back(&syncPropDumpData);
         registry.push_back(&syncPropMaxLogDirs);
         registry.push_back(&syncPropAutoSync);
         registry.push_back(&syncPropAutoSyncInterval);
@@ -1302,6 +1756,17 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
         registry.push_back(&syncPropDeviceData);
         registry.push_back(&syncPropDefaultPeer);
 
+#if 0
+        // Must not be registered! Not valid for --sync-property and
+        // must not be copied between configs.
+        registry.push_back(&syncPropRootMinVersion);
+        registry.push_back(&syncPropRootCurVersion);
+        registry.push_back(&syncPropContextMinVersion);
+        registry.push_back(&syncPropContextCurVersion);
+        registry.push_back(&syncPropPeerMinVersion);
+        registry.push_back(&syncPropPeerCurVersion);
+#endif
+
         // obligatory sync properties
         syncPropUsername.setObligatory(true);
         syncPropPassword.setObligatory(true);
@@ -1313,14 +1778,24 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
         syncPropConfigDate.setHidden(true);
         syncPropNonce.setHidden(true);
         syncPropDeviceData.setHidden(true);
+        syncPropRootMinVersion.setHidden(true);
+        syncPropRootCurVersion.setHidden(true);
+        syncPropContextMinVersion.setHidden(true);
+        syncPropContextCurVersion.setHidden(true);
+        syncPropPeerMinVersion.setHidden(true);
+        syncPropPeerCurVersion.setHidden(true);
 
         // global sync properties
         syncPropDefaultPeer.setSharing(ConfigProperty::GLOBAL_SHARING);
+        syncPropRootMinVersion.setSharing(ConfigProperty::GLOBAL_SHARING);
+        syncPropRootCurVersion.setSharing(ConfigProperty::GLOBAL_SHARING);
 
         // peer independent sync properties
         syncPropLogDir.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         syncPropMaxLogDirs.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         syncPropDevID.setSharing(ConfigProperty::SOURCE_SET_SHARING);
+        syncPropContextMinVersion.setSharing(ConfigProperty::SOURCE_SET_SHARING);
+        syncPropContextCurVersion.setSharing(ConfigProperty::SOURCE_SET_SHARING);
 
         initialized = true;
     }
@@ -1328,11 +1803,10 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
     return registry;
 }
 
-const char *SyncConfig::getUsername() const { return m_stringCache.getProperty(*getNode(syncPropUsername), syncPropUsername); }
+std::string SyncConfig::getUsername() const { return syncPropUsername.getProperty(*getNode(syncPropUsername)); }
 void SyncConfig::setUsername(const string &value, bool temporarily) { syncPropUsername.setProperty(*getNode(syncPropUsername), value, temporarily); }
-const char *SyncConfig::getPassword() const {
-    string password = syncPropPassword.getCachedProperty(*getNode(syncPropPassword), m_cachedPassword);
-    return m_stringCache.storeString(syncPropPassword.getName(), password);
+std::string SyncConfig::getPassword() const {
+    return syncPropPassword.getCachedProperty(*getNode(syncPropPassword), m_cachedPassword);
 }
 void SyncConfig::checkPassword(ConfigUserInterface &ui) {
     syncPropPassword.checkPassword(ui, m_peer, *getProperties());
@@ -1358,7 +1832,7 @@ void PasswordConfigProperty::checkPassword(ConfigUserInterface &ui,
     string descr = getDescr(serverName,globalConfigNode,sourceName,sourceConfigNode);
     if (password == "-") {
         ConfigPasswordKey key = getPasswordKey(descr,serverName,globalConfigNode,sourceName,sourceConfigNode);
-        passwordSave = ui.askPassword(getName(),descr, key);
+        passwordSave = ui.askPassword(getMainName(),descr, key);
     } else if(boost::starts_with(password, "${") &&
               boost::ends_with(password, "}")) {
         string envname = password.substr(2, password.size() - 3);
@@ -1377,9 +1851,9 @@ void PasswordConfigProperty::checkPassword(ConfigUserInterface &ui,
      * Previous impl use temp string to store them, this is not good for expansion in the backend */
     if(!passwordSave.empty()) {
         if(sourceConfigNode.get() == NULL) {
-            globalConfigNode.addFilter(getName(), passwordSave);
+            globalConfigNode.addFilter(getMainName(), passwordSave);
         } else {
-            sourceConfigNode->addFilter(getName(), passwordSave);
+            sourceConfigNode->addFilter(getMainName(), passwordSave);
         }
     }
 }
@@ -1407,7 +1881,7 @@ void PasswordConfigProperty::savePassword(ConfigUserInterface &ui,
     }
     string descr = getDescr(serverName,globalConfigNode,sourceName,sourceConfigNode);
     ConfigPasswordKey key = getPasswordKey(descr,serverName,globalConfigNode,sourceName,sourceConfigNode);
-    if(ui.savePassword(getName(), password, key)) {
+    if(ui.savePassword(getMainName(), password, key)) {
         string value = "-";
         if(sourceConfigNode.get() == NULL) {
             setProperty(globalConfigNode, value);
@@ -1503,23 +1977,22 @@ bool SyncConfig::getUseProxy() const {
 void SyncConfig::setUseProxy(bool value, bool temporarily) { syncPropUseProxy.setProperty(*getNode(syncPropUseProxy), value, temporarily); }
 
 /* If http_proxy set in the environment returns it, otherwise configured value */
-const char *SyncConfig::getProxyHost() const {
+std::string SyncConfig::getProxyHost() const {
     char *proxy = getenv(ProxyString);
     if (!proxy) {
-        return m_stringCache.getProperty(*getNode(syncPropUseProxy),syncPropProxyHost); 
+        return syncPropProxyHost.getProperty(*getNode(syncPropUseProxy)); 
     } else {
-        return m_stringCache.storeString(syncPropProxyHost.getName(), proxy);
+        return proxy;
     }
 }
 
 void SyncConfig::setProxyHost(const string &value, bool temporarily) { syncPropProxyHost.setProperty(*getNode(syncPropProxyHost), value, temporarily); }
 
-const char *SyncConfig::getProxyUsername() const { return m_stringCache.getProperty(*getNode(syncPropProxyUsername), syncPropProxyUsername); }
+std::string SyncConfig::getProxyUsername() const { return syncPropProxyUsername.getProperty(*getNode(syncPropProxyUsername)); }
 void SyncConfig::setProxyUsername(const string &value, bool temporarily) { syncPropProxyUsername.setProperty(*getNode(syncPropProxyUsername), value, temporarily); }
 
-const char *SyncConfig::getProxyPassword() const {
-    string password = syncPropProxyPassword.getCachedProperty(*getNode(syncPropProxyPassword), m_cachedProxyPassword);
-    return m_stringCache.storeString(syncPropProxyPassword.getName(), password);
+std::string SyncConfig::getProxyPassword() const {
+    return syncPropProxyPassword.getCachedProperty(*getNode(syncPropProxyPassword), m_cachedProxyPassword);
 }
 void SyncConfig::checkProxyPassword(ConfigUserInterface &ui) {
     syncPropProxyPassword.checkPassword(ui, m_peer, *getNode(syncPropProxyPassword), "", boost::shared_ptr<FilterConfigNode>());
@@ -1529,7 +2002,7 @@ void SyncConfig::saveProxyPassword(ConfigUserInterface &ui) {
 }
 void SyncConfig::setProxyPassword(const string &value, bool temporarily) { m_cachedProxyPassword = ""; syncPropProxyPassword.setProperty(*getNode(syncPropProxyPassword), value, temporarily); }
 vector<string> SyncConfig::getSyncURL() const { 
-    string s = m_stringCache.getProperty(*getNode(syncPropSyncURL), syncPropSyncURL);
+    string s = syncPropSyncURL.getProperty(*getNode(syncPropSyncURL));
     vector<string> urls;
     if (!s.empty()) {
         // workaround for g++ 4.3/4.4:
@@ -1547,7 +2020,7 @@ void SyncConfig::setSyncURL(const vector<string> &value, bool temporarily) {
     }
     return setSyncURL (urls.str(), temporarily);
 }
-const char *SyncConfig::getClientAuthType() const { return m_stringCache.getProperty(*getNode(syncPropClientAuthType), syncPropClientAuthType); }
+std::string SyncConfig::getClientAuthType() const { return syncPropClientAuthType.getProperty(*getNode(syncPropClientAuthType)); }
 void SyncConfig::setClientAuthType(const string &value, bool temporarily) { syncPropClientAuthType.setProperty(*getNode(syncPropClientAuthType), value, temporarily); }
 unsigned long  SyncConfig::getMaxMsgSize() const { return syncPropMaxMsgSize.getPropertyValue(*getNode(syncPropMaxMsgSize)); }
 void SyncConfig::setMaxMsgSize(unsigned long value, bool temporarily) { syncPropMaxMsgSize.setProperty(*getNode(syncPropMaxMsgSize), value, temporarily); }
@@ -1555,11 +2028,11 @@ unsigned int  SyncConfig::getMaxObjSize() const { return syncPropMaxObjSize.getP
 void SyncConfig::setMaxObjSize(unsigned int value, bool temporarily) { syncPropMaxObjSize.setProperty(*getNode(syncPropMaxObjSize), value, temporarily); }
 bool SyncConfig::getCompression() const { return syncPropCompression.getPropertyValue(*getNode(syncPropCompression)); }
 void SyncConfig::setCompression(bool value, bool temporarily) { syncPropCompression.setProperty(*getNode(syncPropCompression), value, temporarily); }
-const char *SyncConfig::getDevID() const { return m_stringCache.getProperty(*getNode(syncPropDevID), syncPropDevID); }
+std::string SyncConfig::getDevID() const { return syncPropDevID.getProperty(*getNode(syncPropDevID)); }
 void SyncConfig::setDevID(const string &value, bool temporarily) { syncPropDevID.setProperty(*getNode(syncPropDevID), value, temporarily); }
 bool SyncConfig::getWBXML() const { return syncPropWBXML.getPropertyValue(*getNode(syncPropWBXML)); }
 void SyncConfig::setWBXML(bool value, bool temporarily) { syncPropWBXML.setProperty(*getNode(syncPropWBXML), value, temporarily); }
-const char *SyncConfig::getLogDir() const { return m_stringCache.getProperty(*getNode(syncPropLogDir), syncPropLogDir); }
+std::string SyncConfig::getLogDir() const { return syncPropLogDir.getProperty(*getNode(syncPropLogDir)); }
 void SyncConfig::setLogDir(const string &value, bool temporarily) { syncPropLogDir.setProperty(*getNode(syncPropLogDir), value, temporarily); }
 int SyncConfig::getMaxLogDirs() const { return syncPropMaxLogDirs.getPropertyValue(*getNode(syncPropMaxLogDirs)); }
 void SyncConfig::setMaxLogDirs(int value, bool temporarily) { syncPropMaxLogDirs.setProperty(*getNode(syncPropMaxLogDirs), value, temporarily); }
@@ -1571,20 +2044,22 @@ int SyncConfig::getRetryInterval() const { return syncPropRetryInterval.getPrope
 void SyncConfig::setRetryInterval(int value, bool temporarily) { return syncPropRetryInterval.setProperty(*getNode(syncPropRetryInterval),value,temporarily); }
 
 /* used by Server Alerted Sync */
-const char* SyncConfig::getRemoteIdentifier() const {return m_stringCache.getProperty (*getNode(syncPropRemoteIdentifier), syncPropRemoteIdentifier);}
+std::string SyncConfig::getRemoteIdentifier() const { return syncPropRemoteIdentifier.getProperty(*getNode(syncPropRemoteIdentifier));}
 void SyncConfig::setRemoteIdentifier (const string &value, bool temporarily) { return syncPropRemoteIdentifier.setProperty (*getNode(syncPropRemoteIdentifier), value, temporarily); }
 
 bool SyncConfig::getPeerIsClient() const { return syncPropPeerIsClient.getPropertyValue(*getNode(syncPropPeerIsClient)); }
 void SyncConfig::setPeerIsClient(bool value, bool temporarily) { syncPropPeerIsClient.setProperty(*getNode(syncPropPeerIsClient), value, temporarily); }
 
-const char* SyncConfig::getSyncMLVersion() const { return m_stringCache.getProperty(*getNode(syncPropSyncMLVersion), syncPropSyncMLVersion); }
+std::string SyncConfig::getSyncMLVersion() const { return syncPropSyncMLVersion.getProperty(*getNode(syncPropSyncMLVersion)); }
 void SyncConfig::setSyncMLVersion(const string &value, bool temporarily) { syncPropSyncMLVersion.setProperty(*getNode(syncPropSyncMLVersion), value, temporarily); }
 
-string SyncConfig::getPeerName() const { return syncPropPeerName.getProperty(*getNode(syncPropPeerName)); }
-void SyncConfig::setPeerName(const string &name) { syncPropPeerName.setProperty(*getNode(syncPropPeerName), name); }
+string SyncConfig::getUserPeerName() const { return syncPropPeerName.getProperty(*getNode(syncPropPeerName)); }
+void SyncConfig::setUserPeerName(const string &name) { syncPropPeerName.setProperty(*getNode(syncPropPeerName), name); }
 
 bool SyncConfig::getPrintChanges() const { return syncPropPrintChanges.getPropertyValue(*getNode(syncPropPrintChanges)); }
 void SyncConfig::setPrintChanges(bool value, bool temporarily) { syncPropPrintChanges.setProperty(*getNode(syncPropPrintChanges), value, temporarily); }
+bool SyncConfig::getDumpData() const { return syncPropDumpData.getPropertyValue(*getNode(syncPropDumpData)); }
+void SyncConfig::setDumpData(bool value, bool temporarily) { syncPropDumpData.setProperty(*getNode(syncPropDumpData), value, temporarily); }
 std::string SyncConfig::getWebURL() const { return syncPropWebURL.getProperty(*getNode(syncPropWebURL)); }
 void SyncConfig::setWebURL(const std::string &url, bool temporarily) { syncPropWebURL.setProperty(*getNode(syncPropWebURL), url, temporarily); }
 std::string SyncConfig::getIconURI() const { return syncPropIconURI.getProperty(*getNode(syncPropIconURI)); }
@@ -1603,7 +2078,7 @@ void SyncConfig::setConfigDate() {
     syncPropConfigDate.setProperty(*getNode(syncPropConfigDate), date);
 }
 
-const char* SyncConfig::getSSLServerCertificates() const { return m_stringCache.getProperty(*getNode(syncPropSSLServerCertificates), syncPropSSLServerCertificates); }
+std::string SyncConfig::getSSLServerCertificates() const { return syncPropSSLServerCertificates.getProperty(*getNode(syncPropSSLServerCertificates)); }
 void SyncConfig::setSSLServerCertificates(const string &value, bool temporarily) { syncPropSSLServerCertificates.setProperty(*getNode(syncPropSSLServerCertificates), value, temporarily); }
 bool SyncConfig::getSSLVerifyServer() const { return syncPropSSLVerifyServer.getPropertyValue(*getNode(syncPropSSLVerifyServer)); }
 void SyncConfig::setSSLVerifyServer(bool value, bool temporarily) { syncPropSSLVerifyServer.setProperty(*getNode(syncPropSSLVerifyServer), value, temporarily); }
@@ -1651,9 +2126,8 @@ void SyncConfig::setConfigFilter(bool sync,
         if (m_globalNode != m_contextNode) {
             m_globalNode->setFilter(filter);
         }
-    } else if (source.empty()) {
-        m_sourceFilter = filter;
     } else {
+        m_nodeCache.clear();
         m_sourceFilters[source] = filter;
     }
 }
@@ -1664,7 +2138,7 @@ SyncConfig::getNode(const ConfigProperty &prop)
     switch (prop.getSharing()) {
     case ConfigProperty::GLOBAL_SHARING:
         if (prop.isHidden()) {
-            boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no hidden global properties"))));
+            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_globalHiddenNode));
         } else {
             return m_globalNode;
         }
@@ -1782,11 +2256,10 @@ static void copyProperties(const ConfigNode &fromProps,
     BOOST_FOREACH(const ConfigProperty *prop, allProps) {
         if (prop->isHidden() == hidden &&
             (unshared ||
-             prop->getSharing() != ConfigProperty::NO_SHARING ||
-             (prop->getFlags() & ConfigProperty::SHARED_AND_UNSHARED))) {
-            string name = prop->getName();
+             prop->getSharing() != ConfigProperty::NO_SHARING)) {
             bool isDefault;
             string value = prop->getProperty(fromProps, &isDefault);
+            string name = prop->getName(toProps);
             toProps.setProperty(name, value, prop->getComment(),
                                 isDefault ? &value : NULL);
         }
@@ -1840,8 +2313,8 @@ void SyncConfig::copy(const SyncConfig &other,
     }
 }
 
-const char *SyncConfig::getSwv() const { return VERSION; }
-const char *SyncConfig::getDevType() const { return DEVICE_TYPE; }
+std::string SyncConfig::getSwv() const { return VERSION; }
+std::string SyncConfig::getDevType() const { return DEVICE_TYPE; }
 
                      
 SyncSourceConfig::SyncSourceConfig(const string &name, const SyncSourceNodes &nodes) :
@@ -1851,7 +2324,7 @@ SyncSourceConfig::SyncSourceConfig(const string &name, const SyncSourceNodes &no
 }
 
 StringConfigProperty SyncSourceConfig::m_sourcePropSync("sync",
-                                           "requests a certain synchronization mode:\n"
+                                           "Requests a certain synchronization mode when initiating a sync:\n"
                                            "  two-way             = only send/receive changes since last sync\n"
                                            "  slow                = exchange all items\n"
                                            "  refresh-from-client = discard all remote items and replace with\n"
@@ -1860,7 +2333,13 @@ StringConfigProperty SyncSourceConfig::m_sourcePropSync("sync",
                                            "                        the items on the server\n"
                                            "  one-way-from-client = transmit changes from client\n"
                                            "  one-way-from-server = transmit changes from server\n"
-                                           "  none (or disabled)  = synchronization disabled",
+                                           "  disabled (or none)  = synchronization disabled\n"
+                                           "When accepting a sync session in a SyncML server (HTTP server), only\n"
+                                           "sources with sync != disabled are made available to the client,\n"
+                                           "which chooses the final sync mode based on its own configuration.\n"
+                                           "When accepting a sync session in a SyncML client (local sync with\n"
+                                           "the server contacting SyncEvolution on a device), the sync mode\n"
+                                           "specified in the client is typically overriden by the server.\n",
                                            "disabled",
                                            "",
                                            Values() +
@@ -1877,21 +2356,16 @@ static bool SourcePropSyncIsSet(boost::shared_ptr<SyncSourceConfig> source)
 }
 
 
-static class SourceTypeConfigProperty : public StringConfigProperty {
+static class SourceBackendConfigProperty : public StringConfigProperty {
 public:
-    SourceTypeConfigProperty() :
-        StringConfigProperty("type",
+    SourceBackendConfigProperty() :
+        StringConfigProperty("backend",
                              "Specifies the SyncEvolution backend and thus the\n"
-                             "data which is synchronized by this source. Some\n"
-                             "backends can exchange data in multiple formats.\n"
-                             "Some of them have a default format that is used\n"
-                             "automatically unless specified differently.\n"
-                             "Sometimes the format must be specified.\n"
-                             "\n"
-                             "This property can be set for individual peers as\n"
-                             "well as for the context. Different peers in the\n"
-                             "same context can use different formats, but the\n"
-                             "backend must be consistent.\n"
+                             "data which is synchronized by this source. Each\n"
+                             "backend may support multiple databases (see 'database'\n"
+                             "property), different formats inside that database (see\n"
+                             "'databaseFormat'), and different formats when talking to\n"
+                             "the sync peer (see 'syncFormat' and 'forceSyncFormat').\n"
                              "\n"
                              "A special 'virtual' backend combines several other\n"
                              "data sources and presents them as one set of items\n"
@@ -1902,52 +2376,29 @@ public:
                              "Right now such a virtual backend is limited to\n"
                              "combining one calendar source with events and one\n"
                              "task source. They have to be specified in the\n"
-                             "'evolutionsource' property, typically like this:\n"
+                             "'database' property, typically like this:\n"
                              "  calendar,todo\n"
                              "\n"
-                             "In all cases the format of this configuration is\n"
-                             "  <backend>[:format]\n"
-                             "\n"
                              "Different sources combined in one virtual source must\n"
-                             "have a common representation. As with other backends,\n"
-                             "the preferred format can be influenced via the 'format'\n"
+                             "have a common format. As with other backends,\n"
+                             "the preferred format can be influenced via the 'syncFormat'\n"
                              "attribute.\n"
-                             "Here are some valid examples:\n"
-                             "  contacts - synchronize address book with default vCard 2.1 format\n"
-                             "  contacts:text/vcard - address book with vCard 3.0 format\n"
-                             "  calendar - synchronize events in iCalendar 2.0 format\n"
-                             "  calendar:text/x-vcalendar - prefer legacy vCalendar 1.0 format\n"
-                             "  virtual:text/x-vcalendar - a virtual backend using vCalendar 1.0 format\n"
-                             "\n"
-                             "Sending and receiving items in the same format as used by the server for\n"
-                             "the uri selected below is essential. Normally, SyncEvolution and the server\n"
-                             "negotiate the preferred format automatically. With some servers, it is\n"
-                             "necessary to change the defaults (vCard 2.1 and iCalendar 2.0), typically\n"
-                             "because the server does not implement the format selection or the format\n"
-                             "itself correctly.\n"
-                             "Errors while starting to sync and parsing and/or storing\n"
-                             "items on either client or server can be caused by a mismatch between\n"
-                             "type and uri.\n"
                              "\n"
                              "Here's the full list of potentially supported backends,\n"
-                             "valid <backend> values for each of them, and possible\n"
+                             "valid 'backend' values for each of them, and possible\n"
                              "formats. Note that SyncEvolution installations usually\n"
                              "support only a subset of the backends; that's why e.g.\n"
                              "\"addressbook\" is unambiguous although there are multiple\n"
-                             "address book backends.\n",
+                             "address book backends.\n"
+                             "\n",
                              "select backend",
                              "",
                              Values() +
                              (Aliases("virtual")) +
                              (Aliases("calendar") + "events") +
-                             (Aliases("calendar:text/calendar") + "text/calendar") +
-                             (Aliases("calendar:text/x-vcalendar") + "text/x-vcalendar") +
                              (Aliases("addressbook") + "contacts") +
-                             (Aliases("addressbook:text/x-vcard") + "text/x-vcard") +
-                             (Aliases("addressbook:text/vcard") + "text/vcard") +
-                             (Aliases("todo") + "tasks" + "text/x-todo") +
-                             (Aliases("memo") + "memos" + "notes" + "text/plain") +
-                             (Aliases("memo:text/calendar") + "text/x-journal"))
+                             (Aliases("todo") + "tasks") +
+                             (Aliases("memo") + "memos" + "notes"))
     {}
 
     virtual string getComment() const {
@@ -1987,24 +2438,37 @@ public:
 
         return res;
     }
-
-    /** relax string checking: only the part before a colon has to match one of the aliases */
-    virtual bool checkValue(const string &value, string &error) const {
-        size_t colon = value.find(':');
-        if (colon != value.npos) {
-            string backend = value.substr(0, colon);
-            return StringConfigProperty::checkValue(backend, error);
-        } else {
-            return StringConfigProperty::checkValue(value, error);
-        }
-    }
-} sourcePropSourceType;
-static bool SourcePropSourceTypeIsSet(boost::shared_ptr<SyncSourceConfig> source)
+} sourcePropBackend;
+static bool SourcePropBackendIsSet(boost::shared_ptr<SyncSourceConfig> source)
 {
-    return source->isSet(sourcePropSourceType);
+    return source->isSet(sourcePropBackend);
 }
 
-static ConfigProperty sourcePropDatabaseID("evolutionsource",
+StringConfigProperty sourcePropSyncFormat("syncFormat",
+                                          "When there are alternative formats for the same data,\n"
+                                          "each side of a sync offers all that it supports and marks one as\n"
+                                          "preferred. If set, this property overrides the format\n"
+                                          "that would normally be marked as preferred by a backend.\n"
+                                          "\n"
+                                          "Valid values depend on the backend. Here are some examples:\n"
+                                          "  contacts - text/vcard = vCard 3.0 format\n"
+                                          "             text/x-vcard = legacy vCard 2.1 format\n"
+                                          "  calendar - text/calendar = iCalendar 2.0 format\n"
+                                          "             text/x-vcalendar = legacy vCalendar 1.0 format\n"
+                                          "\n"
+                                          "Errors while starting to sync and parsing and/or storing\n"
+                                          "items on either client or server can be caused by a mismatch between\n"
+                                          "the sync format and uri at the peer.\n");
+
+static BoolConfigProperty sourcePropForceSyncFormat("forceSyncFormat",
+                                                    "Some peers get confused when offered multiple choices\n"
+                                                    "for the sync format or pick the less optimal one.\n"
+                                                    "In such a case, setting this property enforces that the\n"
+                                                    "preferred format specified with 'syncFormat' is\n"
+                                                    "really used.",
+                                                    "0");
+
+static ConfigProperty sourcePropDatabaseID(Aliases("database") + "evolutionsource",
                                            "Picks one of backend data sources:\n"
                                            "enter either the name or the full URL.\n"
                                            "Most backends have a default data source,\n"
@@ -2017,7 +2481,7 @@ static ConfigProperty sourcePropDatabaseID("evolutionsource",
                                            "If your sub datastore has a comma in name, you\n"
                                            "must prevent taht comma from being mistaken as the\n"
                                            "separator by preceding it with a backslash, like this:\n"
-                                           "  evolutionsource=Source1PartA\\,PartB,Source2\\\\Backslash\n"
+                                           "  database=Source1PartA\\,PartB,Source2\\\\Backslash\n"
                                            "\n"
                                            "To get a full list of available data sources,\n"
                                            "run syncevolution without parameters. The name\n"
@@ -2026,6 +2490,13 @@ static ConfigProperty sourcePropDatabaseID("evolutionsource",
                                            "used to reference the data source. The default\n"
                                            "data source is marked with <default> after the\n"
                                            "URL, if there is a default.\n");
+
+static StringConfigProperty sourcePropDatabaseFormat("databaseFormat",
+                                                     "Defines the data format to be used by the backend for its\n"
+                                                     "own storage. Typically backends only support one format\n"
+                                                     "and ignore this property, but for example the file backend\n"
+                                                     "uses it. See the 'backend' property for more information.\n");
+
 static ConfigProperty sourcePropURI("uri",
                                     "this is appended to the server's URL to identify the\n"
                                     "server's database");
@@ -2034,14 +2505,14 @@ static bool SourcePropURIIsSet(boost::shared_ptr<SyncSourceConfig> source)
     return source->isSet(sourcePropURI);
 }
 
-static ConfigProperty sourcePropUser("evolutionuser",
+static ConfigProperty sourcePropUser(Aliases("databaseUser") + "evolutionuser",
                                      "authentication for backend data source; password can be specified\n"
                                      "in multiple ways, see SyncML server password for details\n"
                                      "\n"
-                                     "Warning: setting evolutionuser/password in cases where it is not\n"
+                                     "Warning: setting database user/password in cases where it is not\n"
                                      "needed, as for example with local Evolution calendars and addressbooks,\n"
                                      "can cause the Evolution backend to hang.");
-static EvolutionPasswordConfigProperty sourcePropPassword("evolutionpassword", "","", "backend");
+static DatabasePasswordConfigProperty sourcePropPassword(Aliases("databasePassword") + "evolutionpassword", "","", "backend");
 
 static ConfigProperty sourcePropAdminData(SourceAdminDataName,
                                           "used by the Synthesis library internally; do not modify");
@@ -2055,9 +2526,12 @@ ConfigPropertyRegistry &SyncSourceConfig::getRegistry()
 
     if (!initialized) {
         registry.push_back(&SyncSourceConfig::m_sourcePropSync);
-        registry.push_back(&sourcePropSourceType);
-        registry.push_back(&sourcePropDatabaseID);
         registry.push_back(&sourcePropURI);
+        registry.push_back(&sourcePropBackend);
+        registry.push_back(&sourcePropSyncFormat);
+        registry.push_back(&sourcePropForceSyncFormat);
+        registry.push_back(&sourcePropDatabaseID);
+        registry.push_back(&sourcePropDatabaseFormat);
         registry.push_back(&sourcePropUser);
         registry.push_back(&sourcePropPassword);
         registry.push_back(&sourcePropAdminData);
@@ -2076,13 +2550,11 @@ ConfigPropertyRegistry &SyncSourceConfig::getRegistry()
         // conceptually.
 
         // peer independent source properties
+        sourcePropBackend.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         sourcePropDatabaseID.setSharing(ConfigProperty::SOURCE_SET_SHARING);
+        sourcePropDatabaseFormat.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         sourcePropUser.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         sourcePropPassword.setSharing(ConfigProperty::SOURCE_SET_SHARING);
-
-        // Save "type" also in the shared nodes, so that the backend
-        // can be selected independently from a specific peer.
-        sourcePropSourceType.setFlags(ConfigProperty::SHARED_AND_UNSHARED);
 
         initialized = true;
     }
@@ -2135,30 +2607,22 @@ SyncSourceNodes::getNode(const ConfigProperty &prop) const
         }
         break;
     case ConfigProperty::NO_SHARING:
-        if ((prop.getFlags() & ConfigProperty::SHARED_AND_UNSHARED) &&
-            !m_havePeerNode &&
-            !prop.isHidden()) {
-            // special case for "sync": use shared node because
-            // peer node does not exist
-            return m_sharedNode;
+        if (prop.isHidden()) {
+            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_hiddenPeerNode));
         } else {
-            if (prop.isHidden()) {
-                return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_hiddenPeerNode));
-            } else {
-                return m_peerNode;
-            }
+            return m_peerNode;
         }
+        break;
     }
     return boost::shared_ptr<FilterConfigNode>();
 }
 
-const char *SyncSourceConfig::getDatabaseID() const { return m_stringCache.getProperty(*getNode(sourcePropDatabaseID), sourcePropDatabaseID); }
+std::string SyncSourceConfig::getDatabaseID() const { return sourcePropDatabaseID.getProperty(*getNode(sourcePropDatabaseID)); }
 void SyncSourceConfig::setDatabaseID(const string &value, bool temporarily) { sourcePropDatabaseID.setProperty(*getNode(sourcePropDatabaseID), value, temporarily); }
-const char *SyncSourceConfig::getUser() const { return m_stringCache.getProperty(*getNode(sourcePropUser), sourcePropUser); }
+std::string SyncSourceConfig::getUser() const { return sourcePropUser.getProperty(*getNode(sourcePropUser)); }
 void SyncSourceConfig::setUser(const string &value, bool temporarily) { sourcePropUser.setProperty(*getNode(sourcePropUser), value, temporarily); }
-const char *SyncSourceConfig::getPassword() const {
-    string password = sourcePropPassword.getCachedProperty(*getNode(sourcePropPassword), m_cachedPassword);
-    return m_stringCache.storeString(sourcePropPassword.getName(), password);
+std::string SyncSourceConfig::getPassword() const {
+    return sourcePropPassword.getCachedProperty(*getNode(sourcePropPassword), m_cachedPassword);
 }
 void SyncSourceConfig::checkPassword(ConfigUserInterface &ui, 
                                      const string &serverName, 
@@ -2171,43 +2635,135 @@ void SyncSourceConfig::savePassword(ConfigUserInterface &ui,
     sourcePropPassword.savePassword(ui, serverName, globalConfigNode, m_name, getNode(sourcePropPassword));
 }
 void SyncSourceConfig::setPassword(const string &value, bool temporarily) { m_cachedPassword = ""; sourcePropPassword.setProperty(*getNode(sourcePropPassword), value, temporarily); }
-const char *SyncSourceConfig::getURI() const { return m_stringCache.getProperty(*getNode(sourcePropURI), sourcePropURI); }
+std::string SyncSourceConfig::getURI() const { return sourcePropURI.getProperty(*getNode(sourcePropURI)); }
 void SyncSourceConfig::setURI(const string &value, bool temporarily) { sourcePropURI.setProperty(*getNode(sourcePropURI), value, temporarily); }
-const char *SyncSourceConfig::getSync() const { return m_stringCache.getProperty(*getNode(m_sourcePropSync), m_sourcePropSync); }
+std::string SyncSourceConfig::getSync() const { return m_sourcePropSync.getProperty(*getNode(m_sourcePropSync)); }
 void SyncSourceConfig::setSync(const string &value, bool temporarily) { m_sourcePropSync.setProperty(*getNode(m_sourcePropSync), value, temporarily); }
-string SyncSourceConfig::getSourceTypeString(const SyncSourceNodes &nodes) { return sourcePropSourceType.getProperty(*nodes.getNode(sourcePropSourceType)); }
-SourceType SyncSourceConfig::getSourceType(const SyncSourceNodes &nodes) {
-    string type = getSourceTypeString(nodes);
-    SourceType sourceType;
+
+SourceType::SourceType(const string &type)
+{
+    m_forceFormat = false;
     size_t colon = type.find(':');
     if (colon != type.npos) {
-        string backend = type.substr(0, colon);
+        m_backend = type.substr(0, colon);
+        sourcePropBackend.normalizeValue(m_backend);
         string format = type.substr(colon + 1);
-        sourcePropSourceType.normalizeValue(backend);
-        size_t formatLen = format.size();
-        if(format[formatLen - 1] == '!') {
-            sourceType.m_forceFormat = true;
-            format = format.substr(0, formatLen - 1);
+        if (boost::ends_with(format, "!")) {
+            m_forceFormat = true;
+            format.resize(format.size() - 1);
         }
-        sourceType.m_backend = backend;
-        sourceType.m_format  = format;
+        colon = format.find(':');
+        if (colon != format.npos) {
+            // ignore obsolete Mime version
+            m_format = format.substr(0, colon);
+        } else {
+            m_format = format;
+        }
+        // no difference between remote and local format
+        m_localFormat = m_format;
     } else {
-        sourceType.m_backend = type;
-        sourceType.m_format  = "";
+        m_backend = type;
     }
+}
+
+string SourceType::toString() const
+{
+    string type = m_backend;
+    if (!m_format.empty()) {
+        type += ":";
+        type += m_format;
+        if (m_forceFormat) {
+            type += "!";
+        }
+    }
+    return type;
+}
+
+SourceType SyncSourceConfig::getSourceType(const SyncSourceNodes &nodes)
+{
+    // legacy "type" property is tried if the backend property is not set
+    bool isDefault;
+    string backend = sourcePropBackend.getProperty(*nodes.getNode(sourcePropBackend), &isDefault);
+    if (isDefault) {
+        string type;
+        if (nodes.getNode(sourcePropBackend)->getProperty("type", type)) {
+            return SourceType(type);
+        }
+    }
+
+    SourceType sourceType;
+    sourceType.m_backend = backend;
+    sourceType.m_localFormat = sourcePropDatabaseFormat.getProperty(*nodes.getNode(sourcePropDatabaseFormat));
+    sourceType.m_format = sourcePropSyncFormat.getProperty(*nodes.getNode(sourcePropSyncFormat));
+    sourceType.m_forceFormat = sourcePropForceSyncFormat.getPropertyValue(*nodes.getNode(sourcePropForceSyncFormat));
     return sourceType;
 }
 SourceType SyncSourceConfig::getSourceType() const { return getSourceType(m_nodes); }
-void SyncSourceConfig::setSourceType(const string &value, bool temporarily) { sourcePropSourceType.setProperty(*getNode(sourcePropSourceType), value, temporarily); }
+
+void SyncSourceConfig::setSourceType(const SourceType &type, bool temporarily)
+{
+    // writing always uses the new properties: the config must have
+    // been converted to the new format before writing is allowed
+    setBackend(type.m_backend, temporarily);
+    setDatabaseFormat(type.m_localFormat, temporarily);
+    setSyncFormat(type.m_format, temporarily);
+    setForceSyncFormat(type.m_forceFormat, temporarily);
+}
+
+void SyncSourceConfig::setBackend(const std::string &value, bool temporarily)
+{
+    sourcePropBackend.setProperty(*getNode(sourcePropBackend),
+                                  value,
+                                  temporarily);    
+}
+std::string SyncSourceConfig::getBackend() const
+{
+    
+
+    return sourcePropBackend.getProperty(*getNode(sourcePropBackend));
+}
+
+void SyncSourceConfig::setDatabaseFormat(const std::string &value, bool temporarily)
+{
+    sourcePropDatabaseFormat.setProperty(*getNode(sourcePropDatabaseFormat),
+                                         value,
+                                         temporarily);
+}
+std::string SyncSourceConfig::getDatabaseFormat() const
+{
+    return sourcePropDatabaseFormat.getProperty(*getNode(sourcePropDatabaseFormat));
+}
+
+void SyncSourceConfig::setSyncFormat(const std::string &value, bool temporarily)
+{
+    sourcePropSyncFormat.setProperty(*getNode(sourcePropSyncFormat),
+                                     value,
+                                     temporarily);
+}
+std::string SyncSourceConfig::getSyncFormat() const
+{
+    return sourcePropSyncFormat.getProperty(*getNode(sourcePropSyncFormat));
+}
+
+void SyncSourceConfig::setForceSyncFormat(bool value, bool temporarily)
+{
+    sourcePropForceSyncFormat.setProperty(*getNode(sourcePropForceSyncFormat),
+                                          value,
+                                          temporarily);
+}
+bool SyncSourceConfig::getForceSyncFormat() const
+{
+    return sourcePropForceSyncFormat.getPropertyValue(*getNode(sourcePropForceSyncFormat));
+}
 
 const int SyncSourceConfig::getSynthesisID() const { return sourcePropSynthesisID.getPropertyValue(*getNode(sourcePropSynthesisID)); }
 void SyncSourceConfig::setSynthesisID(int value, bool temporarily) { sourcePropSynthesisID.setProperty(*getNode(sourcePropSynthesisID), value, temporarily); }
 
-ConfigPasswordKey EvolutionPasswordConfigProperty::getPasswordKey(const string &descr,
-                                                                  const string &serverName,
-                                                                  FilterConfigNode &globalConfigNode,
-                                                                  const string &sourceName,
-                                                                  const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
+ConfigPasswordKey DatabasePasswordConfigProperty::getPasswordKey(const string &descr,
+                                                                 const string &serverName,
+                                                                 FilterConfigNode &globalConfigNode,
+                                                                 const string &sourceName,
+                                                                 const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
 {
     ConfigPasswordKey key;
     key.user = sourcePropUser.getProperty(*sourceConfigNode);
@@ -2365,7 +2921,7 @@ bool SecondsConfigProperty::checkValue(const string &value, string &error) const
 
 unsigned int SecondsConfigProperty::getPropertyValue(const ConfigNode &node, bool *isDefault) const
 {
-    string name = getName();
+    string name = getName(node);
     string value = node.readProperty(name);
     if (value.empty()) {
         if (isDefault) {
@@ -2442,13 +2998,17 @@ class SyncConfigTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE(SyncConfigTest);
     CPPUNIT_TEST(normalize);
     CPPUNIT_TEST(parseDuration);
+    CPPUNIT_TEST(propertySpec);
     CPPUNIT_TEST_SUITE_END();
 
 private:
     void normalize()
     {
-        ScopedEnvChange xdg("XDG_CONFIG_HOME", "/dev/null");
-        ScopedEnvChange home("HOME", "/dev/null");
+        // use same dir as CmdlineTest...
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", "CmdlineTest");
+        ScopedEnvChange home("HOME", "CmdlineTest");
+
+        rm_r("CmdlineTest");
 
         CPPUNIT_ASSERT_EQUAL(std::string("@default"),
                              SyncConfig::normalizeConfigString(""));
@@ -2462,6 +3022,31 @@ private:
                              SyncConfig::normalizeConfigString("FooBar@Something"));
         CPPUNIT_ASSERT_EQUAL(std::string("foo_bar_x_y_z"),
                              SyncConfig::normalizeConfigString("Foo/bar\\x:y:z"));
+
+        // keep @default if explicitly requested
+        CPPUNIT_ASSERT_EQUAL(std::string("foobar@default"),
+                             SyncConfig::normalizeConfigString("FooBar", false));
+
+        // test config lookup
+        SyncConfig foo_default("foo"), foo_other("foo@other"), bar("bar@other");
+        foo_default.flush();
+        foo_other.flush();
+        bar.flush();
+        CPPUNIT_ASSERT_EQUAL(std::string("foo"),
+                             SyncConfig::normalizeConfigString("foo"));
+        CPPUNIT_ASSERT_EQUAL(std::string("foo"),
+                             SyncConfig::normalizeConfigString("foo@default"));
+        CPPUNIT_ASSERT_EQUAL(std::string("foo@default"),
+                             SyncConfig::normalizeConfigString("foo", false));
+        CPPUNIT_ASSERT_EQUAL(std::string("foo@default"),
+                             SyncConfig::normalizeConfigString("foo@default", false));
+        CPPUNIT_ASSERT_EQUAL(std::string("foo@other"),
+                             SyncConfig::normalizeConfigString("foo@other"));
+        foo_default.remove();
+        CPPUNIT_ASSERT_EQUAL(std::string("foo@other"),
+                             SyncConfig::normalizeConfigString("foo"));
+        CPPUNIT_ASSERT_EQUAL(std::string("foo@other"),
+                             SyncConfig::normalizeConfigString("foo", false));
     }
 
     void parseDuration()
@@ -2494,6 +3079,55 @@ private:
         CPPUNIT_ASSERT_EQUAL(expected, seconds);
 
         CPPUNIT_ASSERT(!SecondsConfigProperty::parseDuration("m", error, seconds));
+    }
+
+    void propertySpec()
+    {
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", "/dev/null");
+        ScopedEnvChange home("HOME", "/dev/null");
+        PropertySpecifier spec;
+
+        spec = PropertySpecifier::StringToPropSpec("foo");
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_config);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.toString());
+
+        spec = PropertySpecifier::StringToPropSpec("source/foo@ContEXT");
+        CPPUNIT_ASSERT_EQUAL(string("source"), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string("@context"), spec.m_config);       
+        CPPUNIT_ASSERT_EQUAL(string("source/foo@context"), spec.toString());
+
+        spec = PropertySpecifier::StringToPropSpec("source/foo@ContEXT", PropertySpecifier::NO_NORMALIZATION);
+        CPPUNIT_ASSERT_EQUAL(string("source"), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string("@ContEXT"), spec.m_config);       
+        CPPUNIT_ASSERT_EQUAL(string("source/foo@ContEXT"), spec.toString());
+
+        spec = PropertySpecifier::StringToPropSpec("foo@peer@context");
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string("peer@context"), spec.m_config);
+        CPPUNIT_ASSERT_EQUAL(string("foo@peer@context"), spec.toString());
+
+        spec = PropertySpecifier::StringToPropSpec("foo@context");
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string("@context"), spec.m_config);
+        CPPUNIT_ASSERT_EQUAL(string("foo@context"), spec.toString());
+
+        spec = PropertySpecifier::StringToPropSpec("source/foo");
+        CPPUNIT_ASSERT_EQUAL(string("source"), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string("foo"), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_config);
+        CPPUNIT_ASSERT_EQUAL(string("source/foo"), spec.toString());
+
+        spec = PropertySpecifier::StringToPropSpec("");
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_source);
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_property);
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.m_config);
+        CPPUNIT_ASSERT_EQUAL(string(""), spec.toString());
     }
 };
 

@@ -27,7 +27,7 @@ SE_BEGIN_CXX
 static SyncSource *createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
-    bool isMe = sourceType.m_backend == "KCalExtended";
+    bool isMe = sourceType.m_backend == "mkcal";
     bool maybeMe = sourceType.m_backend == "calendar";
 
     if (isMe || maybeMe) {
@@ -52,10 +52,16 @@ static RegisterSyncSource registerMe("KCalExtended",
                                      false,
 #endif
                                      createSource,
-                                     "KCalExtended = calendar\n"
-                                     "   iCalendar 2.0 = text/calendar\n",
+                                     "mkcal = KCalExtended = calendar\n"
+                                     "   'database' normally is the name of a calendar\n"
+                                     "   inside the default calendar storage. If it starts\n" 
+                                     "   with the 'SyncEvolution_Test_' prefix, it will be\n"
+                                     "   created as needed, otherwise it must exist.\n"
+                                     "   If it starts with the 'file://' prefix, the default\n"
+                                     "   calendar in the specified SQLite storage file will\n"
+                                     "   created (if needed) and used.\n",
                                      Values() +
-                                     (Aliases("KCalExtended")));
+                                     (Aliases("mkcal") + "KCalExtended" + "MeeGo Calendar"));
 
 #ifdef ENABLE_KCALEXTENDED
 #ifdef ENABLE_UNIT_TESTS
@@ -88,6 +94,9 @@ public:
     virtual void updateConfig(ClientTestConfig &config) const
     {
         config.type = "KCalExtended:text/calendar";
+        // after fixing BMC #6061, mKCal is able to delete individual
+        // VEVENTs, without enforcing the "each child must have parent" rule
+        config.linkedItemsRelaxedSemantic = true;
     }
 } iCal20Test;
 

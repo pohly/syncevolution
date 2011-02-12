@@ -46,6 +46,84 @@ using namespace std;
  * @{
  */
 
+/**
+ * The SyncEvolution configuration is versioned, so that incompatible
+ * changes to the on-disk config and files can be made more reliably.
+ *
+ * The on-disk configuration is versioned at three levels:
+ * - root level
+ * - context
+ * - peer
+ *
+ * This granularity allows migrating individual peers, contexts or
+ * everything to a new format.
+ *
+ * For each of these levels, two numbers are stored on disk and
+ * hard-coded in the binary:
+ * - current version = incremented each time the format is extended
+ * - minimum version = set to current version each time a backwards
+ *                     incompatible change is made
+ *
+ * This mirrors the libtool library versioning.
+ *
+ * Reading must check that the on-disk minimum version is <= the
+ * binary's current version. Otherwise the config is too recent to
+ * be used.
+ *
+ * Writing will bump minimum and current version on disk to the
+ * versions in the binary. It will never decrease versions. This
+ * works when the more recent format adds information that can
+ * be safely ignored by older releases. If that is not possible,
+ * then the "minimum" version must be increased to prevent older
+ * releases from using the config.
+ *
+ * If bumping the versions increases the minimum version
+ * beyond the version supported by the release which wrote the config,
+ * that release will no longer work. Experimental releases will throw
+ * an error and users must explicitly migrate to the current
+ * format. Stable releases will migrate automatically.
+ *
+ * The on-disks current version can be checked to determine how to
+ * handle it. It may be more obvious to simple check for the existence
+ * of certain properties (that's how this was handled before the
+ * introduction of versioning).
+ *
+ * Here are some simple rules for handling the versions:
+ * - increase CUR version when adding new properties or files
+ * - set MIN to CUR when it is not safe that older releases
+ *   read and write a config with the current format
+ *
+ * SyncEvolution < 1.2 had no versioning. It's format is 0.
+ * SyncEvolution 1.2:
+ * - config peer min/cur version 1, because
+ *   of modified libsynthesis binfiles and
+ * - context min/cur version 1, because
+ *   evolutionsource->database, evolutionuser/password->databaseUser/Password
+ */
+static const int CONFIG_ROOT_MIN_VERSION = 0;
+static const int CONFIG_ROOT_CUR_VERSION = 0;
+static const int CONFIG_CONTEXT_MIN_VERSION = 1;
+static const int CONFIG_CONTEXT_CUR_VERSION = 1;
+static const int CONFIG_PEER_MIN_VERSION = 1;
+static const int CONFIG_PEER_CUR_VERSION = 1;
+
+enum ConfigLevel {
+    CONFIG_LEVEL_ROOT,      /**< = GLOBAL_SHARING */
+    CONFIG_LEVEL_CONTEXT,   /**< = SOURCE_SET_SHARING */
+    CONFIG_LEVEL_PEER,      /**< = NO_SHARING */
+    CONFIG_LEVEL_MAX
+};
+
+std::string ConfigLevel2String(ConfigLevel level);
+
+enum ConfigLimit {
+    CONFIG_MIN_VERSION,
+    CONFIG_CUR_VERSION,
+    CONFIG_VERSION_MAX
+};
+
+extern int ConfigVersions[CONFIG_LEVEL_MAX][CONFIG_VERSION_MAX];
+
 class SyncSourceConfig;
 typedef SyncSourceConfig PersistentSyncSourceConfig;
 class ConfigTree;
@@ -56,12 +134,71 @@ class ConstSyncSourceNodes;
 /** name of the per-source admin data property */
 extern const char *const SourceAdminDataName;
 
+/** simplified creation of string lists: InitList("foo") + "bar" + ... */
+template<class T> class InitList : public list<T> {
+ public:
+    InitList() {}
+    InitList(const T &initialValue) {
+        push_back(initialValue);
+    }
+    InitList &operator + (const T &rhs) {
+        push_back(rhs);
+        return *this;
+    }
+    InitList &operator += (const T &rhs) {
+        push_back(rhs);
+        return *this;
+    }
+};
+typedef InitList<string> Aliases;
+typedef InitList<Aliases> Values;
+
+enum PropertyType {
+    /** sync properties occur once per config */
+    SYNC_PROPERTY_TYPE,
+    /** source properties occur once per source in each config */
+    SOURCE_PROPERTY_TYPE,
+    /** exact type is unknown */
+    UNKNOWN_PROPERTY_TYPE
+};
+
+/**
+ * A property name with optional source and context.
+ * String format is [<source>/]<property>[@<context>|@<peer>@<context>]
+ *
+ * Note that the part after the @ sign without another @ is always
+ * a context. The normal shorthand of just <peer> without context
+ * does not work here.
+ */
+class PropertySpecifier {
+ public:
+    std::string m_source;    /**< source name, empty if applicable to all or sync property */
+    std::string m_property;  /**< property name, must not be empty */
+    std::string m_config;    /**< config name, empty if none, otherwise @<context> or <peer>@<context> */
+
+    enum {
+        NO_NORMALIZATION = 0,
+        NORMALIZE_SOURCE = 1,
+        NORMALIZE_CONFIG = 2
+    };
+
+    /** parse, optionally also normalize source and config */
+    static PropertySpecifier StringToPropSpec(const std::string &spec, int flags = NORMALIZE_SOURCE|NORMALIZE_CONFIG);
+    std::string toString();
+};
+
 /**
  * A property has a name and a comment. Derived classes might have
  * additional code to read and write the property from/to a
  * ConfigNode. They might also one or more  of the properties
  * on the fly, therefore the virtual get methods which return a
  * string value and not just a reference.
+ *
+ * In addition to the name, it may also have aliases. When reading
+ * from a ConfigNode, all specified names are checked in the order in
+ * which they are listed, and the first one found is used. When
+ * writing, an existing key is overwritten, otherwise the main name is
+ * created as a new key.
  *
  * A default value is returned if the ConfigNode doesn't have
  * a value set (= empty string). Invalid values in the configuration
@@ -98,20 +235,39 @@ extern const char *const SourceAdminDataName;
  */
 class ConfigProperty {
  public:
-    ConfigProperty(const string &name, const string &comment,
+        ConfigProperty(const string &name, const string &comment,
+                       const string &def = string(""), const string &descr = string("")) :
+        m_obligatory(false),
+        m_hidden(false),
+        m_sharing(NO_SHARING),
+        m_flags(0),
+        m_names(name),
+        m_comment(boost::trim_right_copy(comment)),
+        m_defValue(def),
+        m_descr(descr)
+        {}
+
+    ConfigProperty(const Aliases &names, const string &comment,
                    const string &def = string(""), const string &descr = string("")) :
         m_obligatory(false),
         m_hidden(false),
         m_sharing(NO_SHARING),
         m_flags(0),
-        m_name(name),
+        m_names(names),
         m_comment(boost::trim_right_copy(comment)),
             m_defValue(def),
         m_descr(descr)
         {}
     virtual ~ConfigProperty() {}
-    
-    virtual string getName() const { return m_name; }
+
+    /** name to be used for a specific node: first name if not in node, otherwise existing key */
+    string getName(const ConfigNode &node) const;
+
+    /** primary name */
+    string getMainName() const { return m_names.front(); }
+
+    /* virtual so that derived classes like SourceBackendConfigProperty can generate the result dynamically */
+    virtual const Aliases &getNames() const { return m_names; }
     virtual string getComment() const { return m_comment; }
     virtual string getDefValue() const { return m_defValue; }
     virtual string getDescr() const { return m_descr; }
@@ -189,33 +345,22 @@ class ConfigProperty {
     Sharing getSharing() const { return m_sharing; }
     void setSharing(Sharing sharing) { m_sharing = sharing; }
 
-    /**
-     * special hacks for certain properties
-     */
-    enum Flags {
-        SHARED_AND_UNSHARED = 1<<0   /**< value is stored with
-                                        SOURCE_SET_SHARING and
-                                        NO_SHARING, the later taking
-                                        precedency when reading
-                                        ("type"!) */
-    };
-    void setFlags(int flags) { m_flags = flags; }
-    int getFlags(void) const { return m_flags; }
-
     /** set value unconditionally, even if it is not valid */
-    void setProperty(ConfigNode &node, const string &value) const { node.setProperty(getName(), value, getComment()); }
+    void setProperty(ConfigNode &node, const string &value) const { node.setProperty(getName(node), value, getComment()); }
     void setProperty(FilterConfigNode &node, const string &value, bool temporarily = false) const {
+        string name = getName(node);
         if (temporarily) {
-            node.addFilter(m_name, value);
+            node.addFilter(name, value);
         } else {
-            node.setProperty(m_name, value, getComment());
+            node.setProperty(name, value, getComment());
         }
     }
 
     /** set default value of a property, marked as default unless forced setting */
     void setDefaultProperty(ConfigNode &node, bool force) const {
+        string name = getName(node);
         string defValue = getDefValue();
-        node.setProperty(m_name, defValue, getComment(), force ? NULL : &defValue);
+        node.setProperty(name, defValue, getComment(), force ? NULL : &defValue);
     }
 
     /**
@@ -227,7 +372,7 @@ class ConfigProperty {
      *                      the default was returned instead
      */
     virtual string getProperty(const ConfigNode &node, bool *isDefault = NULL) const {
-        string name = getName();
+        string name = getName(node);
         string value = node.readProperty(name);
         if (!value.empty()) {
             string error;
@@ -248,7 +393,7 @@ class ConfigProperty {
 
     // true if property is set to non-empty value
     bool isSet(const ConfigNode &node) const {
-        string name = getName();
+        string name = getName(node);
         string value = node.readProperty(name);
         return !value.empty();
     }
@@ -261,27 +406,9 @@ class ConfigProperty {
     bool m_hidden;
     Sharing m_sharing;
     int m_flags;
-    const string m_name, m_comment, m_defValue, m_descr;
+    const Aliases m_names;
+    const string m_comment, m_defValue, m_descr;
 };
-
-template<class T> class InitList : public list<T> {
- public:
-    InitList() {}
-    InitList(const T &initialValue) {
-        push_back(initialValue);
-    }
-    InitList &operator + (const T &rhs) {
-        push_back(rhs);
-        return *this;
-    }
-    InitList &operator += (const T &rhs) {
-        push_back(rhs);
-        return *this;
-    }
-};
-typedef InitList<string> Aliases;
-typedef InitList<Aliases> Values;
-
 
 /**
  * A string property which maps multiple different possible value
@@ -403,21 +530,22 @@ template<class T> class TypedConfigProperty : public ConfigProperty {
         ostringstream out;
 
         out << value;
-        node.setProperty(getName(), out.str(), getComment());
+        node.setProperty(getName(node), out.str(), getComment());
     }
     void setProperty(FilterConfigNode &node, const T &value, bool temporarily = false) const {
         ostringstream out;
+        string name = getName(node);
 
         out << value;
         if (temporarily) {
-            node.addFilter(getName(), out.str());
+            node.addFilter(name, out.str());
         } else {
-            node.setProperty(getName(), out.str(), getComment());
+            node.setProperty(name, out.str(), getComment());
         }
     }
 
     T getPropertyValue(const ConfigNode &node, bool *isDefault = NULL) const {
-        string name = getName();
+        string name = getName(node);
         string value = node.readProperty(name);
         istringstream in(value);
         T res;
@@ -612,6 +740,9 @@ class PasswordConfigProperty : public ConfigProperty {
     PasswordConfigProperty(const string &name, const string &comment, const string &def = string(""),const string &descr = string("")) :
        ConfigProperty(name, comment, def, descr)
            {}
+    PasswordConfigProperty(const Aliases &names, const string &comment, const string &def = string(""),const string &descr = string("")) :
+       ConfigProperty(names, comment, def, descr)
+           {}
 
     /**
      * Check the password and cache the result.
@@ -682,13 +813,13 @@ class ProxyPasswordConfigProperty : public PasswordConfigProperty {
 /**
  * A derived ConfigProperty class for the property "evolutionpassword"
  */
-class EvolutionPasswordConfigProperty : public PasswordConfigProperty {
+class DatabasePasswordConfigProperty : public PasswordConfigProperty {
  public:
-    EvolutionPasswordConfigProperty(const string &name, 
-                                    const string &comment, 
-                                    const string &def = string(""),
-                                    const string &descr = string("")): 
-                                    PasswordConfigProperty(name,comment,def,descr)
+    DatabasePasswordConfigProperty(const Aliases &names,
+                                   const string &comment, 
+                                   const string &def = string(""),
+                                   const string &descr = string("")): 
+    PasswordConfigProperty(names,comment,def,descr)
     {}
     virtual ConfigPasswordKey getPasswordKey(const string &descr,
                                              const string &serverName,
@@ -742,11 +873,11 @@ class SafeConfigProperty : public ConfigProperty {
     {}
 
     void setProperty(ConfigNode &node, const string &value) {
-        ConfigProperty::setProperty(node, SafeConfigNode::escape(value, true, false));
+        ConfigProperty::setProperty(node, StringEscape::escape(value, '!', StringEscape::INI_WORD));
     }
     virtual string getProperty(const ConfigNode &node, bool *isDefault = NULL) const {
         string res = ConfigProperty::getProperty(node, isDefault);
-        res = SafeConfigNode::unescape(res);
+        res = StringEscape::unescape(res, '!');
         return res;
     }
 };
@@ -760,33 +891,14 @@ class ConfigPropertyRegistry : public list<const ConfigProperty *> {
     /** case-insensitive search for property */
     const ConfigProperty *find(const string &propName) const {
         BOOST_FOREACH(const ConfigProperty *prop, *this) {
-            if (boost::iequals(prop->getName(), propName)) {
-                return prop;
+            BOOST_FOREACH(const string &name, prop->getNames()) {
+                if (boost::iequals(name, propName)) {
+                    return prop;
+                }
             }
         }
         return NULL;
     }
-};
-
-/**
- * Store the current string value of a property in a cache
- * and return the "const char *" pointer that is expected by
- * the client library.
- */
-class ConfigStringCache {
- public:
-    const char *getProperty(const ConfigNode &node, const ConfigProperty &prop) {
-        string value = prop.getProperty(node);
-        return storeString(prop.getName(), value);
-    }
-
-    const char *storeString(const string &key, const string &value) {
-        const string &entry = m_cache[key] = value;
-        return entry.c_str();
-    }
-
- private:
-    map<string, string> m_cache;
 };
 
 /**
@@ -834,6 +946,11 @@ class SyncConfig {
      * places. Will succeed even if config does not
      * yet exist: flushing such a config creates it.
      *
+     * Does a version check to ensure that the config can be
+     * read. Users of the instance must to an explicit
+     * prepareConfigForWrite() if the config or the files associated
+     * with it (Synthesis bin files) are going to be written.
+     *
      * @param peer   string that identifies the peer,
      *               matching regex (.*)(@([^@]*))? 
      *               where the $1 (the first part) is 
@@ -849,15 +966,48 @@ class SyncConfig {
      *               as configuration tree instead of
      *               searching for it; always uses the
      *               current layout in that tree
+     *
+     * @param redirectPeerRootPath
+     *               Can be used to redirect the per-peer
+     *               files into a different directory. Only works
+     *               in non-peer context configs.
+     *               Used by SyncContext for local sync.
      */
     SyncConfig(const string &peer,
-               boost::shared_ptr<ConfigTree> tree = boost::shared_ptr<ConfigTree>());
+               boost::shared_ptr<ConfigTree> tree = boost::shared_ptr<ConfigTree>(),
+               const string &redirectPeerRootPath = "");
+
 
     /**
      * Creates a temporary configuration.
      * Can be copied around, but not flushed.
      */
     SyncConfig();
+
+    /**
+     * determines whether the need to migrate a config causes a
+     * STATUS_MIGRATION_NEEDED error or does the migration
+     * automatically; default is to migrate automatically in
+     * stable releases and to ask in development releases
+     */
+    enum ConfigWriteMode {
+        MIGRATE_AUTOMATICALLY,
+        ASK_USER_TO_MIGRATE
+    };
+    ConfigWriteMode getConfigWriteMode() const { return m_configWriteMode; }
+    void setConfigWriteMode(ConfigWriteMode mode) { m_configWriteMode = mode; }
+
+    /**
+     * This does another version check which ensures that the config
+     * is not unintentionally altered so that it cannot be read by
+     * older SyncEvolution releases. If the config cannot be written
+     * without breaking older releases, then either the call will fail
+     * (development releases) or migrate the config (stable releases).
+     * Can be controlled via setConfigWriteMode();
+     *
+     * Also writes the current config versions into the config.
+     */
+    void prepareConfigForWrite();
 
    /** absolute directory name of the configuration root */
     string getRootPath() const;
@@ -945,6 +1095,9 @@ class SyncConfig {
      * returns list of servers in either the old (.sync4j) or
      * new config directory (.config), given as server name
      * and absolute root of config
+     *
+     * Guaranteed to be sorted by the (context, peer name, path) tuple,
+     * in increasing order (foo@bar < abc@xyz < abc.old@xyz).
      */
     static ConfigList getConfigs();
 
@@ -983,14 +1136,47 @@ class SyncConfig {
      */
     static boost::shared_ptr<SyncConfig> createPeerTemplate(const string &peer);
 
-    /** true if the main configuration file already exists */
+    /**
+     * true if the main configuration file already exists;
+     * "main" here means the per-peer config or context config,
+     * depending on what the config refers to
+     */
     bool exists() const;
+
+    /**
+     * true if the config files for the selected level exist;
+     * false is returned for CONFIG_LEVEL_PEER and a config
+     * which refers to a context
+     */
+    bool exists(ConfigLevel level) const;
 
     /**
      * The normalized, unique config name used by this instance.
      * Empty if not backed up by a real config.
      */
     string getConfigName() const { return m_peer; }
+
+    /**
+     * The normalized context used by this instance.
+     * Includes @ sign.
+     */
+    string getContextName() const;
+
+    /**
+     * the normalized peer name, empty if not a peer config
+     */
+    string getPeerName() const;
+
+    /**
+     * true if the config is for a peer, false if a context config
+     */
+    bool hasPeerProperties() const { return !m_peerPath.empty(); }
+
+    /**
+     * returns names of peers inside this config;
+     * empty if not a context
+     */
+    list<string> getPeers() const;
 
     /**
      * Do something before doing flush to files. This is particularly
@@ -1027,10 +1213,12 @@ class SyncConfig {
      *   replaced by underscore
      * - when no context specified: search for peer config first in @default,
      *   then also in other contexts in alphabetical order
-     * - @default stripped
+     * - @default stripped if requested (dangerous: result "foo" may incorrectly
+     *   be mapped to "foo@bar" if the "foo@default" config gets removed),
+     *   otherwise added if missing
      * - empty string replaced with "@default"
      */
-    static string normalizeConfigString(const string &config);
+    static string normalizeConfigString(const string &config, bool noDefaultContext = true);
 
     /**
      * Split a config string (normalized or not) into the peer part
@@ -1045,6 +1233,9 @@ class SyncConfig {
      * Replaces the property filter of either the sync properties or
      * all sources. This can be used to e.g. temporarily override
      * the active sync mode.
+     *
+     * All future calls of getSyncSourceNodes() will have these
+     * filters applied.
      *
      * @param sync     true if the filter applies to sync properties,
      *                 false if it applies to sources
@@ -1101,6 +1292,14 @@ class SyncConfig {
     /**
      * Creates config nodes for a certain node. The nodes are not
      * yet created in the backend if they do not yet exist.
+     *
+     * Calling this for the same name repeatedly will return the
+     * same set of node instances. This allows to set properties
+     * temporarily in one place and have them used elsewhere.
+     *
+     * setConfigFilter() resets this cache of nodes. Requesting nodes
+     * after that call will create a new set of nodes with properties
+     * modified temporarily according to these filters.
      *
      * @param name       the name of the sync source
      * @param trackName  additional part of the tracking node name (used for unit testing)
@@ -1188,7 +1387,7 @@ class SyncConfig {
     virtual string getDefaultPeer() const;
     virtual void setDefaultPeer(const string &value);
 
-    virtual const char *getLogDir() const;
+    virtual std::string getLogDir() const;
     virtual void setLogDir(const string &value, bool temporarily = false);
 
     virtual int getMaxLogDirs() const;
@@ -1199,6 +1398,9 @@ class SyncConfig {
 
     virtual bool getPrintChanges() const;
     virtual void setPrintChanges(bool value, bool temporarily = false);
+
+    virtual bool getDumpData() const;
+    virtual void setDumpData(bool value, bool temporarily = false);
 
     virtual std::string getWebURL() const;
     virtual void setWebURL(const std::string &url, bool temporarily = false);
@@ -1224,17 +1426,17 @@ class SyncConfig {
     /**@}*/
 
     /**
-     * @name Settings inherited from Funambol
+     * @name SyncML Settings
      *
-     * These settings are required by the Funambol C++ client library.
+     * These settings are required by the Synthesis engine.
      * Some of them are hard-coded in this class. A derived class could
      * make them configurable again, should that be desired.
      */
     /**@{*/
 
-    virtual const char*  getUsername() const;
+    virtual std::string getUsername() const;
     virtual void setUsername(const string &value, bool temporarily = false);
-    virtual const char*  getPassword() const;
+    virtual std::string getPassword() const;
     virtual void setPassword(const string &value, bool temporarily = false);
 
     /**
@@ -1257,26 +1459,26 @@ class SyncConfig {
     virtual void setPreventSlowSync(bool value, bool temporarily = false);
     virtual bool getUseProxy() const;
     virtual void setUseProxy(bool value, bool temporarily = false);
-    virtual const char*  getProxyHost() const;
+    virtual std::string getProxyHost() const;
     virtual void setProxyHost(const string &value, bool temporarily = false);
     virtual int getProxyPort() const { return 0; }
-    virtual const char* getProxyUsername() const;
+    virtual std::string getProxyUsername() const;
     virtual void setProxyUsername(const string &value, bool temporarily = false);
-    virtual const char* getProxyPassword() const;
+    virtual std::string getProxyPassword() const;
     virtual void checkProxyPassword(ConfigUserInterface &ui);
     virtual void saveProxyPassword(ConfigUserInterface &ui);
     virtual void setProxyPassword(const string &value, bool temporarily = false);
     virtual vector<string>  getSyncURL() const;
     virtual void setSyncURL(const string &value, bool temporarily = false);
     virtual void setSyncURL(const vector<string> &value, bool temporarily = false);
-    virtual const char*  getClientAuthType() const;
+    virtual std::string getClientAuthType() const;
     virtual void setClientAuthType(const string &value, bool temporarily = false);
     virtual unsigned long getMaxMsgSize() const;
     virtual void setMaxMsgSize(unsigned long value, bool temporarily = false);
     virtual unsigned int getMaxObjSize() const;
     virtual void setMaxObjSize(unsigned int value, bool temporarily = false);
     virtual unsigned long getReadBufferSize() const { return 0; }
-    virtual const char* getSSLServerCertificates() const;
+    virtual std::string getSSLServerCertificates() const;
 
     /**
      * iterate over files mentioned in getSSLServerCertificates()
@@ -1297,15 +1499,15 @@ class SyncConfig {
     virtual bool  getCompression() const;
     virtual void setCompression(bool value, bool temporarily = false);
     virtual unsigned int getResponseTimeout() const { return 0; }
-    virtual const char*  getDevID() const;
+    virtual std::string getDevID() const;
     virtual void setDevID(const string &value, bool temporarily = false);
 
     /*Used for Server Alerted Sync*/
-    virtual const char* getRemoteIdentifier() const;
+    virtual std::string getRemoteIdentifier() const;
     virtual void setRemoteIdentifier (const string &value, bool temporaritly = false);
     virtual bool getPeerIsClient () const;
     virtual void setPeerIsClient (bool value, bool temporarily = false);
-    virtual const char* getSyncMLVersion() const;
+    virtual std::string getSyncMLVersion() const;
     virtual void setSyncMLVersion (const string &value, bool temporarily = false);
 
     /**
@@ -1313,8 +1515,8 @@ class SyncConfig {
      * not necessarily unique. Can be used by a GUI instead
      * of the config name.
      */
-    virtual string getPeerName() const;
-    virtual void setPeerName(const string &name);
+    virtual string getUserPeerName() const;
+    virtual void setUserPeerName(const string &name);
 
     /**
      * The Device ID of our peer. Typically only relevant when the
@@ -1355,16 +1557,15 @@ class SyncConfig {
     virtual bool getWBXML() const;
     virtual void setWBXML(bool isWBXML, bool temporarily = false);
 
-    virtual const char*  getUserAgent() const { return "SyncEvolution"; }
-    virtual const char*  getMan() const { return "Patrick Ohly"; }
-    virtual const char*  getMod() const { return "SyncEvolution"; }
-    virtual const char*  getOem() const { return "Open Source"; }
-    virtual const char*  getHwv() const { return "unknown"; }
-    virtual const char*  getSwv() const;
-    virtual const char*  getDevType() const;
+    virtual std::string getUserAgent() const { return "SyncEvolution"; }
+    virtual std::string getMan() const { return "Patrick Ohly"; }
+    virtual std::string getMod() const { return "SyncEvolution"; }
+    virtual std::string getOem() const { return "Open Source"; }
+    virtual std::string getHwv() const { return "unknown"; }
+    virtual std::string getSwv() const;
+    virtual std::string getDevType() const;
     /**@}*/
 
-private:
     enum Layout {
         SYNC4J_LAYOUT,        /**< .syncj4/evolution/<server>, SyncEvolution <= 0.7.x */
         HTTP_SERVER_LAYOUT,   /**< .config/syncevolution/<server> with sources
@@ -1374,6 +1575,13 @@ private:
                                  SyncEvolution >= 1.0 */
     };
 
+    /** config versioning; setting is done internally */
+    int getConfigVersion(ConfigLevel level, ConfigLimit limit) const;
+
+    /** file layout used by config */
+    Layout getLayout() const { return m_layout; }
+
+private:
     /**
      * scans for peer configurations
      * @param root         absolute directory path
@@ -1383,6 +1591,15 @@ private:
     static void addPeers(const string &root,
                          const std::string &configname,
                          SyncConfig::ConfigList &res);
+
+    /* internal access to configuration versioning */
+    void setConfigVersion(ConfigLevel level, ConfigLimit limit, int version);
+
+    /**
+     * migrate root (""), context or peer config and everything contained in them to
+     * the current config format
+     */
+    void migrate(const std::string &config);
 
     /**
      * set tree and nodes to VolatileConfigTree/Node
@@ -1417,8 +1634,10 @@ private:
     string m_contextPath;
 
     Layout m_layout;
+    string m_redirectPeerRootPath;
     string m_cachedPassword;
     string m_cachedProxyPassword;
+    ConfigWriteMode m_configWriteMode;
 
     /** holds all config nodes relative to the root that we found */
     boost::shared_ptr<ConfigTree> m_tree;
@@ -1426,7 +1645,8 @@ private:
     /** access to global sync properties, independent of
         the context (for example, "defaultPeer") */
     boost::shared_ptr<FilterConfigNode> m_globalNode;
-        
+    boost::shared_ptr<ConfigNode> m_globalHiddenNode;
+
     /** access to properties shared between peers */
     boost::shared_ptr<FilterConfigNode> m_contextNode;
     boost::shared_ptr<ConfigNode> m_contextHiddenNode;
@@ -1440,14 +1660,9 @@ private:
 
     /**
      * temporary override for all sync source settings
+     * ("" as key) or specific sources (source name as key)
      */
-    FilterConfigNode::ConfigFilter m_sourceFilter;
-
-    /** temporary override for settings of specific sources */
-    typedef std::map<std::string, FilterConfigNode::ConfigFilter> SourceFilters_t;
-    SourceFilters_t m_sourceFilters;
-
-    mutable ConfigStringCache m_stringCache;
+    SourceProps m_sourceFilters;
 
     static string getOldRoot() {
         return getHome() + "/.sync4j/evolution";
@@ -1458,7 +1673,9 @@ private:
         return xdg_root_str ? string(xdg_root_str) + "/syncevolution" :
             getHome() + "/.config/syncevolution";
     }
- 
+
+    /** remember all SyncSourceNodes so that temporary changes survive */
+    map<string, SyncSourceNodes> m_nodeCache;
 };
 
 /**
@@ -1502,6 +1719,9 @@ class SyncSourceNodes {
     /** true if the peer-specific config node exists */
     bool exists() const { return m_peerNode->exists(); }
 
+    /** true if the context-specific config node exists */
+    bool dataConfigExists() const { return m_sharedNode->exists(); }
+
     /**
      * Returns the right config node for a certain property,
      * depending on visibility and sharing.
@@ -1537,6 +1757,14 @@ class SyncSourceNodes {
 };
 
 /**
+ * nop deleter for boost::shared_ptr<SyncConfig>
+ */
+struct SyncConfigNOP
+{
+    void operator() (SyncConfig *) {}
+};
+
+/**
  * same as SyncSourceNodes, but with only read access to properties
  */
 class ConstSyncSourceNodes : private SyncSourceNodes
@@ -1556,8 +1784,25 @@ class ConstSyncSourceNodes : private SyncSourceNodes
 struct SourceType {
     SourceType():m_forceFormat(false)
     {}
+
+    /**
+     * Parses the SyncEvolution <= 1.1 type specifier:
+     * <backend>[:<format>[:<version>][!]]
+     *
+     * The <version> part is not stored anymore (was required by file
+     * backend, but not actually used).
+     */
+    SourceType(const string &type);
+
+    /**
+     * converts back to SyncEvolution <= 1.1 type specifier
+     */
+    string toString() const;
+
     string m_backend; /**< identifies the SyncEvolution backend (either via a generic term like "addressbook" or a specific one like "Evolution Contacts") */
-    string m_format; /**< the format to be used (typically a MIME type) */
+    string m_localFormat;  /**< the format to be used inside the backend for storing items; typically
+                              hard-coded and not configurable */
+    string m_format; /**< the format to be used (typically a MIME type) when talking to our peer */
     bool   m_forceFormat; /**< force to use the client's preferred format instead giving the engine and server a choice */
 };
 
@@ -1582,7 +1827,7 @@ class SyncSourceConfig {
     }
     boost::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const { return const_cast<SyncSourceConfig *>(this)->getProperties(hidden); }
 
-    virtual const char*  getName() const { return m_name.c_str(); }
+    virtual std::string getName() const { return m_name.c_str(); }
 
     /**
      * Directory to be used by source when it needs to store
@@ -1621,10 +1866,10 @@ class SyncSourceConfig {
         return prop.isSet(*getProperties(prop.isHidden()));
     }
 
-    virtual const char *getUser() const;
+    virtual std::string getUser() const;
     virtual void setUser(const string &value, bool temporarily = false);
 
-    const char *getPassword() const;
+    virtual std::string getPassword() const;
     virtual void setPassword(const string &value, bool temporarily = false);
 
     /** same as SyncConfig::checkPassword() but with
@@ -1636,7 +1881,7 @@ class SyncSourceConfig {
     virtual void savePassword(ConfigUserInterface &ui, const string &serverName, FilterConfigNode& globalConfigNode);
 
     /** selects the backend database to use */
-    virtual const char *getDatabaseID() const;
+    virtual std::string getDatabaseID() const;
     virtual void setDatabaseID(const string &value, bool temporarily = false);
 
     /**
@@ -1651,18 +1896,21 @@ class SyncSourceConfig {
      * configuration; different SyncSources then check whether
      * they support that type. This call has to work before instantiating
      * a source and thus gets passed a node to read from.
-     *
-     * @return the pair of <backend> and the (possibly empty)
-     *         <format> specified in the "type" property; see
-     *         sourcePropSourceType in SyncConfig.cpp
-     *         for details
      */
     static SourceType getSourceType(const SyncSourceNodes &nodes);
-    static string getSourceTypeString(const SyncSourceNodes &nodes);
     virtual SourceType getSourceType() const;
 
-    /** set the source type in <backend>[:format] style */
-    virtual void setSourceType(const string &value, bool temporarily = false);
+    /** set source backend and formats in one step */
+    virtual void setSourceType(const SourceType &type, bool temporarily = false);
+
+    virtual void setBackend(const std::string &value, bool temporarily = false);
+    virtual std::string getBackend() const;
+    virtual void setDatabaseFormat(const std::string &value, bool temporarily = false);
+    virtual std::string getDatabaseFormat() const;
+    virtual void setSyncFormat(const std::string &value, bool temporarily = false);
+    virtual std::string getSyncFormat() const;
+    virtual void setForceSyncFormat(bool value, bool temporarily = false);
+    virtual bool getForceSyncFormat() const;
 
     /**
      * Returns the SyncSource URI: used in SyncML to address the data
@@ -1672,7 +1920,7 @@ class SyncSourceConfig {
      * two different sync sources cannot access the same data at
      * the same time.
      */
-    virtual const char*  getURI() const;
+    virtual std::string getURI() const;
     virtual void setURI(const string &value, bool temporarily = false);
 
     /**
@@ -1687,13 +1935,12 @@ class SyncSourceConfig {
      * - refresh-from-server
      * - refresh-from-client
      */
-    virtual const char*  getSync() const;
+    virtual std::string getSync() const;
     virtual void setSync(const string &value, bool temporarily = false);
 
  private:
     string m_name;
     SyncSourceNodes m_nodes;
-    mutable ConfigStringCache m_stringCache;
     string m_cachedPassword;
 };
 

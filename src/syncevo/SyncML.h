@@ -108,6 +108,8 @@ enum SyncMLStatus {
     /** external data has been merged */
     STATUS_DATA_MERGED = 207,
 
+    /** The request requires user authentication. */
+    STATUS_UNAUTHORIZED = 401,
     /** forbidden / access denied */
     STATUS_FORBIDDEN = 403,
     /** object not found / unassigned field */
@@ -122,6 +124,11 @@ enum SyncMLStatus {
     STATUS_DATASTORE_FAILURE = 510,
     /** database / memory full error */
     STATUS_FULL = 420,
+
+    /* sysync error codes also used by SyncEvolution */
+
+    /** transport failure, sysync::LOCERR_TRANSPFAIL */
+    STATUS_TRANSPORT_FAILURE = 20043,
 
     /* error codes in the range reserved by Synthesis for the application follow */
 
@@ -145,6 +152,20 @@ enum SyncMLStatus {
      * and no responsble is gotten in a specific time.
      */
     STATUS_PASSWORD_TIMEOUT = 22003,
+
+    /**
+     * On-disk files (config, Synthesis binfiles) are too recent
+     * to be read and/or used by this SyncEvolution release.
+     * User must upgrade.
+     */
+    STATUS_RELEASE_TOO_OLD = 22004,
+
+    /**
+     * On-disk files would be changed in such a way that downgrading
+     * becomes impossible. User must explicitly migrate config if
+     * he wants to proceed.
+     */
+    STATUS_MIGRATION_NEEDED = 22005,
 
     STATUS_MAX = 0x7FFFFFF
 };
@@ -287,13 +308,19 @@ class SyncReport : public std::map<std::string, SyncSourceReport> {
     time_t m_start, m_end;
     SyncMLStatus m_status;
     std::string m_error;
+    std::string m_localName, m_remoteName;
 
  public:
     SyncReport() :
         m_start(0),
         m_end(0),
-        m_status(STATUS_OK)
+        m_status(STATUS_OK),
+        m_localName("LOCAL"),
+        m_remoteName("REMOTE")
         {}
+
+    void setLocalName(const std::string &name) { m_localName = name; }
+    void setRemoteName(const std::string &name) { m_remoteName = name; }
 
     typedef std::pair<std::string, SyncSourceReport> SourceReport_t;
 
@@ -303,6 +330,10 @@ class SyncReport : public std::map<std::string, SyncSourceReport> {
     }
     SyncSourceReport &getSyncSourceReport(const std::string &name) {
         return (*this)[name];
+    }
+    const SyncSourceReport *findSyncSourceReport(const std::string &name) const {
+        const_iterator it = find(name);
+        return it == end() ? NULL : &it->second;
     }
 
     /** start time of sync, 0 if unknown */

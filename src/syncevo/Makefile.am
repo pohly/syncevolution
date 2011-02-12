@@ -19,6 +19,8 @@ lib_LTLIBRARIES = libsyncevolution.la
 
 SYNCEVOLUTION_SOURCES  = \
 	ConfigTree.h \
+	ConfigFilter.h \
+	ConfigFilter.cpp \
 	ConfigNode.h \
 	ConfigNode.cpp \
 	HashConfigNode.h \
@@ -48,6 +50,9 @@ SYNCEVOLUTION_SOURCES  = \
 	\
 	SoupTransportAgent.h \
 	SoupTransportAgent.cpp \
+	\
+	LocalTransportAgent.h \
+	LocalTransportAgent.cpp \
 	\
 	util.cpp \
 	util.h \
@@ -102,13 +107,21 @@ SYNCEVOLUTION_SOURCES  = \
 	FileConfigTree.h \
 	FileConfigTree.cpp \
 	\
+	MapSyncSource.h \
+	MapSyncSource.cpp \
+	\
 	TrackingSyncSource.h \
 	TrackingSyncSource.cpp
 
 libsyncevolution_includedir= $(includedir)/syncevo
 libsyncevolution_include_HEADERS = \
 	declarations.h \
+        Cmdline.h \
+	ConfigFilter.h \
 	TrackingSyncSource.h  \
+        MapSyncSource.h \
+        LogRedirect.h \
+        LogStdout.h \
 	FileConfigNode.h \
 								  FilterConfigNode.h \
 								  PrefixConfigNode.h \

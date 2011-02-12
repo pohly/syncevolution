@@ -353,12 +353,15 @@ class DBusUtil(Timeout):
                                                     '/org/syncevolution/Server'),
                                      'org.syncevolution.Server')
 
-    def createSession(self, config, wait):
+    def createSession(self, config, wait, flags=[]):
         """Return sessionpath and session object for session using 'config'.
         A signal handler calls loop.quit() when this session becomes ready.
         If wait=True, then this call blocks until the session is ready.
         """
-        sessionpath = self.server.StartSession(config)
+        if flags:
+            sessionpath = self.server.StartSessionWithFlags(config, flags)
+        else:
+            sessionpath = self.server.StartSession(config)
 
         def session_ready(object, ready):
             if self.running and ready and object == sessionpath:
@@ -439,6 +442,21 @@ class DBusUtil(Timeout):
                                 byte_arrays=True, 
                                 utf8_strings=True)
 
+    def setUpConfigListeners(self):
+        """records ConfigChanged signal and records it in DBusUtil.events, then quits the loop"""
+
+        def config():
+            if self.running:
+                DBusUtil.events.append("ConfigChanged")
+                loop.quit()
+
+        bus.add_signal_receiver(config,
+                                'ConfigChanged',
+                                'org.syncevolution.Server',
+                                'org.syncevolution',
+                                byte_arrays=True, 
+                                utf8_strings=True)
+
     def setUpConnectionListeners(self, conpath):
         """records connection signals (abort and reply), quits when
         getting an abort"""
@@ -511,15 +529,15 @@ class DBusUtil(Timeout):
             prefix = 'SyncEvolution_Test_'
         return prefix + source;
 
-    def getEvolutionSources(self, config):
-        # get 'evolutionsource' for each source
+    def getDatabases(self, config):
+        # get 'database' for each source
         updateProps = { }
         for key, value in config.items():
             if key != "":
                 tmpdict = { }
                 [source, sep, name] = key.partition('/')
                 if sep == '/':
-                    tmpdict["evolutionsource"] = self.getDatabaseName(name)
+                    tmpdict["database"] = self.getDatabaseName(name)
                 updateProps[key] = tmpdict
         return updateProps
 
@@ -531,6 +549,19 @@ class TestDBusServer(unittest.TestCase, DBusUtil):
 
     def run(self, result):
         self.runTest(result)
+
+    def testCapabilities(self):
+        """check the Server.GetCapabilities() call"""
+        capabilities = self.server.GetCapabilities()
+        capabilities.sort()
+        self.failUnlessEqual(capabilities, ['ConfigChanged', 'DatabaseProperties', 'GetConfigName', 'Notifications', 'SessionAttach', 'SessionFlags', 'Version'])
+
+    def testVersions(self):
+        """check the Server.GetVersions() call"""
+        versions = self.server.GetVersions()
+        self.failIfEqual(versions["version"], "")
+        self.failIfEqual(versions["system"], None)
+        self.failIfEqual(versions["backends"], None)
 
     def testGetConfigsEmpty(self):
         """GetConfigs() with no configurations available"""
@@ -550,8 +581,7 @@ class TestDBusServer(unittest.TestCase, DBusUtil):
                                        "Ovi",
                                        "ScheduleWorld",
                                        "SyncEvolution",
-                                       "Synthesis",
-                                       "ZYB"])
+                                       "Synthesis"])
 
     def testGetConfigScheduleWorld(self):
         """read ScheduleWorld template"""
@@ -660,7 +690,7 @@ class TestDBusServerTerm(unittest.TestCase, DBusUtil):
 
 class Connman (dbus.service.Object):
     count = 0
-    @dbus.service.method(dbus_interface='org.moblin.connman.Manager', in_signature='', out_signature='a{sv}')
+    @dbus.service.method(dbus_interface='net.connman.Manager', in_signature='', out_signature='a{sv}')
     def GetProperties(self):
         self.count = self.count+1
         if (self.count == 1):
@@ -688,7 +718,7 @@ class Connman (dbus.service.Object):
             return {"ConnectedTechnologies":["ethernet", "some other stuff"],
                     "AvailableTechnologies": ["bluetooth"]}
 
-    @dbus.service.signal(dbus_interface='org.moblin.connman.Manager', signature='sv')
+    @dbus.service.signal(dbus_interface='net.connman.Manager', signature='sv')
     def PropertyChanged(self, key, value):
         pass
 
@@ -718,7 +748,7 @@ class Connman (dbus.service.Object):
 
 class TestDBusServerPresence(unittest.TestCase, DBusUtil):
     """Tests Presence signal and checkPresence API"""
-    name = dbus.service.BusName ("org.moblin.connman", bus);
+    name = dbus.service.BusName ("net.connman", bus);
     conn = Connman (bus, "/")
 
     def setUp(self):
@@ -877,7 +907,55 @@ class TestDBusSession(unittest.TestCase, DBusUtil):
 
     def testCreateSession(self):
         """ask for session"""
-        pass
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+
+    def testAttachSession(self):
+        """attach to running session"""
+        self.session.Attach()
+        self.session.Detach()
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+
+    @timeout(70)
+    def testAttachOldSession(self):
+        """attach to session which no longer has clients"""
+        self.session.Detach()
+        time.sleep(5)
+        # This used to be impossible with SyncEvolution 1.0 because it
+        # removed the session right after the previous client
+        # left. SyncEvolution 1.1 makes it possible by keeping
+        # sessions around for a minute. However, the session is
+        # no longer listed because it really should only be used
+        # by clients which heard about it before.
+        self.failUnlessEqual(self.server.GetSessions(), [])
+        self.session.Attach()
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+        time.sleep(60)
+        self.failUnlessEqual(self.session.GetFlags(), [])        
+
+    @timeout(70)
+    def testExpireSession(self):
+        """ensure that session stays around for a minute"""
+        self.session.Detach()
+        time.sleep(5)
+        self.failUnlessEqual(self.session.GetFlags(), [])
+        self.failUnlessEqual(self.session.GetConfigName(), "@default");
+        time.sleep(60)
+        try:
+            self.session.GetFlags()
+        except:
+            pass
+        else:
+            self.fail("Session.GetFlags() should have failed")
+
+    def testCreateSessionWithFlags(self):
+        """ask for session with some specific flags and config"""
+        self.session.Detach()
+        self.sessionpath, self.session = self.createSession("FooBar@no-such-context", True, ["foo", "bar"])
+        self.failUnlessEqual(self.session.GetFlags(), ["foo", "bar"])
+        self.failUnlessEqual(self.session.GetConfigName(), "foobar@no-such-context");
 
     @timeout(20)
     def testSecondSession(self):
@@ -1029,22 +1107,23 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
                                 "deviceId" : "foo",
                                 "RetryInterval" : "10",
                                 "RetryDuration" : "20",
+                                "ConsumerReady" : "1",
                                 "configName" : "dummy-test"
                               },
                          "source/addressbook" : { "sync" : "slow",
-                                                  "type" : "addressbook",
+                                                  "backend" : "addressbook",
                                                   "uri" : "card"
                                                 },
                          "source/calendar"    : { "sync" : "disabled",
-                                                  "type" : "calendar",
+                                                  "backend" : "calendar",
                                                   "uri" : "cal"
                                                 },
                          "source/todo"        : { "sync" : "disabled",
-                                                  "type" : "todo",
+                                                  "backend" : "todo",
                                                   "uri" : "task"
                                                 },
                          "source/memo"        : { "sync" : "disabled",
-                                                  "type" : "memo",
+                                                  "backend" : "memo",
                                                   "uri" : "text"
                                                 }
                        }
@@ -1055,10 +1134,10 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
                             }
         self.sources = ['addressbook', 'calendar', 'todo', 'memo']
 
-        #create default or user settings evolutionsource
-        updateProps = self.getEvolutionSources(self.config)
+        #create default or user settings database
+        updateProps = self.getDatabases(self.config)
         for key, dict in updateProps.items():
-            self.config[key]["evolutionsource"] = dict["evolutionsource"]
+            self.config[key]["database"] = dict["database"]
 
     def run(self, result):
         self.runTest(result)
@@ -1072,26 +1151,46 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         """ create a server with full config. Used internally. """
         self.session.SetConfig(False, False, self.config, utf8_strings=True)
 
-    def testSetConfigInvalidParam(self):
-        """ test that the right error is reported when parameters are not correct """
-        try:
-            self.session.SetConfig(False, True, {}, utf8_strings=True)
-        except dbus.DBusException, ex:
-            self.failUnlessEqual(str(ex),
-                                 "org.syncevolution.Exception: Clearing existing configuration "
-                                 "and temporary configuration changes which only affects the "
-                                 "duration of the session are mutually exclusive")
-        else:
-            self.fail("no exception thrown")
+    def testTemporaryConfig(self):
+        """various temporary config changes"""
+        ref = { "": { "loglevel": "2", "configName": "dummy-test" } }
+        config = copy.deepcopy(ref)
+        self.session.SetConfig(False, False, config, utf8_strings=True)
+        # reset
+        self.session.SetConfig(False, True, {}, utf8_strings=True)
+        self.failUnlessEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        # add sync prop
+        self.session.SetConfig(True, True, { "": { "loglevel": "100" } }, utf8_strings=True)
+        config[""]["loglevel"] = "100"
+        self.failUnlessEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        # add source
+        self.session.SetConfig(True, True, { "source/foobar": { "sync": "two-way" } }, utf8_strings=True)
+        config["source/foobar"] = { "sync": "two-way" }
+        self.session.SetConfig(True, True, { "": { "loglevel": "100" } }, utf8_strings=True)
+        # add source prop
+        self.session.SetConfig(True, True, { "source/foobar": { "database": "xyz" } }, utf8_strings=True)
+        config["source/foobar"]["database"] = "xyz"
+        self.failUnlessEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        # reset temporary settings
+        self.session.SetConfig(False, True, { }, utf8_strings=True)
+        config = copy.deepcopy(ref)
+        self.failUnlessEqual(config, self.session.GetConfig(False, utf8_strings=True))        
 
+    @timeout(20)
     def testCreateGetConfig(self):
         """ test the config is created successfully. """
+        self.setUpConfigListeners()
         self.config[""]["username"] = "creategetconfig"
         self.config[""]["password"] = "112233445566778"
         self.setupConfig()
         """ get config and compare """
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config, self.config)
+        # terminate session and check whether a "config changed" signal
+        # was sent as required
+        self.session.Detach()
+        loop.run()
+        self.failUnlessEqual(DBusUtil.events, ["ConfigChanged"])
 
     def testUpdateConfig(self):
         """ test the config is permenantly updated correctly. """
@@ -1143,12 +1242,11 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
             self.session.SetConfig(True, False, config, utf8_strings=True)
         except dbus.DBusException, ex:
             self.failUnlessEqual(str(ex),
-                                 "org.syncevolution.Exception: test-dbus/config/syncevolution/default/peers/"
-                                 "dummy-test/sources/addressbook/config.ini: "
-                                 "sync = invalid-value: not one of the valid values (two-way, "
-                                 "slow, refresh-from-client = refresh-client, refresh-from-server "
-                                 "= refresh-server = refresh, one-way-from-client = one-way-client, "
-                                 "one-way-from-server = one-way-server = one-way, disabled = none)")
+                                 "org.syncevolution.InvalidCall: invalid value 'invalid-value' for "
+                                 "property 'sync': 'not one of the valid values (two-way, slow, "
+                                 "refresh-from-client = refresh-client, refresh-from-server = "
+                                 "refresh-server = refresh, one-way-from-client = one-way-client, "
+                                 "one-way-from-server = one-way-server = one-way, disabled = none)'")
         else:
             self.fail("no exception thrown")
 
@@ -1159,6 +1257,40 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         except dbus.DBusException, ex:
             self.failUnlessEqual(str(ex),
                                  "org.syncevolution.NoSuchConfig: The configuration 'dummy-test' doesn't exist")
+        else:
+            self.fail("no exception thrown")
+
+    def testUnknownConfigContent(self):
+        """config with unkown must be rejected"""
+        self.setupConfig()
+
+        try:
+            config1 = copy.deepcopy(self.config)
+            config1[""]["no-such-sync-property"] = "foo"
+            self.session.SetConfig(False, False, config1, utf8_strings=True)
+        except dbus.DBusException, ex:
+            self.failUnlessEqual(str(ex),
+                                 "org.syncevolution.InvalidCall: unknown property 'no-such-sync-property'")
+        else:
+            self.fail("no exception thrown")
+
+        try:
+            config1 = copy.deepcopy(self.config)
+            config1["source/addressbook"]["no-such-source-property"] = "foo"
+            self.session.SetConfig(False, False, config1, utf8_strings=True)
+        except dbus.DBusException, ex:
+            self.failUnlessEqual(str(ex),
+                                 "org.syncevolution.InvalidCall: unknown property 'no-such-source-property'")
+        else:
+            self.fail("no exception thrown")
+
+        try:
+            config1 = copy.deepcopy(self.config)
+            config1["no-such-key"] = { "foo": "bar" }
+            self.session.SetConfig(False, False, config1, utf8_strings=True)
+        except dbus.DBusException, ex:
+            self.failUnlessEqual(str(ex),
+                                 "org.syncevolution.InvalidCall: invalid config entry 'no-such-key'")
         else:
             self.fail("no exception thrown")
 
@@ -1200,7 +1332,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
     def testCheckSourceInvalidEvolutionSource(self):
         """ test the right error is reported when the evolutionsource is invalid """
         self.setupConfig()
-        config = { "source/memo" : { "evolutionsource" : "impossible-source"} }
+        config = { "source/memo" : { "database" : "impossible-source"} }
         self.session.SetConfig(True, False, config, utf8_strings=True)
         try:
             self.session.CheckSource("memo", utf8_strings=True)
@@ -1215,7 +1347,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         self.setupConfig()
         # we cannot set an invalid type here, so pick one which is likely
         # to be not supported in syncevo-dbus-server
-        config = { "source/memo" : { "type" : "apple-contacts"} }
+        config = { "source/memo" : { "backend" : "apple-contacts"} }
         self.session.SetConfig(True, False, config, utf8_strings=True)
         try:
             self.session.CheckSource("memo", utf8_strings=True)
@@ -1226,9 +1358,11 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
             self.fail("no exception thrown")
 
     def testCheckSourceNoType(self):
-        """ test the right error is reported when the type is unset """
+        """ test the right error is reported when the source is unusable"""
         self.setupConfig()
-        config = { "source/memo" : { "type" : "" } }
+        config = { "source/memo" : { "backend" : "file",
+                                     "databaseFormat" : "text/calendar",
+                                     "database" : "file:///no/such/path" } }
         self.session.SetConfig(True, False, config, utf8_strings=True)
         try:
             self.session.CheckSource("memo", utf8_strings=True)
@@ -1247,7 +1381,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
     def testCheckSourceUpdateConfigTemp(self):
         """ test the config is temporary updated and in effect for GetDatabases in the current session. """
         self.setupConfig()
-        tempConfig = {"source/temp" : { "type" : "calendar"}}
+        tempConfig = {"source/temp" : { "backend" : "calendar"}}
         self.session.SetConfig(True, True, tempConfig, utf8_strings=True)
         databases2 = self.session.CheckSource("temp", utf8_strings=True)
 
@@ -1296,7 +1430,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         """ test the config is temporary updated and in effect for GetDatabases in the current session. """
         self.setupConfig()
         databases1 = self.session.GetDatabases("calendar", utf8_strings=True)
-        tempConfig = {"source/temp" : { "type" : "calendar"}}
+        tempConfig = {"source/temp" : { "backend" : "calendar"}}
         self.session.SetConfig(True, True, tempConfig, utf8_strings=True)
         databases2 = self.session.GetDatabases("temp", utf8_strings=True)
         self.failUnlessEqual(databases2, databases1)
@@ -1573,7 +1707,7 @@ class TestSessionAPIsReal(unittest.TestCase, DBusUtil):
         except dbus.DBusException, ex:
             self.fail(str(ex) + 
                       ". To test this case, please first set up a correct config named 'dbus_unittest'.")
-        updateProps = self.getEvolutionSources(configProps)
+        updateProps = self.getDatabases(configProps)
         # temporarily set evolutionsource and don't change them
         self.session.SetConfig(True, True, updateProps, utf8_strings=True)
 
@@ -1724,27 +1858,27 @@ class TestConnection(unittest.TestCase, DBusUtil):
                                 "RetryDuration" : "10"
                               },
                          "source/addressbook" : { "sync" : "two-way",
-                                                  "type" : "addressbook",
+                                                  "backend" : "addressbook",
                                                   "uri" : "card"
                                                 },
                          "source/calendar"    : { "sync" : "two-way",
-                                                  "type" : "calendar",
+                                                  "backend" : "calendar",
                                                   "uri" : "cal"
                                                 },
                          "source/todo"        : { "sync" : "two-way",
-                                                  "type" : "todo",
+                                                  "backend" : "todo",
                                                   "uri" : "task"
                                                 },
                          "source/memo"        : { "sync" : "two-way",
-                                                  "type" : "memo",
+                                                  "backend" : "memo",
                                                   "uri" : "text"
                                                 }
                        }
 
         #create default or user settings evolutionsource
-        updateProps = self.getEvolutionSources(self.config)
+        updateProps = self.getDatabases(self.config)
         for key, dict in updateProps.items():
-            self.config[key]["evolutionsource"] = dict["evolutionsource"]
+            self.config[key]["database"] = dict["database"]
 
     def setupConfig(self, name="dummy-test", deviceId="sc-api-nat"):
         self.setUpSession(name)
@@ -1781,7 +1915,7 @@ class TestConnection(unittest.TestCase, DBusUtil):
             connection.Process('1234', 'invalid message type')
         except dbus.DBusException, ex:
             self.failUnlessEqual(str(ex),
-                                 'org.syncevolution.Exception: message type not supported for starting a sync')
+                                 "org.syncevolution.Exception: message type 'invalid message type' not supported for starting a sync")
         else:
             self.fail("no exception thrown")
         loop.run()
@@ -1986,7 +2120,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
     Creates and tests the configs 'foo', 'bar', 'foo@other_context',
     '@default' and checks that 'defaultPeer' (global), 'syncURL' (per
-    peer), 'evolutionsource' (per source), 'uri' (per source and peer)
+    peer), 'database' (per source), 'uri' (per source and peer)
     are shared correctly.
 
     Runs with a the server ready, without session."""
@@ -2022,7 +2156,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
                                         "deviceId" : "shared-device-identifier",
                                         "syncURL": "http://scheduleworld" },
                                  "source/calendar" : { "uri" : "cal3" },
-                                 "source/addressbook" : { "evolutionsource": "Personal",
+                                 "source/addressbook" : { "database": "Personal",
                                                           "sync" : "two-way",
                                                           "uri": "card3" } },
                                utf8_strings=True)
@@ -2033,11 +2167,11 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
         self.failUnlessEqual(config[""]["deviceId"], "shared-device-identifier")
-        self.failUnlessEqual(config["source/addressbook"]["evolutionsource"], "Personal")
+        self.failUnlessEqual(config["source/addressbook"]["database"], "Personal")
         self.session.SetConfig(True, False,
                                { "" : { "syncURL": "http://funambol" },
                                  "source/calendar" : { "uri" : "cal" },
-                                 "source/addressbook" : { "evolutionsource": "Work",
+                                 "source/addressbook" : { "database": "Work",
                                                           "sync" : "refresh-from-client",
                                                           "uri": "card" } },
                                utf8_strings=True)
@@ -2052,7 +2186,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
         self.failUnlessEqual(config[""]["syncURL"], "http://scheduleworld")
-        self.failUnlessEqual(config["source/addressbook"]["evolutionsource"], "Work")
+        self.failUnlessEqual(config["source/addressbook"]["database"], "Work")
         self.failUnlessEqual(config["source/addressbook"]["uri"], "card3")
         self.session.Detach()
 
@@ -2086,63 +2220,56 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config = self.server.GetConfig("scheduleworld", True, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
         self.failUnlessEqual(config[""]["deviceId"], "shared-device-identifier")
-        self.failUnlessEqual(config["source/addressbook"]["evolutionsource"], "Work")
+        self.failUnlessEqual(config["source/addressbook"]["database"], "Work")
 
     def testSharedType(self):
-        """'type' must be set per-peer and shared"""
+        """'type' consists of per-peer and shared properties"""
         self.setupConfigs()
 
-        # writing for peer modifies "type" in "foo" and context
+        # writing for peer modifies properties in "foo" and context
         self.setUpSession("Foo@deFAULT")
         config = self.session.GetConfig(False, utf8_strings=True)
-        config["source/addressbook"]["type"] = "file:text/vcard:3.0"
+        config["source/addressbook"]["syncFormat"] = "text/vcard"
+        config["source/addressbook"]["backend"] = "file"
+        config["source/addressbook"]["databaseFormat"] = "text/x-vcard"
         self.session.SetConfig(True, False,
                                config,
                                utf8_strings=True)
         config = self.server.GetConfig("Foo", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/vcard:3.0")
+        self.failUnlessEqual(config["source/addressbook"]["syncFormat"], "text/vcard")
         config = self.server.GetConfig("@default", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/vcard:3.0")
+        self.failUnlessEqual(config["source/addressbook"]["backend"], "file")
+        self.failUnlessEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
         self.session.Detach()
 
-        # writing in context only changes the context
-        self.setUpSession("@deFAULT")
-        config = self.session.GetConfig(False, utf8_strings=True)
-        config["source/addressbook"]["type"] = "file:text/x-vcard:2.1"
-        self.session.SetConfig(True, False,
-                               config,
-                               utf8_strings=True)
-        config = self.server.GetConfig("Foo", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/vcard:3.0")
-        config = self.server.GetConfig("@default", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/x-vcard:2.1")
-
     def testSharedTypeOther(self):
-        """'type' must not be overwritten when set in the context"""
-        # writing for peer modifies "type" in "foo" and context "@other"
+        """shared backend properties must be preserved when adding peers"""
+        # writing peer modifies properties in "foo" and creates context "@other"
         self.setUpSession("Foo@other")
         config = self.server.GetConfig("ScheduleWorld@other", True, utf8_strings=True)
-        config["source/addressbook"]["type"] = "file:text/vcard:3.0"
+        config["source/addressbook"]["backend"] = "file"
+        config["source/addressbook"]["databaseFormat"] = "text/x-vcard"
         self.session.SetConfig(False, False,
                                config,
                                utf8_strings=True)
         config = self.server.GetConfig("Foo", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/vcard:3.0")
+        self.failUnlessEqual(config["source/addressbook"]["backend"], "file")
         config = self.server.GetConfig("@other", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/vcard:3.0")
+        self.failUnlessEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
         self.session.Detach()
 
         # adding second client must preserve type
         self.setUpSession("bar@other")
         config = self.server.GetConfig("Funambol@other", True, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "addressbook")
+        self.failUnlessEqual(config["source/addressbook"]["backend"], "file")
         self.session.SetConfig(False, False,
                                config,
                                utf8_strings=True)
         config = self.server.GetConfig("bar", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "addressbook")
+        self.failUnlessEqual(config["source/addressbook"]["backend"], "file")
+        self.failUnlessEqual(config["source/addressbook"].get("syncFormat"), None)
         config = self.server.GetConfig("@other", False, utf8_strings=True)
-        self.failUnlessEqual(config["source/addressbook"]["type"], "file:text/vcard:3.0")
+        self.failUnlessEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
 
     def testOtherContext(self):
         """write into independent context"""
@@ -2152,7 +2279,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.setUpSession("foo@other_context")
         config = self.session.GetConfig(False, utf8_strings=True)
         config[""]["syncURL"] = "http://scheduleworld2"
-        config["source/addressbook"] = { "evolutionsource": "Play",
+        config["source/addressbook"] = { "database": "Play",
                                          "uri": "card30" }
         self.session.SetConfig(True, False,
                                config,
@@ -2160,7 +2287,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
         self.failUnlessEqual(config[""]["syncURL"], "http://scheduleworld2")
-        self.failUnlessEqual(config["source/addressbook"]["evolutionsource"], "Play")
+        self.failUnlessEqual(config["source/addressbook"]["database"], "Play")
         self.failUnlessEqual(config["source/addressbook"]["uri"], "card30")
         self.session.Detach()
 
@@ -2169,7 +2296,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
         self.failUnlessEqual(config[""]["syncURL"], "http://scheduleworld")
-        self.failUnlessEqual(config["source/addressbook"]["evolutionsource"], "Work")
+        self.failUnlessEqual(config["source/addressbook"]["database"], "Work")
         self.failUnlessEqual(config["source/addressbook"]["uri"], "card3")
         self.session.Detach()
 
@@ -2232,7 +2359,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config = self.server.GetConfig("foo@other_context", False, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
         self.failUnlessEqual(config[""]["syncURL"], "http://scheduleworld2")
-        self.failUnlessEqual(config["source/addressbook"]["evolutionsource"], "Play")
+        self.failUnlessEqual(config["source/addressbook"]["database"], "Play")
         self.failUnlessEqual(config["source/addressbook"]["uri"], "card30")
 
     def testRemoveContext(self):

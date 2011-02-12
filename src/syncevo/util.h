@@ -36,6 +36,8 @@
 #include <exception>
 #include <list>
 
+#include <syncevo/Logging.h>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 using namespace std;
@@ -169,6 +171,75 @@ unsigned long Hash(const std::string &str);
 std::string SHA_256(const std::string &in);
 
 /**
+ * escape/unescape code
+ *
+ * Escaping is done URL-like, with a configurable escape
+ * character. The exact set of characters to replace (besides the
+ * special escape character) is configurable, too.
+ *
+ * The code used to be in SafeConfigNode, but is of general value.
+ */
+class StringEscape
+{
+ public:
+    enum Mode {
+        SET,               /**< explicit list of characters to be escaped */
+        INI_VALUE,         /**< right hand side of .ini assignment:
+                              escape all spaces at start and end (but not in the middle) and the equal sign */
+        INI_WORD,          /**< same as before, but keep it one word:
+                              escape all spaces and the equal sign = */
+        STRICT             /**< general purpose:
+                              escape all characters besides alphanumeric and -_ */
+    };
+
+ private:
+    char m_escapeChar;
+    Mode m_mode;
+    std::set<char> m_forbidden;
+
+ public:
+    /**
+     * default constructor, using % as escape character, escaping all spaces (including
+     * leading and trailing ones), and all characters besides alphanumeric and -_
+     */
+    StringEscape(char escapeChar = '%', Mode mode = STRICT) :
+        m_escapeChar(escapeChar),
+        m_mode(mode)
+    {}
+
+    /**
+     * @param escapeChar        character used to introduce escape sequence
+     * @param forbidden         explicit list of characters which are to be escaped
+     */
+    StringEscape(char escapeChar, const char *forbidden);
+
+    /** special character which introduces two-char hex encoded original character */
+    char getEscapeChar() const { return m_escapeChar; }
+    void setEscapeChar(char escapeChar) { m_escapeChar = escapeChar; }
+
+    Mode getMode() const { return m_mode; }
+    void setMode(Mode mode) { m_mode = mode; }
+
+    /**
+     * escape string according to current settings
+     */
+    string escape(const string &str) const;
+
+    /** escape string with the given settings */
+    static string escape(const string &str, char escapeChar, Mode mode);
+
+    /**
+     * unescape string, with escape character as currently set
+     */
+    string unescape(const string &str) const { return unescape(str, m_escapeChar); }
+
+    /**
+     * unescape string, with escape character as given
+     */
+    static string unescape(const string &str, char escapeChar);
+};
+
+/**
  * This is a simplified implementation of a class representing and calculating
  * UUIDs v4 inspired from RFC 4122. We do not use cryptographic pseudo-random
  * numbers, instead we rely on rand/srand.
@@ -183,6 +254,15 @@ class UUID : public string {
  public:
     UUID();
 };
+
+/**
+ * Safety check for string pointer.
+ * Returns pointer if valid, otherwise the default string.
+ */
+inline const char *NullPtrCheck(const char *ptr, const char *def = "(null)")
+{
+    return ptr ? ptr : def;
+}
 
 /**
  * A C++ wrapper around readir() which provides the names of all
@@ -246,6 +326,17 @@ std::string StringPrintf(const char *format, ...)
 std::string StringPrintfV(const char *format, va_list ap);
 
 /**
+ * strncpy() which inserts adds 0 byte
+ */
+char *Strncpy(char *dest, const char *src, size_t n);
+
+/**
+ * sleep() with sub-second resolution. Might be interrupted by signals
+ * before the time has elapsed.
+ */
+void Sleep(double seconds);
+
+/**
  * an exception which records the source file and line
  * where it was thrown
  *
@@ -268,15 +359,21 @@ class Exception : public std::runtime_error
     /**
      * Convenience function, to be called inside a catch(..) block.
      *
-     * Rethrows the exception to determine what it is, then logs it as
-     * an error. Turns certain known exceptions into the corresponding
+     * Rethrows the exception to determine what it is, then logs it
+     * at the chosen level (error by default).
+     *
+     * Turns certain known exceptions into the corresponding
      * status code if status still was STATUS_OK when called.
      * Returns updated status code.
      *
      * @param logger    the class which does the logging
+     * @retval explanation   set to explanation for problem, if non-NULL
+     * @param level     level to be used for logging
      */
-    static SyncMLStatus handle(SyncMLStatus *status = NULL, Logger *logger = NULL);
+    static SyncMLStatus handle(SyncMLStatus *status = NULL, Logger *logger = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR);
     static SyncMLStatus handle(Logger *logger) { return handle(NULL, logger); }
+    static SyncMLStatus handle(std::string &explanation) { return handle(NULL, NULL, &explanation); }
+    static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }
 };
 
 /**
@@ -297,6 +394,27 @@ protected:
     SyncMLStatus m_status;
 };
 
+class TransportException : public Exception
+{
+ public:
+    TransportException(const std::string &file,
+                       int line,
+                       const std::string &what) :
+    Exception(file, line, what) {}
+    ~TransportException() throw() {}
+};
+
+class TransportStatusException : public StatusException
+{
+ public:
+    TransportStatusException(const std::string &file,
+                             int line,
+                             const std::string &what,
+                             SyncMLStatus status) :
+    StatusException(file, line, what, status) {}
+    ~TransportStatusException() throw() {}
+};
+
 /**
  * replace ${} with environment variables, with
  * XDG_DATA_HOME, XDG_CACHE_HOME and XDG_CONFIG_HOME having their normal
@@ -314,6 +432,23 @@ inline string getHome() {
  * escaped by a backslash. Spaces around the separator is also stripped.
  * */
 std::vector<std::string> unescapeJoinedString (const std::string &src, char separator);
+
+/**
+ * mapping from int flag to explanation
+ */
+struct Flag {
+    int m_flag;
+    const char *m_description;
+};
+
+/**
+ * turn flags into comma separated list of explanations
+ *
+ * @param flags     bit mask
+ * @param descr     array with zero m_flag as end marker
+ * @param sep       used to join m_description strings
+ */
+std::string Flags2String(int flags, const Flag *descr, const std::string &sep = ", ");
 
 /**
  * Temporarily set env variable, restore old value on destruction.

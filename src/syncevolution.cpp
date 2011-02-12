@@ -168,10 +168,16 @@ private:
     void attachSync();
 
     /** 
-     * callback of 'Server.Attach'
-     * also set up a watch and add watch callback when the daemon is gone
+     * callback of 'Server.Attach':
+     * also set up a watch and add watch callback when the daemon is gone,
+     * then do version check before returning
      */
     void attachCb(const boost::shared_ptr<Watch> &watch, const string &error);
+
+    /**
+     * second half of attaching: check version and print warning
+     */
+    void versionCb(const StringMap &versions, const string &error);
 
     /** callback of 'Server.GetSessions' */
     void getSessionsCb(const vector<string> &sessions, const string &error);
@@ -446,30 +452,13 @@ static void getEnvVars(map<string, string> &vars);
 extern "C"
 int main( int argc, char **argv )
 {
-#ifdef ENABLE_MAEMO
-    // EDS-DBus uses potentially long-running calls which may fail due
-    // to the default 25s timeout. Some of these can be replaced by
-    // their async version, but e_book_async_get_changes() still
-    // triggered it.
-    //
-    // The workaround for this is to link the binary against a libdbus
-    // which has the dbus-timeout.patch and thus let's users and
-    // the application increase the default timeout.
-    setenv("DBUS_DEFAULT_TIMEOUT", "600000", 0);
-#endif
-
     // Intercept stderr and route it through our logging.
     // stdout is printed normally. Deconstructing it when
     // leaving main() does one final processing of pending
     // output.
     LogRedirect redirect(false);
 
-#if defined(HAVE_GLIB)
-    // this is required when using glib directly or indirectly
-    g_type_init();
-    g_thread_init(NULL);
-    g_set_prgname("syncevolution");
-#endif
+    SyncContext::initMain("syncevolution");
 
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -491,6 +480,10 @@ int main( int argc, char **argv )
     free(exe);
 
     try {
+        if (getenv("SYNCEVOLUTION_DEBUG")) {
+            LoggerBase::instance().setLevel(Logger::DEBUG);
+        }
+
         /*
          * don't log errors to cerr: LogRedirect cannot distinguish
          * between our valid error messages and noise from other
@@ -635,13 +628,38 @@ void RemoteDBusServer::attachSync()
 
 void RemoteDBusServer::attachCb(const boost::shared_ptr<Watch> &watch, const string &error)
 {
-    replyInc();
     if(error.empty()) {
-        // don't print error information, leave it to caller
-        m_attached = true;
         //if attach is successful, watch server whether it is gone
         m_daemonWatch = watch;
         m_daemonWatch->setCallback(boost::bind(&RemoteDBusServer::daemonGone,this));
+
+        // don't print error information, leave it to caller
+        m_attached = true;
+
+        // do a version check now before calling replyInc()
+        DBusClientCall1< StringMap > getVersions(*this, "GetVersions");
+        getVersions(boost::bind(&RemoteDBusServer::versionCb, this, _1, _2));
+    } else {
+        // done with attach phase, skip version check
+        replyInc();
+    }
+}
+
+void RemoteDBusServer::versionCb(const StringMap &versions,
+                                 const string &error)
+{
+    replyInc();
+    if (!error.empty()) {
+        SE_LOG_DEBUG(NULL, NULL, "Server.GetVersions(): %s", error.c_str());
+    } else {
+        StringMap::const_iterator it = versions.find("version");
+        if (it != versions.end() &&
+            it->second != VERSION) {
+            SE_LOG_INFO(NULL, NULL,
+                        "proceeding despite version mismatch between command line client 'syncevolution' and 'syncevo-dbus-server' (%s != %s)",
+                        it->second.c_str(),
+                        VERSION);
+        }
     }
 }
 
@@ -734,8 +752,12 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
     //3) execute 'arguments' once it is active
 
     // start a new session
-    DBusClientCall1<DBusObject_t> call(*this, "StartSession");
-    call(peer, boost::bind(&RemoteDBusServer::startSessionCb, this, _1, _2));
+    DBusClientCall1<DBusObject_t> startSession(*this, "StartSessionWithFlags");
+    std::vector<std::string> flags;
+    if (!runSync) {
+        flags.push_back("no-sync");
+    }
+    startSession(peer, flags, boost::bind(&RemoteDBusServer::startSessionCb, this, _1, _2));
 
     // wait until 'StartSession' returns
     resetReplies();
@@ -812,6 +834,9 @@ void RemoteDBusServer::startSessionCb(const DBusObject_t &sessionPath, const str
     replyInc();
     if(!error.empty()) {
         SE_LOG_ERROR(NULL, NULL, "starting D-Bus session failed: %s", error.c_str());
+        if (error.find("org.freedesktop.DBus.Error.UnknownMethod") != error.npos) {
+            SE_LOG_INFO(NULL, NULL, "syncevo-dbus-server is most likely too old");
+        }
         m_result = false;
         g_main_loop_quit(m_loop);
         return;

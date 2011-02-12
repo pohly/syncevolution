@@ -7,8 +7,8 @@
       // make sure we have all trailing and leading spaces eliminated
       DESCRIPTION=NORMALIZED(DESCRIPTION);
       SUMMARY=NORMALIZED(SUMMARY);
-      // make sure that we have a DESCRIPTION
-      if (DESCRIPTION==EMPTY) DESCRIPTION=SUMMARY;
+      // eliminate description that is the same as summary
+      if (DESCRIPTION==SUMMARY) DESCRIPTION=EMPTY;
       // calendar or todo
       if (ISEVENT) {
         // VEVENT
@@ -64,6 +64,19 @@
             }
             i=i+1;
           }  
+        }
+
+        // Transform absolute alarm time back to relative time (mirrors the code in
+        // VCALENDAR_OUTGOING_SCRIPT, see also BMC #11233). This applies to all
+        // events, recurring or not, if the "alarmTimeToUTC" workaround is applied.
+        // With a peer which cannot distinguish between absolute and relative
+        // alarms we better treat all alarms as relative, because that is presented
+        // more nicely to the user on the local side.
+        if (ITEMDATATYPE()=="vCalendar10" &&
+            ALARM_TIME!=EMPTY &&
+            !ISDURATION(ALARM_TIME) &&
+            SESSIONVAR("alarmTimeToUTC")) { 
+            ALARM_TIME = ALARM_TIME - DTSTART;
         }
 
         // - shape attendees (and make sure ATTENDEES[] is assigned even for empty email addresses)
@@ -136,8 +149,10 @@
       // make sure we have at least a summary
       if (SUMMARY==EMPTY) SUMMARY=SUBSTR(DESCRIPTION,0,32); // derive from description
       if (SUMMARY==EMPTY) SUMMARY="unnamed"; // in case description is empty as well
-      // make sure that we have a DESCRIPTION
-      if (DESCRIPTION==EMPTY) DESCRIPTION=SUMMARY;
+      // make sure that we have a DESCRIPTION, because some peers only support that;
+      // can be avoided for peers where we are certain (from CtCaps) that they can
+      // receive the text as part of the summary
+      if (ISAVAILABLE(SUMMARY)!=TRUE && DESCRIPTION==EMPTY) DESCRIPTION=SUMMARY;
       // do NOT send duration (some servers crash when doing so)
       DURATION = UNASSIGNED;
       // shape alarm
@@ -151,7 +166,11 @@
       }
 
       // for 'ALARM_TIME', convert duration time to UTC time
-      // This workaround is for Mobical.net can't understand duration time
+      // This workaround is for Mobical.net which can't understand duration time.
+      // Also used with phones. The interpretation at least by Nokia
+      // is that the absolute alarm time repeats together with the
+      // event (BMC #11233). VCALENDAR_INCOMING_SCRIPT has the
+      // corresponding transformation back (important for recurring events).
       if (SESSIONVAR("alarmTimeToUTC") && ITEMDATATYPE()=="vCalendar10"
             && ALARM_TIME!=EMPTY && ISDURATION(ALARM_TIME)) {
         TIMESTAMP ts;

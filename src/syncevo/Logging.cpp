@@ -28,7 +28,7 @@
 SE_BEGIN_CXX
 
 static LoggerStdout DefaultLogger;
-
+std::string Logger::m_processName;
 static std::vector<LoggerBase *> loggers;
 LoggerBase &LoggerBase::instance()
 {
@@ -52,6 +52,19 @@ void LoggerBase::popLogger()
         loggers.pop_back();
     }
 }
+
+int LoggerBase::numLoggers()
+{
+    return (int)loggers.size();
+}
+
+LoggerBase *LoggerBase::loggerAt(int index)
+{
+    return index < 0 || index >= (int)loggers.size() ?
+        NULL :
+        loggers[index];
+}
+
 
 void Logger::message(Level level,
                      const char *prefix,

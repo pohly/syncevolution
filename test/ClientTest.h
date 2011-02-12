@@ -140,6 +140,12 @@ struct SyncOptions {
      */
     Callback_t m_startCallback;
 
+    /**
+     * called while configuration is prepared for sync, see
+     * SyncContext::prepare()
+     */
+    Callback_t m_prepareCallback;
+
     boost::shared_ptr<TransportAgent> m_transport;
 
     SyncOptions(SyncMode syncMode = SYNC_NONE,
@@ -174,6 +180,7 @@ struct SyncOptions {
     SyncOptions &setRetryDuration(int retryDuration) { m_retryDuration = retryDuration; return *this; }
     SyncOptions &setRetryInterval(int retryInterval) { m_retryInterval = retryInterval; return *this; }
     SyncOptions &setStartCallback(const Callback_t &callback) { m_startCallback = callback; return *this; }
+    SyncOptions &setPrepareCallback(const Callback_t &callback) { m_prepareCallback = callback; return *this; }
     SyncOptions &setTransportAgent(const boost::shared_ptr<TransportAgent> transport)
                                   {m_transport = transport; return *this;}
 
@@ -224,6 +231,23 @@ class ClientTest {
   public:
     ClientTest(int serverSleepSec = 0, const std::string &serverLog= "");
     virtual ~ClientTest();
+
+    /** set up before running a test */
+    virtual void setup() { }
+
+    /** cleanup function to be called when shutting down testing */
+    typedef void (*Cleanup_t)(void);
+
+    /**
+     * Call this to register another shutdown cleanup functions.
+     * Every unique function will be called exactly once.
+     */
+    static void registerCleanup(Cleanup_t cleanup);
+
+    /**
+     * Call cleanup functions.
+     */
+    static void shutdown();
 
     /**
      * This function registers tests using this instance of ClientTest for
@@ -276,7 +300,9 @@ class ClientTest {
     /**
      * utility function for importing items with blank lines as separator
      */
-    static int import(ClientTest &client, TestingSyncSource &source, const char *file, std::string &realfile);
+    static int import(ClientTest &client, TestingSyncSource &source,
+                      const ClientTestConfig &config,
+                      const char *file, std::string &realfile);
 
     /**
      * utility function for comparing vCard and iCal files with the external
@@ -434,6 +460,9 @@ public:
     /** helper funclets to create sources */
     CreateSource createSourceA, createSourceB;
 
+    /** if set, then this will be called at the end of testing */
+    void (*cleanupSources)();
+
     LocalTests(const std::string &name, ClientTest &cl, int sourceParam, ClientTest::Config &co) :
         CppUnit::TestSuite(name),
         client(cl),
@@ -442,6 +471,9 @@ public:
         createSourceA(co.createSourceA, cl, sourceParam, true),
         createSourceB(co.createSourceB, cl, sourceParam, false)
         {}
+
+    /** set up before running a test */
+    virtual void setUp() { client.setup(); }
 
     /**
      * adds the supported tests to the instance itself;
@@ -455,9 +487,10 @@ public:
      * regardless whether the data source already contains items or not
      *
      * @param relaxed   if true, then disable some of the additional checks after adding the item
+     * @retval inserted    actual data that was inserted, optional
      * @return the LUID of the inserted item
      */
-    virtual std::string insert(CreateSource createSource, const char *data, bool relaxed = false);
+    virtual std::string insert(CreateSource createSource, const char *data, bool relaxed = false, std::string *inserted = NULL);
 
     /**
      * assumes that exactly one element is currently inserted and updates it with the given item
@@ -486,6 +519,11 @@ public:
      * @return true if the two databases are equal
      */
     virtual bool compareDatabases(const char *refFile, TestingSyncSource &copy, bool raiseAssert = true);
+
+    /**
+     * compare data in source with vararg list of std::string pointers, NULL terminated
+     */
+    void compareDatabases(TestingSyncSource &copy, ...);
 
     /**
      * insert artificial items, number of them determined by TEST_EVOLUTION_NUM_ITEMS
@@ -559,8 +597,16 @@ public:
     SyncTests(const std::string &name, ClientTest &cl, std::vector<int> sourceIndices, bool isClientA = true);
     ~SyncTests();
 
-    /** adds the supported tests to the instance itself */
-    virtual void addTests();
+    /**
+     * adds the supported tests to the instance itself
+     * @param isFirstSource     the tests are getting generated for a single source,
+     *                          the one which was listed first; some tests are the
+     *                          same for all sources and should only be run once
+     */
+    virtual void addTests(bool isFirstSource = false);
+
+    /** set up before running a test */
+    virtual void setUp() { client.setup(); }
 
 protected:
     /** list with all local test classes for manipulating the sources and their index in the client */
@@ -747,6 +793,16 @@ protected:
     virtual void testResendServerUpdate();
     virtual void testResendFull();
 
+    virtual void testResendProxyClientAdd();
+    virtual void testResendProxyClientRemove();
+    virtual void testResendProxyClientUpdate();
+    virtual void testResendProxyServerAdd();
+    virtual void testResendProxyServerRemove();
+    virtual void testResendProxyServerUpdate();
+    virtual void testResendProxyFull();
+
+    virtual void testTimeout();
+
     /**
      * implements testMaxMsg(), testLargeObject(), testLargeObjectEncoded()
      * using a sequence of items with varying sizes
@@ -764,6 +820,7 @@ protected:
         SyncPrefix prefix(logPrefix, *this);
         doSync(options);
     }
+    virtual void postSync(int res, const std::string &logname);
 };
 
 /*
@@ -790,6 +847,13 @@ public:
     ~TransportWrapper() {
     }
 
+    /**
+     * -1 for wrappers which are meant to be used without message resending,
+     * otherwise the number x for which "interrupt" <= x will lead to
+     * an aborted sync (0 for TransportResendInjector, 2 for TransportResendProxy)
+     */
+    virtual int getResendFailureThreshold() { return -1; }
+
     virtual int getMessageCount() { return m_messageCount; }
 
     virtual void setURL(const std::string &url) { m_wrappedAgent->setURL(url); }
@@ -808,8 +872,7 @@ public:
         m_wrappedAgent.reset();
     }
     virtual Status wait(bool noReply = false) { return m_status; }
-    virtual void setCallback (TransportCallback cb, void *udata, int interval) 
-    { return m_wrappedAgent->setCallback(cb, udata, interval);}
+    virtual void setTimeout(int seconds) { m_wrappedAgent->setTimeout(seconds); }
 };
 
 /** assert equality, include string in message if unequal */

@@ -30,6 +30,7 @@
 
 #include <boost/scoped_array.hpp>
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -42,6 +43,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <math.h>
 
 #if USE_SHA256 == 1
 # include <glib.h>
@@ -117,9 +119,10 @@ void splitPath(const string &path, string &dir, string &file)
 
 bool relToAbs(string &path)
 {
-    char buffer[PATH_MAX+1];
-    if (realpath(path.c_str(), buffer)) {
+    char *buffer;
+    if ((buffer = realpath(path.c_str(), NULL)) != NULL) {
         path = buffer;
+	free(buffer);
         return true;
     } else {
         return false; 
@@ -459,6 +462,159 @@ std::string SHA_256(const std::string &data)
 #endif
 }
 
+StringEscape::StringEscape(char escapeChar, const char *forbidden) :
+    m_escapeChar(escapeChar)
+{
+    while (*forbidden) {
+        m_forbidden.insert(*forbidden);
+        ++forbidden;
+    }
+}
+
+string StringEscape::escape(const string &str) const
+{
+    if (m_mode != SET) {
+        return escape(str, m_escapeChar, m_mode);
+    }
+
+    string res;
+    char buffer[4];
+
+    res.reserve(str.size() * 3);
+    BOOST_FOREACH(char c, str) {
+        if(c != m_escapeChar &&
+           m_forbidden.find(c) == m_forbidden.end()) {
+            res += c;
+        } else {
+            sprintf(buffer, "%c%02x",
+                    m_escapeChar,
+                    (unsigned int)(unsigned char)c);
+            res += buffer;
+        }
+    }
+    return res;
+}
+
+string StringEscape::escape(const string &str, char escapeChar, Mode mode)
+{
+    string res;
+    char buffer[4];
+    bool isLeadingSpace = true;
+    res.reserve(str.size() * 3);
+
+    BOOST_FOREACH(char c, str) {
+        if(c != escapeChar &&
+           (mode == STRICT ?
+            (isalnum(c) ||
+             c == '-' ||
+             c == '_') :
+            !(((isLeadingSpace || mode == INI_WORD) && isspace(c)) ||
+              c == '=' ||
+              c == '\r' ||
+              c == '\n'))) {
+            res += c;
+            if (!isspace(c)) {
+                isLeadingSpace = false;
+            }
+        } else {
+            sprintf(buffer, "%c%02x",
+                    escapeChar,
+                    (unsigned int)(unsigned char)c);
+            res += buffer;
+        }
+    }
+
+    // also encode trailing space?
+    if (mode == INI_VALUE) {
+        size_t numspaces = 0;
+        ssize_t off = res.size() - 1;
+        while (off >= 0 && isspace(res[off])) {
+            off--;
+            numspaces++;
+        }
+        res.resize(res.size() - numspaces);
+        BOOST_FOREACH(char c, str.substr(str.size() - numspaces)) {
+            sprintf(buffer, "%c%02x",
+                    escapeChar,
+                    (unsigned int)(unsigned char)c);
+            res += buffer;
+        }
+    }
+
+    return res;
+}
+
+string StringEscape::unescape(const string &str, char escapeChar)
+{
+    string res;
+    size_t curr;
+
+    res.reserve(str.size());
+
+    curr = 0;
+    while (curr < str.size()) {
+        if (str[curr] == escapeChar) {
+            string hex = str.substr(curr + 1, 2);
+            res += (char)strtol(hex.c_str(), NULL, 16);
+            curr += 3;
+        } else {
+            res += str[curr];
+            curr++;
+        }
+    }
+
+    return res;
+}
+
+#ifdef ENABLE_UNIT_TESTS
+
+class StringEscapeTest : public CppUnit::TestFixture {
+    CPPUNIT_TEST_SUITE(StringEscapeTest);
+    CPPUNIT_TEST(escape);
+    CPPUNIT_TEST(unescape);
+    CPPUNIT_TEST_SUITE_END();
+
+    void escape() {
+        const string test = " _-%\rfoo bar?! \n ";
+
+        StringEscape def;
+        CPPUNIT_ASSERT_EQUAL(string("%20_-%25%0dfoo%20bar%3f%21%20%0a%20"), def.escape(test));
+        CPPUNIT_ASSERT_EQUAL(string("%20_-%25%0dfoo%20bar%3f%21%20%0a%20"),
+                             StringEscape::escape(test, '%', StringEscape::STRICT));
+
+        StringEscape word('%', StringEscape::INI_WORD);
+        CPPUNIT_ASSERT_EQUAL(string("%20_-%25%0dfoo%20bar?!%20%0a%20"), word.escape(test));
+        CPPUNIT_ASSERT_EQUAL(string("%20_-%25%0dfoo%20bar?!%20%0a%20"),
+                             StringEscape::escape(test, '%', StringEscape::INI_WORD));
+
+        StringEscape ini('%', StringEscape::INI_VALUE);
+        CPPUNIT_ASSERT_EQUAL(string("%20_-%25%0dfoo bar?! %0a%20"), ini.escape(test));
+        CPPUNIT_ASSERT_EQUAL(string("%20_-%25%0dfoo bar?! %0a%20"),
+                             StringEscape::escape(test, '%', StringEscape::INI_VALUE));
+
+        StringEscape alt('!', StringEscape::INI_VALUE);
+        CPPUNIT_ASSERT_EQUAL(string("!20_-%!0dfoo bar?!21 !0a!20"), alt.escape(test));
+        CPPUNIT_ASSERT_EQUAL(string("!20_-%!0dfoo bar?!21 !0a!20"),
+                             StringEscape::escape(test, '!', StringEscape::INI_VALUE));
+    }
+
+    void unescape() {
+        const string escaped = "%20_-%25foo%20bar%3F%21%20%0A";
+        const string plain = " _-%foo bar?! \n";
+
+        StringEscape def;
+        CPPUNIT_ASSERT_EQUAL(plain, def.unescape(escaped));
+        CPPUNIT_ASSERT_EQUAL(plain, StringEscape::unescape(escaped, '%'));
+
+        CPPUNIT_ASSERT_EQUAL(string("%41B"), StringEscape::unescape("%41!42", '!'));
+        CPPUNIT_ASSERT_EQUAL(string("A!42"), StringEscape::unescape("%41!42", '%'));
+    }
+};
+
+SYNCEVOLUTION_TEST_SUITE_REGISTRATION(StringEscapeTest);
+
+#endif // ENABLE_UNIT_TESTS
+
 
 std::string StringPrintf(const char *format, ...)
 {
@@ -505,35 +661,61 @@ std::string StringPrintfV(const char *format, va_list ap)
     return res;
 }
 
-SyncMLStatus Exception::handle(SyncMLStatus *status, Logger *logger)
+char *Strncpy(char *dest, const char *src, size_t n)
+{
+    strncpy(dest, src, n);
+    if (n) {
+        dest[n - 1] = 0;
+    }
+    return dest;
+}
+
+void Sleep(double seconds)
+{
+    timeval delay;
+    delay.tv_sec = floor(seconds);
+    delay.tv_usec = (seconds - (double)delay.tv_sec) * 1e6;
+    select(0, NULL, NULL, NULL, &delay);
+}
+
+
+SyncMLStatus Exception::handle(SyncMLStatus *status, Logger *logger, std::string *explanation, Logger::Level level)
 {
     // any problem here is a fatal local problem, unless set otherwise
     // by the specific exception
     SyncMLStatus new_status = SyncMLStatus(STATUS_FATAL + sysync::LOCAL_STATUS_CODE);
+    std::string error;
 
     try {
         throw;
     } catch (const TransportException &ex) {
         SE_LOG_DEBUG(logger, NULL, "TransportException thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
-        SE_LOG_ERROR(logger, NULL, "%s", ex.what());
+        error = ex.what();
         new_status = SyncMLStatus(sysync::LOCERR_TRANSPFAIL);
     } catch (const BadSynthesisResult &ex) {
         new_status = SyncMLStatus(ex.result());
-        SE_LOG_DEBUG(logger, NULL, "error code from Synthesis engine %s",
-                     Status2String(new_status).c_str());
+        error = StringPrintf("error code from Synthesis engine %s",
+                             Status2String(new_status).c_str());
     } catch (const StatusException &ex) {
         new_status = ex.syncMLStatus();
-        SE_LOG_DEBUG(logger, NULL, "error code from SyncEvolution %s and exception thrown at %s:%d",
-                     Status2String(new_status).c_str(), ex.m_file.c_str(), ex.m_line);
+        SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
+                     ex.m_file.c_str(), ex.m_line);
+        error = StringPrintf("error code from SyncEvolution %s: %s",
+                             Status2String(new_status).c_str(), ex.what());
     } catch (const Exception &ex) {
         SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
-        SE_LOG_ERROR(logger, NULL, "%s", ex.what());
+        error = ex.what();
     } catch (const std::exception &ex) {
-        SE_LOG_ERROR(logger, NULL, "%s", ex.what());
+        error = ex.what();
     } catch (...) {
-        SE_LOG_ERROR(logger, NULL, "unknown error");
+        error = "unknown error";
+    }
+    SE_LOG(level, logger, NULL, "%s", error.c_str());
+
+    if (explanation) {
+        *explanation = error;
     }
 
     if (status && *status == STATUS_OK) {
@@ -610,6 +792,19 @@ std::vector<std::string> unescapeJoinedString (const std::string& src, char sep)
         }
     }
     return splitStrings;
+}
+
+std::string Flags2String(int flags, const Flag *descr, const std::string &sep)
+{
+    std::list<std::string> tmp;
+
+    while (descr->m_flag) {
+        if (flags & descr->m_flag) {
+            tmp.push_back(descr->m_description);
+        }
+        ++descr;
+    }
+    return boost::join(tmp, ", ");
 }
 
 ScopedEnvChange::ScopedEnvChange(const string &var, const string &value) :
