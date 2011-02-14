@@ -60,7 +60,7 @@
           <value index="3" field="ORG_TEAM"/>
         </property>
         <property name="X-KADDRESSBOOK-X-Office">
-          <value field="ORG_OFFICE">
+          <value field="ORG_OFFICE"/>
         </property>
 
         <property name="ROLE">
@@ -169,7 +169,7 @@
           <value field="MANAGER" show="yes"/>
         </property>
         <property name="X-MANAGER" suppressempty="yes" rule="EVOLUTION"/> <!-- disables the X-MANAGER for EVOLUTION -->
-        <property name="X-MANAGER" suppressempty="yes" rule="KDE">
+        <property name="X-MANAGER" suppressempty="yes" rule="KDE"/>
         <property name="X-MANAGER" suppressempty="yes" rule="other">
           <value field="MANAGER" show="yes"/>
         </property>

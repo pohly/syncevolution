@@ -83,10 +83,10 @@ public:
     {
     }
 
-    virtual const char *getMimeType() const {
+    virtual std::string getMimeType() const {
         return "text/vcard";
     }
-    virtual const char *getMimeVersion() const {
+    virtual std::string getMimeVersion() const {
         return "3.0";
     }
 
@@ -120,8 +120,8 @@ public:
     // TODO: the items are expected to be complete VCALENDAR with
     // all necessary VTIMEZONEs and one VEVENT (here) resp. VTODO
     // (AkonadiTodoSource). Not sure what we get from Akonadi.
-    virtual const char *getMimeType() const { return "text/calendar"; }
-    virtual const char *getMimeVersion() const { return "2.0"; }
+    virtual std::string getMimeType() const { return "text/calendar"; }
+    virtual std::string getMimeVersion() const { return "2.0"; }
 };
 
 class AkonadiTaskSource : public AkonadiSyncSource
@@ -132,8 +132,8 @@ public:
     {
     }
 
-    virtual const char *getMimeType() const { return "text/calendar"; }
-    virtual const char *getMimeVersion() const { return "2.0"; }
+    virtual std::string getMimeType() const { return "text/calendar"; }
+    virtual std::string getMimeVersion() const { return "2.0"; }
 };
 
 class AkonadiMemoSource : public AkonadiSyncSource
@@ -149,8 +149,8 @@ public:
     // the AkonadiSyncSource will use VJOURNAL
     // Also Currently there is no application which uses akonadi backend
     // to display notes: probably work for knote??
-    virtual const char *getMimeType() const { return "text/plain"; }
-    virtual const char *getMimeVersion() const { return "1.0"; }
+    virtual std::string getMimeType() const { return "text/plain"; }
+    virtual std::string getMimeVersion() const { return "1.0"; }
 };
 
 SE_END_CXX
