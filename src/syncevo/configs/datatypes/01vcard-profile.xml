@@ -59,14 +59,14 @@
           <value index="2" field="ORG_OFFICE"/>
           <value index="3" field="ORG_TEAM"/>
         </property>
-        <property name="X-KADDRESSBOOK-X-Office">
+        <property name="X-KADDRESSBOOK-X-Office" delayedparsing="1">
           <value field="ORG_OFFICE"/>
         </property>
 
         <property name="ROLE">
           <value field="ROLE"/>
         </property>
-        <property name="X-KADDRESSBOOK-X-Profession">
+        <property name="X-KADDRESSBOOK-X-Profession" delayedpasing="1">
           <value field="ROLE"/>
         </property>
 
@@ -139,13 +139,14 @@
         <property name="FBURL" suppressempty="yes">
           <value field="FBURL" show="yes"/>
         </property>
-        <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes">
+        <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="KDE">
+        <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="other">
           <value field="BLOGURL" show="yes"/>
         </property>
         <property name="X-EVOLUTION-VIDEO-URL" suppressempty="yes">
           <value field="VIDEOURL" show="yes"/>
         </property>
-        <property name="X-KADDRESSBOOK-BlogFeed" suppressempty="yes">
+        <property name="X-KADDRESSBOOK-BlogFeed" suppressempty="yes" delayedparsing="1">
           <value field="BLOGURL" show="yes"/>
         </property>
 
@@ -165,11 +166,12 @@
         <property name="X-KADDRESSBOOK-X-ManagersName" suppressempty="yes" delayedparsing="1">
           <value field="MANAGER" show="yes"/>
         </property>
-        <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1">
+        <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1" rule="KDE"/>
+        <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1" rule="other">
           <value field="MANAGER" show="yes"/>
         </property>
         <property name="X-MANAGER" suppressempty="yes" rule="EVOLUTION"/> <!-- disables the X-MANAGER for EVOLUTION -->
-        <property name="X-MANAGER" suppressempty="yes" rule="KDE"/>
+        <property name="X-MANAGER" suppressempty="yes" rule="KDE"/> <!-- disables the X-MANAGER for Akonadi -->
         <property name="X-MANAGER" suppressempty="yes" rule="other">
           <value field="MANAGER" show="yes"/>
         </property>
@@ -177,7 +179,8 @@
         <property name="X-KADDRESSBOOK-X-AssistantsName" suppressempty="yes" delayedparsing="1">
           <value field="ASSISTANT" show="yes"/>
         </property>
-        <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1">
+        <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1" rule="KDE"/>
+        <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1" rule="other">
           <value field="ASSISTANT" show="yes"/>
         </property>
         <property name="X-ASSISTANT" suppressempty="yes" rule="EVOLUTION"/>
@@ -189,7 +192,8 @@
         <property name="X-KADDRESSBOOK-X-SpouseName" suppressempty="yes" delayedparsing="1">
           <value field="SPOUSE" show="yes"/>
         </property>
-        <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1">
+        <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="KDE"/>
+        <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="other">
           <value field="SPOUSE" show="yes"/>
         </property>
         <property name="X-SPOUSE" suppressempty="yes" rule="EVOLUTION"/>
@@ -201,7 +205,8 @@
         <property name="X-KADDRESSBOOK-X-Anniversary" suppressempty="yes" delayedparsing="1">
           <value field="ANNIVERSARY" show="yes"/>
         </property>
-        <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1">
+        <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1" rule="KDE"/>
+        <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1" rule="other">
           <value field="ANNIVERSARY" show="yes"/>
         </property>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="EVOLUTION"/>

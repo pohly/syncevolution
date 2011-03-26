@@ -140,7 +140,7 @@ class AkonadiMemoSource : public AkonadiSyncSource
 {
 public:
     AkonadiMemoSource(const SyncSourceParams &params)
-        : AkonadiSyncSource("text/x-vnd.akonadi.calendar.journal", params)
+        : AkonadiSyncSource("text/x-vnd.akonadi.note", params)
     {
     }
 
