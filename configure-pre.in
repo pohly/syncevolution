@@ -429,7 +429,7 @@ fi
 
 KDEKWALLETFOUND=yes
 if ! test "$KDE_KWALLET_CFLAGS"; then
-    KDE_KWALLET_CFLAGS="-I/usr/include/KDE -I/usr/include/qt4"
+    KDE_KWALLET_CFLAGS="-I`kde4-config --path include` -I`kde4-config --path include`/KDE -I`qmake -query QT_INSTALL_HEADERS`"
 fi
 if ! test "$KDE_KWALLET_LIBS"; then
     KDE_KWALLET_LIBS="-lkdeui -lkdecore"

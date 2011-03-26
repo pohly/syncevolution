@@ -139,7 +139,7 @@
         <property name="FBURL" suppressempty="yes">
           <value field="FBURL" show="yes"/>
         </property>
-        <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="KDE">
+        <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="KDE"/>
         <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="other">
           <value field="BLOGURL" show="yes"/>
         </property>
