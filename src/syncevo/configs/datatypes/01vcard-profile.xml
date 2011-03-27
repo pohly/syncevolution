@@ -189,7 +189,7 @@
           <value field="ASSISTANT" show="yes"/>
         </property>
 
-        <property name="X-KADDRESSBOOK-X-SpouseName" suppressempty="yes" delayedparsing="1">
+        <property name="X-KADDRESSBOOK-X-SpousesName" suppressempty="yes" delayedparsing="1">
           <value field="SPOUSE" show="yes"/>
         </property>
         <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="KDE"/>
@@ -222,50 +222,88 @@
         <property name="X-KADDRESSBOOK-X-IMAddress" suppressempty="yes">
           <value field="IM_ADDRESS" show="yes"/>
         </property>
-        <property name="X-AIM" suppressempty="yes">
+        <property name="X-messaging/aim-All" suppressempty="yes" delayedparsing="1">
+          <value field="AIM_HANDLE"/>
+        </property>
+        <property name="X-AIM" suppressempty="yes" rule="KDE"/>
+        <property name="X-AIM" suppressempty="yes" rule="other">
           <value field="AIM_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="AIM_SLOT"/>
           </parameter>
         </property>
-        <property name="X-GADUGADU" suppressempty="yes">
+        
+        <property name="X-messaging/gadu-All" suppressempty="yes" delayedparsing="1">
+          <value field="GADUGADU_HANDLE"/>
+        </property>
+        <property name="X-GADUGADU" suppressempty="yes" rule="KDE"/>
+        <property name="X-GADUGADU" suppressempty="yes" rule="other">
           <value field="GADUGADU_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="GADUGADU_SLOT"/>
           </parameter>
         </property>
-        <property name="X-GROUPWISE" suppressempty="yes">
+        
+        <property name="X-messaging/groupwise-All" suppressempty="yes" delayedparsing="1">
+          <value field="GROUPWISE_HANDLE"/>
+        </property>
+        <property name="X-GROUPWISE" suppressempty="yes" rule="KDE"/>
+        <property name="X-GROUPWISE" suppressempty="yes" rule="other">
           <value field="GROUPWISE_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="GROUPWISE_SLOT"/>
           </parameter>
         </property>
-        <property name="X-ICQ" suppressempty="yes">
+        
+        <property name="X-messaging/icq-All" suppressempty="yes" delayedparsing="1">
+          <value field="ICQ_HANDLE"/>
+        </property>
+        <property name="X-ICQ" suppressempty="yes" rule="KDE"/>
+        <property name="X-ICQ" suppressempty="yes" rule="other">
           <value field="ICQ_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="ICQ_SLOT"/>
           </parameter>
         </property>
-        <property name="X-JABBER" suppressempty="yes">
+        
+        <property name="X-messaging/xmpp-All" suppressempty="yes" delayedparsing="1">
+          <value field="JABBER_HANDLE"/>
+        </property>
+        <property name="X-JABBER" suppressempty="yes" rule="KDE"/>        
+        <property name="X-JABBER" suppressempty="yes" rule="other">
           <value field="JABBER_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no">
             <value field="JABBER_SLOT"/>
           </parameter>
         </property>
-        <property name="X-MSN" suppressempty="yes">
+
+        <property name="X-messaging/msn-All" suppressempty="yes" delayedparsing="1">
+          <value field="MSN_HANDLE"/>
+        </property>
+        <property name="X-MSN" suppressempty="yes" rule="KDE"/>
+        <property name="X-MSN" suppressempty="yes" rule="other">
           <value field="MSN_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="MSN_SLOT"/>
           </parameter>
         </property>
-        <property name="X-YAHOO" suppressempty="yes">
+        
+        <property name="X-messaging/yahoo-All" suppressempty="yes" delayedparsing="1">
+          <value field="YAHOO_HANDLE"/>
+        </property>
+        <property name="X-YAHOO" suppressempty="yes" rule="KDE"/>        
+        <property name="X-YAHOO" suppressempty="yes" rule="other">
           <value field="YAHOO_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="YAHOO_SLOT"/>
           </parameter>
         </property>
 
-        <property name="X-SKYPE" suppressempty="yes"> 
+        <property name="X-messaging/skype-All" suppressempty="yes" delayedparsing="1">
+          <value field="SKYPE_HANDLE"/>
+        </property>
+        <property name="X-SKYPE" suppressempty="yes" rule="KDE"/>
+        <property name="X-SKYPE" suppressempty="yes" rule="other"> 
           <value field="SKYPE_HANDLE"/>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="SKYPE_SLOT"/>
@@ -278,6 +316,17 @@
             <value field="SIP_SLOT"/>
           </parameter>
         </property>
+
+        <property name="X-messaging/irc-All" suppressempty="yes">
+          <value field="IRC_HANDLE"/>
+        </property>
+        <property name="X-messaging/meanwhile-All" suppressempty="yes">
+          <value field="MEANWHILE_HANDLE"/>
+        </property>
+        <property name="X-messaging/sms-All" suppressempty="yes">
+          <value field="SMS_HANDLE"/>
+        </property>
+
 
         <property name="ADR" values="7">
           <value index="0" field="ADR_POBOX"/>
@@ -319,6 +368,20 @@
               <enum name="JPEG" value="0"/>
             </value>
           </parameter>
+        </property>
+
+
+        <property name="X-KADDRESSBOOK-CRYPTOENCRYPTPREF" suppressempty="yes">
+          <value field="CRYPTOENCRYPTPREF" show="yes"/>
+        </property>
+        <property name="X-KADDRESSBOOK-CRYPTOPROTOPREF" suppressempty="yes">
+          <value field="CRYPTOPROTOPREF" show="yes"/>
+        </property>
+        <property name="X-KADDRESSBOOK-CRYPTOSIGNPREF" suppressempty="yes">
+          <value field="CRYPTOSIGNPREF" show="yes"/>
+        </property>
+        <property name="X-KADDRESSBOOK-OPENPGPFP" suppressempty="yes">
+          <value field="OPENPGPFP" show="yes"/>
         </property>
 
       </profile>
