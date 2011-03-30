@@ -256,5 +256,101 @@ void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, boo
     }
 }
 
+QString AkonadiMemoSource::toKJots(QString data){
+  // KJots stores it's resource in the format
+  //Subject: Hello World
+  //Content-Type: text/plain <------- always plain text for the akonadi resource
+  //Date: Wed, 30 Mar 2011 01:02:48 +0530 <----date created
+  //MIME-Version: 1.0 <----- always the same
+  // <---- This line break seperates the content from the information
+  //<Content>
+
+  QString subject = "Subject: ";
+  QString contentType = "Content-Type: text/plain";
+  QString dateTime = QDateTime::currentDateTime().toString(Qt::ISODate);
+  QString mimeVersion = "MIME-Version: 1.0";
+  QString content;
+  
+  QStringList lines = data.split('\n');
+  subject += lines.first();
+  content = data.remove(0,data.indexOf('\n')+1);
+  
+  QString result = subject + '\n' +
+                   contentType + '\n' +
+                   dateTime + '\n'+
+                   mimeVersion + "\n\n"+
+                   content;
+  return result;
+}
+
+QString AkonadiMemoSource::toSynthesis(QString data){
+    //Synthesis expects Plain Text in the form Subject + "\n" + Content
+    QString subject;
+    QString content;
+  
+    subject = data.split('\n').first();
+    subject.remove("Subject: ");
+    
+    content = data.remove(0,data.indexOf("\n\n")+2);
+    return subject+'\n'+content;
+}
+
+void AkonadiMemoSource::readItem(const std::string &luid, std::string &data, bool raw)
+{
+    Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
+
+    ItemFetchJob *fetchJob = new ItemFetchJob(Item(syncItemId));
+    fetchJob->fetchScope().fetchFullPayload();
+    if (fetchJob->exec()) {
+        QByteArray payload = fetchJob->items().first().payloadData();
+        QString formattedData = toSynthesis(payload);
+        data = formattedData.toStdString();        
+    } else {
+        throwError(string("extracting item " ) + luid);
+    }
+}
+
+TrackingSyncSource::InsertItemResult AkonadiMemoSource::insertItem(const std::string &luid, const std::string &data, bool raw)
+{
+    Item item;
+    std::string formattedData = toKJots(QString::fromStdString(data)).toStdString();
+
+    if (luid.empty()) {
+        item.setMimeType(m_subMime.c_str());
+        item.setPayloadFromData(QByteArray(formattedData.c_str()));
+        ItemCreateJob *createJob = new ItemCreateJob(item, m_collection);
+        if (!createJob->exec()) {
+            throwError(string("storing new item ") + luid);
+            return InsertItemResult("", "", false);
+        }
+        item = createJob->item();
+    } else {
+        Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
+        ItemFetchJob *fetchJob = new ItemFetchJob(Item(syncItemId));
+        if (!fetchJob->exec()) {
+            throwError(string("checking item ") + luid);
+        }
+        item = fetchJob->items().first();
+        item.setPayloadFromData(QByteArray(formattedData.c_str()));
+        ItemModifyJob *modifyJob = new ItemModifyJob(item);
+        // TODO: SyncEvolution must pass the known revision that
+        // we are updating.
+        // TODO: check that the item has not been updated in the meantime
+        qDebug() << "In ItemModifyJob for item: " << luid.c_str();
+        if (!modifyJob->exec()) {
+            throwError(string("updating item ") + luid);
+            return InsertItemResult("", "", false);
+        }
+        item = modifyJob->item();
+    }
+
+    // Read-only datastores may not have actually added something here!
+    // The Jobs themselves throw errors, and hence the return statements
+    // above will take care of this
+    return InsertItemResult(QByteArray::number(item.id()).constData(),
+                            QByteArray::number(item.revision()).constData(),
+                            false);
+}
+
 SE_END_CXX
 #endif // ENABLE_AKONADI
