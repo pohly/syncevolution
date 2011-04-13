@@ -1689,7 +1689,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         switch (extra1) {
         case 401:
             // TODO: reset cached password
-            SE_LOG_INFO(NULL, NULL, "authorization failed, check username '%s' and password", getUsername().c_str());
+            SE_LOG_INFO(NULL, NULL, "authorization failed, check username '%s' and password", getSyncUsername().c_str());
             break;
         case 403:
             SE_LOG_INFO(&source, NULL, "log in succeeded, but server refuses access - contact server operator");
@@ -2580,8 +2580,8 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     substTag(xml, "maxmsgsize", std::max(getMaxMsgSize(), 10000ul));
     substTag(xml, "maxobjsize", std::max(getMaxObjSize(), 1024u));
     if (m_serverMode) {
-        const string user = getUsername();
-        const string password = getPassword();
+        const string user = getSyncUsername();
+        const string password = getSyncPassword();
 
         /*
          * Do not check username/pwd if this local sync or over
@@ -2761,7 +2761,8 @@ void SyncContext::initMain(const char *appname)
         // because we don't call it directly and might not even be linked against
         // it. Therefore check for the relevant symbols via dlsym().
         void (*set_log_level)(int);
-        void (*set_log_function)(void (*func)(int level, const char *str));
+        typedef void (*LogFunc_t)(int level, const char *str);
+        void (*set_log_function)(LogFunc_t func);
         
         set_log_level = (typeof(set_log_level))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_level");
         set_log_function = (typeof(set_log_function))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_function");
@@ -2852,7 +2853,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
 
         try {
             // dump some summary information at the beginning of the log
-            SE_LOG_DEV(NULL, NULL, "SyncML server account: %s", getUsername().c_str());
+            SE_LOG_DEV(NULL, NULL, "SyncML server account: %s", getSyncUsername().c_str());
             SE_LOG_DEV(NULL, NULL, "client: SyncEvolution %s for %s", getSwv().c_str(), getDevType().c_str());
             SE_LOG_DEV(NULL, NULL, "device ID: %s", getDevID().c_str());
             SE_LOG_DEV(NULL, NULL, "%s", EDSAbiWrapperDebug());
@@ -2992,7 +2993,7 @@ bool SyncContext::sendSAN(uint16_t version)
     bool legacy = version < 12;
     /* Should be nonce sent by the server in the preceeding sync session */
     string nonce = "SyncEvolution";
-    string uauthb64 = san.B64_H (getUsername(), getPassword());
+    string uauthb64 = san.B64_H (getSyncUsername(), getSyncPassword());
     /* Client is expected to conduct the sync in the backgroud */
     sysync::UI_Mode mode = sysync::UI_not_specified;
 
@@ -3244,8 +3245,8 @@ SyncMLStatus SyncContext::doSync()
         }
          
         m_engine.SetStrValue(profile, "serverURI", getUsedSyncURL());
-        m_engine.SetStrValue(profile, "serverUser", getUsername());
-        m_engine.SetStrValue(profile, "serverPassword", getPassword());
+        m_engine.SetStrValue(profile, "serverUser", getSyncUsername());
+        m_engine.SetStrValue(profile, "serverPassword", getSyncPassword());
         m_engine.SetInt32Value(profile, "encoding",
                                getWBXML() ? 1 /* WBXML */ : 2 /* XML */);
 
@@ -3492,6 +3493,11 @@ SyncMLStatus SyncContext::doSync()
                                             progressInfo.extra1,
                                             progressInfo.extra2,
                                             progressInfo.extra3);
+                        if (progressInfo.eventtype == sysync::PEV_SESSIONEND &&
+                            !status) {
+                            // remember sync result
+                            status = SyncMLStatus(progressInfo.extra1);
+                        }
                         break;
                     default: {
                         // specific for a certain sync source:
@@ -3562,6 +3568,10 @@ SyncMLStatus SyncContext::doSync()
                 break;
             }
             case sysync::STEPCMD_NEEDDATA:
+                if (!sendStart) {
+                    // no message sent yet, record start of wait for data
+                    sendStart = time(NULL);
+                }
                 switch (m_agent->wait()) {
                 case TransportAgent::ACTIVE:
                     // Still sending the data?! Don't change anything,
@@ -3625,6 +3635,18 @@ SyncMLStatus SyncContext::doSync()
                  * message sending interval equals m_retryInterval.
                  */
                 case TransportAgent::FAILED: {
+                    // Send might have failed because of abort or
+                    // suspend request.
+                    if (checkForSuspend()) {
+                        SE_LOG_DEBUG(NULL, NULL, "suspending after TransportAgent::FAILED as requested by user");
+                        stepCmd = sysync::STEPCMD_SUSPEND;
+                        break;
+                    } else if (checkForAbort()) {
+                        SE_LOG_DEBUG(NULL, NULL, "aborting after TransportAgent::FAILED as requested by user");
+                        stepCmd = sysync::STEPCMD_ABORT;
+                        break;
+                    }
+
                     time_t curTime = time(NULL);
                     time_t duration = curTime - sendStart;
                     // same if() as above for TIME_OUT
@@ -3637,18 +3659,6 @@ SyncMLStatus SyncContext::doSync()
                                     (long)(duration % 60));
                         SE_THROW_EXCEPTION(TransportException, "transport failed, retry period exceeded");
                     } else {
-                        // Send might have failed because of abort or
-                        // suspend request.
-                        if (checkForSuspend()) {
-                            SE_LOG_DEBUG(NULL, NULL, "suspending after TransportAgent::FAILED as requested by user");
-                            stepCmd = sysync::STEPCMD_SUSPEND;
-                            break;
-                        } else if (checkForAbort()) {
-                            SE_LOG_DEBUG(NULL, NULL, "aborting after TransportAgent::FAILED as requested by user");
-                            stepCmd = sysync::STEPCMD_ABORT;
-                            break;
-                        }
-
                         // retry send
                         int leftTime = m_retryInterval - (curTime - resendStart);
                         if (leftTime >0 ) {
@@ -4070,7 +4080,7 @@ public:
 private:
 
     string getLogData() { return "LogDirTest/data"; }
-    virtual const char *getLogDir() { return "LogDirTest/cache/syncevolution"; }
+    virtual std::string getLogDir() const { return "LogDirTest/cache/syncevolution"; }
     int m_maxLogDirs;
 
     ostringstream m_out;

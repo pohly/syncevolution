@@ -100,7 +100,7 @@ PropertySpecifier PropertySpecifier::StringToPropSpec(const std::string &spec, i
             res.m_config = spec.substr(at);
         }
         if (flags & NORMALIZE_CONFIG) {
-            res.m_config = SyncConfig::normalizeConfigString(res.m_config, false);
+            res.m_config = SyncConfig::normalizeConfigString(res.m_config, SyncConfig::NORMALIZE_LONG_FORMAT);
         }
     } else {
         at = spec.size();
@@ -172,7 +172,7 @@ void ConfigProperty::throwValueError(const ConfigNode &node, const string &name,
     SyncContext::throwError(node.getName() + ": " + name + " = " + value + ": " + error);
 }
 
-string SyncConfig::normalizeConfigString(const string &config, bool noDefaultContext)
+string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags flags)
 {
     string normal = config;
     boost::to_lower(normal);
@@ -185,14 +185,15 @@ string SyncConfig::normalizeConfigString(const string &config, bool noDefaultCon
         }
     }
     if (boost::ends_with(normal, "@default")) {
-        if (noDefaultContext) {
+        if (flags & NORMALIZE_SHORTHAND) {
             normal.resize(normal.size() - strlen("@default"));
         }
     } else if (boost::ends_with(normal, "@")) {
         normal.resize(normal.size() - 1);
     } else {
         size_t at = normal.rfind('@');
-        if (at == normal.npos) {
+        if (at == normal.npos &&
+            !(flags & NORMALIZE_IS_NEW)) {
             // No explicit context. Pick the first server which matches
             // when ignoring their context. Peer list is sorted by name,
             // therefore shorter config names (= without context) are
@@ -207,7 +208,7 @@ string SyncConfig::normalizeConfigString(const string &config, bool noDefaultCon
                 }
             }
         }
-        if (!noDefaultContext && normal.find('@') == normal.npos) {
+        if (!(flags & NORMALIZE_SHORTHAND) && normal.find('@') == normal.npos) {
             // explicitly include @default context specifier
             normal += "@default";
         }
@@ -815,6 +816,11 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     config->setDefaults(false);
     config->setDevID(string("syncevolution-") + UUID());
 
+    // leave the rest empty for special "none" template
+    if (server == "none") {
+        return config;
+    }
+
     // create sync source configs and set non-default values
     config->setSourceDefaults("addressbook", false);
     config->setSourceDefaults("calendar", false);
@@ -947,6 +953,7 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
         config->setConsumerReady(true);
         source = config->getSyncSourceConfig("addressbook");
         source->setURI("con");
+        source->setSyncFormat("text/vcard"); // vCard 3.0 works better than vCard 2.1 (NICKNAME!)
         source = config->getSyncSourceConfig("calendar");
         source->setURI("cal");
         source = config->getSyncSourceConfig("todo");
@@ -1768,9 +1775,15 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
 #endif
 
         // obligatory sync properties
-        syncPropUsername.setObligatory(true);
-        syncPropPassword.setObligatory(true);
-        syncPropDevID.setObligatory(true);
+        //
+        // username/password used to be
+        // considered obligatory, but are not anymore because there are
+        // cases where they are not needed (local sync, Bluetooth)
+        // syncPropUsername.setObligatory(true);
+        // syncPropPassword.setObligatory(true);
+        //
+        // created if not given:
+        // syncPropDevID.setObligatory(true);
         syncPropSyncURL.setObligatory(true);
 
         // hidden sync properties
@@ -1803,15 +1816,15 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
     return registry;
 }
 
-std::string SyncConfig::getUsername() const { return syncPropUsername.getProperty(*getNode(syncPropUsername)); }
-void SyncConfig::setUsername(const string &value, bool temporarily) { syncPropUsername.setProperty(*getNode(syncPropUsername), value, temporarily); }
-std::string SyncConfig::getPassword() const {
+std::string SyncConfig::getSyncUsername() const { return syncPropUsername.getProperty(*getNode(syncPropUsername)); }
+void SyncConfig::setSyncUsername(const string &value, bool temporarily) { syncPropUsername.setProperty(*getNode(syncPropUsername), value, temporarily); }
+std::string SyncConfig::getSyncPassword() const {
     return syncPropPassword.getCachedProperty(*getNode(syncPropPassword), m_cachedPassword);
 }
-void SyncConfig::checkPassword(ConfigUserInterface &ui) {
+void SyncConfig::checkSyncPassword(ConfigUserInterface &ui) {
     syncPropPassword.checkPassword(ui, m_peer, *getProperties());
 }
-void SyncConfig::savePassword(ConfigUserInterface &ui) {
+void SyncConfig::saveSyncPassword(ConfigUserInterface &ui) {
     syncPropPassword.savePassword(ui, m_peer, *getProperties());
 }
 
@@ -1955,7 +1968,7 @@ ConfigPasswordKey ProxyPasswordConfigProperty::getPasswordKey(const string &desc
     return key;
 }
 
-void SyncConfig::setPassword(const string &value, bool temporarily) { m_cachedPassword = ""; syncPropPassword.setProperty(*getNode(syncPropPassword), value, temporarily); }
+void SyncConfig::setSyncPassword(const string &value, bool temporarily) { m_cachedPassword = ""; syncPropPassword.setProperty(*getNode(syncPropPassword), value, temporarily); }
 
 bool SyncConfig::getPreventSlowSync() const { return syncPropPreventSlowSync.getPropertyValue(*getNode(syncPropPreventSlowSync)); }
 void SyncConfig::setPreventSlowSync(bool value, bool temporarily) { syncPropPreventSlowSync.setProperty(*getNode(syncPropPreventSlowSync), value, temporarily); }
@@ -2160,6 +2173,18 @@ SyncConfig::getNode(const ConfigProperty &prop)
     }
     // should not be reached
     return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("unknown sharing state of property"))));
+}
+
+boost::shared_ptr<FilterConfigNode>
+SyncConfig::getNode(const std::string &propName)
+{
+    ConfigPropertyRegistry &registry = getRegistry();
+    const ConfigProperty *prop = registry.find(propName);
+    if (prop) {
+        return getNode(*prop);
+    } else {
+        return boost::shared_ptr<FilterConfigNode>();
+    }
 }
 
 static void setDefaultProps(const ConfigPropertyRegistry &registry,
@@ -3025,7 +3050,7 @@ private:
 
         // keep @default if explicitly requested
         CPPUNIT_ASSERT_EQUAL(std::string("foobar@default"),
-                             SyncConfig::normalizeConfigString("FooBar", false));
+                             SyncConfig::normalizeConfigString("FooBar", SyncConfig::NORMALIZE_LONG_FORMAT));
 
         // test config lookup
         SyncConfig foo_default("foo"), foo_other("foo@other"), bar("bar@other");
@@ -3037,16 +3062,16 @@ private:
         CPPUNIT_ASSERT_EQUAL(std::string("foo"),
                              SyncConfig::normalizeConfigString("foo@default"));
         CPPUNIT_ASSERT_EQUAL(std::string("foo@default"),
-                             SyncConfig::normalizeConfigString("foo", false));
+                             SyncConfig::normalizeConfigString("foo", SyncConfig::NORMALIZE_LONG_FORMAT));
         CPPUNIT_ASSERT_EQUAL(std::string("foo@default"),
-                             SyncConfig::normalizeConfigString("foo@default", false));
+                             SyncConfig::normalizeConfigString("foo@default", SyncConfig::NORMALIZE_LONG_FORMAT));
         CPPUNIT_ASSERT_EQUAL(std::string("foo@other"),
                              SyncConfig::normalizeConfigString("foo@other"));
         foo_default.remove();
         CPPUNIT_ASSERT_EQUAL(std::string("foo@other"),
                              SyncConfig::normalizeConfigString("foo"));
         CPPUNIT_ASSERT_EQUAL(std::string("foo@other"),
-                             SyncConfig::normalizeConfigString("foo", false));
+                             SyncConfig::normalizeConfigString("foo", SyncConfig::NORMALIZE_LONG_FORMAT));
     }
 
     void parseDuration()

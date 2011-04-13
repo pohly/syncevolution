@@ -139,14 +139,14 @@ template<class T> class InitList : public list<T> {
  public:
     InitList() {}
     InitList(const T &initialValue) {
-        push_back(initialValue);
+        list<T>::push_back(initialValue);
     }
     InitList &operator + (const T &rhs) {
-        push_back(rhs);
+        list<T>::push_back(rhs);
         return *this;
     }
     InitList &operator += (const T &rhs) {
-        push_back(rhs);
+        list<T>::push_back(rhs);
         return *this;
     }
 };
@@ -622,10 +622,14 @@ class ScalarConfigProperty : public TypedConfigProperty<T>
             error += endptr;
             return false;
         }
+        // comparison might be always true for some types
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wtautological-compare"
         if (val > Tmax || val < Tmin) {
             error = "range error";
             return false;
         }
+#pragma clang diagnostic pop
         if (Tmin == 0) {
             // check that we didn't accidentally accept a negative value,
             // strtoul() does that
@@ -1132,6 +1136,7 @@ class SyncConfig {
      *
      * @param peer   a configuration name, *without* a context (scheduleworld, not scheduleworld@default),
      * or a configuration path in the system directory which can avoid another fuzzy match process.
+     * "none" returns an empty template (default sync properties and dev ID set).
      * @return NULL if no such template
      */
     static boost::shared_ptr<SyncConfig> createPeerTemplate(const string &peer);
@@ -1206,19 +1211,28 @@ class SyncConfig {
      */
     static ConfigPropertyRegistry &getRegistry();
 
+    enum NormalizeFlags {
+        NORMALIZE_LONG_FORMAT = 0,  /**< include context in normal form */
+        NORMALIZE_SHORTHAND = 1,    /**< keep normal form shorter by not specifying @default */
+        NORMALIZE_IS_NEW = 2,       /**< does not refer to an existing config, do not search
+                                       for it among existing configs */
+        NORMALIZE_MAX = 0xFFFF
+    };
+
     /**
      * Normalize a config string:
      * - lower case
      * - non-printable and unsafe characters (colon, slash, backslash)
      *   replaced by underscore
-     * - when no context specified: search for peer config first in @default,
-     *   then also in other contexts in alphabetical order
-     * - @default stripped if requested (dangerous: result "foo" may incorrectly
-     *   be mapped to "foo@bar" if the "foo@default" config gets removed),
+     * - when no context specified and NORMALIZE_IS_NEW not set:
+     *   search for peer config first in @default, then also in other contexts
+     *   in alphabetical order
+     * - NORMALIZE_SHORTHAND set: @default stripped  (dangerous: result "foo"
+     *   may incorrectly be mapped to "foo@bar" if the "foo@default" config gets removed),
      *   otherwise added if missing
      * - empty string replaced with "@default"
      */
-    static string normalizeConfigString(const string &config, bool noDefaultContext = true);
+    static string normalizeConfigString(const string &config, NormalizeFlags flags = NORMALIZE_SHORTHAND);
 
     /**
      * Split a config string (normalized or not) into the peer part
@@ -1264,6 +1278,16 @@ class SyncConfig {
     boost::shared_ptr<const FilterConfigNode> getNode(const ConfigProperty &prop) const 
     {
         return const_cast<SyncConfig *>(this)->getNode(prop);
+    }
+
+    /**
+     * Returns the right config node for a certain registered property,
+     * looked up by name. NULL if not found.
+     */
+    boost::shared_ptr<FilterConfigNode> getNode(const std::string &propName);
+    boost::shared_ptr<const FilterConfigNode> getNode(const std::string &propName) const
+    {
+        return const_cast<SyncConfig *>(this)->getNode(propName);
     }
 
     /**
@@ -1434,18 +1458,18 @@ class SyncConfig {
      */
     /**@{*/
 
-    virtual std::string getUsername() const;
-    virtual void setUsername(const string &value, bool temporarily = false);
-    virtual std::string getPassword() const;
-    virtual void setPassword(const string &value, bool temporarily = false);
+    virtual std::string getSyncUsername() const;
+    virtual void setSyncUsername(const string &value, bool temporarily = false);
+    virtual std::string getSyncPassword() const;
+    virtual void setSyncPassword(const string &value, bool temporarily = false);
 
     /**
      * Look at the password setting and if it requires user interaction,
-     * get it from the user. Then store it for later usage in getPassword().
-     * Without this call, getPassword() returns the original, unmodified
+     * get it from the user. Then store it for later usage in getSyncPassword().
+     * Without this call, getSyncPassword() returns the original, unmodified
      * config string.
      */
-    virtual void checkPassword(ConfigUserInterface &ui);
+    virtual void checkSyncPassword(ConfigUserInterface &ui);
 
     /**
      * Look at the password setting and if it needs special mechanism to
@@ -1453,7 +1477,7 @@ class SyncConfig {
      * in the config tree.
      * @param ui the ui pointer
      */
-    virtual void savePassword(ConfigUserInterface &ui); 
+    virtual void saveSyncPassword(ConfigUserInterface &ui); 
 
     virtual bool getPreventSlowSync() const;
     virtual void setPreventSlowSync(bool value, bool temporarily = false);

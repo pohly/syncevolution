@@ -29,6 +29,8 @@ SYNCEVOLUTION_SOURCES  = \
         SmartPtr.h \
 	eds_abi_wrapper.h \
 	eds_abi_wrapper.cpp \
+	GLibSupport.h \
+	GLibSupport.cpp \
 	\
 	SyncML.h \
 	SyncML.cpp \
@@ -113,6 +115,13 @@ SYNCEVOLUTION_SOURCES  = \
 	TrackingSyncSource.h \
 	TrackingSyncSource.cpp
 
+if ENABLE_ICAL
+SYNCEVOLUTION_SOURCES += \
+	icalstrdup.c \
+	icalstrdup.h
+endif
+
+
 libsyncevolution_includedir= $(includedir)/syncevo
 libsyncevolution_include_HEADERS = \
 	declarations.h \
@@ -134,8 +143,11 @@ libsyncevolution_include_HEADERS = \
 								  Logging.h \
 								  SyncML.h \
 								  eds_abi_wrapper.h \
+								  icalstrdup.h \
 								  SmartPtr.h \
 								  ConfigNode.h 
+
+
 if ENABLE_OBEX 
 SYNCEVOLUTION_SOURCES += ObexTransportAgent.h ObexTransportAgent.cpp
 SYNCEVOLUTION_LDADD += $(LIBOPENOBEX_LIBS)

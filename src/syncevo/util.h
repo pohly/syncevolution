@@ -28,6 +28,7 @@
 #include <boost/function.hpp>
 
 #include <stdarg.h>
+#include <time.h>
 
 #include <vector>
 #include <sstream>
@@ -336,6 +337,46 @@ char *Strncpy(char *dest, const char *src, size_t n);
  */
 void Sleep(double seconds);
 
+
+/**
+ * Sub-second time stamps. Thin wrapper around timespec
+ * and clock_gettime() (for monotonic time). Comparisons
+ * assume normalized values (tv_nsec >= 0, < 1e9). Addition
+ * and substraction produce normalized values, as long
+ * as the result is positive. Substracting a - b where a < b
+ * leads to an undefined result.
+ */
+class Timespec : public timespec
+{
+ public:
+    Timespec() { tv_sec = 0; tv_nsec = 0; }
+    Timespec(time_t sec, long nsec) { tv_sec = sec; tv_nsec = nsec; }
+
+    bool operator < (const Timespec &other) const {
+        return tv_sec < other.tv_sec ||
+            (tv_sec == other.tv_sec && tv_nsec < other.tv_nsec);
+    }
+    bool operator > (const Timespec &other) const {
+        return tv_sec > other.tv_sec ||
+            (tv_sec == other.tv_sec && tv_nsec > other.tv_nsec);
+    }
+    bool operator <= (const Timespec &other) const { return !(*this > other); }
+    bool operator >= (const Timespec &other) const { return !(*this < other); }
+
+    operator bool () const { return tv_sec || tv_nsec; }
+
+    Timespec operator + (int seconds) const { return Timespec(tv_sec + seconds, tv_nsec); }
+    Timespec operator - (int seconds) const { return Timespec(tv_sec - seconds, tv_nsec); }
+    Timespec operator + (const Timespec &other) const;
+    Timespec operator - (const Timespec &other) const;
+
+    operator timeval () const { timeval res; res.tv_sec = tv_sec; res.tv_usec = tv_nsec / 1000; return res; }
+
+    static Timespec monotonic() { Timespec res; clock_gettime(CLOCK_MONOTONIC, &res); return res; }
+    static Timespec system() { Timespec res; clock_gettime(CLOCK_REALTIME, &res); return res; }
+};
+ 
+
 /**
  * an exception which records the source file and line
  * where it was thrown
@@ -473,6 +514,22 @@ std::string getCurrentTime();
 /** throw a class which accepts file, line, what parameters */
 #define SE_THROW_EXCEPTION(_class,  _what) \
     throw _class(__FILE__, __LINE__, _what)
+
+/** throw a class which accepts file, line, what plus 1 additional parameter */
+#define SE_THROW_EXCEPTION_1(_class,  _what, _x1)   \
+    throw _class(__FILE__, __LINE__, (_what), (_x1))
+
+/** throw a class which accepts file, line, what plus 2 additional parameters */
+#define SE_THROW_EXCEPTION_2(_class,  _what, _x1, _x2) \
+    throw _class(__FILE__, __LINE__, (_what), (_x1), (_x2))
+
+/** throw a class which accepts file, line, what plus 2 additional parameters */
+#define SE_THROW_EXCEPTION_3(_class,  _what, _x1, _x2, _x3) \
+    throw _class(__FILE__, __LINE__, (_what), (_x1), (_x2), (_x3))
+
+/** throw a class which accepts file, line, what plus 2 additional parameters */
+#define SE_THROW_EXCEPTION_4(_class,  _what, _x1, _x2, _x3, _x4) \
+    throw _class(__FILE__, __LINE__, (_what), (_x1), (_x2), (_x3), (_x4))
 
 /** throw a class which accepts file, line, what parameters and status parameters*/
 #define SE_THROW_EXCEPTION_STATUS(_class,  _what, _status) \

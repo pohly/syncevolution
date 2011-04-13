@@ -8,7 +8,7 @@ dnl Invoke autogen.sh to produce a configure script.
 #
 # Starting with the 1.1 release cycle, the rpm-style
 # .99 pseudo-version number is used to mark a pre-release.
-AC_INIT([syncevolution], [1.1.99.2])
+AC_INIT([syncevolution], [1.1.99.3])
 # STABLE_VERSION=1.0.1+
 AC_SUBST(STABLE_VERSION)
 
@@ -36,6 +36,7 @@ if test "$enable_release_mode" = "yes"; then
 fi
 
 AM_INIT_AUTOMAKE([tar-ustar])
+AM_MAINTAINER_MODE([enable]) # needed for nightly builds where reconfiguration fails under certain chroots
 AC_CONFIG_MACRO_DIR([m4])
 define([SYNTHESISSRC_REPO], [])
 dnl Specify git revisions/branches without prefix, i.e., without 'origin'.
@@ -679,7 +680,7 @@ elif test "$SYNTHESISSRC" != "none" && test -d $srcdir/src/synthesis; then
     esac
 elif test "$enable_shared" = "no"; then
     # link against engine
-    PKG_CHECK_MODULES(SYNTHESIS, "synthesis")
+    PKG_CHECK_MODULES(SYNTHESIS, "synthesis >= 3.4")
     SYNTHESIS_ENGINE="$SYNTHESIS_LIBS -lsynthesis"
 else
     # link against SDK alone, except in client-test
@@ -687,7 +688,7 @@ else
     #SYNTHESIS_ENGINE="`echo $SYNTHESIS_LIBS | sed -e 's/-lsynthesisstubs/-lsynthesis/'`"
 
     # can't use the SDK alone because of sysync::SySyncDebugPuts()
-    PKG_CHECK_MODULES(SYNTHESIS, "synthesis")
+    PKG_CHECK_MODULES(SYNTHESIS, "synthesis >= 3.4")
     SYNTHESIS_ENGINE="$SYNTHESIS_LIBS"
 fi
 

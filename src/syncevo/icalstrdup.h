@@ -20,6 +20,12 @@
 #ifndef ICALSTRDUP_H
 #define ICALSTRDUP_H
 
+#ifdef HAVE_CONFIG_H
+# include <config.h>
+#endif
+
+#ifdef ENABLE_ICAL
+
 #ifndef HANDLE_LIBICAL_MEMORY
 # define HANDLE_LIBICAL_MEMORY 1
 #endif
@@ -90,4 +96,5 @@ extern char *ical_strdup(const char *x);
 }
 #endif /* __cplusplus */
 
+#endif /* ENABLE_ICAL */
 #endif /* ICALSTRDUP_H */

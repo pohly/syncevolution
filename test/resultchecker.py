@@ -25,6 +25,9 @@ resultcheck.py: tranverse the test result directory, generate an XML
 based test report.
 """
 
+# sort more accurately on sub-second modification times
+os.stat_float_times(True)
+
 space="  "
 def check (resultdir, serverlist,resulturi, srcdir, shellprefix, backenddir):
     '''Entrypoint, resutldir is the test result directory to be generated,
@@ -157,7 +160,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
     runservers = os.listdir(resultdir)
     #list source test servers statically, we have no idea how to differenciate
     #automatically whether the server is a source test or sync test.
-    sourceServers = ['evolution', 'evolution-prebuilt-build']
+    sourceServers = ['evolution', 'evolution-prebuilt-build', 'yahoo', 'googlecalendar', 'apple']
     sourceServersRun = 0
     haveSource = False
     #Only process servers listed in the input parameter and in the sourceServer
@@ -201,7 +204,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 templates=[]
                 oldpath = os.getcwd()
                 os.chdir (srcdir)
-                fout,fin=popen2.popen2(shellprefix + " env LD_LIBRARY_PATH=build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR="+backenddir +" ./client-test -h |grep 'Client::Sync::vcard21'|grep -v 'Retry' |grep -v 'Suspend' | grep -v 'Resend'")
+                fout,fin=popen2.popen2(shellprefix + " env LD_LIBRARY_PATH=build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR="+backenddir +" CLIENT_TEST_SOURCES=vcard21 ./client-test -h |grep 'Client::Sync::vcard21'|grep -v 'Retry' |grep -v 'Suspend' | grep -v 'Resend'")
                 os.chdir(oldpath)
                 for line in fout:
                     l = line.partition('Client::Sync::vcard21::')[2].rpartition('\n')[0]
@@ -221,7 +224,11 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
             if(params[server].find('return code ') !=-1):
                 result.write('result="'+params[server].partition('return code ')[2].partition(')')[0]+'" ')
             result.write('>\n')
-            logs = glob.glob(resultdir+'/'+rserver+'/*.log')
+            # sort files by creation time, to preserve run order
+            logs = map(lambda file: (os.stat(file).st_mtime, file),
+                       glob.glob(resultdir+'/'+rserver+'/*.log'))
+            logs.sort()
+            logs = map(lambda entry: entry[1], logs)
             logdic ={}
             logprefix ={}
             for log in logs:
@@ -245,6 +252,8 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 indents.append(indent)
                 prefix = logprefix[format]
                 qformat = format;
+                # avoid + sign in element name (not allowed by XML);
+                # code reading XML must replace _- with + and __ with _
                 qformat = qformat.replace("_", "__");
                 qformat = qformat.replace("+", "_-");
                 result.write(indent+'<'+qformat+' prefix="'+prefix+'">\n')

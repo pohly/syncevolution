@@ -178,7 +178,7 @@ void CurlTransportAgent::send(const char *data, size_t len)
 
     m_status = ACTIVE;
     if (m_timeoutSeconds) {
-        m_sendStartTime = time(NULL);
+        m_sendStartTime = Timespec::monotonic();
     }
     m_aborting = false;
     if ((code = curl_easy_setopt(m_easyHandle, CURLOPT_PROGRESSDATA, static_cast<void *> (this)))||
@@ -290,8 +290,8 @@ int CurlTransportAgent::progressCallback(void* transport, double, double, double
 int CurlTransportAgent::processCallback()
 {
     if (m_timeoutSeconds) {
-        time_t curTime = time(NULL);
-        if (curTime - m_sendStartTime > m_timeoutSeconds) {
+        Timespec curTime = Timespec::monotonic();
+        if (curTime > m_sendStartTime + m_timeoutSeconds) {
             m_status = TIME_OUT;
             return -1;
         }

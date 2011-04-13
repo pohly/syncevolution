@@ -627,6 +627,23 @@ std::list<std::string> LocalTests::insertManyItems(CreateSource createSource, in
     return luids;
 }
 
+// update every single item in the database
+void LocalTests::updateData(CreateSource createSource) {
+    // check additional requirements
+    CPPUNIT_ASSERT(config.update);
+
+    TestingSyncSourcePtr source;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSource()));
+    BOOST_FOREACH(const string &luid, source->getAllItems()) {
+        string item;
+        source->readItemRaw(luid, item);
+        config.update(item);
+        source->insertItemRaw(luid, item);
+    }
+    CPPUNIT_ASSERT_NO_THROW(source.reset());
+}
+
+
 // creating sync source
 void LocalTests::testOpen() {
     // check requirements
@@ -1651,6 +1668,9 @@ void SyncTests::addTests(bool isFirstSource) {
                         ADD_TEST(SyncTests, testTwinning);
                         ADD_TEST(SyncTests, testItems);
                         ADD_TEST(SyncTests, testItemsXML);
+                        if (config.update) {
+                            ADD_TEST(SyncTests, testExtensions);
+                        }
                     }
                     if (config.templateItem) {
                         ADD_TEST(SyncTests, testMaxMsg);
@@ -2498,8 +2518,8 @@ bool SyncTests::doConversionCallback(bool *success,
     return true;
 }
 
-// creates several items, transmits them back and forth and
-// then compares which of them have been preserved
+// imports test data, transmits it from client A to the server to
+// client B and then compares which of the data has been transmitted
 void SyncTests::testItems() {
     // clean server and first test database
     deleteAll();
@@ -2534,6 +2554,67 @@ void SyncTests::testItemsXML() {
     accessClientB->refreshClient(SyncOptions().setWBXML(false));
 
     compareDatabases();
+}
+
+// imports test data, transmits it from client A to the server to
+// client B, update on B and transfers back to the server,
+// then compares against reference data that has the same changes
+// applied on A
+void SyncTests::testExtensions() {
+    // clean server and first test database
+    deleteAll();
+
+    // import data and create reference data
+    source_it it;
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        it->second->testImport();
+
+        string refDir = getCurrentTest() + "." + it->second->config.sourceName + ".ref.dat";
+        simplifyFilename(refDir);
+        rm_r(refDir);
+        mkdir_p(refDir);
+
+        TestingSyncSourcePtr source;
+        int counter = 0;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
+        BOOST_FOREACH(const string &luid, source->getAllItems()) {
+            string item;
+            source->readItemRaw(luid, item);
+            it->second->config.update(item);
+            ofstream out(StringPrintf("%s/%d", refDir.c_str(), counter).c_str());
+            out.write(item.c_str(), item.size());
+            counter++;
+        }
+        CPPUNIT_ASSERT_NO_THROW(source.reset());
+    }
+
+    // transfer from client A to server to client B
+    doSync("send", SyncOptions(SYNC_TWO_WAY));
+    accessClientB->refreshClient(SyncOptions());
+
+    // update on client B
+    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+        it->second->updateData(it->second->createSourceB);
+    }
+
+    // send back
+    accessClientB->doSync("update", SyncOptions(SYNC_TWO_WAY));
+    doSync("patch", SyncOptions(SYNC_TWO_WAY));
+
+    // compare data in source A against reference data *without* telling synccompare
+    // to ignore known data loss for the server
+    ScopedEnvChange env("CLIENT_TEST_SERVER", "");
+    bool equal = true;
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        string refDir = getCurrentTest() + "." + it->second->config.sourceName + ".ref.dat";
+        simplifyFilename(refDir);
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
+        if (!it->second->compareDatabases(refDir.c_str(), *source, false)) {
+            equal = false;
+        }
+    }
+    CPPUNIT_ASSERT(equal);
 }
 
 // tests the following sequence of events:
@@ -3525,8 +3606,8 @@ static bool setDeadSyncURL(SyncContext &context,
 
     if (boost::starts_with(url, "http")) {
         context.setSyncURL(fakeURL, true);
-        context.setUsername("foo", true);
-        context.setPassword("bar", true);
+        context.setSyncUsername("foo", true);
+        context.setSyncPassword("bar", true);
         return false;
     } else if (boost::starts_with(url, "local://")) {
         FullProps props = context.getConfigProps();
@@ -3570,14 +3651,15 @@ void SyncTests::testTimeout()
                        CheckSyncReport(-1, -1, -1, -1, -1, -1,
                                        false).setReport(&report))
            .setPrepareCallback(boost::bind(setDeadSyncURL, _1, _2, ntohs(servaddr.sin_port), &skipped))
-           .setRetryDuration(10)
-           .setRetryInterval(10));
+           .setRetryDuration(20)
+           .setRetryInterval(20));
     time_t end = time(NULL);
     close(fd);
     if (!skipped) {
         CPPUNIT_ASSERT_EQUAL(STATUS_TRANSPORT_FAILURE, report.getStatus());
-        CPPUNIT_ASSERT(end - start >= 9);
-        CPPUNIT_ASSERT(end - start < 15);
+        CPPUNIT_ASSERT(end - start >= 19);
+        CPPUNIT_ASSERT(end - start < 30); // needs to be sufficiently larger than 20s timeout
+                                          // because under valgrind the startup time is considerable
     }
 }
 
@@ -3880,6 +3962,24 @@ bool ClientTest::compare(ClientTest &client, const char *fileA, const char *file
     return success;
 }
 
+void ClientTest::update(std::string &item)
+{
+    const static char *props[] = {
+        "\nFN:",
+        "\nN:",
+        "\nSUMMARY:",
+        NULL
+    };
+
+    for (const char **prop = props; *prop; prop++) {
+        size_t pos;
+        pos = item.find(*prop);
+        if (pos != item.npos) {
+            item.insert(pos + strlen(*prop), "MOD-");
+        }
+    }
+}
+
 void ClientTest::postSync(int res, const std::string &logname)
 {
 #ifdef WIN32
@@ -3984,6 +4084,8 @@ void ClientTest::getTestData(const char *type, Config &config)
     config.import = import;
     config.dump = dump;
     config.compare = compare;
+    // Sync::*::testExtensions not enabled by default.
+    // config.update = update;
 
     // redirect requests for "ical20" towards "ical20_noutc"?
     bool noutc = false;
@@ -4145,7 +4247,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VEVENT\n"
             "SUMMARY:phone meeting\n"
             "DTEND:20060406T163000Z\n"
@@ -4165,7 +4266,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VEVENT\n"
             "SUMMARY:meeting on site\n"
             "DTEND:20060406T163000Z\n"
@@ -4186,7 +4286,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VEVENT\n"
             "SUMMARY:phone meeting\n"
             "DTEND:20060406T163000Z\n"
@@ -4212,7 +4311,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VEVENT\n"
             "SUMMARY:phone meeting\n"
             "DTEND:20060406T163000Z\n"
@@ -4234,7 +4332,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTIMEZONE\n"
             "TZID:/softwarestudio.org/Olson_20011030_5/Europe/Berlin\n"
             "X-LIC-LOCATION:Europe/Berlin\n"
@@ -4272,7 +4369,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTIMEZONE\n"
             "TZID:/softwarestudio.org/Olson_20011030_5/Europe/Berlin\n"
             "X-LIC-LOCATION:Europe/Berlin\n"
@@ -4380,7 +4476,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTIMEZONE\n"
             "TZID:Asia/Shanghai\n"
             "BEGIN:STANDARD\n"
@@ -4418,7 +4513,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTIMEZONE\n"
             "TZID:Asia/Shanghai\n"
             "BEGIN:STANDARD\n"
@@ -4471,7 +4565,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTODO\n"
             "UID:20060417T173712Z-4360-727-1-2730@gollum\n"
             "DTSTAMP:20060417T173712Z\n"
@@ -4487,7 +4580,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTODO\n"
             "UID:20060417T173712Z-4360-727-1-2730@gollum\n"
             "DTSTAMP:20060417T173712Z\n"
@@ -4504,7 +4596,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTODO\n"
             "UID:20060417T173712Z-4360-727-1-2730@gollum\n"
             "DTSTAMP:20060417T173712Z\n"
@@ -4520,7 +4611,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VTODO\n"
             "UID:20060417T173712Z-4360-727-1-2730@gollum\n"
             "DTSTAMP:20060417T173712Z\n"
@@ -4552,7 +4642,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VJOURNAL\n"
             "SUMMARY:Summary\n"
             "DESCRIPTION:Summary\\nBody text\n"
@@ -4562,7 +4651,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VJOURNAL\n"
             "SUMMARY:Summary Modified\n"
             "DESCRIPTION:Summary Modified\\nBody text\n"
@@ -4574,7 +4662,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VJOURNAL\n"
             "SUMMARY:Summary\n"
             "DESCRIPTION:Summary\\nBody modified\n"
@@ -4584,7 +4671,6 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
-            "METHOD:PUBLISH\n"
             "BEGIN:VJOURNAL\n"
             "SUMMARY:Summary\n"
             "DESCRIPTION:Summary\\nBody text <<REVISION>>\n"
