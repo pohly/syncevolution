@@ -46,6 +46,11 @@ libsyncevolution_qt_dbus_la_CPPFLAGS = $(AM_CPPFLAGS) $(QT_CPPFLAGS)
 # unused parameters in some inline functions).
 libsyncevolution_qt_dbus_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(filter-out -O2 -g -W -Wall, $(QT_CXXFLAGS))
 
+DISTCLEANFILES = syncevolution-qt-dbus.pc
+EXTRA_DIST = syncevolution-qt-dbus.pc.in
+pkgconfig_DATA = syncevolution-qt-dbus.pc
+pkgconfigdir = $(libdir)/pkgconfig
+
 syncevo-server-full.cpp: ../dbus/interfaces/syncevo-server-full.xml
 	if test -f $@; then touch $@; else qdbusxml2cpp -p $* -i dbustypes.h $< ; fi
 syncevo-session-full.cpp: ../dbus/interfaces/syncevo-session-full.xml
