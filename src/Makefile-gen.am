@@ -16,6 +16,10 @@ DISTCLEANFILES =
 CLEANFILES =
 BUILT_SOURCES =
 
+if ENABLE_QT_DBUS
+SUBDIRS += dbus-qt
+endif
+
 service_in_files = org.syncevolution.service.in
 if COND_DBUS
 servicedir = $(DBUS_SERVICES_DIR)
