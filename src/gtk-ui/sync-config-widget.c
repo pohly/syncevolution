@@ -423,7 +423,6 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     }
 
     username = gtk_entry_get_text (GTK_ENTRY (self->username_entry));
-    syncevo_config_set_value (self->config, NULL, "username", username);
 
     sync_url = gtk_entry_get_text (GTK_ENTRY (self->baseurl_entry));
     /* make a wild guess if no scheme in url */
@@ -432,10 +431,16 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     } else {
         real_url = g_strdup (sync_url);
     }
-    syncevo_config_set_value (self->config, NULL, "syncURL", real_url);
 
     password = gtk_entry_get_text (GTK_ENTRY (self->password_entry));
-    syncevo_config_set_value (self->config, NULL, "password", password);
+
+    if (peer_is_local) {
+        /* TODO: handle setting the webdav config in config-source@xxx */
+    } else {
+        syncevo_config_set_value (self->config, NULL, "syncURL", real_url);
+        syncevo_config_set_value (self->config, NULL, "password", password);
+        syncevo_config_set_value (self->config, NULL, "username", username);
+    }
 
     syncevo_config_get_value (self->config, NULL, "deviceName", &device);
     if (!device || strlen (device) == 0) {
@@ -759,6 +764,7 @@ init_source (char *name,
     if (uri) {
         gtk_entry_set_text (GTK_ENTRY (widgets->entry), uri);
     }
+    gtk_widget_set_sensitive (widgets->entry, !peer_is_local (self->config));
     gtk_table_attach_defaults (GTK_TABLE (self->server_settings_table),
                                widgets->entry,
                                1, 2, row, row + 1);
@@ -831,6 +837,41 @@ sync_config_widget_expand_id (SyncConfigWidget *self,
 }
 
 static void
+get_config_for_webdav (SyncevoServer *seerver,
+                       SyncevoConfig *config,
+                       GError *error,
+                       SyncConfigWidget *self)
+{
+    char *password = "";
+    char *username = "";
+    char *url = "";
+
+    syncevo_config_get_value (config, NULL, "username", &username);
+    syncevo_config_get_value (config, NULL, "password", &password);
+    syncevo_config_get_value (config, NULL, "syncURL", &url);
+
+    gtk_entry_set_text (GTK_ENTRY (self->username_entry), username);
+    gtk_entry_set_text (GTK_ENTRY (self->password_entry), password);
+    gtk_entry_set_text (GTK_ENTRY (self->baseurl_entry), url);
+}
+
+static void
+sync_config_widget_update_from_local_config (SyncConfigWidget *self)
+{
+    char *webdav_config, *sync_url;
+
+    syncevo_config_get_value (self->config, NULL, "syncURL", &sync_url);
+    webdav_config = g_strdup_printf ("source-config%s", sync_url + 8);
+
+    syncevo_server_get_config (self->server, 
+                               webdav_config,
+                               FALSE,
+                               (SyncevoServerGetConfigCb)get_config_for_webdav,
+                               self);
+    g_free (webdav_config);
+}
+
+static void
 sync_config_widget_update_expander (SyncConfigWidget *self)
 {
     char *username = "";
@@ -855,7 +896,7 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
                       2, 1);
 
     client = peer_is_client (self->config);
-    if (client) {
+    if (client && !peer_is_local (self->config)) {
         if (!self->device_template_selected) {
             gtk_widget_hide (self->settings_box);
             gtk_widget_show (self->device_selector_box);
@@ -952,17 +993,6 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     gtk_widget_show (self->source_toggle_label);
     gtk_container_add (GTK_CONTAINER (align), self->source_toggle_label);
 
-    syncevo_config_get_value (self->config, NULL, "username", &username);
-    syncevo_config_get_value (self->config, NULL, "password", &password);
-    syncevo_config_get_value (self->config, NULL, "syncURL", &sync_url);
-
-    if (username) {
-        gtk_entry_set_text (GTK_ENTRY (self->username_entry), username);
-    }
-    if (password) {
-        gtk_entry_set_text (GTK_ENTRY (self->password_entry), password);
-    }
-
     // TRANSLATORS: label of a entry in service configuration
     label = gtk_label_new (_("Server address"));
     gtk_misc_set_alignment (GTK_MISC (label), 9.0, 0.5);
@@ -973,14 +1003,27 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     self->baseurl_entry = gtk_entry_new ();
     gtk_entry_set_max_length (GTK_ENTRY (self->baseurl_entry), 99);
     gtk_entry_set_width_chars (GTK_ENTRY (self->baseurl_entry), 80);
-    if (sync_url) {
-        gtk_entry_set_text (GTK_ENTRY (self->baseurl_entry), sync_url);
-    }
     gtk_widget_show (self->baseurl_entry);
-
     gtk_table_attach_defaults (GTK_TABLE (self->server_settings_table),
                                self->baseurl_entry,
                                1, 2, 0, 1);
+
+
+    /* Fill in username, password and url. This requires a second step 
+     * for local syncs for webdav */
+    if (peer_is_local (self->config)) {
+        sync_config_widget_update_from_local_config (self);
+    } else {
+        syncevo_config_get_value (self->config, NULL, "syncURL", &sync_url);
+        syncevo_config_get_value (self->config, NULL, "username", &username);
+        syncevo_config_get_value (self->config, NULL, "password", &password);
+        if (username)
+            gtk_entry_set_text (GTK_ENTRY (self->username_entry), username);
+        if (password)
+            gtk_entry_set_text (GTK_ENTRY (self->password_entry), password);
+        if (sync_url)
+            gtk_entry_set_text (GTK_ENTRY (self->baseurl_entry), sync_url);
+    }
 
     /* update source widgets */
     if (self->sources) {

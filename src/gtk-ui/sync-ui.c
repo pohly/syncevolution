@@ -2066,15 +2066,25 @@ get_config_for_config_widget_cb (SyncevoServer *server,
 
     
     if (g_strcmp0 ("1", ready) != 0 ||
-        (type && g_strcmp0 ("WebDAV", type) == 0) ||
-        (url && g_str_has_prefix (url, "local://@"))) {
+        (type && g_strcmp0 ("WebDAV", type) == 0)) {
 
         /* Ignore existing configs and templates unless they are
            explicitly marked as "ConsumerReady. 
-           Also ignore webdav  (and the local syncs used for webdav)
-           for now */
+           Also ignore webdav peers -- they will be accessed via the 
+           corresponding local config (see src/backends/webdav/README) */
     } else if (is_peer && g_strcmp0 ("1", is_peer) == 0) {
-        if (url) {
+        if (!url) {
+            /*  wha? */
+        } else if (g_str_has_prefix (url, "local://@")) {
+            /* local sync client */
+            add_configuration_to_box (GTK_BOX (c_data->data->services_box),
+                                      config,
+                                      c_data->name,
+                                      c_data->has_template,
+                                      c_data->has_configuration,
+                                      c_data->data);
+        } else {
+            /* device sync */
             SyncConfigWidget *w;
             char *fp, *tmp, *template_name, *device_name = NULL;
             char **fpv = NULL;

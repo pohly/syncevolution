@@ -91,5 +91,6 @@ void server_data_free (server_data *data, gboolean free_config);
  * utility function: TRUE if the config belongs to a client (PeerIsClient)
  */
 gboolean peer_is_client (SyncevoConfig *config);
+gboolean peer_is_local (SyncevoConfig *config);
 
 #endif
