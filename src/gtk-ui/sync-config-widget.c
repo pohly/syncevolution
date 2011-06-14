@@ -62,6 +62,7 @@ typedef struct save_config_data {
     SyncConfigWidget *widget;
     gboolean delete;
     gboolean temporary;
+    gboolean save_webdav_config; /* saving an additional source-config for webdav */
     source_widgets *widgets;
     char *basename;
 } save_config_data;
@@ -201,12 +202,25 @@ set_config_cb (SyncevoSession *session,
                                       data->widgets->name,
                                       (SyncevoSessionGenericCb)check_source_cb,
                                       data->widgets);
+    } else if (peer_is_local (data->widget->config) && !data->save_webdav_config) {
+        char *name;
+        /* we saved a local config, we need to save the 
+         * webdav source-config as well */
+
+        g_object_unref (session);
+ 
+        data->save_webdav_config = TRUE;
+        name = g_strdup_printf ("source-config@%s", data->widget->config_name);
+        syncevo_server_start_no_sync_session (data->widget->server,
+                                              name,
+                                              (SyncevoServerStartSessionCb)start_session_for_config_write_cb,
+                                              data);
+        g_free (name);
     } else {
         data->widget->configured = TRUE;
         g_signal_emit (data->widget, signals[SIGNAL_CHANGED], 0);
         g_object_unref (session);
     }
-
 }
 
 static void
@@ -253,7 +267,7 @@ get_config_for_overwrite_prevention_cb (SyncevoSession *session,
 static void
 save_config (save_config_data *data,
              SyncevoSession *session)
-{   
+{
     SyncConfigWidget *w = data->widget;
 
     if (data->delete) {
@@ -261,17 +275,27 @@ save_config (save_config_data *data,
         w->config = g_hash_table_new (g_str_hash, g_str_equal);
     }
 
-    /* if this is a client peer (a device) and not configured, we
+    /* if this is a device client peer and not configured, we
      * need to test that we aren't overwriting existing
      * configs */
     /* TODO: This might be a good thing to do for any configurations.*/
     if (peer_is_client (w->config) &&
+        !peer_is_local (w->config) &&
         !w->configured && !data->temporary) {
 
         syncevo_session_get_config (session,
                                     FALSE,
                                     (SyncevoSessionGetConfigCb)get_config_for_overwrite_prevention_cb,
                                     data);
+    } else if (data->save_webdav_config) {
+        /* we are saving the additional source-config for webdav  */
+        syncevo_session_set_config (session,
+                                    data->temporary,
+                                    data->temporary,
+                                    data->widget->webdav_config,
+                                    (SyncevoSessionGenericCb)set_config_cb,
+                                    data);
+ 
     } else {
         syncevo_session_set_config (session,
                                     data->temporary,
@@ -373,10 +397,16 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
     char *real_url, *device;
     gboolean send, receive;
     SyncevoSyncMode mode;
+    SyncevoConfig *config_with_credentials;
 
-    if (!self->config) {
-        return;
-    }
+    g_return_if_fail (self->config != NULL);
+
+    /* webdav configs have username/passwd in the source-config */
+    if (!peer_is_local (self->config))
+        config_with_credentials = self->config;
+    else
+        config_with_credentials = self->webdav_config;
+    g_return_if_fail (config_with_credentials != NULL);
 
     if (!self->config_name || strlen (self->config_name) == 0) {
         g_free (self->config_name);
@@ -434,13 +464,12 @@ use_clicked_cb (GtkButton *btn, SyncConfigWidget *self)
 
     password = gtk_entry_get_text (GTK_ENTRY (self->password_entry));
 
-    if (peer_is_local) {
-        /* TODO: handle setting the webdav config in config-source@xxx */
-    } else {
-        syncevo_config_set_value (self->config, NULL, "syncURL", real_url);
-        syncevo_config_set_value (self->config, NULL, "password", password);
-        syncevo_config_set_value (self->config, NULL, "username", username);
-    }
+    syncevo_config_set_value (config_with_credentials,
+                              NULL, "syncURL", real_url);
+    syncevo_config_set_value (config_with_credentials,
+                              NULL,"password", password);
+    syncevo_config_set_value (config_with_credentials,
+                              NULL, "username", username);
 
     syncevo_config_get_value (self->config, NULL, "deviceName", &device);
     if (!device || strlen (device) == 0) {
@@ -777,10 +806,12 @@ init_source (char *name,
     /* start a session so we save a temporary config so we can do
      * CheckSource, and show the source-related widgets if the 
      * source is available */
+
     data = g_slice_new (save_config_data);
     data->widget = self;
     data->delete = FALSE;
     data->temporary = TRUE;
+    data->save_webdav_config = FALSE;
     data->widgets = source_widgets_ref (widgets);
 
     syncevo_server_start_no_sync_session (self->server,
@@ -837,41 +868,6 @@ sync_config_widget_expand_id (SyncConfigWidget *self,
 }
 
 static void
-get_config_for_webdav (SyncevoServer *seerver,
-                       SyncevoConfig *config,
-                       GError *error,
-                       SyncConfigWidget *self)
-{
-    char *password = "";
-    char *username = "";
-    char *url = "";
-
-    syncevo_config_get_value (config, NULL, "username", &username);
-    syncevo_config_get_value (config, NULL, "password", &password);
-    syncevo_config_get_value (config, NULL, "syncURL", &url);
-
-    gtk_entry_set_text (GTK_ENTRY (self->username_entry), username);
-    gtk_entry_set_text (GTK_ENTRY (self->password_entry), password);
-    gtk_entry_set_text (GTK_ENTRY (self->baseurl_entry), url);
-}
-
-static void
-sync_config_widget_update_from_local_config (SyncConfigWidget *self)
-{
-    char *webdav_config, *sync_url;
-
-    syncevo_config_get_value (self->config, NULL, "syncURL", &sync_url);
-    webdav_config = g_strdup_printf ("source-config%s", sync_url + 8);
-
-    syncevo_server_get_config (self->server, 
-                               webdav_config,
-                               FALSE,
-                               (SyncevoServerGetConfigCb)get_config_for_webdav,
-                               self);
-    g_free (webdav_config);
-}
-
-static void
 sync_config_widget_update_expander (SyncConfigWidget *self)
 {
     char *username = "";
@@ -881,6 +877,7 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     char *str;
     GtkWidget *label, *align;
     SyncevoSyncMode mode = SYNCEVO_SYNC_NONE;
+    SyncevoConfig *config_with_credentials;
     gboolean send, receive;
     gboolean client;
 
@@ -918,6 +915,7 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
     syncevo_config_foreach_source (self->config,
                                    (ConfigFunc)get_common_mode,
                                    &mode);
+
     switch (mode) {
     case SYNCEVO_SYNC_TWO_WAY:
         send = receive = TRUE;
@@ -1009,21 +1007,25 @@ sync_config_widget_update_expander (SyncConfigWidget *self)
                                1, 2, 0, 1);
 
 
-    /* Fill in username, password and url. This requires a second step 
-     * for local syncs for webdav */
-    if (peer_is_local (self->config)) {
-        sync_config_widget_update_from_local_config (self);
-    } else {
-        syncevo_config_get_value (self->config, NULL, "syncURL", &sync_url);
-        syncevo_config_get_value (self->config, NULL, "username", &username);
-        syncevo_config_get_value (self->config, NULL, "password", &password);
-        if (username)
-            gtk_entry_set_text (GTK_ENTRY (self->username_entry), username);
-        if (password)
-            gtk_entry_set_text (GTK_ENTRY (self->password_entry), password);
-        if (sync_url)
-            gtk_entry_set_text (GTK_ENTRY (self->baseurl_entry), sync_url);
-    }
+    /* Fill in username, password and url. */
+    if (!peer_is_local (self->config))
+        config_with_credentials = self->config;
+    else
+        config_with_credentials = self->webdav_config;
+
+    syncevo_config_get_value (config_with_credentials,
+                              NULL, "syncURL", &sync_url);
+    syncevo_config_get_value (config_with_credentials,
+                              NULL, "username", &username);
+    syncevo_config_get_value (config_with_credentials,
+                              NULL, "password", &password);
+
+    if (username)
+        gtk_entry_set_text (GTK_ENTRY (self->username_entry), username);
+    if (password)
+        gtk_entry_set_text (GTK_ENTRY (self->password_entry), password);
+    if (sync_url)
+        gtk_entry_set_text (GTK_ENTRY (self->baseurl_entry), sync_url);
 
     /* update source widgets */
     if (self->sources) {
@@ -1240,7 +1242,7 @@ sync_config_widget_update_label (SyncConfigWidget *self)
         } else {
             str = g_strdup_printf ("%s", self->pretty_name);
         }
-        if (g_str_has_prefix (sync_url, "obex-bt://")) {
+        if (sync_url && g_str_has_prefix (sync_url, "obex-bt://")) {
             char *tmp = g_strdup_printf (_("%s - Bluetooth device"), str);
             g_free (str);
             str = tmp;
@@ -1592,25 +1594,62 @@ sync_config_widget_size_request (GtkWidget      *widget,
     }
 }
 
-static GObject *
-sync_config_widget_constructor (GType                  gtype,
-                                guint                  n_properties,
-                                GObjectConstructParam *properties)
+static void
+_add_local_source (char *name,
+                   GHashTable *source_configuration,
+                   SyncevoConfig *local_config)
 {
-    SyncConfigWidget *self;
-    GObjectClass *parent_class;  
-    char *url, *icon;
+    char *sync;
+
+    sync = g_hash_table_lookup (source_configuration, "sync");
+    if (sync)
+        syncevo_config_set_value (local_config, name, "sync", sync);
+    syncevo_config_set_value (local_config, name, "uri", name);
+    syncevo_config_set_value (local_config, name, "backend", name);
+}
+
+static void
+sync_config_widget_init_from_webdav_template (SyncConfigWidget *self)
+{
+    char *local_url, *web_url;
+
+    /* the template is actually for the webdav config, not the local config */
+    self->webdav_config = self->config;
+    g_hash_table_remove (self->webdav_config, "username");
+    g_hash_table_remove (self->webdav_config, "password");
+    syncevo_config_get_value (self->webdav_config, NULL, "webURL", &web_url);
+
+    /* create new local config */
+    self->config = g_hash_table_new (g_str_hash, g_str_equal);
+
+    local_url = g_strdup_printf ("local://@%s", self->config_name);
+    
+    syncevo_config_set_value (self->config, NULL, "syncURL", local_url);
+    syncevo_config_set_value (self->config, NULL, "PeerIsClient", "1");
+    syncevo_config_set_value (self->config, NULL, "PeerName", self->pretty_name);
+    if (web_url)
+        syncevo_config_set_value (self->config, NULL, "WebURL", web_url);
+
+    syncevo_config_foreach_source (self->webdav_config,
+                                   (ConfigFunc)_add_local_source,
+                                   self->config);
+
+    /* TODO: take copies of all strings and free this where? */
+}
+
+static void
+sync_config_widget_contructor_final (SyncConfigWidget *self)
+{
+    char *url, *icon, *type;
     GdkPixbuf *buf;
 
-    parent_class = G_OBJECT_CLASS (sync_config_widget_parent_class);
-    self = SYNC_CONFIG_WIDGET (parent_class->constructor (gtype,
-                                                          n_properties,
-                                                          properties));
+    syncevo_config_get_value (self->config, NULL, "peerType", &type);
+    if (g_strcmp0 (type, "WebDAV") == 0 &&
+        self->has_template && !self->configured) {
 
-    if (!self->config || !self->server) {
-        g_warning ("No SyncevoServer or Syncevoconfig set for SyncConfigWidget");
-        return G_OBJECT (self);
-    }
+        sync_config_widget_init_from_webdav_template (self);
+    } else 
+
 
     if (g_strcmp0 (self->config_name, "default") == 0) {
 
@@ -1643,6 +1682,48 @@ sync_config_widget_constructor (GType                  gtype,
     if (GTK_WIDGET_VISIBLE (self->entry)) {
         gtk_widget_grab_focus (self->entry);
     }
+}
+
+static void
+get_config_for_webdav_cb (SyncevoServer *server,
+                          SyncevoConfig *config,
+                          GError *error,
+                          SyncConfigWidget *self)
+{
+    self->webdav_config = config;
+
+    sync_config_widget_contructor_final (self);
+}
+
+static GObject *
+sync_config_widget_constructor (GType                  gtype,
+                                guint                  n_properties,
+                                GObjectConstructParam *properties)
+{
+    SyncConfigWidget *self;
+    GObjectClass *parent_class;  
+
+    parent_class = G_OBJECT_CLASS (sync_config_widget_parent_class);
+    self = SYNC_CONFIG_WIDGET (parent_class->constructor (gtype,
+                                                          n_properties,
+                                                          properties));
+
+    if (!self->config || !self->server) {
+        g_warning ("No SyncevoServer or Syncevoconfig set for SyncConfigWidget");
+        return G_OBJECT (self);
+    }
+
+    if (peer_is_local (self->config)) {
+        char *name;
+
+        /* need webdav config before proceeding */
+        name = g_strdup_printf ("source-config@%s", self->config_name);
+        syncevo_server_get_config (self->server, 
+                                   name, FALSE,
+                                   (SyncevoServerGetConfigCb)get_config_for_webdav_cb,
+                                   self);
+    } else
+        sync_config_widget_contructor_final (self);
 
     return G_OBJECT (self);
 }

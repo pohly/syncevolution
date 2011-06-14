@@ -48,6 +48,7 @@ typedef struct {
     SyncevoServer *server;
     SyncevoConfig *config;
     GHashTable *configs; /* possible configs. config above is one of these */
+    SyncevoConfig *webdav_config; /* only present for local configs */
 
     char *config_name;
     char *pretty_name;

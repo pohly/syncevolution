@@ -2064,18 +2064,18 @@ get_config_for_config_widget_cb (SyncevoServer *server,
     syncevo_config_get_value (config, NULL, "syncURL", &url);
     syncevo_config_get_value (config, NULL, "peerType", &type);
 
+g_debug ("%s %s %s", url, is_peer, type);
     
-    if (g_strcmp0 ("1", ready) != 0 ||
-        (type && g_strcmp0 ("WebDAV", type) == 0)) {
-
-        /* Ignore existing configs and templates unless they are
+    if ((g_strcmp0 ("1", ready) != 0 && !c_data->has_configuration) ||
+        (type && g_strcmp0 ("WebDAV", type) == 0 && c_data->has_configuration)) {
+        /* Ignore existing templates unless they are
            explicitly marked as "ConsumerReady. 
            Also ignore webdav peers -- they will be accessed via the 
            corresponding local config (see src/backends/webdav/README) */
     } else if (is_peer && g_strcmp0 ("1", is_peer) == 0) {
         if (!url) {
             /*  wha? */
-        } else if (g_str_has_prefix (url, "local://@")) {
+        } else if (peer_is_local (config)) {
             /* local sync client */
             add_configuration_to_box (GTK_BOX (c_data->data->services_box),
                                       config,
