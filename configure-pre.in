@@ -501,15 +501,17 @@ if test $enable_dbus_service = "yes"; then
         AC_DEFINE(HAS_NOTIFY, 1, [define if libnotify could be used in dbus service])
     fi
 
-    # Here we're using QtGui too because mlite fails to depend on it,
-    # despite using QAction.
-    PKG_CHECK_MODULES(MLITE, [mlite QtGui], HAVE_MLITE=yes, HAVE_MLITE=no)
+    AS_IF([test "x$enable_mlite" = "xyes"],
+          # Here we're using QtGui too because mlite fails to depend on it,
+          # despite using QAction.
+          PKG_CHECK_MODULES(MLITE, [mlite QtGui], HAVE_MLITE=yes, HAVE_MLITE=no),
+          [])
     AC_ARG_ENABLE(mlite,
                   AS_HELP_STRING([--enable-mlite],
                                  [send notifications for automatic sync events, using mlite]),
-                  [ test "$enableval" = "no" || test $HAVE_MLITE = "yes" || AC_ERROR([required mlite package not found]) ],
-                  [ test $HAVE_MLITE = "yes" || AC_ERROR([required mlite package not found, use --disable-mlite to compile without mlite based notifications]) ])
-    if test $HAVE_MLITE = "yes"; then
+                  [test "$enableval" = "yes" && test $HAVE_MLITE = "no" && AC_ERROR([requested mlite package not found]) ],
+                  [ test $HAVE_MLITE = "yes" && enable_mlite=yes ])
+    if test $enable_mlite = "yes"; then
         AC_DEFINE(HAS_MLITE, 1, [define if mlite could be used in dbus service])
     fi
     AC_DEFINE(DBUS_SERVICE, 1, [define if dbus service is enabled])
