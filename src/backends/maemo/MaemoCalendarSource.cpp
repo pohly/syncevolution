@@ -53,7 +53,7 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
     }
 }
 
-const char *MaemoCalendarSource::getMimeType() const
+std::string MaemoCalendarSource::getMimeType() const
 {
     switch (entry_format) {
     case -1: return "text/plain";
@@ -63,7 +63,7 @@ const char *MaemoCalendarSource::getMimeType() const
     }
 }
 
-const char *MaemoCalendarSource::getMimeVersion() const
+std::string MaemoCalendarSource::getMimeVersion() const
 {
     switch (entry_format) {
     case -1: return "1.0";
