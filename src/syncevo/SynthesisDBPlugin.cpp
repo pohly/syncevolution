@@ -153,7 +153,7 @@ TSyError SyncEvolution_Module_DeleteContext( CContext mContext )
 {
     SyncSource  *source = MoC(mContext);
     SE_LOG_DEBUG(NULL, NULL, "Module_DeleteContext %s",
-                 source ? source->getName() : "'session'");
+                 source ? source->getName().c_str() : "'session'");
     if (source) {
         source->popSynthesisAPI();
     }
@@ -310,8 +310,8 @@ TSyError SyncEvolution_Session_Login( CContext sContext, cAppCharP sUsername, ap
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    string user = sc->getUsername();
-    string password = sc->getPassword();
+    string user = sc->getSyncUsername();
+    string password = sc->getSyncPassword();
 
     if (user.empty() && password.empty()) {
         // nothing to check, accept peer
@@ -496,8 +496,13 @@ bool SyncEvolution_ReadNextMapItem( CContext aContext, MapID mID, bool aFirst )
         res = source->handleException();
     }
 
-    SE_LOG_DEBUG(source, NULL, "ReadNextMapItem %08lX first=%s res=%d",
-                 (long)mID, aFirst ? "yes" : "no", res);
+    SE_LOG_DEBUG(source, NULL, "ReadNextMapItem '%s' + %x = '%s' + %d first=%s res=%d",
+                 res ? NullPtrCheck(mID->localID) : "(none)",
+                 res ? mID->ident : 0,
+                 res ? NullPtrCheck(mID->remoteID) : "(none)",
+                 res ? mID->flags : 0,
+                 aFirst ? "yes" : "no",
+                 res);
     return res;
 } /* ReadNextMapItem */
 
@@ -519,8 +524,10 @@ TSyError SyncEvolution_InsertMapItem( CContext aContext, cMapID mID )
         res = source->handleException();
     }
 
-    SE_LOG_DEBUG(source, NULL, "InsertMapItem '%s' '%s' %04X %d, res=%d", 
-                 mID->localID, mID->remoteID, mID->flags, mID->ident, res);
+    SE_LOG_DEBUG(source, NULL, "InsertMapItem '%s' + %x = '%s' + %x res=%d", 
+                 NullPtrCheck(mID->localID), mID->ident,
+                 NullPtrCheck(mID->remoteID), mID->flags,
+                 res);
     return res;
 } /* InsertMapItem */
 
@@ -542,8 +549,10 @@ TSyError SyncEvolution_UpdateMapItem( CContext aContext, cMapID mID )
         res = source->handleException();
     }
 
-    SE_LOG_DEBUG(source, NULL, "UpdateMapItem '%s' '%s' %04X %d, res=%d", 
-                 mID->localID, mID->remoteID, mID->flags, mID->ident, res);
+    SE_LOG_DEBUG(source, NULL, "UpdateMapItem '%s' + %x = '%s' + %x, res=%d", 
+                 mID->localID, mID->ident,
+                 mID->remoteID, mID->flags,
+                 res);
 
     return res;
 } /* UpdateMapItem */
@@ -566,8 +575,10 @@ TSyError SyncEvolution_DeleteMapItem( CContext aContext, cMapID mID )
         res = source->handleException();
     }
 
-    SE_LOG_DEBUG(source, NULL, "DeleteMapItem '%s' '%s' %04X %d res=%d",
-                 mID->localID, mID->remoteID, mID->flags, mID->ident, res);
+    SE_LOG_DEBUG(source, NULL, "DeleteMapItem '%s' + %x = '%s' + %x res=%d",
+                 mID->localID, mID->ident,
+                 mID->remoteID, mID->flags,
+                 res);
     return res;
 } /* DeleteMapItem */
 
@@ -721,8 +732,19 @@ sysync::TSyError SyncEvolution_ReadBlob(CContext aContext, cItemID  aID,  cAppCh
   TSyError res;
   if (source->getOperations().m_readBlob) {
       try {
-          res = source->getOperations().m_readBlob(aID, aBlobID, (void **)aBlkPtr, aBlkSize,
-                                                   aTotSize, aFirst, aLast);
+	    size_t blksize, totsize;
+	    /* Another conversion between memSize and size_t to make s390 happy */
+            res = source->getOperations().m_readBlob(aID, aBlobID, (void **)aBlkPtr,
+						     aBlkSize ? &blksize : NULL,
+						     aTotSize ? &totsize : NULL,
+						     aFirst, aLast);
+	    if (aBlkSize) {
+	        *aBlkSize = blksize;
+	    }
+            if (aTotSize) {
+                *aTotSize = totsize;
+            }
+
       } catch (...) {
           res = source->handleException();
       }

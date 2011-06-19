@@ -22,6 +22,7 @@
 #define INCL_LOGSTDOUT
 
 #include <syncevo/Logging.h>
+#include <syncevo/util.h>
 #include <stdio.h>
 #include <string>
 
@@ -36,6 +37,12 @@ class LoggerStdout : public LoggerBase
 {
     FILE *m_file;
     bool m_closeFile;
+
+    /**
+     * Set before writing the first message if log level is debugging,
+     * together with printing a message that gives the local time.
+     */
+    Timespec m_startTime;
 
  public:
     /**
@@ -70,6 +77,8 @@ class LoggerStdout : public LoggerBase
                           const char *function,
                           const char *format,
                           va_list args);
+
+    virtual bool isProcessSafe() const { return true; }
 };
 
 SE_END_CXX

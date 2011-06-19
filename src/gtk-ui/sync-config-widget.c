@@ -88,17 +88,17 @@ get_service_description (const char *service)
         return _("ScheduleWorld enables you to keep your contacts, events, "
                  "tasks, and notes in sync.");
     }else if (strcmp (service, "Google") == 0) {
-        return _("Google Sync can backup and synchronize your contacts "
+        return _("Google Sync can back up and synchronize your contacts "
                  "with your Gmail contacts.");
     }else if (strcmp (service, "Funambol") == 0) {
         /* TRANSLATORS: Please include the word "demo" (or the equivalent in
            your language): Funambol is going to be a 90 day demo service
            in the future */
-        return _("Backup your contacts and calendar. Sync with a single "
+        return _("Back up your contacts and calendar. Sync with a single "
                  "click, anytime, anywhere (DEMO).");
     }else if (strcmp (service, "Mobical") == 0) {
         return _("Mobical Backup and Restore service allows you to securely "
-                 "backup your personal mobile data for free.");
+                 "back up your personal mobile data for free.");
     }else if (strcmp (service, "ZYB") == 0) {
         return _("ZYB is a simple way for people to store and share mobile "
                  "information online.");
@@ -1886,7 +1886,7 @@ sync_config_widget_init (SyncConfigWidget *self)
     gtk_box_pack_end (GTK_BOX (hbox), vbox, FALSE, FALSE, 32);
 
     /* TRANSLATORS: button in service configuration form */
-    self->button = gtk_button_new_with_label (_("Setup now"));
+    self->button = gtk_button_new_with_label (_("Set up now"));
     gtk_widget_set_size_request (self->button, SYNC_UI_LIST_BTN_WIDTH, -1);
     g_signal_connect (self->button, "clicked",
                       G_CALLBACK (setup_service_clicked), self);
@@ -1906,10 +1906,10 @@ sync_config_widget_init (SyncConfigWidget *self)
     gtk_widget_show (hbox);
     gtk_box_pack_start (GTK_BOX (self->device_selector_box), hbox,
                         FALSE, TRUE, 8);
-    self->device_text = gtk_label_new (("We don't know what this device is exactly. "
-                                        "Please take a look at the list of "
-                                        "supported devices and pick yours if it "
-                                        "is listed"));
+    self->device_text = gtk_label_new (_("We don't know what this device is exactly. "
+                                         "Please take a look at the list of "
+                                         "supported devices and pick yours if it "
+                                         "is listed"));
     gtk_widget_show (self->device_text);
     gtk_label_set_line_wrap (GTK_LABEL (self->device_text), TRUE);
     gtk_widget_set_size_request (self->device_text, 600, -1);
@@ -1944,7 +1944,7 @@ sync_config_widget_init (SyncConfigWidget *self)
                       G_CALLBACK (device_combo_changed), self);
 
 
-    self->device_select_btn = gtk_button_new_with_label ("Use these settings");
+    self->device_select_btn = gtk_button_new_with_label (_("Use these settings"));
     gtk_widget_set_sensitive (self->device_select_btn, FALSE);
     gtk_widget_show (self->device_select_btn);
     gtk_box_pack_start (GTK_BOX (hbox), self->device_select_btn,

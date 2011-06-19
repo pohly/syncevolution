@@ -40,7 +40,14 @@
 #include <syncevo/util.h>
 #include <syncevo/VolatileConfigNode.h>
 
+#include <boost/bind.hpp>
+
 #include <syncevo/declarations.h>
+
+#ifdef ENABLE_BUTEO_TESTS
+#include "client-test-buteo.h"
+#endif
+
 SE_BEGIN_CXX
 
 /*
@@ -255,7 +262,6 @@ public:
                     boost::shared_ptr<SyncSourceConfig> scServerTemplate = from->getSyncSourceConfig(testconfig.sourceNameServerTemplate);
                     sc->setURI(scServerTemplate->getURI());
                 }
-                sc->setSourceType(testconfig.type);
             }
 
             // always set these properties: they might have changed since the last run
@@ -263,6 +269,7 @@ public:
             sc->setDatabaseID(database);
             sc->setUser(m_evoUser);
             sc->setPassword(m_evoPassword);
+            sc->setBackend(SourceType(testconfig.type).m_backend);
         }
         config->flush();
     }
@@ -304,7 +311,7 @@ public:
     static void getSourceConfig(const RegisterSyncSourceTest *test, Config &config) {
         memset(&config, 0, sizeof(config));
         ClientTest::getTestData(test->m_testCaseName.c_str(), config);
-        config.createSourceA = createSource;
+        config.createSourceA = boost::bind(createSource, _1, _2, _3);
         config.createSourceB = createSource;
         config.sourceName = test->m_configName.c_str();
 
@@ -319,14 +326,41 @@ public:
         return false;
     }
 
+#ifdef ENABLE_BUTEO_TESTS
+    virtual void setup() {
+        QtContactsSwitcher::prepare(*this);
+    }
+#endif
+
     virtual SyncMLStatus doSync(const int *sources,
                                 const std::string &logbase,
                                 const SyncOptions &options)
     {
+        // check whether using buteo to do sync
+        const char *buteo = getenv("CLIENT_TEST_BUTEO");
+        bool useButeo = false;
+        if (buteo && 
+                (boost::equals(buteo, "1") || boost::iequals(buteo, "t"))) {
+            useButeo = true;
+        }
+
         string server = getenv("CLIENT_TEST_SERVER") ? getenv("CLIENT_TEST_SERVER") : "funambol";
         server += "_";
         server += m_clientID;
         
+
+        if (useButeo) {
+#ifdef ENABLE_BUTEO_TESTS
+            ButeoTest buteo(*this, server, logbase, options);
+            buteo.prepareSources(sources, m_syncSource2Config);
+            SyncReport report;
+            SyncMLStatus status = buteo.doSync(&report);
+            options.m_checkReport.check(status, report);
+            return status;
+#else
+            throw runtime_error("This client-test was built without enabling buteo testing.");
+#endif
+        }
         class ClientTest : public CmdlineSyncClient {
         public:
             ClientTest(const string &server,
@@ -360,6 +394,10 @@ public:
                     setPreventSlowSync(false);
                 }
                 SyncContext::prepare();
+                if (m_options.m_prepareCallback &&
+                    m_options.m_prepareCallback(*this, m_options)) {
+                    m_options.m_isAborted = true;
+                }
             }
 
             virtual void displaySyncProgress(sysync::TProgressEventEnum type,
@@ -396,9 +434,9 @@ public:
         // configure active sources with the desired sync mode,
         // disable the rest
         FilterConfigNode::ConfigFilter filter;
-        filter[SyncSourceConfig::m_sourcePropSync.getName()] = "none";
+        filter["sync"] = "none";
         client.setConfigFilter(false, "", filter);
-        filter[SyncSourceConfig::m_sourcePropSync.getName()] =
+        filter["sync"] =
             PrettyPrintSyncMode(options.m_syncMode);
         for(int i = 0; sources[i] >= 0; i++) {
             std::string &name = m_syncSource2Config[sources[i]];
@@ -446,16 +484,16 @@ private:
         // implement Evolution shutdown workaround (see lockEvolution above)
         evClient.checkEvolutionSource(name);
 
-        return evClient.createSource(name, isSourceA);
+        return evClient.createNamedSource(name, isSourceA);
     }
 
     /** called internally in this class */
-    TestingSyncSource *createSource(const string &name, bool isSourceA) {
+    TestingSyncSource *createNamedSource(const string &name, bool isSourceA) {
         string database = getDatabaseName(name);
-        SyncConfig config("client-test-changes");
-        SyncSourceNodes nodes = config.getSyncSourceNodes(name,
-                                                          string("_") + m_clientID +
-                                                          "_" + (isSourceA ? "A" : "B"));
+        boost::shared_ptr<SyncConfig> context(new SyncConfig("source-config@client-test"));
+        SyncSourceNodes nodes = context->getSyncSourceNodes(name,
+                                                            string("_") + m_clientID +
+                                                            "_" + (isSourceA ? "A" : "B"));
 
         // always set this property: the name might have changes since last test run
         nodes.getProperties()->setProperty("evolutionsource", database.c_str());
@@ -463,14 +501,14 @@ private:
         nodes.getProperties()->setProperty("evolutionpassword", m_evoPassword.c_str());
 
         SyncSourceParams params(name,
-                                nodes);
-
+                                nodes,
+                                context);
         const RegisterSyncSourceTest *test = m_configs[name];
         ClientTestConfig testConfig;
         getSourceConfig(test, testConfig);
 
         PersistentSyncSourceConfig sourceConfig(params.m_name, params.m_nodes);
-        sourceConfig.setSourceType(testConfig.type);
+        sourceConfig.setSourceType(SourceType(testConfig.type));
 
         // downcasting here: anyone who registers his sources for testing
         // must ensure that they are indeed TestingSyncSource instances
@@ -509,7 +547,7 @@ private:
 
         if (!basename.empty() &&
             lockEvolution.find(basename) == lockEvolution.end()) {
-            lockEvolution[basename].reset(createSource(name, true));
+            lockEvolution[basename].reset(createNamedSource(name, true));
             lockEvolution[basename]->open();
             ClientTest::registerCleanup(CleanupSources);
         }

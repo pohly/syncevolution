@@ -77,6 +77,11 @@ void SingleFileConfigTree::flush()
     // not implemented, cannot write anyway
 }
 
+void SingleFileConfigTree::reload()
+{
+    SE_THROW("SingleFileConfigTree::reload() not implemented");
+}
+
 void SingleFileConfigTree::remove(const string &path)
 {
     SE_THROW("internal error: SingleFileConfigTree::remove() called");
@@ -113,6 +118,13 @@ boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const string &path,
     
     return open(fullpath);
 }
+
+boost::shared_ptr<ConfigNode> SingleFileConfigTree::add(const string &path,
+                                                        const boost::shared_ptr<ConfigNode> &bode)
+{
+    SE_THROW("SingleFileConfigTree::add() not supported");
+}
+
 
 static void checkChild(const string &normalized,
                        const string &node,

@@ -151,6 +151,9 @@ std::string Status2String(SyncMLStatus status)
     case STATUS_DATA_MERGED:
         error = "data merged";
         break;
+    case STATUS_UNAUTHORIZED:
+        error = "authorization failed";
+        break;
     case STATUS_FORBIDDEN:
         error = "access denied";
         break;
@@ -183,6 +186,14 @@ std::string Status2String(SyncMLStatus status)
 
     case STATUS_PASSWORD_TIMEOUT:
         error = "password request timed out";
+        break;
+
+    case STATUS_RELEASE_TOO_OLD:
+        error = "SyncEvolution binary V" VERSION " too old to use configuration";
+        break;
+
+    case STATUS_MIGRATION_NEEDED:
+        error = "proceeding would make backward incompatible changes, aborted";
         break;
 
     case sysync::LOCERR_BADPROTO:
@@ -445,6 +456,7 @@ namespace {
             return res;
         }
     }
+#if 0
     string left(char sep, const string &str, size_t width) {
         if (str.size() + 1 >= width) {
             return str;
@@ -455,6 +467,7 @@ namespace {
             return res;
         }
     }
+#endif
 
     // insert string at column if it fits, otherwise flush right
     string align(char sep, const string &str, size_t width, size_t column) {
@@ -533,10 +546,10 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
     if (!(flags & WITHOUT_REJECTS) || !(flags & WITHOUT_CONFLICTS)) {
         out << "|" << fill(' ', name_width);
         if (!(flags & WITHOUT_CLIENT)) {
-            out << '|' << center(' ', "LOCAL", client_width);
+            out << '|' << center(' ', m_localName, client_width);
         }
         if (!(flags & WITHOUT_SERVER)) {
-            out << '|' << center(' ', "REMOTE", server_width);
+            out << '|' << center(' ', m_remoteName, server_width);
         }
         if (!(flags & WITHOUT_CONFLICTS)) {
             out << '|' << center(' ', "FLI", conflict_width);

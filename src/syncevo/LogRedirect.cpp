@@ -47,6 +47,7 @@
 SE_BEGIN_CXX
 
 LogRedirect *LogRedirect::m_redirect;
+std::set<std::string> LogRedirect::m_knownErrors;
 
 void LogRedirect::abortHandler(int sig) throw()
 {
@@ -79,20 +80,39 @@ void LogRedirect::init()
         m_stdout.m_read =
         m_stdout.m_write =
         m_stdout.m_copy = -1;
+
+    const char *lines = getenv("SYNCEVOLUTION_SUPPRESS_ERRORS");
+    if (lines) {
+        typedef boost::split_iterator<const char *> string_split_iterator;
+        string_split_iterator it =
+            boost::make_split_iterator(lines, boost::first_finder("\n", boost::is_iequal()));
+        while (it != string_split_iterator()) {
+            m_knownErrors.insert(std::string(it->begin(), it->end()));
+            ++it;
+        }
+    }
 }
 
-LogRedirect::LogRedirect(bool both) throw()
+LogRedirect::LogRedirect(bool both, const char *filename) throw()
 {
     init();
+    m_processing = true;
     if (!getenv("SYNCEVOLUTION_DEBUG")) {
         redirect(STDERR_FILENO, m_stderr);
         if (both) {
             redirect(STDOUT_FILENO, m_stdout);
-            m_out = fdopen(dup(m_stdout.m_copy), "w");
+            m_out = filename ?
+                fopen(filename, "w") :
+                fdopen(dup(m_stdout.m_copy), "w");
             if (!m_out) {
                 restore(m_stdout);
                 restore(m_stderr);
-                perror("LogRedirect fdopen");
+                perror(filename ? filename : "LogRedirect fdopen");
+            }
+        } else if (filename) {
+            m_out = fopen(filename, "w");
+            if (!m_out) {
+                perror(filename);
             }
         }
     }
@@ -115,6 +135,7 @@ LogRedirect::LogRedirect(bool both) throw()
         sigaction(SIGSEGV, &new_action, &old_action);
         sigaction(SIGBUS, &new_action, &old_action);
     }
+    m_processing = false;
 }
 
 LogRedirect::LogRedirect(ExecuteFlags flags)
@@ -139,6 +160,7 @@ LogRedirect::~LogRedirect() throw()
     }
     process();
     restore();
+    m_processing = true;
     if (m_out) {
         fclose(m_out);
     }
@@ -150,10 +172,32 @@ LogRedirect::~LogRedirect() throw()
     }
 }
 
+void LogRedirect::redoRedirect() throw()
+{
+    bool doStdout = m_stdout.m_copy >= 0;
+    bool doStderr = m_stderr.m_copy >= 0;
+
+    if (doStdout) {
+        restore(m_stdout);
+        redirect(STDOUT_FILENO, m_stdout);
+    }
+    if (doStderr) {
+        restore(m_stderr);
+        redirect(STDERR_FILENO, m_stderr);
+    }
+}
+
 void LogRedirect::restore() throw()
 {
+    if (m_processing) {
+        return;
+    }
+    m_processing = true;
+
     restore(m_stdout);
     restore(m_stderr);
+
+    m_processing = false;
 }
 
 void LogRedirect::messagev(Level level,
@@ -407,12 +451,21 @@ bool LogRedirect::process(FDs &fds) throw()
 
                 // If the text contains the word "error", it probably
                 // is severe enough to show to the user, regardless of
-                // who produced it.
-                if (strcasestr(text, "error")) {
+                // who produced it... except for errors suppressed
+                // explicitly.
+                if (strcasestr(text, "error") &&
+                    !ignoreError(text)) {
                     level = Logger::ERROR;
                 }
             }
 
+            // avoid explicit newline at end of output,
+            // logging will add it for each message()
+            // invocation
+            size_t len = strlen(text);
+            if (len > 0 && text[len - 1] == '\n') {
+                text[len - 1] = 0;
+            }
             LoggerBase::instance().message(level, prefix,
                                            NULL, 0, NULL,
                                            "%s", text);
@@ -422,6 +475,15 @@ bool LogRedirect::process(FDs &fds) throw()
     return data_read;
 }
 
+bool LogRedirect::ignoreError(const std::string &text)
+{
+    BOOST_FOREACH(const std::string &entry, m_knownErrors) {
+        if (text.find(entry) != text.npos) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void LogRedirect::process()
 {
@@ -569,6 +631,7 @@ class LogRedirectTest : public CppUnit::TestFixture {
             CPPUNIT_ASSERT(level <= DEBUG && level >= 0);
             m_streams[level] << StringPrintfV(format, args);
         }
+        virtual bool isProcessSafe() const { return true; }
     };
     
 public:
@@ -633,6 +696,9 @@ public:
 #ifdef HAVE_GLIB
     void glib()
     {
+        fflush(stdout);
+        fflush(stderr);
+
         static const char *filename = "LogRedirectTest_glib.out";
         int new_stdout = open(filename, O_RDWR|O_CREAT|O_TRUNC, S_IRWXU);
 

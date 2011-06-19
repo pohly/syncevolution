@@ -26,7 +26,7 @@ using namespace std;
 #ifdef ENABLE_ECAL
 
 // include first, it sets HANDLE_LIBICAL_MEMORY for us
-#include "libical/icalstrdup.h"
+#include <syncevo/icalstrdup.h>
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/SmartPtr.h>
@@ -157,12 +157,12 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
 char *EvolutionCalendarSource::authenticate(const char *prompt,
                                             const char *key)
 {
-    const char *passwd = getPassword();
+    std::string passwd = getPassword();
 
     SE_LOG_DEBUG(this, NULL, "authentication requested, prompt \"%s\", key \"%s\" => %s",
                  prompt, key,
-                 passwd && passwd[0] ? "returning configured password" : "no password configured");
-    return passwd && passwd[0] ? strdup(passwd) : NULL;
+                 !passwd.empty() ? "returning configured password" : "no password configured");
+    return !passwd.empty() ? strdup(passwd.c_str()) : NULL;
 }
 
 void EvolutionCalendarSource::open()
@@ -596,8 +596,8 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                                             &gerror)) {
         if (gerror->domain == E_CALENDAR_ERROR &&
             gerror->code == E_CALENDAR_STATUS_OBJECT_NOT_FOUND) {
-            SE_LOG_DEBUG(this, NULL, "%s: %s: request to delete non-existant item ignored",
-                      getName(), luid.c_str());
+            SE_LOG_DEBUG(this, NULL, "%s: request to delete non-existant item ignored",
+                         luid.c_str());
             g_clear_error(&gerror);
         } else {
             throwError(string("deleting item " ) + luid, gerror);
@@ -812,7 +812,7 @@ string EvolutionCalendarSource::getItemModTime(ECalComponent *ecomp)
     if (!modTimePtr) {
         return "";
     } else {
-        return icalTime2Str(*modTimePtr);
+        return icalTime2Str(*modTimePtr.get());
     }
 }
 

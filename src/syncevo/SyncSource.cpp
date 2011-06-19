@@ -54,7 +54,12 @@ void SyncSourceBase::throwError(const string &action, int error)
 
 void SyncSourceBase::throwError(const string &failure)
 {
-    SyncContext::throwError(string(getName()) + ": " + failure);
+    SyncContext::throwError(string(getDisplayName()) + ": " + failure);
+}
+
+void SyncSourceBase::throwError(SyncMLStatus status, const string &failure)
+{
+    SyncContext::throwError(status, getDisplayName() + ": " + failure);
 }
 
 SyncMLStatus SyncSourceBase::handleException()
@@ -73,7 +78,7 @@ void SyncSourceBase::messagev(Level level,
                               const char *format,
                               va_list args)
 {
-    string newprefix = getName();
+    string newprefix = getDisplayName();
     if (prefix) {
         newprefix += ": ";
         newprefix += prefix;
@@ -175,6 +180,14 @@ string SyncSourceBase::getNativeDatatypeName()
     XMLConfigFragments fragments;
     getSynthesisInfo(info, fragments);
     return info.m_native;
+}
+
+SyncSource::SyncSource(const SyncSourceParams &params) :
+    SyncSourceConfig(params.m_name, params.m_nodes),
+    m_numDeleted(0),
+    m_forceSlowSync(false),
+    m_name(params.getDisplayName())
+{
 }
 
 SDKInterface *SyncSource::getSynthesisAPI() const
@@ -310,14 +323,13 @@ string SyncSource::backendsDebug() {
 
 SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error, SyncConfig *config)
 {
-    string sourceTypeString = getSourceTypeString(params.m_nodes);
     SourceType sourceType = getSourceType(params.m_nodes);
 
     if (sourceType.m_backend == "virtual") {
         SyncSource *source = NULL;
         source = new VirtualSyncSource(params, config);
         if (error && !source) {
-            SyncContext::throwError(params.m_name + ": virtual source cannot be instantiated");
+            SyncContext::throwError(params.getDisplayName() + ": virtual source cannot be instantiated");
         }
         return source;
     }
@@ -327,20 +339,26 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
         SyncSource *source = sourceInfos->m_create(params);
         if (source) {
             if (source == RegisterSyncSource::InactiveSource) {
-                SyncContext::throwError(params.m_name + ": access to " + sourceInfos->m_shortDescr +
-                                                " not enabled, therefore type = " + sourceTypeString + " not supported");
+                SyncContext::throwError(params.getDisplayName() + ": access to " + sourceInfos->m_shortDescr +
+                                        " not enabled");
             }
             return source;
         }
     }
 
     if (error) {
-        string problem = params.m_name + ": type '" + sourceTypeString + "' not supported";
+        string backends;
         if (scannedModules.m_available.size()) {
-            problem += " by any of the backends (";
-            problem += boost::join(scannedModules.m_available, ", ");
-            problem += ")";
+            backends += "by any of the backend modules (";
+            backends += boost::join(scannedModules.m_available, ", ");
+            backends += ") ";
         }
+        string problem =
+            StringPrintf("%s: backend '%s' not supported %sor not fully configured (format '%s')",
+                         params.m_name.c_str(),
+                         sourceType.m_backend.c_str(),
+                         backends.c_str(),
+                         sourceType.m_localFormat.c_str());
         SyncContext::throwError(problem);
     }
 
@@ -350,9 +368,9 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
 SyncSource *SyncSource::createTestingSource(const string &name, const string &type, bool error,
                                             const char *prefix)
 {
-    SyncConfig config("testing@client-test");
-    SyncSourceNodes nodes = config.getSyncSourceNodes(name);
-    SyncSourceParams params(name, nodes);
+    boost::shared_ptr<SyncConfig> context(new SyncConfig("source-config@client-test"));
+    SyncSourceNodes nodes = context->getSyncSourceNodes(name);
+    SyncSourceParams params(name, nodes, context);
     PersistentSyncSourceConfig sourceconfig(name, nodes);
     sourceconfig.setSourceType(type);
     if (prefix) {
@@ -365,11 +383,20 @@ VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig 
     DummySyncSource(params)
 {
     if (config) {
+        std::string evoSyncSource = getDatabaseID();
         BOOST_FOREACH(std::string name, getMappedSources()) {
+            if (name.empty()) {
+                throwError(StringPrintf("configuration of underlying sources contains empty source name: database = '%s'",
+                                        evoSyncSource.c_str()));
+            }
             SyncSourceNodes source = config->getSyncSourceNodes(name);
-            SyncSourceParams params(name, source);
+            SyncSourceParams params(name, source, boost::shared_ptr<SyncConfig>(config, SyncConfigNOP()));
             boost::shared_ptr<SyncSource> syncSource(createSource(params, true, config));
             m_sources.push_back(syncSource);
+        }
+        if (m_sources.size() != 2) {
+            throwError(StringPrintf("configuration of underlying sources must contain exactly one calendar and one todo source (like calendar+todo): database = '%s'",
+                                    evoSyncSource.c_str()));
         }
     }
 }
@@ -632,80 +659,54 @@ void SyncSourceSerialize::init(SyncSource::Operations &ops)
                                         this, _1, _2, _3);
 }
 
-/**
- * Mapping from Hash() value to file.
- */
-class ItemCache
+
+void ItemCache::init(const SyncSource::Operations::ConstBackupInfo &oldBackup,
+                     const SyncSource::Operations::BackupInfo &newBackup,
+                     bool legacy)
 {
-public:
-#ifdef USE_SHA256
-    typedef std::string Hash_t;
-    Hash_t hashFunc(const std::string &data) { return SHA_256(data); }
-#else
-    typedef unsigned long Hash_t;
-    Hash_t hashFunc(const std::string &data) { return Hash(data); }
-#endif
-    typedef unsigned long Counter_t;
-
-    /** mark the algorithm used for the hash via different suffices */
-    static const char *m_hashSuffix;
-
-    /**
-     * Collect information about stored hashes. Provides
-     * access to file name via hash.
-     *
-     * If no hashes were written (as in an old SyncEvoltion
-     * version), we could read the files to recreate the
-     * hashes. This is not done because it won't occur
-     * often enough.
-     *
-     * Hashes are also not verified. Users should better
-     * not edit them or file contents...
-     *
-     * @param oldBackup     existing backup to read; may be empty
-     */
-    void init(const SyncSource::Operations::ConstBackupInfo &oldBackup)
-    {
-        m_hash2counter.clear();
-        m_dirname = oldBackup.m_dirname;
-        if (m_dirname.empty() || !oldBackup.m_node) {
-            return;
-        }
-
-        long numitems;
-        if (!oldBackup.m_node->getProperty("numitems", numitems)) {
-            return;
-        }
-        for (long counter = 1; counter <= numitems; counter++) {
-            stringstream key;
-            key << counter << m_hashSuffix;
-            Hash_t hash;
-            if (oldBackup.m_node->getProperty(key.str(), hash)) {
-                m_hash2counter[hash] = counter;
-            }
-        }
+    m_counter = 1;
+    m_legacy = legacy;
+    m_backup = newBackup;
+    m_hash2counter.clear();
+    m_dirname = oldBackup.m_dirname;
+    if (m_dirname.empty() || !oldBackup.m_node) {
+        return;
     }
 
-    /**
-     * create file name for a specific hash, empty if no such hash
-     */
-    string getFilename(Hash_t hash)
-    {
-        Map_t::const_iterator it = m_hash2counter.find(hash);
-        if (it != m_hash2counter.end()) {
-            stringstream dirname;
-            dirname << m_dirname << "/" << it->second;
-            return dirname.str();
-        } else {
-            return "";
+    long numitems;
+    if (!oldBackup.m_node->getProperty("numitems", numitems)) {
+        return;
+    }
+    for (long counter = 1; counter <= numitems; counter++) {
+        stringstream key;
+        key << counter << m_hashSuffix;
+        Hash_t hash;
+        if (oldBackup.m_node->getProperty(key.str(), hash)) {
+            m_hash2counter[hash] = counter;
         }
     }
+}
 
-private:
-    typedef std::map<Hash_t, Counter_t> Map_t;
-    Map_t m_hash2counter;
-    string m_dirname;
-};
+void ItemCache::reset()
+{
+    // clean directory and start counting at 1 again
+    m_counter = 1;
+    rm_r(m_backup.m_dirname);
+    mkdir_p(m_backup.m_dirname);
+    m_backup.m_node->clear();
+}
+
+string ItemCache::getFilename(Hash_t hash)
+{
+    Map_t::const_iterator it = m_hash2counter.find(hash);
+    if (it != m_hash2counter.end()) {
+        stringstream dirname;
+        dirname << m_dirname << "/" << it->second;
+        return dirname.str();
+    } else {
+        return "";
+    }
+}
 
 const char *ItemCache::m_hashSuffix =
 #ifdef USE_SHA256
@@ -714,6 +715,71 @@ const char *ItemCache::m_hashSuffix =
     "-hash"
 #endif
 ;
+
+void ItemCache::backupItem(const std::string &item,
+                           const std::string &uid,
+                           const std::string &rev)
+{
+    stringstream filename;
+    filename << m_backup.m_dirname << "/" << m_counter;
+
+    ItemCache::Hash_t hash = hashFunc(item);
+    string oldfilename = getFilename(hash);
+    if (!oldfilename.empty()) {
+        // found old file with same content, reuse it via hardlink
+        if (link(oldfilename.c_str(), filename.str().c_str())) {
+            // Hard linking failed. Record this, then continue
+            // by ignoring the old file.
+            SE_LOG_DEBUG(NULL, NULL, "hard linking old %s new %s: %s",
+                         oldfilename.c_str(),
+                         filename.str().c_str(),
+                         strerror(errno));
+            oldfilename.clear();
+        }
+    }
+
+    if (oldfilename.empty()) {
+        // write new file instead of reusing old one
+        ofstream out(filename.str().c_str());
+        out.write(item.c_str(), item.size());
+        out.close();
+        if (out.fail()) {
+            SE_THROW(string("error writing ") + filename.str() + ": " + strerror(errno));
+        }
+    }
+
+    stringstream key;
+    key << m_counter << "-uid";
+    m_backup.m_node->setProperty(key.str(), uid);
+    if (m_legacy) {
+        // clear() does not remove the existing content, which was
+        // intended here. This should have been key.str(""). As a
+        // result, keys for -rev are longer than intended because they
+        // start with the -uid part. We cannot change it now, because
+        // that would break compatibility with nodes that use the
+        // older, longer keys for -rev.
+        // key.clear();
+    } else {
+        key.str("");
+    }
+    key << m_counter << "-rev";
+    m_backup.m_node->setProperty(key.str(), rev);
+    key.str("");
+    key << m_counter << ItemCache::m_hashSuffix;
+    m_backup.m_node->setProperty(key.str(), hash);
+
+    m_counter++;
+}
+
+void ItemCache::finalize(BackupReport &report)
+{
+    stringstream value;
+    value << m_counter - 1;
+    m_backup.m_node->setProperty("numitems", value.str());
+    m_backup.m_node->flush();
+
+    report.setNumItems(m_counter - 1);
+}
 
 void SyncSourceRevisions::initRevisions()
 {
@@ -729,7 +795,7 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
                                      BackupReport &report)
 {
     ItemCache cache;
-    cache.init(oldBackup);
+    cache.init(oldBackup, newBackup, true);
 
     bool startOfSync = newBackup.m_mode == SyncSource::Operations::BackupInfo::BACKUP_BEFORE;
     RevisionMap_t buffer;
@@ -742,67 +808,16 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
         revisions = &buffer;
     }
 
-    unsigned long counter = 1;
     string item;
     errno = 0;
     BOOST_FOREACH(const StringPair &mapping, *revisions) {
         const string &uid = mapping.first;
         const string &rev = mapping.second;
         m_raw->readItemRaw(uid, item);
-
-        stringstream filename;
-        filename << newBackup.m_dirname << "/" << counter;
-
-        ItemCache::Hash_t hash = cache.hashFunc(item);
-        string oldfilename = cache.getFilename(hash);
-        if (!oldfilename.empty()) {
-            // found old file with same content, reuse it via hardlink
-            if (link(oldfilename.c_str(), filename.str().c_str())) {
-                // Hard linking failed. Record this, then continue
-                // by ignoring the old file.
-                SE_LOG_DEBUG(NULL, NULL, "hard linking old %s new %s: %s",
-                             oldfilename.c_str(),
-                             filename.str().c_str(),
-                             strerror(errno));
-                oldfilename.clear();
-            }
-        }
-
-        if (oldfilename.empty()) {
-            // write new file instead of reusing old one
-            ofstream out(filename.str().c_str());
-            out.write(item.c_str(), item.size());
-            out.close();
-            if (out.fail()) {
-                throwError(string("error writing ") + filename.str() + ": " + strerror(errno));
-            }
-        }
-
-        stringstream key;
-        key << counter << "-uid";
-        newBackup.m_node->setProperty(key.str(), uid);
-        // clear() does not remove the existing content, which was
-        // intended here. This should have been key.str(""). As a
-        // result, keys for -rev are longer than intended because they
-        // start with the -uid part. We cannot change it now, because
-        // that would break compatibility with nodes that use the
-        // older, longer keys for -rev.
-        key.clear();
-        key << counter << "-rev";
-        newBackup.m_node->setProperty(key.str(), rev);
-        key.str("");
-        key << counter << ItemCache::m_hashSuffix;
-        newBackup.m_node->setProperty(key.str(), hash);
-
-        counter++;
+        cache.backupItem(item, uid, rev);
     }
 
-    stringstream value;
-    value << counter - 1;
-    newBackup.m_node->setProperty("numitems", value.str());
-    newBackup.m_node->flush();
-
-    report.setNumItems(counter - 1);
+    cache.finalize(report);
 }
 
 void SyncSourceRevisions::restoreData(const SyncSource::Operations::ConstBackupInfo &oldBackup,
@@ -904,6 +919,13 @@ void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode)
 {
     initRevisions();
 
+    // Delay setProperty calls until after checking all uids.
+    // Necessary for MapSyncSource, which shares the revision among
+    // several uids. Another advantage is that we can do the "find
+    // deleted items" check with less entries (new items not added
+    // yet).
+    StringMap revUpdates;
+
     BOOST_FOREACH(const StringPair &mapping, m_revisions) {
         const string &uid = mapping.first;
         const string &revision = mapping.second;
@@ -914,11 +936,11 @@ void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode)
         string serverRevision(trackingNode.readProperty(uid));
         if (!serverRevision.size()) {
             addItem(uid, NEW);
-            trackingNode.setProperty(uid, revision);
+            revUpdates[uid] = revision;
         } else {
             if (revision != serverRevision) {
                 addItem(uid, UPDATED);
-                trackingNode.setProperty(uid, revision);
+                revUpdates[uid] = revision;
             }
         }
     }
@@ -933,6 +955,11 @@ void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode)
             addItem(uid, DELETED);
             trackingNode.removeProperty(uid);
         }
+    }
+
+    // now update tracking node
+    BOOST_FOREACH(const StringPair &update, revUpdates) {
+        trackingNode.setProperty(update.first, update.second);
     }
 }
 
@@ -1269,7 +1296,7 @@ void SyncSourceBlob::init(SyncSource::Operations &ops,
                           const std::string &dir)
 {
     m_blob.Init(getSynthesisAPI(),
-                getName(),
+                getName().c_str(),
                 dir, "", "", "");
     ops.m_readBlob = boost::bind(&SyncSourceBlob::readBlob, this,
                                  _1, _2, _3, _4, _5, _6, _7);

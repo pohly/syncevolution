@@ -70,12 +70,12 @@ class Unref {
     }
 #ifdef ENABLE_EBOOK
     static void unref(EBookQuery *pointer) { e_book_query_unref(pointer); }
-#endif
-#ifdef ENABLE_ECAL
+#endif // ENABLE_EBOOK
+#endif // HAVE_GLIB
+#ifdef ENABLE_ICAL
     static void unref(icalcomponent *pointer) { icalcomponent_free(pointer); }
     static void unref(icaltimezone *pointer) { icaltimezone_free(pointer, 1); }
-#endif
-#endif
+#endif // ENABLE_ICAL
 };
 
 #ifdef HAVE_GLIB
@@ -86,6 +86,10 @@ class UnrefGLibEvent {
 class UnrefGString {
  public:
     static void unref(gchar *ptr) { g_free(ptr); }
+};
+class UnrefGMainLoop {
+ public:
+    static void unref(GMainLoop *ptr) { g_main_loop_unref(ptr); }
 };
 #endif // HAVE_GLIB
 
@@ -212,6 +216,7 @@ template <class T> class arrayptr : public eptr<T, T, ArrayUnref<T> > {
 /** eptr for glib event handle */
 typedef SmartPtr<guint, guint, UnrefGLibEvent> GLibEvent;
 typedef SmartPtr<gchar *, gchar *, UnrefGString> GString;
+typedef SmartPtr<GMainLoop *, GMainLoop *, UnrefGMainLoop> GMainLoopPtr;
 #endif
 
 SE_END_CXX

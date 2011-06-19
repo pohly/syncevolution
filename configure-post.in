@@ -19,11 +19,6 @@ if test "$enable_any" = "no"; then
         AC_MSG_ERROR([no backend enabled - refusing to continue: $anymissing])
 fi
 
-dnl check for programs.
-AC_PROG_CXX
-AC_PROG_LIBTOOL
-AC_PROG_MAKE_SET
-
 dnl glib initialization is done only if requested by some configure-sub.in,
 dnl for not needed otherwise even if found
 if test "$need_glib" = "yes"; then
@@ -100,6 +95,10 @@ if test "$enable_evolution_compatibility" == "yes"; then
    AC_DEFINE(EVOLUTION_COMPATIBILITY, 1, [avoid hard dependency on Evolution shared objects])
 fi
 AM_CONDITIONAL([ENABLE_EVOLUTION_COMPATIBILITY], [test "$enable_evolution_compatibility" == "yes"])
+PKG_CHECK_MODULES(LIBICAL_AVAILABLE,
+                  libical >= 0.43,
+                  AC_DEFINE(HAVE_LIBICAL_R, 1, [have recent enough libical with _r variants]),
+                  pass)
 
 dnl --enable-developer-mode
 if test "$enable_developer_mode" == "yes"; then
@@ -139,6 +138,15 @@ AC_ARG_ENABLE(dbus-timeout-hack,
 if test "$enable_dbus_timeout_hack" = "yes"; then
    AC_DEFINE(ENABLE_DBUS_TIMEOUT_HACK, 1, [overrides the default D-Bus timeout so that synchronous calls never time out])
 fi
+
+# Avoid hard-coding paths in backends. These names are chosen so
+# that a backend can alternatively use its own top-level configure
+# with PKG_CHECK_MODULES(SYNCEVOLUTION, "syncevolution") to set them.
+# need absolute path, use pwd instead of relative $srcdir
+SYNCEVOLUTION_CFLAGS=-I`cd $srcdir && pwd`/src
+SYNCEVOLUTION_LIBS=`pwd`/src/syncevo/libsyncevolution.la
+AC_SUBST(SYNCEVOLUTION_CFLAGS)
+AC_SUBST(SYNCEVOLUTION_LIBS)
 
 AC_CONFIG_FILES(Makefile src/dbus/interfaces/Makefile src/gdbus/Makefile src/dbus/Makefile src/Makefile src/syncevo/Makefile src/syncevo/syncevolution.pc src/syncevo/configs/Makefile src/synthesis-includes/Makefile src/gtk-ui/Makefile po/Makefile.in test/Makefile src/dbus/syncevo-dbus.pc)
 AC_OUTPUT

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Intel Corporation
+ * Copyright (C) 2011 Symbio, Ville Nummela
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,6 +23,13 @@
 #include "config.h"
 #endif
 
+struct DBusMessage;
+namespace SyncEvo {
+static DBusMessage *SyncEvoHandleException(DBusMessage *msg);
+}
+#define DBUS_CXX_EXCEPTION_HANDLER SyncEvo::SyncEvoHandleException
+#include "gdbus-cxx-bridge.h"
+
 #include <syncevo/Logging.h>
 #include <syncevo/LogStdout.h>
 #include <syncevo/LogRedirect.h>
@@ -32,7 +40,9 @@
 #include <syncevo/SyncSource.h>
 #include <syncevo/SyncML.h>
 #include <syncevo/FileConfigNode.h>
+#include <syncevo/TransportAgent.h>
 #include <syncevo/Cmdline.h>
+#include <syncevo/GLibSupport.h>
 
 #include <synthesis/san.h>
 
@@ -50,6 +60,7 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <fstream>
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 #include <boost/noncopyable.hpp>
@@ -62,20 +73,86 @@ extern "C" {
 }
 #endif
 
+// redefining "signals" clashes with the use of that word in gtkbindings.h,
+// included via notify.h
+#define QT_NO_KEYWORDS
+
+#ifdef USE_KDE_KWALLET
+#include <QtCore/QCoreApplication>
+#include <QtCore/QString>
+#include <QtCore/QLatin1String>
+#include <QtCore/QByteArray>
+#include <QtCore/QDebug>
+#include <QtDBus/QDBusConnection>
+
+#include <KApplication>
+#include <KAboutData>
+#include <KCmdLineArgs>
+
+#include <kwallet.h>
+#endif
+
 #ifdef HAS_NOTIFY
 #include <libnotify/notify.h>
 #endif
 
-class DBusMessage;
-static DBusMessage *SyncEvoHandleException(DBusMessage *msg);
-#define DBUS_CXX_EXCEPTION_HANDLER SyncEvoHandleException
-#include "gdbus-cxx-bridge.h"
-
+using namespace GDBusCXX;
 using namespace SyncEvo;
+
+SE_BEGIN_CXX
 
 static GMainLoop *loop = NULL;
 static bool shutdownRequested = false;
 static LogRedirect *redirectPtr;
+
+/**
+ * Encapsulates startup environment from main() and can do execve()
+ * with it later on. Assumes that argv[0] is the executable to run.
+ */
+class Restart
+{
+    vector<string> m_argv;
+    vector<string> m_env;
+
+    void saveArray(vector<string> &array, char **p)
+    {
+        while(*p) {
+            array.push_back(*p);
+            p++;
+        }
+    }
+
+    const char **createArray(const vector<string> &array)
+    {
+        const char **res = new const char *[(array.size() + 1)];
+        size_t i;
+        for (i = 0; i < array.size(); i++) {
+            res[i] = array[i].c_str();
+        }
+        res[i] = NULL;
+        return res;
+    }
+
+public:
+    Restart(char **argv, char **env)
+    {
+        saveArray(m_argv, argv);
+        saveArray(m_env, env);
+    }
+
+    void restart()
+    {
+        const char **argv = createArray(m_argv);
+        const char **env = createArray(m_env);
+        LogRedirect::reset();
+        if (execve(argv[0], (char *const *)argv, (char *const *)env)) {
+            SE_THROW(StringPrintf("restarting syncevo-dbus-server failed: %s", strerror(errno)));
+        }
+    }
+};
+
+/** initialized in main() */
+static boost::shared_ptr<Restart> restart;
 
 /**
  * Anything that can be owned by a client, like a connection
@@ -216,6 +293,8 @@ public:
     void activate(int seconds,
                   const boost::function<bool ()> &callback)
     {
+        deactivate();
+
         m_callback = callback;
         m_tag = g_timeout_add_seconds(seconds, triggered, static_cast<gpointer>(this));
         if (!m_tag) {
@@ -303,6 +382,9 @@ private:
     boost::shared_ptr<DBusUserInterface> getLocalConfig(const std::string &configName, bool mustExist = true);
 };
 
+SE_END_CXX
+namespace GDBusCXX {
+
 /**
  * dbus_traits for SourceDatabase. Put it here for 
  * avoiding polluting gxx-dbus-bridge.h
@@ -312,6 +394,9 @@ template<> struct dbus_traits<ReadOperations::SourceDatabase> :
                               dbus_member<ReadOperations::SourceDatabase, std::string, &ReadOperations::SourceDatabase::m_name,
                               dbus_member<ReadOperations::SourceDatabase, std::string, &ReadOperations::SourceDatabase::m_uri,
                               dbus_member_single<ReadOperations::SourceDatabase, bool, &ReadOperations::SourceDatabase::m_isDefault> > > >{}; 
+
+}
+SE_BEGIN_CXX
 
 /**
  * Automatic termination and track clients
@@ -811,8 +896,11 @@ class AutoSyncManager : public SessionListener
      */
     void update(const string &configName);
 
-    /* Is there any auto sync task in the queue? */
+    /* Is there anything ready to run? */
     bool hasTask() { return !m_workQueue.empty(); }
+
+    /* Is there anything with automatic syncing waiting for its time to run? */
+    bool hasAutoConfigs() { return !m_peerMap.empty(); }
 
     /** 
      * pick the front task from the working queue and create a session for it.
@@ -969,7 +1057,7 @@ class PresenceStatus {
 };
 
 /*
- * Implements org.moblin.connman.Manager
+ * Implements org.connman.Manager
  * GetProperty  : getPropCb
  * PropertyChanged: propertyChanged
  **/
@@ -977,9 +1065,9 @@ class ConnmanClient : public DBusRemoteObject
 {
 public:
     ConnmanClient (DBusServer &server);
-    virtual const char *getDestination() const {return "org.moblin.connman";}
+    virtual const char *getDestination() const {return "net.connman";}
     virtual const char *getPath() const {return "/";}
-    virtual const char *getInterface() const {return "org.moblin.connman.Manager";}
+    virtual const char *getInterface() const {return "net.connman.Manager";}
     virtual DBusConnection *getConnection() const {return m_connmanConn.get();}
 
     void propertyChanged(const string &name,
@@ -994,6 +1082,72 @@ private:
     SignalWatch2 <string,boost::variant<vector<string>, string> > m_propertyChanged;
 };
 
+/**
+ * Client for org.freedesktop.NetworkManager
+ * The initial state of NetworkManager is queried via
+ * org.freedesktop.DBus.Properties. Dynamic changes are listened via
+ * org.freedesktop.NetworkManager - StateChanged signal
+ */
+class NetworkManagerClient : public DBusRemoteObject
+{
+public:
+    enum NM_State
+      {
+        NM_STATE_UNKNOWN,
+        NM_STATE_ASLEEP,
+        NM_STATE_CONNECTING,
+        NM_STATE_CONNECTED,
+        NM_STATE_DISCONNECTED
+      };
+public:
+    NetworkManagerClient(DBusServer& server);
+    
+    virtual const char *getDestination() const {
+        return "org.freedesktop.NetworkManager";
+    }
+    virtual const char *getPath() const {
+        return "/org/freedesktop/NetworkManager";
+    }
+    virtual const char *getInterface() const {
+        return "org.freedesktop.NetworkManager";
+    }
+    virtual DBusConnection *getConnection() const {
+        return m_networkManagerConn.get();
+    }
+
+    void stateChanged(uint32_t uiState);
+
+private:
+
+    class NetworkManagerProperties : public DBusRemoteObject
+    {
+    public:
+        NetworkManagerProperties(NetworkManagerClient& manager);
+
+        virtual const char *getDestination() const {
+            return "org.freedesktop.NetworkManager";
+        }
+        virtual const char *getPath() const {
+            return "/org/freedesktop/NetworkManager";
+        }
+        virtual const char *getInterface() const {
+            return "org.freedesktop.DBus.Properties";
+        }
+        virtual DBusConnection* getConnection() const {
+            return m_manager.getConnection();
+        }
+        void get();
+        void getCallback(const boost::variant<uint32_t, std::string> &prop,
+                         const std::string &error);
+    private:
+        NetworkManagerClient &m_manager;
+    };
+    
+    DBusServer &m_server;
+    DBusConnectionPtr m_networkManagerConn;
+    SignalWatch1<uint32_t> m_stateChanged;
+    NetworkManagerProperties m_properties;
+};
 
 
 /**
@@ -1012,6 +1166,25 @@ class DBusServer : public DBusObjectHelper,
     uint32_t m_lastSession;
     typedef std::list< std::pair< boost::shared_ptr<Watch>, boost::shared_ptr<Client> > > Clients_t;
     Clients_t m_clients;
+
+    /**
+     * Watch all files mapped into our address space. When
+     * modifications are seen (as during a package upgrade), queue a
+     * high priority session. This prevents running other sessions,
+     * which might not be able to execute correctly. For example, a
+     * sync with libsynthesis from 1.1 does not work with
+     * SyncEvolution XML files from 1.2. The dummy session then waits
+     * for the changes to settle (see SHUTDOWN_QUIESENCE_SECONDS) and
+     * either shuts down or restarts.  The latter is necessary if the
+     * daemon has automatic syncing enabled in a config.
+     */
+    list< boost::shared_ptr<GLibNotify> > m_files;
+    void fileModified();
+
+    /**
+     * session handling the shutdown in response to file modifications
+     */
+    boost::shared_ptr<Session> m_shutdownSession;
 
     /* Event source that regurally pool network manager
      * */
@@ -1238,7 +1411,8 @@ class DBusServer : public DBusObjectHelper,
 
     PresenceStatus m_presence;
     ConnmanClient m_connman;
-
+    NetworkManagerClient m_networkManager;
+    
     /** manager to automatic sync */
     AutoSyncManager m_autoSync;
 
@@ -1375,6 +1549,19 @@ public:
      */
     std::string getNextSession();
 
+    /**
+     * Number of seconds to wait after file modifications are observed
+     * before shutting down or restarting. Shutting down could be done
+     * immediately, but restarting might not work right away. 10
+     * seconds was chosen because every single package is expected to
+     * be upgraded on disk in that interval. If a long-running system
+     * upgrade replaces additional packages later, then the server
+     * might restart multiple times during a system upgrade. Because it
+     * never runs operations directly after starting, that shouldn't
+     * be a problem.
+     */
+    static const int SHUTDOWN_QUIESENCE_SECONDS = 10;
+
     AutoSyncManager &getAutoSyncManager() { return m_autoSync; }
 
     /**
@@ -1394,6 +1581,8 @@ public:
                           const char *function,
                           const char *format,
                           va_list args);
+
+    virtual bool isProcessSafe() const { return false; }
 };
 
 /**
@@ -1516,12 +1705,16 @@ struct SourceStatus
     uint32_t m_error;
 };
 
+SE_END_CXX
+namespace GDBusCXX {
 template<> struct dbus_traits<SourceStatus> :
     public dbus_struct_traits<SourceStatus,
                               dbus_member<SourceStatus, std::string, &SourceStatus::m_mode,
                               dbus_member<SourceStatus, std::string, &SourceStatus::m_status,
                               dbus_member_single<SourceStatus, uint32_t, &SourceStatus::m_error> > > >
 {};
+}
+SE_BEGIN_CXX
 
 struct SourceProgress
 {
@@ -1538,6 +1731,8 @@ struct SourceProgress
     int32_t m_receiveCount, m_receiveTotal;
 };
 
+SE_END_CXX
+namespace GDBusCXX {
 template<> struct dbus_traits<SourceProgress> :
     public dbus_struct_traits<SourceProgress,
                               dbus_member<SourceProgress, std::string, &SourceProgress::m_phase,
@@ -1548,6 +1743,8 @@ template<> struct dbus_traits<SourceProgress> :
                               dbus_member<SourceProgress, int32_t, &SourceProgress::m_receiveCount,
                               dbus_member_single<SourceProgress, int32_t, &SourceProgress::m_receiveTotal> > > > > > > >
 {};
+}
+SE_BEGIN_CXX
 
 /**
  * This class is mainly to implement two virtual functions 'askPassword'
@@ -1688,15 +1885,15 @@ public:
      * These ratios might be dynamicall changed in the future.
      */
     /** PRO_SYNC_PREPARE step ratio to standard unit */
-    static const float PRO_SYNC_PREPARE_RATIO = 0.2;
+    static const float PRO_SYNC_PREPARE_RATIO;
     /** data prepare for data items to standard unit. All are combined by profiling data */
-    static const float DATA_PREPARE_RATIO = 0.10;
+    static const float DATA_PREPARE_RATIO;
     /** one data item send's ratio to standard unit */
-    static const float ONEITEM_SEND_RATIO = 0.05;
+    static const float ONEITEM_SEND_RATIO;
     /** one data item receive&parse's ratio to standard unit */
-    static const float ONEITEM_RECEIVE_RATIO = 0.05;
+    static const float ONEITEM_RECEIVE_RATIO;
     /** connection setup to standard unit */
-    static const float CONN_SETUP_RATIO = 0.5;
+    static const float CONN_SETUP_RATIO;
     /** assume the number of data items */
     static const int DEFAULT_ITEMS = 5;
     /** default times of message send/receive in each step */
@@ -1772,6 +1969,12 @@ private:
     string m_source;
 };
 
+const float ProgressData::PRO_SYNC_PREPARE_RATIO = 0.2;
+const float ProgressData::DATA_PREPARE_RATIO = 0.10;
+const float ProgressData::ONEITEM_SEND_RATIO = 0.05;
+const float ProgressData::ONEITEM_RECEIVE_RATIO = 0.05;
+const float ProgressData::CONN_SETUP_RATIO = 0.5;
+
 class CmdlineWrapper;
 
 /**
@@ -1790,6 +1993,7 @@ class Session : public DBusObjectHelper,
     std::string m_peerDeviceID;
 
     bool m_serverMode;
+    bool m_serverAlerted;
     SharedBuffer m_initialMessage;
     string m_initialMessageType;
 
@@ -1884,11 +2088,15 @@ class Session : public DBusObjectHelper,
     /** the number of sources that have been restored */
     int m_restoreSrcEnd;
 
+    /**
+     * status of the session
+     */
     enum RunOperation {
-        OP_SYNC = 0,
-        OP_RESTORE = 1,
-        OP_CMDLINE = 2,
-        OP_NULL
+        OP_SYNC,            /**< running a sync */
+        OP_RESTORE,         /**< restoring data */
+        OP_CMDLINE,         /**< executing command line */
+        OP_SHUTDOWN,        /**< will shutdown server as soon as possible */
+        OP_NULL             /**< idle, accepting commands via D-Bus */
     };
 
     static string runOpToString(RunOperation op);
@@ -1900,6 +2108,26 @@ class Session : public DBusObjectHelper,
 
     /** Cmdline to execute command line args */
     boost::shared_ptr<CmdlineWrapper> m_cmdline;
+
+    /**
+     * time of latest file modification relevant for shutdown
+     */
+    Timespec m_shutdownLastMod;
+
+    /**
+     * timer which counts seconds until server is meant to shut down:
+     * set only while the session is active and thus shutdown is allowed
+     */
+    Timeout m_shutdownTimer;
+
+    /**
+     * Called Server::SHUTDOWN_QUIESENCE_SECONDS after last file modification,
+     * while shutdown session is active and thus ready to shut down the server.
+     * Then either triggers the shutdown or restarts.
+     *
+     * @return always false to disable timer
+     */
+    bool shutdownServer();
 
     /** Session.Attach() */
     void attach(const Caller_t &caller);
@@ -1985,7 +2213,8 @@ public:
         PRI_CMDLINE = -10,
         PRI_DEFAULT = 0,
         PRI_CONNECTION = 10,
-        PRI_AUTOSYNC = 20
+        PRI_AUTOSYNC = 20,
+        PRI_SHUTDOWN = 256  // always higher than anything else
     };
 
     /**
@@ -1994,10 +2223,27 @@ public:
     void setPriority(int priority) { m_priority = priority; }
     int getPriority() const { return m_priority; }
 
+    /**
+     * Turns session into one which will shut down the server, must
+     * be called before enqueing it. Will wait for a certain idle period
+     * after file modifications before claiming to be ready for running
+     * (see Server::SHUTDOWN_QUIESENCE_SECONDS).
+     */
+    void startShutdown();
+
+    /**
+     * Called by server to tell shutdown session that a file was modified.
+     * Session uses that to determine when the quiesence period is over.
+     */
+    void shutdownFileModified();
+
+    bool isServerAlerted() const { return m_serverAlerted; }
+    void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
+
     void initServer(SharedBuffer data, const std::string &messageType);
-    void setConnection(const boost::shared_ptr<Connection> c) { m_connection = c; m_useConnection = c; }
-    boost::weak_ptr<Connection> getConnection() { return m_connection; }
-    bool useConnection() { return m_useConnection; }
+    void setStubConnection(const boost::shared_ptr<Connection> c) { m_connection = c; m_useConnection = c; }
+    boost::weak_ptr<Connection> getStubConnection() { return m_connection; }
+    bool useStubConnection() { return m_useConnection; }
 
     /**
      * After the connection closes, the Connection instance is
@@ -2011,8 +2257,8 @@ public:
      * the sync starts and overwriting it when the connection
      * closes.
      */
-    void setConnectionError(const std::string error) { m_connectionError = error; }
-    std::string getConnectionError() { return m_connectionError; }
+    void setStubConnectionError(const std::string error) { m_connectionError = error; }
+    std::string getStubConnectionError() { return m_connectionError; }
 
 
     DBusServer &getServer() { return m_server; }
@@ -2346,16 +2592,14 @@ class DBusTransportAgent : public TransportAgent
     std::string m_type;
 
     /*
-     * When the callback is invoked, we always abort the current
+     * When the timeout occurs, we always abort the current
      * transmission.  If it is invoked while we are not in the wait()
      * of this transport, then we remember that in m_eventTriggered
      * and return from wait() right away. The main loop is only
      * quit when the transport is waiting in it. This is a precaution
      * to not interfere with other parts of the code.
      */
-    TransportCallback m_callback;
-    void *m_callbackData;
-    int m_callbackInterval;
+    int m_timeoutSeconds;
     GLibEvent m_eventSource;
     bool m_eventTriggered;
     bool m_waiting;
@@ -2378,11 +2622,9 @@ class DBusTransportAgent : public TransportAgent
     virtual void cancel() {}
     virtual void shutdown();
     virtual Status wait(bool noReply = false);
-    virtual void setCallback (TransportCallback cb, void * udata, int interval)
+    virtual void setTimeout(int seconds)
     {
-        m_callback = cb;
-        m_callbackData = udata;
-        m_callbackInterval = interval;
+        m_timeoutSeconds = seconds;
         m_eventSource = 0;
     }
     virtual void getReply(const char *&data, size_t &len, std::string &contentType);
@@ -2728,11 +2970,23 @@ void ReadOperations::getConfig(bool getTemplate,
     BOOST_FOREACH(const ConfigProperty *prop, syncRegistry) {
         bool isDefault = false;
         string value = prop->getProperty(*syncConfig->getProperties(), &isDefault);
-        if(boost::iequals(prop->getName(), "syncURL") && !syncURL.empty() ) {
-            localConfigs.insert(pair<string, string>(prop->getName(), syncURL));
+        if(boost::iequals(prop->getMainName(), "syncURL") && !syncURL.empty() ) {
+            localConfigs.insert(pair<string, string>(prop->getMainName(), syncURL));
         } else if(!isDefault) {
-            localConfigs.insert(pair<string, string>(prop->getName(), value));
+            localConfigs.insert(pair<string, string>(prop->getMainName(), value));
         }
+    }
+
+    // Set ConsumerReady for existing SyncEvolution < 1.2 configs
+    // if not set explicitly,
+    // because in older releases all existing configurations where
+    // shown. SyncEvolution 1.2 is more strict and assumes that
+    // ConsumerReady must be set explicitly. The sync-ui always has
+    // set the flag for configs created or modified with it, but the
+    // command line did not. Matches similar code in the Cmdline.cpp
+    // migration code.
+    if (syncConfig->getConfigVersion(CONFIG_LEVEL_PEER, CONFIG_CUR_VERSION) == 0 /* SyncEvolution < 1.2 */) {
+        localConfigs.insert(make_pair("ConsumerReady", "1"));
     }
 
     // insert 'configName' of the chosen config (m_configName is not normalized)
@@ -2750,7 +3004,7 @@ void ReadOperations::getConfig(bool getTemplate,
             bool isDefault = false;
             string value = prop->getProperty(*sourceNodes.getProperties(), &isDefault);
             if(!isDefault) {
-                localConfigs.insert(pair<string, string>(prop->getName(), value));
+                localConfigs.insert(pair<string, string>(prop->getMainName(), value));
             }
         }
         config.insert(pair<string, map<string, string> >( "source/" + name, localConfigs));
@@ -2818,7 +3072,7 @@ void ReadOperations::checkSource(const std::string &sourceName)
     bool checked = false;
     try {
         // this can already throw exceptions when the config is invalid
-        SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName));
+        SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
         auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, config.get()));
 
         if (syncSource.get()) {
@@ -2839,7 +3093,7 @@ void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &d
     boost::shared_ptr<SyncConfig> config(new SyncConfig(m_configName));
     setFilters(*config);
 
-    SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName));
+    SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
     const SourceRegistry &registry(SyncSource::getSourceRegistry());
     BOOST_FOREACH(const RegisterSyncSource *sourceInfo, registry) {
         SyncSource *source = sourceInfo->m_create(params);
@@ -2873,6 +3127,47 @@ string DBusUserInterface::askPassword(const string &passwordName,
                                       const ConfigPasswordKey &key) 
 {
     string password;
+    
+#ifdef USE_KDE_KWALLET
+    /** here we use server sync url without protocol prefix and
+     * user account name as the key in the keyring */
+     /* Also since the KWallet's API supports only storing (key,passowrd)
+     * or Map<QString,QString> , the former is used */
+    bool isKde=true;
+    #ifdef USE_GNOME_KEYRING
+    //When Both GNOME KEYRING and KWALLET are available, Check if this is a KDE Session 
+    //and Call
+    if(getenv("KDE_FULL_SESSION"))
+      isKde=false;
+    #endif   
+    if (isKde){
+	QString walletPassword;
+        QString walletKey = QString(passwdStr(key.user)) + ',' +
+			    QString(passwdStr(key.domain))+ ','+
+			    QString(passwdStr(key.server))+','+
+			    QString(passwdStr(key.object))+','+
+			    QString(passwdStr(key.protocol))+','+
+			    QString(passwdStr(key.authtype))+','+
+			    QString::number(key.port);
+                                                          
+	    
+	    QString wallet_name = KWallet::Wallet::NetworkWallet();
+	    //QString folder = QString::fromUtf8("Syncevolution");
+	    const QLatin1String folder("Syncevolution");
+    	  	      
+	    if (!KWallet::Wallet::keyDoesNotExist(wallet_name, folder, walletKey)){
+	    KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, KWallet::Wallet::Synchronous); 
+	
+	    if (wallet){
+	      if (wallet->setFolder(folder))                
+                if (wallet->readPassword(walletKey, walletPassword) == 0)
+		  return walletPassword.toStdString();
+		 }    
+	  }        
+
+    }    
+#endif
+
 #ifdef USE_GNOME_KEYRING
     /** here we use server sync url without protocol prefix and
      * user account name as the key in the keyring */
@@ -2899,6 +3194,8 @@ string DBusUserInterface::askPassword(const string &passwordName,
         return password;
     }
 #endif
+
+
     //if not found, return empty
     return "";
 }
@@ -2907,6 +3204,54 @@ bool DBusUserInterface::savePassword(const string &passwordName,
                                      const string &password, 
                                      const ConfigPasswordKey &key)
 {
+
+
+#ifdef USE_KDE_KWALLET
+        /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
+         * but currently only use passed key instead */
+    bool isKde=true;
+    #ifdef USE_GNOME_KEYRING
+    //When Both GNOME KEYRING and KWALLET are available, Check if this is a KDE Session 
+    //and Call
+    if(getenv("KDE_FULL_SESSION"))
+      isKde=false;
+    #endif
+    if(isKde){
+        // write password to keyring
+	QString walletKey = QString(passwdStr(key.user)) + ',' +
+			    QString(passwdStr(key.domain))+ ','+
+			    QString(passwdStr(key.server))+','+
+			    QString(passwdStr(key.object))+','+
+			    QString(passwdStr(key.protocol))+','+
+			    QString(passwdStr(key.authtype))+','+
+			    QString::number(key.port);
+	QString walletPassword = password.c_str();
+	
+	 bool write_success = false;
+	 QString wallet_name = KWallet::Wallet::NetworkWallet();
+	 //QString folder = QString::fromUtf8("Syncevolution");
+	 const QLatin1String folder("Syncevolution");
+	 
+	 KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, 
+                                            KWallet::Wallet::Synchronous);
+	  if (wallet){
+	    if (!wallet->hasFolder(folder))
+	      wallet->createFolder(folder);
+	    
+	    if (wallet->setFolder(folder))	      
+	      if (wallet->writePassword(walletKey, walletPassword) == 0)
+                write_success = true;            
+	    
+	}
+	
+        if(!write_success) {
+            SyncContext::throwError("Try to save " + passwordName + " in kde-wallet but got an error. ");
+        } 
+        
+    return write_success;
+    }
+#endif
+
 #ifdef USE_GNOME_KEYRING
     /* It is possible to let CmdlineSyncClient decide which of fields in ConfigPasswordKey it would use
      * but currently only use passed key instead */
@@ -2936,9 +3281,10 @@ bool DBusUserInterface::savePassword(const string &passwordName,
     } 
     return true;
 #else
+#endif
+
     /** if no support of gnome-keyring, don't save anything */
     return false;
-#endif
 }
 
 void DBusUserInterface::readStdin(string &content)
@@ -2953,25 +3299,64 @@ DBusSync::DBusSync(const std::string &config,
     DBusUserInterface(config),
     m_session(session)
 {
+    #ifdef USE_KDE_KWALLET
+    //QCoreApplication *app;
+    //if (!qApp) {
+        //int argc = 1;
+        //app = new QCoreApplication(argc, (char *[1]){ (char*) "syncevolution"});
+    //}
+    int argc = 1;
+    static const char *prog = "syncevolution";
+    static char *argv[] = { (char *)&prog, NULL };
+    //if (!qApp) {
+        //new QCoreApplication(argc, argv);
+    //}
+    KAboutData aboutData(// The program name used internally.
+                         "syncevolution",
+                         // The message catalog name
+                         // If null, program name is used instead.
+                         0,
+                         // A displayable program name string.
+                         ki18n("Syncevolution"),
+                         // The program version string.
+                         "1.0",
+                         // Short description of what the app does.
+                         ki18n("Lets Akonadi synchronize with a SyncML Peer"),
+                         // The license this code is released under
+                         KAboutData::License_GPL,
+                         // Copyright Statement
+                         ki18n("(c) 2010"),
+                         // Optional text shown in the About box.
+                         // Can contain any information desired.
+                         ki18n(""),
+                         // The program homepage string.
+                         "http://www.syncevolution.org/",
+                         // The bug report email address
+                         "syncevolution@syncevolution.org");
+
+    KCmdLineArgs::init(argc, argv, &aboutData);
+    if (!kapp) {
+        new KApplication;
+        //To stop KApplication from spawning it's own DBus Service ... Will have to patch KApplication about this
+        QDBusConnection::sessionBus().unregisterService("org.syncevolution.syncevolution-"+QString::number(getpid()));
+    }
+    #endif
+  
 }
 
 boost::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
 {
-    if (m_session.useConnection()) {
+    if (m_session.useStubConnection()) {
         // use the D-Bus Connection to send and receive messages
         boost::shared_ptr<TransportAgent> agent(new DBusTransportAgent(m_session.getServer().getLoop(),
                                                                        m_session,
-                                                                       m_session.getConnection()));
+                                                                       m_session.getStubConnection()));
         // We don't know whether we'll run as client or server.
         // But we as we cannot resend messages via D-Bus even if running as
         // client (API not designed for it), let's use the hard timeout
         // from RetryDuration here.
         int timeout = getRetryDuration();
-        if (timeout) {
-            agent->setCallback(transport_cb,
-                               reinterpret_cast<void *>(static_cast<uintptr_t>(timeout)),
-                               timeout);
-        }
+        agent->setTimeout(timeout);
         return agent;
     } else {
         // no connection, use HTTP via libsoup/GMainLoop
@@ -3078,24 +3463,62 @@ void Session::detach(const Caller_t &caller)
     client->detach(this);
 }
 
+/**
+ * validate key/value property and copy it to the filter
+ * if okay
+ */
+static void copyProperty(const StringPair &keyvalue,
+                         ConfigPropertyRegistry &registry,
+                         FilterConfigNode::ConfigFilter &filter)
+{
+    const std::string &name = keyvalue.first;
+    const std::string &value = keyvalue.second;
+    const ConfigProperty *prop = registry.find(name);
+    if (!prop) {
+        SE_THROW_EXCEPTION(InvalidCall, StringPrintf("unknown property '%s'", name.c_str()));
+    }
+    std::string error;
+    if (!prop->checkValue(value, error)) {
+        SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid value '%s' for property '%s': '%s'",
+                                                     value.c_str(), name.c_str(), error.c_str()));
+    }
+    filter.insert(keyvalue);
+}                        
+
 static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
 {
     ReadOperations::Config_t::const_iterator it;
     for (it = config.begin(); it != config.end(); it++) {
         map<string, string>::const_iterator sit;
-        if(it->first.empty()) {
+        string name = it->first;
+        if (name.empty()) {
+            ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
             for (sit = it->second.begin(); sit != it->second.end(); sit++) {
-                syncFilter.insert(*sit);
-            }
-        } else {
-            string name = it->first;
-            if(name.find("source/") == 0) {
-                name = name.substr(7); ///> 7 is the length of "source/"
-                FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
-                for (sit = it->second.begin(); sit != it->second.end(); sit++) {
-                    sourceFilter.insert(*sit);
+                // read-only properties can (and have to be) ignored
+                static const char *init[] = {
+                    "configName",
+                    "description",
+                    "score",
+                    "deviceName",
+                    "templateName",
+                    "fingerprint"
+                };
+                static const set< std::string, Nocase<std::string> >
+                    special(init,
+                            init + (sizeof(init) / sizeof(*init)));
+                if (special.find(sit->first) == special.end()) {
+                    copyProperty(*sit, registry, syncFilter);
                 }
             }
+        } else if (boost::starts_with(name, "source/")) {
+            name = name.substr(strlen("source/"));
+            FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
+            ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
+            for (sit = it->second.begin(); sit != it->second.end(); sit++) {
+                copyProperty(*sit, registry, sourceFilter);
+            }
+        } else {
+            SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid config entry '%s'", name.c_str()));
         }
     }
 }
@@ -3109,13 +3532,10 @@ void Session::setConfig(bool update, bool temporary,
         string msg = StringPrintf("%s started, cannot change configuration at this time", runOpToString(m_runOperation).c_str());
         SE_THROW_EXCEPTION(InvalidCall, msg);
     }
-    if (!update && temporary) {
-        throw std::runtime_error("Clearing existing configuration and temporary configuration changes which only affects the duration of the session are mutually exclusive");
-    }
 
     m_server.getPresenceStatus().updateConfigPeers (m_configName, config);
     /** check whether we need remove the entire configuration */
-    if(!update && config.empty()) {
+    if(!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(getConfigName()));
         if(syncConfig.get()) {
             syncConfig->remove();
@@ -3123,14 +3543,36 @@ void Session::setConfig(bool update, bool temporary,
         }
         return;
     }
-    if(temporary) {
-        /* save temporary configs in session filters */
-        setSyncFilters(config, m_syncFilter, m_sourceFilters);
+
+    /*
+     * validate input config and convert to filters;
+     * if validation fails, no harm was done at this point yet
+     */
+    FilterConfigNode::ConfigFilter syncFilter;
+    SourceFilters_t sourceFilters;
+    setSyncFilters(config, syncFilter, sourceFilters);
+
+    if (temporary) {
+        /* save temporary configs in session filters, either erasing old
+           temporary settings or adding to them */
+        if (update) {
+            m_syncFilter.insert(syncFilter.begin(), syncFilter.end());
+            BOOST_FOREACH(SourceFilters_t::value_type &source, sourceFilters) {
+                SourceFilters_t::iterator it = m_sourceFilters.find(source.first);
+                if (it != m_sourceFilters.end()) {
+                    // add to existing source filter
+                    it->second.insert(source.second.begin(), source.second.end());
+                } else {
+                    // add source filter
+                    m_sourceFilters.insert(source);
+                }
+            }
+        } else {
+            m_syncFilter = syncFilter;
+            m_sourceFilters = sourceFilters;            
+        }
         m_tempConfig = true;
     } else {
-        FilterConfigNode::ConfigFilter syncFilter;
-        std::map<std::string, FilterConfigNode::ConfigFilter> sourceFilters;
-        setSyncFilters(config, syncFilter, sourceFilters);
         /* need to save configurations */
         boost::shared_ptr<SyncConfig> from(new SyncConfig(getConfigName()));
         /* if it is not clear mode and config does not exist, an error throws */
@@ -3169,6 +3611,7 @@ void Session::setConfig(bool update, bool temporary,
             from->setConfigFilter(false, it->first, it->second);
         }
         boost::shared_ptr<DBusSync> syncConfig(new DBusSync(getConfigName(), *this));
+        syncConfig->prepareConfigForWrite();
         syncConfig->copy(*from, NULL);
 
         syncConfig->preFlush(*syncConfig);
@@ -3198,6 +3641,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
     }
 
     m_sync.reset(new DBusSync(getConfigName(), *this));
+    m_sync->setServerAlerted(m_serverAlerted);
     if (m_serverMode) {
         m_sync->initServer(m_sessionID,
                            m_initialMessage,
@@ -3220,7 +3664,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
     FilterConfigNode::ConfigFilter filter;
     filter = m_sourceFilter;
     if (!mode.empty()) {
-        filter[SyncSourceConfig::m_sourcePropSync.getName()] = mode;
+        filter["sync"] = mode;
     }
     m_sync->setConfigFilter(false, "", filter);
     BOOST_FOREACH(const std::string &source,
@@ -3228,7 +3672,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
         filter = m_sourceFilters[source];
         SourceModes_t::const_iterator it = source_modes.find(source);
         if (it != source_modes.end()) {
-            filter[SyncSourceConfig::m_sourcePropSync.getName()] = it->second;
+            filter["sync"] = it->second;
         }
         m_sync->setConfigFilter(false, source, filter);
     }
@@ -3440,8 +3884,52 @@ Session::~Session()
     done();
 }
 
+void Session::startShutdown()
+{
+    m_runOperation = OP_SHUTDOWN;
+}
+
+void Session::shutdownFileModified()
+{
+    m_shutdownLastMod = Timespec::monotonic();
+    SE_LOG_DEBUG(NULL, NULL, "file modified at %lu.%09lus, %s",
+                 (unsigned long)m_shutdownLastMod.tv_sec,
+                 (unsigned long)m_shutdownLastMod.tv_nsec,
+                 m_active ? "active" : "not active");
+
+    if (m_active) {
+        // (re)set shutdown timer: once it fires, we are ready to shut down;
+        // brute-force approach, will reset timer many times
+        m_shutdownTimer.activate(DBusServer::SHUTDOWN_QUIESENCE_SECONDS,
+                                 boost::bind(&Session::shutdownServer, this));
+    }
+}
+
+bool Session::shutdownServer()
+{
+    Timespec now = Timespec::monotonic();
+    bool autosync = m_server.getAutoSyncManager().hasTask() ||
+        m_server.getAutoSyncManager().hasAutoConfigs();
+    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
+                 now.tv_sec, now.tv_nsec,
+                 autosync ? "on" : "off");
+    if (autosync) {
+        // suitable exec() call which restarts the server using the same environment it was in
+        // when it was started
+        restart->restart();
+    } else {
+        // leave server now
+        shutdownRequested = true;
+        g_main_loop_quit(loop);
+        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
+    }
+
+    return false;
+}
+
 void Session::setActive(bool active)
 {
+    bool oldActive = m_active;
     m_active = active;
     if (active) {
         if (m_syncStatus == SYNC_QUEUEING) {
@@ -3452,6 +3940,29 @@ void Session::setActive(bool active)
         boost::shared_ptr<Connection> c = m_connection.lock();
         if (c) {
             c->ready();
+        }
+
+        if (!oldActive &&
+            m_runOperation == OP_SHUTDOWN) {
+            // shutdown session activated: check if or when we can shut down
+            if (m_shutdownLastMod) {
+                Timespec now = Timespec::monotonic();
+                SE_LOG_DEBUG(NULL, NULL, "latest file modified at %lu.%09lus, now is %lu.%09lus",
+                             (unsigned long)m_shutdownLastMod.tv_sec,
+                             (unsigned long)m_shutdownLastMod.tv_nsec,
+                             (unsigned long)now.tv_sec,
+                             (unsigned long)now.tv_nsec);
+                if (m_shutdownLastMod + DBusServer::SHUTDOWN_QUIESENCE_SECONDS <= now) {
+                    // ready to shutdown immediately
+                    shutdownServer();
+                } else {
+                    // need to wait
+                    int secs = DBusServer::SHUTDOWN_QUIESENCE_SECONDS -
+                        (now - m_shutdownLastMod).tv_sec;
+                    SE_LOG_DEBUG(NULL, NULL, "shut down in %ds", secs);
+                    m_shutdownTimer.activate(secs, boost::bind(&Session::shutdownServer, this));
+                }
+            }
         }
     }
 }
@@ -3635,6 +4146,13 @@ void Session::run()
                 }
                 m_setConfig = m_cmdline->configWasModified();
                 break;
+            case OP_SHUTDOWN:
+                // block until time for shutdown or restart if no
+                // shutdown requested already
+                if (!shutdownRequested) {
+                    g_main_loop_run(loop);
+                }
+                break;
             default:
                 break;
             };
@@ -3692,12 +4210,12 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     if(!sources.empty()) {
         BOOST_FOREACH(const std::string &source, sources) {
             FilterConfigNode::ConfigFilter filter;
-            filter[SyncSourceConfig::m_sourcePropSync.getName()] = "two-way";
+            filter["sync"] = "two-way";
             m_sync->setConfigFilter(false, source, filter);
         }
         // disable other sources
         FilterConfigNode::ConfigFilter disabled;
-        disabled[SyncSourceConfig::m_sourcePropSync.getName()] = "disabled";
+        disabled["sync"] = "disabled";
         m_sync->setConfigFilter(false, "", disabled);
     }
     m_restoreBefore = before;
@@ -4011,7 +4529,7 @@ void Connection::failed(const std::string &reason)
     if (m_failure.empty()) {
         m_failure = reason;
         if (m_session) {
-            m_session->setConnectionError(reason);
+            m_session->setStubConnectionError(reason);
         }
     }
     if (m_state != FAILED) {
@@ -4091,6 +4609,7 @@ void Connection::process(const Caller_t &caller,
             std::string config;
             std::string peerDeviceID;
             bool serverMode = false;
+            bool serverAlerted = false;
             // check message type, determine whether we act
             // as client or server, choose config
             if (message_type == "HTTP Config") {
@@ -4098,6 +4617,7 @@ void Connection::process(const Caller_t &caller,
                 config.assign(reinterpret_cast<const char *>(message.second),
                               message.first);
             } else if (message_type == TransportAgent::m_contentTypeServerAlertedNotificationDS) {
+                serverAlerted = true;
             	sysync::SanPackage san;
             	if (san.PassSan(const_cast<uint8_t *>(message.second), message.first, 2) || san.GetHeader()) {
                     // We are very tolerant regarding the content of the message.
@@ -4240,6 +4760,9 @@ void Connection::process(const Caller_t &caller,
                                     info.toString().c_str(),
                                     entry.first.c_str(),
                                     entry.second.c_str());
+                        // Stop searching. Other peer configs might have the same remoteDevID.
+                        // We go with the first one found, which because of the sort order
+                        // of getConfigs() ensures that "foo" is found before "foo.old".
                         break;
                     }
                 }
@@ -4267,12 +4790,13 @@ void Connection::process(const Caller_t &caller,
                                                    message.first),
                                       message_type);
             }
+            m_session->setServerAlerted(serverAlerted);
             m_session->setPriority(Session::PRI_CONNECTION);
-            m_session->setConnection(myself);
+            m_session->setStubConnection(myself);
             // this will be reset only when the connection shuts down okay
             // or overwritten with the error given to us in
             // Connection::close()
-            m_session->setConnectionError("closed prematurely");
+            m_session->setStubConnectionError("closed prematurely");
             m_server.enqueue(m_session);
             break;
         }
@@ -4331,13 +4855,13 @@ void Connection::close(const Caller_t &caller,
             "connection closed unexpectedly" :
             error;
         if (m_session) {
-            m_session->setConnectionError(err);
+            m_session->setStubConnectionError(err);
         }
         failed(err);
     } else {
         m_state = DONE;
         if (m_session) {
-            m_session->setConnectionError("");
+            m_session->setStubConnectionError("");
         }
     }
 
@@ -4447,7 +4971,7 @@ void Connection::ready()
                 // configuration might contain
                 // additional parameters (like date
                 // range selection for events)
-                if (boost::starts_with(sourceConfig->getURI(), serverURI)) {
+                if (boost::starts_with(sourceConfig->getURINonEmpty(), serverURI)) {
                     SE_LOG_DEBUG(NULL, NULL,
                                  "SAN entry #%d = source %s with mode %s",
                                  (int)sync, source.c_str(), syncMode.c_str());
@@ -4484,7 +5008,7 @@ DBusTransportAgent::DBusTransportAgent(GMainLoop *loop,
     m_loop(loop),
     m_session(session),
     m_connection(connection),
-    m_callback(NULL),
+    m_timeoutSeconds(0),
     m_eventTriggered(false),
     m_waiting(false)
 {
@@ -4517,9 +5041,8 @@ void DBusTransportAgent::send(const char *data, size_t len)
     connection->m_state = Connection::WAITING;
     connection->m_incomingMsg = SharedBuffer();
 
-    // setup regular callback
-    if (m_callback) {
-        m_eventSource = g_timeout_add_seconds(m_callbackInterval, timeoutCallback, static_cast<gpointer>(this));
+    if (m_timeoutSeconds) {
+        m_eventSource = g_timeout_add_seconds(m_timeoutSeconds, timeoutCallback, static_cast<gpointer>(this));
     }
     m_eventTriggered = false;
 
@@ -4551,8 +5074,6 @@ void DBusTransportAgent::shutdown()
 gboolean DBusTransportAgent::timeoutCallback(gpointer transport)
 {
     DBusTransportAgent *me = static_cast<DBusTransportAgent *>(transport);
-    me->m_callback(me->m_callbackData);
-    // TODO: check or remove return code from callback?!
     me->m_eventTriggered = true;
     if (me->m_waiting) {
         g_main_loop_quit(me->m_loop);
@@ -4601,10 +5122,10 @@ DBusTransportAgent::Status DBusTransportAgent::wait(bool noReply)
         connection = m_connection.lock();
         if (connection) {
             return ACTIVE;
-        } else if (m_session.getConnectionError().empty()) {
+        } else if (m_session.getStubConnectionError().empty()) {
             return INACTIVE;
         } else {
-            SE_THROW_EXCEPTION(TransportException, m_session.getConnectionError());
+            SE_THROW_EXCEPTION(TransportException, m_session.getStubConnectionError());
             return FAILED;
         }
         break;
@@ -4866,6 +5387,65 @@ void ConnmanClient::propertyChanged(const string &name,
     }
 }
 
+/***************** NetworkManagerClient implementation *************/
+NetworkManagerClient::NetworkManagerClient(DBusServer &server) :
+    m_server(server),
+    m_stateChanged(*this, "StateChanged"),
+    m_properties(*this)
+{
+    m_networkManagerConn = b_dbus_setup_bus(DBUS_BUS_SYSTEM, NULL, true, NULL);
+    if(m_networkManagerConn) {
+        m_properties.get();
+        m_stateChanged.activate(boost::bind(
+                                    &NetworkManagerClient::stateChanged,
+                                    this, _1));
+    } else {
+        SE_LOG_ERROR(NULL, NULL,
+                     "DBus connection setup for NetworkManager failed");
+    }
+}
+
+void NetworkManagerClient::stateChanged(uint32_t uiState)
+{
+    if(uiState==NM_STATE_CONNECTED) {
+        SE_LOG_DEBUG(NULL, NULL, "NetworkManager connected");
+        m_server.getPresenceStatus().updatePresenceStatus(
+            true, PresenceStatus::HTTP_TRANSPORT);
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "NetworkManager disconnected");
+        m_server.getPresenceStatus().updatePresenceStatus(
+            false, PresenceStatus::HTTP_TRANSPORT);
+    }
+}
+
+NetworkManagerClient::NetworkManagerProperties::NetworkManagerProperties(
+    NetworkManagerClient& manager) :
+    m_manager(manager)
+{
+
+}
+
+void NetworkManagerClient::NetworkManagerProperties::get()
+{
+    DBusClientCall1<boost::variant<uint32_t, std::string> > get(*this, "Get");
+    get(std::string(""), std::string("State"),
+        boost::bind(&NetworkManagerProperties::getCallback, this, _1, _2));    
+}
+
+void NetworkManagerClient::NetworkManagerProperties::getCallback(
+    const boost::variant<uint32_t, std::string> &prop,
+    const std::string &error)
+{
+    if(!error.empty()) {
+        SE_LOG_DEBUG (
+            NULL, NULL,
+            "Error in calling Get of Interface "
+            "org.freedesktop.DBus.Properties : %s", error.c_str());
+    } else {
+        m_manager.stateChanged(boost::get<uint32_t>(prop));
+    }
+}
+
 /********************** DBusServer implementation ******************/
 
 void DBusServer::clientGone(Client *c)
@@ -4909,6 +5489,7 @@ vector<string> DBusServer::getCapabilities()
     capabilities.push_back("Version");
     capabilities.push_back("SessionFlags");
     capabilities.push_back("SessionAttach");
+    capabilities.push_back("DatabaseProperties");
     return capabilities;
 }
 
@@ -5057,6 +5638,7 @@ DBusServer::DBusServer(GMainLoop *loop, const DBusConnectionPtr &conn, int durat
     logOutput(*this, "LogOutput"),
     m_presence(*this),
     m_connman(*this),
+    m_networkManager(*this),
     m_autoSync(*this),
     m_autoTerm(m_autoSync.preventTerm() ? -1 : duration), //if there is any task in auto sync, prevent auto termination
     m_parentLogger(LoggerBase::instance())
@@ -5101,8 +5683,59 @@ DBusServer::~DBusServer()
     LoggerBase::popLogger();
 }
 
+void DBusServer::fileModified()
+{
+    if (!m_shutdownSession) {
+        string newSession = getNextSession();
+        vector<string> flags;
+        flags.push_back("no-sync");
+        m_shutdownSession = Session::createSession(*this,
+                                                   "",  "",
+                                                   newSession,
+                                                   flags);
+        m_shutdownSession->setPriority(Session::PRI_AUTOSYNC);
+        m_shutdownSession->startShutdown();
+        enqueue(m_shutdownSession);
+    }
+
+    m_shutdownSession->shutdownFileModified();
+}
+
 void DBusServer::run()
 {
+    // This has the intended side effect that it loads everything into
+    // memory which might be dynamically loadable, like backend
+    // plugins.
+    StringMap map = getVersions();
+    SE_LOG_DEBUG(NULL, NULL, "D-Bus server ready to run, versions:");
+    BOOST_FOREACH(const StringPair &entry, map) {
+        SE_LOG_DEBUG(NULL, NULL, "%s: %s", entry.first.c_str(), entry.second.c_str());
+    }
+
+    // Now that everything is loaded, check memory map for files which we have to monitor.
+    set<string> files;
+    ifstream in("/proc/self/maps");
+    while (!in.eof()) {
+        string line;
+        getline(in, line);
+        size_t off = line.find('/');
+        if (off != line.npos &&
+            line.find(" r-xp ") != line.npos) {
+            files.insert(line.substr(off));
+        }
+    }
+    in.close();
+    BOOST_FOREACH(const string &file, files) {
+        try {
+            SE_LOG_DEBUG(NULL, NULL, "watching: %s", file.c_str());
+            boost::shared_ptr<GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&DBusServer::fileModified, this)));
+            m_files.push_back(notify);
+        } catch (...) {
+            // ignore errors for indidividual files
+            Exception::handle();
+        }
+    }
+
     while (!shutdownRequested) {
         if (!m_activeSession ||
             !m_activeSession->readyToRun()) {
@@ -5127,9 +5760,9 @@ void DBusServer::run()
             }
             session.swap(m_syncSession);
             dequeue(session.get());
-        } 
+        }
 
-        if (m_autoSync.hasTask()) {
+        if (!shutdownRequested && m_autoSync.hasTask()) {
             // if there is at least one pending task and no session is created for auto sync,
             // pick one task and create a session
             m_autoSync.startTask();
@@ -5138,7 +5771,7 @@ void DBusServer::run()
         // Otherwise activeSession is owned by AutoSyncManager but it never
         // be ready to run. Because methods of Session, like 'sync', are able to be
         // called when it is active.  
-        if (m_autoSync.hasActiveSession())
+        if (!shutdownRequested && m_autoSync.hasActiveSession())
         {
             // if the autosync is the active session, then invoke 'sync'
             // to make it ready to run
@@ -5215,7 +5848,7 @@ int DBusServer::killSessions(const std::string &peerDeviceID)
                          session->getSessionID().c_str(),
                          peerDeviceID.c_str());
             // remove session and its corresponding connection
-            boost::shared_ptr<Connection> c = session->getConnection().lock();
+            boost::shared_ptr<Connection> c = session->getStubConnection().lock();
             if (c) {
                 c->shutdown();
             }
@@ -6108,9 +6741,12 @@ void AutoSyncManager::Notification::send(const char *summary,
         notify_notification_clear_actions(m_notification);
         notify_notification_close(m_notification, NULL);
     }
-#if !defined(NOTIFY_CHECK_VERSION)
+#ifndef NOTIFY_CHECK_VERSION
+# define NOTIFY_CHECK_VERSION(_x,_y,_z) 0
+#endif
+#if !NOTIFY_CHECK_VERSION(0,7,0)
     m_notification = notify_notification_new(summary, body, NULL, NULL);
-#else // NOTIFY_CHECK_VERSION(0,7,0) is redundant, because 0.7.0 introduced NOTIFY_CHECK_VERSION
+#else
     m_notification = notify_notification_new(summary, body, NULL);
 #endif
     //if actions are not supported, don't add actions
@@ -6175,8 +6811,13 @@ static bool parseDuration(int &duration, const char* value)
     }
 }
 
-int main(int argc, char **argv)
+SE_END_CXX
+
+int main(int argc, char **argv, char **envp)
 {
+    // remember environment for restart
+    restart.reset(new Restart(argv, envp));
+
     int duration = 600;
     int opt = 1;
     while(opt < argc) {
@@ -6197,16 +6838,7 @@ int main(int argc, char **argv)
         opt++;
     }
     try {
-        g_type_init();
-        g_thread_init(NULL);
-        g_set_application_name("SyncEvolution");
-
-        // Initializing a potential use of EDS early is necessary for
-        // libsynthesis when compiled with
-        // --enable-evolution-compatibility: in that mode libical will
-        // only be found by libsynthesis after EDSAbiWrapperInit()
-        // pulls it into the process by loading libecal.
-        EDSAbiWrapperInit();
+        SyncContext::initMain("syncevo-dbus-server");
 
         loop = g_main_loop_new (NULL, FALSE);
 
@@ -6220,7 +6852,9 @@ int main(int argc, char **argv)
         redirectPtr = &redirect;
 
         // make daemon less chatty - long term this should be a command line option
-        LoggerBase::instance().setLevel(LoggerBase::INFO);
+        LoggerBase::instance().setLevel(getenv("SYNCEVOLUTION_DEBUG") ?
+                                        LoggerBase::DEBUG :
+                                        LoggerBase::INFO);
 
         DBusErrorCXX err;
         DBusConnectionPtr conn = b_dbus_setup_bus(DBUS_BUS_SESSION,
@@ -6231,7 +6865,7 @@ int main(int argc, char **argv)
             err.throwFailure("b_dbus_setup_bus()", " failed - server already running?");
         }
 
-        DBusServer server(loop, conn, duration);
+        SyncEvo::DBusServer server(loop, conn, duration);
         server.activate();
 
         SE_LOG_INFO(NULL, NULL, "%s: ready to run",  argv[0]);

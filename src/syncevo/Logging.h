@@ -22,6 +22,7 @@
 #define INCL_LOGGING
 
 #include <stdarg.h>
+#include <string>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -97,6 +98,15 @@ class Logger
 
     /** always returns a valid level, also for NULL, by falling back to DEBUG */
     static Level strToLevel(const char *str);
+
+    /**
+     * additional, short string identifying the SyncEvolution process;
+     * empty if master process
+     *
+     * Included by LoggerStdout in the [INFO/DEBUG/...] tag.
+     */
+    static void setProcessName(const std::string &name) { m_processName = name; }
+    static std::string getProcessName() { return m_processName; }
     
     virtual ~Logger() {}
 
@@ -132,6 +142,16 @@ class Logger
         __attribute__((format(printf, 7, 8)))
 #endif
         ;
+
+    /**
+     * this logger instance can be used by multiple processes:
+     * true for those which write single lines, false
+     * for more complicated output like HTML (Synthesis log)
+     */
+    virtual bool isProcessSafe() const = 0;        
+
+ protected:
+    static std::string m_processName;
 };
 
 /**
@@ -166,6 +186,16 @@ class LoggerBase : public Logger
      * Must match a pushLogger() call.
      */
     static void popLogger();
+
+    /** total number of active loggers */
+    static int numLoggers();
+
+    /**
+     * access to active logger
+     * @param index    0 for oldest (inner-most) logger
+     * @return pointer or NULL for invalid index
+     */
+    static LoggerBase *loggerAt(int index);
 
     virtual void setLevel(Level level) { m_level = level; }
     virtual Level getLevel() { return m_level; }

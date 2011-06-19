@@ -64,6 +64,13 @@ void FileConfigTree::flush()
     }
 }
 
+void FileConfigTree::reload()
+{
+    BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
+        node.second->reload();
+    }
+}
+
 /**
  * remove config files, backup files of config files (with ~ at
  * the end) and empty directories
@@ -179,6 +186,18 @@ boost::shared_ptr<ConfigNode> FileConfigTree::open(const string &path,
     } else {
         boost::shared_ptr<ConfigNode> node(new HashFileConfigNode(fullpath, filename, m_readonly));
         return m_nodes[fullname] = node;
+    }
+}
+
+boost::shared_ptr<ConfigNode> FileConfigTree::add(const string &path,
+                                                  const boost::shared_ptr<ConfigNode> &node)
+{
+    NodeCache_t::iterator found = m_nodes.find(path);
+    if (found != m_nodes.end()) {
+        return found->second;
+    } else {
+        m_nodes[path] = node;
+        return node;
     }
 }
 

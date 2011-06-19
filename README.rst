@@ -20,10 +20,10 @@ Show information about configuration(s):
   syncevolution --print-servers|--print-configs|--print-peers
 
 Show information about a specific configuration:
-  syncevolution --print-config [--quiet] <config> [main|<source> ...]
+  syncevolution --print-config [--quiet] [--] <config> [main|<source> ...]
 
 List sessions:
-  syncevolution --print-sessions [--quiet] <config>
+  syncevolution --print-sessions [--quiet] [--] <config>
 
 Show information about SyncEvolution:
   syncevolution --help|-h|--version
@@ -32,30 +32,30 @@ Run a synchronization as configured:
   syncevolution <config> [<source> ...]
 
 Run a synchronization with properties changed just for this run:
-  syncevolution --run <options for run> <config> [<source> ...]
+  syncevolution --run <options for run> [--] <config> [<source> ...]
 
 Restore data from the automatic backups:
-  syncevolution --restore <session directory> --before|--after [--dry-run] <config> <source> ...
+  syncevolution --restore <session directory> --before|--after [--dry-run] [--] <config> <source> ...
 
-Modify a configuration:
-  syncevolution --configure <options> <config> [<source> ...]
-  syncevolution --remove|--migrate <options> <config>
+Create, update or remove a configuration:
+  syncevolution --configure <options> [--] <config> [<source> ...]
+  syncevolution --remove|--migrate <options> [--] <config>
 
 List items:
-  syncevolution --print-items <config> <source>
+  syncevolution --print-items [--] <config> <source>
 
 Export item(s):
-  syncevolution [--delimiter <string>] --export <dir>|<file>|- <config> <source> [<luid> ...]
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- [--] <config> <source> [<luid> ...]
 
 Add item(s):
-  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- <config> <source>
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [--] <config> <source>
 
 Update item(s)
-  syncevolution --update <dir> <config> <source>
-  syncevolution [--delimiter <string>|none] --update <file>|- <config> <source> <luid> ...
+  syncevolution --update <dir> [--] <config> <source>
+  syncevolution [--delimiter <string>|none] --update <file>|- [--] <config> <source> <luid> ...
 
 Remove item(s):
-  syncevolution --delete-items <config> <source> (<luid> ... | \*)
+  syncevolution --delete-items [--] <config> <source> (<luid> ... | \*)
 
 DESCRIPTION
 ===========
@@ -259,8 +259,7 @@ give via "--source-property type=<backend>", like this::
 
   syncevolution --print-items --source-property type=evolution-contacts dummy-config dummy-source
 
-The desired backend database can be chosen via "--source-property
-evolutionsource".
+The desired backend database can be chosen via "--source-property database".
 
 OPTIONS
 =======
@@ -301,15 +300,30 @@ a list of valid values.
 
 --configure|-c
   Modify the configuration files for the selected peer and/or sources.
+
   If no such configuration exists, then a new one is created using one
-  of the template configurations (see --template option). When
-  creating a new configuration and listing sources explicitly on the
+  of the template configurations (see --template option). Choosing a
+  template sets most of the relevant properties for the peer and the
+  default set of sources (see above for a list of those). Anything
+  specific to the user (like username/password) still has to be set
+  manually.
+
+  When creating a new configuration and listing sources explicitly on the
   command line, only those sources will be set to active in the new
   configuration, i.e. `syncevolution -c memotoo addressbook`
   followed by `syncevolution memotoo` will only synchronize the
   address book. The other sources are created in a disabled state.
   When modifying an existing configuration and sources are specified,
   then the source properties of only those sources are modified.
+
+  By default, creating a config requires a template. Source names on the
+  command line must match those in the template. This allows catching
+  typos in the peer and source names. But it also prevents some advanced
+  use cases. Therefore it is possible to disable these checks in two ways::
+
+    - use `--template none` or
+    - specify all required sync and source properties that are normally
+      in the templates on the command line (syncURL, backend, ...)
 
 --run|-r
   To prevent accidental sync runs when a configuration change was
@@ -386,6 +400,26 @@ a list of valid values.
   to update the configuration. Can be used multiple times.  Specifying
   an unused property will trigger an error message.
 
+  The <property> has the following format: ``<name>[@<context>|@<peer>@<context>]``
+
+  The optional <context> or <peer>@<context> suffix limits the scope
+  of the value to that particular configuration. This is currently
+  only useful for a local sync, which involves a source and a target
+  configuration.
+
+  A string without a second @ sign inside is always interpreted as a
+  context name, so in contrast to the <server> string, "foo" cannot be
+  used to reference the "foo@default" configuration. Use the full name
+  including the context for that.
+
+  When no config or context is specified explicitly, a value is
+  changed in all active configs, typically the one given with
+  ``<server>``.  The priority of multiple values for the same config
+  is `more specific definition wins`, so ``<peer>@<context>``
+  overrides ``@<context>``, which overrides `no suffix given`.
+  Specifying some suffix which does not apply to the current operation
+  does not trigger an error, so beware of typos.
+
   When using the configuration layout introduced with 1.0, some of the
   sync properties are shared between peers, for example the directory
   where sessions are logged. Permanently changing such a shared
@@ -397,15 +431,39 @@ a list of valid values.
 --source-property|-z <property>=<value>|<property>=?|?
   Same as --sync-property, but applies to the configuration of all active
   sources. `--sync <mode>` is a shortcut for `--source-property sync=<mode>`.
-  
+
+  The <property> has the following format: ``[<source>/]<name>[@<context>|@<peer>@<context>]``
+
+  In it's simplest form without <source>, <context> or <config>,
+  the name specifies one of the know properties.
   When combined with `--configure`, the configuration of all sources
   is modified. The value is applied to all sources unless sources are
   listed explicitly on the command line. So if you want to change a
   source property of just one specific sync source, then use
   `--configure --source-property ... <server> <source>`.
-  
+
+  Adding the <source>/ prefix makes it possible to set the same
+  property differently for different sources in one command::
+
+    --configure --source-property addressbook/sync=two-way \
+                --source-property calendar/sync=one-way-from-server \
+                <server>
+
+  If the same property is set both with and without a <source>/ prefix,
+  then the more specific value with that prefix is used for that source,
+  regardless of the order on the command line. The following command
+  disables all sources except for the addressbook::
+
+    --configure --source-property addressbook/sync=none \
+                --source-property sync=two-way \
+                <server>
+
   As with sync properties, some properties are shared between peers,
-  in particular the selection of which local data to synchronize.
+  in particular the selection of which local data to synchronize.  The
+  optional configuration suffix in ``<property>`` also has the same
+  meaning as for sync properties. That suffix is checked first, so
+  "sync@foo@default" overrides "addressbook/sync", even though
+  "addressbook/sync" normally overrides "sync".
 
 --template|-l <peer name>|default|?<device>
   Can be used to select from one of the built-in default configurations
@@ -452,6 +510,11 @@ a list of valid values.
   synchronization without the --keyring argument, the password has to be
   entered interactively. The --print-config output always shows "-" instead
   of retrieving the password from the keyring.
+
+  The SyncEvolution daemon always uses the GNOME keyring, regardless of
+  the --keyring command line parameter. Therefore --keyring only has an
+  effect in combination with --daemon=no, or when SyncEvolution was compiled
+  without daemon support (not the default).
 
 --daemon[=yes/no]
   By default, the SyncEvolution command line is executed inside the
@@ -537,7 +600,7 @@ clients, see `Exchanging Data`_::
                  memotoo@other
   
   syncevolution --configure \
-                --source-property evolutionsource=<name of other address book> \
+                --source-property database=<name of other address book> \
                 @other addressbook
 
   syncevolution --configure \

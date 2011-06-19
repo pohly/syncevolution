@@ -62,6 +62,7 @@ my $mobical = $server =~ /mobical/;
 my $memotoo = $server =~ /memotoo/;
 my $nokia_7210c = $server =~ /nokia_7210c/;
 my $ovi = $server =~ /Ovi/;
+my $unique_uid = $ENV{CLIENT_TEST_UNIQUE_UID};
 
 # TODO: this hack ensures that any synchronization is limited to
 # properties supported by Synthesis. Remove this again.
@@ -70,6 +71,9 @@ my $ovi = $server =~ /Ovi/;
 my $egroupware = $server =~ /egroupware/;
 my $funambol = $server =~ /funambol/;
 my $google = $server =~ /google/;
+my $google_valarm = $ENV{CLIENT_TEST_GOOGLE_VALARM};
+my $yahoo = $server =~ /yahoo/;
+my $apple = $server =~ /apple/;
 my $evolution = $client =~ /evolution/;
 my $addressbook = $client =~ /addressbook/;
 
@@ -104,17 +108,12 @@ sub splitvalue {
   return join("", @res);
 }
 
-# parameters: text, width to use for reformatted lines
-# returns list of lines without line breaks
-sub Normalize {
-  $_ = shift;
-  my $width = shift;
+# called for one VCALENDAR (with single VEVENT/VTODO/VJOURNAL) or VCARD,
+# returns normalized one
+sub NormalizeItem {
+    my $width = shift;
+    $_ = shift;
 
-  s/\r//g;
-
-  my @items = ();
-
-  foreach $_ ( split( /(?:(?<=\nEND:VCARD)|(?<=\nEND:VCALENDAR))\n*/ ) ) {
     # undo line continuation
     s/\n\s//gs;
     # ignore charset specifications, assume UTF-8
@@ -124,6 +123,11 @@ sub Normalize {
     # in calendar events the UID needs to be preserved to handle
     # meeting invitations/replies correctly
     s/((VCARD|VJOURNAL).*)^UID:[^\n]*\n/$1/msg;
+
+    # intentional changes to UID are acceptable when running with CLIENT_TEST_UNIQUE_UID
+    if ($unique_uid) {
+        s/UID:UNIQUE-UID-\d+-/UID:/g;
+    }
 
     # exact order of categories is irrelevant
     s/^CATEGORIES:(\S+)/"CATEGORIES:" . sortlist($1)/mge;
@@ -146,6 +150,9 @@ sub Normalize {
 
     # EXDATE;VALUE=DATE is the default, no need to show it
     s/^EXDATE;VALUE=DATE:/EXDATE:/mg;
+
+    # default opacity is OPAQUE
+    s/^TRANSP:OPAQUE\r?\n?//gm;
 
     # multiple EXDATEs may be joined into one, use separate properties as normal form
     s/^(EXDATE[^:]*):(.*)(\r?\n)/splitvalue($1, $2, $3)/mge;
@@ -198,9 +205,9 @@ sub Normalize {
     s/^((ATTENDEE|ORGANIZER).*):[Mm][Aa][Ii][Ll][Tt][Oo]:/$1:mailto:/mg;
 
     # remove fields which may differ
-    s/^(PRODID|CREATED|DTSTAMP|LAST-MODIFIED|REV):.*\r?\n?//gm;
+    s/^(PRODID|CREATED|DTSTAMP|LAST-MODIFIED|REV)(;X-VOBJ-FLOATINGTIME-ALLOWED=(TRUE|FALSE))?:.*\r?\n?//gm;
     # remove optional fields
-    s/^(METHOD|X-WSS-[A-Z]*):.*\r?\n?//gm;
+    s/^(METHOD|X-WSS-[A-Z]*|X-WR-[A-Z]*|CALSCALE):.*\r?\n?//gm;
 
     # trailing line break(s) in a DESCRIPTION may or may not be
     # removed or added by servers
@@ -238,12 +245,16 @@ sub Normalize {
     # diff shorter, too.
     my $location = "[^\n]*((?:Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Brazil|Canada|Chile|Egypt|Eire|Europe|Hongkong|Iceland|India|Iran|Israel|Jamaica|Japan|Kwajalein|Libya|Mexico|Mideast|Navajo|Pacific|Poland|Portugal|Singapore|Turkey|Zulu)[-a-zA-Z0-9_/]*)";
     s;^BEGIN:VTIMEZONE.*?^TZID:$location.*^END:VTIMEZONE;BEGIN:VTIMEZONE\n  TZID:$1 [...]\nEND:VTIMEZONE;gms;
-    s;TZID=$location;TZID=$1;gm;
+    s;TZID="?$location"?;TZID=$1;gm;
 
     # normalize iCalendar 2.0
     if (/^BEGIN:(VEVENT|VTODO|VJOURNAL)$/m) {
         # CLASS=PUBLIC is the default, no need to show it
         s/^CLASS:PUBLIC\r?\n//m;
+        # RELATED=START is the default behavior
+        s/^TRIGGER([^\n:]*);RELATED=START/TRIGGER$1/mg;
+        # VALUE=DURATION is the default behavior
+        s/^TRIGGER([^\n:]*);VALUE=DURATION/TRIGGER$1/mg;
     }
 
     if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$google || $mobical || $memotoo) {
@@ -287,6 +298,31 @@ sub Normalize {
       s!^TEL\;TYPE=CAR(.*)\n!TEL$1\n!mg;
       # some properties are lost
       s/^(X-EVOLUTION-FILE-AS|NICKNAME|BDAY|CATEGORIES|CALURI|FBURL|ROLE|URL|X-AIM|X-EVOLUTION-UI-SLOT|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-MANAGER|X-SPOUSE|X-MOZILLA-HTML|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
+
+      #several properties are not preserved by Google in icalendar2.0 format
+      s/^(SEQUENCE|X-EVOLUTION-ALARM-UID)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($apple) {
+        # remove some parameters added by Apple Calendar server in CalDAV
+        s/^(ORGANIZER[^:]*);SCHEDULE-AGENT=NONE/$1/gm;
+        s/^(ORGANIZER[^:]*);SCHEDULE-STATUS=5.3/$1/gm;
+        # seems to require a fixed number of recurrences; hmm, okay...
+        s/^RRULE:COUNT=400;FREQ=DAILY/RRULE:FREQ=DAILY/gm;
+    }
+
+    if ($google || $yahoo) {
+      # default status is CONFIRMED
+      s/^STATUS:CONFIRMED\r?\n?//gm;
+    }
+
+    # Google randomly (?!) adds a standard alarm to events.
+    if ($google_valarm) {
+        s/BEGIN:VALARM\nDESCRIPTION:This is an event reminder\nACTION:DISPLAY\nTRIGGER:-PT10M\n(X-KDE-KCALCORE-ENABLED:TRUE\n)END:VALARM\n//s;
+    }
+
+    if ($yahoo) {
+        s/^(X-MICROSOFT-[-A-Z0-9]*)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
     if ($addressbook) {
@@ -452,8 +488,6 @@ sub Normalize {
       }
       if (/^BEGIN:VEVENT/m ) {
         s/^(UID|SEQUENCE|TRANSP|RECURRENCE-ID|X-EVOLUTION-ALARM-UID|ORGANIZER)(;[^:;\n]*)*:.*\r?\n?//gm;
-        # RELATED=START is the default behavior though server will lost it
-        s/^TRIGGER([^\n:]*);RELATED=START/TRIGGER$1/mg;
         # some parameters of 'ATTENDEE' will be lost by server
         s/^ATTENDEE([^\n:]*);CUTYPE=([^\n;:]*)/ATTENDEE$1/mg;
         s/^ATTENDEE([^\n:]*);LANGUAGE=([^\n;:]*)/ATTENDEE$1/mg;
@@ -544,10 +578,40 @@ sub Normalize {
       }
     }
 
-    push @items, ${$formatted[0]}[0];
-  }
+    return ${$formatted[0]}[0];
+}
 
-  return split( /\n/, join( "\n\n", sort @items ));
+# parameters: text, width to use for reformatted lines
+# returns list of lines without line breaks
+sub Normalize {
+    $_ = shift;
+    my $width = shift;
+
+    s/\r//g;
+
+    my @items = ();
+
+    # split into individual items
+    foreach $_ ( split( /(?:(?<=\nEND:VCARD)|(?<=\nEND:VCALENDAR))\n*/ ) ) {
+        if (/END:VEVENT\s+BEGIN:VEVENT/s) {
+            # remove multiple events from calendar item
+            s/(BEGIN:VEVENT.*END:VEVENT\n)//s;
+            my $events = $1;
+            my $calendar = $_;
+            my $event;
+            # inject every single one back into the calendar and process the result
+            foreach $event ( split ( /(?:(?<=\nEND:VEVENT))\n*/, $events ) ) {
+                $_ = $calendar;
+                s/\nEND:VCALENDAR/\n$event\nEND:VCALENDAR/;
+                push @items, NormalizeItem($width, $_);
+            }
+        } else {
+            # already a single item
+            push @items, NormalizeItem($width, $_);
+        }
+    }
+
+    return split( /\n/, join( "\n\n", sort @items ));
 }
 
 # number of columns available for output:

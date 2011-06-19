@@ -30,6 +30,7 @@
 
 #include <boost/scoped_array.hpp>
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -42,6 +43,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <math.h>
 
 #if USE_SHA256 == 1
 # include <glib.h>
@@ -460,6 +462,39 @@ std::string SHA_256(const std::string &data)
 #endif
 }
 
+StringEscape::StringEscape(char escapeChar, const char *forbidden) :
+    m_escapeChar(escapeChar)
+{
+    while (*forbidden) {
+        m_forbidden.insert(*forbidden);
+        ++forbidden;
+    }
+}
+
+string StringEscape::escape(const string &str) const
+{
+    if (m_mode != SET) {
+        return escape(str, m_escapeChar, m_mode);
+    }
+
+    string res;
+    char buffer[4];
+
+    res.reserve(str.size() * 3);
+    BOOST_FOREACH(char c, str) {
+        if(c != m_escapeChar &&
+           m_forbidden.find(c) == m_forbidden.end()) {
+            res += c;
+        } else {
+            sprintf(buffer, "%c%02x",
+                    m_escapeChar,
+                    (unsigned int)(unsigned char)c);
+            res += buffer;
+        }
+    }
+    return res;
+}
+
 string StringEscape::escape(const string &str, char escapeChar, Mode mode)
 {
     string res;
@@ -580,6 +615,59 @@ SYNCEVOLUTION_TEST_SUITE_REGISTRATION(StringEscapeTest);
 
 #endif // ENABLE_UNIT_TESTS
 
+Timespec Timespec::operator + (const Timespec &other) const
+{
+    Timespec res(tv_sec + other.tv_sec,
+                 tv_nsec + other.tv_nsec);
+    if (res.tv_nsec > 1000000000) {
+        res.tv_sec++;
+        res.tv_nsec -= 1000000000;
+    }
+    return res;
+}
+
+Timespec Timespec::operator - (const Timespec &other) const
+{
+    Timespec res(tv_sec - other.tv_sec, 0);
+    if (other.tv_nsec > tv_nsec) {
+        res.tv_sec--;
+        res.tv_nsec = tv_nsec + 1000000000 - other.tv_nsec;
+    } else {
+        res.tv_nsec = tv_nsec - other.tv_nsec;
+    }
+    return res;
+}
+
+#ifdef ENABLE_UNIT_TESTS
+
+class TimespecTest : public CppUnit::TestFixture {
+    CPPUNIT_TEST_SUITE(TimespecTest);
+    CPPUNIT_TEST(add);
+    CPPUNIT_TEST(substract);
+    CPPUNIT_TEST_SUITE_END();
+
+    void add()
+    {
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 0), Timespec(0, 0) + 1);
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 0), Timespec(0, 0) + Timespec(1, 0));
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 0), Timespec(0, 500000000) + Timespec(0, 500000000));
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 999999998), Timespec(0, 999999999) + Timespec(0, 999999999));
+    }
+
+    void substract()
+    {
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 0), Timespec(2, 0) - 1);
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 0), Timespec(2, 0) - Timespec(1, 0));
+        CPPUNIT_ASSERT_EQUAL(Timespec(1, 0), Timespec(1, 500000000) - Timespec(0, 500000000));
+        CPPUNIT_ASSERT_EQUAL(Timespec(0, 999999999), Timespec(1, 999999998) - Timespec(0, 999999999));
+    }
+};
+
+SYNCEVOLUTION_TEST_SUITE_REGISTRATION(TimespecTest);
+
+#endif // ENABLE_UNIT_TESTS
+
+
 
 std::string StringPrintf(const char *format, ...)
 {
@@ -626,35 +714,61 @@ std::string StringPrintfV(const char *format, va_list ap)
     return res;
 }
 
-SyncMLStatus Exception::handle(SyncMLStatus *status, Logger *logger)
+char *Strncpy(char *dest, const char *src, size_t n)
+{
+    strncpy(dest, src, n);
+    if (n) {
+        dest[n - 1] = 0;
+    }
+    return dest;
+}
+
+void Sleep(double seconds)
+{
+    timeval delay;
+    delay.tv_sec = floor(seconds);
+    delay.tv_usec = (seconds - (double)delay.tv_sec) * 1e6;
+    select(0, NULL, NULL, NULL, &delay);
+}
+
+
+SyncMLStatus Exception::handle(SyncMLStatus *status, Logger *logger, std::string *explanation, Logger::Level level)
 {
     // any problem here is a fatal local problem, unless set otherwise
     // by the specific exception
     SyncMLStatus new_status = SyncMLStatus(STATUS_FATAL + sysync::LOCAL_STATUS_CODE);
+    std::string error;
 
     try {
         throw;
     } catch (const TransportException &ex) {
         SE_LOG_DEBUG(logger, NULL, "TransportException thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
-        SE_LOG_ERROR(logger, NULL, "%s", ex.what());
+        error = ex.what();
         new_status = SyncMLStatus(sysync::LOCERR_TRANSPFAIL);
     } catch (const BadSynthesisResult &ex) {
         new_status = SyncMLStatus(ex.result());
-        SE_LOG_DEBUG(logger, NULL, "error code from Synthesis engine %s",
-                     Status2String(new_status).c_str());
+        error = StringPrintf("error code from Synthesis engine %s",
+                             Status2String(new_status).c_str());
     } catch (const StatusException &ex) {
         new_status = ex.syncMLStatus();
-        SE_LOG_DEBUG(logger, NULL, "error code from SyncEvolution %s and exception thrown at %s:%d",
-                     Status2String(new_status).c_str(), ex.m_file.c_str(), ex.m_line);
+        SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
+                     ex.m_file.c_str(), ex.m_line);
+        error = StringPrintf("error code from SyncEvolution %s: %s",
+                             Status2String(new_status).c_str(), ex.what());
     } catch (const Exception &ex) {
         SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
-        SE_LOG_ERROR(logger, NULL, "%s", ex.what());
+        error = ex.what();
     } catch (const std::exception &ex) {
-        SE_LOG_ERROR(logger, NULL, "%s", ex.what());
+        error = ex.what();
     } catch (...) {
-        SE_LOG_ERROR(logger, NULL, "unknown error");
+        error = "unknown error";
+    }
+    SE_LOG(level, logger, NULL, "%s", error.c_str());
+
+    if (explanation) {
+        *explanation = error;
     }
 
     if (status && *status == STATUS_OK) {
@@ -731,6 +845,19 @@ std::vector<std::string> unescapeJoinedString (const std::string& src, char sep)
         }
     }
     return splitStrings;
+}
+
+std::string Flags2String(int flags, const Flag *descr, const std::string &sep)
+{
+    std::list<std::string> tmp;
+
+    while (descr->m_flag) {
+        if (flags & descr->m_flag) {
+            tmp.push_back(descr->m_description);
+        }
+        ++descr;
+    }
+    return boost::join(tmp, ", ");
 }
 
 ScopedEnvChange::ScopedEnvChange(const string &var, const string &value) :

@@ -67,8 +67,8 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual bool isEmpty();
     virtual void close();
     virtual Databases getDatabases();
-    virtual const char *getMimeType() const;
-    virtual const char *getMimeVersion() const;
+    virtual std::string getMimeType() const;
+    virtual std::string getMimeVersion() const;
 
     /* implementation of TrackingSyncSource interface */
     virtual void listAllItems(RevisionMap_t &revisions);
@@ -78,15 +78,13 @@ class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
 
  private:
     /**
-     * @name values obtained from the source's type property
+     * @name values obtained from the source's "database format" configuration property
      *
      * Other sync sources only support one hard-coded type and
      * don't need such variables.
      */
     /**@{*/
     string m_mimeType;
-    string m_mimeVersion;
-    string m_supportedTypes;
     /**@}*/
 
     /** directory selected via the database name in open(), reset in close() */

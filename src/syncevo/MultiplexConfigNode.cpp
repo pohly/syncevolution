@@ -27,22 +27,20 @@ MultiplexConfigNode::getNode(const string &property,
                              const ConfigProperty **found) const
 {
     BOOST_FOREACH(const ConfigProperty *prop, m_registry) {
-        if (boost::iequals(prop->getName(), property)) {
+        bool match = false;
+        BOOST_FOREACH(const std::string &name, prop->getNames()) {
+            if (name == property) {
+                match = true;
+                break;
+            }
+        }
+        if (match) {
             if (found) {
                 *found = prop;
             }
 
             FilterConfigNode *node = 
                 m_nodes[prop->isHidden()][prop->getSharing()].get();
-
-            // special case: fall back to shared node if no unshared
-            // node or only dummy one, and property is primarily
-            // stored unshared, but also in the shared node
-            if ((!node || !m_havePeerNodes) &&
-                prop->getSharing() == ConfigProperty::NO_SHARING &&
-                (prop->getFlags() & ConfigProperty::SHARED_AND_UNSHARED)) {
-                node = m_nodes[prop->isHidden()][ConfigProperty::SOURCE_SET_SHARING].get();
-            }
 
             return node;
         }
@@ -106,12 +104,6 @@ void MultiplexConfigNode::setProperty(const string &property,
     FilterConfigNode *node = getNode(property, &prop);
     if (node) {
         node->setProperty(property, value, comment, defValue);
-        bool hidden = prop->isHidden();
-        if (node == m_nodes[hidden][ConfigProperty::NO_SHARING].get() &&
-            (node = m_nodes[hidden][ConfigProperty::SOURCE_SET_SHARING].get()) != NULL &&
-            (prop->getFlags() & ConfigProperty::SHARED_AND_UNSHARED)) {
-            node->setProperty(property, value, comment, defValue);
-        }
     } else {
         SE_THROW(property + ": not supported by configuration multiplexer");
     }
