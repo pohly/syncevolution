@@ -31,6 +31,10 @@ LDFLAGS = -Wl,--as-needed
 export CFLAGS
 export LDFLAGS
 
+# some optified -dev packages may forget the symlink
+PKG_CONFIG_PATH=/opt/maemo/usr/lib/pkgconfig
+export PKG_CONFIG_PATH
+
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 	CONFIGURE_FLAGS += CXXFLAGS="-g -O0"
 endif
