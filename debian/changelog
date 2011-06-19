@@ -1,8 +1,16 @@
 syncevolution (1:1.1.99.4-1) unstable; urgency=low
 
   * SyncEvolution 1.1.99.4 for Maemo.
+    - Built with WebDAV support.
+  * Build-Depend on libneon27-gnutls-dev.
+  * Depend on host (used by WebDAV backend for DNS SRV lookups).
+  * Updated package description:
+    - SyncEvolution now supports CalDAV/CardDAV.
+    - Remove mention of ScheduleWorld, as the service shut down.
+    - Mention Ovi instead, since this package is for a Nokia device.
+    - Mention Google, since CalDAV is finally supported.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Sun, 19 Jun 2011 17:25:40 +0200
+ -- Ove Kaaven <ovek@arcticnet.no>  Sun, 19 Jun 2011 17:40:57 +0200
 
 syncevolution (1:1.1.1-1) unstable; urgency=low
 

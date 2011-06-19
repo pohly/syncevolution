@@ -37,7 +37,7 @@ endif
 
 CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-ssl-certificate-check \
  --disable-libsoup --enable-libcurl --disable-ecal --enable-ebook --enable-maemocal \
- --disable-bluetooth --with-synthesis-src=libsynthesis
+ --disable-bluetooth --enable-dav --with-synthesis-src=libsynthesis
 
 #ifneq (,$(findstring maemo,$(DEB_BUILD_OPTIONS)))
 #	CONFIGURE_FLAGS += --enable-maemo --enable-shared
