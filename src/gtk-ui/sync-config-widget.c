@@ -202,14 +202,13 @@ set_config_cb (SyncevoSession *session,
                                       data->widgets->name,
                                       (SyncevoSessionGenericCb)check_source_cb,
                                       data->widgets);
-    } else if (peer_is_local (data->widget->config) && !data->save_webdav_config) {
+    } else if (data->save_webdav_config) {
         char *name;
         /* we saved a local config, we need to save the 
          * webdav source-config as well */
 
         g_object_unref (session);
  
-        data->save_webdav_config = TRUE;
         name = g_strdup_printf ("source-config@%s", data->widget->config_name);
         syncevo_server_start_no_sync_session (data->widget->server,
                                               name,
@@ -270,11 +269,6 @@ save_config (save_config_data *data,
 {
     SyncConfigWidget *w = data->widget;
 
-    if (data->delete) {
-        syncevo_config_free (w->config);
-        w->config = g_hash_table_new (g_str_hash, g_str_equal);
-    }
-
     /* if this is a device client peer and not configured, we
      * need to test that we aren't overwriting existing
      * configs */
@@ -289,14 +283,28 @@ save_config (save_config_data *data,
                                     data);
     } else if (data->save_webdav_config) {
         /* we are saving the additional source-config for webdav  */
+        data->save_webdav_config = FALSE;
+
+        if (data->delete) {
+            syncevo_config_free (w->webdav_config);
+            w->webdav_config = g_hash_table_new (g_str_hash, g_str_equal);
+        }
         syncevo_session_set_config (session,
                                     data->temporary,
                                     data->temporary,
-                                    data->widget->webdav_config,
+                                    w->webdav_config,
                                     (SyncevoSessionGenericCb)set_config_cb,
                                     data);
- 
     } else {
+        /* make sure we save the webdav source-config afterwards */
+        if (peer_is_local (w->config))
+            data->save_webdav_config = TRUE;
+
+        if (data->delete) {
+            syncevo_config_free (w->config);
+            syncevo_config_free (w->config);
+            w->config = g_hash_table_new (g_str_hash, g_str_equal);
+        }
         syncevo_session_set_config (session,
                                     data->temporary,
                                     data->temporary,
