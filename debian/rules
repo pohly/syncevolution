@@ -26,9 +26,7 @@ DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 
 
-CFLAGS = -Wall -g
 LDFLAGS = -Wl,--as-needed
-export CFLAGS
 export LDFLAGS
 
 # some optified -dev packages may forget the symlink
