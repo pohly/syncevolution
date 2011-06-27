@@ -363,10 +363,11 @@ class DBusUtil(Timeout):
             print "\ndone, quit gdb now\n"
         hasfailed = numerrors + numfailures != len(result.errors) + len(result.failures)
 
-        if not debugger and DBusUtil.pserver.poll() == None:
+        if not debugger and self.isServerRunning():
             os.kill(DBusUtil.pserver.pid, signal.SIGTERM)
         DBusUtil.pserver.communicate()
         serverout = open(syncevolog).read()
+        # Did the server fail or was it terminated by SIGTERM (-15)?
         if DBusUtil.pserver is not None and DBusUtil.pserver.returncode != -15:
             hasfailed = True
         if hasfailed:
@@ -377,10 +378,10 @@ class DBusUtil(Timeout):
         monitorout = open(dbuslog).read()
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
-        if DBusUtil.pserver.returncode and DBusUtil.pserver.returncode != -15:
+        if DBusUtil.pserver.returncode and hasfailed:
             # create a new failure specifically for the server
-            result.errors.append((self,
-                                  "server terminated with error code %d%s" % (DBusUtil.pserver.returncode, report)))
+            result.errors.append(self,
+                                 "server terminated with error code %d%s" % (DBusUtil.pserver.returncode, report))
         elif numerrors != len(result.errors):
             # append report to last error
             result.errors[-1] = (result.errors[-1][0], result.errors[-1][1] + report)
