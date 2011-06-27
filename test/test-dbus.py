@@ -1538,7 +1538,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         else:
             self.fail("no exception thrown")
 
-    def testCheckSourceInvalidType(self):
+    def testCheckSourceInvalidBackend(self):
         """TestSessionAPIsDummy.testCheckSourceInvalidType -  test the right error is reported when the type is invalid """
         self.setupConfig()
         config = { "source/memo" : { "backend" : "no-such-backend"} }
@@ -1550,7 +1550,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         else:
             self.fail("no exception thrown")
 
-    def testCheckSourceNoType(self):
+    def testCheckSourceNoBackend(self):
         """TestSessionAPIsDummy.testCheckSourceNoType -  test the right error is reported when the source is unusable"""
         self.setupConfig()
         config = { "source/memo" : { "backend" : "file",
@@ -2507,7 +2507,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.assertEqual(config[""]["deviceId"], "shared-device-identifier")
         self.assertEqual(config["source/addressbook"]["database"], "Work")
 
-    def testSharedType(self):
+    def testSharedProperties(self):
         """TestMultipleConfigs.testSharedType - 'type' consists of per-peer and shared properties"""
         self.setupConfigs()
 
@@ -2527,7 +2527,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.assertEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
         self.session.Detach()
 
-    def testSharedTypeOther(self):
+    def testSharedPropertyOther(self):
         """TestMultipleConfigs.testSharedTypeOther - shared backend properties must be preserved when adding peers"""
         # writing peer modifies properties in "foo" and creates context "@other"
         self.setUpSession("Foo@other")
@@ -2543,7 +2543,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.assertEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
         self.session.Detach()
 
-        # adding second client must preserve type
+        # adding second client must preserve property
         self.setUpSession("bar@other")
         config = self.server.GetConfig("Funambol@other", True, utf8_strings=True)
         self.assertEqual(config["source/addressbook"]["backend"], "file")
