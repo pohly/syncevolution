@@ -22,6 +22,8 @@
 #include <syncevo/LogRedirect.h>
 #include <syncevo/SmartPtr.h>
 
+#include <sstream>
+
 #include <dlfcn.h>
 
 #include <syncevo/declarations.h>
@@ -95,25 +97,41 @@ URI URI::resolve(const std::string &path) const
 
 std::string URI::toURL() const
 {
-    return StringPrintf("%s://%s@%s:%u/%s#%s",
-                        m_scheme.c_str(),
-                        m_userinfo.c_str(),
-                        m_host.c_str(),
-                        m_port,
-                        m_path.c_str(),
-                        m_fragment.c_str());
+    std::ostringstream buffer;
+
+    buffer << m_scheme << "://";
+    if (!m_userinfo.empty()) {
+        buffer << m_userinfo << "@";
+    }
+    buffer << m_host;
+    if (m_port) {
+        buffer << ":" << m_port;
+    }
+    buffer << m_path;
+    if (!m_query.empty()) {
+        buffer << "?" << m_query;
+    }
+    if (!m_fragment.empty()) {
+        buffer << "#" << m_fragment;
+    }
+    return buffer.str();
 }
 
 std::string URI::escape(const std::string &text)
 {
     SmartPtr<char *> tmp(ne_path_escape(text.c_str()));
-    return tmp.get();
+    // Fail gracefully. I have observed ne_path_escape returning NULL
+    // a couple of times, with input "%u". It makes sense, if the
+    // escaping fails, to just return the same string, because, well,
+    // it couldn't be escaped.
+    return tmp ? tmp.get() : text;
 }
 
 std::string URI::unescape(const std::string &text)
 {
     SmartPtr<char *> tmp(ne_path_unescape(text.c_str()));
-    return tmp.get();
+    // Fail gracefully. See also the similar comment for the escape() method.
+    return tmp ? tmp.get() : text;
 }
 
 std::string URI::normalizePath(const std::string &path, bool collection)
@@ -125,7 +143,17 @@ std::string URI::normalizePath(const std::string &path, bool collection)
     string_split_iterator it =
         boost::make_split_iterator(path, boost::first_finder("/", boost::is_iequal()));
     while (!it.eof()) {
-        res += escape(unescape(std::string(it->begin(), it->end())));
+        std::string split(it->begin(), it->end());
+        // Let's have an exception here for "%u", since we use that to replace the
+        // actual username into the path. It's safe to ignore "%u" because it
+        // couldn't be in a valid URI anyway.
+        // TODO: we should find a neat way to remove the awareness of "%u" from
+        // NeonCXX.
+        std::string normalizedSplit = split;
+        if (split != "%u") {
+            normalizedSplit = escape(unescape(split));
+        }
+        res += normalizedSplit;
         ++it;
         if (!it.eof()) {
             res += '/';
@@ -264,6 +292,7 @@ int Session::getCredentials(void *userdata, const char *realm, int attempt, char
             SyncEvo::Strncpy(username, user.c_str(), NE_ABUFSIZ);
             SyncEvo::Strncpy(password, pw.c_str(), NE_ABUFSIZ);
             session->m_credentialsSent = true;
+            SE_LOG_DEBUG(NULL, NULL, "retry request with credentials");
             return 0;
         } else {
             // give up
@@ -313,6 +342,7 @@ void Session::preSend(ne_request *req, ne_buffer *header)
 
         // check for acceptance of credentials later
         m_credentialsSent = true;
+        SE_LOG_DEBUG(NULL, NULL, "forced sending credentials");
     }
 }
 
@@ -354,10 +384,16 @@ int Session::sslVerify(void *userdata, int failures, const ne_ssl_certificate *c
 unsigned int Session::options(const std::string &path)
 {
     unsigned int caps;
-    check(ne_options2(m_session, path.c_str(), &caps));
+    checkError(ne_options2(m_session, path.c_str(), &caps));
     return caps;
 }
 #endif // HAVE_LIBNEON_OPTIONS
+
+class PropFindDeleter
+{
+public:
+    void operator () (ne_propfind_handler *handler) { if (handler) { ne_propfind_destroy(handler); } }
+};
 
 void Session::propfindURI(const std::string &path, int depth,
                           const ne_propname *props,
@@ -367,36 +403,27 @@ void Session::propfindURI(const std::string &path, int depth,
     startOperation("PROPFIND", deadline);
 
  retry:
-    ne_propfind_handler *handler;
+    boost::shared_ptr<ne_propfind_handler> handler;
     int error;
 
-    handler = ne_propfind_create(m_session, path.c_str(), depth);
+    handler = boost::shared_ptr<ne_propfind_handler>(ne_propfind_create(m_session, path.c_str(), depth),
+                                                     PropFindDeleter());
     if (props != NULL) {
-	error = ne_propfind_named(handler, props,
+	error = ne_propfind_named(handler.get(), props,
                                   propsResult, const_cast<void *>(static_cast<const void *>(&callback)));
     } else {
-	error = ne_propfind_allprop(handler,
+	error = ne_propfind_allprop(handler.get(),
                                     propsResult, const_cast<void *>(static_cast<const void *>(&callback)));
     }
 
-    // remember details before destroying request, needed for 301
-    ne_request *req = ne_propfind_get_request(handler);
+    // remain valid as long as "handler" is valid
+    ne_request *req = ne_propfind_get_request(handler.get());
     const ne_status *status = ne_get_status(req);
-    int code = status->code;
-    int klass = status->klass;
     const char *tmp = ne_get_response_header(req, "Location");
     std::string location(tmp ? tmp : "");
 
-    ne_propfind_destroy(handler);
-    
-    if (error == NE_ERROR && klass == 3) {
-        SE_THROW_EXCEPTION_2(RedirectException,
-                             StringPrintf("%d status: redirected to %s", code, location.c_str()),
-                             code, location);
-    } else {
-        if (!check(error, code)) {
-            goto retry;
-        }
+    if (!checkError(error, status->code, status, location)) {
+        goto retry;
     }
 }
 
@@ -447,7 +474,9 @@ int Session::propIterator(void *userdata,
 
 void Session::startOperation(const string &operation, const Timespec &deadline)
 {
-    SE_LOG_DEBUG(NULL, NULL, "starting %s", operation.c_str());
+    SE_LOG_DEBUG(NULL, NULL, "starting %s, credentials %s",
+                 operation.c_str(),
+                 m_settings->getCredentialsOkay() ? "okay" : "unverified");
 
     // remember current operation attributes
     m_operation = operation;
@@ -470,7 +499,7 @@ void Session::flush()
     }
 }
 
-bool Session::check(int error, int code, const ne_status *status, const string &location)
+bool Session::checkError(int error, int code, const ne_status *status, const string &location)
 {
     flush();
 
@@ -539,6 +568,7 @@ bool Session::check(int error, int code, const ne_status *status, const string &
 
             // assume that credentials were valid, if sent
             if (m_credentialsSent) {
+                SE_LOG_DEBUG(NULL, NULL, "credentials accepted");
                 m_settings->setCredentialsOkay(true);
             }
 
@@ -563,8 +593,10 @@ bool Session::check(int error, int code, const ne_status *status, const string &
                 // potentially temporary server failure, may try again
                 retry = true;
             }
-        } else if (descr.find("Secure connection truncated") != descr.npos) {
+        } else if (descr.find("Secure connection truncated") != descr.npos ||
+                   descr.find("decryption failed or bad record mac") != descr.npos) {
             // occasionally seen with Google server; let's retry
+            // For example: "Could not read status line: SSL error: decryption failed or bad record mac"
             retry = true;
         }
         break;
@@ -642,6 +674,7 @@ bool Session::check(int error, int code, const ne_status *status, const string &
 
     if (code == 401) {
         // fatal credential error, remember that
+        SE_LOG_DEBUG(NULL, NULL, "credentials rejected");
         m_settings->setCredentialsOkay(false);
     }
 
@@ -750,18 +783,20 @@ int XMLParser::reset(std::string &buffer)
     return 0;
 }
 
-void XMLParser::initReportParser(std::string &href,
-                                 std::string &etag)
+void XMLParser::initReportParser(const ResponseEndCB_t &responseEnd)
 {
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "multistatus", _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "response", _2, _3));
+    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "response", _2, _3),
+                Neon::XMLParser::DataCB_t(),
+                boost::bind(&Neon::XMLParser::doResponseEnd,
+                            this, responseEnd));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "href", _2, _3),
-                boost::bind(Neon::XMLParser::append, boost::ref(href), _2, _3));
+                boost::bind(Neon::XMLParser::append, boost::ref(m_href), _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "propstat", _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "status", _2, _3) /* check status? */);
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "prop", _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "getetag", _2, _3),
-                boost::bind(Neon::XMLParser::append, boost::ref(etag), _2, _3));
+                boost::bind(Neon::XMLParser::append, boost::ref(m_etag), _2, _3));
 }
 
 Request::Request(Session &session,
@@ -810,7 +845,7 @@ bool Request::run()
         error = ne_xml_dispatch_request(m_req, m_parser->get());
     }
 
-    return check(error);
+    return checkError(error);
 }
 
 int Request::addResultData(void *userdata, const char *buf, size_t len)
@@ -820,9 +855,9 @@ int Request::addResultData(void *userdata, const char *buf, size_t len)
     return 0;
 }
 
-bool Request::check(int error)
+bool Request::checkError(int error)
 {
-    return m_session.check(error, getStatus()->code, getStatus(), getResponseHeader("Location"));
+    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"));
 }
 
 }

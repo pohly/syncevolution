@@ -624,6 +624,7 @@ bool Cmdline::run() {
     } else if (m_printTemplates) {
         SyncConfig::DeviceList devices;
         if (m_template.empty()){
+            devices.push_back (SyncConfig::DeviceDescription("", "", SyncConfig::MATCH_FOR_CLIENT_MODE));
             dumpConfigTemplates("Available configuration templates (servers):",
                     SyncConfig::getPeerTemplates(devices), false);
         } else {
@@ -857,13 +858,21 @@ bool Cmdline::run() {
                 fromScratch = true;
                 string configTemplate;
                 if (m_template.empty()) {
-                    // template is the peer name
-                    configTemplate = m_server;
                     if (configureContext) {
                         // configuring a context, template doesn't matter =>
                         // use default "SyncEvolution" template
                         configTemplate =
                             peer = "SyncEvolution";
+                        from = SyncConfig::createPeerTemplate(peer);
+                    } else if (peer == "target-config") {
+                        // Configuring the source context for local sync
+                        // => determine template based on context name.
+                        configTemplate = context;
+                        from = SyncConfig::createPeerTemplate(context);
+                    } else {
+                        // template is the peer name
+                        configTemplate = m_server;
+                        from = SyncConfig::createPeerTemplate(peer);
                     }
                 } else {
                     // Template is specified explicitly. It must not contain a context,
@@ -877,14 +886,12 @@ bool Cmdline::run() {
                     }
                     string tmp;
                     SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(m_server), tmp, context);
+                    from = SyncConfig::createPeerTemplate(peer);
                 }
-                from = SyncConfig::createPeerTemplate(peer);
                 list<string> missing;
-                if (!from.get() &&
-                    m_template.empty()) {
-                    // check if all obligatory sync properties are specified, if so, allow user
-                    // to proceed with "none" template; if a template was specified, we skip
-                    // this and go directly to the code below which prints an error message
+                if (!from.get()) {
+                    // check if all obligatory sync properties are specified; needed
+                    // for both the "is complete" check and the error message below
                     ConfigProps syncProps = m_props.createSyncFilter(to->getContextName());
                     bool complete = true;
                     BOOST_FOREACH(const ConfigProperty *prop, SyncConfig::getRegistry()) {
@@ -894,7 +901,12 @@ bool Cmdline::run() {
                             complete = false;
                         }
                     }
-                    if (complete) {
+
+                    // if everything was specified and no invalid template name was given, allow user
+                    // to proceed with "none" template; if a template was specified, we skip
+                    // this and go directly to the code below which prints an error message
+                    if (complete &&
+                        m_template.empty()) {
                         from = SyncConfig::createPeerTemplate("none");
                     }
                 }
@@ -1987,6 +1999,25 @@ static string filterConfig(const string &buffer)
     return res.str();
 }
 
+static string removeComments(const string &buffer)
+{
+    ostringstream res;
+
+    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
+    for (string_split_iterator it =
+             boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal()));
+         it != string_split_iterator();
+         ++it) {
+        string line = boost::copy_range<string>(*it);
+        if (!line.empty() &&
+            !boost::starts_with(line, "#")) {
+            res << line << endl;
+        }
+    }
+
+    return res.str();
+}
+
 // remove comment lines from scanFiles() output
 static string filterFiles(const string &buffer)
 {
@@ -2137,8 +2168,6 @@ static string internalToIni(const string &config)
         }
         string assignment = line.substr(colon + 1);
         // substitude aliases with generic values
-        boost::replace_first(assignment, "= F", "= 0");
-        boost::replace_first(assignment, "= T", "= 1");
         boost::replace_first(assignment, "= syncml:auth-md5", "= md5");
         boost::replace_first(assignment, "= syncml:auth-basix", "= basic");
         res << assignment << endl;
@@ -2147,6 +2176,33 @@ static string internalToIni(const string &config)
     return res.str();
 }
 
+/** result of removeComments(filterRandomUUID(filterConfig())) for Google Calendar template/config */
+static const std::string googlecaldav =
+               "syncURL = https://www.google.com/calendar/dav/%u/user/?SyncEvolution=Google\n"
+               "printChanges = 0\n"
+               "dumpData = 0\n"
+               "deviceId = fixed-devid\n"
+               "IconURI = image://themedimage/icons/services/google-calendar\n"
+               "ConsumerReady = 1\n"
+               "peerType = WebDAV\n"
+               "[calendar]\n"
+               "sync = two-way\n"
+               "backend = CalDAV\n";
+
+/** result of removeComments(filterRandomUUID(filterConfig())) for Yahoo Calendar + Contacts */
+static const std::string yahoo =
+               "printChanges = 0\n"
+               "dumpData = 0\n"
+               "deviceId = fixed-devid\n"
+               "IconURI = image://themedimage/icons/services/yahoo\n"
+               "ConsumerReady = 1\n"
+               "peerType = WebDAV\n"
+               "[addressbook]\n"
+               "sync = disabled\n"
+               "backend = CardDAV\n"
+               "[calendar]\n"
+               "sync = two-way\n"
+               "backend = CalDAV\n";
 
 /**
  * Testing is based on a text representation of a directory
@@ -2179,6 +2235,7 @@ class CmdlineTest : public CppUnit::TestFixture {
     CPPUNIT_TEST(testMatchTemplate);
     CPPUNIT_TEST(testAddSource);
     CPPUNIT_TEST(testSync);
+    CPPUNIT_TEST(testWebDAV);
     CPPUNIT_TEST(testConfigure);
     CPPUNIT_TEST(testConfigureTemplates);
     CPPUNIT_TEST(testConfigureSources);
@@ -2192,6 +2249,12 @@ public:
     CmdlineTest() :
         m_testDir("CmdlineTest")
     {
+    }
+
+    void setUp()
+    {
+        rm_r(m_testDir);
+        mkdir_p(m_testDir);
     }
 
 protected:
@@ -2230,11 +2293,17 @@ protected:
         buffer.replace(uuid, end - uuid, "deviceId = fixed-devid");
     }
 
+    string filterRandomUUID(const string &buffer) {
+        string copy = buffer;
+        removeRandomUUID(copy);
+        return copy;
+    }
+
     /** create new configurations */
     void testSetupScheduleWorld() { doSetupScheduleWorld(false); }
     void doSetupScheduleWorld(bool shared) {
         string root;
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
@@ -2305,7 +2374,6 @@ protected:
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         doSetupScheduleWorld(false);
         // bump min/cur version to something not supported, then
         // try to read => should fail
@@ -2365,7 +2433,6 @@ protected:
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         doSetupScheduleWorld(false);
         // decrease min/cur version to something no longer supported,
         // then try to write => should migrate in release mode and fail otherwise
@@ -2425,7 +2492,6 @@ protected:
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         doSetupScheduleWorld(false);
         // decrease min/cur version to something no longer supported,
         // then try to write => should migrate in release mode and fail otherwise
@@ -2486,13 +2552,12 @@ protected:
 
     void testSetupDefault() {
         string root;
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
         root = m_testDir;
         root += "/syncevolution/default";
-        rm_r(root);
         TestCmdline cmdline("--configure",
                             "--template", "default",
                             "--sync-property", "deviceID = fixed-devid",
@@ -2508,12 +2573,11 @@ protected:
 
     void testSetupRenamed() {
         string root;
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
         root = m_testDir;
-        rm_r(root);
         root += "/syncevolution/default";
         TestCmdline cmdline("--configure",
                             "--template", "scheduleworld",
@@ -2531,7 +2595,7 @@ protected:
     void testSetupFunambol() { doSetupFunambol(false); }
     void doSetupFunambol(bool shared) {
         string root;
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
@@ -2567,7 +2631,7 @@ protected:
     void testSetupSynthesis() { doSetupSynthesis(false); }
     void doSetupSynthesis(bool shared) {
         string root;
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
@@ -2599,7 +2663,12 @@ protected:
     }
 
     void testTemplate() {
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
         TestCmdline failure("--template", NULL);
+
         CPPUNIT_ASSERT(!failure.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
         CPPUNIT_ASSERT_EQUAL(string("ERROR: missing parameter for '--template'\n"), lastLine(failure.m_err.str()));
@@ -2610,15 +2679,18 @@ protected:
                                   "   template name = template description\n"
                                   "   eGroupware = http://www.egroupware.org\n"
                                   "   Funambol = http://my.funambol.com\n"
-                                  "   Google = http://m.google.com/sync\n"
+                                  "   Google_Calendar = event sync via CalDAV, use for the 'target-config@google-calendar' config\n"
+                                  "   Google_Contacts = contact sync via SyncML, see http://www.google.com/support/mobile/bin/topic.py?topic=22181\n"
                                   "   Goosync = http://www.goosync.com/\n"
                                   "   Memotoo = http://www.memotoo.com\n"
-                                  "   Mobical = http://www.mobical.net\n"
+                                  "   Mobical = https://www.everdroid.com\n"
                                   "   Oracle = http://www.oracle.com/technology/products/beehive/index.html\n"
                                   "   Ovi = http://www.ovi.com\n"
-                                  "   ScheduleWorld = http://www.scheduleworld.com\n"
+                                  "   ScheduleWorld = server no longer in operation\n"
                                   "   SyncEvolution = http://www.syncevolution.org\n"
-                                  "   Synthesis = http://www.synthesis.ch\n",
+                                  "   Synthesis = http://www.synthesis.ch\n"
+                                  "   WebDAV = contact and event sync using WebDAV, use for the 'target-config@<server>' config\n"
+                                  "   Yahoo = contact and event sync using WebDAV, use for the 'target-config@yahoo' config\n",
                                   help.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("", help.m_err.str());
     }
@@ -2662,11 +2734,10 @@ protected:
     }
 
     void testPrintServers() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         doSetupScheduleWorld(false);
         doSetupSynthesis(true);
         doSetupFunambol(true);
@@ -2682,11 +2753,10 @@ protected:
     }
 
     void testPrintConfig() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         testSetupFunambol();
 
         {
@@ -2882,7 +2952,6 @@ protected:
     }
 
     void testPrintFileTemplates() {
-        rm_r(m_testDir);
         // use local copy of templates in build dir (no need to install)
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "./templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
@@ -2892,8 +2961,7 @@ protected:
     }
 
     void testPrintFileTemplatesConfig() {
-        rm_r(m_testDir);
-        mkdir_p(m_testDir);
+        // simulate reading templates from user's XDG HOME
         symlink("../templates", (m_testDir + "/syncevolution-templates").c_str());
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
@@ -2903,6 +2971,24 @@ protected:
     }
 
     void doPrintFileTemplates() {
+        // Compare only the properties which are really set.
+        //
+        // note that "backend" will be take from the @default context if one
+        // exists, so run this before setting up Funambol below
+        {
+            TestCmdline cmdline("--print-config", "--template", "google calendar", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF(googlecaldav,
+                                      removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
+        }
+
+        {
+            TestCmdline cmdline("--print-config", "--template", "yahoo", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF(yahoo,
+                                      removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
+        }
+
         testSetupFunambol();
 
         {
@@ -2930,7 +3016,7 @@ protected:
 
     void testAddSource() {
         string root;
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
@@ -3016,12 +3102,71 @@ protected:
                                   string(filter2.m_cmdline->m_props[""].m_syncProps));
     }
 
-    void testConfigure() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+    void testWebDAV() {
+#ifdef ENABLE_DAV
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
+        // configure Yahoo under a different name, with explicit template selection
+        {
+            TestCmdline cmdline("--configure",
+                                "--template", "yahoo",
+                                "target-config@my-yahoo",
+                                NULL);
+            cmdline.doit();
+        }
+        {
+            TestCmdline cmdline("--print-config", "target-config@my-yahoo", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF(yahoo,
+                                      removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
+        }
+
+        // configure Google Calendar with template derived from config name
+        {
+            TestCmdline cmdline("--configure",
+                                "target-config@google-calendar",
+                                NULL);
+            cmdline.doit();
+        }
+        {
+            TestCmdline cmdline("--print-config", "target-config@google-calendar", NULL);
+            cmdline.doit();
+            CPPUNIT_ASSERT_EQUAL_DIFF(googlecaldav,
+                                      removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
+        }
+
+        // test "template not found" error cases
+        {
+            TestCmdline cmdline("--configure",
+                                "--template", "yahooxyz",
+                                "target-config@my-yahoo-xyz",
+                                NULL);
+            CPPUNIT_ASSERT(cmdline.m_cmdline->parse());
+            CPPUNIT_ASSERT(!cmdline.m_cmdline->run());
+            CPPUNIT_ASSERT(boost::starts_with(cmdline.m_out.str(), "Available configuration templates (clients and servers):\n"));
+            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'yahooxyz' available.\n"),
+                                 lastLine(cmdline.m_err.str()));
+        }
+        {
+            TestCmdline cmdline("--configure",
+                                "target-config@foobar",
+                                NULL);
+            CPPUNIT_ASSERT(cmdline.m_cmdline->parse());
+            CPPUNIT_ASSERT(!cmdline.m_cmdline->run());
+            CPPUNIT_ASSERT(boost::starts_with(cmdline.m_out.str(), "Available configuration templates (clients and servers):\n"));
+            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'foobar' available. Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: syncURL\n"),
+                                 lastLine(cmdline.m_err.str()));
+        }
+#endif
+    }
+
+    void testConfigure() {
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
         testSetupScheduleWorld();
         string expected = doConfigure(ScheduleWorldConfig(), "sources/addressbook/config.ini:");
 
@@ -3139,6 +3284,8 @@ protected:
                               "\n"
                               "ConsumerReady:\n"
                               "\n"
+                              "peerType:\n"
+                              "\n"
                               "defaultPeer:\n");
         string sourceProperties("sync:\n"
                                 "\n"
@@ -3228,7 +3375,7 @@ protected:
      * templates. See BMC #14805.
      */
     void testConfigureTemplates() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
@@ -3272,17 +3419,18 @@ protected:
             "syncevolution/default/peers/foo/config.ini:syncURL = local://@bar\n";
 
         string configsource =
-            "syncevolution/default/peers/foo/sources/ical20/config.ini:sync = two-way\n"
-            "syncevolution/default/sources/ical20/config.ini:backend = calendar\n";
+            "syncevolution/default/peers/foo/sources/eds_event/config.ini:sync = two-way\n"
+            "syncevolution/default/sources/eds_event/config.ini:backend = calendar\n";
 
         rm_r(m_testDir);
         {
             // allow user to proceed if they wish: should result in no sources configured
             TestCmdline failure("--configure", "--template", "none", "foo", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
+            bool success  = failure.m_cmdline->run();
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
+            CPPUNIT_ASSERT(success);
             string res = scanFiles(m_testDir);
             removeRandomUUID(res);
             CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig, filterFiles(res));
@@ -3293,10 +3441,10 @@ protected:
             // allow user to proceed if they wish: should result in no sources configured,
             // even if general source properties are specified
             TestCmdline failure("--configure", "--template", "none", "backend=calendar", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
+            bool success = failure.m_cmdline->parse() && failure.m_cmdline->run();
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
+            CPPUNIT_ASSERT(success);
             string res = scanFiles(m_testDir);
             removeRandomUUID(res);
             CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig, filterFiles(res));
@@ -3306,11 +3454,11 @@ protected:
         {
             // allow user to proceed if they wish: should result in no sources configured,
             // even if specific source properties are specified
-            TestCmdline failure("--configure", "--template", "none", "ical20/backend=calendar", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
+            TestCmdline failure("--configure", "--template", "none", "eds_event/backend=calendar", "foo", NULL);
+            bool success = failure.m_cmdline->parse() && failure.m_cmdline->run();
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
+            CPPUNIT_ASSERT(success);
             string res = scanFiles(m_testDir);
             removeRandomUUID(res);
             CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig, filterFiles(res));
@@ -3318,14 +3466,14 @@ protected:
 
         rm_r(m_testDir);
         {
-            // allow user to proceed if they wish and possible: here ical20 is not usable
-            TestCmdline failure("--configure", "--template", "none", "foo", "ical20", NULL);
+            // allow user to proceed if they wish and possible: here eds_event is not usable
+            TestCmdline failure("--configure", "--template", "none", "foo", "eds_event", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             bool caught = false;
             try {
                 CPPUNIT_ASSERT(failure.m_cmdline->run());
             } catch (const StatusException &ex) {
-                if (!strcmp(ex.what(), "ical20: no backend available")) {
+                if (!strcmp(ex.what(), "eds_event: no backend available")) {
                     caught = true;
                 } else {
                     throw;
@@ -3336,14 +3484,14 @@ protected:
 
         rm_r(m_testDir);
         {
-            // allow user to proceed if they wish and possible: here ical20 is not configurable
-            TestCmdline failure("--configure", "syncURL=local://@bar", "foo", "ical20", NULL);
+            // allow user to proceed if they wish and possible: here eds_event is not configurable
+            TestCmdline failure("--configure", "syncURL=local://@bar", "foo", "eds_event", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             bool caught = false;
             try {
                 CPPUNIT_ASSERT(failure.m_cmdline->run());
             } catch (const StatusException &ex) {
-                if (!strcmp(ex.what(), "no such source(s): ical20")) {
+                if (!strcmp(ex.what(), "no such source(s): eds_event")) {
                     caught = true;
                 } else {
                     throw;
@@ -3354,14 +3502,14 @@ protected:
 
         rm_r(m_testDir);
         {
-            // allow user to proceed if they wish and possible: here ical20 is not configurable (wrong context)
-            TestCmdline failure("--configure", "syncURL=local://@bar", "ical20/backend@xyz=calendar", "foo", "ical20", NULL);
+            // allow user to proceed if they wish and possible: here eds_event is not configurable (wrong context)
+            TestCmdline failure("--configure", "syncURL=local://@bar", "eds_event/backend@xyz=calendar", "foo", "eds_event", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             bool caught = false;
             try {
                 CPPUNIT_ASSERT(failure.m_cmdline->run());
             } catch (const StatusException &ex) {
-                if (!strcmp(ex.what(), "no such source(s): ical20")) {
+                if (!strcmp(ex.what(), "no such source(s): eds_event")) {
                     caught = true;
                 } else {
                     throw;
@@ -3373,7 +3521,7 @@ protected:
         rm_r(m_testDir);
         {
             // allow user to proceed if they wish: configure exactly the specified sources
-            TestCmdline failure("--configure", "--template", "none", "backend=calendar", "foo", "ical20", NULL);
+            TestCmdline failure("--configure", "--template", "none", "backend=calendar", "foo", "eds_event", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(failure.m_cmdline->run());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
@@ -3401,7 +3549,7 @@ protected:
         {
             // allow user to proceed if they provide enough information;
             // source created because listed and usable
-            TestCmdline failure("--configure", "syncURL=local://@bar", "backend=calendar", "foo", "ical20", NULL);
+            TestCmdline failure("--configure", "syncURL=local://@bar", "backend=calendar", "foo", "eds_event", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(failure.m_cmdline->run());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
@@ -3415,7 +3563,7 @@ protected:
         {
             // allow user to proceed if they provide enough information;
             // source created because listed and usable
-            TestCmdline failure("--configure", "syncURL=local://@bar", "ical20/backend@default=calendar", "foo", "ical20", NULL);
+            TestCmdline failure("--configure", "syncURL=local://@bar", "eds_event/backend@default=calendar", "foo", "eds_event", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(failure.m_cmdline->run());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
@@ -3428,11 +3576,9 @@ protected:
 
 
     void testConfigureSources() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
-
-        rm_r(m_testDir);
 
         // create from scratch with only addressbook configured
         {
@@ -3543,7 +3689,7 @@ protected:
     }
 
     void testOldConfigure() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
@@ -3684,11 +3830,10 @@ protected:
     }
 
     void testMigrate() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         string oldRoot = m_testDir + "/.sync4j/evolution/scheduleworld";
         string newRoot = m_testDir + "/syncevolution/default";
 
@@ -3911,11 +4056,10 @@ protected:
         // Migrate context containing a peer. Must also migrate peer.
         // Covers special case of inconsistent "type".
 
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        rm_r(m_testDir);
         string root = m_testDir + "/syncevolution/default";
 
         string oldConfig =
@@ -4081,7 +4225,7 @@ private:
                          "peers/scheduleworld/config.ini:# remoteIdentifier = \n"
                          "peers/scheduleworld/config.ini:# PeerIsClient = 0\n"
                          "peers/scheduleworld/config.ini:# SyncMLVersion = \n"
-                         "peers/scheduleworld/config.ini:# PeerName = \n"
+                         "peers/scheduleworld/config.ini:PeerName = ScheduleWorld\n"
                          "config.ini:deviceId = fixed-devid\n" /* this is not the default! */
                          "peers/scheduleworld/config.ini:# remoteDeviceId = \n"
                          "peers/scheduleworld/config.ini:# enableWBXML = 1\n"
@@ -4092,8 +4236,9 @@ private:
                          "peers/scheduleworld/config.ini:# SSLVerifyServer = 1\n"
                          "peers/scheduleworld/config.ini:# SSLVerifyHost = 1\n"
                          "peers/scheduleworld/config.ini:WebURL = http://www.scheduleworld.com\n"
-                         "peers/scheduleworld/config.ini:# IconURI = \n"
+                         "peers/scheduleworld/config.ini:IconURI = image://themedimage/icons/services/scheduleworld\n"
                          "peers/scheduleworld/config.ini:# ConsumerReady = 0\n"
+                         "peers/scheduleworld/config.ini:# peerType = \n"
 
                          "peers/scheduleworld/sources/addressbook/.internal.ini:# adminData = \n"
                          "peers/scheduleworld/sources/addressbook/.internal.ini:# synthesisID = 0\n"
@@ -4195,7 +4340,7 @@ private:
             "spds/syncml/config.txt:# remoteIdentifier = \n"
             "spds/syncml/config.txt:# PeerIsClient = 0\n"
             "spds/syncml/config.txt:# SyncMLVersion = \n"
-            "spds/syncml/config.txt:# PeerName = \n"
+            "spds/syncml/config.txt:PeerName = ScheduleWorld\n"
             "spds/syncml/config.txt:deviceId = fixed-devid\n" /* this is not the default! */
             "spds/syncml/config.txt:# remoteDeviceId = \n"
             "spds/syncml/config.txt:# enableWBXML = 1\n"
@@ -4212,7 +4357,7 @@ private:
             "spds/syncml/config.txt:# SSLVerifyServer = 1\n"
             "spds/syncml/config.txt:# SSLVerifyHost = 1\n"
             "spds/syncml/config.txt:WebURL = http://www.scheduleworld.com\n"
-            "spds/syncml/config.txt:# IconURI = \n"
+            "spds/syncml/config.txt:IconURI = image://themedimage/icons/services/scheduleworld\n"
             "spds/syncml/config.txt:# ConsumerReady = 0\n"
             "spds/sources/addressbook/config.txt:sync = two-way\n"
             "spds/sources/addressbook/config.txt:type = addressbook:text/vcard\n"
@@ -4244,6 +4389,7 @@ private:
     string FunambolConfig() {
         string config = ScheduleWorldConfig();
         boost::replace_all(config, "/scheduleworld/", "/funambol/");
+        boost::replace_all(config, "PeerName = ScheduleWorld", "PeerName = Funambol");
 
         boost::replace_first(config,
                              "syncURL = http://sync.scheduleworld.com/funambol/ds",
@@ -4252,6 +4398,10 @@ private:
         boost::replace_first(config,
                              "WebURL = http://www.scheduleworld.com",
                              "WebURL = http://my.funambol.com");
+
+        boost::replace_first(config,
+                             "IconURI = image://themedimage/icons/services/scheduleworld",
+                             "IconURI = image://themedimage/icons/services/funambol");
 
         boost::replace_first(config,
                              "# ConsumerReady = 0",
@@ -4298,6 +4448,7 @@ private:
     string SynthesisConfig() {
         string config = ScheduleWorldConfig();
         boost::replace_all(config, "/scheduleworld/", "/synthesis/");
+        boost::replace_all(config, "PeerName = ScheduleWorld", "PeerName = Synthesis");
 
         boost::replace_first(config,
                              "syncURL = http://sync.scheduleworld.com/funambol/ds",
@@ -4305,7 +4456,11 @@ private:
 
         boost::replace_first(config,
                              "WebURL = http://www.scheduleworld.com",
-                             "WebURL = http://www.synthesis.ch");        
+                             "WebURL = http://www.synthesis.ch");
+
+        boost::replace_first(config,
+                             "IconURI = image://themedimage/icons/services/scheduleworld",
+                             "IconURI = image://themedimage/icons/services/synthesis");
 
         boost::replace_first(config,
                              "addressbook/config.ini:uri = card3",
@@ -4427,7 +4582,7 @@ private:
     }
 
     string printConfig(const string &server) {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
+        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 

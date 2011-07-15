@@ -32,7 +32,12 @@ class CalDAVSource : public WebDAVSource,
     virtual std::string getMimeVersion() const { return "2.0"; }
 
     /* implementation of SubSyncSource interface */
+    virtual void begin() { contactServer(); }
+    virtual void endSubSync(bool success) { if (success) { storeServerInfos(); } }
+    virtual std::string subDatabaseRevision() { return databaseRevision(); }
     virtual void listAllSubItems(SubRevisionMap_t &revisions);
+    virtual void updateAllSubItems(SubRevisionMap_t &revisions);
+    virtual void setAllSubItems(const SubRevisionMap_t &revisions);
     virtual SubItemResult insertSubItem(const std::string &uid, const std::string &subid,
                                         const std::string &item);
     virtual void readSubItem(const std::string &uid, const std::string &subid, std::string &item);
@@ -110,6 +115,14 @@ class CalDAVSource : public WebDAVSource,
          */
         eptr<icalcomponent> m_calendar;
 
+        /**
+         * clean all X-LIC-ERROR warnings added by libical, for example:
+         * X-LIC-ERROR;X-LIC-ERRORTYPE=VALUE-PARSE-ERROR:No value for LOCATION property. Removing entire property:
+         *
+         * @param comp    VEVENT, VTODO, ...
+         */
+        static void icalClean(icalcomponent *comp);
+
         /** date-time as string, without time zone */
         static std::string icalTime2Str(const icaltimetype &tt);
 
@@ -153,20 +166,30 @@ class CalDAVSource : public WebDAVSource,
         iterator findByUID(const std::string &uid);
     } m_cache;
 
+    Event &findItem(const std::string &davLUID);
     Event &loadItem(const std::string &davLUID);
     Event &loadItem(Event &event);
 
     /** callback for listAllSubItems: parse and add new item */
     int appendItem(SubRevisionMap_t &revisions,
-                   std::string &href,
-                   std::string &etag,
+                   const std::string &href,
+                   const std::string &etag,
                    std::string &data);
 
     /** callback for backupData(): dump into backup */
     int backupItem(ItemCache &cache,
-                   std::string &href,
-                   std::string &etag,
+                   const std::string &href,
+                   const std::string &etag,
                    std::string &data);
+
+    /** add to m_cache */
+    void addSubItem(const std::string &luid,
+                    const SubRevisionEntry &entry);
+
+    /** store as luid + revision */
+    void addResource(StringMap &items,
+                     const std::string &href,
+                     const std::string &etag);
 };
 
 SE_END_CXX

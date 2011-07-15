@@ -51,7 +51,14 @@ checksource () {
     fi
     describe=`git describe --tags`
     hash=`cat .git/HEAD | sed -e 's/ref: //'`
-    hash=`git show-ref --abbrev --hash --verify $hash`
+    if [ "`echo $hash | sed -e 's/[0-9a-fA-F]//g'`" ] ; then
+        # contains other characters than simple hex, probably a reference:
+        # convert to abbreviated hash
+        hash=`git show-ref --abbrev --hash --verify $hash`
+    else
+        # already a hash, abbreviate
+        hash=`echo $hash | sed -e 's/\(......\).*/\1/'`
+    fi
     # detect -<number of changes>-g<hash> suffix added when tag is older than HEAD
     if perl -e "exit !('$describe' =~ m/-[0-9]+-[0-9a-g]{8}\$/);"; then
         # remove suffix to get tag (doesn't matter if we do not pick
@@ -143,8 +150,10 @@ fi
 
 BACKENDS=
 SUBS=
-for sub in src/backends/*/configure-sub.in; do
-    BACKENDS="$BACKENDS `dirname $sub | sed -e 's;^src/;;'`"
+for sub in `find -L src -name configure-sub.in`; do
+    case $sub in src/backends/*)
+        BACKENDS="$BACKENDS `dirname $sub | sed -e 's;^src/;;'`";;
+    esac
     SUBS="$SUBS $sub"
     echo "# vvvvvvvvvvvvvv $sub vvvvvvvvvvvvvv" >>$tmpfile
     cat $sub >>$tmpfile

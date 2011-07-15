@@ -90,6 +90,59 @@ void LocalTransportAgent::start()
         SE_THROW(StringPrintf("invalid local sync inside context '%s', need second context with different databases", context.c_str()));
     }
 
+    // initialize target client so that we can check passwords in the calling process
+    boost::shared_ptr<SyncContext> client(new SyncContext(std::string("target-config") + m_clientContext,
+                                                          m_server->getConfigName(),
+                                                          m_server->getRootPath() + "/." + m_clientContext,
+                                                          boost::shared_ptr<TransportAgent>(this, NoopAgentDestructor()),
+                                                          m_server->getDoLogging()));
+
+    // allow proceeding with sync even if no "target-config" was created,
+    // because information about username/password (for WebDAV) or the
+    // sources (for file backends) might be enough
+    client->setConfigNeeded(false);
+
+    // Apply temporary config filters, stored for us in m_server by the
+    // command line.
+    const FullProps &props = m_server->getConfigProps();
+    client->setConfigFilter(true, "", props.createSyncFilter(client->getConfigName()));
+    BOOST_FOREACH(const string &sourceName, m_server->getSyncSources()) {
+        client->setConfigFilter(false, sourceName, props.createSourceFilter(client->getConfigName(), sourceName));
+    }
+
+    // Copy non-empty credentials from main config, because
+    // that is where the GUI knows how to store them. A better
+    // solution would be to require that credentials are in the
+    // "target-config" config.
+    string tmp = m_server->getSyncUsername();
+    if (!tmp.empty()) {
+        client->setSyncUsername(tmp, true);
+    }
+    tmp = m_server->getSyncPassword();
+    if (!tmp.empty()) {
+        client->setSyncPassword(tmp, true);
+    }
+
+    // Iterate over all sync and source properties instead of checking
+    // some specified passwords. Mimics the code in SyncContext::sync(),
+    // except that we use the SyncContext in the caller to retrieve
+    // passwords interactively. client->sync() will check passwords
+    // again later in the forked process, but then it won't have to do
+    // anything because the check here will save passwords temporarily.
+    ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
+    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        prop->checkPassword(*m_server, client->getPeer(), *client->getProperties());
+    }
+    // TODO: also handle passwords in active sources or, better,
+    // get interactive password retrieval working in the forked process
+    // BOOST_FOREACH(SyncSource *source, sourceList) {
+    //     ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
+    //     BOOST_FOREACH(const ConfigProperty *prop, registry) {
+    //         prop->checkPassword(*m_server, m_server, *getProperties(),
+    //                             source->getName(), source->getProperties());
+    //     }
+    // }
+
     memset(sockets, 0, sizeof(sockets));
     try {
         if (socketpair(AF_LOCAL,
@@ -129,6 +182,7 @@ void LocalTransportAgent::start()
             m_messageFD = sockets[0][1];
             close(sockets[1][0]);
             m_statusFD = sockets[1][1];
+            m_client = client;
             run();
             break;
         default:
@@ -211,49 +265,16 @@ void LocalTransportAgent::run()
     try {
         SE_LOG_DEBUG(NULL, NULL, "client is running, %s log redirection",
                      redirect ? "with" : "without");
-        // TODO: password and abort handling in a derived class
-        bool doLogging = m_server->getDoLogging();
-        SyncContext client(std::string("source-config") + m_clientContext,
-                           m_server->getConfigName(),
-                           m_server->getRootPath() + "/." + m_clientContext,
-                           boost::shared_ptr<TransportAgent>(this, NoopAgentDestructor()),
-                           doLogging);
-
-        // allow proceeding with sync even if no "source-config" was created,
-        // because information about username/password (for WebDAV) or the
-        // sources (for file backends) might be enough
-        client.setConfigNeeded(false);
-
-        // Apply temporary config filters, stored for us in m_server by the
-        // command line.
-        const FullProps &props = m_server->getConfigProps();
-        client.setConfigFilter(true, "", props.createSyncFilter(client.getConfigName()));
-        BOOST_FOREACH(const string &sourceName, m_server->getSyncSources()) {
-            client.setConfigFilter(false, sourceName, props.createSourceFilter(client.getConfigName(), sourceName));
-        }
-
-        // Copy non-empty credentials from main config, because
-        // that is where the GUI knows how to store them. A better
-        // solution would be to require that credentials are in the
-        // "source-config" config.
-        string tmp = m_server->getSyncUsername();
-        if (!tmp.empty()) {
-            client.setSyncUsername(tmp, true);
-        }
-        tmp = m_server->getSyncPassword();
-        if (!tmp.empty()) {
-            client.setSyncPassword(tmp, true);
-        }
 
         // debugging mode: write logs inside sub-directory of parent,
         // otherwise use normal log settings
-        if (!doLogging) {
-            client.setLogDir(std::string(m_server->getLogDir()) + "/child", true);
+        if (!m_server->getDoLogging()) {
+            m_client->setLogDir(std::string(m_server->getLogDir()) + "/child", true);
         }
 
         // disable all sources temporarily, will be enabled by next loop
-        BOOST_FOREACH(const string &targetName, client.getSyncSources()) {
-            SyncSourceNodes targetNodes = client.getSyncSourceNodes(targetName);
+        BOOST_FOREACH(const string &targetName, m_client->getSyncSources()) {
+            SyncSourceNodes targetNodes = m_client->getSyncSourceNodes(targetName);
             SyncSourceConfig targetSource(targetName, targetNodes);
             targetSource.setSync("disabled", true);
         }
@@ -266,16 +287,16 @@ void LocalTransportAgent::run()
             string sync = source.getSync();
             if (sync != "disabled") {
                 string targetName = source.getURINonEmpty();
-                SyncSourceNodes targetNodes = client.getSyncSourceNodes(targetName);
+                SyncSourceNodes targetNodes = m_client->getSyncSourceNodes(targetName);
                 SyncSourceConfig targetSource(targetName, targetNodes);
                 string fullTargetName = m_clientContext + "/" + targetName;
 
                 if (!targetNodes.dataConfigExists()) {
                     if (targetName.empty()) {
-                        client.throwError("missing URI for one of the sources");
+                        m_client->throwError("missing URI for one of the sources");
                     } else {
-                        client.throwError(StringPrintf("%s: source not configured",
-                                                       fullTargetName.c_str()));
+                        m_client->throwError(StringPrintf("%s: source not configured",
+                                                          fullTargetName.c_str()));
                     }
                 }
 
@@ -284,9 +305,9 @@ void LocalTransportAgent::run()
                 // be written. If a sync mode was set, it must have been
                 // done before in this loop => error in original config.
                 if (string(targetSource.getSync()) != "disabled") {
-                    client.throwError(StringPrintf("%s: source targetted twice by %s",
-                                                   fullTargetName.c_str(),
-                                                   m_clientContext.c_str()));
+                    m_client->throwError(StringPrintf("%s: source targetted twice by %s",
+                                                      fullTargetName.c_str(),
+                                                      m_clientContext.c_str()));
                 }
                 targetSource.setSync(sync.c_str(), true);
                 targetSource.setURI(sourceName.c_str(), true);
@@ -294,7 +315,7 @@ void LocalTransportAgent::run()
         }
 
         // now sync
-        client.sync(&m_clientReport);
+        m_client->sync(&m_clientReport);
     } catch(...) {
         SyncMLStatus status = m_clientReport.getStatus();
         string explanation;
@@ -388,7 +409,7 @@ void LocalTransportAgent::receiveChildReport()
         try {
             SE_LOG_DEBUG(NULL, NULL, "parent: receiving report");
             m_receiveBuffer.m_used = 0;
-            if (readMessage(statusFD, m_receiveBuffer, deadline()) == ACTIVE) {
+            if (readMessage(statusFD, m_receiveBuffer, deadline(5 * 60 /* seconds */)) == ACTIVE) {
                 boost::shared_ptr<std::string> data(new std::string);
                 data->assign(m_receiveBuffer.m_message->m_data, m_receiveBuffer.m_message->getDataLength());
                 boost::shared_ptr<StringDataBlob> dump(new StringDataBlob("buffer", data, false));
@@ -451,7 +472,7 @@ void LocalTransportAgent::send(const char *data, size_t len)
                 m_receiveBuffer.m_used - len);
         m_receiveBuffer.m_used -= len;
     }
-    m_status = writeMessage(m_messageFD, m_sendType, data, len, deadline());
+    m_status = writeMessage(m_messageFD, m_sendType, data, len, deadline(5 * 60 /* seconds */));
 }
 
 TransportAgent::Status LocalTransportAgent::writeMessage(int fd, Message::Type type, const char *data, size_t len, Timespec deadline)
@@ -574,7 +595,7 @@ TransportAgent::Status LocalTransportAgent::wait(bool noReply)
             m_status = INACTIVE;
         } else {
             if (!m_receiveBuffer.haveMessage()) {
-                m_status = readMessage(m_messageFD, m_receiveBuffer, deadline());
+                m_status = readMessage(m_messageFD, m_receiveBuffer, deadline(m_timeoutSeconds));
                 if (m_status == ACTIVE) {
                     // complete message received, check if it is SyncML
                     switch (m_receiveBuffer.m_message->m_type) {
@@ -735,7 +756,22 @@ void LocalTransportAgent::getReply(const char *&data, size_t &len, std::string &
 
 void LocalTransportAgent::setTimeout(int seconds)
 {
-    m_timeoutSeconds = seconds;
+    // setTimeout() was meant for unreliable transports like HTTP
+    // which cannot determine whether the peer is still alive. The
+    // LocalTransportAgent uses sockets and will notice when a peer
+    // dies unexpectedly, so timeouts should never be necessary.
+    //
+    // Quite the opposite, because the "client" in a local sync
+    // with WebDAV on the client side can be quite slow, incorrect
+    // timeouts were seen where the client side took longer than
+    // the default timeout of 5 minutes to process a message and
+    // send a reply.
+    //
+    // Therefore we ignore the request to set a timeout here and thus
+    // local send/receive operations are allowed to continue for as
+    // long as they like.
+    //
+    // m_timeoutSeconds = seconds;
 }
 
 SE_END_CXX

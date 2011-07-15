@@ -108,6 +108,7 @@ class Action:
 
     def tryexecution(self, step, logs):
         """wrapper around execute which handles exceptions, directories and stdout"""
+        print "*** running action %s" % self.name
         if logs:
             fd = -1
             oldstdout = os.dup(1)
@@ -141,7 +142,7 @@ class Action:
         os.chdir(cwd)
         if logs:
             if fd >= 0:
-                os.close(fd)
+                sys.stdout.close()
                 os.dup2(oldstdout, 1)
                 os.dup2(oldstderr, 2)
                 sys.stderr = olderr
@@ -266,7 +267,11 @@ class Context:
         #calculate the src dir where client-test can be located
         srcdir = os.path.join(self.tmpdir,"build/src")
         backenddir = os.path.join(self.tmpdir, "install/usr/lib/syncevolution/backends")
-        self.runCommand("resultchecker.py " +self.resultdir+" "+",".join(run_servers)+" "+self.uri +" "+srcdir + " '" + options.shell + " " + options.testprefix +" '"+" '" +backenddir +"'");
+        # resultchecker doesn't need valgrind, remove it
+        shell = re.sub(r'\S*valgrind\S*', '', options.shell)
+        prefix = re.sub(r'\S*valgrind\S*', '', options.testprefix)
+        uri = self.uri or ("file:///" + self.resultdir)
+        self.runCommand("resultchecker.py " +self.resultdir+" "+"'"+",".join(run_servers)+"'"+" "+uri +" "+srcdir + " '" + shell + " " + testprefix +" '"+" '" +backenddir +"'");
         # transform to html
         self.runCommand("xsltproc -o " + self.resultdir + "/cmp_result.xml --stringparam cmp_file " + self.lastresultdir +"/nightly.xml "+self.datadir +"/compare.xsl "+ self.resultdir+"/nightly.xml")
         self.runCommand("xsltproc -o " + self.resultdir + "/nightly.html --stringparam cmp_result_file " + self.resultdir + "/cmp_result.xml " + self.datadir +"/generate-html.xsl "+ self.resultdir+"/nightly.xml")
@@ -377,23 +382,11 @@ class GitCheckout(Action):
         self.basedir = os.path.join(abspath(workdir), name)
 
     def execute(self):
-        url = self.url
-        if url.startswith("git@gitorious.org:"):
-            # use git protocol instead of personal access,
-            # because nightly testing doesn't have ssh access
-            url = url.replace("git@gitorious.org:", "git://gitorious.org/")
         if os.access(self.basedir, os.F_OK):
-            cmd = "cd %s && perl -pi -e 's!git\@gitorious.org:!git://gitorious.org/!' .git/config && git fetch" % (self.basedir)
+            cmd = "cd %s && git fetch" % (self.basedir)
         else:
-            cmd = "git clone %s %s && chmod -R g+w %s && cd %s && git config core.sharedRepository group " % (url, self.basedir, self.basedir, self.basedir)
+            cmd = "git clone %s %s && chmod -R g+w %s && cd %s && git config core.sharedRepository group " % (self.url, self.basedir, self.basedir, self.basedir)
         context.runCommand(cmd)
-
-        if (url != self.url):
-            # restore personal access via ssh so that other users
-            # can commit their changes
-            cmd = "cd %s && perl -pi -e 's!git://gitorious.org/!git\@gitorious.org:!' .git/config" % (self.basedir)
-            context.runCommand(cmd)
-
         context.runCommand("set -x; cd %(dir)s && git show-ref &&"
                            "((git tag -l | grep -w -q %(rev)s) && git checkout %(rev)s ||"
                            "((git branch -l | grep -w -q %(rev)s) && git checkout %(rev)s || git checkout -b %(rev)s origin/%(rev)s) && git merge origin/%(rev)s)" %
@@ -424,7 +417,7 @@ class AutotoolsBuild(Action):
 
 
 class SyncEvolutionTest(Action):
-    def __init__(self, name, build, serverlogs, runner, tests, sources, testenv="", lineFilter=None, testPrefix="", serverName=""):
+    def __init__(self, name, build, serverlogs, runner, tests, sources, testenv="", lineFilter=None, testPrefix="", serverName="", testBinary="./client-test"):
         """Execute TestEvolution for all (empty tests) or the
         selected tests."""
         Action.__init__(self, name)
@@ -442,6 +435,7 @@ class SyncEvolutionTest(Action):
         self.serverName = serverName
         if not self.serverName:
             self.serverName = name
+        self.testBinary = testBinary
 
     def execute(self):
         resdir = os.getcwd()
@@ -449,16 +443,43 @@ class SyncEvolutionTest(Action):
         # clear previous test results
         context.runCommand("%s %s testclean" % (self.runner, context.make))
         try:
-            if context.setupcmd:
-                cmd = "%s %s %s %s ./syncevolution" % (self.testenv, self.runner, context.setupcmd, self.name)
-                context.runCommand("%s || ( sleep 5 && %s )" % (cmd, cmd))
             backenddir = os.path.join(context.tmpdir, "install/usr/lib/syncevolution/backends")
             confdir = os.path.join(context.workdir, "syncevolution/src/syncevo/configs")
             templatedir = os.path.join(context.workdir, "syncevolution/src/templates")
             if not os.access(backenddir, os.F_OK):
                 # try relative to client-test inside the current directory
                 backenddir = "backends"
-            basecmd = "http_proxy= CLIENT_TEST_SERVER=%s CLIENT_TEST_SOURCES=%s %s SYNCEVOLUTION_TEMPLATE_DIR=%s SYNCEVOLUTION_XML_CONFIG_DIR=%s SYNCEVOLUTION_BACKEND_DIR=%s SYNC_EVOLUTION_EVO_CALENDAR_DELAY=1 CLIENT_TEST_ALARM=1200 CLIENT_TEST_LOG=%s CLIENT_TEST_EVOLUTION_PREFIX=file://%s/databases %s env LD_LIBRARY_PATH=build-synthesis/src/.libs PATH=backends/webdav:$PATH %s ./client-test" % (self.serverName, ",".join(self.sources), self.testenv, templatedir, confdir, backenddir, self.serverlogs, context.workdir, self.runner, self.testPrefix);
+            installenv = \
+                "SYNCEVOLUTION_TEMPLATE_DIR=%s " \
+                "SYNCEVOLUTION_XML_CONFIG_DIR=%s " \
+                "SYNCEVOLUTION_BACKEND_DIR=%s " \
+                % ( templatedir, confdir, backenddir )
+
+            if context.setupcmd:
+                cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
+                context.runCommand("%s || ( sleep 5 && %s )" % (cmd, cmd))
+
+            # proxy must be set in test config! Necessary because not all tests work with the env proxy (local CalDAV, for example).
+            basecmd = "http_proxy= " \
+                      "CLIENT_TEST_SERVER=%(server)s " \
+                      "CLIENT_TEST_SOURCES=%(sources)s " \
+                      "SYNC_EVOLUTION_EVO_CALENDAR_DELAY=1 " \
+                      "CLIENT_TEST_ALARM=1200 " \
+                      "%(env)s %(installenv)s" \
+                      "CLIENT_TEST_LOG=%(log)s " \
+                      "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
+                      "%(runner)s " \
+                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs PATH=backends/webdav:.:$PATH %(testprefix)s " \
+                      "%(testbinary)s" % \
+                      { "server": self.serverName,
+                        "sources": ",".join(self.sources),
+                        "env": self.testenv,
+                        "installenv": installenv,
+                        "log": self.serverlogs,
+                        "evoprefix": context.databasePrefix,
+                        "runner": self.runner,
+                        "testbinary": self.testBinary,
+                        "testprefix": self.testPrefix }
             enabled = context.enabled.get(self.name)
             if not enabled:
                 enabled = self.tests
@@ -508,6 +529,9 @@ parser.add_option("", "--tmp",
 parser.add_option("", "--workdir",
                   type="string", dest="workdir", default="",
                   help="directory for files which might be reused between runs")
+parser.add_option("", "--database-prefix",
+                  type="string", dest="databasePrefix", default="Test_",
+                  help="defines database names (<prefix>_<type>_1/2), must exist")
 parser.add_option("", "--resultdir",
                   type="string", dest="resultdir", default="",
                   help="directory for log files and results")
@@ -515,7 +539,7 @@ parser.add_option("", "--lastresultdir",
                   type="string", dest="lastresultdir", default="",
                   help="directory for last day's log files and results")
 parser.add_option("", "--datadir",
-                  type="string", dest="datadir", default="",
+                  type="string", dest="datadir", default=os.path.dirname(os.path.abspath(os.path.expanduser(os.path.expandvars(sys.argv[0])))),
                   help="directory for files used by report generation")
 parser.add_option("", "--resulturi",
                   type="string", dest="uri", default=None,
@@ -600,6 +624,7 @@ context = Context(options.tmpdir, options.resultdir, options.uri, options.workdi
                   options.subject, options.sender, options.recipients, options.mailhost,
                   enabled, options.skip, options.nologs, options.setupcmd,
                   options.makecmd, options.sanitychecks, options.lastresultdir, options.datadir)
+context.databasePrefix = options.databasePrefix
 
 class EvoSvn(Action):
     """Builds Evolution from SVN using Paul Smith's Evolution Makefile."""
@@ -732,6 +757,7 @@ class SyncEvolutionDist(AutotoolsBuild):
             context.runCommand("%s %s BINSUFFIX=%s distbin" % (self.runner, context.make, self.binsuffix))
         context.runCommand("%s %s distcheck" % (self.runner, context.make))
         context.runCommand("%s %s DISTCHECK_CONFIGURE_FLAGS=--enable-gui distcheck" % (self.runner, context.make))
+        context.runCommand("%s %s 'DISTCHECK_CONFIGURE_FLAGS=--disable-ecal --disable-ebook' distcheck" % (self.runner, context.make))
 
 dist = SyncEvolutionDist("dist",
                          options.binsuffix,
@@ -747,11 +773,25 @@ evolutiontest = SyncEvolutionTest("evolution", compile,
                                   testPrefix=options.testprefix)
 context.add(evolutiontest)
 
+# test-dbus.py doesn't need valgrind, remove it
+shell = re.sub(r'\S*valgrind\S*', '', options.shell)
+testprefix = re.sub(r'\S*valgrind\S*', '', options.testprefix)
+dbustest = SyncEvolutionTest("dbus", compile,
+                             "", shell,
+                             "",
+                             [],
+                             testPrefix=testprefix,
+                             testBinary=os.path.join(abspath(context.workdir),
+                                                     "syncevolution",
+                                                     "test",
+                                                     "test-dbus.py -v"))
+context.add(dbustest)
+
 test = SyncEvolutionTest("googlecalendar", compile,
                          "", options.shell,
-                         "Client::Source::google_caldav Client::Sync::ical20::testItems",
-                         [ "google_caldav", "vcard30" ],
-                         "CLIENT_TEST_WEBDAV='google caldav' "
+                         "Client::Sync::eds_event::testItems Client::Source::google_caldav",
+                         [ "google_caldav", "eds_event" ],
+                         "CLIENT_TEST_WEBDAV='google caldav testcases=testcases/google_event.ics' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
                          "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
                          "CLIENT_TEST_UNIQUE_UID=1 " # server keeps backups and restores old data unless UID is unieque
@@ -762,9 +802,9 @@ context.add(test)
 
 test = SyncEvolutionTest("yahoo", compile,
                          "", options.shell,
-                         "Client::Source::yahoo_caldav Client::Source::yahoo_carddav Client::Sync::vcard30::testItems Client::Sync::ical20::testItems",
-                         [ "yahoo_caldav", "yahoo_carddav", "ical20", "vcard30" ],
-                         "CLIENT_TEST_WEBDAV='yahoo caldav carddav' "
+                         "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::yahoo_caldav Client::Source::yahoo_carddav",
+                         [ "yahoo_caldav", "yahoo_carddav", "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='yahoo caldav carddav carddav/testcases=testcases/yahoo_contact.vcf' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
                          "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
                          "CLIENT_TEST_MODE=server " # for Client::Sync
@@ -774,10 +814,11 @@ context.add(test)
 
 test = SyncEvolutionTest("apple", compile,
                          "", options.shell,
-                         "Client::Source::apple_caldav Client::Source::apple_carddav Client::Sync::ical20 Client::Sync::vcard30",
-                         [ "apple_caldav", "apple_carddav", "ical20", "vcard30" ],
+                         "Client::Sync::eds_event Client::Sync::eds_contact Client::Source::apple_caldav Client::Source::apple_carddav",
+                         [ "apple_caldav", "apple_carddav", "eds_event", "eds_contact" ],
                          "CLIENT_TEST_WEBDAV='apple caldav carddav' "
-                         "CLIENT_TEST_NUM_ITEMS=1000 " # test is local, so we can afford a higher number
+                         "CLIENT_TEST_NUM_ITEMS=250 " # test is local, so we can afford a higher number
+                         "CLIENT_TEST_ALARM=2400 " # but even with a local server does the test run a long time
                          "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          ,
@@ -787,32 +828,32 @@ context.add(test)
 scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
                                       "", options.shell,
                                       "Client::Sync",
-                                      [ "vcard30",
-                                        "ical20",
-                                        "itodo20",
-                                        "text" ],
+                                      [ "eds_contact",
+                                        "eds_event",
+                                        "eds_task",
+                                        "eds_memo" ],
                                       "CLIENT_TEST_NUM_ITEMS=10 "
                                       "CLIENT_TEST_FAILURES="
                                       "Client::Sync::text::testManyItems,"
-                                      "Client::Sync::vcard30_ical20_itodo20_text::testManyItems,"
-                                      "Client::Sync::text_itodo20_ical20_vcard30::testManyItems CLIENT_TEST_SKIP=Client::Sync::ical20::Retry,"
-                                      "Client::Sync::ical20::Suspend,"
-                                      "Client::Sync::ical20::Resend,"
-                                      "Client::Sync::vcard30::Retry,"
-                                      "Client::Sync::vcard30::Suspend,"
-                                      "Client::Sync::vcard30::Resend,"
-                                      "Client::Sync::itodo20::Retry,"
-                                      "Client::Sync::itodo20::Suspend,"
-                                      "Client::Sync::itodo20::Resend,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_text::testManyItems,"
+                                      "Client::Sync::text_eds_task_eds_event_eds_contact::testManyItems CLIENT_TEST_SKIP=Client::Sync::eds_event::Retry,"
+                                      "Client::Sync::eds_event::Suspend,"
+                                      "Client::Sync::eds_event::Resend,"
+                                      "Client::Sync::eds_contact::Retry,"
+                                      "Client::Sync::eds_contact::Suspend,"
+                                      "Client::Sync::eds_contact::Resend,"
+                                      "Client::Sync::eds_task::Retry,"
+                                      "Client::Sync::eds_task::Suspend,"
+                                      "Client::Sync::eds_task::Resend,"
                                       "Client::Sync::text::Retry,"
                                       "Client::Sync::text::Suspend,"
                                       "Client::Sync::text::Resend,"
-                                      "Client::Sync::vcard30_ical20_itodo20_text::Retry,"
-                                      "Client::Sync::vcard30_ical20_itodo20_text::Suspend,"
-                                      "Client::Sync::vcard30_ical20_itodo20_text::Resend,"
-                                      "Client::Sync::text_itodo20_ical20_vcard30::Retry,"
-                                      "Client::Sync::text_itodo20_ical20_vcard30::Suspend,"
-                                      "Client::Sync::text_itodo20_ical20_vcard30::Resend "
+                                      "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_text::Resend,"
+                                      "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
+                                      "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend,"
+                                      "Client::Sync::text_eds_task_eds_event_eds_contact::Resend "
                                       "CLIENT_TEST_DELAY=5 "
                                       "CLIENT_TEST_COMPARE_LOG=T "
                                       "CLIENT_TEST_RESEND_TIMEOUT=5 "
@@ -822,18 +863,18 @@ context.add(scheduleworldtest)
 
 egroupwaretest = SyncEvolutionTest("egroupware", compile,
                                    "", options.shell,
-                                   "Client::Sync::vcard21 "
-                                   "Client::Sync::ical20::testCopy "
-                                   "Client::Sync::ical20::testUpdate "
-                                   "Client::Sync::ical20::testDelete "
-                                   "Client::Sync::vcard21_ical20::testCopy "
-                                   "Client::Sync::vcard21_ical20::testUpdate "
-                                   "Client::Sync::vcard21_ical20::testDelete "
-                                   "Client::Sync::ical20_vcard21::testCopy "
-                                   "Client::Sync::ical20_vcard21::testUpdate "
-                                   "Client::Sync::ical20_vcard21::testDelete ",
-                                   [ "vcard21",
-                                     "ical20" ],
+                                   "Client::Sync::eds_contact "
+                                   "Client::Sync::eds_event::testCopy "
+                                   "Client::Sync::eds_event::testUpdate "
+                                   "Client::Sync::eds_event::testDelete "
+                                   "Client::Sync::eds_contact_eds_event::testCopy "
+                                   "Client::Sync::eds_contact_eds_event::testUpdate "
+                                   "Client::Sync::eds_contact_eds_event::testDelete "
+                                   "Client::Sync::eds_event_eds_contact::testCopy "
+                                   "Client::Sync::eds_event_eds_contact::testUpdate "
+                                   "Client::Sync::eds_event_eds_contact::testDelete ",
+                                   [ "eds_contact",
+                                     "eds_event" ],
                                    # ContactSync::testRefreshFromServerSync,ContactSync::testRefreshFromClientSync,ContactSync::testDeleteAllRefresh,ContactSync::testRefreshSemantic,ContactSync::testRefreshStatus - refresh-from-client not supported by server
                                    # ContactSync::testOneWayFromClient - not supported by server?
                                    # ContactSync::testItems - loses a lot of information
@@ -867,24 +908,24 @@ class SynthesisTest(SyncEvolutionTest):
         SyncEvolutionTest.__init__(self, name, build, "", # os.path.join(synthesisdir, "logs")
                                    runner,
                                    "Client::Sync",
-                                   [ "vcard21",
-                                     "text" ],
+                                   [ "eds_contact",
+                                     "eds_memo" ],
                                    "CLIENT_TEST_SKIP="
-                                   "Client::Sync::ical20::Retry,"
-                                   "Client::Sync::ical20::Suspend,"
-                                   "Client::Sync::ical20::Resend,"
-                                   "Client::Sync::vcard21::Retry,"
-                                   "Client::Sync::vcard21::Suspend,"
-                                   "Client::Sync::vcard21::Resend,"
-                                   "Client::Sync::itodo20::Retry,"
-                                   "Client::Sync::itodo20::Suspend,"
-                                   "Client::Sync::itodo20::Resend,"
+                                   "Client::Sync::eds_event::Retry,"
+                                   "Client::Sync::eds_event::Suspend,"
+                                   "Client::Sync::eds_event::Resend,"
+                                   "Client::Sync::eds_contact::Retry,"
+                                   "Client::Sync::eds_contact::Suspend,"
+                                   "Client::Sync::eds_contact::Resend,"
+                                   "Client::Sync::eds_task::Retry,"
+                                   "Client::Sync::eds_task::Suspend,"
+                                   "Client::Sync::eds_task::Resend,"
                                    "Client::Sync::text::Retry,"
                                    "Client::Sync::text::Suspend,"
                                    "Client::Sync::text::Resend,"
-                                   "Client::Sync::vcard21_text::Retry,"
-                                   "Client::Sync::vcard21_text::Suspend,"
-                                   "Client::Sync::vcard21_text::Resend "
+                                   "Client::Sync::eds_contact_text::Retry,"
+                                   "Client::Sync::eds_contact_text::Suspend,"
+                                   "Client::Sync::eds_contact_text::Resend "
                                    "CLIENT_TEST_NUM_ITEMS=20 "
                                    "CLIENT_TEST_DELAY=2 "
                                    "CLIENT_TEST_COMPARE_LOG=T "
@@ -919,36 +960,36 @@ class FunambolTest(SyncEvolutionTest):
         SyncEvolutionTest.__init__(self, name, build, serverlogs,
                                    runner,
                                    "Client::Sync",
-                                   [ "vcard21",
-                                     "ical20",
-                                     "itodo20",
-                                     "text" ],
+                                   [ "eds_contact",
+                                     "eds_event",
+                                     "eds_task",
+                                     "eds_memo" ],
                                    "CLIENT_TEST_SKIP="
-                                   "Client::Sync::ical20::Retry,"
-                                   "Client::Sync::ical20::Suspend,"
-                                   "Client::Sync::ical20::Resend,"
-                                   "Client::Sync::vcard21::Retry,"
-                                   "Client::Sync::vcard21::Suspend,"
-                                   "Client::Sync::vcard21::Resend,"
-                                   "Client::Sync::itodo20::Retry,"
-                                   "Client::Sync::itodo20::Suspend,"
-                                   "Client::Sync::itodo20::Resend,"
+                                   "Client::Sync::eds_event::Retry,"
+                                   "Client::Sync::eds_event::Suspend,"
+                                   "Client::Sync::eds_event::Resend,"
+                                   "Client::Sync::eds_contact::Retry,"
+                                   "Client::Sync::eds_contact::Suspend,"
+                                   "Client::Sync::eds_contact::Resend,"
+                                   "Client::Sync::eds_task::Retry,"
+                                   "Client::Sync::eds_task::Suspend,"
+                                   "Client::Sync::eds_task::Resend,"
                                    "Client::Sync::text::Retry,"
                                    "Client::Sync::text::Suspend,"
                                    "Client::Sync::text::Resend,"
-                                   "Client::Sync::vcard21_ical20_itodo20_text::Retry,"
-                                   "Client::Sync::vcard21_ical20_itodo20_text::Suspend,"
-                                   "Client::Sync::vcard21_ical20_itodo20_text::Resend,"
-                                   "Client::Sync::text_itodo20_ical20_vcard21::Retry,"
-                                   "Client::Sync::text_itodo20_ical20_vcard21::Suspend,"
-                                   "Client::Sync::text_itodo20_ical20_vcard21::Resend "
+                                   "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
+                                   "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
+                                   "Client::Sync::eds_contact_eds_event_eds_task_text::Resend,"
+                                   "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
+                                   "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend,"
+                                   "Client::Sync::text_eds_task_eds_event_eds_contact::Resend "
                                    "CLIENT_TEST_XML=1 "
                                    "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                    "CLIENT_TEST_DELAY=10 "
                                    "CLIENT_TEST_FAILURES="
-                                   "Client::Sync::vcard21::testTwinning,"
-                                   "Client::Sync::vcard21_ical20_itodo20_text::testTwinning,"
-                                   "Client::Sync::text_itodo20_ical20_vcard21::testTwinning "
+                                   "Client::Sync::eds_contact::testTwinning,"
+                                   "Client::Sync::eds_contact_eds_event_eds_task_text::testTwinning,"
+                                   "Client::Sync::text_eds_task_eds_event_eds_contact::testTwinning "
                                    "CLIENT_TEST_COMPARE_LOG=T "
                                    "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                    "CLIENT_TEST_INTERRUPT_AT=1",
@@ -977,12 +1018,12 @@ context.add(funambol)
 zybtest = SyncEvolutionTest("zyb", compile,
                             "", options.shell,
                             "Client::Sync",
-                            [ "vcard21" ],
+                            [ "eds_contact" ],
                             "CLIENT_TEST_NUM_ITEMS=10 "
                             "CLIENT_TEST_SKIP="
-                            "Client::Sync::vcard21::Retry,"
-                            "Client::Sync::vcard21::Suspend,"
-                            "Client::Sync::vcard21::Resend "
+                            "Client::Sync::eds_contact::Retry,"
+                            "Client::Sync::eds_contact::Suspend,"
+                            "Client::Sync::eds_contact::Resend "
                             "CLIENT_TEST_DELAY=5 "
                             "CLIENT_TEST_COMPARE_LOG=T",
                             testPrefix=options.testprefix)
@@ -991,20 +1032,20 @@ context.add(zybtest)
 googletest = SyncEvolutionTest("google", compile,
                                "", options.shell,
                                "Client::Sync",
-                               [ "vcard21" ],
+                               [ "eds_contact" ],
                                "CLIENT_TEST_NUM_ITEMS=10 "
                                "CLIENT_TEST_XML=0 "
                                "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                "CLIENT_TEST_SKIP="
-                               "Client::Sync::vcard21::Retry,"
-                               "Client::Sync::vcard21::Suspend,"
-                               "Client::Sync::vcard21::Resend,"
-                               "Client::Sync::vcard21::testRefreshFromClientSync,"
-                               "Client::Sync::vcard21::testRefreshFromClientSemantic,"
-                               "Client::Sync::vcard21::testRefreshStatus,"
-                               "Client::Sync::vcard21::testDeleteAllRefresh,"
-                               "Client::Sync::vcard21::testOneWayFromClient,"
-                               "Client::Sync::vcard21::testItemsXML "
+                               "Client::Sync::eds_contact::Retry,"
+                               "Client::Sync::eds_contact::Suspend,"
+                               "Client::Sync::eds_contact::Resend,"
+                               "Client::Sync::eds_contact::testRefreshFromClientSync,"
+                               "Client::Sync::eds_contact::testRefreshFromClientSemantic,"
+                               "Client::Sync::eds_contact::testRefreshStatus,"
+                               "Client::Sync::eds_contact::testDeleteAllRefresh,"
+                               "Client::Sync::eds_contact::testOneWayFromClient,"
+                               "Client::Sync::eds_contact::testItemsXML "
                                "CLIENT_TEST_DELAY=5 "
                                "CLIENT_TEST_COMPARE_LOG=T",
                                testPrefix=options.testprefix)
@@ -1013,43 +1054,43 @@ context.add(googletest)
 mobicaltest = SyncEvolutionTest("mobical", compile,
                                 "", options.shell,
                                 "Client::Sync",
-                                [ "vcard21",
-                                  "ical20",
-                                  "itodo20",
-                                  "text" ],
+                                [ "eds_contact",
+                                  "eds_event",
+                                  "eds_task",
+                                  "eds_memo" ],
                                 "CLIENT_TEST_NOCHECK_SYNCMODE=1 "
                                 "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                 "CLIENT_TEST_SKIP="
-                                "Client::Sync::vcard21::Retry,"
-                                "Client::Sync::vcard21::Suspend,"
-                                "Client::Sync::vcard21::Resend,"
-                                "Client::Sync::vcard21::testRefreshFromClientSync,"
-                                "Client::Sync::vcard21::testSlowSyncSemantic,"
-                                "Client::Sync::vcard21::testRefreshStatus,"
-                                "Client::Sync::vcard21::testDelete,"
-                                "Client::Sync::vcard21::testItemsXML,"
-                                "Client::Sync::vcard21::testOneWayFromServer,"
-                                "Client::Sync::vcard21::testOneWayFromClient,"
-                                "Client::Sync::ical20::testRefreshFromClientSync,"
-                                "Client::Sync::ical20::testSlowSyncSemantic,"
-                                "Client::Sync::ical20::testRefreshStatus,"
-                                "Client::Sync::ical20::testDelete,"
-                                "Client::Sync::ical20::testItemsXML,"
-                                "Client::Sync::ical20::testOneWayFromServer,"
-                                "Client::Sync::ical20::testOneWayFromClient,"
-                                "Client::Sync::ical20::Retry,"
-                                "Client::Sync::ical20::Suspend,"
-                                "Client::Sync::ical20::Resend,"
-                                "Client::Sync::itodo20::testRefreshFromClientSync,"
-                                "Client::Sync::itodo20::testSlowSyncSemantic,"
-                                "Client::Sync::itodo20::testRefreshStatus,"
-                                "Client::Sync::itodo20::testDelete,"
-                                "Client::Sync::itodo20::testItemsXML,"
-                                "Client::Sync::itodo20::testOneWayFromServer,"
-                                "Client::Sync::itodo20::testOneWayFromClient,"
-                                "Client::Sync::itodo20::Retry,"
-                                "Client::Sync::itodo20::Suspend,"
-                                "Client::Sync::itodo20::Resend,"
+                                "Client::Sync::eds_contact::Retry,"
+                                "Client::Sync::eds_contact::Suspend,"
+                                "Client::Sync::eds_contact::Resend,"
+                                "Client::Sync::eds_contact::testRefreshFromClientSync,"
+                                "Client::Sync::eds_contact::testSlowSyncSemantic,"
+                                "Client::Sync::eds_contact::testRefreshStatus,"
+                                "Client::Sync::eds_contact::testDelete,"
+                                "Client::Sync::eds_contact::testItemsXML,"
+                                "Client::Sync::eds_contact::testOneWayFromServer,"
+                                "Client::Sync::eds_contact::testOneWayFromClient,"
+                                "Client::Sync::eds_event::testRefreshFromClientSync,"
+                                "Client::Sync::eds_event::testSlowSyncSemantic,"
+                                "Client::Sync::eds_event::testRefreshStatus,"
+                                "Client::Sync::eds_event::testDelete,"
+                                "Client::Sync::eds_event::testItemsXML,"
+                                "Client::Sync::eds_event::testOneWayFromServer,"
+                                "Client::Sync::eds_event::testOneWayFromClient,"
+                                "Client::Sync::eds_event::Retry,"
+                                "Client::Sync::eds_event::Suspend,"
+                                "Client::Sync::eds_event::Resend,"
+                                "Client::Sync::eds_task::testRefreshFromClientSync,"
+                                "Client::Sync::eds_task::testSlowSyncSemantic,"
+                                "Client::Sync::eds_task::testRefreshStatus,"
+                                "Client::Sync::eds_task::testDelete,"
+                                "Client::Sync::eds_task::testItemsXML,"
+                                "Client::Sync::eds_task::testOneWayFromServer,"
+                                "Client::Sync::eds_task::testOneWayFromClient,"
+                                "Client::Sync::eds_task::Retry,"
+                                "Client::Sync::eds_task::Suspend,"
+                                "Client::Sync::eds_task::Resend,"
                                 "Client::Sync::text::testRefreshFromClientSync,"
                                 "Client::Sync::text::testSlowSyncSemantic,"
                                 "Client::Sync::text::testRefreshStatus,"
@@ -1060,26 +1101,26 @@ mobicaltest = SyncEvolutionTest("mobical", compile,
                                 "Client::Sync::text::Retry,"
                                 "Client::Sync::text::Suspend,"
                                 "Client::Sync::text::Resend,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testRefreshFromClientSync,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testSlowSyncSemantic,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testRefreshStatus,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testDelete,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testItemsXML,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testOneWayFromServer,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::testOneWayFromClient,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::Retry,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::Suspend,"
-                                "Client::Sync::vcard21_ical20_itodo20_text::Resend,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testRefreshFromClientSync,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testSlowSyncSemantic,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testRefreshStatus,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testDelete,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testItemsXML,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testOneWayFromServer,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::testOneWayFromClient,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::Retry,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::Suspend,"
-                                "Client::Sync::text_itodo20_ical20_vcard21::Resend "
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshFromClientSync,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testSlowSyncSemantic,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshStatus,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testDelete,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testItemsXML,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testOneWayFromServer,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testOneWayFromClient,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::Resend,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshFromClientSync,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testSlowSyncSemantic,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshStatus,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testDelete,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testItemsXML,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testOneWayFromServer,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testOneWayFromClient,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::Resend "
                                 "CLIENT_TEST_DELAY=5 "
                                 "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "
@@ -1090,33 +1131,33 @@ context.add(mobicaltest)
 memotootest = SyncEvolutionTest("memotoo", compile,
                                 "", options.shell,
                                 "Client::Sync",
-                                [ "vcard30",
-                                  "ical20",
-                                  "itodo20",
-                                  "text" ],
+                                [ "eds_contact",
+                                  "eds_event",
+                                  "eds_task",
+                                  "eds_memo" ],
                                 "CLIENT_TEST_NOCHECK_SYNCMODE=1 "
                                 "CLIENT_TEST_NUM_ITEMS=10 "
                                 "CLIENT_TEST_SKIP="
-                                "Client::Sync::vcard30::Retry,"
-                                "Client::Sync::vcard30::Suspend,"
-                                "Client::Sync::vcard30::testRefreshFromClientSync,"
-                                "Client::Sync::vcard30::testRefreshFromClientSemantic,"
-                                "Client::Sync::vcard30::testRefreshStatus,"
-                                "Client::Sync::vcard30::testDeleteAllRefresh,"
-                                "Client::Sync::vcard30::testOneWayFromServer,"
-                                "Client::Sync::ical20::testRefreshFromClientSync,"
-                                "Client::Sync::ical20::testRefreshFromClientSemantic,"
-                                "Client::Sync::ical20::testRefreshStatus,"
-                                "Client::Sync::ical20::testOneWayFromServer,"
-                                "Client::Sync::ical20::Retry,"
-                                "Client::Sync::ical20::Suspend,"
-                                "Client::Sync::itodo20::testRefreshFromClientSync,"
-                                "Client::Sync::itodo20::testRefreshFromClientSemantic,"
-                                "Client::Sync::itodo20::testRefreshStatus,"
-                                "Client::Sync::itodo20::testDeleteAllRefresh,"
-                                "Client::Sync::itodo20::testOneWayFromServer,"
-                                "Client::Sync::itodo20::Retry,"
-                                "Client::Sync::itodo20::Suspend,"
+                                "Client::Sync::eds_contact::Retry,"
+                                "Client::Sync::eds_contact::Suspend,"
+                                "Client::Sync::eds_contact::testRefreshFromClientSync,"
+                                "Client::Sync::eds_contact::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_contact::testRefreshStatus,"
+                                "Client::Sync::eds_contact::testDeleteAllRefresh,"
+                                "Client::Sync::eds_contact::testOneWayFromServer,"
+                                "Client::Sync::eds_event::testRefreshFromClientSync,"
+                                "Client::Sync::eds_event::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_event::testRefreshStatus,"
+                                "Client::Sync::eds_event::testOneWayFromServer,"
+                                "Client::Sync::eds_event::Retry,"
+                                "Client::Sync::eds_event::Suspend,"
+                                "Client::Sync::eds_task::testRefreshFromClientSync,"
+                                "Client::Sync::eds_task::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_task::testRefreshStatus,"
+                                "Client::Sync::eds_task::testDeleteAllRefresh,"
+                                "Client::Sync::eds_task::testOneWayFromServer,"
+                                "Client::Sync::eds_task::Retry,"
+                                "Client::Sync::eds_task::Suspend,"
                                 "Client::Sync::text::testRefreshFromClientSync,"
                                 "Client::Sync::text::testRefreshFromClientSemantic,"
                                 "Client::Sync::text::testRefreshStatus,"
@@ -1124,20 +1165,20 @@ memotootest = SyncEvolutionTest("memotoo", compile,
                                 "Client::Sync::text::testOneWayFromServer,"
                                 "Client::Sync::text::Retry,"
                                 "Client::Sync::text::Suspend,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::testRefreshFromClientSync,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::testRefreshFromClientSemantic,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::testRefreshStatus,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::testDeleteAllRefresh,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::testOneWayFromServer,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::Retry,"
-                                "Client::Sync::vcard30_ical20_itodo20_text::Suspend,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::testRefreshFromClientSync,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::testRefreshFromClientSemantic,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::testRefreshStatus,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::testOneWayFromServer,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::testDeleteAllRefresh,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::Retry,"
-                                "Client::Sync::text_itodo20_ical20_vcard30::Suspend "
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshFromClientSync,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshStatus,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testDeleteAllRefresh,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::testOneWayFromServer,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshFromClientSync,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshFromClientSemantic,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshStatus,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testOneWayFromServer,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::testDeleteAllRefresh,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
+                                "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend "
                                 "CLIENT_TEST_DELAY=5 "
                                 "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "
@@ -1148,21 +1189,21 @@ context.add(memotootest)
 ovitest = SyncEvolutionTest("ovi", compile,
                                 "", options.shell,
                                 "Client::Sync",
-                                [ "vcard30",
+                                [ "eds_contact",
                                   "calendar+todo" ],
                                 "CLIENT_TEST_DELETE_REFRESH=1 "
                                 "CLIENT_TEST_NUM_ITEMS=50 "
                                 "CLIENT_TEST_MAX_ITEMSIZE=512 "
                                 "CLIENT_TEST_SKIP="
-                                "Client::Sync::vcard30::Retry,"
-                                "Client::Sync::vcard30::Suspend,"
-                                "Client::Sync::vcard30::testOneWayFromClient,"
-                                "Client::Sync::vcard30::testOneWayFromServer,"
-                                "Client::Sync::vcard30::testSlowSyncSemantic,"
-                                "Client::Sync::vcard30::testComplexRefreshFromServerSemantic,"
-                                "Client::Sync::vcard30::testDelete,"
-                                "Client::Sync::vcard30::testDeleteAllSync,"
-                                "Client::Sync::vcard30::testManyDeletes,"
+                                "Client::Sync::eds_contact::Retry,"
+                                "Client::Sync::eds_contact::Suspend,"
+                                "Client::Sync::eds_contact::testOneWayFromClient,"
+                                "Client::Sync::eds_contact::testOneWayFromServer,"
+                                "Client::Sync::eds_contact::testSlowSyncSemantic,"
+                                "Client::Sync::eds_contact::testComplexRefreshFromServerSemantic,"
+                                "Client::Sync::eds_contact::testDelete,"
+                                "Client::Sync::eds_contact::testDeleteAllSync,"
+                                "Client::Sync::eds_contact::testManyDeletes,"
                                 "Client::Sync::calendar+todo::Retry,"
                                 "Client::Sync::calendar+todo::Suspend,"
                                 "Client::Sync::calendar+todo::testOneWayFromClient,"
@@ -1176,24 +1217,24 @@ ovitest = SyncEvolutionTest("ovi", compile,
                                 "Client::Sync::calendar+todo::testItemsXML,"
                                 "Client::Sync::calendar+todo::testMaxMsg,"
                                 "Client::Sync::calendar+todo::testLargeObject,"
-                                "Client::Sync::calendar+todo_vcard30::Retry,"
-                                "Client::Sync::calendar+todo_vcard30::Suspend,"
-                                "Client::Sync::calendar+todo_vcard30::testOneWayFromClient,"
-                                "Client::Sync::calendar+todo_vcard30::testOneWayFromServer,"
-                                "Client::Sync::calendar+todo_vcard30::testSlowSyncSemantic,"
-                                "Client::Sync::calendar+todo_vcard30::testComplexRefreshFromServerSemantic,"
-                                "Client::Sync::calendar+todo_vcard30::testDelete,"
-                                "Client::Sync::calendar+todo_vcard30::testDeleteAllSync,"
-                                "Client::Sync::calendar+todo_vcard30::testManyDeletes,"
+                                "Client::Sync::calendar+todo_eds_contact::Retry,"
+                                "Client::Sync::calendar+todo_eds_contact::Suspend,"
+                                "Client::Sync::calendar+todo_eds_contact::testOneWayFromClient,"
+                                "Client::Sync::calendar+todo_eds_contact::testOneWayFromServer,"
+                                "Client::Sync::calendar+todo_eds_contact::testSlowSyncSemantic,"
+                                "Client::Sync::calendar+todo_eds_contact::testComplexRefreshFromServerSemantic,"
+                                "Client::Sync::calendar+todo_eds_contact::testDelete,"
+                                "Client::Sync::calendar+todo_eds_contact::testDeleteAllSync,"
+                                "Client::Sync::calendar+todo_eds_contact::testManyDeletes,"
                                 "Client::Sync::calendar+todo::Retry,"
-                                "Client::Sync::vcard30_calendar+todo::Suspend,"
-                                "Client::Sync::vcard30_calendar+todo::testOneWayFromClient,"
-                                "Client::Sync::vcard30_calendar+todo::testOneWayFromServer,"
-                                "Client::Sync::vcard30_calendar+todo::testSlowSyncSemantic,"
-                                "Client::Sync::vcard30_calendar+todo::testComplexRefreshFromServerSemantic,"
-                                "Client::Sync::vcard30_calendar+todo::testDelete,"
-                                "Client::Sync::vcard30_calendar+todo::testDeleteAllSync,"
-                                "Client::Sync::vcard30_calendar+todo::testManyDeletes,"
+                                "Client::Sync::eds_contact_calendar+todo::Suspend,"
+                                "Client::Sync::eds_contact_calendar+todo::testOneWayFromClient,"
+                                "Client::Sync::eds_contact_calendar+todo::testOneWayFromServer,"
+                                "Client::Sync::eds_contact_calendar+todo::testSlowSyncSemantic,"
+                                "Client::Sync::eds_contact_calendar+todo::testComplexRefreshFromServerSemantic,"
+                                "Client::Sync::eds_contact_calendar+todo::testDelete,"
+                                "Client::Sync::eds_contact_calendar+todo::testDeleteAllSync,"
+                                "Client::Sync::eds_contact_calendar+todo::testManyDeletes,"
                                 "CLIENT_TEST_DELAY=5 "
                                 "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "

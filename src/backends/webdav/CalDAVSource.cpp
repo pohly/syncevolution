@@ -43,6 +43,16 @@ void CalDAVSource::listAllSubItems(SubRevisionMap_t &revisions)
         "xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n"
         "<D:prop>\n"
         "<D:getetag/>\n"
+
+        // In practice, peers always return the full data dump
+        // even if asked to return only a subset. Therefore we use this
+        // REPORT to populate our m_cache instead of sending lots of GET
+        // requests later on: faster sync, albeit with higher
+        // memory consumption.
+        //
+        // Because incremental syncs typically don't use listAllSubItems(),
+        // this looks like a good trade-off.
+#ifdef SHORT_ALL_SUB_ITEMS_DATA
         "<C:calendar-data>\n"
         "<C:comp name=\"VCALENDAR\">\n"
         "<C:prop name=\"VERSION\"/>\n"
@@ -55,6 +65,10 @@ void CalDAVSource::listAllSubItems(SubRevisionMap_t &revisions)
         "<C:comp name=\"VTIMEZONE\"/>\n"
         "</C:comp>\n"
         "</C:calendar-data>\n"
+#else
+        "<C:calendar-data/>\n"
+#endif
+
         "</D:prop>\n"
         // filter expected by Yahoo! Calendar
         "<C:filter>\n"
@@ -67,16 +81,14 @@ void CalDAVSource::listAllSubItems(SubRevisionMap_t &revisions)
     Timespec deadline = createDeadline();
     getSession()->startOperation("REPORT 'meta data'", deadline);
     while (true) {
-        string result;
-        string href, etag, data;
+        string data;
         Neon::XMLParser parser;
-        parser.initReportParser(href, etag);
+        parser.initReportParser(boost::bind(&CalDAVSource::appendItem, this,
+                                            boost::ref(revisions),
+                                            _1, _2, boost::ref(data)));
         m_cache.clear();
         parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
-                           boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3),
-                           boost::bind(&CalDAVSource::appendItem, this,
-                                       boost::ref(revisions),
-                                       boost::ref(href), boost::ref(etag), boost::ref(data)));
+                           boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
         Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
         report.addHeader("Depth", "1");
         report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
@@ -88,19 +100,145 @@ void CalDAVSource::listAllSubItems(SubRevisionMap_t &revisions)
     m_cache.m_initialized = true;
 }
 
+void CalDAVSource::addResource(StringMap &items,
+                               const std::string &href,
+                               const std::string &etag)
+{
+    std::string davLUID = path2luid(Neon::URI::parse(href).m_path);
+    items[davLUID] = ETag2Rev(etag);
+}
+
+void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
+{
+    // list items to identify new, updated and removed ones
+    const std::string query =
+        "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
+        "<C:calendar-query xmlns:D=\"DAV:\"\n"
+        "xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n"
+        "<D:prop>\n"
+        "<D:getetag/>\n"
+        "</D:prop>\n"
+        // filter expected by Yahoo! Calendar
+        "<C:filter>\n"
+        "<C:comp-filter name=\"VCALENDAR\">\n"
+        "<C:comp-filter name=\"VEVENT\">\n"
+        "</C:comp-filter>\n"
+        "</C:comp-filter>\n"
+        "</C:filter>\n"
+        "</C:calendar-query>\n";
+    Timespec deadline = createDeadline();
+    StringMap items;
+    getSession()->startOperation("updateAllSubItems REPORT 'list items'", deadline);
+    while (true) {
+        string data;
+        Neon::XMLParser parser;
+        items.clear();
+        parser.initReportParser(boost::bind(&CalDAVSource::addResource,
+                                            this, boost::ref(items), _1, _2));
+        Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
+        report.addHeader("Depth", "1");
+        report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
+        if (report.run()) {
+            break;
+        }
+    }
+
+    // remove obsolete entries
+    SubRevisionMap_t::iterator it = revisions.begin();
+    while (it != revisions.end()) {
+        SubRevisionMap_t::iterator next = it;
+        ++next;
+        if (items.find(it->first) == items.end()) {
+            revisions.erase(it);
+        }
+        it = next;
+    }
+
+    // build list of new or updated entries,
+    // copy others to cache
+    m_cache.clear();
+    std::list<std::string> mustRead;
+    BOOST_FOREACH(const StringPair &item, items) {
+        SubRevisionMap_t::iterator it = revisions.find(item.first);
+        if (it == revisions.end() ||
+            it->second.m_revision != item.second) {
+            // read current information below
+            mustRead.push_back(item.first);
+        } else {
+            // copy still relevant information
+            addSubItem(it->first, it->second);
+        }
+    }
+
+    // request dump of these items, add to cache and revisions
+    //
+    // Failures to find or read certain items will be
+    // ignored. appendItem() will only be called for actually
+    // retrieved items. This is partly intentional: Google is known to
+    // have problems with providing all of its data via GET or the
+    // multiget REPORT below. It returns a 404 error for items that a
+    // calendar-query includes (see loadItem()).  Such items are
+    // ignored it and thus will be silently skipped. This is not
+    // perfect, but better than failing the sync.
+    if (!mustRead.empty()) {
+        std::stringstream buffer;
+        buffer << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+            "<C:calendar-multiget xmlns:D=\"DAV:\"\n"
+            "   xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n"
+            "<D:prop>\n"
+            "   <D:getetag/>\n"
+            "   <C:calendar-data/>\n"
+            "</D:prop>\n";
+        BOOST_FOREACH(const std::string &href, mustRead) {
+            buffer << "<D:href>" << luid2path(href) << "</D:href>\n";
+        }
+        buffer << "</C:calendar-multiget>";
+        std::string query = buffer.str();
+        getSession()->startOperation("updateAllSubItems REPORT 'multiget new/updated items'", deadline);
+        while (true) {
+            string data;
+            Neon::XMLParser parser;
+            parser.initReportParser(boost::bind(&CalDAVSource::appendItem, this,
+                                                boost::ref(revisions),
+                                                _1, _2, boost::ref(data)));
+            m_cache.clear();
+            parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
+                               boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
+            Neon::Request report(*getSession(), "REPORT", getCalendar().m_path,
+                                 query, parser);
+            report.addHeader("Depth", "1");
+            report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
+            if (report.run()) {
+                break;
+            }
+        }
+    }
+}
+
 int CalDAVSource::appendItem(SubRevisionMap_t &revisions,
-                             std::string &href,
-                             std::string &etag,
+                             const std::string &href,
+                             const std::string &etag,
                              std::string &data)
 {
+    // Ignore responses with no data: this is not perfect (should better
+    // try to figure out why there is no data), but better than
+    // failing.
+    //
+    // One situation is the response for the collection itself,
+    // which comes with a 404 status and no data with Google Calendar.
+    if (data.empty()) {
+        return 0;
+    }
+
     Event::unescapeRecurrenceID(data);
     eptr<icalcomponent> calendar(icalcomponent_new_from_string((char *)data.c_str()), // cast is a hack for broken definition in old libical
                                  "iCalendar 2.0");
     std::string davLUID = path2luid(Neon::URI::parse(href).m_path);
-    pair<string, set<string> > &rev = revisions[davLUID];
-    rev.first = ETag2Rev(etag);
+    SubRevisionEntry &entry = revisions[davLUID];
+    entry.m_revision = ETag2Rev(etag);
     long maxSequence = 0;
     std::string uid;
+    entry.m_subids.clear();
     for (icalcomponent *comp = icalcomponent_get_first_component(calendar, ICAL_VEVENT_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(calendar, ICAL_VEVENT_COMPONENT)) {
@@ -110,24 +248,61 @@ int CalDAVSource::appendItem(SubRevisionMap_t &revisions,
         if (sequence > maxSequence) {
             maxSequence = sequence;
         }
-        rev.second.insert(subid);
+        entry.m_subids.insert(subid);
     }
+    entry.m_uid = uid;
 
     if (!m_cache.m_initialized) {
         boost::shared_ptr<Event> event(new Event);
         event->m_DAVluid = davLUID;
         event->m_UID = uid;
-        event->m_etag = rev.first;
-        event->m_subids = rev.second;
+        event->m_etag = entry.m_revision;
+        event->m_subids = entry.m_subids;
         event->m_sequence = maxSequence;
+#ifndef SHORT_ALL_SUB_ITEMS_DATA
+        // we got a full data dump, use it
+        for (icalcomponent *comp = icalcomponent_get_first_component(calendar, ICAL_VEVENT_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(calendar, ICAL_VEVENT_COMPONENT)) {
+            // remove useless X-LIC-ERROR
+            Event::icalClean(comp);
+        }
+        event->m_calendar = calendar;
+#endif
         m_cache.insert(make_pair(davLUID, event));
     }
 
     // reset data for next item
     data.clear();
-    href.clear();
-    etag.clear();
     return 0;
+}
+
+void CalDAVSource::addSubItem(const std::string &luid,
+                              const SubRevisionEntry &entry)
+{
+    boost::shared_ptr<Event> &event = m_cache[luid];
+    event.reset(new Event);
+    event->m_DAVluid = luid;
+    event->m_etag = entry.m_revision;
+    event->m_UID = entry.m_uid;
+    // We don't know sequence and last-modified. This
+    // information will have to be filled in by loadItem()
+    // when some operation on this event needs it.
+    event->m_subids = entry.m_subids;
+}
+
+void CalDAVSource::setAllSubItems(const SubRevisionMap_t &revisions)
+{
+    if (!m_cache.m_initialized) {
+        // populate our cache (without data) from the information cached
+        // for us
+        BOOST_FOREACH(const SubRevisionMap_t::value_type &subentry,
+                      revisions) {
+            addSubItem(subentry.first,
+                       subentry.second);
+        }
+        m_cache.m_initialized = true;
+    }
 }
 
 SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid, const std::string &callerSubID,
@@ -145,11 +320,22 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
          comp;
          comp = icalcomponent_get_next_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) {
         std::string subid = Event::getSubID(comp);
-        newEvent->m_UID = Event::getUID(comp);
-        if (newEvent->m_UID.empty()) {
-            // create new UID
-            newEvent->m_UID = UUID();
-            Event::setUID(comp, newEvent->m_UID);
+        EventCache::iterator it;
+        if (!luid.empty() &&
+            (it = m_cache.find(luid)) != m_cache.end()) {
+            // Additional sanity check: ensure that the expected UID is set.
+            // Necessary if the peer we synchronize with (aka the local
+            // data storage) doesn't support foreign UIDs. Maemo 5 calendar
+            // backend is one example.
+            Event::setUID(comp, it->second->m_UID);
+            newEvent->m_UID = it->second->m_UID;
+        } else {
+            newEvent->m_UID = Event::getUID(comp);
+            if (newEvent->m_UID.empty()) {
+                // create new UID
+                newEvent->m_UID = UUID();
+                Event::setUID(comp, newEvent->m_UID);
+            }
         }
         newEvent->m_sequence = Event::getSequence(comp);
         newEvent->m_subids.insert(subid);
@@ -179,7 +365,8 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
     }
     std::string subid = *newEvent->m_subids.begin();
 
-    // determine whether we already know the merged item even though our caller didn't
+    // Determine whether we already know the merged item even though
+    // our caller didn't.
     std::string davLUID = luid;
     std::string knownSubID = callerSubID;
     if (davLUID.empty()) {
@@ -227,7 +414,8 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             data = &buffer;
         }
         res = insertItem(name, *data, true);
-        subres.m_uid = res.m_luid;
+        subres.m_mainid = res.m_luid;
+        subres.m_uid = newEvent->m_UID;
         subres.m_subid = subid;
         subres.m_revision = res.m_revision;
 
@@ -305,16 +493,24 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
         }
         Event &event = loadItem(davLUID);
         // no changes expected yet, copy previous attributes
-        subres.m_uid = davLUID;
+        subres.m_mainid = davLUID;
+        subres.m_uid = event.m_UID;
         subres.m_subid = subid;
         subres.m_revision = event.m_etag;
 
         // Google hack: increase sequence number if smaller or equal to
         // sequence on server. Server rejects update otherwise.
         // See http://code.google.com/p/google-caldav-issues/issues/detail?id=26
-        if (settings().googleUpdateHack() && newEvent->m_sequence <= event.m_sequence) {
+        if (settings().googleUpdateHack()) {
+            // always bump SEQ by one before PUT
             event.m_sequence++;
-            Event::setSequence(firstcomp, event.m_sequence);
+            if (newEvent->m_sequence < event.m_sequence) {
+                // override in new event, existing ones will be updated below
+                Event::setSequence(firstcomp, event.m_sequence);
+            } else {
+                // new event sequence is equal or higher, use that
+                event.m_sequence = newEvent->m_sequence;
+            }
         }
 
         // update cache: find old VEVENT and remove it before adding new one,
@@ -326,7 +522,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             if (Event::getSubID(comp) == subid) {
                 removeme = comp;
             } else if (settings().googleUpdateHack()) {
-                // increase modification time stamps and sequence to that of the new item,
+                // increase modification time stamps to that of the new item,
                 // Google rejects the whole update otherwise
                 if (!icaltime_is_null_time(lastmodtime)) {
                     icalproperty *dtstamp = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
@@ -338,6 +534,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                         icalproperty_set_lastmodified(lastmod, lastmodtime);
                     }
                 }
+                // set SEQ to the one increased above
                 Event::setSequence(comp, event.m_sequence);
             }
         }
@@ -444,7 +641,10 @@ void CalDAVSource::Event::unescapeRecurrenceID(std::string &data)
 
 std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string &subid)
 {
-    Event &event = loadItem(davLUID);
+    // find item in cache first, load only if it is not going to be
+    // removed entirely
+    Event &event = findItem(davLUID);
+
     if (event.m_subids.size() == 1) {
         // remove entire merged item, nothing will be left after removal
         if (*event.m_subids.begin() != subid) {
@@ -459,6 +659,54 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                     // item was already removed while the sync ran.
                     // Let's log the problem and ignore it.
                     Exception::log();
+                } else if (ex.syncMLStatus() == 409 &&
+                           strstr(ex.what(), "Can't delete a recurring event")) {
+                    // Google CalDAV:
+                    // HTTP/1.1 409 Can't delete a recurring event except on its organizer's calendar
+                    //
+                    // Workaround: remove RRULE and EXDATE before deleting
+                    bool updated = false;
+                    icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
+                    if (comp) {
+                        icalproperty *prop;
+                        while ((prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) != NULL) {
+                            icalcomponent_remove_property(comp, prop);
+                            updated = true;
+                        }
+                        while ((prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) != NULL) {
+                            icalcomponent_remove_property(comp, prop);
+                            updated = true;
+                        }
+                    }
+                    if (updated) {
+                        SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: remove RRULE before deleting");
+                        eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
+                        insertSubItem(davLUID, subid, icalstr.get());
+                        // It has been observed that trying the DELETE immediately
+                        // failed again with the same "Can't delete a recurring event"
+                        // error although the event no longer has an RRULE. Seems
+                        // that the Google server sometimes need a bit of time until
+                        // changes really trickle through all databases. Let's
+                        // try a few times before giving up.
+                        for (int retry = 0; retry < 5; retry++) {
+                            try {
+                                SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: remove event, attempt #%d", retry);
+                                removeSubItem(davLUID, subid);
+                                break;
+                            } catch (const TransportStatusException &ex2) {
+                                if (ex2.syncMLStatus() == 409 &&
+                                    strstr(ex2.what(), "Can't delete a recurring event")) {
+                                    SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: try again in a second");
+                                    sleep(1);
+                                } else {
+                                    throw;
+                                }
+                            }
+                        }
+                    } else {
+                        SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack not applicable, giving up");
+                        throw;
+                    }
                 } else {
                     throw;
                 }
@@ -467,7 +715,9 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
         m_cache.erase(davLUID);
         return "";
     } else {
+        loadItem(event);
         bool found = false;
+        bool parentRemoved = false;
         for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -475,6 +725,9 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                 icalcomponent_remove_component(event.m_calendar, comp);
                 icalcomponent_free(comp);
                 found = true;
+                if (subid.empty()) {
+                    parentRemoved = true;
+                }
             }
         }
         if (!found) {
@@ -483,7 +736,20 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
         event.m_subids.erase(subid);
         // TODO: avoid updating the item immediately
         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
-        InsertItemResult res = insertItem(davLUID, icalstr.get(), true);
+        InsertItemResult res;
+        if (parentRemoved && settings().googleChildHack()) {
+            // Must avoid VEVENTs with RECURRENCE-ID in
+            // event.m_calendar and the PUT request.  Brute-force
+            // approach here is to encode as string, escape, and parse
+            // again.
+            string item = icalstr.get();
+            Event::escapeRecurrenceID(item);
+            event.m_calendar.set(icalcomponent_new_from_string((char *)item.c_str()), // hack for old libical
+                                 "parsing iCalendar 2.0");
+            res = insertItem(davLUID, item, true);
+        } else {
+            res = insertItem(davLUID, icalstr.get(), true);
+        }
         if (res.m_merged ||
             res.m_luid != davLUID) {
             SE_THROW("unexpected result of removing sub event");
@@ -504,7 +770,12 @@ void CalDAVSource::flushItem(const string &davLUID)
 
 std::string CalDAVSource::getSubDescription(const string &davLUID, const string &subid)
 {
-    Event &event = loadItem(davLUID);
+    Event &event = findItem(davLUID);
+    if (!event.m_calendar) {
+        // Don't load (expensive!) only to provide the description.
+        // Returning an empty string will trigger the fallback (logging the ID).
+        return "";
+    }
     for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -538,13 +809,19 @@ std::string CalDAVSource::getDescription(const string &luid)
     return getSubDescription(ids.first, ids.second);
 }
 
-CalDAVSource::Event &CalDAVSource::loadItem(const std::string &davLUID)
+CalDAVSource::Event &CalDAVSource::findItem(const std::string &davLUID)
 {
     EventCache::iterator it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         throwError("event not found");
     }
-    return loadItem(*it->second);
+    return *it->second;
+}
+
+CalDAVSource::Event &CalDAVSource::loadItem(const std::string &davLUID)
+{
+    Event &event = findItem(davLUID);
+    return loadItem(event);
 }
 
 CalDAVSource::Event &CalDAVSource::loadItem(Event &event)
@@ -611,10 +888,8 @@ CalDAVSource::Event &CalDAVSource::loadItem(Event &event)
                 Timespec deadline = createDeadline();
                 getSession()->startOperation("REPORT 'single item'", deadline);
                 while (true) {
-                    string result;
-                    string href, etag;
                     Neon::XMLParser parser;
-                    parser.initReportParser(href, etag);
+                    parser.initReportParser();
                     item = "";
                     parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
                                        boost::bind(Neon::XMLParser::append, boost::ref(item), _2, _3));
@@ -633,11 +908,17 @@ CalDAVSource::Event &CalDAVSource::loadItem(Event &event)
         Event::unescapeRecurrenceID(item);
         event.m_calendar.set(icalcomponent_new_from_string((char *)item.c_str()), // hack for old libical
                              "parsing iCalendar 2.0");
-        // sequence number might have been increased by last save,
-        // so check it again
+
+        // Sequence number/last-modified might have been increased by last save.
+        // Or the cache was populated by setAllSubItems(), which doesn't give
+        // us the information. In that case, UID might also still be unknown.
+        // Either way, check it again.
         for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
+            if (event.m_UID.empty()) {
+                event.m_UID = Event::getUID(comp);
+            }
             long sequence = Event::getSequence(comp);
             if (sequence > event.m_sequence) {
                 event.m_sequence = sequence;
@@ -651,22 +932,27 @@ CalDAVSource::Event &CalDAVSource::loadItem(Event &event)
                 }
             }
 
-            // clean all X-LIC-ERROR warnings added by libical, for example:
-            // X-LIC-ERROR;X-LIC-ERRORTYPE=VALUE-PARSE-ERROR:No value for LOCATION property. Removing entire property:
-            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
-            while (prop) {
-                icalproperty *next = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
-                const char *name = icalproperty_get_property_name(prop);
-                if (name && !strcmp("X-LIC-ERROR", name)) {
-                    icalcomponent_remove_property(comp, prop);
-                    icalproperty_free(prop);
-                }
-                prop = next;
-            }
+            // remove useless X-LIC-ERROR
+            Event::icalClean(comp);
         }
     }
     return event;
 }
+
+void CalDAVSource::Event::icalClean(icalcomponent *comp)
+{
+    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+    while (prop) {
+        icalproperty *next = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
+        const char *name = icalproperty_get_property_name(prop);
+        if (name && !strcmp("X-LIC-ERROR", name)) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+        prop = next;
+    }
+}
+
 
 std::string CalDAVSource::Event::icalTime2Str(const icaltimetype &tt)
 {
@@ -744,6 +1030,13 @@ void CalDAVSource::backupData(const SyncSource::Operations::ConstBackupInfo &old
                               const SyncSource::Operations::BackupInfo &newBackup,
                               BackupReport &backupReport)
 {
+    contactServer();
+
+    // If this runs as part of the sync preparations, then we might
+    // use the result to populate our m_cache. But because dumping
+    // data is typically disabled, this optimization isn't really
+    // worth that much.
+
     ItemCache cache;
     cache.init(oldBackup, newBackup, false);
 
@@ -764,15 +1057,13 @@ void CalDAVSource::backupData(const SyncSource::Operations::ConstBackupInfo &old
         "</C:comp-filter>\n"
         "</C:filter>\n"
         "</C:calendar-query>\n";
-    string result;
-    string href, etag, data;
+    string data;
     Neon::XMLParser parser;
-    parser.initReportParser(href, etag);
+    parser.initReportParser(boost::bind(&CalDAVSource::backupItem, this,
+                                        boost::ref(cache),
+                                        _1, _2, boost::ref(data)));
     parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
-                       boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3),
-                       boost::bind(&CalDAVSource::backupItem, this,
-                                   boost::ref(cache),
-                                   boost::ref(href), boost::ref(etag), boost::ref(data)));
+                       boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
     Timespec deadline = createDeadline();
     getSession()->startOperation("REPORT 'full calendar'", deadline);
     while (true) {
@@ -788,8 +1079,8 @@ void CalDAVSource::backupData(const SyncSource::Operations::ConstBackupInfo &old
 }
 
 int CalDAVSource::backupItem(ItemCache &cache,
-                             std::string &href,
-                             std::string &etag,
+                             const std::string &href,
+                             const std::string &etag,
                              std::string &data)
 {
     Event::unescapeRecurrenceID(data);
@@ -799,8 +1090,6 @@ int CalDAVSource::backupItem(ItemCache &cache,
 
     // reset data for next item
     data.clear();
-    href.clear();
-    etag.clear();
     return 0;
 }
 

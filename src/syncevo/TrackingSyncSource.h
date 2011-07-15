@@ -77,14 +77,9 @@ class TrackingSyncSource : public TestingSyncSource,
      *                       of seconds which has to pass before changes
      *                       are detected reliably (see SyncSourceRevisions
      *                       for details), otherwise pass 0
-     * @param trackingNode   a ConfigNode instance which will be used to store
-     *                       luid/revision string pairs; if not set, TrackingSyncSource
-     *                       will create its own node with the tracking node
-     *                       in params as storage
      */
     TrackingSyncSource(const SyncSourceParams &params,
-                       int granularitySeconds = 1,
-                       const boost::shared_ptr<ConfigNode> &trackingNode = boost::shared_ptr<ConfigNode>());
+                       int granularitySeconds = 1);
     ~TrackingSyncSource() {}
 
     /**
@@ -126,6 +121,15 @@ class TrackingSyncSource : public TestingSyncSource,
     virtual bool isEmpty() = 0;
 
     /**
+     * A unique identifier for the current state of the complete database.
+     * The semantic is the following:
+     * - empty string implies "state unknown" or "identifier not supported" (the default implementation)
+     * - id not empty and id_1 == id_2 implies "nothing has changed";
+     *   the inverse is not true (ids may be different although nothing has changed)
+     */
+    virtual std::string databaseRevision() { return ""; }
+
+    /**
      * fills the complete mapping from LUID to revision string of all
      * currently existing items
      *
@@ -138,6 +142,32 @@ class TrackingSyncSource : public TestingSyncSource,
      * a non-empty string is necessary and none was provided.
      */
     virtual void listAllItems(SyncSourceRevisions::RevisionMap_t &revisions) = 0;
+
+    /**
+     * Called at the start of the sync session to tell
+     * the derived class about the cached information if (and only
+     * if) listAllItems() and updateAllItems() were not called. The derived class
+     * might not need this information, so the default implementation
+     * simply ignores.
+     *
+     * A more complex API could have been defined to only prepare the
+     * information when needed, but that seemed unnecessarily complex.
+     */
+    virtual void setAllItems(const RevisionMap_t &revisions) {}
+
+    /**
+     * updates the revision map to reflect the current state
+     *
+     * May be called instead of listAllItems() if the caller has
+     * a valid list to start from. If the implementor
+     * cannot update the list, it must start from scratch by
+     * reseting the list and calling listAllItems(). The default
+     * implementation of this method does that.
+     */
+    virtual void updateAllItems(SyncSourceRevisions::RevisionMap_t &revisions) {
+        revisions.clear();
+        listAllItems(revisions);
+    }
 
     /**
      * Create or modify an item.
@@ -216,7 +246,19 @@ class TrackingSyncSource : public TestingSyncSource,
 
   private:
     void checkStatus(SyncSourceReport &changes);
+    boost::shared_ptr<ConfigNode> m_trackingNode;
 
+    /**
+     * Stores meta information besides the item list:
+     * - "databaseRevision" = result of databaseRevision() at end of last sync
+     *
+     * Shares the same key/value store as m_trackingNode,
+     * which uses the "item-" prefix in its keys to
+     * avoid name clashes.
+     */
+    boost::shared_ptr<ConfigNode> m_metaNode;
+
+ protected:
     /* implementations of SyncSource callbacks */
     virtual void beginSync(const std::string &lastToken, const std::string &resumeToken);
     virtual std::string endSync(bool success);
@@ -228,8 +270,6 @@ class TrackingSyncSource : public TestingSyncSource,
     virtual void enableServerMode();
     virtual bool serverModeEnabled() const;
     virtual std::string getPeerMimeType() const;
-
-    boost::shared_ptr<ConfigNode> m_trackingNode;
 };
 
 

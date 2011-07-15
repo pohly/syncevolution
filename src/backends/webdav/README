@@ -45,7 +45,7 @@ They also use:
   >= 11: plaintext HTTP authentication
 
 The recommended way of using the CalDAV and CardDAV backends is to
-configure a context with the "source-config" peer inside it. Such a
+configure a context with the "target-config" peer inside it. Such a
 context then can be used as part of a local sync with other
 sources. See the Google section below for examples.
 
@@ -55,8 +55,27 @@ Multiple calendars/address books
 
 This is not yet implemented. The code always ends up picking the
 default collection. Eventually the goal is to enable:
-- listing of available collections
-- selecting them via the "database" property
+1. listing of available collections
+2. selecting them via the "database" property
+
+Only the second point is currently implemented.
+
+The "database" property now can hold the final URL of the collection
+(aka database) on the WebDAV server which is used for the
+source. Setting it skips the entire auto-discovery process, which
+makes access quite a bit faster and more reliable.
+
+Because most UIs won't know initially how to find these URLs (listing
+them not supported by the core SyncEvolution) and/or won't have the
+necessary user dialogs, the property is set automatically after a
+successful sync. This avoids the accidental switching between
+databases when the user adds or removes databases on the server (which
+can lead to different results of the auto discovery).
+
+There's still no guarantee that the database picked by default is the
+"right" one. That can only be solved in the UI because servers
+typically don't have a "default" or "personal" flag for their
+collections.
 
 
 Concurrency
@@ -96,13 +115,13 @@ syncevolution --configure \
               username=<your account> \
               password=<your password> \
               consumerReady=0 \
-              source-config@google calendar
+              target-config@google calendar
 
 # list events in the server
-syncevolution --print-items source-config@google calendar
+syncevolution --print-items target-config@google calendar
 
 # show the content of these events on stdout
-syncevolution --export - source-config@google calendar
+syncevolution --export - target-config@google calendar
 
 # set up synchronization, using "google-calendar" as peer name
 # because "google" is typically used for the SyncML-based
@@ -158,11 +177,11 @@ syncevolution --configure \
               username=<your account@yahoo.com or some other yahoo domain> \
               password=<your password> \
               consumerReady=0 \
-              source-config@yahoo addressbook calendar
+              target-config@yahoo addressbook calendar
 
 # list items, use "--export -" to see content
-syncevolution --print-items source-config@yahoo calendar
-syncevolution --print-items source-config@yahoo addressbook
+syncevolution --print-items target-config@yahoo calendar
+syncevolution --print-items target-config@yahoo addressbook
 
 # configure synchronization, with addressbook not enabled
 syncevolution --configure \
@@ -188,7 +207,7 @@ SYNCEVOLUTION_DEBUG=1 syncevolution --daemon=no loglevel=4 --print-items @google
 
 Each sync produces two log files, one for the main config
 ("google-calendar"), one for the target config
-("source-config@google"). It is possible to choose different log levels:
+("target-config@google"). It is possible to choose different log levels:
 
 syncevolution --run \
               loglevel=1 \
@@ -292,17 +311,30 @@ cover importing/exporting of items and change tracking.
 client-test needs to be told in the CLIENT_TEST_WEBDAV env variable
 which CalDAV or CardDAV servers are available and the sync properties
 for them. It then creates a suitable
-"source-config@client-test-<server>" config with "caldav" and/or
+"target-config@client-test-<server>" config with "caldav" and/or
 "carddav" sources. Sync properties can be specified; if not given, the
 relevant ones must be set inside that config already.
 
+In addition to sync properties, the following properties can be used
+to influence the test setup itself:
+  testconfig = name of a test config known to ClientTest::getTestData(),
+               default is "eds_contact" (for CardDAV) and "eds_event" (for CalDAV)
+  testcases  = name of file holding data for testImport (eds_contact.vcf and eds_event.ics)
+
 The format of CLIENT_TEST_WEBDAV is:
-  <server> [caldav] [carddav] <prop>=<val> ...; ...
+  <server> [caldav] [carddav] [<testconfig>] <prop>=<val> ...; ...
+  <prop> = sync property or [caldav/carddav/<testconfig>]/testcases
 
 Example:
 
 env PATH=backends/webdav/:$PATH \
-    "CLIENT_TEST_WEBDAV=yahoo caldav carddav username=<my @yahoo.com email> password=<password>; google caldav username=<email> password=<password> syncURL=https://www.google.com/calendar/dav/%u/user/?SyncEvolution=Google" \
+    "CLIENT_TEST_WEBDAV=
+     yahoo caldav carddav username=<my @yahoo.com email> password=<password>
+           caldav/testcases=testcases/yahoo_event.ics
+           carddav/testcases=testcases/yahoo_contact.vcf ;
+     google caldav username=<email> password=<password>
+            testcases=testcases/google_event.ics
+            syncURL=https://www.google.com/calendar/dav/%u/user/?SyncEvolution=Google" \
     ./client-test \
     Client::Source::yahoo_caldav::testOpen \
     Client::Source::yahoo_carddav::testOpen \

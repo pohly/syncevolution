@@ -12,7 +12,6 @@ nodist_bin_SCRIPTS =
 libexec_PROGRAMS =
 libexec_SCRIPTS =
 nobase_dist_template_DATA =
-DISTCLEANFILES =
 CLEANFILES =
 BUILT_SOURCES =
 
@@ -35,12 +34,10 @@ nobase_dist_template_DATA += $(TEMPLATE_FILES)
 else
 SUBDIRS += $(SYNTHESIS_SUBDIR_INCLUDES)
 endif
-if COND_GUI
-SUBDIRS += dbus gtk-ui
-else
-if COND_DOC
 SUBDIRS += dbus
-endif
+if COND_GUI
+SUBDIRS += gtk-ui
+else
 endif
 
 DIST_SUBDIRS = gdbus dbus syncevo $(BACKENDS) gtk-ui gnome-bluetooth synthesis-includes
@@ -174,6 +171,7 @@ dist-hook:
 
 clean-local: testclean
 	rm -rf testcases
+	[ ! -L templates ] || rm templates
 
 # files created during testing
 testclean:
@@ -185,15 +183,26 @@ distclean-local:
 
 if COND_DBUS
 syncevo_dbus_server_SOURCES = \
+	NotificationBackendBase.h \
+	NotificationBackendNoop.h \
+	NotificationBackendNoop.cpp \
+	NotificationBackendLibnotify.h \
+	NotificationBackendLibnotify.cpp \
+	NotificationBackendMLite.h \
+	NotificationBackendMLite.cpp \
+	NotificationManager.h \
+	NotificationManagerBase.h \
+	NotificationManagerFactory.h \
+	NotificationManagerFactory.cpp \
 	syncevo-dbus-server.cpp \
 	$(CORE_SOURCES)
 if ENABLE_UNIT_TESTS
 nodist_syncevo_dbus_server_SOURCES = ../test/test.cpp
 endif
 
-syncevo_dbus_server_LDADD = gdbus/libgdbussyncevo.la $(CORE_LDADD) $(KEYRING_LIBS) $(LIBNOTIFY_LIBS) $(KDE_KWALLET_LIBS)
+syncevo_dbus_server_LDADD = gdbus/libgdbussyncevo.la $(CORE_LDADD) $(KEYRING_LIBS) $(LIBNOTIFY_LIBS) $(MLITE_LIBS) $(KDE_KWALLET_LIBS) $(DBUS_LIBS)
 syncevo_dbus_server_CPPFLAGS = -DHAVE_CONFIG_H -I$(srcdir)/gdbus $(AM_CPPFLAGS) -DSYNCEVOLUTION_LOCALEDIR=\"${SYNCEVOLUTION_LOCALEDIR}\"
-syncevo_dbus_server_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(GLIB_CFLAGS) $(DBUS_CFLAGS) $(LIBSOUP_CFLAGS) $(KEYRING_CFLAGS) $(LIBNOTIFY_CFLAGS) $(KDE_KWALLET_CFLAGS)
+syncevo_dbus_server_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(GLIB_CFLAGS) $(DBUS_CFLAGS) $(LIBSOUP_CFLAGS) $(KEYRING_CFLAGS) $(LIBNOTIFY_CFLAGS) $(MLITE_CFLAGS) $(KDE_KWALLET_CFLAGS)
 syncevo_dbus_server_LDFLAGS = $(CORE_LD_FLAGS) $(LIBSOUP_LIBS)
 syncevo_dbus_server_DEPENDENCIES = gdbus/libgdbussyncevo.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(SYNTHESIS_DEP)
 endif
@@ -219,20 +228,21 @@ endif
 
 # list of test file base files
 #
-# Generated files (testcases/ical20.ics.funambol.tem) are derived from
-# the original base file ($(srcdir)/test/testcases/ical20.ics) by
-# applying a patch ($(srcdir)/test/testcases/ical20.ics.funambol.tem.patch).
+# Generated files (testcases/eds_event.ics.funambol.tem) are derived from
+# the original base file ($(srcdir)/test/testcases/eds_event.ics) by
+# applying a patch ($(srcdir)/test/testcases/eds_event.ics.funambol.tem.patch).
 CLIENT_LIB_TEST_FILES = \
 	testcases/lcs/file1.txt \
 	testcases/lcs/file2.txt \
 	testcases/templates/clients/SyncEvolution.ini \
 	testcases/templates/clients/phone/nokia/S40/7210c.ini \
-	testcases/vcard21.vcf \
-	testcases/vcard30.vcf \
-	testcases/ical20.ics \
-	testcases/ical20.ics.local \
-	testcases/imemo20.ics \
-	testcases/itodo20.ics
+	testcases/google_event.ics \
+	testcases/yahoo_contact.vcf \
+	testcases/eds_contact.vcf \
+	testcases/eds_event.ics \
+	testcases/eds_event.ics.local \
+	testcases/eds_memo.ics \
+	testcases/eds_task.ics
 
 # all patch files
 TEST_FILES_PATCHES = $(wildcard $(srcdir)/../test/testcases/*.patch)
@@ -253,15 +263,30 @@ client_test_LDADD = $(CORE_LDADD) $(SYNTHESIS_ENGINE) $(BUTEOSYNCPROFILE_LIBS) $
 # rule to generate patched files from patches:
 # make cannot compute the dependencies completely, so run the commands
 # on each make invocation and do the time stamp test ourselves
+#
+# If we create the patched file anew, then set its time to the more
+# recent of the two input files. That way it won't be re-generated
+# (because it is not older), and it won't be used to refresh the patch
+# either in testcase2patch (because it is not newer either).
+# That is useful on platforms where diff produces different results
+# than the one in the source (possible because the "find shortest
+# patch" problem may have multiple solutions).
 .PHONY: $(TEST_FILES_GENERATED)
 $(TEST_FILES_GENERATED):
 	@ mkdir -p testcases
-	@ echo "checking whether server specific test cases $@ are up-to-date"
-	set -e; \
+	@ echo "checking whether server specific test case $@ is up-to-date"
+	@ set -e; \
 	patchfile=$(srcdir)/../test/$@.patch; \
 	basefile=$(srcdir)/../test/$(basename $(basename $@)); \
-	[ ! $@ -ot $$patchfile ] && [ ! $@ -ot $$basefile ] || \
-	(echo '*** foo'; echo '--- bar'; cat $$patchfile) | patch -o $@ $$basefile
+	( [ -e $@ ] && [ ! $@ -ot $$patchfile ] && [ ! $@ -ot $$basefile ] && echo "   $@ up-to-date" ) || \
+	( [ ! -s $$patchfile ] && echo "   copy $$basefile to $@ because patch file is empty" && cp $$basefile $@ ) || \
+	( echo "   generating $@ by applying $$patchfile to $$basefile" && \
+	  (echo '*** foo'; echo '--- bar'; cat $$patchfile) | patch -s -o $@ $$basefile && \
+          ( if [ $$basefile -ot $$patchfile ]; then \
+              touch -r $$patchfile $@; else \
+              touch -r $$basefile $@; fi ) \
+        )
+
 
 # rule to regenerate patches:
 # like generating the patched files, this is run every time.
@@ -275,14 +300,16 @@ $(TEST_FILES_GENERATED):
 .PHONY: testcase2patch
 testcase2patch: $(TEST_FILES_GENERATED)
 	@ echo "checking whether test case patch files are up-to-date"
-	set -e; \
+	@ set -e; \
 	for i in testcases/*.tem; do \
 		patchfile=$(srcdir)/../test/$$i.patch; \
 		basefile=$(srcdir)/../test/`echo $$i | cut -d . -f  -2`; \
 		if [ $$patchfile -ot $$i ] || [ $$patchfile -ot $$basefile ]; then \
 			diff -u $$basefile $$i | tail -n +3 > $$patchfile || true; \
 			touch -r $$i $$patchfile; \
-			echo "updated $$patchfile"; \
+			echo "   updated $$patchfile"; \
+                else \
+                        echo "   $$patchfile up-to-date"; \
 		fi; \
 	done
 
@@ -304,7 +331,7 @@ CLEANFILES += client-test-buteo.moc.cpp
 templates:
 	if test "$(srcdir)/templates" != "./templates"; then \
 		rm -rf ./templates; \
-		cp -r "$(srcdir)/templates" .; \
+		ln -s "$(srcdir)/templates" .; \
 	fi
 
 # distribute test system?
@@ -336,7 +363,7 @@ abort_redirect_DEPENDENCIES = all
 
 # special target for testing with valgrind
 valgrind : test
-	valgrind --leak-check=yes --suppressions=valgrind.supp ./test
+	valgrind --leak-check=yes --suppressions=valgrind.supp ./client-test
 
 # Same solution for rebuilding as in top-level Makefile, see there
 # for further comments.

@@ -20,8 +20,6 @@
 #ifndef DBUSTYPES_H
 #define DBUSTYPES_H
 
-#include "commondbustypes.h"
-
 #include <QtCore/QList>
 #include <QtCore/QMap>
 #include <QtCore/QString>
@@ -36,10 +34,10 @@ struct SyncDatabase
 };
 Q_DECLARE_METATYPE ( SyncDatabase )
 
- // Marshall the SyncDatabase data into a D-BUS argument
- QDBusArgument &operator<<(QDBusArgument &argument, const SyncDatabase &mystruct);
- // Retrieve the SyncDatabase data from the D-BUS argument
- const QDBusArgument &operator>>(const QDBusArgument &argument, SyncDatabase &mystruct);
+// Marshall the SyncDatabase data into a D-BUS argument
+QDBusArgument &operator<<(QDBusArgument &argument, const SyncDatabase &mystruct);
+// Retrieve the SyncDatabase data from the D-BUS argument
+const QDBusArgument &operator>>(const QDBusArgument &argument, SyncDatabase &mystruct);
 
 struct SyncProgress
 {
@@ -53,10 +51,10 @@ struct SyncProgress
 };
 Q_DECLARE_METATYPE ( SyncProgress )
 
- // Marshall the SyncProgress data into a D-BUS argument
- QDBusArgument &operator<<(QDBusArgument &argument, const SyncProgress &mystruct);
- // Retrieve the SyncProgress data from the D-BUS argument
- const QDBusArgument &operator>>(const QDBusArgument &argument, SyncProgress &mystruct);
+// Marshall the SyncProgress data into a D-BUS argument
+QDBusArgument &operator<<(QDBusArgument &argument, const SyncProgress &mystruct);
+// Retrieve the SyncProgress data from the D-BUS argument
+const QDBusArgument &operator>>(const QDBusArgument &argument, SyncProgress &mystruct);
 
 struct SyncStatus
 {
@@ -66,25 +64,28 @@ struct SyncStatus
 };
 Q_DECLARE_METATYPE ( SyncStatus )
 
- // Marshall the SyncStatus data into a D-BUS argument
- QDBusArgument &operator<<(QDBusArgument &argument, const SyncStatus &mystruct);
- // Retrieve the SyncStatus data from the D-BUS argument
- const QDBusArgument &operator>>(const QDBusArgument &argument, SyncStatus &mystruct);
+// Marshall the SyncStatus data into a D-BUS argument
+QDBusArgument &operator<<(QDBusArgument &argument, const SyncStatus &mystruct);
+// Retrieve the SyncStatus data from the D-BUS argument
+const QDBusArgument &operator>>(const QDBusArgument &argument, SyncStatus &mystruct);
 
-typedef QMap<QString, StringMap > QStringMultiMap;
-typedef QList< StringMap > QArrayOfStringMap;
+typedef QMap<QString, QString> QStringMap;
+typedef QMap<QString, QStringMap > QStringMultiMap;
+typedef QList< QStringMap > QArrayOfStringMap;
 typedef QList< SyncDatabase > QArrayOfDatabases;
 typedef QMap<QString, SyncProgress >  QSyncProgressMap;
 typedef QMap<QString, SyncStatus >  QSyncStatusMap;
 
+Q_DECLARE_METATYPE ( QStringMap )
 Q_DECLARE_METATYPE ( QStringMultiMap )
 Q_DECLARE_METATYPE ( QArrayOfStringMap )
 Q_DECLARE_METATYPE ( QArrayOfDatabases )
 Q_DECLARE_METATYPE ( QSyncProgressMap )
 Q_DECLARE_METATYPE ( QSyncStatusMap )
 
-inline void registerMyDataTypes() {
+inline void syncevolution_qt_dbus_register_types() {
     qDBusRegisterMetaType< SyncDatabase >();
+    qDBusRegisterMetaType< QStringMap >();
     qDBusRegisterMetaType< QStringMultiMap >();
     qDBusRegisterMetaType< QArrayOfStringMap >();
     qDBusRegisterMetaType< QArrayOfDatabases >();

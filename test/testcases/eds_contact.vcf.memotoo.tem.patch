@@ -1,3 +1,12 @@
+@@ -32,7 +32,7 @@
+ BEGIN:VCARD
+ VERSION:3.0
+ NICKNAME:user12
+-NOTE:ampersand entity &amp\; less-than entity &lt\;
++NOTE:ampersand entity xxx less-than entity yyy - HTML entities replaced by corresponding characters by Memotoo
+ FN:xml entities
+ N:xml;entities;;;
+ X-EVOLUTION-FILE-AS:xml\, entities
 @@ -137,7 +137,7 @@
  NICKNAME:user7
  X-EVOLUTION-SPOUSE:
@@ -7,7 +16,7 @@
   ed itself...
  FN:line breaks
  N:breaks;line;;;
-@@ -189,7 +189,6 @@
+@@ -191,7 +191,6 @@
  EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
  EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
  EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
@@ -15,15 +24,15 @@
  TEL;TYPE=work;TYPE=Voice;X-EVOLUTION-UI-SLOT=1:business 1
  TEL;TYPE=homE;TYPE=VOICE;X-EVOLUTION-UI-SLOT=2:home 2
  TEL;TYPE=CELL;X-EVOLUTION-UI-SLOT=3:mobile 3
-@@ -197,7 +196,6 @@
+@@ -199,7 +198,6 @@
  TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
  TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6
  TEL;TYPE=CAR;X-EVOLUTION-UI-SLOT=7:car 7
 -TEL;TYPE=PREF;X-EVOLUTION-UI-SLOT=8:primary 8
- X-AIM;TYPE=HOME;X-EVOLUTION-UI-SLOT=1:AIM JOHN
- X-YAHOO;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:YAHOO JDOE
- X-ICQ;TYPE=HOME;X-EVOLUTION-UI-SLOT=3:ICQ JD
-@@ -282,7 +280,7 @@
+ X-AIM;X-EVOLUTION-UI-SLOT=1:AIM JOHN
+ X-YAHOO;X-EVOLUTION-UI-SLOT=2:YAHOO JDOE
+ X-ICQ;X-EVOLUTION-UI-SLOT=3:ICQ JD
+@@ -289,7 +287,7 @@
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
  FN:Mr. First \; special \; middle Last

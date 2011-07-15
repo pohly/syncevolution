@@ -132,6 +132,8 @@ struct URI {
     std::string m_query;
     std::string m_fragment;
 
+    URI() : m_port(0) {}
+
     /**
      * Split URL into parts. Throws TransportAgentException on
      * invalid url.  Port will be set to default for scheme if not set
@@ -171,6 +173,16 @@ struct URI {
         m_path == other.m_path &&
         m_query == other.m_query &&
         m_fragment == other.m_fragment;
+    }
+
+    bool empty() {
+        return m_scheme.empty() &&
+        m_host.empty() &&
+        m_userinfo.empty() &&
+        m_port == 0 &&
+        m_path.empty() &&
+        m_query.empty() &&
+        m_fragment.empty();
     }
 };
 
@@ -267,7 +279,7 @@ class Session {
      *
      * call sequence is this:
      * - startOperation()
-     * - repeat until success or final failure: create request, run(), check()
+     * - repeat until success or final failure: create request, run(), checkError()
      *
      * @param operation    internal descriptor for debugging (for example, PROPFIND)
      * @param deadline     time at which the operation must be completed, otherwise it'll be considered failed;
@@ -277,7 +289,7 @@ class Session {
 
     /**
      * to be called after each operation which might have produced debugging output by neon;
-     * automatically called by check()
+     * automatically called by checkError()
      */
     void flush();
 
@@ -293,8 +305,8 @@ class Session {
      * @return true for success, false if retry needed (only if deadline not empty);
      *         errors reported via exceptions
      */ 
-    bool check(int error, int code = 0, const ne_status *status = NULL,
-               const string &location = "");
+    bool checkError(int error, int code = 0, const ne_status *status = NULL,
+                    const string &location = "");
 
     ne_session *getSession() const { return m_session; }
 
@@ -311,9 +323,9 @@ class Session {
     ne_session *m_session;
     URI m_uri;
     std::string m_proxyURL;
-    /** time when last successul request completed, maintained by check() */
+    /** time when last successul request completed, maintained by checkError() */
     Timespec m_lastRequestEnd;
-    /** number of times a request was sent, maintained by startOperation(), the credentials callback, and check() */
+    /** number of times a request was sent, maintained by startOperation(), the credentials callback, and checkError() */
     int m_attempt;
 
     /** ne_set_server_auth() callback */
@@ -407,15 +419,30 @@ class XMLParser
     static int reset(std::string &buffer);
 
     /**
-     * Setup parser for handling REPORT result.
-     * Caller still needs to push a handler for
-     * "urn:ietf:params:xml:ns:caldav", "calendar-data".
-     * 
-     * @param href      caller's buffer for DAV:href
-     * @param etag      caller's buffer for DAV:getetag
+     * called once a response is completely parse
+     *
+     * @param href     the path for which the response was sent
+     * @param etag     it's etag, empty if not requested or available
      */
-    void initReportParser(std::string &href,
-                          std::string &etag);
+    typedef boost::function<void (const std::string &, const std::string &)> ResponseEndCB_t;
+
+    /**
+     * Setup parser for handling REPORT result.
+     * Already deals with href and etag, caching it
+     * for each response and passing it to the "response
+     * complete" callback.
+     *
+     * Caller still needs to push a handler for
+     * "urn:ietf:params:xml:ns:caldav", "calendar-data",
+     * or any other elements that it wants to know about.
+     * 
+     * @param responseEnd   called at the end of processing each response;
+     *                      this is the only time when all relevant
+     *                      parts of the response are guaranteed to have been seen;
+     *                      when expecting only one response, the callback
+     *                      is not needed
+     */
+    void initReportParser(const ResponseEndCB_t &responseEnd = ResponseEndCB_t());
 
  private:
     ne_xml_parser *m_parser;
@@ -432,6 +459,17 @@ class XMLParser
         EndCB_t m_end;
     };
     std::list<Callbacks> m_stack;
+
+    /** buffers for initReportParser() */
+    std::string m_href, m_etag;
+
+    int doResponseEnd(const ResponseEndCB_t &responseEnd) {
+        responseEnd(m_href, m_etag);
+        // clean up for next response
+        m_href.clear();
+        m_etag.clear();
+        return 0;
+    }
 
     static int startCB(void *userdata, int parent,
                        const char *nspace, const char *name,
@@ -475,10 +513,10 @@ class Request
 
     /**
      * Execute the request. May only be called once per request. Uses
-     * Session::check() underneath to detect fatal errors and throw
+     * Session::checkError() underneath to detect fatal errors and throw
      * exceptions.
      *
-     * @return result of Session::check()
+     * @return result of Session::checkError()
      */
     bool run();
 
@@ -504,7 +542,7 @@ class Request
     static int addResultData(void *userdata, const char *buf, size_t len);
 
     /** throw error if error code *or* current status indicates failure */
-    bool check(int error);
+    bool checkError(int error);
 };
 
 /** thrown for 301 HTTP status */

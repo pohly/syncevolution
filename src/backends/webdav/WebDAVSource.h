@@ -47,6 +47,16 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     static void replaceHTMLEntities(std::string &item);
 
  protected:
+    /**
+     * Initialize HTTP session and locate the right collection.
+     * To be called after open() to do the heavy initializtion
+     * work.
+     */
+    void contactServer();
+
+    /** store resource URL permanently after successful sync */
+    void storeServerInfos();
+
     /* implementation of SyncSource interface */
     virtual void open();
     virtual bool isEmpty();
@@ -55,7 +65,21 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     void getSynthesisInfo(SynthesisInfo &info,
                           XMLConfigFragments &fragments);
 
+    /** intercept TrackingSyncSource::beginSync() to do the expensive initialization */
+    virtual void beginSync(const std::string &lastToken, const std::string &resumeToken) {
+        contactServer();
+        TrackingSyncSource::beginSync(lastToken, resumeToken);
+    }
+    /** hook into session to store infos */
+    virtual std::string endSync(bool success) {
+        if (success) {
+             storeServerInfos();
+	}
+	return TrackingSyncSource::endSync(success);
+    }
+
     /* implementation of TrackingSyncSource interface */
+    virtual std::string databaseRevision();
     virtual void listAllItems(RevisionMap_t &revisions);
     virtual InsertItemResult insertItem(const string &luid, const std::string &item, bool raw);
     void readItem(const std::string &luid, std::string &item, bool raw);
@@ -166,6 +190,22 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
                               const ne_prop_result_set *results,
                               RevisionMap_t &revisions,
                               bool &failed);
+
+    void backupData(const boost::function<Operations::BackupData_t> &op,
+                    const Operations::ConstBackupInfo &oldBackup,
+                    const Operations::BackupInfo &newBackup,
+                    BackupReport &report) {
+        contactServer();
+        op(oldBackup, newBackup, report);
+    }
+
+    void restoreData(const boost::function<Operations::RestoreData_t> &op,
+                     const Operations::ConstBackupInfo &oldBackup,
+                     bool dryrun,
+                     SyncSourceReport &report) {
+        contactServer();
+        op(oldBackup, dryrun, report);
+    }
 
     /**
      * Extracts ETag from response header, empty if not found.

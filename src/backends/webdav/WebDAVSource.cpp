@@ -8,6 +8,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/find.hpp>
 #include <boost/scoped_ptr.hpp>
 
 #include <syncevo/LogRedirect.h>
@@ -45,12 +46,14 @@ public:
     {
         if (m_context) {
             vector<string> urls = m_context->getSyncURL();
+            string urlWithUsername;
+
             if (!urls.empty()) {
-                m_url = urls.front();
+                m_url = urlWithUsername = urls.front();
                 std::string username = m_context->getSyncUsername();
-                boost::replace_all(m_url, "%u", Neon::URI::escape(username));
+                boost::replace_all(urlWithUsername, "%u", Neon::URI::escape(username));
             }
-            Neon::URI uri = Neon::URI::parse(m_url);
+            Neon::URI uri = Neon::URI::parse(urlWithUsername);
             typedef boost::split_iterator<string::iterator> string_split_iterator;
             for (string_split_iterator arg =
                      boost::make_split_iterator(uri.m_query, boost::first_finder("&", boost::is_iequal()));
@@ -77,13 +80,13 @@ public:
                         } else {
                             SE_THROW(StringPrintf("unknown SyncEvolution flag %s in URL %s",
                                                   std::string(flag->begin(), flag->end()).c_str(),
-                                                  m_url.c_str()));
+                                                  urlWithUsername.c_str()));
                         }
                     }
-                } else {
+                } else if (arg->end() != arg->begin()) {
                     SE_THROW(StringPrintf("unknown parameter %s in URL %s",
                                           std::string(arg->begin(), arg->end()).c_str(),
-                                          m_url.c_str()));
+                                          urlWithUsername.c_str()));
                 }
             }
             boost::shared_ptr<FilterConfigNode> node = m_context->getNode(WebDAVCredentialsOkay);
@@ -143,6 +146,7 @@ public:
             boost::shared_ptr<FilterConfigNode> node = m_context->getNode(WebDAVCredentialsOkay);
             WebDAVCredentialsOkay.setProperty(*node, okay);
             node->flush();
+            m_credentialsOkay = okay;
         }
     }
 
@@ -163,6 +167,12 @@ WebDAVSource::WebDAVSource(const SyncSourceParams &params,
         m_contextSettings.reset(new ContextSettings(params.m_context));
         m_settings = m_contextSettings;
     }
+
+    /* insert contactServer() into BackupData_t and RestoreData_t (implemented by SyncSourceRevisions) */
+    m_operations.m_backupData = boost::bind(&WebDAVSource::backupData,
+                                            this, m_operations.m_backupData, _1, _2, _3);
+    m_operations.m_restoreData = boost::bind(&WebDAVSource::restoreData,
+                                             this, m_operations.m_restoreData, _1, _2, _3);
 }
 
 void WebDAVSource::replaceHTMLEntities(std::string &item)
@@ -281,6 +291,32 @@ void WebDAVSource::replaceHTMLEntities(std::string &item)
 
 void WebDAVSource::open()
 {
+    // Nothing to do here, expensive initialization is in contactServer().
+}
+
+void WebDAVSource::contactServer()
+{
+    if (!m_calendar.empty() &&
+        m_session) {
+        // we have done this work before, no need to repeat it
+    }
+
+    // Can we skip auto-detection because a full resource URL is set?
+    std::string database = getDatabaseID();
+    if (!database.empty() &&
+        m_contextSettings) {
+        m_calendar = Neon::URI::parse(database);
+        // m_contextSettings = m_settings, so this sets m_settings->getURL()
+        m_contextSettings->setURL(database);
+        // start talking to host defined by m_settings->getURL()
+        m_session = Neon::Session::create(m_settings);
+        // force authentication
+        std::string user, pw;
+        m_settings->getCredentials("", user, pw);
+        m_session->forceAuthorization(user, pw);
+        return;
+    }
+
     int timeoutSeconds = m_settings->timeoutSeconds();
     int retrySeconds = m_settings->retrySeconds();
     SE_LOG_DEBUG(this, NULL, "timout %ds, retry %ds => %s",
@@ -417,7 +453,17 @@ void WebDAVSource::open()
     Timespec finalDeadline = createDeadline(); // no resending if left empty
 
     while (true) {
+        bool usernameInserted = false;
         std::string next;
+
+        // Replace %u with the username, if the %u is found. Also, keep track
+        // of this event happening, because if we later on get a 404 error,
+        // we will convert it to 401 only if the path contains the username
+        // and it was indeed us who put the username there (not the server).
+        if (boost::find_first(path, "%u")) {
+            boost::replace_all(path, "%u", Neon::URI::escape(username));
+            usernameInserted = true;
+        }
 
         // must normalize so that we can compare against results from server
         path = Neon::URI::normalizePath(path, true);
@@ -541,6 +587,28 @@ void WebDAVSource::open()
             } else {
                 candidates.push_front(next.m_path);
             }
+        } catch (const TransportStatusException &ex) {
+            SE_LOG_DEBUG(NULL, NULL, "TransportStatusException: %s", ex.what());
+            if (ex.syncMLStatus() == 404 && boost::find_first(path, username) && usernameInserted) {
+                // We're actually looking at an authentication error: the path to the calendar has
+                // not been found, so the username was wrong. Let's hijack the error message and
+                // code of the exception by throwing a new one.
+                string descr = StringPrintf("Path not found: %s. Is the username '%s' correct?",
+                                            path.c_str(), username.c_str());
+                int code = 401;
+                SE_THROW_EXCEPTION_STATUS(TransportStatusException, descr, SyncMLStatus(code));
+            } else {
+                if (candidates.empty()) {
+                    // nothing left to try, bail out with this error
+                    throw;
+                } else {
+                    // ignore the error (whatever it was!), try next
+                    // candidate; needed to handle 502 "Connection
+                    // refused" for /.well-known/caldav/ from Yahoo!
+                    // Calendar
+                    SE_LOG_DEBUG(NULL, NULL, "ignore error for URI candidate: %s", ex.what());
+                }
+            }
         } catch (const Exception &ex) {
             if (candidates.empty()) {
                 // nothing left to try, bail out with this error
@@ -646,7 +714,7 @@ void WebDAVSource::open()
         if (next.empty()) {
             // use next candidate
             if (candidates.empty()) {
-                throwError(StringPrintf("no collection found in %s", m_settings->getURL().c_str()));
+                throwError(StringPrintf("no collection found in %s", path.c_str()));
             }
             next = candidates.front();
             candidates.pop_front();
@@ -741,6 +809,8 @@ void WebDAVSource::openPropCallback(const Neon::URI &uri,
 
 bool WebDAVSource::isEmpty()
 {
+    contactServer();
+
     // listing all items is relatively efficient, let's use that
     // TODO: use truncated result search
     RevisionMap_t revisions;
@@ -812,6 +882,40 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
         SE_LOG_DEBUG(this, NULL, "using data conversion rules for '%s'", info.m_backendRule.c_str());
     }
 }
+
+void WebDAVSource::storeServerInfos()
+{
+    if (getDatabaseID().empty()) {
+        // user did not select resource, remember the one used for the
+        // next sync
+        setDatabaseID(m_calendar.toURL());
+        getProperties()->flush();
+    }
+}
+
+/**
+ * See https://trac.calendarserver.org/browser/CalendarServer/trunk/doc/Extensions/caldav-ctag.txt
+ */
+static const ne_propname getctag[] = {
+    { "http://calendarserver.org/ns/", "getctag" },
+    { NULL, NULL }
+};
+
+std::string WebDAVSource::databaseRevision()
+{
+    Timespec deadline = createDeadline();
+    Neon::Session::PropfindPropCallback_t callback =
+        boost::bind(&WebDAVSource::openPropCallback,
+                    this, _1, _2, _3, _4);
+    m_davProps[m_calendar.m_path]["http://calendarserver.org/ns/:getctag"] = "";
+    m_session->propfindProp(m_calendar.m_path, 0, getctag, callback, deadline);
+    // Fatal communication problems will be reported via exceptions.
+    // Once we get here, invalid or incomplete results can be
+    // treated as "don't have revision string".
+    string ctag = m_davProps[m_calendar.m_path]["http://calendarserver.org/ns/:getctag"];
+    return ctag;
+}
+
 
 static const ne_propname getetag[] = {
     { "DAV:", "getetag" },
@@ -1130,6 +1234,10 @@ void WebDAVSource::removeItem(const string &uid)
     switch (req->getStatusCode()) {
     case 204:
         // the expected outcome
+        break;
+    case 404:
+        // possibly already removed, ignore
+        SE_LOG_DEBUG(this, NULL, "404 - already removed?");
         break;
     default:
         SE_THROW_EXCEPTION_STATUS(TransportStatusException,

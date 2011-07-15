@@ -131,7 +131,7 @@ public:
         if (!getenv("SYNCEVOLUTION_DEBUG")) {
             string logfile = m_currentTest + ".log";
             simplifyFilename(logfile);
-            m_logger.reset(new LogRedirect(false, logfile.c_str()));
+            m_logger.reset(new LogRedirect(true, logfile.c_str()));
             m_logger->setLevel(Logger::DEBUG);
             LoggerBase::pushLogger(m_logger.get());
         }
@@ -192,7 +192,10 @@ public:
             FILE *fd = fopen ("____compare.log","r");
             if (fd != NULL) {
                 fclose(fd);
-                system ((string("cat ____compare.log >>")+logfile).c_str());
+                if (system ((string("cat ____compare.log >>")+logfile).c_str()) < 0) {
+                    SE_LOG_WARNING(NULL, NULL, "Unable to append ____compare.log to %s.",
+                                   logfile.c_str());
+                }
             }
         }
 

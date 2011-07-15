@@ -1837,7 +1837,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
 
 void SyncContext::throwError(const string &error)
 {
-    throwError(STATUS_FATAL, error);
+    throwError(SyncMLStatus(STATUS_FATAL + sysync::LOCAL_STATUS_CODE), error);
 }
 
 void SyncContext::throwError(SyncMLStatus status, const string &error)
@@ -2279,6 +2279,9 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         "      delayedabort = FALSE;\n"
         "      INTEGER alarmTimeToUTC;\n"
         "      alarmTimeToUTC = FALSE;\n"
+        "      // for VCALENDAR_COMPARE_SCRIPT: don't use UID by default\n"
+        "      INTEGER VCALENDAR_COMPARE_UID;\n"
+        "      VCALENDAR_COMPARE_UID = FALSE;\n"
         "    ]]></sessioninitscript>\n";
 
     ostringstream clientorserver;
@@ -2341,47 +2344,6 @@ void SyncContext::getConfigXML(string &xml, string &configname)
              "clientorserver",
              clientorserver.str(),
              true);
-
-    // Poor man's regex match/replace:
-    // turn compare="foo/bar" into compare="foo" or compare="bar",
-    // depending on whether the first or second value is
-    // desired. See 10calendar-fieldlist.xml.
-    ostringstream modified;
-    size_t last = 0;
-    std::string value;
-    value.reserve(20);
-    static std::string sep("compare=\"");
-    // Choosing between the parts is a hack: in local sync mode,
-    // the iCalendar 2.0 semantic is always picked.
-    bool useFirst = !m_localSync;
-    for (size_t next = xml.find(sep, last);
-         next != xml.npos;
-         next = xml.find(sep, last)) {
-        modified.write(xml.c_str() + last, next - last);
-        modified << sep;
-        last = next + sep.size();
-        value.clear();
-        char c;
-        bool collect = true;
-        while (last != xml.size() &&
-               (c = xml[last]) != '"') {
-            if (c == '/') {
-                if (useFirst) {
-                    collect = false;
-                } else {
-                    // forget first value, use second one instead
-                    value.clear();
-                }
-            } else if (collect) {
-                value += c;
-            }
-            last++;
-        }
-        modified << value;
-    }
-    modified.write(xml.c_str() + last, xml.size() - last);
-    xml = modified.str();
-    modified.str("");
 
     tag = "<debug/>";
     index = xml.find(tag);
@@ -3396,6 +3358,17 @@ SyncMLStatus SyncContext::doSync()
         // (not needed for OBEX)
     }
 
+    // Choosing between comparing UID/RECURRENCE-ID vs. other
+    // iCalendar 2.0 properties is a hack: in local sync mode, the
+    // iCalendar 2.0 semantic is always picked.
+    if (m_serverMode && m_localSync) {
+        SharedKey sessionKey = m_engine.OpenSessionKey(session);
+        SharedKey contextKey = m_engine.OpenKeyByPath(sessionKey, "/sessionvars");
+        m_engine.SetInt32Value(contextKey,
+                               "VCALENDAR_COMPARE_UID",
+                               true);
+    }
+
     // Sync main loop: runs until SessionStep() signals end or error.
     // Exceptions are caught and lead to a call of SessionStep() with
     // parameter STEPCMD_ABORT -> abort session as soon as possible.
@@ -4018,7 +3991,7 @@ string SyncContext::readSessionInfo(const string &dir, SyncReport &report)
 #ifdef ENABLE_UNIT_TESTS
 /**
  * This class works LogDirTest as scratch directory.
- * LogDirTest/[ical20|vcard30]_[one|two|empty] contain different
+ * LogDirTest/[file_event|file_contact]_[one|two|empty] contain different
  * sets of items for use in a FileSyncSource.
  *
  * With that setup and a fake SyncContext it is possible to simulate
@@ -4102,14 +4075,14 @@ public:
             "END:VEVENT\n"
             "END:VCALENDAR\n";
         rm_r("LogDirTest");
-        dump("ical20.one", "1", ical_1);
-        dump("ical20.two", "1", ical_1);
-        dump("ical20.two", "2", ical_2);
-        mkdir_p(getLogData() + "/ical20.empty");
-        dump("vcard30.one", "1", vcard_1);
-        dump("vcard30.two", "1", vcard_1);
-        dump("vcard30.two", "2", vcard_2);
-        mkdir_p(getLogData() + "/vcard30.empty");
+        dump("file_event.one", "1", ical_1);
+        dump("file_event.two", "1", ical_1);
+        dump("file_event.two", "2", ical_2);
+        mkdir_p(getLogData() + "/file_event.empty");
+        dump("file_contact.one", "1", vcard_1);
+        dump("file_contact.two", "1", vcard_1);
+        dump("file_contact.two", "2", vcard_2);
+        mkdir_p(getLogData() + "/file_contact.empty");
 
         mkdir_p(getLogDir());
         m_maxLogDirs = 0;
@@ -4149,7 +4122,7 @@ private:
      *
      * @param changeServer   pretend that peer got changed
      * @param status         result of session
-     * @param varargs        sourcename ("ical20"),
+     * @param varargs        sourcename ("file_event"),
      *                       statebefore (NULL for no dump, or suffix like "_one"),
      *                       stateafter (NULL for same as before), ..., NULL
      * @return logdir created for the session
@@ -4168,9 +4141,9 @@ private:
                 break;
             }
             const char *type = NULL;
-            if (!strcmp(sourcename, "ical20")) {
+            if (!strcmp(sourcename, "file_event")) {
                 type = "file:text/calendar:2.0";
-            } else if (!strcmp(sourcename, "vcard30")) {
+            } else if (!strcmp(sourcename, "file_contact")) {
                 type = "file:text/vcard:3.0";
             }
             CPPUNIT_ASSERT(type);
@@ -4224,21 +4197,21 @@ private:
 
     void testQuickCompare() {
         // identical dirs => identical files
-        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_event",
                                                      getLogData(), "empty",
                                                      getLogData(), "empty"));
-        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_event",
                                                      getLogData(), "one",
                                                      getLogData(), "one"));
-        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_event",
                                                      getLogData(), "two",
                                                      getLogData(), "two"));
         // some files shared
-        CPPUNIT_ASSERT(!system("cp -l -r LogDirTest/data/ical20.two LogDirTest/data/ical20.copy && rm LogDirTest/data/ical20.copy/2"));
-        CPPUNIT_ASSERT(LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(!system("cp -l -r LogDirTest/data/file_event.two LogDirTest/data/file_event.copy && rm LogDirTest/data/file_event.copy/2"));
+        CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                     getLogData(), "two",
                                                     getLogData(), "copy"));
-        CPPUNIT_ASSERT(LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                     getLogData(), "copy",
                                                     getLogData(), "one"));
     }
@@ -4248,16 +4221,16 @@ private:
         ScopedEnvChange cache("XDG_CACHE_HOME", "LogDirTest/cache");
 
         // simple session with no changes
-        string dir = session(false, STATUS_OK, "ical20", ".one", ".one", (char *)0);
+        string dir = session(false, STATUS_OK, "file_event", ".one", ".one", (char *)0);
         Sessions_t sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)1, sessions.size());
         CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
         FileConfigNode status(dir, "status.ini", true);
         CPPUNIT_ASSERT(status.exists());
-        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-ical20-backup-before"));
-        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-ical20-backup-after"));
+        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before"));
+        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-after"));
         CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
-        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_event",
                                                      dir, "before",
                                                      dir, "after"));
     }
@@ -4267,16 +4240,16 @@ private:
         ScopedEnvChange cache("XDG_CACHE_HOME", "LogDirTest/cache");
 
         // session with local changes
-        string dir = session(false, STATUS_OK, "ical20", ".one", ".two", (char *)0);
+        string dir = session(false, STATUS_OK, "file_event", ".one", ".two", (char *)0);
         Sessions_t sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)1, sessions.size());
         CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
         FileConfigNode status(dir, "status.ini", true);
         CPPUNIT_ASSERT(status.exists());
-        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-ical20-backup-before"));
-        CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-ical20-backup-after"));
+        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before"));
+        CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-after"));
         CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
-        CPPUNIT_ASSERT(LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                     dir, "before",
                                                     dir, "after"));
     }
@@ -4288,8 +4261,8 @@ private:
         // two sessions, starting with 1 item, adding 1 during the sync, then
         // removing it again during the second
         string dir = session(false, STATUS_OK,
-                             "ical20", ".one", ".two",
-                             "vcard30", ".one", ".two",
+                             "file_event", ".one", ".two",
+                             "file_contact", ".one", ".two",
                              (char *)0);
         {
             Sessions_t sessions = listSessions();
@@ -4297,22 +4270,22 @@ private:
             CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
             FileConfigNode status(dir, "status.ini", true);
             CPPUNIT_ASSERT(status.exists());
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-ical20-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-ical20-backup-after"));
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-vcard30-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-vcard30-backup-after"));
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before"));
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-after"));
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__contact-backup-before"));
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__contact-backup-after"));
             CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
-            CPPUNIT_ASSERT(LogDir::haveDifferentContent("ical20",
+            CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                         dir, "before",
                                                         dir, "after"));
-            CPPUNIT_ASSERT(LogDir::haveDifferentContent("vcard30",
+            CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_contact",
                                                         dir, "before",
                                                         dir, "after"));
         }
 
         string seconddir = session(false, STATUS_OK,
-                                   "ical20", ".two", ".one",
-                                   "vcard30", ".two", ".one",
+                                   "file_event", ".two", ".one",
+                                   "file_contact", ".two", ".one",
                                    (char *)0);
         {
             Sessions_t sessions = listSessions();
@@ -4321,23 +4294,23 @@ private:
             CPPUNIT_ASSERT_EQUAL(seconddir, sessions[1]);
             FileConfigNode status(seconddir, "status.ini", true);
             CPPUNIT_ASSERT(status.exists());
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-ical20-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-ical20-backup-after"));
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-vcard30-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-vcard30-backup-after"));
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-before"));
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-after"));
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__contact-backup-before"));
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__contact-backup-after"));
             CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
-            CPPUNIT_ASSERT(LogDir::haveDifferentContent("ical20",
+            CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                         seconddir, "before",
                                                         seconddir, "after"));
-            CPPUNIT_ASSERT(LogDir::haveDifferentContent("vcard30",
+            CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_contact",
                                                         seconddir, "before",
                                                         seconddir, "after"));
         }
 
-        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("ical20",
+        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_event",
                                                      dir, "after",
                                                      seconddir, "before"));
-        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("vcard30",
+        CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_contact",
                                                      dir, "after",
                                                      seconddir, "before"));
     }
@@ -4369,11 +4342,11 @@ private:
         CPPUNIT_ASSERT_EQUAL(dirs[0], sessions[0]);
         CPPUNIT_ASSERT_EQUAL(dirs[1], sessions[1]);
 
-        // When syncing first ical20, then vcard30, both sessions
+        // When syncing first file_event, then file_contact, both sessions
         // must be preserved despite m_maxLogDirs = 1, otherwise
-        // we would loose the only existent backup of ical20.
-        dirs[0] = session(false, STATUS_OK, "ical20", ".two", ".one", (char *)0);
-        dirs[1] = session(false, STATUS_OK, "vcard30", ".two", ".one", (char *)0);
+        // we would loose the only existent backup of file_event.
+        dirs[0] = session(false, STATUS_OK, "file_event", ".two", ".one", (char *)0);
+        dirs[1] = session(false, STATUS_OK, "file_contact", ".two", ".one", (char *)0);
         sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)2, sessions.size());
         CPPUNIT_ASSERT_EQUAL(dirs[0], sessions[0]);
@@ -4382,8 +4355,8 @@ private:
         // after synchronizing both, we can expire both the old sessions
         m_maxLogDirs = 1;
         dirs[0] = session(false, STATUS_OK,
-                          "ical20", ".two", ".one",
-                          "vcard30", ".two", ".one",
+                          "file_event", ".two", ".one",
+                          "file_contact", ".two", ".one",
                           (char *)0);
         sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)1, sessions.size());
@@ -4403,12 +4376,12 @@ private:
         // did change something: keep oldest backup because it created the
         // backups for the first time
         dirs[1] = session(false, STATUS_OK,
-                          "ical20", ".one", ".one",
-                          "vcard30", ".one", ".one",
+                          "file_event", ".one", ".one",
+                          "file_contact", ".one", ".one",
                           (char *)0);
         dirs[1] = session(false, STATUS_OK,
-                          "ical20", ".one", ".one",
-                          "vcard30", ".one", ".one",
+                          "file_event", ".one", ".one",
+                          "file_contact", ".one", ".one",
                           (char *)0);
         sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)2, sessions.size());
@@ -4419,8 +4392,8 @@ private:
         // most recent sessions eventually: first change server,
         // then local
         dirs[1] = session(true, STATUS_OK,
-                          "ical20", ".one", ".one",
-                          "vcard30", ".one", ".one",
+                          "file_event", ".one", ".one",
+                          "file_contact", ".one", ".one",
                           (char *)0);
         sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)2, sessions.size());
@@ -4428,8 +4401,8 @@ private:
         CPPUNIT_ASSERT_EQUAL(dirs[1], sessions[1]);
         dirs[0] = dirs[1];
         dirs[1] = session(false, STATUS_OK,
-                          "ical20", ".one", ".two",
-                          "vcard30", ".one", ".two",
+                          "file_event", ".one", ".two",
+                          "file_contact", ".one", ".two",
                           (char *)0);
         sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)2, sessions.size());

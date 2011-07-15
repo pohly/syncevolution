@@ -310,14 +310,14 @@ class ConfigProperty {
 
     /**
      * This is used to generate description dynamically according to the context information
-     * Defalut implmenentation is to return value set in the constructor.
+     * Default implmenentation is to return value set in the constructor, otherwise the server name.
      * Derived classes can override this function. Used by 'checkPassword' and 'savePassword'
      * to generate description for user interface.
      */
     virtual const string getDescr(const string &serverName,
                                   FilterConfigNode &globalConfigNode,
                                   const string &sourceName = string(),
-                                  const boost::shared_ptr<FilterConfigNode> &sourceConfigNode=boost::shared_ptr<FilterConfigNode>()) const { return m_descr; }
+                                  const boost::shared_ptr<FilterConfigNode> &sourceConfigNode=boost::shared_ptr<FilterConfigNode>()) const { return m_descr.empty() ? serverName : m_descr; }
 
 
     /** split \n separated comment into lines without \n, appending them to commentLines */
@@ -1110,6 +1110,8 @@ class SyncConfig {
     static ConfigList getConfigs();
 
     /**
+     * TODO: fix description of matchPeerTemplates() and remove getPeerTemplates()
+     *
      * returns list of available config templates:
      * for each peer listed in @peers, matching against the fingerprint information
      * from the peer (deviceName likely), sorted by the matching score,
@@ -1120,18 +1122,13 @@ class SyncConfig {
      * The assumption currently is only work for SyncML client peers.
      * DeviceList is a list of matching tuples <fingerprint, SyncConfig::MatchMode>.
      */
-    static TemplateList getPeerTemplates(const DeviceList &peers);
+    static TemplateList getPeerTemplates(const DeviceList &peers) { return matchPeerTemplates(peers, true); }
 
     /**
      * match the built-in templates against @param fingerprint, return a list of
      * servers sorted by the matching rank.
      * */
     static TemplateList matchPeerTemplates(const DeviceList &peers, bool fuzzyMatch = true);
-
-    /**
-     * get the built-in default templates
-     */
-    static TemplateList getBuiltInTemplates ();
 
     /**
      * Creates a new instance of a configuration template.
@@ -1467,22 +1464,6 @@ class SyncConfig {
     virtual std::string getSyncPassword() const;
     virtual void setSyncPassword(const string &value, bool temporarily = false);
 
-    /**
-     * Look at the password setting and if it requires user interaction,
-     * get it from the user. Then store it for later usage in getSyncPassword().
-     * Without this call, getSyncPassword() returns the original, unmodified
-     * config string.
-     */
-    virtual void checkSyncPassword(ConfigUserInterface &ui);
-
-    /**
-     * Look at the password setting and if it needs special mechanism to
-     * save password, this function is used to store specified password
-     * in the config tree.
-     * @param ui the ui pointer
-     */
-    virtual void saveSyncPassword(ConfigUserInterface &ui); 
-
     virtual bool getPreventSlowSync() const;
     virtual void setPreventSlowSync(bool value, bool temporarily = false);
     virtual bool getUseProxy() const;
@@ -1493,8 +1474,6 @@ class SyncConfig {
     virtual std::string getProxyUsername() const;
     virtual void setProxyUsername(const string &value, bool temporarily = false);
     virtual std::string getProxyPassword() const;
-    virtual void checkProxyPassword(ConfigUserInterface &ui);
-    virtual void saveProxyPassword(ConfigUserInterface &ui);
     virtual void setProxyPassword(const string &value, bool temporarily = false);
     virtual vector<string>  getSyncURL() const;
     virtual void setSyncURL(const string &value, bool temporarily = false);

@@ -171,6 +171,9 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
         info.m_datatypes <<
         "      </typesupport>\n";
 
+    // arbitrary configuration options, can override the ones above
+    xmlstream << info.m_datastoreOptions;
+
     xml = xmlstream.str();
 }
 
@@ -368,7 +371,7 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
 SyncSource *SyncSource::createTestingSource(const string &name, const string &type, bool error,
                                             const char *prefix)
 {
-    boost::shared_ptr<SyncConfig> context(new SyncConfig("source-config@client-test"));
+    boost::shared_ptr<SyncConfig> context(new SyncConfig("target-config@client-test"));
     SyncSourceNodes nodes = context->getSyncSourceNodes(name);
     SyncSourceParams params(name, nodes, context);
     PersistentSyncSourceConfig sourceconfig(name, nodes);
@@ -915,8 +918,51 @@ void SyncSourceRevisions::restoreData(const SyncSource::Operations::ConstBackupI
     }
 }
 
-void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode)
+void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mode)
 {
+    if (mode == CHANGES_NONE) {
+        // shortcut because nothing changed: just copy our known item list
+        ConfigProps props;
+        trackingNode.readProperties(props);
+
+        RevisionMap_t revisions;
+        BOOST_FOREACH(const StringPair &mapping, props) {
+            const string &uid = mapping.first;
+            const string &revision = mapping.second;
+            addItem(uid);
+            revisions[uid] = revision;
+        }
+        setAllItems(revisions);
+        return;
+    }
+
+    if (!m_revisionsSet &&
+        mode == CHANGES_FULL) {
+        ConfigProps props;
+        trackingNode.readProperties(props);
+        if (!props.empty()) {
+            // We were not asked to throw away all old information and
+            // there is some that may be worth salvaging, so let's give
+            // our derived class a chance to update it instead of having
+            // to reread everything.
+            //
+            // The exact number of items at which the update method is
+            // more efficient depends on the derived class; here we assume
+            // that even a single item makes it worthwhile. The derived
+            // class can always ignore the information if it has different
+            // tradeoffs.
+            //
+            // TODO (?): an API which only provides the information
+            // on demand...
+            m_revisions.clear();
+            m_revisions.insert(props.begin(), props.end());
+            updateAllItems(m_revisions);
+            // continue with m_revisions initialized below
+            m_revisionsSet = true;
+        }
+    }
+
+    // traditional, slow fallback follows...
     initRevisions();
 
     // Delay setProperty calls until after checking all uids.
@@ -933,6 +979,8 @@ void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode)
         // always remember the item, need full list
         addItem(uid);
 
+        // TODO: avoid unnecessary work in CHANGES_SLOW mode
+        // Not done yet to avoid introducing bugs.
         string serverRevision(trackingNode.readProperty(uid));
         if (!serverRevision.size()) {
             addItem(uid, NEW);
