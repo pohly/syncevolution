@@ -92,7 +92,9 @@ synccompare : ../test/Algorithm/Diff.pm ../test/synccompare.pl
 	perl -e '$$diff = shift; open(DIFF, "<$$diff"); ($$_) = split(/__END__/, join("", <DIFF>)); s/\*import.*//m; s/require +Exporter;//; s/^#.*\n//mg; s/ +#.*\n//mg; $$diff = $$_;' -e 'while(<>) {' @MODIFY_SYNCCOMPARE@ -e 's/use +Algorithm::Diff;/"# embedded version of Algorithm::Diff follows, copyright by the original authors\n" . $$diff . "# end of embedded Algorithm::Diff\n"/e; print;}' $+ >$@
 	chmod u+x $@
 
-CORE_SOURCES =
+# compile code shared between all executables once into a library
+noinst_LTLIBRARIES = libsyncevocommon.la
+libsyncevocommon_la_SOURCES =
 
 # The files which register backends have to be compiled into
 # "client-test" and "syncevolution" in order to pull in the
@@ -107,7 +109,7 @@ BACKEND_REGISTRIES = @BACKEND_REGISTRIES@
 if ENABLE_MODULES
 EXTRA_DIST += $(BACKEND_REGISTRIES)
 else
-CORE_SOURCES += $(BACKEND_REGISTRIES)
+libsyncevocommon_la_SOURCES += $(BACKEND_REGISTRIES)
 endif
 
 CORE_CXXFLAGS = $(SYNTHESIS_CFLAGS)
@@ -122,8 +124,7 @@ libstdc++.a :
 syncevolution_SOURCES = \
 	syncevolution.cpp \
 	CmdlineSyncClient.h \
-	CmdlineSyncClient.cpp \
-	$(CORE_SOURCES)
+	CmdlineSyncClient.cpp
 if ENABLE_UNIT_TESTS
 nodist_syncevolution_SOURCES = ../test/test.cpp
 endif
@@ -131,13 +132,13 @@ endif
 # SYNCEVOLUTION_LDADD will be replaced with libsyncebook.la/libsyncecal.la/libsyncsqlite.la
 # if linking statically against them, empty otherwise;
 # either way this does not lead to a dependency on those libs - done explicitly
-syncevolution_LDADD = $(CORE_LDADD) $(KEYRING_LIBS) $(KDE_KWALLET_LIBS)
+syncevolution_LDADD = libsyncevocommon.la $(CORE_LDADD) $(KEYRING_LIBS) $(KDE_KWALLET_LIBS)
 if COND_DBUS
 syncevolution_LDADD += gdbus/libgdbussyncevo.la
 endif
 syncevolution_LDFLAGS = $(CORE_LD_FLAGS) $(DBUS_LIBS)
 syncevolution_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(KEYRING_CFLAGS) -I$(srcdir)/gdbus $(DBUS_CFLAGS) $(KDE_KWALLET_CFLAGS)
-syncevolution_DEPENDENCIES = $(EXTRA_LTLIBRARIES) $(CORE_DEP) # $(SYNTHESIS_DEP)
+syncevolution_DEPENDENCIES = $(EXTRA_LTLIBRARIES) $(CORE_DEP) libsyncevocommon.la # $(SYNTHESIS_DEP)
 
 # rule which is only relevant when compiling Synthesis in subdirectory
 #$(SYNTHESIS_LIB) : $(SYNTHESIS_SUBDIR)/all
@@ -194,17 +195,16 @@ syncevo_dbus_server_SOURCES = \
 	NotificationManagerBase.h \
 	NotificationManagerFactory.h \
 	NotificationManagerFactory.cpp \
-	syncevo-dbus-server.cpp \
-	$(CORE_SOURCES)
+	syncevo-dbus-server.cpp
 if ENABLE_UNIT_TESTS
 nodist_syncevo_dbus_server_SOURCES = ../test/test.cpp
 endif
 
-syncevo_dbus_server_LDADD = gdbus/libgdbussyncevo.la $(CORE_LDADD) $(KEYRING_LIBS) $(LIBNOTIFY_LIBS) $(MLITE_LIBS) $(KDE_KWALLET_LIBS) $(DBUS_LIBS)
+syncevo_dbus_server_LDADD = gdbus/libgdbussyncevo.la libsyncevocommon.la $(CORE_LDADD) $(KEYRING_LIBS) $(LIBNOTIFY_LIBS) $(MLITE_LIBS) $(KDE_KWALLET_LIBS) $(DBUS_LIBS)
 syncevo_dbus_server_CPPFLAGS = -DHAVE_CONFIG_H -I$(srcdir)/gdbus $(AM_CPPFLAGS) -DSYNCEVOLUTION_LOCALEDIR=\"${SYNCEVOLUTION_LOCALEDIR}\"
 syncevo_dbus_server_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(GLIB_CFLAGS) $(DBUS_CFLAGS) $(LIBSOUP_CFLAGS) $(KEYRING_CFLAGS) $(LIBNOTIFY_CFLAGS) $(MLITE_CFLAGS) $(KDE_KWALLET_CFLAGS)
 syncevo_dbus_server_LDFLAGS = $(CORE_LD_FLAGS) $(LIBSOUP_LIBS)
-syncevo_dbus_server_DEPENDENCIES = gdbus/libgdbussyncevo.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(SYNTHESIS_DEP)
+syncevo_dbus_server_DEPENDENCIES = gdbus/libgdbussyncevo.la libsyncevocommon.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(SYNTHESIS_DEP)
 endif
 
 # With --disable-shared autotools links against libfunambol.a which does not
@@ -216,8 +216,7 @@ client_test_SOURCES = \
 	CmdlineSyncClient.cpp \
 	../test/ClientTest.cpp \
 	../test/ClientTest.h \
-	../test/client-test-main.cpp \
-	$(CORE_SOURCES)
+	../test/client-test-main.cpp
 nodist_client_test_SOURCES = ../test/test.cpp
 
 if ENABLE_BUTEO_TESTS
@@ -256,7 +255,7 @@ CLIENT_LIB_TEST_FILES += $(TEST_FILES_GENERATED)
 client_test_CPPFLAGS = -DHAVE_CONFIG_H -DENABLE_INTEGRATION_TESTS -DENABLE_UNIT_TESTS $(AM_CPPFLAGS) $(BUTEOSYNCPROFILE_CFLAGS) $(BUTEOSYNCCOMMON_CFLAGS) $(QT_CPPFLAGS)
 client_test_CXXFLAGS = `cppunit-config --cflags` $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(KEYRING_CFLAGS) $(BUTEOSYNCPROFILE_CFLAGS) $(BUTEOSYNCCOMMON_CFLAGS) $(filter-out -O2 -g -W -Wall, $(QT_CXXFLAGS))
 client_test_LDFLAGS = `cppunit-config --libs` `nm syncevo/.libs/libsyncevolution.a | grep funambolAutoRegisterRegistry | sed -e 's/.* /-Wl,-u/'` $(CORE_LD_FLAGS) $(KEYRING_LIBS) $(BUTEOSYNCPROFILE_LIBS) $(BUTEOSYNCCOMMON_LIBS) $(QT_LDFLAGS)
-client_test_LDADD = $(CORE_LDADD) $(SYNTHESIS_ENGINE) $(BUTEOSYNCPROFILE_LIBS) $(BUTEOSYNCCOMMON_LIBS) $(QT_LIBS)
+client_test_LDADD = libsyncevocommon.la $(CORE_LDADD) $(SYNTHESIS_ENGINE) $(BUTEOSYNCPROFILE_LIBS) $(BUTEOSYNCCOMMON_LIBS) $(QT_LIBS)
 # These dependencies are intentionally a bit too broad:
 # they ensure that all files are in place to *run* client-test.
 
@@ -321,7 +320,7 @@ $(filter-out %.tem, $(filter testcases/%, $(subst $(srcdir)/../test/,,$(CLIENT_L
 # The binary does not really depend on the test cases, only running it does.
 # Listing the dependencies here is done to ensure that one doesn't accidentally
 # runs the binary with out-dated auxiliary files.
-client_test_DEPENDENCIES = $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(CLIENT_LIB_TEST_FILES) testcase2patch synccompare templates
+client_test_DEPENDENCIES = libsyncevocommon.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(CLIENT_LIB_TEST_FILES) testcase2patch synccompare templates
 
 CLEANFILES += client-test-buteo.moc.cpp
 
