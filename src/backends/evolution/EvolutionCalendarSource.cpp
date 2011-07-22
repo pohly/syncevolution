@@ -96,7 +96,7 @@ EvolutionCalendarSource::EvolutionCalendarSource(ECalSourceType type,
         m_newSystem = e_cal_new_system_tasks;
         break;
      case E_CAL_SOURCE_TYPE_JOURNAL:
-        SyncSourceLogging::init(InitList<std::string>("SUBJECT"),
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY"),
                                 ", ",
                                 m_operations);
         m_typeName = "memo list";

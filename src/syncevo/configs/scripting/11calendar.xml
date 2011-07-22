@@ -10,7 +10,7 @@
       // eliminate description that is the same as summary
       if (DESCRIPTION==SUMMARY) DESCRIPTION=EMPTY;
       // calendar or todo
-      if (ISEVENT) {
+      if (CALTYPE==1) {
         // VEVENT
         // - handle duration cases
         if (ISDURATION(DURATION)) {
@@ -99,7 +99,7 @@
         if (ORGANIZER_CN==EMPTY)
           ORGANIZER_CN=CN;
       }
-      else {
+      else if (CALTYPE==0){
         // VTODO
         // - make sure we have at least a summary
         if (SUMMARY==EMPTY) SUMMARY=DESCRIPTION; // use description if we don't have a summary
@@ -111,6 +111,19 @@
         if (ITEMDATATYPE()=="vCalendar10") {
           $VCALENDAR_10TO20_PRIORITY_CONVERSION;
         }
+      }
+      else if (CALTYPE==2){
+          //VJOURNAL
+          if (SUMMARY==EMPTY && DESCRIPTION != EMPTY) {
+              INTEGER pos ;
+              pos = FIND(DESCRIPTION, "\n");
+              if (pos == UNASSIGNED) SUMMARY = DESCRIPTION; // use description if we don't have a summary
+              else {
+                  if (pos>32) pos = 32; // at max of 32 charechters as in outgoing script
+                  SUMMARY=SUBSTR(DESCRIPTION, 0, pos) ; // use first line of description 
+              }
+          }
+          if (SUMMARY==EMPTY) SUMMARY="unnamed"; // set dummy summary if we still don't have one
       }
       // a workaround for funambol: adding 'action' for 'alarm'
       // if item data type is vCalendar1.0, also add 'action' for 'alarm'.
@@ -127,7 +140,7 @@
       // make sure we have all trailing and leading spaces eliminated
       DESCRIPTION=NORMALIZED(DESCRIPTION);
       SUMMARY=NORMALIZED(SUMMARY);
-      if (ISEVENT) {
+      if (CALTYPE==1) {
         // VEVENT
         // - combine attendee email address and common name into single string for vCalendar 1.0
         if (ITEMDATATYPE()=="vCalendar10") {
@@ -139,7 +152,7 @@
           ORGANIZER = MAKEEMAILSPEC(ORGANIZER_CN, ORGANIZER);
         }
       }
-      else {
+      else if(CALTYPE==0){
         // VTODO 
         // interal representation is iCalendar20
         if (ITEMDATATYPE()=="vCalendar10") {
@@ -177,7 +190,7 @@
         if (ALARM_REL==2)
           ts = DTEND; // relative to end
         else {
-          if (ISEVENT)
+          if (CALTYPE==1)
             ts = DTSTART; // relative to start for events
           else
             ts = DUE; // relative to due for todos

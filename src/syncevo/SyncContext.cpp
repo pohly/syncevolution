@@ -2498,11 +2498,11 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             string name = vSource->getName();
             datastores << "    <superdatastore name= '" << name << "'> \n";
             datastores << "      <contains datastore = '" << name << m_findSourceSeparator << mappedSources[0] <<"'>\n"
-                << "        <dispatchfilter>F.ISEVENT:=1</dispatchfilter>\n"
+                << "        <dispatchfilter>F.CALTYPE:=1</dispatchfilter>\n"
                 << "        <guidprefix>e</guidprefix>\n"
                 << "      </contains>\n"
                 << "\n      <contains datastore = '" << name << m_findSourceSeparator << mappedSources[1] <<"'>\n"
-                << "        <dispatchfilter>F.ISEVENT:=0</dispatchfilter>\n"
+                << "        <dispatchfilter>F.CALTYPE:=0</dispatchfilter>\n"
                 << "        <guidprefix>t</guidprefix>\n"
                 <<"      </contains>\n" ;
 

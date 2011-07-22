@@ -52,13 +52,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
 
     isMe = sourceType.m_backend == "Evolution Memos";
     if (isMe || sourceType.m_backend == "memo") {
-        if (sourceType.m_format == "" || sourceType.m_format == "text/plain") {
-            return
-#ifdef ENABLE_ECAL
-                enabled ? new EvolutionMemoSource(params) :
-#endif
-                isMe ? RegisterSyncSource::InactiveSource : NULL;
-        } else if (sourceType.m_format == "text/calendar") {
+        if (sourceType.m_format == "" ||
+            sourceType.m_format == "text/calendar" ||
+            sourceType.m_format == "syncevolution/journal") {
             return
 #ifdef ENABLE_ECAL
                 enabled ? new EvolutionCalendarSource(E_CAL_SOURCE_TYPE_JOURNAL, params) :

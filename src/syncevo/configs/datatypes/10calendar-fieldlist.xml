@@ -1,7 +1,7 @@
     <!-- common field list for events and todos (both represented by vCalendar/iCalendar) -->
     <fieldlist name="calendar">
       <field name="SYNCLVL" type="integer" compare="never"/>
-      <field name="ISEVENT" type="integer" compare="always"/>
+      <field name="CALTYPE" type="integer" compare="always"/>
 
       <field name="DMODIFIED" type="timestamp" compare="never" age="yes"/>
       <field name="DCREATED" type="timestamp" compare="never"/>

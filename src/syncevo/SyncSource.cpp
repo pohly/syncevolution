@@ -570,6 +570,13 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
     } else if (type == "text/plain") {
         info.m_fieldlist = "Note";
         info.m_profile = "\"Note\", 2";
+    } else if (type == "syncevolution/journal") {
+        info.m_native = "iCalendar20";
+        info.m_fieldlist = "calendar";
+        info.m_profile = "\"vCalendar\", 2";
+        info.m_datatypes = 
+            "        <use datatype='journal-plain' mode='rw'/>\n" 
+            "        <use datatype='iCalendar20' mode='rw' preferred='yes'/>\n";
     } else {
         throwError(string("default MIME type not supported: ") + type);
     }
@@ -620,7 +627,12 @@ std::string SyncSourceBase::getDataTypeSupport(const std::string &type,
         datatypes =
             "        <use datatype='note10' mode='rw' preferred='yes'/>\n"
             "        <use datatype='note11' mode='rw'/>\n";
-    } else if (type.empty()) {
+    } else if (type == "syncevolution/journal") {
+        datatypes = 
+            "        <use datatype='journal-plain' mode='rw'/>\n" 
+            "        <use datatype='iCalendar20' mode='rw' preferred='yes' />\n";
+    }
+    else if (type.empty()) {
         throwError("no MIME type configured");
     } else {
         throwError(string("configured MIME type not supported: ") + type);

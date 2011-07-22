@@ -1,5 +1,5 @@
     <textprofile name="Note" fieldlist="Note">
-      <linemap field="SUBJECT">
+      <linemap field="SUMMARY">
         <numlines>1</numlines>
         <inheader>false</inheader>
         <allowempty>true</allowempty>
@@ -11,4 +11,16 @@
         <allowempty>true</allowempty>
       </linemap>
     </textprofile>
-
+    <textprofile name="journal" fieldlist="calendar">
+        <linemap field="SUMMARY">
+            <numlines>1</numlines>
+            <inheader>false</inheader>
+            <allowempty>true</allowempty>
+            <filterkeyword>SUBJECT</filterkeyword>
+        </linemap>
+        <linemap field="DESCRIPTION">
+            <numlines>0</numlines>
+            <inheader>false</inheader>
+            <allowempty>true</allowempty>
+        </linemap>
+    </textprofile>

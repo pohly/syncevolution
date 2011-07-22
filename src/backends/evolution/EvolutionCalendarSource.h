@@ -62,8 +62,12 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
     virtual void open();
     virtual bool isEmpty();
     virtual void close(); 
-    virtual std::string getMimeType() const { return "text/calendar"; }
-    virtual std::string getMimeVersion() const { return "2.0"; }
+    virtual std::string getMimeType() const { 
+        return m_type == E_CAL_SOURCE_TYPE_JOURNAL ? "syncevolution/journal" : "text/calendar"; 
+    }
+    virtual std::string getMimeVersion() const { 
+        return m_type == E_CAL_SOURCE_TYPE_JOURNAL ? "1.0" : "2.0"; 
+    }
 
   protected:
     //

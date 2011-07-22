@@ -10,3 +10,12 @@
       <versionstring>1.1</versionstring>
     </datatype>
 
+    <datatype name="journal-plain" basetype="text">
+      <use profile="journal"/>
+      <typestring>text/plain</typestring>
+      <versionstring>1.0</versionstring>
+      <incomingscript><![CDATA[
+        CALTYPE=2; //inform to script that, treat this as JOURNAL
+        $VCALENDAR_INCOMING_SCRIPT
+      ]]></incomingscript>
+    </datatype>
