@@ -3358,6 +3358,7 @@ SyncMLStatus SyncContext::doSync()
         // (not needed for OBEX)
     }
 
+#ifndef ENABLE_MAEMO
     // Choosing between comparing UID/RECURRENCE-ID vs. other
     // iCalendar 2.0 properties is a hack: in local sync mode, the
     // iCalendar 2.0 semantic is always picked.
@@ -3368,6 +3369,7 @@ SyncMLStatus SyncContext::doSync()
                                "VCALENDAR_COMPARE_UID",
                                true);
     }
+#endif
 
     // Sync main loop: runs until SessionStep() signals end or error.
     // Exceptions are caught and lead to a call of SessionStep() with
