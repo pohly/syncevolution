@@ -165,6 +165,29 @@ bool BluezManager::BluezDevice::hasPnpInfoService(const std::vector<std::string>
     return false;
 }
 
+/*
+ * Parse the XML-formatted service record.
+ */
+bool extractValuefromServiceRecord(const std::string &serviceRecord,
+                                   const std::string &attributeId,
+                                   std::string &attributeValue)
+{
+    // Find atribute
+    size_t pos  = serviceRecord.find(attributeId);
+
+    // Only proceed if the attribute id was found.
+    if(pos != std::string::npos)
+    {
+        pos = serviceRecord.find("value", pos + attributeId.size());
+        pos = serviceRecord.find("\"", pos) + 1;
+        int valLen = serviceRecord.find("\"", pos) - pos;
+        attributeValue = serviceRecord.substr(pos, valLen);
+        return true;
+    }
+
+    return false;
+}
+
 void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDict,
                                                    const string &error)
 {
@@ -172,10 +195,18 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
 
     if(iter != serviceDict.end())
     {
-        std::string serviceStr = (*iter).second;
-        // FIXME: Parse xml string and extract IDs.
-        SE_LOG_INFO(NULL, NULL, "%s[%d]: Service string: %s",
-                    __FILE__, __LINE__, serviceStr.c_str());
+        std::string serviceRecord = (*iter).second;
+
+        std::string manId;
+        std::string devId;
+        if(!serviceRecord.empty())
+        {
+            extractValuefromServiceRecord(serviceRecord, "0x0201", manId);
+            extractValuefromServiceRecord(serviceRecord, "0x0202", devId);
+
+            SE_LOG_INFO(NULL, NULL, "%s[%d]: man id: %s, dev id: %s",
+                        __FILE__, __LINE__, manId.c_str(), devId.c_str());
+        }
     }
 }
 
