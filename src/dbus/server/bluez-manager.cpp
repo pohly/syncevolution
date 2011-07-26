@@ -121,6 +121,7 @@ BluezManager::BluezDevice::BluezDevice (BluezAdapter &adapter, const string &pat
     m_propertyChanged.activate(boost::bind(&BluezDevice::propertyChanged, this, _1, _2));
 }
 
+
 void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> &uuids)
 {
     static const char * SYNCML_CLIENT_UUID = "00000002-0000-1000-8000-0002ee000002";
@@ -131,7 +132,18 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
         if(boost::iequals(uuid, SYNCML_CLIENT_UUID)) {
             hasSyncService = true;
             if(!m_mac.empty()) {
-                server.addDevice(SyncConfig::DeviceDescription(m_mac, m_name, SyncConfig::MATCH_FOR_SERVER_MODE));
+                SyncConfig::DeviceDescription deviceDesc(m_mac, m_name,
+                                                         SyncConfig::MATCH_FOR_SERVER_MODE);
+                server.addDevice(deviceDesc);
+                if(hasPnpInfoService(uuids)) {
+                    // TODO: Get the actual manufacturer and device ids.
+                    DBusClientCall1<ServiceDict> discoverServices(*this,
+                                                                  "DiscoverServices");
+                    static const std::string PNP_INFO_UUID("0x1200");
+                    discoverServices(PNP_INFO_UUID,
+                                     boost::bind(&BluezDevice::discoverServicesCb,
+                                                 this, _1, _2));
+                }
             }
             break;
         }
@@ -139,6 +151,31 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
     // if sync service is not available now, possible to remove device
     if(!hasSyncService && !m_mac.empty()) {
         server.removeDevice(m_mac);
+    }
+}
+
+bool BluezManager::BluezDevice::hasPnpInfoService(const std::vector<std::string> &uuids)
+{
+    static const char * DEVICE_ID_UUID = "00001200-0000-1000-8000-00805f9b34fb";
+    BOOST_FOREACH(const string &uuid, uuids) {
+        //if the device has teh PnP Infomation service, add it to the Deviec
+        if(boost::iequals(uuid, DEVICE_ID_UUID))
+            return true;
+    }
+    return false;
+}
+
+void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDict,
+                                                   const string &error)
+{
+    ServiceDict::const_iterator iter = serviceDict.begin();
+
+    if(iter != serviceDict.end())
+    {
+        std::string serviceStr = (*iter).second;
+        // FIXME: Parse xml string and extract IDs.
+        SE_LOG_INFO(NULL, NULL, "%s[%d]: Service string: %s",
+                    __FILE__, __LINE__, serviceStr.c_str());
     }
 }
 

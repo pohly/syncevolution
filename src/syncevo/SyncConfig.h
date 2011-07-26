@@ -1079,6 +1079,18 @@ class SyncConfig {
 
     typedef std::list<boost::shared_ptr <TemplateDescription> > TemplateList;
 
+    /** This information is available if the device supports the
+     * Device Id Profile. */
+    struct PnpInformation
+    {
+        std::string m_manufacturerId;
+        std::string m_deviceId;
+        PnpInformation(const std::string &manufactureId,
+                       const std::string &deviceId)
+            :m_manufacturerId(manufactureId), m_deviceId(deviceId)
+        {}
+    };
+
     struct DeviceDescription {
         /** the id of the device */
         std::string m_deviceId;
@@ -1086,6 +1098,9 @@ class SyncConfig {
         std::string m_fingerprint;
         /** match mode used for matching templates */
         MatchMode m_matchMode;
+        /** the PnP nformation for the device */
+        boost::shared_ptr<PnpInformation> m_pnpInformation;
+
         DeviceDescription(const std::string &deviceId,
                           const std::string &fingerprint,
                           MatchMode mode)
