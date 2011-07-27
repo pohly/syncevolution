@@ -20,6 +20,8 @@
 #include "bluez-manager.h"
 #include "server.h"
 
+#include <boost/assign/list_of.hpp>
+
 using namespace GDBusCXX;
 
 SE_BEGIN_CXX
@@ -191,6 +193,11 @@ bool extractValuefromServiceRecord(const std::string &serviceRecord,
 void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDict,
                                                    const string &error)
 {
+    static std::map<std::string, std::string> VENDORS =
+        boost::assign::map_list_of VENDORS_MAP;
+    static std::map<std::string, std::string> PRODUCTS =
+        boost::assign::map_list_of PRODUCTS_MAP;
+
     ServiceDict::const_iterator iter = serviceDict.begin();
 
     if(iter != serviceDict.end())
@@ -203,9 +210,8 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
         {
             extractValuefromServiceRecord(serviceRecord, "0x0201", manId);
             extractValuefromServiceRecord(serviceRecord, "0x0202", devId);
-
-            SE_LOG_INFO(NULL, NULL, "%s[%d]: man id: %s, dev id: %s",
-                        __FILE__, __LINE__, manId.c_str(), devId.c_str());
+            SE_LOG_INFO(NULL, NULL, "%s[%d]: Vendor: %s, Device: %s",
+                        __FILE__, __LINE__, VENDORS[manId].c_str(), PRODUCTS[manId + "_" + devId].c_str());
         }
     }
 }
