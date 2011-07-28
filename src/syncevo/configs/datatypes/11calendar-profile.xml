@@ -626,20 +626,6 @@
             </value>
           </property>
 
-          <!-- AALARM and DALARM both use the same fields -->
-          <property name="AALARM" onlyformode="old" values="4" suppressempty="yes">
-            <value index="0" field="ALARM_TIME" conversion="emptyonly"/>
-            <value index="1" field="ALARM_SNOOZE" conversion="emptyonly"/>
-            <value index="2" field="ALARM_REPEAT" conversion="emptyonly"/>
-            <value index="3" field="ALARM_MSG" conversion="emptyonly"/>
-          </property>
-          <property name="DALARM" onlyformode="old" values="4" suppressempty="yes">
-            <value index="0" field="ALARM_TIME" conversion="emptyonly"/>
-            <value index="1" field="ALARM_SNOOZE" conversion="emptyonly"/>
-            <value index="2" field="ALARM_REPEAT" conversion="emptyonly"/>
-            <value index="3" field="ALARM_MSG" conversion="emptyonly"/>
-          </property>
-
           <property onlyformode="old" name="RELATED-TO" suppressempty="yes">
             <value field="PARENT_UID"/>
           </property>
@@ -653,6 +639,27 @@
               </value>
               <position hasnot="other" shows="PARENT" field="PARENT_UID"/>
             </parameter>
+          </property>
+
+          <property name="ORGANIZER" suppressempty="yes" onlyformode="standard">
+            <value field="ORGANIZER" conversion="mailto"/>
+            <parameter name="CN" default="no" show="yes">
+              <value field="ORGANIZER_CN"/>
+            </parameter>
+          </property>
+          
+          <property name="RECURRENCE-ID" suppressempty="yes" onlyformode="standard" delayedparsing="1">
+            <value field="ORIGSTART" conversion="autodate"/>
+            <parameter name="TZID" default="no" show="yes">
+              <value field="ORIGSTART" conversion="TZID"/>
+            </parameter>
+            <parameter name="VALUE" default="no" show="yes">
+              <value field="ORIGSTART" conversion="VALUETYPE"/>
+            </parameter>
+          </property>
+
+          <property name="RRULE" suppressempty="yes" delayedparsing="2">
+            <value field="RR_FREQ" conversion="rrule"/>
           </property>
 
         </subprofile>
