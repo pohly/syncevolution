@@ -347,8 +347,27 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
         {
             extractValuefromServiceRecord(serviceRecord, "0x0201", manId);
             extractValuefromServiceRecord(serviceRecord, "0x0202", devId);
-            SE_LOG_INFO(NULL, NULL, "%s[%d]: Vendor: %s, Device: %s",
-                        __FILE__, __LINE__, VENDORS[manId].c_str(), PRODUCTS[manId + "_" + devId].c_str());
+
+            Server &server = m_adapter.m_manager.m_server;
+            SyncConfig::DeviceDescription devDesc;
+            if (server.getDevice(m_mac, devDesc))
+            {
+                devDesc.m_pnpInformation =
+                    boost::shared_ptr<SyncConfig::PnpInformation>(
+                        new SyncConfig::PnpInformation(manId, devId));
+                server.updateDevice(m_mac, devDesc);
+            }
+
+            // FIXME: Remove this. Just for testing.
+            server.getDevice(m_mac, devDesc);
+            if(devDesc.m_pnpInformation)
+                SE_LOG_INFO(NULL, NULL, "%s[%d]: Vendor: %s, Device: %s",
+                            __FILE__, __LINE__,
+                            VENDORS [devDesc.m_pnpInformation->m_manufacturerId].c_str(),
+                            PRODUCTS[devDesc.m_pnpInformation->m_manufacturerId + "_" +
+                                     devDesc.m_pnpInformation->m_deviceId].c_str());
+            else
+                SE_LOG_INFO(NULL, NULL, "%s[%d]: %s", __FILE__, __LINE__, "Oops!");
         }
     }
 }
