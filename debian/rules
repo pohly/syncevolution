@@ -48,7 +48,10 @@ CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-ssl-certificate-chec
 configure: gen-autotools.sh configure-pre.in configure-post.in
 	./autogen-maemo.sh
 
-config.status: configure
+libsynthesis/configure: libsynthesis/configure.in
+	cd libsynthesis && ./autogen-maemo.sh
+
+config.status: configure libsynthesis/configure
 	dh_testdir
 	# --enable-shared added to build SyncEvolution backends as modules,
 	# which is more flexible but not the default because it requires a
