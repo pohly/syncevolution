@@ -140,11 +140,6 @@ private:
          */
         void checkSyncService(const std::vector<std::string> &uuids);
 
-        /**
-         * check whether the current device has the PnP Information service.
-         */
-        bool hasPnpInfoService(const std::vector<std::string> &uuids);
-
      private:
         /** callback of 'GetProperties' method. The properties of the device is gotten */
         void getPropertiesCb(const PropDict &props, const std::string &error);

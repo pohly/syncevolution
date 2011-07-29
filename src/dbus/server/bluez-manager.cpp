@@ -20,6 +20,8 @@
 #include "bluez-manager.h"
 #include "server.h"
 
+#include <algorithm>
+
 #include <boost/assign/list_of.hpp>
 
 using namespace GDBusCXX;
@@ -255,6 +257,20 @@ BluezManager::BluezDevice::BluezDevice (BluezAdapter &adapter, const string &pat
     m_propertyChanged.activate(boost::bind(&BluezDevice::propertyChanged, this, _1, _2));
 }
 
+/**
+ * check whether the current device has the PnP Information attribute.
+ */
+static bool hasPnpInfoService(const std::vector<std::string> &uuids)
+{
+    // The UUID that indicates the PnPInformation attribute is available.
+    static const char * PNPINFOMATION_ATTRIBUTE_UUID = "00001200-0000-1000-8000-00805f9b34fb";
+
+    // Note: GetProperties appears to return this list sorted which binary_search requires.
+    if(std::binary_search(uuids.begin(), uuids.end(), PNPINFOMATION_ATTRIBUTE_UUID))
+        return true;
+
+    return false;
+}
 
 void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> &uuids)
 {
@@ -286,17 +302,6 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
     if(!hasSyncService && !m_mac.empty()) {
         server.removeDevice(m_mac);
     }
-}
-
-bool BluezManager::BluezDevice::hasPnpInfoService(const std::vector<std::string> &uuids)
-{
-    static const char * DEVICE_ID_UUID = "00001200-0000-1000-8000-00805f9b34fb";
-    BOOST_FOREACH(const string &uuid, uuids) {
-        //if the device has teh PnP Infomation service, add it to the Deviec
-        if(boost::iequals(uuid, DEVICE_ID_UUID))
-            return true;
-    }
-    return false;
 }
 
 /*
