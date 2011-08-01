@@ -286,7 +286,7 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
                                                          SyncConfig::MATCH_FOR_SERVER_MODE);
                 server.addDevice(deviceDesc);
                 if(hasPnpInfoService(uuids)) {
-                    // TODO: Get the actual manufacturer and device ids.
+                    // TODO: Get the actual vendor and product ids.
                     DBusClientCall1<ServiceDict> discoverServices(*this,
                                                                   "DiscoverServices");
                     static const std::string PNP_INFO_UUID("0x1200");
@@ -377,9 +377,9 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
             if(devDesc.m_pnpInformation)
                 SE_LOG_INFO(NULL, NULL, "%s[%d]: Vendor: %s, Device: %s",
                             __FILE__, __LINE__,
-                            VENDORS [devDesc.m_pnpInformation->m_manufacturerId].c_str(),
-                            PRODUCTS[devDesc.m_pnpInformation->m_manufacturerId + "_" +
-                                     devDesc.m_pnpInformation->m_deviceId].c_str());
+                            VENDORS [devDesc.m_pnpInformation->m_vendorId].c_str(),
+                            PRODUCTS[devDesc.m_pnpInformation->m_vendorId + "_" +
+                                     devDesc.m_pnpInformation->m_productId].c_str());
             else
                 SE_LOG_INFO(NULL, NULL, "%s[%d]: %s", __FILE__, __LINE__, "Oops!");
         }

@@ -1083,11 +1083,11 @@ class SyncConfig {
      * Device Id Profile. */
     struct PnpInformation
     {
-        std::string m_manufacturerId;
-        std::string m_deviceId;
+        std::string m_vendorId;
+        std::string m_productId;
         PnpInformation(const std::string &manufactureId,
-                       const std::string &deviceId)
-            :m_manufacturerId(manufactureId), m_deviceId(deviceId)
+                       const std::string &productId)
+            :m_vendorId(manufactureId), m_productId(productId)
         {}
     };
 
