@@ -341,12 +341,26 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
     {
         std::string serviceRecord = (*iter).second;
 
-        std::string manId;
-        std::string devId;
         if(!serviceRecord.empty())
         {
-            extractValuefromServiceRecord(serviceRecord, "0x0201", manId);
-            extractValuefromServiceRecord(serviceRecord, "0x0202", devId);
+            static const std::string SOURCE_ATTRIBUTE_ID("0x0205");
+            std::string sourceId;
+            extractValuefromServiceRecord(serviceRecord, SOURCE_ATTRIBUTE_ID, sourceId);
+
+            // A sourceId of 0x001 indicates that the vendor ID was
+            // assigned by the Bluetooth SIG.
+            // TODO: A sourceId of 0x002, means the vendor id was assigned by
+            // the USB Implementor's forum. We do nothing in this case but
+            // should do that look up as well.
+            if(!boost::iequals(sourceId, "0x0001"))
+                return;
+
+            std::string vendorId;
+            std::string productId;
+            static const std::string VENDOR_ATTRIBUTE_ID ("0x0201");
+            static const std::string PRODUCT_ATTRIBUTE_ID("0x0202");
+            extractValuefromServiceRecord(serviceRecord, VENDOR_ATTRIBUTE_ID,  vendorId);
+            extractValuefromServiceRecord(serviceRecord, PRODUCT_ATTRIBUTE_ID, productId);
 
             Server &server = m_adapter.m_manager.m_server;
             SyncConfig::DeviceDescription devDesc;
@@ -354,7 +368,7 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
             {
                 devDesc.m_pnpInformation =
                     boost::shared_ptr<SyncConfig::PnpInformation>(
-                        new SyncConfig::PnpInformation(manId, devId));
+                        new SyncConfig::PnpInformation(vendorId,  productId));
                 server.updateDevice(m_mac, devDesc);
             }
 
