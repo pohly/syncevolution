@@ -156,7 +156,10 @@ using namespace GDBusCXX;
  * product IDs from vendors so we add them as we find them.
  */
 #define PRODUCTS_MAP                            \
+    ("0x0000_0xc112", "Sony Ericsson W995")     \
+    ("0x0001_0x0084", "Nokia N85")              \
     ("0x0001_0x00e7", "Nokia 5230")
+
 
 SE_BEGIN_CXX
 
