@@ -1096,6 +1096,16 @@ class SyncConfig {
         std::string m_deviceId;
         /** the finger print of the device used for matching templates */
         std::string m_fingerprint;
+        /**
+         * For bluetooth devices, we use PnpInformation's immutable
+         * product id which provides a more reliable fingerprint than
+         * the user-modifiable device string.
+         */
+        std::string getFingerprint() {
+            return m_pnpInformation ?
+                m_pnpInformation->m_productId :
+                m_fingerprint;
+        }
         /** match mode used for matching templates */
         MatchMode m_matchMode;
         /** the PnP nformation for the device */

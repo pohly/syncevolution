@@ -692,7 +692,10 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                 continue;
             }
             BOOST_FOREACH (const DeviceList::value_type &entry, peers){
-                int rank = templateConf.metaMatch (entry.m_fingerprint, entry.m_matchMode);
+                std:string fingerprint(entry.m_pnpInformation ?
+                                       entry.m_pnpInformation->m_productId :
+                                       entry.m_fingerprint);
+                int rank = templateConf.metaMatch (fingerprint, entry.m_matchMode);
                 if (fuzzyMatch){
                     if (rank > TemplateConfig::NO_MATCH) {
                         result.push_back (boost::shared_ptr<TemplateDescription>(
@@ -700,7 +703,7 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                                                             templateConf.getDescription(),
                                                             rank,
                                                             entry.m_deviceId,
-                                                            entry.m_fingerprint,
+                                                            fingerprint,
                                                             sDir,
                                                             templateConf.getFingerprint(),
                                                             templateConf.getTemplateName()
@@ -713,8 +716,8 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                                                         templateConf.getDescription(),
                                                         rank,
                                                         entry.m_deviceId,
-                                                        entry.m_fingerprint,
-                                                        sDir, 
+                                                        fingerprint,
+                                                        sDir,
                                                         templateConf.getFingerprint(),
                                                         templateConf.getTemplateName())
                                 ));
