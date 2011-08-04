@@ -53,6 +53,9 @@ monitor = ["dbus-monitor"]
 # primarily for XDG files, but also other temporary files
 xdg_root = "temp-test-dbus"
 configName = "dbus_unittest"
+# for bluetooth tests. replace with values from your test device.
+bt_device_mac = "D4:5D:42:73:E4:6C"
+bt_device_fingerprint = "Nokia 5230"
 
 def property(key, value):
     """Function decorator which sets an arbitrary property of a test.
@@ -280,7 +283,7 @@ class DBusUtil(Timeout):
 
         The D-Bus server must print at least one line of output
         before the test is allowed to start.
-        
+
         The commands are run with XDG_DATA_HOME, XDG_CONFIG_HOME,
         XDG_CACHE_HOME pointing towards local dirs
         test-dbus/[data|config|cache] which are removed before each
@@ -321,7 +324,7 @@ class DBusUtil(Timeout):
         pmonitor = subprocess.Popen(monitor,
                                     stdout=open(dbuslog, "w"),
                                     stderr=subprocess.STDOUT)
-        
+
         if debugger:
             print "\n%s: %s\n" % (self.id(), self.shortDescription())
             DBusUtil.pserver = subprocess.Popen([debugger] + server,
@@ -517,14 +520,14 @@ class DBusUtil(Timeout):
                                 'org.syncevolution.Session',
                                 self.server.bus_name,
                                 sessionpath,
-                                byte_arrays=True, 
+                                byte_arrays=True,
                                 utf8_strings=True)
         bus.add_signal_receiver(status,
                                 'StatusChanged',
                                 'org.syncevolution.Session',
                                 self.server.bus_name,
                                 sessionpath,
-                                byte_arrays=True, 
+                                byte_arrays=True,
                                 utf8_strings=True)
 
     def setUpConfigListeners(self):
@@ -540,7 +543,7 @@ class DBusUtil(Timeout):
                                 'ConfigChanged',
                                 'org.syncevolution.Server',
                                 self.server.bus_name,
-                                byte_arrays=True, 
+                                byte_arrays=True,
                                 utf8_strings=True)
 
     def setUpConnectionListeners(self, conpath):
@@ -567,14 +570,14 @@ class DBusUtil(Timeout):
                                 'org.syncevolution.Connection',
                                 self.server.bus_name,
                                 conpath,
-                                byte_arrays=True, 
+                                byte_arrays=True,
                                 utf8_strings=True)
         bus.add_signal_receiver(reply,
                                 'Reply',
                                 'org.syncevolution.Connection',
                                 self.server.bus_name,
                                 conpath,
-                                byte_arrays=True, 
+                                byte_arrays=True,
                                 utf8_strings=True)
 
     def setupFiles(self, snapshot):
@@ -611,7 +614,7 @@ class DBusUtil(Timeout):
         # check recorded events in DBusUtil.events, first filter them
         statuses = []
         progresses = []
-        # Dict is used to check status order.  
+        # Dict is used to check status order.
         statusPairs = {"": 0, "idle": 1, "running" : 2, "aborting" : 3, "done" : 4}
         for item in DBusUtil.events:
             if item[0] == "status":
@@ -632,7 +635,7 @@ class DBusUtil(Timeout):
                     self.failUnlessEqual(expectedError, error)
             else:
                 self.failUnlessEqual(error, 0)
-            # keep order: session status must be unchanged or the next status 
+            # keep order: session status must be unchanged or the next status
             seps = status.split(';')
             lastSeps = lastStatus.split(';')
             self.failUnless(statusPairs.has_key(seps[0]))
@@ -749,8 +752,8 @@ class TestDBusServerTerm(unittest.TestCase, DBusUtil):
         """TestDBusServerTerm.testNoTerm - D-Bus server must stay around during calls"""
 
         """The server should stay alive because we have dbus call within
-        the duration. The loop is to make sure the total time is longer 
-        than duration and the dbus server still stays alive for dbus calls.""" 
+        the duration. The loop is to make sure the total time is longer
+        than duration and the dbus server still stays alive for dbus calls."""
         for i in range(0, 4):
             time.sleep(4)
             try:
@@ -799,7 +802,7 @@ class TestDBusServerTerm(unittest.TestCase, DBusUtil):
     def testTermAttachedClients(self):
         """TestDBusServerTerm.testTermAttachedClients - D-Bus server must not terminate while clients are attached"""
 
-        """Also it tries to test the dbus server's behavior when a client 
+        """Also it tries to test the dbus server's behavior when a client
         attaches the server many times"""
         self.server.Attach()
         self.server.Attach()
@@ -1154,7 +1157,7 @@ class TestDBusSession(unittest.TestCase, DBusUtil):
         self.failUnlessEqual(self.session.GetFlags(), [])
         self.failUnlessEqual(self.session.GetConfigName(), "@default");
         time.sleep(60)
-        self.failUnlessEqual(self.session.GetFlags(), [])        
+        self.failUnlessEqual(self.session.GetFlags(), [])
 
     @timeout(70)
     def testExpireSession(self):
@@ -1212,7 +1215,7 @@ class TestDBusSession(unittest.TestCase, DBusUtil):
                                 'org.syncevolution.Session',
                                 self.server.bus_name,
                                 sessionpath,
-                                byte_arrays=True, 
+                                byte_arrays=True,
                                 utf8_strings=True)
 
         session = dbus.Interface(bus.get_object(self.server.bus_name,
@@ -1312,7 +1315,7 @@ class TestSessionAPIsEmptyName(unittest.TestCase, DBusUtil):
 class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
     """Tests that work for GetConfig/SetConfig/CheckSource/GetDatabases/GetReports in Session.
        This class is only working in a dummy config. Thus it can't do sync correctly. The purpose
-       is to test some cleanup cases and expected errors. Also, some unit tests for some APIs 
+       is to test some cleanup cases and expected errors. Also, some unit tests for some APIs
        depend on a clean configuration so they are included here. For those unit tests depending
        on sync, another class is used """
 
@@ -1321,7 +1324,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         # use 'dummy-test' as the server name
         self.setUpSession("dummy-test")
         # default config
-        self.config = { 
+        self.config = {
                          "" : { "syncURL" : "http://impossible-syncurl-just-for-testing-to-avoid-conflict",
                                 "username" : "unknown",
                                 # the password request tests depend on not having a real password here
@@ -1358,7 +1361,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
                                                 }
                        }
         # update config
-        self.updateConfig = { 
+        self.updateConfig = {
                                "" : { "username" : "doe"},
                                "source/addressbook" : { "sync" : "slow"}
                             }
@@ -1402,7 +1405,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         # reset temporary settings
         self.session.SetConfig(False, True, { }, utf8_strings=True)
         config = copy.deepcopy(ref)
-        self.failUnlessEqual(config, self.session.GetConfig(False, utf8_strings=True))        
+        self.failUnlessEqual(config, self.session.GetConfig(False, utf8_strings=True))
 
     @timeout(20)
     def testCreateGetConfig(self):
@@ -1463,7 +1466,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
     def testUpdateConfigError(self):
         """TestSessionAPIsDummy.testUpdateConfigError -  test the right error is reported when an invalid property value is set """
         self.setupConfig()
-        config = { 
+        config = {
                      "source/addressbook" : { "sync" : "invalid-value"}
                   }
         try:
@@ -1896,7 +1899,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
                                          byte_arrays=True,
                                          utf8_strings=True)
 
-        # dbus server will be blocked by gnome-keyring-ask dialog, so we kill it, and then 
+        # dbus server will be blocked by gnome-keyring-ask dialog, so we kill it, and then
         # it can't get the password from gnome keyring and send info request for password
         def callback():
             kill = subprocess.Popen("sh -c 'killall -9 gnome-keyring-ask >/dev/null 2>&1'", shell=True)
@@ -2053,7 +2056,7 @@ class TestSessionAPIsReal(unittest.TestCase, DBusUtil):
     def setUp(self):
         self.setUpServer()
         self.setUpSession(configName)
-        self.operation = "" 
+        self.operation = ""
 
     def run(self, result):
         self.runTest(result, own_xdg=False)
@@ -2065,7 +2068,7 @@ class TestSessionAPIsReal(unittest.TestCase, DBusUtil):
         try:
             configProps = self.session.GetConfig(False, utf8_strings=True)
         except dbus.DBusException, ex:
-            self.fail(str(ex) + 
+            self.fail(str(ex) +
                       ". To test this case, please first set up a correct config named 'dbus_unittest'.")
 
     def doSync(self):
@@ -2092,7 +2095,7 @@ class TestSessionAPIsReal(unittest.TestCase, DBusUtil):
         # do sync
         self.doSync()
         self.checkSync()
-    
+
     @timeout(300)
     def testSyncStatusAbort(self):
         """TestSessionAPIsReal.testSyncStatusAbort -  test status is set correctly when the session is aborted """
@@ -2160,7 +2163,7 @@ class TestConnection(unittest.TestCase, DBusUtil):
         self.setUpServer()
         self.setUpListeners(None)
         # default config
-        self.config = { 
+        self.config = {
                          "" : { "remoteDeviceId" : "sc-api-nat",
                                 "password" : "test",
                                 "username" : "test",
@@ -2528,7 +2531,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.setUpSession("@other_context")
         config = self.session.GetConfig(False, utf8_strings=True)
         self.failUnlessEqual(config[""]["defaultPeer"], "foobar_peer")
-        self.failIf("source/addressbook" in config)        
+        self.failIf("source/addressbook" in config)
         self.session.Detach()
 
     def testSharedTemplate(self):
@@ -2798,7 +2801,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
     def modifyServerFile(self):
         """rename server executable to trigger shutdown"""
         os.rename(self.serverexe, self.serverexe + ".bak")
-        os.rename(self.serverexe + ".bak", self.serverexe)        
+        os.rename(self.serverexe + ".bak", self.serverexe)
 
     @timeout(100)
     def testShutdown(self):
@@ -2860,6 +2863,31 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         # serverExecutable() will fail if the service wasn't properly
         # with execve() because then the old process is dead.
         self.failUnlessEqual(self.serverexe, self.serverExecutable())
+
+#class TestBluetooth(unittest.TestCase, DBusUtil):
+class TestBluetooth:
+    """Tests that Bluetooth works properly."""
+
+    def setUp(self):
+        self.setUpServer()
+        self.firstTemplate = "Bluetooth_" + bt_device_mac + "_1"
+
+    def run(self, result):
+        self.runTest(result)
+
+    def testBluetoothProductId(self):
+        """TestBluetooth.testBluetoothProductId - check that fingerprint equals productId"""
+        # This seems to be needed so that we can fetch the singel config.
+        configs = self.server.GetConfigs(True, utf8_strings=True)
+
+        config = self.server.GetConfig(self.firstTemplate, True, utf8_strings=True)
+        self.failUnlessEqual(config['']["fingerPrint"], bt_device_fingerprint)
+
+    def testBluetoothTemplates(self):
+        """TestBluetooth.testBluetoothTemplates - check for the bluetooth device's first template"""
+        configs = self.server.GetConfigs(True, utf8_strings=True)
+        config = next((config for config in configs if config == self.firstTemplate), None)
+        self.failUnless(config)
 
 if __name__ == '__main__':
     unittest.main()
