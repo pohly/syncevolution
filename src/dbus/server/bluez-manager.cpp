@@ -35,8 +35,8 @@ using namespace GDBusCXX;
  */
 // FIXME: This is available from Bluez. Use that.
 #define VENDORS_MAP                                             \
-    ("0x0000", "Ericsson Technology Licensing")                 \
-    ("0x0001", "Nokia Mobile Phones")                           \
+    ("0x0000", "Sony Ericsson")                                 \
+    ("0x0001", "Nokia")                                         \
     ("0x0002", "Intel Corp.")                                   \
     ("0x0003", "IBM Corp.")                                     \
     ("0x0004", "Toshiba Corp.")                                 \
@@ -121,7 +121,7 @@ using namespace GDBusCXX;
     ("0x0053", "Free2move AB")                                  \
     ("0x0054", "3DiJoy Corporation")                            \
     ("0x0055", "Plantronics, Inc.")                             \
-    ("0x0056", "Sony Ericsson Mobile Communications")           \
+    ("0x0056", "Sony Ericsson")                                 \
     ("0x0057", "Harman International Industries, Inc.")         \
     ("0x0058", "Vizio, Inc.")                                   \
     ("0x0059", "Nordic Semiconductor ASA")                      \
