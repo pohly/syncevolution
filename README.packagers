@@ -22,5 +22,5 @@ backends there are more subtle dependencies:
     http://lists.manyfish.co.uk/pipermail/neon/2010-November/001294.html)
   - ensure that one of the following commands is available at runtime:
     adnshost, host, nslookup
-- your package needs to depend on a package that provides rst2html if
+- your package needs to build-depend on a package that provides rst2html if
   you want to to be able to distribute the README file in HTML format
