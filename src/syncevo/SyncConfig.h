@@ -1084,8 +1084,8 @@ class SyncConfig {
      */
     struct PnpInformation
     {
-        std::string m_vendor;
-        std::string m_product;
+        const std::string m_vendor;
+        const std::string m_product;
         bool isKnownProduct() const {return !m_product.empty();}
         PnpInformation(const std::string &vendor,
                        const std::string &product)
