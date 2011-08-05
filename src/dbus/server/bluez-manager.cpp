@@ -331,15 +331,14 @@ bool extractValuefromServiceRecord(const std::string &serviceRecord,
 }
 
 /*
- * Get that name from the value that was extracted from the Device Id
- * service record. The length of the key is used to determing whether
- * the vendor or product name is being queried.
+ * Get the names of the PnpInformation vendor and product from their
+ * respective ids.  At a minimum we need a matching vendor id for this
+ * function to return true. If the product id is not found then we set
+ * it to "", an empty string.
  */
-bool getProductOrVendorNameFromValue(const std::string &value, std::string &name)
+    bool getPnpInfoNamesFromValues(const std::string &vendorValue,  std::string &vendorName,
+                                   const std::string &productValue, std::string &productName)
 {
-    const int VENDOR_VALUE_LENGTH  = 6;
-    const int PRODUCT_VALUE_LENGTH = VENDOR_VALUE_LENGTH * 2 + 1;
-
     // TODO: These will be in the class once the lookup tables are moved to a file.
     //       Use those when available.
     static std::map<std::string, std::string> VENDORS =
@@ -347,28 +346,23 @@ bool getProductOrVendorNameFromValue(const std::string &value, std::string &name
     static std::map<std::string, std::string> PRODUCTS =
         boost::assign::map_list_of PRODUCTS_MAP;
 
-    bool hasMatch = false;
-    std::map<std::string, std::string>::iterator matchingValue;
-    std::map<std::string, std::string>::iterator end;
+    std::map<std::string, std::string>::iterator matchingPair;
 
-    // Determine in which map we look for key.
-    if(value.size() == PRODUCT_VALUE_LENGTH) {     // Porduct format is 0x0000_0x0000
-        matchingValue = PRODUCTS.find(value);
-        end = PRODUCTS.end();
-    }
-    else if(value.size() == VENDOR_VALUE_LENGTH) { // Vendor format is 0x0000
-        matchingValue = VENDORS.find(value);
-        end = VENDORS.end();
-    }
-    else
+    matchingPair = VENDORS.find(vendorValue);
+    // At a minimum the vendor has to match.
+    if(matchingPair == VENDORS.end())
         return false;
 
-    if (matchingValue != end) {
-        name = matchingValue->second;
-        hasMatch = true;
-    }
+    vendorName = matchingPair->second;
 
-    return hasMatch;
+    matchingPair = PRODUCTS.find(productValue);
+    // If the product is not in the look-up table, the product is set to an empty string.
+    if(matchingPair == PRODUCTS.end())
+        productName = "";
+    else
+        productName = matchingPair->second;
+
+    return true;
 }
 
 void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDict,
@@ -406,9 +400,9 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
             extractValuefromServiceRecord(serviceRecord, PRODUCT_ATTRIBUTE_ID, productId);
 
             std::string vendorName, productName;
-            if (!getProductOrVendorNameFromValue(vendorId,  vendorName ) ||
-                !getProductOrVendorNameFromValue(vendorId + "_" + productId, productName))
-                    return;
+            if (!getPnpInfoNamesFromValues(vendorId,                   vendorName,
+                                           vendorId + "_" + productId, productName))
+                return;
 
             Server &server = m_adapter.m_manager.m_server;
             SyncConfig::DeviceDescription devDesc;

@@ -1086,6 +1086,7 @@ class SyncConfig {
     {
         std::string m_vendor;
         std::string m_product;
+        bool isKnownProduct() const {return !m_product.empty();}
         PnpInformation(const std::string &vendor,
                        const std::string &product)
             :m_vendor(vendor), m_product(product)
@@ -1105,7 +1106,7 @@ class SyncConfig {
         void setFingerprint(const std::string &fingerprint) { m_fingerprint = fingerprint; }
         /** match mode used for matching templates */
         MatchMode m_matchMode;
-        /** the PnP nformation for the device */
+        /** the PnPInformation for the device if available */
         boost::shared_ptr<PnpInformation> m_pnpInformation;
 
         DeviceDescription(const std::string &deviceId,

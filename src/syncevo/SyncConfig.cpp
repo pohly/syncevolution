@@ -221,7 +221,8 @@ string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags fl
 
 std::string SyncConfig::DeviceDescription::getFingerprint() const
 {
-    return m_pnpInformation ? m_pnpInformation->m_product : m_fingerprint;
+    return m_pnpInformation && m_pnpInformation->isKnownProduct() ?
+        m_pnpInformation->m_product : m_fingerprint;
 }
 
 bool SyncConfig::splitConfigString(const string &config, string &peer, string &context)
