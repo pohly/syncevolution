@@ -33,6 +33,7 @@ using namespace GDBusCXX;
  * was obtained from
  * http://www.bluetooth.org/Technical/AssignedNumbers/identifiers.htm
  */
+// FIXME: This is available from Bluez. Use that.
 #define VENDORS_MAP                                             \
     ("0x0000", "Ericsson Technology Licensing")                 \
     ("0x0001", "Nokia Mobile Phones")                           \
@@ -422,7 +423,7 @@ void BluezManager::BluezDevice::propertyChanged(const string &name,
         m_name = boost::get<std::string>(prop);
         SyncConfig::DeviceDescription device;
         if(server.getDevice(m_mac, device)) {
-            device.m_fingerprint = m_name;
+            device.setFingerprint(m_name);
             server.updateDevice(m_mac, device);
         }
     } else if(boost::iequals(name, "UUIDs")) {

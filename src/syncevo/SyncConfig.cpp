@@ -219,6 +219,11 @@ string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags fl
     return normal;
 }
 
+std::string SyncConfig::DeviceDescription::getFingerprint() const
+{
+    return m_pnpInformation ? m_pnpInformation->m_productId : m_fingerprint;
+}
+
 bool SyncConfig::splitConfigString(const string &config, string &peer, string &context)
 {
     string::size_type at = config.rfind('@');
@@ -692,9 +697,7 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                 continue;
             }
             BOOST_FOREACH (const DeviceList::value_type &entry, peers){
-                std:string fingerprint(entry.m_pnpInformation ?
-                                       entry.m_pnpInformation->m_productId :
-                                       entry.m_fingerprint);
+                std:string fingerprint(entry.getFingerprint());
                 int rank = templateConf.metaMatch (fingerprint, entry.m_matchMode);
                 if (fuzzyMatch){
                     if (rank > TemplateConfig::NO_MATCH) {
@@ -1464,6 +1467,8 @@ void SyncConfig::setConfigVersion(ConfigLevel level, ConfigLimit limit, int vers
         prop.setProperty(*getNode(prop), version);
     }
 }
+
+
 
 /**
  * This constructor updates some of the properties above and then adds

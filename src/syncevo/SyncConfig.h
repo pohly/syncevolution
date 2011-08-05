@@ -1091,21 +1091,17 @@ class SyncConfig {
         {}
     };
 
-    struct DeviceDescription {
+    class DeviceDescription {
+     public:
         /** the id of the device */
         std::string m_deviceId;
-        /** the finger print of the device used for matching templates */
-        std::string m_fingerprint;
         /**
          * For bluetooth devices, we use PnpInformation's immutable
          * product id which provides a more reliable fingerprint than
          * the user-modifiable device string.
          */
-        std::string getFingerprint() {
-            return m_pnpInformation ?
-                m_pnpInformation->m_productId :
-                m_fingerprint;
-        }
+        std::string getFingerprint() const;
+        void setFingerprint(const std::string &fingerprint) { m_fingerprint = fingerprint; }
         /** match mode used for matching templates */
         MatchMode m_matchMode;
         /** the PnP nformation for the device */
@@ -1118,6 +1114,9 @@ class SyncConfig {
         {}
         DeviceDescription() : m_matchMode(INVALID)
         {}
+     private:
+        /** the finger print of the device used for matching templates */
+        std::string m_fingerprint;
     };
 
     typedef std::list<DeviceDescription> DeviceList;
