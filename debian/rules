@@ -38,8 +38,9 @@ ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 endif
 
 CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-ssl-certificate-check \
- --disable-libsoup --enable-libcurl --disable-ecal --enable-ebook --enable-maemocal \
- --disable-bluetooth --enable-dav --with-synthesis-src=libsynthesis
+ --disable-libsoup --enable-libcurl --disable-ecal --disable-ebook \
+ --enable-qtcontacts --enable-kcalextended \
+ --disable-bluetooth --disable-dav --with-synthesis-src=libsynthesis
 
 #ifneq (,$(findstring maemo,$(DEB_BUILD_OPTIONS)))
 #	CONFIGURE_FLAGS += --enable-maemo --enable-shared
