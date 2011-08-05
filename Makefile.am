@@ -4,12 +4,13 @@ ACLOCAL_AMFLAGS = -I m4 -I m4-repo
 
 man_MANS =
 dist_doc_DATA =
+doc_DATA =
 SUBDIRS = src
 if COND_CORE
 SUBDIRS += po test
 dist_doc_DATA += README NEWS COPYING $(TEST_README_FILES) test/syncevo-http-server-logging.conf
 if COND_HTML_README
-dist_doc_DATA += README.html
+doc_DATA += README.html
 endif
 if COND_MAN_PAGES
 man_MANS += syncevolution.1
