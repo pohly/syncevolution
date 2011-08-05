@@ -1079,15 +1079,16 @@ class SyncConfig {
 
     typedef std::list<boost::shared_ptr <TemplateDescription> > TemplateList;
 
-    /** This information is available if the device supports the
-     * Device Id Profile. */
+    /* This information is available if the device supports the
+     * Device Id Profile.
+     */
     struct PnpInformation
     {
-        std::string m_vendorId;
-        std::string m_productId;
-        PnpInformation(const std::string &manufactureId,
-                       const std::string &productId)
-            :m_vendorId(manufactureId), m_productId(productId)
+        std::string m_vendor;
+        std::string m_product;
+        PnpInformation(const std::string &vendor,
+                       const std::string &product)
+            :m_vendor(vendor), m_product(product)
         {}
     };
 

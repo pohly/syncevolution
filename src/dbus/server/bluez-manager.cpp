@@ -161,7 +161,6 @@ using namespace GDBusCXX;
     ("0x0001_0x0084", "Nokia N85")              \
     ("0x0001_0x00e7", "Nokia 5230")
 
-
 SE_BEGIN_CXX
 
 BluezManager::BluezManager(Server &server) :
@@ -331,6 +330,47 @@ bool extractValuefromServiceRecord(const std::string &serviceRecord,
     return false;
 }
 
+/*
+ * Get that name from the value that was extracted from the Device Id
+ * service record. The length of the key is used to determing whether
+ * the vendor or product name is being queried.
+ */
+bool getProductOrVendorNameFromValue(const std::string &value, std::string &name)
+{
+    const int VENDOR_VALUE_LENGTH  = 6;
+    const int PRODUCT_VALUE_LENGTH = VENDOR_VALUE_LENGTH * 2 + 1;
+
+    // TODO: These will be in the class once the lookup tables are moved to a file.
+    //       Use those when available.
+    static std::map<std::string, std::string> VENDORS =
+        boost::assign::map_list_of VENDORS_MAP;
+    static std::map<std::string, std::string> PRODUCTS =
+        boost::assign::map_list_of PRODUCTS_MAP;
+
+    bool hasMatch = false;
+    std::map<std::string, std::string>::iterator matchingValue;
+    std::map<std::string, std::string>::iterator end;
+
+    // Determine in which map we look for key.
+    if(value.size() == PRODUCT_VALUE_LENGTH) {     // Porduct format is 0x0000_0x0000
+        matchingValue = PRODUCTS.find(value);
+        end = PRODUCTS.end();
+    }
+    else if(value.size() == VENDOR_VALUE_LENGTH) { // Vendor format is 0x0000
+        matchingValue = VENDORS.find(value);
+        end = VENDORS.end();
+    }
+    else
+        return false;
+
+    if (matchingValue != end) {
+        name = matchingValue->second;
+        hasMatch = true;
+    }
+
+    return hasMatch;
+}
+
 void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDict,
                                                    const string &error)
 {
@@ -359,12 +399,16 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
             if(!boost::iequals(sourceId, "0x0001"))
                 return;
 
-            std::string vendorId;
-            std::string productId;
+            std::string vendorId, productId;
             static const std::string VENDOR_ATTRIBUTE_ID ("0x0201");
             static const std::string PRODUCT_ATTRIBUTE_ID("0x0202");
             extractValuefromServiceRecord(serviceRecord, VENDOR_ATTRIBUTE_ID,  vendorId);
             extractValuefromServiceRecord(serviceRecord, PRODUCT_ATTRIBUTE_ID, productId);
+
+            std::string vendorName, productName;
+            if (!getProductOrVendorNameFromValue(vendorId,  vendorName ) ||
+                !getProductOrVendorNameFromValue(vendorId + "_" + productId, productName))
+                    return;
 
             Server &server = m_adapter.m_manager.m_server;
             SyncConfig::DeviceDescription devDesc;
@@ -372,20 +416,9 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
             {
                 devDesc.m_pnpInformation =
                     boost::shared_ptr<SyncConfig::PnpInformation>(
-                        new SyncConfig::PnpInformation(vendorId,  productId));
+                        new SyncConfig::PnpInformation(vendorName,  productName));
                 server.updateDevice(m_mac, devDesc);
             }
-
-            // FIXME: Remove this. Just for testing.
-            server.getDevice(m_mac, devDesc);
-            if(devDesc.m_pnpInformation)
-                SE_LOG_INFO(NULL, NULL, "%s[%d]: Vendor: %s, Device: %s",
-                            __FILE__, __LINE__,
-                            VENDORS [devDesc.m_pnpInformation->m_vendorId].c_str(),
-                            PRODUCTS[devDesc.m_pnpInformation->m_vendorId + "_" +
-                                     devDesc.m_pnpInformation->m_productId].c_str());
-            else
-                SE_LOG_INFO(NULL, NULL, "%s[%d]: %s", __FILE__, __LINE__, "Oops!");
         }
     }
 }
