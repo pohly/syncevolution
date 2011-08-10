@@ -221,8 +221,22 @@ string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags fl
 
 std::string SyncConfig::DeviceDescription::getFingerprint() const
 {
-    return m_pnpInformation && m_pnpInformation->isKnownProduct() ?
-        m_pnpInformation->m_product : m_fingerprint;
+    std::string fingerprint;
+
+    /** In the case that we have the PnpInformation we prefer it over
+     *  the mutable device name. The is true even if we only found the
+     *  vendor component of the PnpInformation.
+     */
+    if (m_pnpInformation) {
+        if(m_pnpInformation->isKnownProduct())
+            fingerprint = m_pnpInformation->m_product;
+        else
+            fingerprint = m_pnpInformation->m_vendor;
+    }
+    else
+        fingerprint = m_fingerprint;
+
+    return fingerprint;
 }
 
 bool SyncConfig::splitConfigString(const string &config, string &peer, string &context)
