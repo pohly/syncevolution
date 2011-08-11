@@ -450,7 +450,7 @@ void BluezManager::BluezDevice::propertyChanged(const string &name,
         m_name = boost::get<std::string>(prop);
         SyncConfig::DeviceDescription device;
         if(server.getDevice(m_mac, device)) {
-            device.setFingerprint(m_name);
+            device.m_deviceName = m_name;
             server.updateDevice(m_mac, device);
         }
     } else if(boost::iequals(name, "UUIDs")) {

@@ -234,7 +234,7 @@ std::string SyncConfig::DeviceDescription::getFingerprint() const
             fingerprint = m_pnpInformation->m_vendor;
     }
     else
-        fingerprint = m_fingerprint;
+        fingerprint = m_deviceName;
 
     return fingerprint;
 }
