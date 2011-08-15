@@ -56,6 +56,7 @@ configName = "dbus_unittest"
 # for bluetooth tests. replace with values from your test device.
 bt_device_mac = "D4:5D:42:73:E4:6C"
 bt_device_fingerprint = "Nokia 5230"
+bt_device_name = "Nokia 5230a"
 
 def property(key, value):
     """Function decorator which sets an arbitrary property of a test.
@@ -2877,9 +2878,8 @@ class TestBluetooth:
 
     def testBluetoothProductId(self):
         """TestBluetooth.testBluetoothProductId - check that fingerprint equals productId"""
-        # This seems to be needed so that we can fetch the singel config.
+        # This seems to be needed so that we can fetch the single config.
         configs = self.server.GetConfigs(True, utf8_strings=True)
-
         config = self.server.GetConfig(self.firstTemplate, True, utf8_strings=True)
         self.failUnlessEqual(config['']["fingerPrint"], bt_device_fingerprint)
 
@@ -2888,6 +2888,13 @@ class TestBluetooth:
         configs = self.server.GetConfigs(True, utf8_strings=True)
         config = next((config for config in configs if config == self.firstTemplate), None)
         self.failUnless(config)
+
+    def testBluetoothUserModifiableDeviceName(self):
+        """TestBluetooth.testBluetoothUserModifiableDeviceName - check that peerName equals """
+        # This seems to be needed so that we can fetch the single config.
+        configs = self.server.GetConfigs(True, utf8_strings=True)
+        config = self.server.GetConfig(self.firstTemplate, True, utf8_strings=True)
+        self.failUnlessEqual(config['']["peerName"], bt_device_name)
 
 if __name__ == '__main__':
     unittest.main()
