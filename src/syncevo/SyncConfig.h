@@ -1032,6 +1032,10 @@ class SyncConfig {
         // The matched percentage of the template, larger the better.
         int m_rank;
 
+        // A string that can be shown in GUIs. For bluetooth devices
+        // this is the user-modifiable device name.
+        std::string m_peerName;
+
         //a unique identity of the device that the template is for, used by caller
         std::string m_deviceId;
 
@@ -1049,11 +1053,14 @@ class SyncConfig {
         // The template name (device class) presented
         std::string m_templateName;
 
-        TemplateDescription (const std::string &templateId, const std::string &description, 
-                const int rank, const std::string deviceId, const std::string &fingerprint, const std::string &path, const std::string &model, const std::string &templateName)
+        TemplateDescription (const std::string &templateId, const std::string &description,
+                             const int rank, const std::string &peerName, const std::string &deviceId,
+                             const std::string &fingerprint, const std::string &path,
+                             const std::string &model, const std::string &templateName)
             :   m_templateId (templateId),
                 m_description (description),
                 m_rank (rank),
+                m_peerName (peerName),
                 m_deviceId (deviceId),
                 m_fingerprint (fingerprint),
                 m_path (path),
