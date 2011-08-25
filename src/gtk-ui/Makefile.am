@@ -29,13 +29,9 @@ themerc_DATA = \
 desktopdir = $(datadir)/applications
 
 EXTRA_DIST = \
-	ui.glade \
 	$(themerc_DATA) \
 	$(applications_in_files) \
 	$(noinst_DATA)
-
-ui.xml: ui.glade
-	$(GTK_BUILDER_CONV) $< $(@F)
 
 # sync-ui: default GUI, could be plain GTK or Moblin UX
 # sync-ui-gtk: GTK GUI
@@ -76,6 +72,5 @@ sync_ui_moblin_CFLAGS = $(sync_ui_CFLAGS)
 sync_ui_moblin_CPPFLAGS = $(sync_ui_CPPFLAGS) -DUSE_MOBLIN_UX
 
 CLEANFILES = $(BUILT_SOURCES) \
-	ui.xml \
 	sync-moblin.desktop \
         $(applications_generated)
