@@ -116,12 +116,10 @@ class CalDAVSource : public WebDAVSource,
         eptr<icalcomponent> m_calendar;
 
         /**
-         * clean all X-LIC-ERROR warnings added by libical, for example:
-         * X-LIC-ERROR;X-LIC-ERRORTYPE=VALUE-PARSE-ERROR:No value for LOCATION property. Removing entire property:
-         *
-         * @param comp    VEVENT, VTODO, ...
+         * clean up calendar directly after receiving it from peer:
+         * RECURRENCE-ID in UTC, remove X-LIC-ERROR
          */
-        static void icalClean(icalcomponent *comp);
+        static void fixIncomingCalendar(icalcomponent *calendar);
 
         /** date-time as string, without time zone */
         static std::string icalTime2Str(const icaltimetype &tt);
@@ -169,6 +167,8 @@ class CalDAVSource : public WebDAVSource,
     Event &findItem(const std::string &davLUID);
     Event &loadItem(const std::string &davLUID);
     Event &loadItem(Event &event);
+
+    std::string getSubDescription(Event &event, const string &subid);
 
     /** callback for listAllSubItems: parse and add new item */
     int appendItem(SubRevisionMap_t &revisions,

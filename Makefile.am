@@ -92,7 +92,14 @@ TYPE_rpm = -R
 # Dependency calculation is intentionally incomplete:
 # - don't force dependency on specific EDS libs via backends, their versions change too much (handled via --enable-evolution-compatibility and dynamic loading of the backends)
 # - ignore client-test dependencies (because users typically don't run it)
-REQUIRES_deb = --requires="'$(shell set -x; cd dist; LD_LIBRARY_PATH=$(distdir)/usr/lib:$(distdir)/usr/lib/syncevolution dpkg-shlibdeps -L$(srcdir)/src/shlibs.local --ignore-missing-info -O $$(for i in $$(find $(distdir) -type f -perm /u+x | grep -v -e client-test -e lib/syncevolution/sync); do if file $$i | grep ELF >/dev/null; then echo $$i; fi; done) | sed -e 's/[^=]*=//')'"
+REQUIRES_deb = --requires="'$(shell set -x; cd dist; LD_LIBRARY_PATH=$(distdir)/usr/lib:$(distdir)/usr/lib/syncevolution dpkg-shlibdeps -L$(srcdir)/src/shlibs.local --ignore-missing-info -O $$(for i in $$(find $(distdir) -type f -perm /u+x | grep -v -e client-test -e lib/syncevolution/sync); do if file $$i | grep ELF >/dev/null; then echo $$i; fi; done) | sed -e 's/[^=]*=//')$(REQUIRES_deb_neon)'"
+if NEON_COMPATIBILITY
+# --enable-neon-compatibility in src/backends/webdav:
+# replace dependencies from linking with hard-coded dlopen() dependencies
+REQUIRES_deb_neon = , libneon27 (>= 0.29.0) | libneon27-gnutls (>= 0.29.0)
+else
+REQUIRES_deb_neon =
+endif
 VERSION_deb = 1:$(STABLE_VERSION)$(VERSION)
 VERSION_rpm = `echo $(VERSION) | sed -e s/-/_/g`
 RELEASE = 2
@@ -207,13 +214,21 @@ dist-hook:
 	fi
 
 if ENABLE_EVOLUTION_COMPATIBILITY
+# check .so (relevant for modular builds) and main syncevolution binary
+# (relevant in that case and for static builds) for dependencies on
+# problematic libraries and symbols
+#
+# ical_strdup is an exception because it is in SyncEvolution.
 installcheck-local:
-	for i in `find . -name *.so`; do \
-		if ldd $$i | grep -e libecal -e libebook -e libedata -e libical -e libbluetooth; then \
+	for i in `find $(DESTDIR)/$(libdir)/syncevolution $(DESTDIR)/$(libdir)/libsyncevo* $(DESTDIR)/$(libdir)/libsynthesis* -name *.so` $(DESTDIR)/$(bindir)/syncevolution; do \
+		if objdump -T -C $$i | grep -v :: | grep '\*UND\*' | sort | grep -v -w ical_strdup | grep -e ical -e " e_"; then \
 			echo "$$i should not depend on EDS, libical or libbluetooth"; \
-			objdump -T -C $$i | grep -v :: | grep -e ical -e " e_"; \
 			exit 1; \
-		fi \
+		fi; \
+		if ldd $$i | grep -e libecal -e libebook -e libedata -e libical -e libbluetooth; then \
+			echo "$$i should not be linked against EDS, libical or libbluetooth"; \
+			exit 1; \
+		fi; \
 	done
 endif
 

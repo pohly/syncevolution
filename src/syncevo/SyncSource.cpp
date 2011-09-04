@@ -292,7 +292,10 @@ public:
                     // module!
                     string fullpath = dirpath + '/' + entry;
                     fullpath = normalizePath(fullpath);
-                    dlhandle = dlopen(fullpath.c_str(), RTLD_NOW|RTLD_GLOBAL);
+                    // RTLD_LAZY is needed for the WebDAV backend, which
+                    // needs to do an explicit dlopen() of libneon in compatibility
+                    // mode before any of the neon functions can be resolved.
+                    dlhandle = dlopen(fullpath.c_str(), RTLD_LAZY|RTLD_GLOBAL);
                     // remember which modules were found and which were not
                     if (dlhandle) {
                         debug<<"Loading backend library "<<entry<<endl;
@@ -357,11 +360,12 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
             backends += ") ";
         }
         string problem =
-            StringPrintf("%s: backend '%s' not supported %sor not fully configured (format '%s')",
+            StringPrintf("%s: backend '%s' not supported %sor not correctly configured (databaseFormat '%s', syncFormat '%s')",
                          params.m_name.c_str(),
                          sourceType.m_backend.c_str(),
                          backends.c_str(),
-                         sourceType.m_localFormat.c_str());
+                         sourceType.m_localFormat.c_str(),
+                         sourceType.m_format.c_str());
         SyncContext::throwError(problem);
     }
 
@@ -371,7 +375,13 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
 SyncSource *SyncSource::createTestingSource(const string &name, const string &type, bool error,
                                             const char *prefix)
 {
-    boost::shared_ptr<SyncConfig> context(new SyncConfig("target-config@client-test"));
+    std::string config = "target-config@client-test";
+    const char *server = getenv("CLIENT_TEST_SERVER");
+    if (server) {
+        config += "-";
+        config += server;
+    }
+    boost::shared_ptr<SyncConfig> context(new SyncConfig(config));
     SyncSourceNodes nodes = context->getSyncSourceNodes(name);
     SyncSourceParams params(name, nodes, context);
     PersistentSyncSourceConfig sourceconfig(name, nodes);

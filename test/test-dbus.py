@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python -u
 #
 # Copyright (C) 2009 Intel Corporation
 #
@@ -226,6 +226,28 @@ class TimeoutTest:
         self.failIf(end - start < 5)
         self.failIf(end - start >= 6)
 
+def TryKill(pid, signal):
+    try:
+        os.kill(pid, signal)
+    except OSError, ex:
+        # might have quit in the meantime, deal with the race
+        # condition
+        if ex.errno != 3:
+            raise ex
+
+def ShutdownSubprocess(popen, timeout):
+    start = time.time()
+    if popen.poll() == None:
+        TryKill(popen.pid, signal.SIGTERM)
+    while popen.poll() == None and start + timeout >= time.time():
+        time.sleep(0.01)
+    if popen.poll() == None:
+        TryKill(popen.pid, signal.SIGKILL)
+        while popen.poll() == None and start + timeout + 1 >= time.time():
+            time.sleep(0.01)
+        return False
+    return True
+
 class DBusUtil(Timeout):
     """Contains the common run() method for all D-Bus test suites
     and some utility functions."""
@@ -291,8 +313,11 @@ class DBusUtil(Timeout):
         # and increase log level
         env["SYNCEVOLUTION_DEBUG"] = "1"
 
-        dbuslog = "dbus.log"
-        syncevolog = "syncevo.log"
+        # testAutoSyncFailure (__main__.TestSessionAPIsDummy) => testAutoSyncFailure_TestSessionAPIsDummy
+        testname = str(self).replace(" ", "_").replace("__main__.", "").replace("(", "").replace(")", "")
+        dbuslog = testname + ".dbus.log"
+        syncevolog = testname + ".syncevo.log"
+
         pmonitor = subprocess.Popen(monitor,
                                     stdout=open(dbuslog, "w"),
                                     stderr=subprocess.STDOUT)
@@ -315,11 +340,17 @@ class DBusUtil(Timeout):
                     time.sleep(2)
                     break
         else:
+            logfile = open(syncevolog, "w")
+            logfile.write("env:\n%s\n\nargs:\n%s\n\n" % (env, server + serverArgs))
+            logfile.flush()
+            size = os.path.getsize(syncevolog)
             DBusUtil.pserver = subprocess.Popen(server + serverArgs,
                                                 env=env,
-                                                stdout=open(syncevolog, "w"),
+                                                stdout=logfile,
                                                 stderr=subprocess.STDOUT)
-            while os.path.getsize(syncevolog) == 0:
+            while (os.path.getsize(syncevolog) == size or \
+                    not ("syncevo-dbus-server: ready to run" in open(syncevolog).read())) and \
+                    self.isServerRunning():
                 time.sleep(1)
 
         numerrors = len(result.errors)
@@ -354,17 +385,25 @@ class DBusUtil(Timeout):
             print "\ndone, quit gdb now\n"
         hasfailed = numerrors + numfailures != len(result.errors) + len(result.failures)
 
-        if not debugger and DBusUtil.pserver.poll() == None:
-            os.kill(DBusUtil.pserver.pid, signal.SIGTERM)
-        DBusUtil.pserver.communicate()
+        if debugger:
+            # allow debugger to run as long as it is needed
+            DBusUtil.pserver.communicate()
+        else:
+            # force shutdown in 5 seconds
+            if not ShutdownSubprocess(DBusUtil.pserver, 5):
+                print "   syncevo-dbus-server had to be killed with SIGKILL"
+                result.errors.append((self,
+                                      "syncevo-dbus-server had to be killed with SIGKILL"))
         serverout = open(syncevolog).read()
         if DBusUtil.pserver is not None and DBusUtil.pserver.returncode != -15:
             hasfailed = True
         if hasfailed:
             # give D-Bus time to settle down
             time.sleep(1)
-        os.kill(pmonitor.pid, signal.SIGTERM)
-        pmonitor.communicate()
+        if not ShutdownSubprocess(pmonitor, 5):
+            print "   dbus-monitor had to be killed with SIGKILL"
+            result.errors.append((self,
+                                  "dbus-monitor had to be killed with SIGKILL"))
         monitorout = open(dbuslog).read()
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
@@ -417,11 +456,11 @@ class DBusUtil(Timeout):
         signal = bus.add_signal_receiver(session_ready,
                                          'SessionChanged',
                                          'org.syncevolution.Server',
-                                         'org.syncevolution',
+                                         self.server.bus_name,
                                          None,
                                          byte_arrays=True,
                                          utf8_strings=True)
-        session = dbus.Interface(bus.get_object('org.syncevolution',
+        session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 sessionpath),
                                  'org.syncevolution.Session')
         status, error, sources = session.GetStatus(utf8_strings=True)
@@ -476,14 +515,14 @@ class DBusUtil(Timeout):
         bus.add_signal_receiver(progress,
                                 'ProgressChanged',
                                 'org.syncevolution.Session',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 sessionpath,
                                 byte_arrays=True, 
                                 utf8_strings=True)
         bus.add_signal_receiver(status,
                                 'StatusChanged',
                                 'org.syncevolution.Session',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 sessionpath,
                                 byte_arrays=True, 
                                 utf8_strings=True)
@@ -500,7 +539,7 @@ class DBusUtil(Timeout):
         bus.add_signal_receiver(config,
                                 'ConfigChanged',
                                 'org.syncevolution.Server',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 byte_arrays=True, 
                                 utf8_strings=True)
 
@@ -526,14 +565,14 @@ class DBusUtil(Timeout):
         bus.add_signal_receiver(abort,
                                 'Abort',
                                 'org.syncevolution.Connection',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 conpath,
                                 byte_arrays=True, 
                                 utf8_strings=True)
         bus.add_signal_receiver(reply,
                                 'Reply',
                                 'org.syncevolution.Connection',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 conpath,
                                 byte_arrays=True, 
                                 utf8_strings=True)
@@ -744,7 +783,7 @@ class TestDBusServerTerm(unittest.TestCase, DBusUtil):
         except dbus.DBusException:
             self.fail("dbus server should not terminate")
 
-        connection = dbus.Interface(bus.get_object('org.syncevolution',
+        connection = dbus.Interface(bus.get_object(self.server.bus_name,
                                                    conpath),
                                     'org.syncevolution.Connection')
         connection.Close(False, "good bye", utf8_strings=True)
@@ -931,6 +970,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         self.conn.remove_from_connection()
         self.conf = None
 
+    @property("ENV", "DBUS_TEST_CONNMAN=session")
     @timeout(100)
     def testPresenceSignal(self):
         """TestDBusServerPresence.testPresenceSignal - check Server.Presence signal"""
@@ -948,7 +988,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         match = bus.add_signal_receiver(cb_http_presence,
                                 'Presence',
                                 'org.syncevolution.Server',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 None,
                                 byte_arrays=True,
                                 utf8_strings=True)
@@ -967,7 +1007,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         match = bus.add_signal_receiver(cb_bt_presence,
                                 'Presence',
                                 'org.syncevolution.Server',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 None,
                                 byte_arrays=True,
                                 utf8_strings=True)
@@ -996,7 +1036,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         match = bus.add_signal_receiver(cb_bt_http_presence,
                                 'Presence',
                                 'org.syncevolution.Server',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 None,
                                 byte_arrays=True,
                                 utf8_strings=True)
@@ -1009,6 +1049,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         self.failUnlessEqual (self.bar, "")
         match.remove()
 
+    @property("ENV", "DBUS_TEST_CONNMAN=session")
     @timeout(100)
     def testServerCheckPresence(self):
         """TestDBusServerPresence.testServerCheckPresence - check Server.CheckPresence()"""
@@ -1052,6 +1093,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         self.failUnlessEqual (status, "")
         self.failUnlessEqual (transports, ["obex-bt://bt-client-mixed"])
 
+    @property("ENV", "DBUS_TEST_CONNMAN=session")
     @timeout(100)
     def testSessionCheckPresence(self):
         """TestDBusServerPresence.testSessionCheckPresence - check Session.CheckPresence()"""
@@ -1072,7 +1114,6 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         self.failUnlessEqual (status, "no transport")
 
     def run(self, result):
-        os.environ["DBUS_TEST_CONNMAN"] = "session"
         self.runTest(result, True)
 
 class TestDBusSession(unittest.TestCase, DBusUtil):
@@ -1154,7 +1195,7 @@ class TestDBusSession(unittest.TestCase, DBusUtil):
         bus.add_signal_receiver(session_ready,
                                 'SessionChanged',
                                 'org.syncevolution.Server',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 None,
                                 byte_arrays=True,
                                 utf8_strings=True)
@@ -1169,12 +1210,12 @@ class TestDBusSession(unittest.TestCase, DBusUtil):
         bus.add_signal_receiver(status,
                                 'StatusChanged',
                                 'org.syncevolution.Session',
-                                'org.syncevolution',
+                                self.server.bus_name,
                                 sessionpath,
                                 byte_arrays=True, 
                                 utf8_strings=True)
 
-        session = dbus.Interface(bus.get_object('org.syncevolution',
+        session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 sessionpath),
                                  'org.syncevolution.Session')
         status, error, sources = session.GetStatus(utf8_strings=True)
@@ -1322,6 +1363,9 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
                                "source/addressbook" : { "sync" : "slow"}
                             }
         self.sources = ['addressbook', 'calendar', 'todo', 'memo']
+
+        # set by SessionReady signal handlers in some tests
+        self.auto_sync_session_path = None
 
     def run(self, result):
         self.runTest(result)
@@ -1847,7 +1891,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         signal = bus.add_signal_receiver(infoRequest,
                                          'InfoRequest',
                                          'org.syncevolution.Server',
-                                         'org.syncevolution',
+                                         self.server.bus_name,
                                          None,
                                          byte_arrays=True,
                                          utf8_strings=True)
@@ -1884,7 +1928,9 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         self.session.SetConfig(True, False, config, utf8_strings=True)
 
         def session_ready(object, ready):
-            if self.running and object != self.sessionpath:
+            if self.running and object != self.sessionpath and \
+                (self.auto_sync_session_path == None and ready or \
+                 self.auto_sync_session_path == object):
                 self.auto_sync_session_path = object
                 DBusUtil.quit_events.append("session " + object + (ready and " ready" or " done"))
                 loop.quit()
@@ -1892,7 +1938,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         signal = bus.add_signal_receiver(session_ready,
                                          'SessionChanged',
                                          'org.syncevolution.Server',
-                                         'org.syncevolution',
+                                         self.server.bus_name,
                                          None,
                                          byte_arrays=True,
                                          utf8_strings=True)
@@ -1910,7 +1956,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         # session must be around for a while after terminating, to allow
         # reading information about it by clients who didn't start it
         # and thus wouldn't know what the session was about otherwise
-        session = dbus.Interface(bus.get_object('org.syncevolution',
+        session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 self.auto_sync_session_path),
                                  'org.syncevolution.Session')
         reports = session.GetReports(0, 100, utf8_strings=True)
@@ -1921,6 +1967,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         flags = session.GetFlags()
         self.failUnlessEqual(flags, [])
         first_auto = self.auto_sync_session_path
+        self.auto_sync_session_path = None
 
         # check that interval between auto-sync sessions is right
         loop.run()
@@ -1947,7 +1994,9 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         self.session.SetConfig(True, False, config, utf8_strings=True)
 
         def session_ready(object, ready):
-            if self.running and object != self.sessionpath:
+            if self.running and object != self.sessionpath and \
+                (self.auto_sync_session_path == None and ready or \
+                 self.auto_sync_session_path == object):
                 self.auto_sync_session_path = object
                 DBusUtil.quit_events.append("session " + object + (ready and " ready" or " done"))
                 loop.quit()
@@ -1955,7 +2004,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         signal = bus.add_signal_receiver(session_ready,
                                          'SessionChanged',
                                          'org.syncevolution.Server',
-                                         'org.syncevolution',
+                                         self.server.bus_name,
                                          None,
                                          byte_arrays=True,
                                          utf8_strings=True)
@@ -1968,7 +2017,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         loop.run()
         self.failUnlessEqual(DBusUtil.quit_events, ["session " + self.auto_sync_session_path + " ready",
                                                     "session " + self.auto_sync_session_path + " done"])
-        session = dbus.Interface(bus.get_object('org.syncevolution',
+        session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 self.auto_sync_session_path),
                                  'org.syncevolution.Session')
         reports = session.GetReports(0, 100, utf8_strings=True)
@@ -2160,7 +2209,7 @@ class TestConnection(unittest.TestCase, DBusUtil):
                                       must_authenticate,
                                       "")
         self.setUpConnectionListeners(conpath)
-        connection = dbus.Interface(bus.get_object('org.syncevolution',
+        connection = dbus.Interface(bus.get_object(self.server.bus_name,
                                                    conpath),
                                     'org.syncevolution.Connection')
         return (conpath, connection)

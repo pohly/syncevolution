@@ -474,9 +474,12 @@ int Session::propIterator(void *userdata,
 
 void Session::startOperation(const string &operation, const Timespec &deadline)
 {
-    SE_LOG_DEBUG(NULL, NULL, "starting %s, credentials %s",
+    SE_LOG_DEBUG(NULL, NULL, "starting %s, credentials %s, %s",
                  operation.c_str(),
-                 m_settings->getCredentialsOkay() ? "okay" : "unverified");
+                 m_settings->getCredentialsOkay() ? "okay" : "unverified",
+                 deadline ? StringPrintf("deadline in %.1lfs",
+                                         (deadline - Timespec::monotonic()).duration()).c_str() :
+                 "no deadline");
 
     // remember current operation attributes
     m_operation = operation;
@@ -831,6 +834,17 @@ Request::~Request()
 {
     ne_request_destroy(m_req);
 }
+
+#ifdef NEON_COMPATIBILITY
+/**
+ * wrapper needed to allow lazy resolution of the ne_accept_2xx() function when needed
+ * instead of when loaded
+ */
+static int ne_accept_2xx(void *userdata, ne_request *req, const ne_status *st)
+{
+    return ::ne_accept_2xx(userdata, req, st);
+}
+#endif
 
 bool Request::run()
 {

@@ -79,11 +79,13 @@ my $full_timezones = $ENV{CLIENT_TEST_FULL_TIMEZONES}; # do not simplify VTIMEZO
 # properties supported by Synthesis. Remove this again.
 # $synthesis = 1;
 
+my $exchange = $server =~ /exchange/; # Exchange via ActiveSync
 my $egroupware = $server =~ /egroupware/;
 my $funambol = $server =~ /funambol/;
 my $google = $server =~ /google/;
 my $google_valarm = $ENV{CLIENT_TEST_GOOGLE_VALARM};
 my $yahoo = $server =~ /yahoo/;
+my $davical = $server =~ /davical/;
 my $apple = $server =~ /apple/;
 my $evolution = $client =~ /evolution/;
 my $addressbook = $client =~ /addressbook/;
@@ -122,11 +124,25 @@ sub splitvalue {
 # normalize the DATE-TIME duration unless the VALUE isn't a duration
 sub NormalizeTrigger {
     my $value = shift;
-    $value =~ s/([+-]?)P(?:(\d*)D)?T(?:(\d*)H)?(?:(\d*)M)?(?:(\d*)S)?/$1 .
-      "P" . (int($2) ? ($2 . "D") : "") . "T" .
-      (int($3) ? ($3 . "H") : "") .
-      (int($4) ? ($4 . "M") : "") .
-      (int($5) ? ($5 . "S") : "")/e;
+    $value =~ /([+-]?)P(?:(\d*)D)?T(?:(\d*)H)?(?:(\d*)M)?(?:(\d*)S)?/;
+    my ($sign, $days, $hours, $minutes, $seconds) = ($1, int($2), int($3), int($4), int($5));
+    while ($seconds >= 60) {
+        $minutes++;
+        $seconds -= 60;
+    }
+    while ($minutes >= 60) {
+        $hours++;
+        $minutes -= 60;
+    }
+    while ($hours >= 24) {
+        $days++;
+        $hours -= 24;
+    }
+    $value = $sign;
+    $value .= ($days . "D") if $days;
+    $value .= ($hours . "H") if $hours;
+    $value .= ($minutes . "M") if $minutes;
+    $value .= ($seconds . "S") if $seconds;
     return $value;
 }
 
@@ -216,12 +232,23 @@ sub NormalizeItem {
     s/^PHOTO;(.*)TYPE=[A-Z]*/PHOTO;$1/mg;
     # encoding is not case sensitive, skip white space in the middle of binary data
     if (s/^PHOTO;.*?ENCODING=(b|B|BASE64).*?:\s*/PHOTO;ENCODING=B: /mgi) {
-      while (s/^PHOTO(.*?): (\S+)[\t ]+(\S+)/PHOTO$1: $2$3/mg) {}
+        if ($memotoo) {
+            # transcodes image data, can't compare it
+            s/(^PHOTO.*:).*/$1<stripped by synccompare>/mg;
+        } else {
+            while (s/^PHOTO(.*?): (\S+)[\t ]+(\S+)/PHOTO$1: $2$3/mg) {}
+        }
     }
+    # special case for the inlining of the local test case PHOTO
+    s!^PHOTO;;VALUE=uri:file://testcases/local.png$!PHOTO;;VALUE=uri:<local.png>!m;
+    s!^PHOTO;ENCODING=B: iVBORw0KGgoAAAANSUh.*UQOVkeH/aKBSLM04QlMqAAFNBTl\+CjN9AAAAAElFTkSuQmCC$!PHOTO;;VALUE=uri:<local.png>!m;
     # ignore extra day factor in front of weekday
     s/^RRULE:(.*)BYDAY=\+?1(\D)/RRULE:$1BYDAY=$2/mg;
     # remove default VALUE=DATE-TIME
     s/^(DTSTART|DTEND)([^:\n]*);VALUE=DATE-TIME/$1$2/mg;
+
+    # remove default LANGUAGE=en-US
+    s/^([^:\n]*);LANGUAGE=en-US/$1/mg;
 
     # normalize values which look like a date to YYYYMMDD because the hyphen is optional
     s/:(\d{4})-(\d{2})-(\d{2})/:$1$2$3/g;
@@ -309,7 +336,7 @@ sub NormalizeItem {
     #                                      >    LY                                 
     s/^(\w+)([^:\n]*);X-EVOLUTION-ENDDATE=[0-9TZ]*/$1$2/mg;
 
-    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$google || $mobical || $memotoo || $yahoo) {
+    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$google || $mobical || $memotoo || $yahoo || $davical) {
       # does not preserve X-EVOLUTION-UI-SLOT=
       s/^(\w+)([^:\n]*);X-EVOLUTION-UI-SLOT=\d+/$1$2/mg;
     }
@@ -424,7 +451,7 @@ sub NormalizeItem {
 
     if ($funambol) {
       # several properties are not preserved
-      s/^(CALURI|FBURL|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-AIM|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-YAHOO|X-ASSISTANT)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(CALURI|FBURL|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-AIM|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-YAHOO|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-ASSISTANT)(;[^:;\n]*)*:.*\r?\n?//gm;
 
       # quoted-printable line breaks are =0D=0A, not just single =0A
       s/(?<!=0D)=0A/=0D=0A/g;
@@ -534,7 +561,7 @@ sub NormalizeItem {
     }
     if ($memotoo) {
       if (/^BEGIN:VCARD/m ) {
-        s/^(FN|FBURL|CALURI|CATEGORIES|ROLE|X-MOZILLA-HTML|PHOTO|X-EVOLUTION-FILE-AS|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-GROUPWISE)(;[^:;\n]*)*:.*\r?\n?//gm;
+        s/^(FN|FBURL|CALURI|CATEGORIES|ROLE|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-GROUPWISE)(;[^:;\n]*)*:.*\r?\n?//gm;
         # only preserves ORG "Company", but loses "Department" and "Office"
         s/^ORG:([^;:\n]+)(;[^;:\n]+)(;[^\n]*)/ORG:$1$2/mg;
         # only preserves first 6 fields of 'ADR'
@@ -562,7 +589,7 @@ sub NormalizeItem {
       }
     }
     if ($mobical) {
-      s/^(CALURI|CATEGORIES|FBURL|NICKNAME|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-MANAGER|X-SPOUSE|X-YAHOO|X-AIM)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(CALURI|CATEGORIES|FBURL|NICKNAME|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-YAHOO|X-AIM)(;[^:;\n]*)*:.*\r?\n?//gm;
 
       # some workrounds here for mobical's bug 
       s/^(FN|BDAY)(;[^:;\n]*)*:.*\r?\n?//gm;
@@ -579,6 +606,19 @@ sub NormalizeItem {
 
     if ($zyb) {
         s/^(CALURI|CATEGORIES|FBURL|NICKNAME|X-MOZILLA-HTML|PHOTO|X-EVOLUTION-FILE-AS|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-MANAGER|X-SPOUSE|X-YAHOO|X-AIM)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($exchange) {
+        # unsupported properties
+        s/^(SEQUENCE|X-EVOLUTION-ALARM-UID)(;[^:;\n]*)*:.*\r?\n?//gm;
+        # added properties which can be ignored (?)
+        s/^(X-MEEGO-ACTIVESYNCD-[a-zA-Z]*)(;[^:;\n]*)*:.*\r?\n?//gm;
+        # ORGANIZER added - remove and thus ignore if we have no ATTENDEEs
+        if (!/^ATTENDEE/m) {
+            s/^(ORGANIZER)(;[^:;\n]*)*:.*\r?\n?//gm;
+        }
+        # ignore added VALARM DESCRIPTION
+        s/^DESCRIPTION:Reminder\n//m;
     }
 
     # treat X-MOZILLA-HTML=FALSE as if the property didn't exist

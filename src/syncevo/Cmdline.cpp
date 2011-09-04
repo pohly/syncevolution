@@ -742,19 +742,12 @@ bool Cmdline::run() {
             SyncContext::throwError("--dry-run not supported for configuration changes");
         }
         if (m_keyring) {
-#ifndef USE_GNOME_KEYRING
+#if (!defined USE_GNOME_KEYRING) and (!defined USE_KDE_KWALLET)
             m_err << "Error: this syncevolution binary was compiled without support for storing "
-                     "passwords in a keyring. Either store passwords in your configuration "
+                     "passwords in a keyring or wallet. Either store passwords in your configuration "
                      "files or enter them interactively on each program run." << endl;
             return false;
 #endif
-#ifndef USE_KDE_KWALLET
-            m_err << "Error: this syncevolution binary was compiled without support for storing "
-                     "passwords in a wallet. Either store passwords in your configuration "
-                     "files or enter them interactively on each program run." << endl;
-            return false;
-#endif
-
         }
 
         // name of renamed config ("foo.old") after migration
@@ -1156,6 +1149,12 @@ bool Cmdline::run() {
                 !ops.m_readNextItem) {
                 source->throwError("reading items not supported");
             }
+
+            ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
+            BOOST_FOREACH(const ConfigProperty *prop, registry) {
+                prop->checkPassword(*context, m_server, *context->getProperties());
+            }
+
             err = ops.m_startDataRead("", "");
             CHECK_ERROR("reading items");
             list<string> luids;

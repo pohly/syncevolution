@@ -1050,6 +1050,9 @@ public:
 
     void getPropCb(const std::map <std::string, boost::variant <std::vector <std::string> > >& props, const string &error);
 
+    /** TRUE if watching ConnMan status */
+    bool isAvailable() { return m_connmanConn; }
+
 private:
     DBusServer &m_server;
     DBusConnectionPtr m_connmanConn;
@@ -1102,6 +1105,9 @@ public:
     }
 
     void stateChanged(uint32_t uiState);
+
+    /** TRUE if watching Network Manager status */
+    bool isAvailable() { return m_networkManagerConn; }
 
 private:
 
@@ -5701,6 +5707,12 @@ DBusServer::DBusServer(GMainLoop *loop, const DBusConnectionPtr &conn, int durat
 
     LoggerBase::pushLogger(this);
     setLevel(LoggerBase::DEBUG);
+
+    if (!m_connman.isAvailable() &&
+        !m_networkManager.isAvailable()) {
+        // assume that we are online if no network manager was found at all
+        getPresenceStatus().updatePresenceStatus(true, true);
+    }
 }
 
 DBusServer::~DBusServer()
@@ -6752,6 +6764,22 @@ void AutoSyncManager::syncSuccessStart()
     }
 }
 
+/**
+ * True if the error is likely to go away by itself when continuing
+ * with auto-syncing. This errs on the side of showing notifications
+ * too often rather than not often enough.
+ */
+static bool ErrorIsTemporary(SyncMLStatus status)
+{
+    switch (status) {
+    case STATUS_TRANSPORT_FAILURE:
+        return true;
+    default:
+        // pretty much everying this not temporary
+        return false;
+    }
+}
+
 void AutoSyncManager::syncDone(SyncMLStatus status)
 {
     SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been done.\n", m_activeTask->m_peer.c_str());
@@ -6764,8 +6792,9 @@ void AutoSyncManager::syncDone(SyncMLStatus status)
             body = StringPrintf(_("We have just finished syncing your computer with the %s sync service."), m_activeTask->m_peer.c_str());
             //TODO: set config information for 'sync-ui'
             m_notificationManager->publish(summary, body);
-        } else if(m_syncSuccessStart || (!m_syncSuccessStart && status == STATUS_FATAL)) {
-            //if sync is successfully started and has errors, or not started successful with a fatal problem
+        } else if (m_syncSuccessStart || !ErrorIsTemporary(status)) {
+            // if sync is successfully started and has errors, or not started successful with a permanent error
+            // that needs attention
             summary = StringPrintf(_("Sync problem."));
             body = StringPrintf(_("Sorry, there's a problem with your sync that you need to attend to."));
             //TODO: set config information for 'sync-ui'

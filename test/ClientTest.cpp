@@ -820,6 +820,7 @@ void LocalTests::testChanges() {
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countNewItems(source.get()) + countUpdatedItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
+    CPPUNIT_ASSERT_NO_THROW(source.reset());
 
     // start anew, then create, delete and recreate an item -> should only be listed as new or updated,
     // even if (as for calendar with UID) the same LUID gets reused
@@ -864,15 +865,21 @@ void LocalTests::testImport() {
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
     restoreStorage(config, client);
     std::string testcases;
-    SOURCE_ASSERT_EQUAL(source.get(), 0, config.import(client, *source.get(), config, config.testcases, testcases));
+    std::string importFailures = config.import(client, *source.get(), config, config.testcases, testcases);
     backupStorage(config, client);
     CPPUNIT_ASSERT_NO_THROW(source.reset());
 
     // export again and compare against original file
     TestingSyncSourcePtr copy;
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceA()));
-    compareDatabases(testcases.c_str(), *copy.get());
+    bool equal = compareDatabases(testcases.c_str(), *copy.get(), false);
     CPPUNIT_ASSERT_NO_THROW(source.reset());
+
+    if (importFailures.empty()) {
+        CPPUNIT_ASSERT_MESSAGE("imported and exported data equal", equal);
+    } else {
+        CPPUNIT_ASSERT_EQUAL(std::string(""), importFailures);
+    }
 }
 
 // same as testImport() with immediate delete
@@ -1681,6 +1688,20 @@ void SyncTests::addTests(bool isFirstSource) {
                     ADD_TEST(SyncTests, testManyDeletes);
                     ADD_TEST(SyncTests, testSlowSyncSemantic);
                     ADD_TEST(SyncTests, testComplexRefreshFromServerSemantic);
+                    ADD_TEST(SyncTests, testDeleteBothSides);
+
+                    // only add when testing individual source,
+                    // test data not guaranteed to be available for all sources
+                    if (sources.size() == 1 &&
+                        config.parentItem &&
+                        config.childItem) {
+                        ADD_TEST(SyncTests, testLinkedItemsParentChild);
+
+                        if (config.linkedItemsRelaxedSemantic) {
+                            ADD_TEST(SyncTests, testLinkedItemsChild);
+                            ADD_TEST(SyncTests, testLinkedItemsChildParent);
+                        }
+                    }
 
                     if (config.updateItem) {
                         ADD_TEST(SyncTests, testUpdate);
@@ -2891,6 +2912,201 @@ void SyncTests::testComplexRefreshFromServerSemantic()
 }
 
 /**
+ * - create the same item on A, server, B via testCopy()
+ * - delete on both sides
+ * - sync A
+ * - sync B
+ *
+ * Must not fail, even though the Synthesis engine will ask the backends
+ * for deletion of an already deleted item.
+ */
+void SyncTests::testDeleteBothSides()
+{
+    testCopy();
+
+    source_it it;
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        it->second->deleteAll(it->second->createSourceA);
+    }
+    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+        it->second->deleteAll(it->second->createSourceA);
+    }
+
+    doSync("delete-item-A",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        if (it->second->config.createSourceB) {
+            TestingSyncSourcePtr source;
+            SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
+            SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
+            CPPUNIT_ASSERT_NO_THROW(source.reset());
+        }
+    }
+
+
+    // it is undefined whether the item is meant to be reported as deleted again here:
+    // a SyncML client test will mark it as deleted, local sync as server won't
+    accessClientB->doSync("delete-item-B",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(0,0,0, 0,0,-1, true, SYNC_TWO_WAY)));
+    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+        if (it->second->config.createSourceB) {
+            TestingSyncSourcePtr source;
+            SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
+            SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
+            CPPUNIT_ASSERT_NO_THROW(source.reset());
+        }
+    }
+}
+
+/**
+ * - adds parent on client A
+ * - syncs A
+ * - adds unrelated item via client B (necessary to trigger corner cases in
+ *   change tracking, see BMC #22329)
+ * - syncs B
+ * - adds child on client A
+ * - syncs A and B
+ * - compares
+ */
+void SyncTests::testLinkedItemsParentChild()
+{
+    source_it it;
+
+    // clean server, client A and client B
+    deleteAll();
+    accessClientB->refreshClient();
+
+    // create and copy parent item
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        CPPUNIT_ASSERT(it->second->config.parentItem);
+        TestingSyncSourcePtr source;
+        CPPUNIT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
+                                                   it->second->config.parentItem,
+                                                   it->second->config.itemType));
+    }
+    doSync("send-parent",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
+
+    // create independent item, refresh client B and server
+    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+        CPPUNIT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
+                                                   it->second->config.insertItem,
+                                                   it->second->config.itemType));
+    }
+    accessClientB->doSync("recv-parent",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(1,0,0, 1,0,0, true, SYNC_TWO_WAY)));
+
+    // add child on client A
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        CPPUNIT_ASSERT(it->second->config.childItem);
+        TestingSyncSourcePtr source;
+        CPPUNIT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
+                                                   it->second->config.childItem,
+                                                   it->second->config.itemType));
+    }
+    // parent may or may not be considered updated
+    doSync("send-child",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(1,0,0, 1,-1,0, true, SYNC_TWO_WAY)));
+    // parent may or may not be considered updated here
+    accessClientB->doSync("recv-child",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(1,-1,0, 0,0,0, true, SYNC_TWO_WAY)));
+
+    // final comparison
+    compareDatabases();
+}
+
+/**
+ * - adds child on client A
+ * - syncs A
+ * - syncs B
+ * - compare
+ */
+void SyncTests::testLinkedItemsChild()
+{
+    source_it it;
+
+    // clean server, client A and client B
+    deleteAll();
+    accessClientB->refreshClient();
+
+    // create and copy child item
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        CPPUNIT_ASSERT(it->second->config.childItem);
+        TestingSyncSourcePtr source;
+        CPPUNIT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
+                                                   it->second->config.childItem,
+                                                   it->second->config.itemType));
+    }
+    doSync("send",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
+    accessClientB->doSync("recv",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(1,0,0, 0,0,0, true, SYNC_TWO_WAY)));
+
+    // final comparison
+    compareDatabases();
+}
+
+
+/**
+ * - adds child on client A
+ * - syncs A and B
+ * - adds parent on client A
+ * - syncs A and B
+ * - compares
+ */
+void SyncTests::testLinkedItemsChildParent()
+{
+    source_it it;
+
+    // clean server, client A and client B
+    deleteAll();
+    accessClientB->refreshClient();
+
+    // create and copy child item
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        CPPUNIT_ASSERT(it->second->config.childItem);
+        TestingSyncSourcePtr source;
+        CPPUNIT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
+                                                   it->second->config.childItem,
+                                                   it->second->config.itemType));
+    }
+    doSync("send-child",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
+    accessClientB->doSync("recv-child",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(1,0,0, 0,0,0, true, SYNC_TWO_WAY)));
+
+    // add parent on client A
+    for (it = sources.begin(); it != sources.end(); ++it) {
+        CPPUNIT_ASSERT(it->second->config.parentItem);
+        TestingSyncSourcePtr source;
+        CPPUNIT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
+                                                   it->second->config.parentItem,
+                                                   it->second->config.itemType));
+    }
+    // child may or may not be considered updated
+    doSync("send-parent",
+           SyncOptions(SYNC_TWO_WAY,
+                       CheckSyncReport(0,0,0, 1,-1,0, true, SYNC_TWO_WAY)));
+    // child may or may not be considered updated here
+    accessClientB->doSync("recv-parent",
+                          SyncOptions(SYNC_TWO_WAY,
+                                      CheckSyncReport(1,-1,0, 0,0,0, true, SYNC_TWO_WAY)));
+
+    // final comparison
+    compareDatabases();
+}
+
+/**
  * implements testMaxMsg(), testLargeObject(), testLargeObjectEncoded()
  * using a sequence of items with varying sizes
  */
@@ -3696,7 +3912,7 @@ void SyncTests::testTimeout()
     if (!skipped) {
         CPPUNIT_ASSERT_EQUAL(STATUS_TRANSPORT_FAILURE, report.getStatus());
         CPPUNIT_ASSERT(end - start >= 19);
-        CPPUNIT_ASSERT(end - start < 30); // needs to be sufficiently larger than 20s timeout
+        CPPUNIT_ASSERT(end - start < 40); // needs to be sufficiently larger than 20s timeout
                                           // because under valgrind the startup time is considerable
     }
 }
@@ -3971,15 +4187,26 @@ void ClientTest::getItems(const char *file, list<string> &items, std::string &te
     }
 }
 
-int ClientTest::import(ClientTest &client, TestingSyncSource &source, const ClientTestConfig &config,
-                       const char *file, std::string &realfile)
+std::string ClientTest::import(ClientTest &client, TestingSyncSource &source, const ClientTestConfig &config,
+                               const char *file, std::string &realfile)
 {
     list<string> items;
     getItems(file, items, realfile);
+    std::string failures;
     BOOST_FOREACH(string &data, items) {
-        importItem(&source, config, data);
+        try {
+            importItem(&source, config, data);
+        } catch (...) {
+            std::string explanation;
+            Exception::handle(explanation);
+            failures += "Failed to import:\n";
+            failures += data;
+            failures += "\n";
+            failures += explanation;
+            failures += "\n";
+        }
     }
-    return 0;
+    return failures;
 }
 
 bool ClientTest::compare(ClientTest &client, const char *fileA, const char *fileB)
@@ -4071,6 +4298,13 @@ static string mangleICalendar20(const char *data, bool update)
     std::string item = data;
 
     if (update) {
+        if (item.find("BEGIN:VJOURNAL") != item.npos) {
+            // Need to modify first line of description and summary
+            // consistently for a note because in plain text
+            // representation, these lines are expected to be
+            // identical.
+            boost::replace_first(item, "SUMMARY:", "SUMMARY:U ");
+        }
         boost::replace_first(item, "DESCRIPTION:", "DESCRIPTION:U ");
     }
 
@@ -4328,6 +4562,17 @@ void ClientTest::getTestData(const char *type, Config &config)
             "END:VEVENT\n"
             "END:VCALENDAR\n";
 
+        // Servers have very different understandings of how
+	// recurrence interacts with time zones and RRULE.
+	// Must use different test cases for some servers to
+	// avoid having the linkedItems test cases fail
+	// because of that.
+	std::string server;
+	const char *tmp = getenv("CLIENT_TEST_SERVER");
+	if (tmp) {
+	    server = tmp;
+	}
+	// default: time zones + UNTIL in UTC
         config.parentItem =
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
@@ -4360,7 +4605,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "SUMMARY:Recurring\n"
             "DESCRIPTION:recurs each Monday\\, 10 times\n"
             "CLASS:PUBLIC\n"
-            "RRULE:FREQ=WEEKLY;COUNT=10;INTERVAL=1;BYDAY=SU\n"
+            "RRULE:FREQ=WEEKLY;UNTIL=20080608T070000Z;INTERVAL=1;BYDAY=SU\n"
             "CREATED:20080407T193241\n"
             "LAST-MODIFIED:20080407T193241Z\n"
             "END:VEVENT\n"
@@ -4402,6 +4647,127 @@ void ClientTest::getTestData(const char *type, Config &config)
             "DESCRIPTION:second instance modified\n"
             "END:VEVENT\n"
             "END:VCALENDAR\n";
+
+	if (server == "funambol") {
+	    // converts UNTIL into floating time - broken?!
+	    config.parentItem =
+	        "BEGIN:VCALENDAR\n"
+                "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
+                "VERSION:2.0\n"
+                "BEGIN:VTIMEZONE\n"
+                "TZID:/softwarestudio.org/Olson_20011030_5/Europe/Berlin\n"
+                "X-LIC-LOCATION:Europe/Berlin\n"
+                "BEGIN:DAYLIGHT\n"
+                "TZOFFSETFROM:+0100\n"
+                "TZOFFSETTO:+0200\n"
+                "TZNAME:CEST\n"
+                "DTSTART:19700329T020000\n"
+                "RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3\n"
+                "END:DAYLIGHT\n"
+                "BEGIN:STANDARD\n"
+                "TZOFFSETFROM:+0200\n"
+                "TZOFFSETTO:+0100\n"
+                "TZNAME:CET\n"
+                "DTSTART:19701025T030000\n"
+                "RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10\n"
+                "END:STANDARD\n"
+                "END:VTIMEZONE\n"
+                "BEGIN:VEVENT\n"
+                "UID:20080407T193125Z-19554-727-1-50@gollum\n"
+                "DTSTAMP:20080407T193125Z\n"
+                "DTSTART;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080406T090000\n"
+                "DTEND;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080406T093000\n"
+                "TRANSP:OPAQUE\n"
+                "SEQUENCE:XXX\n"
+                "SUMMARY:Recurring\n"
+                "DESCRIPTION:recurs each Monday\\, 10 times\n"
+                "CLASS:PUBLIC\n"
+                "RRULE:FREQ=WEEKLY;UNTIL=20080608T090000;INTERVAL=1;BYDAY=SU\n"
+                "CREATED:20080407T193241\n"
+                "LAST-MODIFIED:20080407T193241Z\n"
+                "END:VEVENT\n"
+                "END:VCALENDAR\n";
+	} else if (server == "mobical") {
+	    // UTC time
+	    config.parentItem =
+	        "BEGIN:VCALENDAR\n"
+                "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
+                "VERSION:2.0\n"
+                "BEGIN:VEVENT\n"
+                "UID:20080407T193125Z-19554-727-1-50@gollum\n"
+                "DTSTAMP:20080407T193125Z\n"
+                "DTSTART:20080406T070000Z\n"
+                "DTEND:20080406T073000Z\n"
+                "TRANSP:OPAQUE\n"
+                "SEQUENCE:XXX\n"
+                "SUMMARY:Recurring\n"
+                "DESCRIPTION:recurs each Monday\\, 10 times\n"
+                "CLASS:PUBLIC\n"
+                "RRULE:FREQ=WEEKLY;UNTIL=20080608T070000Z;INTERVAL=1;BYDAY=SU\n"
+                "CREATED:20080407T193241\n"
+                "LAST-MODIFIED:20080407T193241Z\n"
+                "END:VEVENT\n"
+                "END:VCALENDAR\n";
+            config.childItem =
+                "BEGIN:VCALENDAR\n"
+                "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
+                "VERSION:2.0\n"
+                "BEGIN:VEVENT\n"
+                "UID:20080407T193125Z-19554-727-1-50@gollum\n"
+                "DTSTAMP:20080407T193125Z\n"
+                "DTSTART:20080413T070000Z\n"
+                "DTEND:20080413T073000Z\n"
+                "TRANSP:OPAQUE\n"
+                "SEQUENCE:XXX\n"
+                "SUMMARY:Recurring: Modified\n"
+                "CLASS:PUBLIC\n"
+                "CREATED:20080407T193241\n"
+                "LAST-MODIFIED:20080407T193647Z\n"
+                "RECURRENCE-ID:20080413T070000Z\n"
+                "DESCRIPTION:second instance modified\n"
+                "END:VEVENT\n"
+                "END:VCALENDAR\n";
+	} else if (server == "memotoo") {
+	    // local time
+	    config.parentItem =
+	        "BEGIN:VCALENDAR\n"
+                "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
+                "VERSION:2.0\n"
+                "BEGIN:VEVENT\n"
+                "UID:20080407T193125Z-19554-727-1-50@gollum\n"
+                "DTSTAMP:20080407T193125Z\n"
+                "DTSTART:20080406T070000\n"
+                "DTEND:20080406T073000\n"
+                "TRANSP:OPAQUE\n"
+                "SEQUENCE:XXX\n"
+                "SUMMARY:Recurring\n"
+                "DESCRIPTION:recurs each Monday\\, 10 times\n"
+                "CLASS:PUBLIC\n"
+                "RRULE:FREQ=WEEKLY;UNTIL=20080608T070000;INTERVAL=1;BYDAY=SU\n"
+                "CREATED:20080407T193241\n"
+                "LAST-MODIFIED:20080407T193241Z\n"
+                "END:VEVENT\n"
+                "END:VCALENDAR\n";
+            config.childItem =
+                "BEGIN:VCALENDAR\n"
+                "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
+                "VERSION:2.0\n"
+                "BEGIN:VEVENT\n"
+                "UID:20080407T193125Z-19554-727-1-50@gollum\n"
+                "DTSTAMP:20080407T193125Z\n"
+                "DTSTART:20080413T070000\n"
+                "DTEND:20080413T073000\n"
+                "TRANSP:OPAQUE\n"
+                "SEQUENCE:XXX\n"
+                "SUMMARY:Recurring: Modified\n"
+                "CLASS:PUBLIC\n"
+                "CREATED:20080407T193241\n"
+                "LAST-MODIFIED:20080407T193647Z\n"
+                "RECURRENCE-ID:20080413T070000\n"
+                "DESCRIPTION:second instance modified\n"
+                "END:VEVENT\n"
+                "END:VCALENDAR\n";
+	}
 
         config.templateItem = config.insertItem;
         config.uniqueProperties = "SUMMARY:UID:LOCATION";

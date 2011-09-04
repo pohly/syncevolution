@@ -15,6 +15,8 @@ the result of each action:
 """
 
 import os, sys, popen2, traceback, re, time, smtplib, optparse, stat, shutil, StringIO, MimeWriter
+import shlex
+import subprocess
 
 try:
     import gzip
@@ -177,15 +179,31 @@ class Context:
         self.lastresultdir = lastresultdir
         self.datadir = datadir
 
-    def runCommand(self, cmd):
+    def runCommand(self, cmdstr):
         """Log and run the given command, throwing an exception if it fails."""
-        if "valgrindcheck.sh" in cmd:
-            print "*** ( cd %s; env VALGRIND_LOG='%s' VALGRIND_ARGS='%s' CLIENT_TEST_WEBDAV='%s' %s )" % \
-                (os.getcwd(), os.getenv("VALGRIND_LOG", ""), os.getenv("VALGRIND_ARGS", ""), os.getenv("CLIENT_TEST_WEBDAV", ""), cmd)
-        else:
-            print "*** ( cd %s; env CLIENT_TEST_WEBDAV='%s' %s )" % (os.getcwd(), os.getenv("CLIENT_TEST_WEBDAV", ""), cmd)
+        cmd = shlex.split(cmdstr)
+        if "valgrindcheck.sh" in cmdstr:
+            cmd.insert(0, "VALGRIND_LOG=%s" % os.getenv("VALGRIND_LOG", ""))
+            cmd.insert(0, "VALGRIND_ARGS=%s" % os.getenv("VALGRIND_ARGS", ""))
+            cmd.insert(0, "VALGRIND_LEAK_CHECK_ONLY_FIRST=%s" % os.getenv("VALGRIND_LEAK_CHECK_ONLY_FIRST", ""))
+
+        # move "sudo" or "env" command invocation in front of
+        # all the leading env variable assignments: necessary
+        # because sudo ignores them otherwise
+        command = 0
+        isenv = re.compile(r'[a-zA-Z0-9_]*=.*')
+        while isenv.match(cmd[command]):
+           command = command + 1
+        if cmd[command] in ("env", "sudo"):
+            cmd.insert(0, cmd[command])
+            del cmd[command + 1]
+
+        cmdstr = " ".join(map(lambda x: (' ' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x, cmd))
+        print "*** ( cd %s; export %s; %s )" % (os.getcwd(),
+                                                " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH" ])),
+                                                cmdstr)
         sys.stdout.flush()
-        result = os.system(cmd)
+        result = os.system(cmdstr)
         if result != 0:
             raise Exception("%s: failed (return code %d)" % (cmd, result>>8))
 
@@ -265,8 +283,8 @@ class Context:
 
         # run testresult checker 
         #calculate the src dir where client-test can be located
-        srcdir = os.path.join(self.tmpdir,"build/src")
-        backenddir = os.path.join(self.tmpdir, "install/usr/lib/syncevolution/backends")
+        srcdir = os.path.join(compile.builddir, "src")
+        backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
         # resultchecker doesn't need valgrind, remove it
         shell = re.sub(r'\S*valgrind\S*', '', options.shell)
         prefix = re.sub(r'\S*valgrind\S*', '', options.testprefix)
@@ -443,21 +461,26 @@ class SyncEvolutionTest(Action):
         # clear previous test results
         context.runCommand("%s %s testclean" % (self.runner, context.make))
         try:
-            backenddir = os.path.join(context.tmpdir, "install/usr/lib/syncevolution/backends")
-            confdir = os.path.join(context.workdir, "syncevolution/src/syncevo/configs")
-            templatedir = os.path.join(context.workdir, "syncevolution/src/templates")
+            # use installed backends if available
+            backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
             if not os.access(backenddir, os.F_OK):
-                # try relative to client-test inside the current directory
+                # fallback: relative to client-test inside the current directory
                 backenddir = "backends"
+            # same with configs and templates, except that they use the source as fallback
+            confdir = os.path.join(compile.installdir, "usr/lib/syncevolution/xml")
+            if not os.access(confdir, os.F_OK):
+                confdir = os.path.join(context.workdir, "syncevolution/src/syncevo/configs")
+            templatedir = os.path.join(compile.installdir, "usr/lib/syncevolution/templates")
+            if not os.access(templatedir, os.F_OK):
+                templatedir = os.path.join(context.workdir, "syncevolution/src/templates")
             installenv = \
                 "SYNCEVOLUTION_TEMPLATE_DIR=%s " \
                 "SYNCEVOLUTION_XML_CONFIG_DIR=%s " \
                 "SYNCEVOLUTION_BACKEND_DIR=%s " \
                 % ( templatedir, confdir, backenddir )
 
-            if context.setupcmd:
-                cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
-                context.runCommand("%s || ( sleep 5 && %s )" % (cmd, cmd))
+            cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
+            context.runCommand(cmd)
 
             # proxy must be set in test config! Necessary because not all tests work with the env proxy (local CalDAV, for example).
             basecmd = "http_proxy= " \
@@ -469,7 +492,7 @@ class SyncEvolutionTest(Action):
                       "CLIENT_TEST_LOG=%(log)s " \
                       "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
                       "%(runner)s " \
-                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs PATH=backends/webdav:.:$PATH %(testprefix)s " \
+                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs:$LD_LIBRARY_PATH PATH=backends/webdav:.:$PATH %(testprefix)s " \
                       "%(testbinary)s" % \
                       { "server": self.serverName,
                         "sources": ",".join(self.sources),
@@ -701,6 +724,7 @@ else:
 if options.prebuilt:
     compile = Action("compile")
     compile.builddir = options.prebuilt
+    compile.installdir = os.path.join(options.prebuilt, "../install")
     compile.status = compile.DONE
     compile.execute = compile.nop
 else:
@@ -812,6 +836,18 @@ test = SyncEvolutionTest("yahoo", compile,
                          testPrefix=options.testprefix)
 context.add(test)
 
+test = SyncEvolutionTest("davical", compile,
+                         "", options.shell,
+                         "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::davical_caldav Client::Source::davical_carddav",
+                         [ "davical_caldav", "davical_carddav", "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='davical caldav carddav' "
+                         "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
+                         "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
+                         "CLIENT_TEST_MODE=server " # for Client::Sync
+                         ,
+                         testPrefix=options.testprefix)
+context.add(test)
+
 test = SyncEvolutionTest("apple", compile,
                          "", options.shell,
                          "Client::Sync::eds_event Client::Sync::eds_contact Client::Source::apple_caldav Client::Source::apple_carddav",
@@ -834,9 +870,9 @@ scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
                                         "eds_memo" ],
                                       "CLIENT_TEST_NUM_ITEMS=10 "
                                       "CLIENT_TEST_FAILURES="
-                                      "Client::Sync::text::testManyItems,"
-                                      "Client::Sync::eds_contact_eds_event_eds_task_text::testManyItems,"
-                                      "Client::Sync::text_eds_task_eds_event_eds_contact::testManyItems CLIENT_TEST_SKIP=Client::Sync::eds_event::Retry,"
+                                      "Client::Sync::eds_memo::testManyItems,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testManyItems,"
+                                      "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testManyItems CLIENT_TEST_SKIP=Client::Sync::eds_event::Retry,"
                                       "Client::Sync::eds_event::Suspend,"
                                       "Client::Sync::eds_event::Resend,"
                                       "Client::Sync::eds_contact::Retry,"
@@ -845,15 +881,15 @@ scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
                                       "Client::Sync::eds_task::Retry,"
                                       "Client::Sync::eds_task::Suspend,"
                                       "Client::Sync::eds_task::Resend,"
-                                      "Client::Sync::text::Retry,"
-                                      "Client::Sync::text::Suspend,"
-                                      "Client::Sync::text::Resend,"
-                                      "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
-                                      "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
-                                      "Client::Sync::eds_contact_eds_event_eds_task_text::Resend,"
-                                      "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
-                                      "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend,"
-                                      "Client::Sync::text_eds_task_eds_event_eds_contact::Resend "
+                                      "Client::Sync::eds_memo::Retry,"
+                                      "Client::Sync::eds_memo::Suspend,"
+                                      "Client::Sync::eds_memo::Resend,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Retry,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Suspend,"
+                                      "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Resend,"
+                                      "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
+                                      "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend,"
+                                      "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Resend "
                                       "CLIENT_TEST_DELAY=5 "
                                       "CLIENT_TEST_COMPARE_LOG=T "
                                       "CLIENT_TEST_RESEND_TIMEOUT=5 "
@@ -920,12 +956,12 @@ class SynthesisTest(SyncEvolutionTest):
                                    "Client::Sync::eds_task::Retry,"
                                    "Client::Sync::eds_task::Suspend,"
                                    "Client::Sync::eds_task::Resend,"
-                                   "Client::Sync::text::Retry,"
-                                   "Client::Sync::text::Suspend,"
-                                   "Client::Sync::text::Resend,"
-                                   "Client::Sync::eds_contact_text::Retry,"
-                                   "Client::Sync::eds_contact_text::Suspend,"
-                                   "Client::Sync::eds_contact_text::Resend "
+                                   "Client::Sync::eds_memo::Retry,"
+                                   "Client::Sync::eds_memo::Suspend,"
+                                   "Client::Sync::eds_memo::Resend,"
+                                   "Client::Sync::eds_contact_eds_memo::Retry,"
+                                   "Client::Sync::eds_contact_eds_memo::Suspend,"
+                                   "Client::Sync::eds_contact_eds_memo::Resend "
                                    "CLIENT_TEST_NUM_ITEMS=20 "
                                    "CLIENT_TEST_DELAY=2 "
                                    "CLIENT_TEST_COMPARE_LOG=T "
@@ -974,22 +1010,22 @@ class FunambolTest(SyncEvolutionTest):
                                    "Client::Sync::eds_task::Retry,"
                                    "Client::Sync::eds_task::Suspend,"
                                    "Client::Sync::eds_task::Resend,"
-                                   "Client::Sync::text::Retry,"
-                                   "Client::Sync::text::Suspend,"
-                                   "Client::Sync::text::Resend,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_text::Resend,"
-                                   "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
-                                   "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend,"
-                                   "Client::Sync::text_eds_task_eds_event_eds_contact::Resend "
+                                   "Client::Sync::eds_memo::Retry,"
+                                   "Client::Sync::eds_memo::Suspend,"
+                                   "Client::Sync::eds_memo::Resend,"
+                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Retry,"
+                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Suspend,"
+                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Resend,"
+                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
+                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend,"
+                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Resend "
                                    "CLIENT_TEST_XML=1 "
                                    "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                    "CLIENT_TEST_DELAY=10 "
                                    "CLIENT_TEST_FAILURES="
                                    "Client::Sync::eds_contact::testTwinning,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_text::testTwinning,"
-                                   "Client::Sync::text_eds_task_eds_event_eds_contact::testTwinning "
+                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testTwinning,"
+                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testTwinning "
                                    "CLIENT_TEST_COMPARE_LOG=T "
                                    "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                    "CLIENT_TEST_INTERRUPT_AT=1",
@@ -1091,36 +1127,36 @@ mobicaltest = SyncEvolutionTest("mobical", compile,
                                 "Client::Sync::eds_task::Retry,"
                                 "Client::Sync::eds_task::Suspend,"
                                 "Client::Sync::eds_task::Resend,"
-                                "Client::Sync::text::testRefreshFromClientSync,"
-                                "Client::Sync::text::testSlowSyncSemantic,"
-                                "Client::Sync::text::testRefreshStatus,"
-                                "Client::Sync::text::testDelete,"
-                                "Client::Sync::text::testItemsXML,"
-                                "Client::Sync::text::testOneWayFromServer,"
-                                "Client::Sync::text::testOneWayFromClient,"
-                                "Client::Sync::text::Retry,"
-                                "Client::Sync::text::Suspend,"
-                                "Client::Sync::text::Resend,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshFromClientSync,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testSlowSyncSemantic,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshStatus,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testDelete,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testItemsXML,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testOneWayFromServer,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testOneWayFromClient,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::Resend,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshFromClientSync,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testSlowSyncSemantic,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshStatus,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testDelete,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testItemsXML,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testOneWayFromServer,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testOneWayFromClient,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::Resend "
+                                "Client::Sync::eds_memo::testRefreshFromClientSync,"
+                                "Client::Sync::eds_memo::testSlowSyncSemantic,"
+                                "Client::Sync::eds_memo::testRefreshStatus,"
+                                "Client::Sync::eds_memo::testDelete,"
+                                "Client::Sync::eds_memo::testItemsXML,"
+                                "Client::Sync::eds_memo::testOneWayFromServer,"
+                                "Client::Sync::eds_memo::testOneWayFromClient,"
+                                "Client::Sync::eds_memo::Retry,"
+                                "Client::Sync::eds_memo::Suspend,"
+                                "Client::Sync::eds_memo::Resend,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testRefreshFromClientSync,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testSlowSyncSemantic,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testRefreshStatus,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testDelete,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testItemsXML,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testOneWayFromServer,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testOneWayFromClient,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Retry,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Suspend,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Resend,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testRefreshFromClientSync,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testSlowSyncSemantic,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testRefreshStatus,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testDelete,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testItemsXML,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testOneWayFromServer,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testOneWayFromClient,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Resend "
                                 "CLIENT_TEST_DELAY=5 "
                                 "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "
@@ -1142,43 +1178,38 @@ memotootest = SyncEvolutionTest("memotoo", compile,
                                 "Client::Sync::eds_contact::Suspend,"
                                 "Client::Sync::eds_contact::testRefreshFromClientSync,"
                                 "Client::Sync::eds_contact::testRefreshFromClientSemantic,"
-                                "Client::Sync::eds_contact::testRefreshStatus,"
                                 "Client::Sync::eds_contact::testDeleteAllRefresh,"
                                 "Client::Sync::eds_contact::testOneWayFromServer,"
                                 "Client::Sync::eds_event::testRefreshFromClientSync,"
                                 "Client::Sync::eds_event::testRefreshFromClientSemantic,"
-                                "Client::Sync::eds_event::testRefreshStatus,"
                                 "Client::Sync::eds_event::testOneWayFromServer,"
+                                "Client::Sync::eds_event::testDeleteAllRefresh,"
                                 "Client::Sync::eds_event::Retry,"
                                 "Client::Sync::eds_event::Suspend,"
                                 "Client::Sync::eds_task::testRefreshFromClientSync,"
                                 "Client::Sync::eds_task::testRefreshFromClientSemantic,"
-                                "Client::Sync::eds_task::testRefreshStatus,"
                                 "Client::Sync::eds_task::testDeleteAllRefresh,"
                                 "Client::Sync::eds_task::testOneWayFromServer,"
                                 "Client::Sync::eds_task::Retry,"
                                 "Client::Sync::eds_task::Suspend,"
-                                "Client::Sync::text::testRefreshFromClientSync,"
-                                "Client::Sync::text::testRefreshFromClientSemantic,"
-                                "Client::Sync::text::testRefreshStatus,"
-                                "Client::Sync::text::testDeleteAllRefresh,"
-                                "Client::Sync::text::testOneWayFromServer,"
-                                "Client::Sync::text::Retry,"
-                                "Client::Sync::text::Suspend,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshFromClientSync,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshFromClientSemantic,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testRefreshStatus,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testDeleteAllRefresh,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::testOneWayFromServer,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::Retry,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_text::Suspend,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshFromClientSync,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshFromClientSemantic,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testRefreshStatus,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testOneWayFromServer,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::testDeleteAllRefresh,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::Retry,"
-                                "Client::Sync::text_eds_task_eds_event_eds_contact::Suspend "
+                                "Client::Sync::eds_memo::testRefreshFromClientSync,"
+                                "Client::Sync::eds_memo::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_memo::testDeleteAllRefresh,"
+                                "Client::Sync::eds_memo::testOneWayFromServer,"
+                                "Client::Sync::eds_memo::Retry,"
+                                "Client::Sync::eds_memo::Suspend,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testRefreshFromClientSync,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testDeleteAllRefresh,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testOneWayFromServer,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Retry,"
+                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Suspend,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testRefreshFromClientSync,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testRefreshFromClientSemantic,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testOneWayFromServer,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testDeleteAllRefresh,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
+                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend "
                                 "CLIENT_TEST_DELAY=5 "
                                 "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "

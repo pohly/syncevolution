@@ -300,9 +300,9 @@ class ClientTest {
     /**
      * utility function for importing items with blank lines as separator
      */
-    static int import(ClientTest &client, TestingSyncSource &source,
-                      const ClientTestConfig &config,
-                      const char *file, std::string &realfile);
+    static std::string import(ClientTest &client, TestingSyncSource &source,
+                              const ClientTestConfig &config,
+                              const char *file, std::string &realfile);
 
     /**
      * utility function for comparing vCard and iCal files with the external
@@ -750,6 +750,10 @@ protected:
     virtual void testManyDeletes();
     virtual void testSlowSyncSemantic();
     virtual void testComplexRefreshFromServerSemantic();
+    virtual void testDeleteBothSides();
+    virtual void testLinkedItemsParentChild();
+    virtual void testLinkedItemsChild();
+    virtual void testLinkedItemsChildParent();
 
     virtual void doInterruptResume(int changes,
                   boost::shared_ptr<TransportWrapper> wrapper); 
