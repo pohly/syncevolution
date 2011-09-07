@@ -1,0 +1,9 @@
+<aegis>
+   <request policy="not-inheritable">
+      <credential name="GRP::calendar" />
+      <credential name="GRP::metadata-users" />
+      <credential name="TrackerReadAccess" />
+      <credential name="TrackerWriteAccess" />
+      <for path="/usr/bin/syncevolution" />
+   </request>
+</aegis>
