@@ -430,6 +430,10 @@ QtContactsSource::Databases QtContactsSource::getDatabases()
 
 void QtContactsSource::listAllItems(RevisionMap_t &revisions)
 {
+#ifdef ENABLE_MAEMO
+    QContactLocalId self_id = m_data->m_manager->selfContactId();
+#endif
+
     QContactFetchRequest fetch;
     fetch.setManager(m_data->m_manager.get());
 
@@ -443,6 +447,13 @@ void QtContactsSource::listAllItems(RevisionMap_t &revisions)
     fetch.waitForFinished();
     m_data->checkError("read all items", fetch);
     foreach (const QContact &contact, fetch.contacts()) {
+#ifdef ENABLE_MAEMO
+        if (contact.localId() == self_id) {
+            // Do not synchronize "self" contact
+            continue;
+        }
+#endif
+
         string revision = QtContactsData::getRev(contact);
         string luid = QtContactsData::getLUID(contact);
         if (luid == "2147483647" &&
