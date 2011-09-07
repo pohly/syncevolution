@@ -574,26 +574,38 @@ void ActiveSyncCalendarSource::deleteItem(const string &luid)
         m_cache.erase(easid);
     } else {
         loadItem(event);
-        bool found = false;
         // bool parentRemoved = false;
-        for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
+        icalcomponent *comp;
+        for (comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
             if (Event::getSubID(comp) == subid) {
-                icalcomponent_remove_component(event.m_calendar, comp);
-                icalcomponent_free(comp);
-                found = true;
+                // mark exception as deleted, will be recognized by activesyncd
+                // and translated into empty <Exception>
+                icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+                if (prop) {
+                    icalproperty_set_summary(prop,
+                                             StringPrintf("<<activesyncd deleted>> %s",
+                                                          icalproperty_get_summary(prop)).c_str());
+                } else {
+                    prop = icalproperty_new_summary("<<activesyncd deleted>>");
+                    icalcomponent_add_property(comp, prop);
+                }
+                break;
                 // if (subid.empty()) {
                 // parentRemoved = true;
                 // }
             }
         }
-        if (!found) {
+        if (!comp) {
             SE_THROW("event not found");
         }
         event.m_subids.erase(subid);
         // TODO: avoid updating the item immediately
         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
+        // now delete in cache
+        icalcomponent_remove_component(event.m_calendar, comp);
+        icalcomponent_free(comp);
         InsertItemResult res = ActiveSyncSource::insertItem(easid, icalstr.get());
         if (res.m_merged ||
             res.m_luid != easid) {

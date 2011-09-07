@@ -1290,7 +1290,7 @@ void LocalTests::testLinkedItemsRemoveNormal() {
 
     // The removal of the child fails with Exchange (BMC #22849).
     // Skip the testing, proceed to full removal.
-    if (currentServer() != "exchange") {
+    if (true || currentServer() != "exchange") {
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
         if (getCurrentTest().find("::eds_event::") != std::string::npos) {
             // hack: ignore EDS side effect of adding EXDATE to parent, see http://bugs.meego.com/show_bug.cgi?id=10906
