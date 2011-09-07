@@ -1,3 +1,11 @@
+syncevolution (1:1.1.99.6-2) unstable; urgency=low
+
+  * Removed static libraries.
+  * On Harmattan, re-enable iCal 2.0 UID comparisons.
+  * On Harmattan, don't try to sync the fake "self" contact.
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Wed, 07 Sep 2011 23:59:44 +0200
+
 syncevolution (1:1.1.99.6-1) unstable; urgency=low
 
   * SyncEvolution 1.1.99.6 for Maemo.
