@@ -3358,7 +3358,7 @@ SyncMLStatus SyncContext::doSync()
         // (not needed for OBEX)
     }
 
-#ifndef ENABLE_MAEMO
+#ifndef ENABLE_MAEMO_CALENDAR
     // Choosing between comparing UID/RECURRENCE-ID vs. other
     // iCalendar 2.0 properties is a hack: in local sync mode, the
     // iCalendar 2.0 semantic is always picked.
