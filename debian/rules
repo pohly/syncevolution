@@ -162,5 +162,9 @@ binary-indep: build-indep install-indep
 binary-arch: build-arch install-arch
 	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
 
+	# On Harmattan, add Aegis manifest
+	-aegis-deb-add -control debian/syncevolution/DEBIAN/control .. \
+	  debian/syncevolution.aegis=_aegis
+
 binary: binary-arch binary-indep
 .PHONY: build clean binary-indep binary-arch binary install install-indep install-arch 
