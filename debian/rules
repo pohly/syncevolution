@@ -37,7 +37,8 @@ ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 	CONFIGURE_FLAGS += CXXFLAGS="-g -O0"
 endif
 
-CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-ssl-certificate-check \
+CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-static \
+ --disable-ssl-certificate-check \
  --disable-libsoup --enable-libcurl --disable-ecal --enable-ebook --enable-maemocal \
  --disable-bluetooth --enable-dav --with-synthesis-src=libsynthesis
 
