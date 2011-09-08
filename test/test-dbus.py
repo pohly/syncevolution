@@ -3070,8 +3070,9 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         self.assertEqual(self.serverexe, self.serverExecutable())
 
 bt_mac         = "D4:5D:42:73:E4:6C"
-bt_fingerprint = "Nokia 5230"
-bt_name        = "My Nokia 5230"
+bt_fingerprint = ",Nokia 5230," # this device's substring in comma-separated fingerPrint
+bt_hardware    = "Nokia 5230" # from hardware database
+bt_name        = "My Phone"
 bt_template    = "Bluetooth_%s_1" % (bt_mac)
 bt_adaptor     = "/org/bluez/1036/hci0"
 bt_device      = "%s/dev_%s" % (bt_adaptor, string.replace(bt_mac, ':', '_'))
@@ -3180,6 +3181,7 @@ class TestBluetooth(unittest.TestCase, DBusUtil):
         configs = self.server.GetConfigs(True, utf8_strings=True)
         config  = self.server.GetConfig(bt_template, True, utf8_strings=True)
         self.failIf(string.find(config['']["fingerPrint"], bt_fingerprint) < 0)
+        self.failUnlessEqual(config['']["hardwareName"], bt_hardware)
 
     @property("ENV", "DBUS_TEST_BLUETOOTH=session")
     @timeout(100)
@@ -3192,11 +3194,11 @@ class TestBluetooth(unittest.TestCase, DBusUtil):
     @property("ENV", "DBUS_TEST_BLUETOOTH=session")
     @timeout(100)
     def testBluetoothUserModifiableDeviceName(self):
-        """TestBluetooth.testBluetoothUserModifiableDeviceName - check that peerName equals """
+        """TestBluetooth.testBluetoothUserModifiableDeviceName - check deviceName"""
         # This needs to be called before we can fetch the single config.
         configs = self.server.GetConfigs(True, utf8_strings=True)
         config  = self.server.GetConfig(bt_template, True, utf8_strings=True)
-        self.failUnlessEqual(config['']["peerName"], bt_name)
+        self.failUnlessEqual(config['']["deviceName"], bt_name)
 
 if __name__ == '__main__':
     unittest.main()
