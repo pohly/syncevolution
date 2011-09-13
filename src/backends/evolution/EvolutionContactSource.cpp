@@ -329,7 +329,7 @@ class EBookClientViewSyncHandler {
         EBookClientViewSyncHandler(EBookClientView *view, 
                                    void (*processList)(const GSList *list, void *user_data), 
                                    void *user_data): 
-            m_view(view), m_processList(processList), m_userData(user_data) {}
+            m_processList(processList), m_userData(user_data), m_view(view) {}
 
         bool process(GError **gerror) {
                  // Listen for view signals
