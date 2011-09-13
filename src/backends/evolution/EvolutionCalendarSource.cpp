@@ -594,7 +594,6 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
     if (!update) {
         ItemID id = getItemID(subcomp);
-        const char *uid = NULL;
 
         // Trying to add a normal event which already exists leads to a
         // gerror->domain == E_CALENDAR_ERROR
@@ -637,15 +636,17 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // creating new objects works for normal events and detached occurrences alike
 #ifdef USE_ECAL_CLIENT
-                if(e_cal_client_create_object_sync(m_calendar, subcomp, (char **)&uid, 
-                                                   NULL, &gerror)) {
+                GMemPtr<gchar> uid;
+                if (e_cal_client_create_object_sync(m_calendar, subcomp, uid, 
+                                                    NULL, &gerror)) {
 #else
-                if(e_cal_create_object(m_calendar, subcomp, (char **)&uid, &gerror)) {
+                const char *uid = NULL;
+                if (e_cal_create_object(m_calendar, subcomp, (char **)&uid, &gerror)) {
 #endif
                     // Evolution workaround: don't rely on uid being set if we already had
                     // one. In Evolution 2.12.1 it was set to garbage. The recurrence ID
                     // shouldn't have changed either.
-                    ItemID newid(!id.m_uid.empty() ? id.m_uid : uid, id.m_rid);
+                    ItemID newid(!id.m_uid.empty() ? id.m_uid : (const gchar *)uid, id.m_rid);
                     newluid = newid.getLUID();
                     modTime = getItemModTime(newid);
                     m_allLUIDs.insert(newluid);
@@ -724,12 +725,13 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 ICalComps_t children = removeEvents(id.m_uid, true);
 
                 // Parent is gone, too, and needs to be recreated.
-                const char *uid = NULL;
 #ifdef USE_ECAL_CLIENT
-                if(!e_cal_client_create_object_sync(m_calendar, subcomp, (char **)&uid, 
+                GMemPtr<gchar> uid;
+                if(!e_cal_client_create_object_sync(m_calendar, subcomp, uid, 
                                                     NULL, &gerror)) {
 #else
-                if(!e_cal_create_object(m_calendar, subcomp, (char **)&uid, &gerror)) {
+                const char *uid = NULL;
+                if (!e_cal_create_object(m_calendar, subcomp, (char **)&uid, &gerror)) {
 #endif
                     throwError(string("creating updated item ") + luid, gerror);
                 }
@@ -856,12 +858,13 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 
         // recreate children
         BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
-            char *uid;
 #ifdef USE_ECAL_CLIENT
-            if (!e_cal_client_create_object_sync(m_calendar, *icalcomp, &uid, 
+            GMemPtr<gchar> uid;
+            if (!e_cal_client_create_object_sync(m_calendar, *icalcomp, uid, 
                                                  NULL, &gerror)) {
 #else
-            if (!e_cal_create_object(m_calendar, *icalcomp, &uid, &gerror)) {
+            const char *uid;
+            if (!e_cal_create_object(m_calendar, *icalcomp, (char **)&uid, &gerror)) {
 #endif
                 throwError(string("recreating item ") + luid, gerror);
             }
