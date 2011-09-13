@@ -374,6 +374,27 @@ class PlainGStr : public boost::shared_ptr<gchar>
         const gchar *c_str() const { return &**this; }
 };
 
+/**
+ * Wraps a pointer to one or more instances of T which need to be freed by g_free().
+ * Like GListCXX above this can be used in functions which set the pointer to
+ * memory that needs to be free by the caller.
+ *
+ * Example:
+ * GMemPtr<gchar> uid;
+ * e_cal_client_create_object_sync (...,
+ *                                  uid, // gchar **uid
+ *                                  ...);
+ */
+template<class T> class GMemPtr : boost::noncopyable {
+    T *m_ptr;
+
+ public:
+    GMemPtr(T *ptr = NULL) : m_ptr(ptr) {}
+    ~GMemPtr() { g_free((void *)m_ptr); }
+
+    operator const T * () const { return m_ptr; }
+    operator T ** () { return &m_ptr; }
+};
 
 #endif
 
