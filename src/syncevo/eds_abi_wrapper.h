@@ -55,6 +55,13 @@
 #include <libedataserver/eds-version.h>
 #include <libedataserver/e-source.h>
 #include <libedataserver/e-source-list.h>
+#if EDS_MAJOR_VERSION == 2
+/* not good enough and macro was buggy (2.28 had EDS_MICRO_VERSION 3.1,
+   leading to "floating constant in preprocessor expression")
+   => evaluate to false below */
+# undef EDS_CHECK_VERSION
+# define EDS_CHECK_VERSION(_x,_y,_z) 0
+#endif
 #if EDS_CHECK_VERSION(3,1,0)
 #define USE_EBOOK_CLIENT 1
 #define USE_ECAL_CLIENT 1
