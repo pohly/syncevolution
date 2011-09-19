@@ -1,3 +1,14 @@
+syncevolution (1:1.1.99.7-1) unstable; urgency=low
+
+  * SyncEvolution 1.1.99.7 for Maemo.
+  * Removed static libraries.
+  * Merged from Harmattan branch (irrelevant on Fremantle):
+    - Added Aegis manifest for Harmattan.
+    - On Harmattan, re-enable iCal 2.0 UID comparisons.
+    - On Harmattan, don't try to sync the fake "self" contact.
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Mon, 19 Sep 2011 18:26:59 +0200
+
 syncevolution (1:1.1.99.6-1) unstable; urgency=low
 
   * SyncEvolution 1.1.99.6 for Maemo.
