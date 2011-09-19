@@ -433,8 +433,9 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             Event &event = loadItem(*it->second);
             event.m_etag = res.m_revision;
             if (event.m_subids.find(subid) != event.m_subids.end()) {
-                // was already in that item but caller didn't seem to know
-                subres.m_merged = true;
+                // was already in that item but caller didn't seem to know,
+                // and now we replaced the data on the CalDAV server
+                subres.m_state = ITEM_REPLACED;
             } else {
                 // add to merged item
                 event.m_subids.insert(subid);                
@@ -466,6 +467,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                     icalproperty *lastmod = icalcomponent_get_first_property(firstcomp, ICAL_LASTMODIFIED_PROPERTY);
                     if (lastmod) {
                         lastmodtime = icaltime_from_timet(newEvent->m_lastmodtime, false);
+                        lastmodtime.is_utc = 1;
                         icalproperty_set_lastmodified(lastmod, lastmodtime);
                     }
                     icalproperty *dtstamp = icalcomponent_get_first_property(firstcomp, ICAL_DTSTAMP_PROPERTY);
@@ -547,13 +549,11 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             }
         }
         if (davLUID != luid) {
-            // caller didn't know final UID: if found, the tell him that
-            // we merged the item for him, if not, then don't complain about
-            // it not being found (like we do when the item should exist
-            // but doesn't)
+            // caller didn't know final UID: if found, then tell him to
+            // merge the data and try again
             if (removeme) {
-                subres.m_merged = true;
-                icalcomponent_remove_component(event.m_calendar, removeme);
+                subres.m_state = ITEM_NEEDS_MERGE;
+                goto done;
             } else {
                 event.m_subids.insert(subid);
             }
@@ -561,6 +561,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             if (removeme) {
                 // this is what we expect when the caller mentions the DAV LUID
                 icalcomponent_remove_component(event.m_calendar, removeme);
+                icalcomponent_free(removeme);
             } else {
                 // caller confused?!
                 SE_THROW("event not found");
@@ -583,7 +584,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
         try {
             SE_LOG_DEBUG(this, NULL, "updating VEVENT");
             InsertItemResult res = insertItem(event.m_DAVluid, data, true);
-            if (res.m_merged ||
+            if (res.m_state != ITEM_OKAY ||
                 res.m_luid != event.m_DAVluid) {
                 // should not merge with anything, if so, our cache was invalid
                 SE_THROW("CalDAV item not updated as expected");
@@ -615,12 +616,56 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                 subres.m_merged = true;
                 subres.m_revision = event.m_etag;
 #endif
+            } else if (ex.syncMLStatus() == 409 &&
+                       strstr(ex.what(), "Can only store an event with a newer DTSTAMP")) {
+                SE_LOG_DEBUG(NULL, NULL, "resending VEVENT with updated SEQUENCE/LAST-MODIFIED/DTSTAMP to work around 409");
+
+                // Sometimes a PUT of two linked events updates one of them on the server
+                // (visible in modified SEQUENCE and LAST-MODIFIED values) and then
+                // fails with 409 because, presumably, the other item now has
+                // too low SEQUENCE/LAST-MODIFIED/DTSTAMP values.
+                //
+                // An attempt with splitting the PUT in advance worked for some cases,
+                // but then it still happened for others. So let's use brute force and
+                // try again once more after reading the updated event anew.
+                eptr<icalcomponent> fullcal = event.m_calendar;
+                loadItem(event);
+                event.m_sequence++;
+                lastmodtime = icaltime_from_timet(event.m_lastmodtime, false);
+                lastmodtime.is_utc = 1;
+                event.m_calendar = fullcal;
+                for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
+                     comp;
+                     comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
+                    if (!icaltime_is_null_time(lastmodtime)) {
+                        icalproperty *dtstamp = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
+                        if (dtstamp) {
+                            icalproperty_set_dtstamp(dtstamp, lastmodtime);
+                        }
+                        icalproperty *lastmod = icalcomponent_get_first_property(comp, ICAL_LASTMODIFIED_PROPERTY);
+                        if (lastmod) {
+                            icalproperty_set_lastmodified(lastmod, lastmodtime);
+                        }
+                    }
+                    Event::setSequence(comp, event.m_sequence);
+                }
+                eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
+                std::string data = icalstr.get();
+                InsertItemResult res = insertItem(event.m_DAVluid, data, true);
+                if (res.m_state != ITEM_OKAY ||
+                    res.m_luid != event.m_DAVluid) {
+                    // should not merge with anything, if so, our cache was invalid
+                    SE_THROW("CalDAV item not updated as expected");
+                }
+                event.m_etag = res.m_revision;
+                subres.m_revision = event.m_etag;
             } else {
                 throw;
             }
         }
     }
 
+ done:
     return subres;
 }
 
@@ -720,10 +765,12 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                         icalproperty *prop;
                         while ((prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) != NULL) {
                             icalcomponent_remove_property(comp, prop);
+                            icalproperty_free(prop);
                             updated = true;
                         }
                         while ((prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) != NULL) {
                             icalcomponent_remove_property(comp, prop);
+                            icalproperty_free(prop);
                             updated = true;
                         }
                     }
@@ -802,7 +849,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
         } else {
             res = insertItem(davLUID, icalstr.get(), true);
         }
-        if (res.m_merged ||
+        if (res.m_state != ITEM_OKAY ||
             res.m_luid != davLUID) {
             SE_THROW("unexpected result of removing sub event");
         }

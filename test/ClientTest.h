@@ -286,7 +286,7 @@ class ClientTest {
     /**
      * utility function for dumping items which are C strings with blank lines as separator
      */
-    static int dump(ClientTest &client, TestingSyncSource &source, const char *file);
+    static int dump(ClientTest &client, TestingSyncSource &source, const std::string &file);
 
     /**
      * utility function for splitting file into items with blank lines as separator
@@ -295,20 +295,20 @@ class ClientTest {
      *                        of the generic version. The caller gets the name of the
      *                        file that was opened here.
      */
-    static void getItems(const char *file, std::list<std::string> &items, std::string &realfile);
+    static void getItems(const std::string &file, std::list<std::string> &items, std::string &realfile);
 
     /**
      * utility function for importing items with blank lines as separator
      */
     static std::string import(ClientTest &client, TestingSyncSource &source,
                               const ClientTestConfig &config,
-                              const char *file, std::string &realfile);
+                              const std::string &file, std::string &realfile);
 
     /**
      * utility function for comparing vCard and iCal files with the external
      * synccompare.pl Perl script
      */
-    static bool compare(ClientTest &client, const char *fileA, const char *fileB);
+    static bool compare(ClientTest &client, const std::string &fileA, const std::string &fileB);
 
     /**
      * utility function: update a vCard or iCalendar item by inserting "MOD-" into
@@ -429,7 +429,7 @@ class ClientTest {
  */
 class CreateSource {
 public:
-    CreateSource(ClientTest::Config::createsource_t createSourceParam, ClientTest &clientParam, int sourceParam, bool isSourceAParam) :
+     CreateSource(const ClientTest::Config::createsource_t &createSourceParam, ClientTest &clientParam, int sourceParam, bool isSourceAParam) :
         createSource(createSourceParam),
         client(clientParam),
         source(sourceParam),
@@ -473,8 +473,8 @@ public:
         client(cl),
         source(sourceParam),
         config(co),
-        createSourceA(co.createSourceA, cl, sourceParam, true),
-        createSourceB(co.createSourceB, cl, sourceParam, false)
+        createSourceA(co.m_createSourceA, cl, sourceParam, true),
+        createSourceB(co.m_createSourceB, cl, sourceParam, false)
         {}
 
     /** set up before running a test */
@@ -495,21 +495,21 @@ public:
      * @retval inserted    actual data that was inserted, optional
      * @return the LUID of the inserted item
      */
-    virtual std::string insert(CreateSource createSource, const char *data, bool relaxed = false, std::string *inserted = NULL);
+    virtual std::string insert(CreateSource createSource, const std::string &data, bool relaxed = false, std::string *inserted = NULL);
 
     /**
      * assumes that exactly one element is currently inserted and updates it with the given item
      *
      * @param check     if true, then reopen the source and verify that the reported items are as expected
      */
-    virtual void update(CreateSource createSource, const char *data, bool check = true);
+    virtual void update(CreateSource createSource, const std::string &data, bool check = true);
 
     /**
      * updates one item identified by its LUID with the given item
      *
      * The type of the item is cleared, as in insert() above.
      */
-    virtual void update(CreateSource createSource, const char *data, const std::string &luid);
+    virtual void update(CreateSource createSource, const std::string &data, const std::string &luid);
 
     /** deletes all items locally via sync source */
     virtual void deleteAll(CreateSource createSource);
@@ -590,6 +590,8 @@ public:
     virtual void testLinkedItemsInsertBothUpdateChild();
     virtual void testLinkedItemsInsertBothUpdateParent();
 
+    /** retrieve right set of items for running test */
+    ClientTestConfig::LinkedItems_t getParentChildData();
 };
 
 int countItemsOfType(TestingSyncSource *source, int state);
@@ -751,6 +753,8 @@ protected:
     virtual void testSlowSyncSemantic();
     virtual void testComplexRefreshFromServerSemantic();
     virtual void testDeleteBothSides();
+    virtual void testAddBothSides();
+    virtual void testAddBothSidesRefresh();
     virtual void testLinkedItemsParentChild();
     virtual void testLinkedItemsChild();
     virtual void testLinkedItemsChildParent();

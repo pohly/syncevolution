@@ -162,23 +162,23 @@ class TestingSyncSource;
  * is okay, but it will disable all tests that need the
  * information.
  */
-struct ClientTestConfig{
+struct ClientTestConfig {
     /**
      * The name is used in test names and has to be set.
      */
-    const char *sourceName;
+    std::string m_sourceName;
 
     /**
      * A default URI to be used when creating a client config.
      */
-    const char *uri;
+    std::string m_uri;
 
     /**
      * A corresponding source name in the default server template,
      * this is used to copy corresponding uri set in the server template
      * instead of the uri field above (which is the same for all servers).
      */
-    const char *sourceNameServerTemplate;
+    std::string m_sourceNameServerTemplate;
 
     /**
      * A member function of a subclass which is called to create a
@@ -210,7 +210,7 @@ struct ClientTestConfig{
      * it may report the same changes as the sync source used during
      * sync tests.
      */
-    createsource_t createSourceA;
+    createsource_t m_createSourceA;
 
     /**
      * A second sync source also referencing the primary data
@@ -228,7 +228,7 @@ struct ClientTestConfig{
      * - check that the total number and number of
      *   added/updated/deleted items is as expected
      */
-    createsource_t createSourceB;
+    createsource_t m_createSourceB;
 
     /**
      * The framework can generate vCard and vCalendar/iCalendar items
@@ -239,24 +239,19 @@ struct ClientTestConfig{
      * It must contain the string <<REVISION>> which will be replaced
      * with the revision parameter of the createItem() method.
      */
-    const char *templateItem;
+    std::string m_templateItem;
 
     /**
      * This is a colon (:) separated list of properties which need
      * to be modified in templateItem.
      */
-    const char *uniqueProperties;
-
-    /**
-     * the number of items to create during stress tests
-     */
-    int numItems;
+    std::string m_uniqueProperties;
 
     /**
      * This is a single property in templateItem which can be extended
      * to increase the size of generated items.
      */
-    const char *sizeProperty;
+    std::string m_sizeProperty;
 
     /**
      * Type to be set when importing any of the items into the
@@ -266,7 +261,7 @@ struct ClientTestConfig{
      * Not currently used! All items are assumed to be in the raw,
      * internal format (see SyncSourceRaw and SyncSourceSerialize).
      */
-    const char *itemType;
+    std::string m_itemType;
 
     /**
      * callback which is invoked with a specific item as paramter
@@ -276,33 +271,33 @@ struct ClientTestConfig{
      * @param update     modify item content so that it can be
      *                   used as an update of the old data
      */
-    string (*mangleItem)(const char *data, bool update);
+    boost::function<std::string (const std::string &, bool)> m_mangleItem;
 
     /**
      * A very simple item that is inserted during basic tests. Ideally
      * it only contains properties supported by all servers.
      */
-    const char *insertItem;
+    std::string m_insertItem;
 
     /**
      * A slightly modified version of insertItem. If the source has UIDs
      * embedded into the item data, then both must have the same UID.
      * Again all servers should better support these modified properties.
      */
-    const char *updateItem;
+    std::string m_updateItem;
 
     /**
      * A more heavily modified version of insertItem. Same UID if necessary,
      * but can test changes to items only supported by more advanced
      * servers.
      */
-    const char *complexUpdateItem;
+    std::string m_complexUpdateItem;
 
     /**
      * To test merge conflicts two different updates of insertItem are
      * needed. This is the first such update.
      */
-    const char *mergeItem1;
+    std::string m_mergeItem1;
 
     /**
      * The second merge update item. To avoid true conflicts it should
@@ -310,13 +305,14 @@ struct ClientTestConfig{
      * usually have problems perfectly merging items. Therefore the
      * test is run without expecting a certain merge result.
      */
-    const char *mergeItem2;
+    std::string m_mergeItem2;
 
     /**
-     * These two items are related: one is main one, the other is
-     * a subordinate one. The semantic is that the main item is
-     * complete on it its own, while the other normally should only
-     * be used in combination with the main one.
+     * The items in the inner vector are related: the first one the is
+     * main one, the other(s) is/are a subordinate ones. The semantic
+     * is that the main item is complete on it its own, while the
+     * other normally should only be used in combination with the main
+     * one.
      *
      * Because SyncML cannot express such dependencies between items,
      * a SyncSource has to be able to insert, updated and remove
@@ -328,26 +324,42 @@ struct ClientTestConfig{
      * One example for main and subordinate items are a recurring
      * iCalendar 2.0 event and a detached recurrence.
      */
-    const char *parentItem, *childItem;
+    typedef std::vector<std::string> LinkedItems_t;
+
+    /**
+     * The linked items may exist in different variations (outer vector).
+     */
+    typedef std::vector<LinkedItems_t> MultipleLinkedItems_t;
+
+    MultipleLinkedItems_t m_linkedItems;
 
     /**
      * Backends atomic modification tests
      */
-    bool atomicModification;
+    Bool m_atomicModification;
 
     /**
      * set to false to disable tests which slightly violate the
      * semantic of linked items by inserting children
      * before/without their parent
      */
-    bool linkedItemsRelaxedSemantic;
+    Bool m_linkedItemsRelaxedSemantic;
 
     /**
      * setting this to false disables tests which depend
      * on the source's support for linked item semantic
      * (testLinkedItemsInsertParentTwice, testLinkedItemsInsertChildTwice)
      */
-    bool sourceKnowsItemSemantic;
+    Bool m_sourceKnowsItemSemantic;
+
+    /**
+     * Set this to true if the backend does not have IDs which are the
+     * same for all clients and across slow syncs. For example, when
+     * testing the ActiveSync backend this field needs to be true,
+     * because items are renumbered as 1:x with x = 1, 2, ... for each
+     * clients when a sync anchor is assigned to it.
+     */
+    Bool m_sourceLUIDsAreVolatile;
 
     /**
      * called to dump all items into a file, required by tests which need
@@ -360,7 +372,7 @@ struct ClientTestConfig{
      * @param file       a file name
      * @return error code, 0 for success
      */
-    int (*dump)(ClientTest &client, TestingSyncSource &source, const char *file);
+    boost::function<int (ClientTest &, TestingSyncSource &, const std::string &)> m_dump;
 
     /**
      * import test items: which these are is determined entirely by
@@ -376,8 +388,8 @@ struct ClientTestConfig{
      *                   this may depend on the current server that is being tested
      * @return error string, empty for success
      */
-    std::string (*import)(ClientTest &client, TestingSyncSource &source, const ClientTestConfig &config,
-                          const char *file, std::string &realfile);
+    boost::function<std::string (ClientTest &, TestingSyncSource &, const ClientTestConfig &,
+                                 const std::string &, std::string &)> m_import;
 
     /**
      * a function which compares two files with items in the format used by "dump"
@@ -386,7 +398,7 @@ struct ClientTestConfig{
      * @param fileB      second file name
      * @return true if the content of the files is considered equal
      */
-    bool (*compare)(ClientTest &client, const char *fileA, const char *fileB);
+    boost::function<bool (ClientTest &, const std::string &, const std::string &)> m_compare;
 
     /**
      * A file with test cases in the format expected by import and compare.
@@ -405,27 +417,27 @@ struct ClientTestConfig{
      *   That file then will be used in testItems instead of the base
      *   version. See the src/Makefile.am for rules that maintain such files.
      */
-    const char *testcases;
+    std::string m_testcases;
 
     /**
      * the item type normally used by the source (not used by the tests
      * themselves; client-test.cpp uses it to initialize source configs)
      */
-    const char *type;
+    std::string m_type;
 
     /**
      * a list of sub configs separated via , if this is a super datastore
      */
-    const char *subConfigs;
+    std::string m_subConfigs;
 
     /**
      * TRUE if the source supports recovery from an interrupted
      * synchronization. Enables the Client::Sync::*::Retry group
      * of tests.
      */
-    bool retrySync;
-    bool suspendSync;
-    bool resendSync;
+    Bool m_retrySync;
+    Bool m_suspendSync;
+    Bool m_resendSync;
 
     /**
      * Set this to test if the source supports preserving local data extensions.
@@ -438,8 +450,8 @@ struct ClientTestConfig{
      * genericUpdate works for vCard and iCalendar by updating FN, N, resp. SUMMARY
      * and can be used as implementation of update.
      */
-    void (*update)(std::string &item);
-    void (*genericUpdate)(std::string &item);
+    boost::function<void (std::string &)> m_update;
+    boost::function<void (std::string &)> m_genericUpdate;
 };
 
 /**
@@ -1408,6 +1420,53 @@ class SyncSourceDelete : virtual public SyncSourceBase {
     sysync::TSyError deleteItemSynthesis(sysync::cItemID aID);
 };
 
+enum InsertItemResultState {
+    /**
+     * item added or updated as requested
+     */
+    ITEM_OKAY,
+
+    /**
+     * When a backend is asked to add an item and recognizes
+     * that the item matches an already existing item, it may
+     * replace that item instead of creating a duplicate. In this
+     * case it must return ITEM_REPLACED and set the luid/revision
+     * of that updated item.
+     *
+     * This can happen when such an item was added concurrently to
+     * the running sync or, more likely, was reported as new by
+     * the backend and the engine failed to find the match because
+     * it doesn't know about some special semantic, like iCalendar
+     * 2.0 UID).
+     *
+     * Note that depending on the age of the items, the older data
+     * will replace the more recent one when always using item
+     * replacement.
+     */
+    ITEM_REPLACED,
+
+    /**
+     * Same as ITEM_REPLACED, except that the backend did some
+     * modifications to the data that was sent to it before
+     * storing it, like merging it with the existing item. The
+     * engine will treat the updated item as modified and send
+     * back the update to the peer as soon as possible. In server
+     * mode that will be in the same sync session, in a client in
+     * the next session (client cannot send changes after having
+     * received data from the server).
+     */
+    ITEM_MERGED,
+
+    /**
+     * As before, a match against an existing item was detected.
+     * By returning this state and the luid of the matched item
+     * (revision not needed) the engine is instructed to do the
+     * necessary data comparison and merging itself. Useful when a
+     * backend can't do the necessary merging itself.
+     */
+    ITEM_NEEDS_MERGE
+};
+
 /**
  * an interface for reading and writing items in the internal
  * format; see SyncSourceSerialize for an explanation
@@ -1417,26 +1476,26 @@ class SyncSourceRaw : virtual public SyncSourceBase {
     class InsertItemResult {
     public:
         InsertItemResult() :
-            m_merged(false)
+            m_state(ITEM_OKAY)
             {}
         
         /**
          * @param luid      the LUID after the operation; during an update the LUID must
          *                  not be changed, so return the original one here
          * @param revision  the revision string after the operation; leave empty if not used
-         * @param merged    set this to true if an existing item was updated instead of adding it
+         * @param state     report about what was done with the data
          */
         InsertItemResult(const string &luid,
                          const string &revision,
-                         bool merged) :
+                         InsertItemResultState state) :
         m_luid(luid),
             m_revision(revision),
-            m_merged(merged)
+            m_state(state)
             {}
 
         string m_luid;
         string m_revision;
-        bool m_merged;
+        InsertItemResultState m_state;
     };
 
     /** same as SyncSourceSerialize::insertItem(), but with internal format */
