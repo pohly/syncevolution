@@ -211,7 +211,8 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
 {
     int err;
     CComponent *c;
-    bool r, u = false;
+    bool r;
+    InsertItemResultState u = ITEM_OKAY;
     TrackingSyncSource::InsertItemResult result;
 
     if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
@@ -270,7 +271,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
             throwError(string("creating item "));
         }
         if (err == CALENDAR_ENTRY_DUPLICATED) {
-            u = true;
+            u = ITEM_MERGED;
         }
     }
 
