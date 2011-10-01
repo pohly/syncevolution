@@ -448,7 +448,9 @@ AC_ARG_WITH(gio-gdbus,
                              [with_gio_gdbus="yes"],
                              [with_gio_gdbus="no"]))
 AM_CONDITIONAL([COND_GIO_GDBUS], [test "x$with_gio_gdbus" = "xyes"])
-AS_IF([test "x$with_gio_gdbus" = "xyes"], [need_glib=yes])
+AS_IF([test "x$with_gio_gdbus" = "xyes"], [need_glib=yes
+                                           PKG_CHECK_MODULES([GIO_GDBUS], [gio-2.0 >= 2.26])
+                                           AC_DEFINE([WITH_GIO_GDBUS],[],[Set if using GIO GDBus])])
 
 PKG_CHECK_MODULES(KEYRING, [gnome-keyring-1], HAVE_KEYRING=yes, HAVE_KEYRING=no)
 AC_ARG_ENABLE(gnome-keyring,
