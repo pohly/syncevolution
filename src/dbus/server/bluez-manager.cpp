@@ -38,9 +38,8 @@ BluezManager::BluezManager(Server &server) :
 {
     const char *bluetoothTest = getenv ("DBUS_TEST_BLUETOOTH");
     m_bluezConn = (bluetoothTest && !strcmp(bluetoothTest, "none")) ? NULL :
-        b_dbus_setup_bus((bluetoothTest && !strcmp(bluetoothTest, "session")) ?
-                         DBUS_BUS_SESSION : DBUS_BUS_SYSTEM,
-                         NULL, true, NULL);
+        dbus_get_bus_connection((bluetoothTest && !strcmp(bluetoothTest, "session")) ?
+                                "SESSION" : "SYSTEM", NULL, true, NULL);
     if(m_bluezConn) {
         m_done = false;
         DBusClientCall1<DBusObject_t> getAdapter(*this, "DefaultAdapter");

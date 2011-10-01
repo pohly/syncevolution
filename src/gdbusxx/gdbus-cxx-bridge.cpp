@@ -21,10 +21,50 @@
 
 namespace boost
 {
-    void intrusive_ptr_add_ref(GDBusConnection  *con)  { g_object_ref(con); }
-    void intrusive_ptr_release(GDBusConnection  *con)  { g_object_unref(con); }
-    void intrusive_ptr_add_ref(GDBusMessage     *msg)  { g_object_ref(msg); }
-    void intrusive_ptr_release(GDBusMessage     *msg)  { g_object_unref(msg); }
-    void intrusive_ptr_add_ref(GDBusPendingCall *call) { g_object_ref(call); }
-    void intrusive_ptr_release(GDBusPendingCall *call) { g_object_unref(call); }
+    void intrusive_ptr_add_ref(GDBusConnection       *con)  { g_object_ref(con); }
+    void intrusive_ptr_release(GDBusConnection       *con)  { g_object_unref(con); }
+    void intrusive_ptr_add_ref(GDBusMessage          *msg)  { g_object_ref(msg); }
+    void intrusive_ptr_release(GDBusMessage          *msg)  { g_object_unref(msg); }
+}
+
+namespace GDBusCXX {
+
+GDBusConnection *dbus_get_bus_connection(const char *busType,
+                                         const char *interface,
+                                         bool unshared,
+                                         DBusErrorCXX &err)
+{
+    GDBusConnection *conn;
+
+    if(unshared) {
+        // Note: Is a private connection really necessary? If this is
+        // being used just to exit on disconnect, the exit-on-close
+        // property can be set as such.
+        char *address = g_dbus_address_get_for_bus_sync (boost::iequals(busType, "SESSION") ?
+                                                         G_BUS_TYPE_SESSION : G_BUS_TYPE_SYSTEM,
+                                                         NULL);
+        if(address == NULL) {
+            return NULL;
+        }
+        
+        conn = g_dbus_connection_new_for_address_sync(address,
+                                                      G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
+                                                      NULL, &err);
+        g_free(address);
+    } else {
+        // This returns a singleton, shared connection object.
+        conn = g_bus_get_sync(boost::iequals(busType, "SESSION") ? G_BUS_TYPE_SESSION : G_BUS_TYPE_SYSTEM,
+                              NULL, &err);
+    }
+
+    if(!conn) {
+        return NULL;
+    }
+
+    if(name) {
+        g_bus_own_name_on_connection(conn, interface, G_BUS_NAME_OWNER_FLAGS_NONE,
+                                     NULL, NULL, NULL, NULL);
+    }
+}
+
 }
