@@ -13,8 +13,8 @@ synchronize personal information management data
 SYNOPSIS
 ========
 
-Show available sources:
-  syncevolution
+List databases:
+  syncevolution --print-databases [<properties>] [<config> <source>]
 
 Show information about configuration(s):
   syncevolution --print-servers|--print-configs|--print-peers
@@ -115,13 +115,27 @@ context, without modifying a specific peer. This can be done by using
 `@default` (or some other context name) without anything before the
 `at` sign. The empty string "" is the same as `@default`. ::
 
-   syncevolution
+   syncevolution --print-databases [<properties>] [<config> <source>]
 
-If no arguments are given, then SyncEvolution will list all available
-data sources regardless whether there is a configuration file for them
-or not. The output includes the identifiers which can then be used to
-select those sources in a configuration file. For each source one can
-set a different synchronization mode in its configuration file. ::
+If no additional arguments are given, then SyncEvolution will list all
+available backends and the databases that can be accessed through each
+backend. This works without existing configurations. However, some
+backends need additional information (like credentials or URL of a
+remote server) and/or cannot list databases (file backend). This
+additional information can be provided on the command line with
+property assignments (`username=...`) or in an existing configuration.
+The output in these cases explains the required information further.
+
+Otherwise the output starts with a heading that lists the values for
+the `backend` property which select the backend, followed by the databases.
+Each database has a name and a unique ID (in brackets). Typically
+both can be used as value of the 'database' property. One database
+might be marked as `default`. It will be used when `database` is not
+set explicitly.
+
+When selecting an existing source configuration or specifying the `backend`
+property on the command line, only the databases for that backend
+are listed, using the same output format.
 
    syncevolution <config>
 

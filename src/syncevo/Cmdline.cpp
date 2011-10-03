@@ -191,6 +191,9 @@ bool Cmdline::parse(vector<string> &parsed)
                 m_dontrun = true;
                 m_template = temp.substr (1);
             }
+        } else if(boost::iequals(m_argv[opt], "--print-databases")) {
+            operations.push_back(m_argv[opt]);
+            m_printDatabases = true;
         } else if(boost::iequals(m_argv[opt], "--print-servers") ||
                   boost::iequals(m_argv[opt], "--print-peers") ||
                   boost::iequals(m_argv[opt], "--print-configs")) {
@@ -394,6 +397,7 @@ bool Cmdline::isSync()
         m_printServers || boost::trim_copy(m_server) == "?" ||
         m_printTemplates || m_dontrun ||
         m_argc == 1 || (m_useDaemon.wasSet() && m_argc == 2) ||
+        m_printDatabases ||
         m_printConfig || m_remove ||
         (m_server == "" && m_argc > 1) ||
         m_configure || m_migrate ||
@@ -659,33 +663,53 @@ bool Cmdline::run() {
         }
     } else if (m_dontrun) {
         // user asked for information
-    } else if (m_argc == 1 || (m_useDaemon.wasSet() && m_argc == 2)) {
-        // no parameters: list databases and short usage
+    } else if (m_printDatabases) {
+        // list databases
+        // TODO: use existing config
         const SourceRegistry &registry(SyncSource::getSourceRegistry());
         boost::shared_ptr<FilterConfigNode> sharedNode(new VolatileConfigNode());
         boost::shared_ptr<FilterConfigNode> configNode(new VolatileConfigNode());
         boost::shared_ptr<FilterConfigNode> hiddenNode(new VolatileConfigNode());
         boost::shared_ptr<FilterConfigNode> trackingNode(new VolatileConfigNode());
         boost::shared_ptr<FilterConfigNode> serverNode(new VolatileConfigNode());
+
+        FilterConfigNode::ConfigFilter sourceFilter = m_props.createSourceFilter(m_server, "");
+        configNode->setFilter(sourceFilter);
+        sharedNode->setFilter(sourceFilter);
+
         SyncSourceNodes nodes(true, sharedNode, configNode, hiddenNode, trackingNode, serverNode, "");
-        SyncSourceParams params("list", nodes, boost::shared_ptr<SyncConfig>());
-        
-        BOOST_FOREACH(const RegisterSyncSource *source, registry) {
-            BOOST_FOREACH(const Values::value_type &alias, source->m_typeValues) {
-                if (!alias.empty() && source->m_enabled) {
-                    SourceType type(*alias.begin());
-                    sharedNode->setProperty("backend", type.m_backend);
-                    sharedNode->setProperty("databaseFormat", type.m_localFormat);
-                    auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
-                    if (source.get() != NULL) {
-                        listSources(*source, boost::join(alias, " = "));
-                        m_out << "\n";
+
+        boost::shared_ptr<SyncContext> context(new SyncContext);
+        context->setConfigFilter(true, "", m_props.createSyncFilter(m_server));
+        SyncSourceParams params("list", nodes, context);
+        FilterConfigNode::ConfigFilter::const_iterator backend = sourceFilter.find("backend");
+        if (backend != sourceFilter.end()) {
+            // list for specific backend
+            auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
+            if (source.get() != NULL) {
+                // TODO: find alias
+                listSources(*source, backend->second /* boost::join(alias, " = ") */);
+                m_out << "\n";
+            } else {
+                m_out << "cannot instantiate backend=" << backend->second << std::endl;
+            }
+        } else {
+            // list for all backends
+            BOOST_FOREACH(const RegisterSyncSource *source, registry) {
+                BOOST_FOREACH(const Values::value_type &alias, source->m_typeValues) {
+                    if (!alias.empty() && source->m_enabled) {
+                        SourceType type(*alias.begin());
+                        sharedNode->setProperty("backend", type.m_backend);
+                        sharedNode->setProperty("databaseFormat", type.m_localFormat);
+                        auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
+                        if (source.get() != NULL) {
+                            listSources(*source, boost::join(alias, " = "));
+                            m_out << "\n";
+                        }
                     }
                 }
             }
         }
-
-        usage(false);
     } else if (m_printConfig) {
         boost::shared_ptr<SyncConfig> config;
         ConfigProps syncFilter;
