@@ -4905,7 +4905,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
             "BEGIN:VTIMEZONE\n"
-            "TZID:/softwarestudio.org/Olson_20011030_5/Europe/Berlin\n"
+            "TZID:Europe/Berlin\n"
             "X-LIC-LOCATION:Europe/Berlin\n"
             "BEGIN:DAYLIGHT\n"
             "TZOFFSETFROM:+0100\n"
@@ -4925,8 +4925,8 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VEVENT\n"
             "UID:20080407T193125Z-19554-727-1-50@gollum\n"
             "DTSTAMP:20080407T193125Z\n"
-            "DTSTART;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080406T090000\n"
-            "DTEND;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080406T093000\n"
+            "DTSTART;TZID=Europe/Berlin:20080406T090000\n"
+            "DTEND;TZID=Europe/Berlin:20080406T093000\n"
             "TRANSP:OPAQUE\n"
             "SEQUENCE:XXX\n"
             "SUMMARY:Recurring\n"
@@ -4942,7 +4942,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
             "BEGIN:VTIMEZONE\n"
-            "TZID:/softwarestudio.org/Olson_20011030_5/Europe/Berlin\n"
+            "TZID:Europe/Berlin\n"
             "X-LIC-LOCATION:Europe/Berlin\n"
             "BEGIN:DAYLIGHT\n"
             "TZOFFSETFROM:+0100\n"
@@ -4962,15 +4962,15 @@ void ClientTest::getTestData(const char *type, Config &config)
             "BEGIN:VEVENT\n"
             "UID:20080407T193125Z-19554-727-1-50@gollum\n"
             "DTSTAMP:20080407T193125Z\n"
-            "DTSTART;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080413T090000\n"
-            "DTEND;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080413T093000\n"
+            "DTSTART;TZID=Europe/Berlin:20080413T090000\n"
+            "DTEND;TZID=Europe/Berlin:20080413T093000\n"
             "TRANSP:OPAQUE\n"
             "SEQUENCE:XXX\n"
             "SUMMARY:Recurring: Modified\n"
             "CLASS:PUBLIC\n"
             "CREATED:20080407T193241Z\n"
             "LAST-MODIFIED:20080407T193647Z\n"
-            "RECURRENCE-ID;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080413T090000\n"
+            "RECURRENCE-ID;TZID=Europe/Berlin:20080413T090000\n"
             "DESCRIPTION:second instance modified\n"
             "END:VEVENT\n"
             "END:VCALENDAR\n";
@@ -4982,7 +4982,7 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
                 "VERSION:2.0\n"
                 "BEGIN:VTIMEZONE\n"
-                "TZID:/softwarestudio.org/Olson_20011030_5/Europe/Berlin\n"
+                "TZID:Europe/Berlin\n"
                 "X-LIC-LOCATION:Europe/Berlin\n"
                 "BEGIN:DAYLIGHT\n"
                 "TZOFFSETFROM:+0100\n"
@@ -5002,8 +5002,8 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "BEGIN:VEVENT\n"
                 "UID:20080407T193125Z-19554-727-1-50@gollum\n"
                 "DTSTAMP:20080407T193125Z\n"
-                "DTSTART;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080406T090000\n"
-                "DTEND;TZID=/softwarestudio.org/Olson_20011030_5/Europe/Berlin:20080406T093000\n"
+                "DTSTART;TZID=Europe/Berlin:20080406T090000\n"
+                "DTEND;TZID=Europe/Berlin:20080406T093000\n"
                 "TRANSP:OPAQUE\n"
                 "SEQUENCE:XXX\n"
                 "SUMMARY:Recurring\n"
@@ -5099,7 +5099,7 @@ void ClientTest::getTestData(const char *type, Config &config)
                 // time zone name changes on server to "Standard Timezone",
                 // with some information stripped
                 boost::replace_all(item,
-                                   "/softwarestudio.org/Olson_20011030_5/Europe/Berlin",
+                                   "Europe/Berlin",
                                    "Standard Timezone");
                 // some properties are not stored/supported
                 boost::replace_all(item, "TZNAME:CET\n", "");
