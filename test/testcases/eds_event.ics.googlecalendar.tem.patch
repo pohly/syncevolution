@@ -177,7 +177,7 @@
  CREATED:20060416T204808Z
  LAST-MODIFIED:20060416T204808Z
  END:VEVENT
-@@ -171,11 +261,29 @@
+@@ -193,11 +283,29 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -209,7 +209,7 @@
  TRANSP:TRANSPARENT
  SEQUENCE:4
  SUMMARY:all fields
-@@ -205,34 +313,29 @@
+@@ -227,34 +335,29 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -264,7 +264,7 @@
  TRANSP:OPAQUE
  SEQUENCE:2
  SUMMARY:Recurring
-@@ -247,18 +350,36 @@
+@@ -269,18 +372,36 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -304,7 +304,7 @@
  DESCRIPTION:second instance modified
  END:VEVENT
  END:VCALENDAR
-@@ -266,18 +387,36 @@
+@@ -288,18 +409,36 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -344,7 +344,7 @@
  DESCRIPTION:third instance modified\, different time
  END:VEVENT
  END:VCALENDAR
-@@ -285,11 +424,29 @@
+@@ -307,11 +446,29 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -376,7 +376,7 @@
  TRANSP:OPAQUE
  SEQUENCE:2
  SUMMARY:Recurring 2
-@@ -304,18 +461,36 @@
+@@ -326,18 +483,36 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -417,7 +417,7 @@
  DESCRIPTION:second instance modified\, single detached recurrence
  END:VEVENT
  END:VCALENDAR
-@@ -323,18 +498,36 @@
+@@ -345,18 +520,36 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
@@ -457,7 +457,7 @@
  DESCRIPTION:second instance modified
  END:VEVENT
  END:VCALENDAR
-@@ -342,52 +535,36 @@
+@@ -364,52 +557,36 @@
  BEGIN:VCALENDAR
  PRODID:-//Ximian//NONSGML Evolution Calendar//EN
  VERSION:2.0
