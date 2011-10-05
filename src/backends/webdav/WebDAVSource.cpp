@@ -179,6 +179,11 @@ WebDAVSource::WebDAVSource(const SyncSourceParams &params,
                                             this, m_operations.m_backupData, _1, _2, _3);
     m_operations.m_restoreData = boost::bind(&WebDAVSource::restoreData,
                                              this, m_operations.m_restoreData, _1, _2, _3);
+
+    // ignore the "Request ends, status 207 class 2xx, error line:" printed by neon
+    LogRedirect::addIgnoreError(", error line:");
+    // ignore error messages in returned data
+    LogRedirect::addIgnoreError("Read block (");
 }
 
 void WebDAVSource::replaceHTMLEntities(std::string &item)
@@ -315,11 +320,6 @@ void WebDAVSource::contactServer()
         m_session) {
         // we have done this work before, no need to repeat it
     }
-
-    // ignore the "Request ends, status 207 class 2xx, error line:" printed by neon
-    LogRedirect::addIgnoreError(", error line:");
-    // ignore error messages in returned data
-    LogRedirect::addIgnoreError("Read block (");
 
     SE_LOG_DEBUG(NULL, NULL, "using libneon %s with %s",
                  ne_version_string(), Neon::features().c_str());
