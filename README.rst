@@ -120,22 +120,27 @@ context, without modifying a specific peer. This can be done by using
 If no additional arguments are given, then SyncEvolution will list all
 available backends and the databases that can be accessed through each
 backend. This works without existing configurations. However, some
-backends need additional information (like credentials or URL of a
-remote server) and/or cannot list databases (file backend). This
+backends, like for example the CalDAV backend, need additional
+information (like credentials or URL of a remote server). This
 additional information can be provided on the command line with
 property assignments (`username=...`) or in an existing configuration.
-The output in these cases explains the required information further.
 
-Otherwise the output starts with a heading that lists the values for
-the `backend` property which select the backend, followed by the databases.
-Each database has a name and a unique ID (in brackets). Typically
-both can be used as value of the 'database' property. One database
-might be marked as `default`. It will be used when `database` is not
-set explicitly.
+When listing all databases of all active sources, the output starts
+with a heading that lists the values for the `backend` property which
+select the backend, followed by the databases.  Each database has a
+name and a unique ID (in brackets). Typically both can be used as
+value of the 'database' property. One database might be marked as
+`default`. It will be used when `database` is not set explicitly.
 
 When selecting an existing source configuration or specifying the `backend`
 property on the command line, only the databases for that backend
-are listed, using the same output format.
+are listed and the initial line shows how that backend was selected
+(<config>/<source> resp. backend value).
+
+Some backends do not support listing of databases. For example, the
+file backend synchronizes directories with one file per item and
+always needs an explicit `database` configuration because it cannot guess
+which directory it is meant to use.
 
    syncevolution <config>
 
