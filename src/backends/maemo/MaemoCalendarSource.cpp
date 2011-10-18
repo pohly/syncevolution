@@ -73,6 +73,13 @@ std::string MaemoCalendarSource::getMimeVersion() const
     }
 }
 
+void MaemoCalendarSource::getSynthesisInfo(SynthesisInfo &info,
+                                           XMLConfigFragments &fragments)
+{
+    TrackingSyncSource::getSynthesisInfo(info, fragments);
+    info.m_backendRule = "HAVE-EXDATE-DETACHED";
+}
+
 void MaemoCalendarSource::open()
 {
     string id = getDatabaseID();
