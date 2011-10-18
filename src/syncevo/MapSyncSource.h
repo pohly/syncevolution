@@ -180,6 +180,12 @@ class SubSyncSource : virtual public SyncSourceBase
      */
     virtual std::string getSubDescription(const string &mainid, const string &subid) = 0;
 
+    /**
+     * Called after MapSyncSource already populated the info structure.
+     */
+    virtual void updateSynthesisInfo(SynthesisInfo &info,
+                                     XMLConfigFragments &fragments) {}
+
  private:
     MapSyncSource *m_parent;
 };
@@ -265,6 +271,13 @@ class MapSyncSource :
     virtual std::string getMimeVersion() const { return dynamic_cast<SyncSourceSerialize &>(*m_sub).getMimeVersion(); }
     virtual std::string getDescription(sysync::KeyH aItemKey) { return dynamic_cast<SyncSourceLogging &>(*m_sub).getDescription(aItemKey); }
     virtual std::string getDescription(const string &luid);
+
+ protected:
+    virtual void getSynthesisInfo(SynthesisInfo &info,
+                                  XMLConfigFragments &fragments) {
+        TestingSyncSource::getSynthesisInfo(info, fragments);
+        m_sub->updateSynthesisInfo(info, fragments);
+    }
 
  private:
     boost::shared_ptr<SubSyncSource> m_sub;
