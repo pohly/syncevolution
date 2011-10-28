@@ -288,7 +288,7 @@ public:
     virtual const char *getDestination() const {return "org.syncevolution";}
     virtual const char *getPath() const {return m_path.c_str();}
     virtual const char *getInterface() const {return "org.syncevolution.Session";}
-    virtual DBusConnection *getConnection() const {return m_server.getConnection();}
+    virtual DBUS_CONNECTION_TYPE *getConnection() const {return m_server.getConnection();}
     RemoteDBusServer &getServer() { return m_server; }
 
     /**

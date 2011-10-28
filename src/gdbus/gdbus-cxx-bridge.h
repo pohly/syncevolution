@@ -83,6 +83,8 @@ namespace boost {
  * implementations, this is made to be a define. The intention is to
  * remove the define once the in-tree gdbus is dropped. */
 #define DBUS_CONNECTION_TYPE DBusConnection
+#define DBUS_MESSAGE_TYPE    DBusMessage
+#define DBUS_NEW_ERROR_MSG   b_dbus_create_error
 
 namespace GDBusCXX {
 

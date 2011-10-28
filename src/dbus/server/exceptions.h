@@ -21,10 +21,13 @@
 #define SYNCEVO_EXCEPTIONS_H
 
 #include <syncevo/util.h>
+#include <gio/gio.h>
 
-struct DBusMessage;
 SE_BEGIN_CXX
-DBusMessage *SyncEvoHandleException(DBusMessage *msg);
+// Can't use the DBUS_MESSAGE_TYPE define here because it's not
+// defined till we include gdbus-cxx-bridge.h below. To get around
+// this a command line define was added to server.am's CPPFLAGS.
+DBUS_MSG *SyncEvoHandleException(DBUS_MSG *msg);
 SE_END_CXX
 // This needs to be defined before including gdbus-cxx-bridge.h!
 #define DBUS_CXX_EXCEPTION_HANDLER SyncEvo::SyncEvoHandleException

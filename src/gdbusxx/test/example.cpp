@@ -176,7 +176,7 @@ class DBusTest : public Test, private Test2
     DBusObjectHelper m_secondary;
 
 public:
-    DBusTest(DBusConnection *conn) :
+    DBusTest(GDBusConnection *conn) :
         m_object(conn, "/test", "org.example.Test"),
         // same path!
         m_secondary(conn, m_object.getPath(), "org.example.Secondary"),
@@ -245,7 +245,7 @@ using namespace GDBusCXX;
 int main(int argc, char *argv[])
 {
     GDBusConnection *conn;
-    DBusErrorCXX err;
+    DBusErrorCXX *err;
     struct sigaction sa;
 
     memset(&sa, 0, sizeof(sa));
@@ -259,11 +259,10 @@ int main(int argc, char *argv[])
 
     main_loop = g_main_loop_new(NULL, FALSE);
 
-    conn = dbus_get_bus_connection("SESSION", "org.example", false, &err);
+    conn = dbus_get_bus_connection("SESSION", "org.example", false, err);
     if (conn == NULL) {
-        if (dbus_error_is_set(&err) == TRUE) {
-            fprintf(stderr, "%s\n", err.message);
-            dbus_error_free(&err);
+        if (err) {
+            fprintf(stderr, "%s\n", err->message);
         } else
             fprintf(stderr, "Can't register with session bus\n");
         exit(1);
