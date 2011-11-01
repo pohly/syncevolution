@@ -1,3 +1,9 @@
+syncevolution (1:1.2.0-1) unstable; urgency=low
+
+  * SyncEvolution 1.2 for Maemo.
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 01 Nov 2011 05:28:39 +0100
+
 syncevolution (1:1.1.99.7-1) unstable; urgency=low
 
   * SyncEvolution 1.1.99.7 for Maemo.
