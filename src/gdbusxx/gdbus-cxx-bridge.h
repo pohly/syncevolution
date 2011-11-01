@@ -378,7 +378,7 @@ void appendNewArg(GPtrArray *pa)
 
     GDBusArgInfo *argInfo = g_new0(GDBusArgInfo, 1);
     argInfo->signature = g_strdup(dbus_traits<Arg>::getSignature().c_str());
-    g_dbus_arg_info_ref(argInfo);
+    argInfo->ref_count = 1;
     g_ptr_array_add(pa, argInfo);
 }
 
@@ -392,7 +392,7 @@ void appendNewArgForReply(GPtrArray *pa)
 
     GDBusArgInfo *argInfo = g_new0(GDBusArgInfo, 1);
     argInfo->signature = g_strdup(dbus_traits<Arg>::getReply().c_str());
-    g_dbus_arg_info_ref(argInfo);
+    argInfo->ref_count = 1;
     g_ptr_array_add(pa, argInfo);
 }
 
@@ -437,7 +437,8 @@ class EmitSignal1
         entry->name = g_strdup(m_signal.c_str());
         entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
 
-        return g_dbus_signal_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -482,7 +483,8 @@ class EmitSignal2
         entry->name = g_strdup(m_signal.c_str());
         entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];
 
-        return g_dbus_signal_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -527,7 +529,8 @@ class EmitSignal3
         entry->name = g_strdup(m_signal.c_str());
         entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
 
-        return g_dbus_signal_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -573,7 +576,8 @@ class EmitSignal4
         entry->name = g_strdup(m_signal.c_str());
         entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
 
-        return g_dbus_signal_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -620,7 +624,8 @@ class EmitSignal5
         entry->name = g_strdup(m_signal.c_str());
         entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
 
-        return g_dbus_signal_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -668,7 +673,8 @@ class EmitSignal6
         entry->name = g_strdup(m_signal.c_str());
         entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
 
-        return g_dbus_signal_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -744,7 +750,9 @@ class DBusObjectHelper : public DBusObject
         m_path(path),
         m_interface(interface),
         m_callback(callback),
-        m_activated(false)
+        m_activated(false),
+        m_methods(g_ptr_array_new()),
+        m_signals(g_ptr_array_new())
     {
     }
 
@@ -829,9 +837,10 @@ class DBusObjectHelper : public DBusObject
 
     void activate() {
         GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
-        ifInfo->name       = g_strdup(m_interface.c_str());
-        ifInfo->methods    = (GDBusMethodInfo **)(m_methods);
-        ifInfo->signals    = (GDBusSignalInfo **)(m_signals);
+        ifInfo->ref_count = 1;
+        ifInfo->name      = g_strdup(m_interface.c_str());
+        ifInfo->methods   = (GDBusMethodInfo **)m_methods->pdata[m_methods->len - 1];
+        ifInfo->signals   = (GDBusSignalInfo **)m_signals->pdata[m_signals->len - 1];
 
         GDBusInterfaceVTable *ifVTable = g_new0(GDBusInterfaceVTable, 1);
         ifVTable->method_call = MethodHandler::handler;
@@ -2161,7 +2170,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2257,7 +2267,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2349,7 +2360,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2440,7 +2452,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2529,7 +2542,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2617,7 +2631,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2703,7 +2718,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2788,7 +2804,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2871,7 +2888,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -2952,7 +2970,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3031,7 +3050,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3107,7 +3127,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3181,7 +3202,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3254,7 +3276,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3325,7 +3348,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3395,7 +3419,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3463,7 +3488,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3530,7 +3556,8 @@ struct MakeMethodEntry< boost::function<R (A1)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3595,7 +3622,8 @@ struct MakeMethodEntry< boost::function<void (A1)> >
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3644,7 +3672,8 @@ struct MakeMethodEntry< boost::function<R ()> >
         entry->in_args  = NULL;
         entry->out_args = NULL;
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
@@ -3688,7 +3717,8 @@ struct MakeMethodEntry< boost::function<void ()> >
         entry->in_args  = NULL;
         entry->out_args = NULL;
 
-        return g_dbus_method_info_ref(entry);
+        entry->ref_count = 1;
+        return entry;
     }
 };
 
