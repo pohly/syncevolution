@@ -1,8 +1,10 @@
 syncevolution (1:1.2.0-1) unstable; urgency=low
 
   * SyncEvolution 1.2 for Maemo.
+  * Convert iCalendar 2.0 recurrence exceptions to a format
+    that the Maemo 5 calendar-backend can understand.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Tue, 01 Nov 2011 05:28:39 +0100
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 01 Nov 2011 06:05:52 +0100
 
 syncevolution (1:1.1.99.7-1) unstable; urgency=low
 
