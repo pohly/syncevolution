@@ -2157,7 +2157,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         appendNewArgForReply<A10>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2253,7 +2253,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         appendNewArgForReply<A9>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2345,7 +2345,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         appendNewArgForReply<A9>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2436,7 +2436,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
         appendNewArgForReply<A8>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2525,7 +2525,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
         appendNewArgForReply<A8>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2613,7 +2613,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
         appendNewArgForReply<A7>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2699,7 +2699,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
         appendNewArgForReply<A7>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2784,7 +2784,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
         appendNewArgForReply<A6>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2867,7 +2867,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
         appendNewArgForReply<A6>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -2948,7 +2948,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
         appendNewArgForReply<A5>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3027,7 +3027,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
         appendNewArgForReply<A5>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3103,7 +3103,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
         appendNewArgForReply<A4>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3177,7 +3177,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
         appendNewArgForReply<A4>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3250,7 +3250,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
         appendNewArgForReply<A3>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3321,7 +3321,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
         appendNewArgForReply<A3>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3391,7 +3391,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
         appendNewArgForReply<A2>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3459,7 +3459,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2)> >
         appendNewArgForReply<A2>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3526,7 +3526,7 @@ struct MakeMethodEntry< boost::function<R (A1)> >
         appendNewArgForReply<A1>(inArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
@@ -3591,7 +3591,7 @@ struct MakeMethodEntry< boost::function<void (A1)> >
         appendNewArgForReply<A1>(inArgs);
         g_ptr_array_add(outArgs, NULL);
 
-        entry->name     = strdup(name);
+        entry->name     = g_strdup(name);
         entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
         entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
 
