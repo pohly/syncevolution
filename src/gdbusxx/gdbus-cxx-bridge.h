@@ -138,9 +138,9 @@ class DBusErrorCXX : public GError
 };
 
 GDBusConnection *dbus_get_bus_connection(const char *busType,
-                                          const char *interface,
-                                          bool unshared,
-                                          DBusErrorCXX *err);
+                                         const char *interface,
+                                         bool unshared,
+                                         DBusErrorCXX *err);
 
 /**
  * Special type for object paths. A string in practice.

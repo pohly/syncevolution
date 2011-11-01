@@ -34,11 +34,10 @@ std::map<const std::string, std::pair<MethodHandler::MethodFunction, void*> > Me
 GDBusConnection *dbus_get_bus_connection(const char *busType,
                                          const char *name,
                                          bool unshared,
-                                         DBusErrorCXX *err)
+                                         DBusErrorCXX *err /* Ignored */)
 {
-    //TODO: This error handling needs to be fixed.
     GDBusConnection *conn;
-    GError* error = err;
+    GError* error = NULL;
 
     if(unshared) {
         char *address = g_dbus_address_get_for_bus_sync(boost::iequals(busType, "SESSION") ?
@@ -47,10 +46,11 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
         if(address == NULL) {
             return NULL;
         }
-
+        // Here we set up a private client connection using the chosen bus' address.
         conn = g_dbus_connection_new_for_address_sync(address,
-                                                      // G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
-                                                      G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
+                                                      (GDBusConnectionFlags)
+                                                      (G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
+                                                       G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
                                                       NULL, NULL, &error);
         g_free(address);
 
