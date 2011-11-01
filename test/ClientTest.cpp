@@ -733,7 +733,8 @@ void LocalTests::testLocalDeleteAll() {
 
 // clean database, then insert
 void LocalTests::testComplexInsert() {
-    testLocalDeleteAll();
+    CPPUNIT_ASSERT(config.m_createSourceA);
+    CPPUNIT_ASSERT_NO_THROW(deleteAll(createSourceA));
     testSimpleInsert();
     testIterateTwice();
 }
@@ -742,8 +743,10 @@ void LocalTests::testComplexInsert() {
 void LocalTests::testLocalUpdate() {
     // check additional requirements
     CPPUNIT_ASSERT(!config.m_updateItem.empty());
+    CPPUNIT_ASSERT(config.m_createSourceA);
 
-    testLocalDeleteAll();
+    CPPUNIT_ASSERT_NO_THROW(deleteAll(createSourceA));
+
     testSimpleInsert();
     CPPUNIT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
 }
@@ -754,8 +757,9 @@ void LocalTests::testChanges() {
 
     // check additional requirements
     CPPUNIT_ASSERT(config.m_createSourceB);
+    CPPUNIT_ASSERT(config.m_createSourceA);
 
-    testLocalDeleteAll();
+    CPPUNIT_ASSERT_NO_THROW(deleteAll(createSourceA));
     testSimpleInsert();
 
     // clean changes in sync source B by creating and closing it
@@ -874,8 +878,9 @@ void LocalTests::testImport() {
     CPPUNIT_ASSERT(config.m_dump);
     CPPUNIT_ASSERT(config.m_compare);
     CPPUNIT_ASSERT(!config.m_testcases.empty());
+    CPPUNIT_ASSERT(config.m_createSourceA);
 
-    testLocalDeleteAll();
+    CPPUNIT_ASSERT_NO_THROW(deleteAll(createSourceA));
 
     // import via sync source A
     TestingSyncSourcePtr source;
@@ -905,7 +910,7 @@ void LocalTests::testImportDelete() {
 
     // delete again, because it was observed that this did not
     // work right with calendars in SyncEvolution
-    testLocalDeleteAll();
+    CPPUNIT_ASSERT_NO_THROW(deleteAll(createSourceA));
 }
 
 // test change tracking with large number of items
@@ -3121,23 +3126,36 @@ void SyncTests::testDeleteBothSides()
 // using updated item data makes the test harder to pass:
 // server must use exactly the right item, which currently
 // is not the case for SyncEvolution
-bool addBothSidesUsesUpdateItem = false;
+bool addBothSidesUsesUpdateItem = true;
+
+// SyncEvolution passes with addBothSidesUsesUpdateItem == true
+// if we avoid changes to those properties in the iCalendar test
+// set which currently use merge=lines.
+bool addBothSidesNoMergeLines=true;
 
 // if true, relax expectations for updates from server:
 // may or may not send one
-bool addBothSidesMayUpdate = true;
+bool addBothSidesMayUpdate = false;
 
 // if true, then accept that the Synthesis server mode counts
 // Add commands as "added items" even if they are turned into updates
-bool addBothSidesAddStatsBroken = true;
+bool addBothSidesAddStatsBroken = false;
 
 void SyncTests::testAddBothSides()
 {
     deleteAll();
     accessClientB->deleteAll();
 
+    std::string insertItem = sources[0].second->config.m_insertItem;
+    std::string updateItem = sources[0].second->config.m_updateItem;
+
+    if (addBothSidesNoMergeLines) {
+        boost::replace_all(updateItem, "LOCATION:big meeting room", "LOCATION:my office");
+        boost::replace_all(updateItem, "DESCRIPTION:nice to see you", "DESCRIPTION:let's talk<<REVISION>>");
+    }
+
     CPPUNIT_ASSERT_NO_THROW(sources[0].second->insert(sources[0].second->createSourceA,
-                                                      sources[0].second->config.m_insertItem));
+                                                      insertItem));
 
     doSync("send-old",
            SyncOptions(SYNC_TWO_WAY,
@@ -3147,25 +3165,44 @@ void SyncTests::testAddBothSides()
     std::string data;
     CPPUNIT_ASSERT_NO_THROW(accessClientB->sources[0].second->insert(accessClientB->sources[0].second->createSourceA,
                                                                      addBothSidesUsesUpdateItem ?
-                                                                     accessClientB->sources[0].second->config.m_updateItem:
-                                                                     accessClientB->sources[0].second->config.m_insertItem,
+                                                                     updateItem:
+                                                                     insertItem,
                                                                      false,
                                                                      &data));
 
     // As far as the client knows, it is adding an item;
     // server not expected to send back an update (our data was more recent
     // and completely overwrites the server's data).
-    // When acting as server, we do the duplicate detection.
+    // When acting as server, we do the duplicate detection and thus know
+    // more about the actual outcome.
     accessClientB->doSync("send-update",
                           SyncOptions(SYNC_TWO_WAY,
                                       isServerMode() ?
-                                      CheckSyncReport(addBothSidesAddStatsBroken ? -1 : 0,0,0, 0,addBothSidesMayUpdate ? -1 : 0,0, true, SYNC_TWO_WAY) :
-                                      CheckSyncReport(0,addBothSidesMayUpdate ? -1 : 0,0, 1,0,0, true, SYNC_TWO_WAY)));
+                                      CheckSyncReport(addBothSidesAddStatsBroken ? -1 : 0,0,0,
+
+                                                      0,
+                                                      addBothSidesMayUpdate ? -1 :
+                                                      addBothSidesUsesUpdateItem ? 1 : 0,
+                                                      0,
+
+                                                      true, SYNC_TWO_WAY) :
+                                      CheckSyncReport(0,
+                                                      addBothSidesMayUpdate ? -1 : 0,
+                                                      0,
+
+                                                      // client doesn't know that the add
+                                                      // was an update, in contrast to server
+                                                      1,0,0, true, SYNC_TWO_WAY)));
 
     // update sent to client A
     doSync("update",
            SyncOptions(SYNC_TWO_WAY,
-                       CheckSyncReport(0,addBothSidesMayUpdate ? -1 : 1,0, 0,0,0, true, SYNC_TWO_WAY)));
+                       CheckSyncReport(0,
+                                       addBothSidesMayUpdate ? -1 :
+                                       addBothSidesUsesUpdateItem ? 1 : 0,
+                                       0,
+
+                                       0,0,0, true, SYNC_TWO_WAY)));
 
     // nothing necessary for client B
     accessClientB->doSync("nop",
@@ -3189,9 +3226,17 @@ void SyncTests::testAddBothSidesRefresh()
     deleteAll();
     accessClientB->deleteAll();
 
+    std::string insertItem = sources[0].second->config.m_insertItem;
+    std::string updateItem = sources[0].second->config.m_updateItem;
+
+    if (addBothSidesNoMergeLines) {
+        boost::replace_all(updateItem, "LOCATION:big meeting room", "LOCATION:my office");
+        boost::replace_all(updateItem, "DESCRIPTION:nice to see you", "DESCRIPTION:let's talk<<REVISION>>");
+    }
+
     // insert initial item data on B
     CPPUNIT_ASSERT_NO_THROW(accessClientB->sources[0].second->insert(accessClientB->sources[0].second->createSourceA,
-                                                                     accessClientB->sources[0].second->config.m_insertItem));
+                                                                     insertItem));
 
     // sleep one second to ensure that it's mangled LAST-MODIFIED is older than
     // the one from the next item, inserted on A
@@ -3201,8 +3246,8 @@ void SyncTests::testAddBothSidesRefresh()
     std::string data;
     CPPUNIT_ASSERT_NO_THROW(sources[0].second->insert(sources[0].second->createSourceA,
                                                       addBothSidesUsesUpdateItem ?
-                                                      sources[0].second->config.m_updateItem :
-                                                      sources[0].second->config.m_insertItem,
+                                                      updateItem :
+                                                      insertItem,
                                                       false,
                                                       &data));
     doSync("send-new",
@@ -3210,18 +3255,35 @@ void SyncTests::testAddBothSidesRefresh()
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // As far as the client knows, it is adding an item;
-    // server expected to send back an update (it's data was out-dated);
-    // When acting as server, we do the duplicate detection.
+    // server expected to send back an update (client's data was out-dated);
+    // When acting as server, we do the duplicate detection and thus
+    // know more about the actual outcome.
     accessClientB->doSync("send-old",
                           SyncOptions(SYNC_TWO_WAY,
                                       isServerMode() ?
-                                      CheckSyncReport(addBothSidesAddStatsBroken ? -1 : 0,0,0, 0,addBothSidesMayUpdate ? -1 : 1,0, true, SYNC_TWO_WAY) :
-                                      CheckSyncReport(0,addBothSidesMayUpdate ? -1 : 1,0, 1,0,0, true, SYNC_TWO_WAY)));
+                                      CheckSyncReport(addBothSidesAddStatsBroken ? -1 : 0,
+                                                      addBothSidesMayUpdate ? -1 :
+                                                      addBothSidesUsesUpdateItem ? 1 : 0,
+                                                      0,
+
+                                                      0,
+                                                      addBothSidesMayUpdate ? -1 : 0,
+                                                      0,
+
+                                                      true, SYNC_TWO_WAY) :
+                                      CheckSyncReport(0,
+                                                      addBothSidesMayUpdate ? -1 :
+                                                      addBothSidesUsesUpdateItem ? 1 : 0,
+                                                      0,
+
+                                                      // client doesn't know that add was
+                                                      // an update
+                                                      1,0,0, true, SYNC_TWO_WAY)));
 
     // update sent to client A (result of merge)
     doSync("nopA",
            SyncOptions(SYNC_TWO_WAY,
-                       CheckSyncReport(0,addBothSidesMayUpdate ? -1 : 1,0, 0,0,0, true, SYNC_TWO_WAY)));
+                       CheckSyncReport(0,addBothSidesMayUpdate ? -1 : 0,0, 0,0,0, true, SYNC_TWO_WAY)));
 
     // nothing necessary for client B (already synchronized completely above in one sync)
     accessClientB->doSync("nopB",
@@ -4749,7 +4811,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
             "BEGIN:VEVENT\n"
-            "SUMMARY:phone meeting\n"
+            "SUMMARY:phone meeting - old\n"
             "DTEND:20060406T163000Z\n"
             "DTSTART:20060406T160000Z\n"
             "UID:1234567890!@#$%^&*()<>@dummy\n"
@@ -4768,7 +4830,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"
             "VERSION:2.0\n"
             "BEGIN:VEVENT\n"
-            "SUMMARY:meeting on site\n"
+            "SUMMARY:meeting on site - updated\n"
             "DTEND:20060406T163000Z\n"
             "DTSTART:20060406T160000Z\n"
             "UID:1234567890!@#$%^&*()<>@dummy\n"
