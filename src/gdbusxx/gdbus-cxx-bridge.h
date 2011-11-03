@@ -836,6 +836,13 @@ class DBusObjectHelper : public DBusObject
     }
 
     void activate() {
+        // method and signal array must be NULL-terminated.
+        if(m_methods->pdata[m_methods->len - 1] != NULL) {
+            g_ptr_array_add(m_methods, NULL);
+        }
+        if(m_signals->pdata[m_signals->len - 1] != NULL) {
+            g_ptr_array_add(m_signals, NULL);
+        }
         GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
         ifInfo->ref_count = 1;
         ifInfo->name      = g_strdup(m_interface.c_str());
