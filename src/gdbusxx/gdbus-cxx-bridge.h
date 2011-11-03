@@ -913,7 +913,7 @@ template<class host, class VariantTraits> struct basic_marshal : public dbus_tra
                     GVariantIter &iter, host &value)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_equal(g_variant_get_type(var), VariantTraits::getVariantType())) {
+        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), VariantTraits::getVariantType())) {
             throw std::runtime_error("invalid argument");
         }
         g_variant_get(var, g_variant_get_type_string(var), &value);
@@ -1012,7 +1012,7 @@ template<> struct dbus_traits<std::string> : public dbus_traits_base
                     GVariantIter &iter, std::string &value)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_STRING)) {
+        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_STRING)) {
             throw std::runtime_error("invalid argument");
         }
         const char *str = g_variant_get_string(var, NULL);
@@ -1040,7 +1040,7 @@ template <> struct dbus_traits<DBusObject_t> : public dbus_traits_base
                     GVariantIter &iter, DBusObject_t &value)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_OBJECT_PATH)) {
+        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_OBJECT_PATH)) {
             throw std::runtime_error("invalid argument");
         }
         const char *objPath = g_variant_get_string(var, NULL);
@@ -1111,7 +1111,7 @@ template<class V> struct dbus_traits< std::pair<size_t, const V *> > : public db
                     GVariantIter &iter, host_type &array)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("invalid argument");
         }
         gsize nelements;
@@ -1160,7 +1160,7 @@ template<class K, class V> struct dbus_traits< std::map<K, V> > : public dbus_tr
                     GVariantIter &iter, host_type &dict)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("invalid argument");
         }
 
@@ -1221,7 +1221,7 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
                     GVariantIter &iter, host_type &array)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("invalid argument");
         }
 
@@ -1267,7 +1267,7 @@ template <class V> struct dbus_traits <boost::variant <V> > : public dbus_traits
                     GVariantIter &iter, boost::variant <V> &value)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
+        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
             throw std::runtime_error("invalid argument");
         }
 
@@ -1310,7 +1310,7 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
                     GVariantIter &iter, boost::variant <V1, V2> &value)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
+        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
             throw std::runtime_error("invalid argument");
         }
 
@@ -1420,7 +1420,7 @@ template<class K, class M> struct dbus_struct_traits : public dbus_traits_base
                     GVariantIter &iter, host_type &val)
     {
         GVariant *var = g_variant_iter_next_value(&iter);
-        if (var == NULL || g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
             throw std::runtime_error("invalid argument");
         }
 
