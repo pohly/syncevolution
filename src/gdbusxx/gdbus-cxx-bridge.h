@@ -3940,7 +3940,7 @@ class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, 
 
         //unmarshal the return results and call user callback
         //(*static_cast <Callback_t *>(user_data))(r, err->message);
-        (data->m_callback)(r, err->message);
+        (data->m_callback)(r, err ? err->message : "");
     }
 
 public:
