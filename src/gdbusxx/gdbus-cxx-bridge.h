@@ -1313,7 +1313,6 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
             throw std::runtime_error("invalid argument");
         }
 
-        host_type bVar;
         GVariant *varVar;
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
@@ -1330,6 +1329,8 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
             value = val;
         } else {
             V2 val;
+            // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
+            g_variant_iter_init(&varIter, var);
             dbus_traits<V2>::get(conn, msg, varIter, val);
             value = val;
         }
