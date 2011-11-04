@@ -3934,7 +3934,7 @@ class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, 
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
         typename dbus_traits<R1>::host_type r;
-        if (err == NULL) {
+        if (err == NULL && !g_dbus_message_to_gerror(reply.get(), &err)) {
             ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r);
         }
 
@@ -3976,7 +3976,7 @@ class DBusClientCall2 : public DBusClientCall<boost::function<
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
         typename dbus_traits<R1>::host_type r1;
         typename dbus_traits<R2>::host_type r2;
-        if (err == NULL) {
+        if (err == NULL && !g_dbus_message_to_gerror(reply.get(), &err)) {
             ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2);
         }
         //unmarshal the return results and call user callback
@@ -4017,7 +4017,7 @@ class DBusClientCall3 : public DBusClientCall<boost::function<
         typename dbus_traits<R1>::host_type r1;
         typename dbus_traits<R2>::host_type r2;
         typename dbus_traits<R3>::host_type r3;
-        if (err == NULL) {
+        if (err == NULL && !g_dbus_message_to_gerror(reply.get(), &err)) {
             ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
         }
         //unmarshal the return results and call user callback
