@@ -1226,11 +1226,10 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
         }
 
         int nelements = g_variant_n_children(var);
+        GVariantIter childIter;
+        g_variant_iter_init(&childIter, var);
         for(int i = 0; i < nelements; ++i) {
-            GVariant *childVar = g_variant_get_child_value(var, i);
-            GVariantIter childIter;
             V value;
-            g_variant_iter_init(&childIter, childVar);
             dbus_traits<V>::get(conn, msg, childIter, value);
             array.push_back(value);
         }
