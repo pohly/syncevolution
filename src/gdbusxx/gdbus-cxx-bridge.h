@@ -435,7 +435,7 @@ class EmitSignal1
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(m_signal.c_str());
-        entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
+        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -481,7 +481,7 @@ class EmitSignal2
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(m_signal.c_str());
-        entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];
+        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -527,7 +527,7 @@ class EmitSignal3
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(m_signal.c_str());
-        entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
+        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -574,7 +574,7 @@ class EmitSignal4
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(m_signal.c_str());
-        entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
+        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -622,7 +622,7 @@ class EmitSignal5
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(m_signal.c_str());
-        entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
+        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -671,7 +671,7 @@ class EmitSignal6
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(m_signal.c_str());
-        entry->args = (GDBusArgInfo **)args->pdata[args->len - 1];;
+        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -846,8 +846,8 @@ class DBusObjectHelper : public DBusObject
         GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
         ifInfo->ref_count = 1;
         ifInfo->name      = g_strdup(m_interface.c_str());
-        ifInfo->methods   = (GDBusMethodInfo **)m_methods->pdata[m_methods->len - 1];
-        ifInfo->signals   = (GDBusSignalInfo **)m_signals->pdata[m_signals->len - 1];
+        ifInfo->methods   = (GDBusMethodInfo **)m_methods->pdata;
+        ifInfo->signals   = (GDBusSignalInfo **)m_signals->pdata;
 
         GDBusInterfaceVTable *ifVTable = g_new0(GDBusInterfaceVTable, 1);
         ifVTable->method_call = MethodHandler::handler;
@@ -2174,8 +2174,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2271,8 +2271,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2364,8 +2364,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2456,8 +2456,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2546,8 +2546,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2635,8 +2635,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2722,8 +2722,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2808,8 +2808,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2892,8 +2892,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -2974,8 +2974,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3054,8 +3054,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3131,8 +3131,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3206,8 +3206,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3280,8 +3280,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3352,8 +3352,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3423,8 +3423,8 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3492,8 +3492,8 @@ struct MakeMethodEntry< boost::function<void (A1, A2)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3560,8 +3560,8 @@ struct MakeMethodEntry< boost::function<R (A1)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
@@ -3626,8 +3626,8 @@ struct MakeMethodEntry< boost::function<void (A1)> >
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)inArgs->pdata[inArgs->len - 1];
-        entry->out_args = (GDBusArgInfo **)outArgs->pdata[outArgs->len - 1];
+        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
