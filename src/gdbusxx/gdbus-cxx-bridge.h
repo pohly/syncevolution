@@ -1242,7 +1242,7 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
 
     static void append(GVariantBuilder &builder, arg_type array)
     {
-        g_variant_builder_open(&builder, G_VARIANT_TYPE(getContainedType().c_str()));
+        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
 
         for(typename host_type::const_iterator it = array.begin();
             it != array.end();
