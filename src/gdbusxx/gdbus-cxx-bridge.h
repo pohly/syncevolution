@@ -278,7 +278,11 @@ struct ExtractArgs {
     ExtractArgs(GDBusConnection *conn, GDBusMessage *msg) {
         m_conn = conn;
         m_msg = msg;
-        g_variant_iter_init(&m_iter, g_dbus_message_get_body(m_msg));
+
+        GVariant * msgBody = g_dbus_message_get_body(m_msg);
+        if(msgBody != NULL) {
+            g_variant_iter_init(&m_iter, msgBody);
+        }
     }
 
     /** syntactic sugar: redirect >> into Get instance */
