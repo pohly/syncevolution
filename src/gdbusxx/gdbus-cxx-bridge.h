@@ -1587,11 +1587,17 @@ class DBusWatch : public Watch
                                                        -1,
                                                        NULL,
                                                        &error);
-        if (result == NULL || !g_variant_get_boolean(result)) {
-            if(error != NULL) {
-                throw std::runtime_error("g_dbus_connection_call_sync(): NameHasOwner");
+
+        if (result != NULL) {
+            bool actual_result = false;
+
+            g_variant_get(result, "(b)", &actual_result);
+            if (!actual_result) {
+                disconnect(m_conn.get(), NULL, NULL, NULL, NULL, NULL, this);
             }
-            disconnect(m_conn.get(), NULL, NULL, NULL, NULL, NULL, this);
+        } else {
+            std::string err_msg("g_dbus_connection_call_sync(): NameHasOwner - ");
+            throw std::runtime_error(err_msg + error->message);
         }
     }
 
