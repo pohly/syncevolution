@@ -1321,7 +1321,8 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
         varVar = g_variant_iter_next_value(&varIter);
-        if (!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V2>::getSignature())) {
+        if ((!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V2>::getSignature())) &&
+            (!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V1>::getSignature()))) {
             // ignore unrecognized sub type in variant
             return;
         }
