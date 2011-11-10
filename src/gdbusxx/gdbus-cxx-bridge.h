@@ -685,7 +685,8 @@ class EmitSignal6
 struct MethodHandler
 {
     typedef GDBusMessage *(*MethodFunction)(GDBusConnection *conn, GDBusMessage *msg, void *data);
-    static std::map<const std::string, std::pair<MethodFunction, void*> > m_methodMap;
+    typedef std::map<const std::string, std::pair<MethodFunction, void*> > MethodMap;
+    static MethodMap m_methodMap;
 
     static void handler(GDBusConnection       *connection,
                         const gchar           *sender,
@@ -696,8 +697,8 @@ struct MethodHandler
                         GDBusMethodInvocation *invocation,
                         gpointer               user_data)
     {
-        std::map<const std::string, std::pair<MethodFunction, void*> >::iterator it;
-        it = m_methodMap.find(method_name);
+        MethodMap::iterator it;
+        it = m_methodMap.find(std::string(object_path) + method_name);
         if(it == m_methodMap.end()) {
             g_dbus_method_invocation_return_dbus_error(invocation,
                                                        "org.SyncEvolution.NoMatchingMethodName",
@@ -763,6 +764,25 @@ class DBusObjectHelper : public DBusObject
     ~DBusObjectHelper()
     {
         deactivate();
+
+        MethodHandler::MethodMap::iterator iter(MethodHandler::m_methodMap.begin());
+        MethodHandler::MethodMap::iterator iter_end(MethodHandler::m_methodMap.end());
+        MethodHandler::MethodMap::iterator first_to_erase(iter_end);
+        MethodHandler::MethodMap::iterator last_to_erase(iter_end);
+
+        while (iter != iter_end) {
+            const bool prefix_equal(iter->first.compare(0, m_path.size(), m_path));
+
+            if (prefix_equal && (first_to_erase == iter_end)) {
+                first_to_erase = iter;
+            } else if (!prefix_equal && (first_to_erase != iter_end)) {
+                last_to_erase = iter;
+            }
+            ++iter;
+        }
+        if (first_to_erase != iter_end) {
+            MethodHandler::m_methodMap.erase(first_to_erase, last_to_erase);
+        }
     }
 
     virtual GDBusConnection *getConnection() const { return m_conn.get(); }
@@ -775,12 +795,11 @@ class DBusObjectHelper : public DBusObject
      */
     template <class A1, class C, class M> void add(A1 instance, M C::*method, const char *name)
     {
-        // TODO: cleanup method
         typedef MakeMethodEntry< boost::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
         MethodHandler::m_methodMap.insert(std::pair<const std::string,
                                            std::pair<MethodHandler::MethodFunction,
-                                           void*> >(name,
+                                           void*> >(m_path + name,
                                                     std::pair<MethodHandler::MethodFunction,
                                                     void*>(entry_type::methodFunction,
                                                            new boost::function<M>(entry_type::boostptr(method,
@@ -797,7 +816,7 @@ class DBusObjectHelper : public DBusObject
         g_ptr_array_add(m_methods, entry_type::make(name));
         MethodHandler::m_methodMap.insert(std::pair<const std::string,
                                            std::pair<MethodHandler::MethodFunction,
-                                           void*> >(name,
+                                           void*> >(m_path + name,
                                                     std::pair<MethodHandler::MethodFunction,
                                                     void*>(entry_type::methodFunction,
                                                            new boost::function<M>(function))));
@@ -2041,7 +2060,7 @@ template <class R, class DBusR> struct dbus_traits_result
 
     typedef boost::shared_ptr<R> host_type;
     typedef boost::shared_ptr<R> &arg_type;
-    static const bool asynchronous = true;
+    static const bool asynchronous = false;
 
     static void get(GDBusConnection *conn, GDBusMessage *msg,
                     GVariantIter &iter, host_type &value)
