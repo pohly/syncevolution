@@ -797,13 +797,13 @@ class DBusObjectHelper : public DBusObject
     {
         typedef MakeMethodEntry< boost::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
-        MethodHandler::m_methodMap.insert(std::pair<const std::string,
-                                           std::pair<MethodHandler::MethodFunction,
-                                           void*> >(m_path + name,
-                                                    std::pair<MethodHandler::MethodFunction,
-                                                    void*>(entry_type::methodFunction,
-                                                           new boost::function<M>(entry_type::boostptr(method,
-                                                                                                       instance)))));
+
+        boost::function<M> *func = new boost::function<M>(entry_type::boostptr(method, instance));
+        typedef std::pair<MethodHandler::MethodFunction, void*> callbackPair;
+        callbackPair methodAndData = std::make_pair(entry_type::methodFunction, func);
+
+        MethodHandler::m_methodMap.insert(std::pair<const std::string, callbackPair>(m_path + name,
+                                                                                     methodAndData));
     }
 
     /**
@@ -814,12 +814,13 @@ class DBusObjectHelper : public DBusObject
     {
         typedef MakeMethodEntry< boost::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
-        MethodHandler::m_methodMap.insert(std::pair<const std::string,
-                                           std::pair<MethodHandler::MethodFunction,
-                                           void*> >(m_path + name,
-                                                    std::pair<MethodHandler::MethodFunction,
-                                                    void*>(entry_type::methodFunction,
-                                                           new boost::function<M>(function))));
+
+        typedef std::pair<MethodHandler::MethodFunction, void*> callbackPair;
+        callbackPair methodAndData = std::make_pair(entry_type::methodFunction,
+                                                    new boost::function<M>(function));
+
+        MethodHandler::m_methodMap.insert(std::pair<const std::string, callbackPair>(m_path + name,
+                                                                                     methodAndData));
     }
 
     /**
