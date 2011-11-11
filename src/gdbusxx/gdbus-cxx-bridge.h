@@ -1138,11 +1138,12 @@ template<class V> struct dbus_traits< std::pair<size_t, const V *> > : public db
         if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("invalid argument");
         }
+        typedef typename dbus_traits<V>::host_type V_host_type;
         gsize nelements;
-        typename dbus_traits<V>::host_type *data;
-        data = (typename dbus_traits<V>::host_type *) g_variant_get_fixed_array(var,
-                                                                                &nelements,
-                                                                                static_cast<gsize>(sizeof(host_type)));
+        V_host_type *data;
+        data = (V_host_type *) g_variant_get_fixed_array(var,
+                                                         &nelements,
+                                                         static_cast<gsize>(sizeof(V_host_type)));
         array.first = nelements;
         array.second = data;
         g_variant_unref(var);
