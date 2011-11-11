@@ -688,6 +688,15 @@ struct MethodHandler
     typedef std::map<const std::string, std::pair<MethodFunction, void*> > MethodMap;
     static MethodMap m_methodMap;
 
+    static std::string make_prefix(const char *object_path) {
+        return std::string(object_path) + "~";
+    }
+
+    static std::string make_method_key(const char *object_path,
+                                       const char *method_name) {
+        return make_prefix(object_path) + method_name;
+    }
+
     static void handler(GDBusConnection       *connection,
                         const gchar           *sender,
                         const gchar           *object_path,
@@ -698,7 +707,7 @@ struct MethodHandler
                         gpointer               user_data)
     {
         MethodMap::iterator it;
-        it = m_methodMap.find(std::string(object_path) + method_name);
+        it = m_methodMap.find(make_method_key(object_path, method_name));
         if(it == m_methodMap.end()) {
             g_dbus_method_invocation_return_dbus_error(invocation,
                                                        "org.SyncEvolution.NoMatchingMethodName",
@@ -769,9 +778,10 @@ class DBusObjectHelper : public DBusObject
         MethodHandler::MethodMap::iterator iter_end(MethodHandler::m_methodMap.end());
         MethodHandler::MethodMap::iterator first_to_erase(iter_end);
         MethodHandler::MethodMap::iterator last_to_erase(iter_end);
+        const std::string prefix(MethodHandler::make_prefix(m_path.c_str()));
 
         while (iter != iter_end) {
-            const bool prefix_equal(iter->first.compare(0, m_path.size(), m_path));
+            const bool prefix_equal(iter->first.compare(0, prefix.size(), prefix));
 
             if (prefix_equal && (first_to_erase == iter_end)) {
                 first_to_erase = iter;
@@ -801,9 +811,9 @@ class DBusObjectHelper : public DBusObject
         boost::function<M> *func = new boost::function<M>(entry_type::boostptr(method, instance));
         typedef std::pair<MethodHandler::MethodFunction, void*> callbackPair;
         callbackPair methodAndData = std::make_pair(entry_type::methodFunction, func);
+        const std::string key(MethodHandler::make_method_key(m_path.c_str(), name));
 
-        MethodHandler::m_methodMap.insert(std::pair<const std::string, callbackPair>(m_path + name,
-                                                                                     methodAndData));
+        MethodHandler::m_methodMap.insert(std::make_pair(key, methodAndData));
     }
 
     /**
@@ -818,9 +828,9 @@ class DBusObjectHelper : public DBusObject
         typedef std::pair<MethodHandler::MethodFunction, void*> callbackPair;
         callbackPair methodAndData = std::make_pair(entry_type::methodFunction,
                                                     new boost::function<M>(function));
+        const std::string key(MethodHandler::make_method_key(m_path.c_str(), name));
 
-        MethodHandler::m_methodMap.insert(std::pair<const std::string, callbackPair>(m_path + name,
-                                                                                     methodAndData));
+        MethodHandler::m_methodMap.insert(std::make_pair(key, methodAndData));
     }
 
     /**
