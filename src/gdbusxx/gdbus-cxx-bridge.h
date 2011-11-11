@@ -2168,12 +2168,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -2267,12 +2261,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -2359,12 +2347,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -2454,12 +2436,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -2543,12 +2519,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -2635,12 +2605,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -2721,12 +2685,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -2810,12 +2768,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -2893,12 +2845,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -2978,12 +2924,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3058,12 +2998,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3137,12 +3071,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3211,12 +3139,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -3288,12 +3210,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3359,12 +3275,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -3433,12 +3343,6 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3501,12 +3405,6 @@ struct MakeMethodEntry< boost::function<void (A1, A2)> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
@@ -3572,12 +3470,6 @@ struct MakeMethodEntry< boost::function<R (A1)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3638,12 +3530,6 @@ struct MakeMethodEntry< boost::function<void (A1)> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3696,12 +3582,6 @@ struct MakeMethodEntry< boost::function<R ()> >
         }
     }
 
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
-
     static GDBusMethodInfo *make(const char *name)
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
@@ -3740,12 +3620,6 @@ struct MakeMethodEntry< boost::function<void ()> >
             return handleException(msg);
         }
     }
-
-    /* static void destroyFunction(void *user_data) */
-    /* { */
-    /*     BDBusMethodTable *entry = static_cast<BDBusMethodTable *>(user_data); */
-    /*     delete static_cast<M *>(entry->method_data); */
-    /* } */
 
     static GDBusMethodInfo *make(const char *name)
     {
