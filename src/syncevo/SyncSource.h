@@ -362,6 +362,13 @@ struct ClientTestConfig {
     Bool m_sourceLUIDsAreVolatile;
 
     /**
+     * Set this to true if the backend supports
+     * X-SYNCEVOLUTION-EXDATE-DETACHED, see CalDAVSource.cpp
+     * CalDAVSource::readSubItem().
+     */
+    Bool m_supportsReccurenceEXDates;
+
+    /**
      * called to dump all items into a file, required by tests which need
      * to compare items
      *
