@@ -1088,7 +1088,7 @@ template <> struct dbus_traits<DBusObject_t> : public dbus_traits_base
         if(!g_variant_is_object_path(value.c_str())) {
             throw std::runtime_error("invalid argument");
         }
-        g_variant_builder_add_value(&builder, g_variant_new_string(value.c_str()));
+        g_variant_builder_add_value(&builder, g_variant_new_object_path(value.c_str()));
     }
 
     typedef DBusObject_t host_type;
