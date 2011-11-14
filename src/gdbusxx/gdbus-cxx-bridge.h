@@ -1469,7 +1469,7 @@ template<class K, class M> struct dbus_struct_traits : public dbus_traits_base
 
     static void append(GVariantBuilder &builder, arg_type val)
     {
-        g_variant_builder_open(&builder, G_VARIANT_TYPE(getContainedType().c_str()));
+        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
         M::append(builder, val);
         g_variant_builder_close(&builder);
     }
