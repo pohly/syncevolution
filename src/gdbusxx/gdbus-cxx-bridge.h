@@ -687,6 +687,7 @@ struct MethodHandler
     typedef GDBusMessage *(*MethodFunction)(GDBusConnection *conn, GDBusMessage *msg, void *data);
     typedef std::map<const std::string, std::pair<MethodFunction, void*> > MethodMap;
     static MethodMap m_methodMap;
+    static boost::function<void (void)> m_callback;
 
     static std::string make_prefix(const char *object_path) {
         return std::string(object_path) + "~";
@@ -713,6 +714,12 @@ struct MethodHandler
                                                        "org.SyncEvolution.NoMatchingMethodName",
                                                        "No methods registered with this name");
             return;
+        }
+
+        // We are calling callback because we want to keep server alive as long
+        // as possible. This callback is in fact delaying server's autotermination.
+        if(!m_callback.empty()) {
+            m_callback();
         }
 
         MethodFunction methodFunc = it->second.first;
@@ -750,7 +757,6 @@ class DBusObjectHelper : public DBusObject
     guint m_connId;
     std::string m_path;
     std::string m_interface;
-    boost::function<void (void)> m_callback;
     bool m_activated;
     GPtrArray *m_methods;
     GPtrArray *m_signals;
@@ -763,11 +769,13 @@ class DBusObjectHelper : public DBusObject
         m_conn(conn),
         m_path(path),
         m_interface(interface),
-        m_callback(callback),
         m_activated(false),
         m_methods(g_ptr_array_new()),
         m_signals(g_ptr_array_new())
     {
+        if (!MethodHandler::m_callback) {
+            MethodHandler::m_callback = callback;
+        }
     }
 
     ~DBusObjectHelper()
@@ -866,7 +874,6 @@ class DBusObjectHelper : public DBusObject
             throw std::runtime_error(std::string("g_dbus_connection_register_object() failed for ") +
                                      getPath() + " " + getInterface());
         }
-        m_callback = callback;
         m_activated = true;
     }
 
@@ -908,12 +915,6 @@ class DBusObjectHelper : public DBusObject
                                          getPath() + " " + getInterface());
             }
             m_activated = false;
-        }
-    }
-    static void interfaceCallback(void *userData) {
-        DBusObjectHelper* helper = static_cast<DBusObjectHelper*>(userData);
-        if(!helper->m_callback.empty()) {
-            helper->m_callback();
         }
     }
 };

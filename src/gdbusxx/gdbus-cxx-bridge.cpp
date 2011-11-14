@@ -30,6 +30,7 @@ namespace boost
 namespace GDBusCXX {
 
 MethodHandler::MethodMap MethodHandler::m_methodMap;
+boost::function<void (void)> MethodHandler::m_callback;
 
 GDBusConnection *dbus_get_bus_connection(const char *busType,
                                          const char *name,
