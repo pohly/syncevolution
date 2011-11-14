@@ -960,7 +960,7 @@ template<class host, class VariantTraits> struct basic_marshal : public dbus_tra
     static void append(GVariantBuilder &builder, arg_type value)
     {
         const gchar *typeStr = g_variant_type_dup_string(VariantTraits::getVariantType());
-        g_variant_builder_add(&builder, typeStr, &value);
+        g_variant_builder_add(&builder, typeStr, value);
         g_free((gpointer)typeStr);
     }
 };
@@ -1163,7 +1163,7 @@ template<class V> struct dbus_traits< std::pair<size_t, const V *> > : public db
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
         for(uint i = 0; i < array.first; ++i) {
-            g_variant_builder_add(&builder, getContainedType().c_str(), &array.second[i]);
+            g_variant_builder_add(&builder, getContainedType().c_str(), array.second[i]);
         }
         g_variant_builder_close(&builder);
     }
