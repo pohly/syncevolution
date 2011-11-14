@@ -36,6 +36,8 @@ BluezManager::BluezManager(Server &server) :
     m_server(server),
     m_adapterChanged(*this, "DefaultAdapterChanged")
 {
+    m_lookupTable.bt_key_file = NULL;
+    m_lookupTable.isLoaded = false;
     const char *bluetoothTest = getenv ("DBUS_TEST_BLUETOOTH");
     m_bluezConn = (bluetoothTest && !strcmp(bluetoothTest, "none")) ? NULL :
         dbus_get_bus_connection((bluetoothTest && !strcmp(bluetoothTest, "session")) ?
