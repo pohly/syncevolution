@@ -781,12 +781,13 @@ class DBusObjectHelper : public DBusObject
         const std::string prefix(MethodHandler::make_prefix(m_path.c_str()));
 
         while (iter != iter_end) {
-            const bool prefix_equal(iter->first.compare(0, prefix.size(), prefix));
+            const bool prefix_equal(!iter->first.compare(0, prefix.size(), prefix));
 
             if (prefix_equal && (first_to_erase == iter_end)) {
                 first_to_erase = iter;
             } else if (!prefix_equal && (first_to_erase != iter_end)) {
                 last_to_erase = iter;
+                break;
             }
             ++iter;
         }
