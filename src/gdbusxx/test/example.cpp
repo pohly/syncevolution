@@ -245,7 +245,7 @@ using namespace GDBusCXX;
 int main(int argc, char *argv[])
 {
     GDBusConnection *conn;
-    DBusErrorCXX *err;
+    DBusErrorCXX err;
     struct sigaction sa;
 
     memset(&sa, 0, sizeof(sa));
@@ -259,10 +259,10 @@ int main(int argc, char *argv[])
 
     main_loop = g_main_loop_new(NULL, FALSE);
 
-    conn = dbus_get_bus_connection("SESSION", "org.example", false, err);
+    conn = dbus_get_bus_connection("SESSION", "org.example", false, &err);
     if (conn == NULL) {
-        if (err) {
-            fprintf(stderr, "%s\n", err->message);
+        if (err.message) {
+            fprintf(stderr, "%s\n", err.message);
         } else
             fprintf(stderr, "Can't register with session bus\n");
         exit(1);

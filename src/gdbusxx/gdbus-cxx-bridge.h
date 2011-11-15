@@ -128,12 +128,58 @@ class GDBusMessagePtr : public boost::intrusive_ptr<GDBusMessage>
  * the struct automatically, then can be used to
  * throw an exception
  */
-class DBusErrorCXX : public GError
+class DBusErrorCXX
 {
+    GError *m_error;
  public:
+    char *message;
+    DBusErrorCXX(GError *error = NULL)
+    : m_error(error)
+    {
+        if (m_error) {
+            message = m_error->message;
+        }
+    }
+    DBusErrorCXX(const DBusErrorCXX &dbus_error)
+    : m_error(NULL)
+    {
+        if (dbus_error.m_error) {
+            m_error = g_error_copy (dbus_error.m_error);
+            message = m_error->message;
+        }
+    }
+
+    DBusErrorCXX operator=(const DBusErrorCXX &dbus_error)
+    {
+        DBusErrorCXX temp_error(dbus_error);
+        GError* temp_c_error = temp_error.m_error;
+
+        temp_error.m_error = m_error;
+        m_error = temp_c_error;
+        message = m_error->message;
+        return *this;
+    }
+
+    void set(GError *error) {
+        if (m_error) {
+            g_error_free (m_error);
+        }
+        m_error = error;
+        if (m_error) {
+            message = m_error->message;
+        }
+    }
+
+    ~DBusErrorCXX() {
+        if (m_error) {
+            g_error_free (m_error);
+        }
+    }
+
     void throwFailure(const std::string &operation, const std::string &explanation = " failed")
     {
-        throw std::runtime_error(operation + explanation);
+        std::string error_message(m_error ? (std::string(": ") + m_error->message) : "");
+        throw std::runtime_error(operation + explanation + error_message);
     }
 };
 
@@ -368,6 +414,7 @@ class EmitSignal0
 
         entry->name = g_strdup(m_signal.c_str());
 
+        entry->ref_count = 1;
         return entry;
     }
 };
@@ -682,10 +729,32 @@ class EmitSignal6
     }
 };
 
+struct FunctionWrapperBase {
+    void* m_func_ptr;
+    FunctionWrapperBase(void* func_ptr)
+    : m_func_ptr(func_ptr)
+    {}
+
+    virtual ~FunctionWrapperBase() {}
+};
+
+template<typename M>
+struct FunctionWrapper : public FunctionWrapperBase {
+    FunctionWrapper(boost::function<M>* func_ptr)
+    : FunctionWrapperBase(reinterpret_cast<void*>(func_ptr))
+    {}
+
+    virtual ~FunctionWrapper() {
+        delete reinterpret_cast<boost::function<M>*>(m_func_ptr);
+    }
+};
+
 struct MethodHandler
 {
     typedef GDBusMessage *(*MethodFunction)(GDBusConnection *conn, GDBusMessage *msg, void *data);
-    typedef std::map<const std::string, std::pair<MethodFunction, void*> > MethodMap;
+    typedef boost::shared_ptr<FunctionWrapperBase> FuncWrapper;
+    typedef std::pair<MethodFunction, FuncWrapper > CallbackPair;
+    typedef std::map<const std::string, CallbackPair > MethodMap;
     static MethodMap m_methodMap;
     static boost::function<void (void)> m_callback;
 
@@ -723,7 +792,7 @@ struct MethodHandler
         }
 
         MethodFunction methodFunc = it->second.first;
-        void *methodData          = it->second.second;
+        void *methodData          = reinterpret_cast<void*>(it->second.second->m_func_ptr);
         GDBusMessage *reply;
         reply = (methodFunc)(g_dbus_method_invocation_get_connection(invocation),
                              g_dbus_method_invocation_get_message(invocation),
@@ -735,6 +804,11 @@ struct MethodHandler
                                        G_DBUS_SEND_MESSAGE_FLAGS_NONE,
                                        NULL,
                                        &error);
+        g_object_unref(reply);
+        // TODO: throw an exception?
+        if (error != NULL) {
+            g_error_free (error);
+        }
     }
 };
 
@@ -814,12 +888,16 @@ class DBusObjectHelper : public DBusObject
      */
     template <class A1, class C, class M> void add(A1 instance, M C::*method, const char *name)
     {
+        if (!m_methods) {
+            throw std::logic_error("You can't add new methods after registration!");
+        }
+
         typedef MakeMethodEntry< boost::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
 
         boost::function<M> *func = new boost::function<M>(entry_type::boostptr(method, instance));
-        typedef std::pair<MethodHandler::MethodFunction, void*> callbackPair;
-        callbackPair methodAndData = std::make_pair(entry_type::methodFunction, func);
+        MethodHandler::FuncWrapper wrapper(new FunctionWrapper<M>(func));
+        MethodHandler::CallbackPair methodAndData = std::make_pair(entry_type::methodFunction, wrapper);
         const std::string key(MethodHandler::make_method_key(m_path.c_str(), name));
 
         MethodHandler::m_methodMap.insert(std::make_pair(key, methodAndData));
@@ -831,12 +909,17 @@ class DBusObjectHelper : public DBusObject
      */
     template <class M> void add(M *function, const char *name)
     {
+        if (!m_methods) {
+            throw std::logic_error("You can't add new functions after registration!");
+        }
+
         typedef MakeMethodEntry< boost::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
 
-        typedef std::pair<MethodHandler::MethodFunction, void*> callbackPair;
-        callbackPair methodAndData = std::make_pair(entry_type::methodFunction,
-                                                    new boost::function<M>(function));
+        boost::function<M> *func = new boost::function<M>(function);
+        MethodHandler::FuncWrapper wrapper(new FunctionWrapper<M>(func));
+        MethodHandler::CallbackPair methodAndData = std::make_pair(entry_type::methodFunction,
+                                                                   wrapper);
         const std::string key(MethodHandler::make_method_key(m_path.c_str(), name));
 
         MethodHandler::m_methodMap.insert(std::make_pair(key, methodAndData));
@@ -847,6 +930,10 @@ class DBusObjectHelper : public DBusObject
      */
     template <class S> void add(const S &s)
     {
+        if (!m_signals) {
+            throw std::logic_error("You can't add new signals after registration!");
+        }
+
         g_ptr_array_add(m_signals, s.makeSignalEntry());
     }
 
@@ -861,13 +948,15 @@ class DBusObjectHelper : public DBusObject
         ifInfo->signals    = signals;
         ifInfo->properties = properties;
 
-        GDBusInterfaceVTable *ifVTable = g_new0(GDBusInterfaceVTable, 1);
-        ifVTable->method_call = MethodHandler::handler;
+        GDBusInterfaceVTable ifVTable;
+        ifVTable.method_call = MethodHandler::handler;
+        ifVTable.get_property = NULL;
+        ifVTable.set_property = NULL;
 
         if ((m_connId = g_dbus_connection_register_object(getConnection(),
                                                           getPath(),
                                                           ifInfo,
-                                                          ifVTable,
+                                                          &ifVTable,
                                                           this,
                                                           NULL,
                                                           NULL)) == 0) {
@@ -879,6 +968,9 @@ class DBusObjectHelper : public DBusObject
 
     void activate() {
         // method and signal array must be NULL-terminated.
+        if (!m_methods || !m_signals) {
+            throw std::logic_error("This object was already activated.");
+        }
         if(m_methods->pdata[m_methods->len - 1] != NULL) {
             g_ptr_array_add(m_methods, NULL);
         }
@@ -886,18 +978,21 @@ class DBusObjectHelper : public DBusObject
             g_ptr_array_add(m_signals, NULL);
         }
         GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
-        ifInfo->ref_count = 1;
         ifInfo->name      = g_strdup(m_interface.c_str());
-        ifInfo->methods   = (GDBusMethodInfo **)m_methods->pdata;
-        ifInfo->signals   = (GDBusSignalInfo **)m_signals->pdata;
+        ifInfo->methods   = (GDBusMethodInfo **)g_ptr_array_free(m_methods, FALSE);
+        ifInfo->signals   = (GDBusSignalInfo **)g_ptr_array_free(m_signals, FALSE);
+        m_signals = NULL;
+        m_methods = NULL;
 
-        GDBusInterfaceVTable *ifVTable = g_new0(GDBusInterfaceVTable, 1);
-        ifVTable->method_call = MethodHandler::handler;
+        GDBusInterfaceVTable ifVTable;
+        ifVTable.method_call = MethodHandler::handler;
+        ifVTable.get_property = NULL;
+        ifVTable.set_property = NULL;
 
         if ((m_connId = g_dbus_connection_register_object(getConnection(),
                                                           getPath(),
                                                           ifInfo,
-                                                          ifVTable,
+                                                          &ifVTable,
                                                           this,
                                                           NULL,
                                                           NULL)) == 0) {
@@ -1629,8 +1724,10 @@ class DBusWatch : public Watch
                 disconnect(m_conn.get(), NULL, NULL, NULL, NULL, NULL, this);
             }
         } else {
+            std::string error_message(error->message);
+            g_error_free(error);
             std::string err_msg("g_dbus_connection_call_sync(): NameHasOwner - ");
-            throw std::runtime_error(err_msg + error->message);
+            throw std::runtime_error(err_msg + error_message);
         }
     }
 
@@ -2291,7 +2388,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2378,7 +2475,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2465,7 +2562,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2549,7 +2646,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2633,7 +2730,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2714,7 +2811,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2795,7 +2892,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2873,7 +2970,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -2950,7 +3047,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -3024,7 +3121,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -3096,7 +3193,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -3165,7 +3262,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         appendNewArgForReply<A4>(outArgs);
@@ -3234,7 +3331,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         g_ptr_array_add(outArgs, NULL);
@@ -3300,7 +3397,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
         g_ptr_array_add(inArgs, NULL);
         
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
         g_ptr_array_add(outArgs, NULL);
@@ -3366,7 +3463,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
@@ -3429,7 +3526,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
@@ -3492,7 +3589,7 @@ struct MakeMethodEntry< boost::function<R (A1)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
@@ -3552,7 +3649,7 @@ struct MakeMethodEntry< boost::function<void (A1)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(inArgs);
+        appendNewArgForReply<A1>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
@@ -3819,7 +3916,11 @@ class DBusClientCall0 : public DBusClientCall<boost::function<void (const std::s
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
         //unmarshal the return results and call user callback
-        (data->m_callback)(err->message);
+        (data->m_callback)(err ? err->message : "");
+        delete data;
+        if (err != NULL) {
+            g_error_free (err);
+        }
     }
 
 public:
@@ -3859,6 +3960,10 @@ class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, 
         //unmarshal the return results and call user callback
         //(*static_cast <Callback_t *>(user_data))(r, err->message);
         (data->m_callback)(r, err ? err->message : "");
+        delete data;
+        if (err != NULL) {
+            g_error_free (err);
+        }
     }
 
 public:
@@ -3898,7 +4003,11 @@ class DBusClientCall2 : public DBusClientCall<boost::function<
             ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2);
         }
         //unmarshal the return results and call user callback
-        (data->m_callback)(r1, r2, err->message);
+        (data->m_callback)(r1, r2, err ? err->message : "");
+        delete data;
+        if (err != NULL) {
+            g_error_free (err);
+        }
     }
 
 public:
@@ -3939,7 +4048,11 @@ class DBusClientCall3 : public DBusClientCall<boost::function<
             ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
         }
         //unmarshal the return results and call user callback
-        (data->m_callback)(r1, r2, r3, err->message);
+        (data->m_callback)(r1, r2, r3, err ? err->message : "");
+        delete data;
+        if (err != NULL) {
+            g_error_free (err);
+        }
     }
 
 public:

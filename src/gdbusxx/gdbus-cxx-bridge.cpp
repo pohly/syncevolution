@@ -45,6 +45,7 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
                                                         G_BUS_TYPE_SESSION : G_BUS_TYPE_SYSTEM,
                                                         NULL, &error);
         if(address == NULL) {
+            err->set(error);
             return NULL;
         }
         // Here we set up a private client connection using the chosen bus' address.
@@ -56,6 +57,7 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
         g_free(address);
 
         if(error != NULL) {
+            err->set(error);
             return NULL;
         }
     } else {
@@ -63,8 +65,11 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
         conn = g_bus_get_sync(boost::iequals(busType, "SESSION") ? G_BUS_TYPE_SESSION : G_BUS_TYPE_SYSTEM,
                               NULL, &error);
         if(error != NULL) {
+            err->set(error);
             return NULL;
         }
+        g_bus_own_name_on_connection(conn, name, G_BUS_NAME_OWNER_FLAGS_NONE,
+                                     NULL, NULL, NULL, NULL);
     }
 
     if(!conn) {
@@ -72,8 +77,6 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
     }
 
     if(name) {
-        g_bus_own_name_on_connection(conn, name, G_BUS_NAME_OWNER_FLAGS_NONE,
-                                     NULL, NULL, NULL, NULL);
         g_dbus_connection_set_exit_on_close(conn, TRUE);
     }
 
