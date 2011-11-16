@@ -326,7 +326,7 @@ struct ExtractArgs {
         m_msg = msg;
 
         GVariant * msgBody = g_dbus_message_get_body(m_msg);
-        if(msgBody != NULL) {
+        if (msgBody != NULL) {
             g_variant_iter_init(&m_iter, msgBody);
         }
     }
@@ -423,7 +423,7 @@ template <typename Arg>
 void appendNewArg(GPtrArray *pa)
 {
     // Only append argument if there is a signature.
-    if(dbus_traits<Arg>::getSignature().empty()) {
+    if (dbus_traits<Arg>::getSignature().empty()) {
         return;
     }
 
@@ -437,7 +437,7 @@ template <typename Arg>
 void appendNewArgForReply(GPtrArray *pa)
 {
     // Only append argument if there is a reply signature.
-    if(dbus_traits<Arg>::getReply().empty()) {
+    if (dbus_traits<Arg>::getReply().empty()) {
         return;
     }
 
@@ -778,7 +778,7 @@ struct MethodHandler
     {
         MethodMap::iterator it;
         it = m_methodMap.find(make_method_key(object_path, method_name));
-        if(it == m_methodMap.end()) {
+        if (it == m_methodMap.end()) {
             g_dbus_method_invocation_return_dbus_error(invocation,
                                                        "org.SyncEvolution.NoMatchingMethodName",
                                                        "No methods registered with this name");
@@ -787,7 +787,7 @@ struct MethodHandler
 
         // We are calling callback because we want to keep server alive as long
         // as possible. This callback is in fact delaying server's autotermination.
-        if(!m_callback.empty()) {
+        if (!m_callback.empty()) {
             m_callback();
         }
 
@@ -797,7 +797,7 @@ struct MethodHandler
         reply = (methodFunc)(g_dbus_method_invocation_get_connection(invocation),
                              g_dbus_method_invocation_get_message(invocation),
                              methodData);
-        
+
         GError *error = NULL;
         g_dbus_connection_send_message(g_dbus_method_invocation_get_connection(invocation),
                                        reply,
@@ -971,10 +971,10 @@ class DBusObjectHelper : public DBusObject
         if (!m_methods || !m_signals) {
             throw std::logic_error("This object was already activated.");
         }
-        if(m_methods->pdata[m_methods->len - 1] != NULL) {
+        if (m_methods->pdata[m_methods->len - 1] != NULL) {
             g_ptr_array_add(m_methods, NULL);
         }
-        if(m_signals->pdata[m_signals->len - 1] != NULL) {
+        if (m_signals->pdata[m_signals->len - 1] != NULL) {
             g_ptr_array_add(m_signals, NULL);
         }
         GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
@@ -1181,7 +1181,7 @@ template <> struct dbus_traits<DBusObject_t> : public dbus_traits_base
 
     static void append(GVariantBuilder &builder, const DBusObject_t &value)
     {
-        if(!g_variant_is_object_path(value.c_str())) {
+        if (!g_variant_is_object_path(value.c_str())) {
             throw std::runtime_error("invalid argument");
         }
         g_variant_builder_add_value(&builder, g_variant_new_object_path(value.c_str()));
@@ -1709,8 +1709,8 @@ class DBusWatch : public Watch
                                                        "/org/freedesktop/DBus",
                                                        "org.freedesktop.DBus",
                                                        "NameHasOwner",
-                                                       g_variant_new ("(s)", peer),
-                                                       G_VARIANT_TYPE ("(b)"),
+                                                       g_variant_new("(s)", peer),
+                                                       G_VARIANT_TYPE("(b)"),
                                                        G_DBUS_CALL_FLAGS_NONE,
                                                        -1,
                                                        NULL,
@@ -3395,7 +3395,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
         appendNewArg<A2>(inArgs);
         appendNewArg<A3>(inArgs);
         g_ptr_array_add(inArgs, NULL);
-        
+
         GPtrArray *outArgs = g_ptr_array_new();
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
