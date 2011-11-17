@@ -41,9 +41,6 @@
 #include "sync-ui.h"
 #include "sync-config-widget.h"
 
-/* local copy of GtkInfoBar, used when GTK+ < 2.18 */
-#include "gtkinfobar.h"
-
 #ifdef USE_MOBLIN_UX
 #include "mux-frame.h"
 

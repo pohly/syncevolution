@@ -65,9 +65,7 @@ src_gtk_ui_sync_ui_SOURCES = \
   src/gtk-ui/mux-frame.c \
   src/gtk-ui/mux-frame.h \
   src/gtk-ui/sync-config-widget.c \
-  src/gtk-ui/sync-config-widget.h \
-  src/gtk-ui/gtkinfobar.c \
-  src/gtk-ui/gtkinfobar.h
+  src/gtk-ui/sync-config-widget.h
 
 src_gtk_ui_sync_ui_LDADD = \
   $(GUI_LIBS) \
