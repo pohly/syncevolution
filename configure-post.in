@@ -158,7 +158,7 @@ SYNCEVOLUTION_LIBS=`pwd`/src/syncevo/libsyncevolution.la
 AC_SUBST(SYNCEVOLUTION_CFLAGS)
 AC_SUBST(SYNCEVOLUTION_LIBS)
 
-AC_CONFIG_FILES(Makefile src/dbus/interfaces/Makefile src/gdbus/Makefile src/dbus/Makefile src/dbus/glib/Makefile src/Makefile src/syncevo/Makefile src/syncevo/syncevolution.pc src/syncevo/configs/Makefile src/synthesis-includes/Makefile src/gtk-ui/Makefile po/Makefile.in test/Makefile src/dbus/glib/syncevo-dbus.pc)
+AC_CONFIG_FILES(Makefile src/dbus/interfaces/Makefile src/gdbus/Makefile src/dbus/Makefile src/dbus/glib/Makefile src/Makefile src/syncevo/Makefile src/syncevo/syncevolution.pc src/syncevo/configs/Makefile src/synthesis-includes/Makefile src/gtk3-ui/Makefile src/gtk-ui/Makefile po/Makefile.in test/Makefile src/dbus/glib/syncevo-dbus.pc)
 AC_OUTPUT
 
 echo
@@ -171,7 +171,7 @@ echo "DBus service: $enable_dbus_service"
 echo "GNOME keyring: $enable_gnome_keyring"
 echo "UI (DBus client): $enable_gui"
 echo "Bluetooth transport: $have_bluetooth"
-echo "GNOME Bluetooth panel plugin: $enable_gnome_bluetooth_panel"
+echo "GNOME Bluetooth panel plugin: $enable_gnome_bluetooth_panel (using $gtk_version)"
 echo "SHA-256: $have_sha"
 echo "API documentation: $enable_doc"
 echo "D-Bus Timeout Hack: $enable_dbus_timeout_hack"
