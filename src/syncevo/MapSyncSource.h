@@ -67,7 +67,7 @@ class SubSyncSource : virtual public SyncSourceBase
     class SubItemResult {
     public:
         SubItemResult() :
-            m_merged(false)
+            m_state(ITEM_OKAY)
         {}
         
         /**
@@ -79,25 +79,25 @@ class SubSyncSource : virtual public SyncSourceBase
          * @param uid       an arbitrary string, stored, but not used by MapSyncSource;
          *                  used in the CalDAV backend to associate mainid (= resource path)
          *                  with UID (= part of the item content, but with special semantic)
-         * @param merged    set this to true if an existing sub item was updated instead of adding it
+         * @param state     report about what was done with the data
          */
         SubItemResult(const string &mainid,
                       const string &subid,
                       const string &revision,
                       const string &uid,
-                      bool merged) :
+                      InsertItemResultState state) :
             m_mainid(mainid),
             m_subid(subid),
             m_revision(revision),
             m_uid(uid),
-            m_merged(merged)
+            m_state(state)
         {}
 
         string m_mainid;
         string m_subid;
         string m_revision;
         string m_uid;
-        bool m_merged;
+        InsertItemResultState m_state;
     };
 
     SubSyncSource() : m_parent(NULL) {}
@@ -179,6 +179,12 @@ class SubSyncSource : virtual public SyncSourceBase
      * and should only be done when it is reasonably cheap.
      */
     virtual std::string getSubDescription(const string &mainid, const string &subid) = 0;
+
+    /**
+     * Called after MapSyncSource already populated the info structure.
+     */
+    virtual void updateSynthesisInfo(SynthesisInfo &info,
+                                     XMLConfigFragments &fragments) {}
 
  private:
     MapSyncSource *m_parent;
@@ -265,6 +271,13 @@ class MapSyncSource :
     virtual std::string getMimeVersion() const { return dynamic_cast<SyncSourceSerialize &>(*m_sub).getMimeVersion(); }
     virtual std::string getDescription(sysync::KeyH aItemKey) { return dynamic_cast<SyncSourceLogging &>(*m_sub).getDescription(aItemKey); }
     virtual std::string getDescription(const string &luid);
+
+ protected:
+    virtual void getSynthesisInfo(SynthesisInfo &info,
+                                  XMLConfigFragments &fragments) {
+        TestingSyncSource::getSynthesisInfo(info, fragments);
+        m_sub->updateSynthesisInfo(info, fragments);
+    }
 
  private:
     boost::shared_ptr<SubSyncSource> m_sub;

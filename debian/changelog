@@ -1,3 +1,11 @@
+syncevolution (1:1.2.0-4) unstable; urgency=low
+
+  * SyncEvolution 1.2 for Harmattan.
+  * Packaging updates for Fremantle merged into Harmattan tree
+    (that's the reason for the version number jump on Harmattan).
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Sun, 20 Nov 2011 19:19:24 +0100
+
 syncevolution (1:1.1.99.6-2) unstable; urgency=low
 
   * Removed static libraries.

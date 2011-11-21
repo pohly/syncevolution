@@ -541,6 +541,9 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
 {
     string type = getMimeType();
 
+    // default remote rule (local-storage.xml): suppresses empty properties
+    info.m_backendRule = "LOCALSTORAGE";
+
     if (type == "text/x-vcard") {
         info.m_native = "vCard21";
         info.m_fieldlist = "contacts";
@@ -555,6 +558,14 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
         info.m_datatypes =
             "        <use datatype='vCard21' mode='rw'/>\n"
             "        <use datatype='vCard30' mode='rw' preferred='yes'/>\n";
+        // If a backend overwrites the m_beforeWriteScript, then it must
+        // include $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT in its own script,
+        // otherwise it will be sent invalid, empty PHOTO;TYPE=unknown;VALUE=binary:
+        // properties.
+        info.m_beforeWriteScript = "$VCARD_OUTGOING_PHOTO_VALUE_SCRIPT;\n";
+        // Likewise for reading. This is needed to ensure proper merging
+        // of contact data.
+        info.m_afterReadScript = "$VCARD_INCOMING_PHOTO_VALUE_SCRIPT;\n";
     } else if (type == "text/x-calendar" || type == "text/x-vcalendar") {
         info.m_native = "vCalendar10";
         info.m_fieldlist = "calendar";
@@ -657,6 +668,19 @@ sysync::TSyError SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sys
         InsertItemResult inserted =
             insertItem(!aID ? "" : aID->item, data.get());
         newID->item = StrAlloc(inserted.m_luid.c_str());
+        switch (inserted.m_state) {
+        case ITEM_OKAY:
+            break;
+        case ITEM_REPLACED:
+            res = sysync::DB_DataReplaced;
+            break;
+        case ITEM_MERGED:
+            res = sysync::DB_DataMerged;
+            break;
+        case ITEM_NEEDS_MERGE:
+            res = sysync::DB_Conflict;
+            break;
+        }
     }
 
     return res;

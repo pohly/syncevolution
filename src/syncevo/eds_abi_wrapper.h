@@ -180,6 +180,7 @@ struct EDSAbiWrapper {
     const char* (*icalparameter_get_tzid) (const icalparameter* value);
     void (*icalparameter_set_tzid) (icalparameter* value, const char* v);
     icalparameter *(*icalparameter_new_from_value_string)(icalparameter_kind kind, const char *value);
+    icalparameter *(*icalparameter_new_clone)(icalparameter *param);
     icalproperty *(*icalproperty_new_clone)(icalproperty *prop);
     void (*icalproperty_free)(icalproperty *prop);
     const char* (*icalproperty_get_description) (const icalproperty* prop);
@@ -197,6 +198,7 @@ struct EDSAbiWrapper {
     icalproperty* (*icalproperty_new_summary) (const char* v);
     icalproperty* (*icalproperty_new_sequence) (int v);
     icalproperty* (*icalproperty_new_uid) (const char* v);
+    icalproperty* (*icalproperty_new_recurrenceid) (icaltimetype v);
     void (*icalproperty_set_value_from_string) (icalproperty* prop,const char* value, const char* kind);
     void (*icalproperty_set_dtstamp) (icalproperty* prop, struct icaltimetype v);
     void (*icalproperty_set_lastmodified) (icalproperty* prop, struct icaltimetype v);
@@ -204,6 +206,11 @@ struct EDSAbiWrapper {
     void (*icalproperty_set_uid) (icalproperty* prop, const char *v);
     void (*icalproperty_remove_parameter_by_kind)(icalproperty* prop,
                                                   icalparameter_kind kind);
+    void (*icalproperty_add_parameter)(icalproperty* prop,icalparameter* parameter);
+    const char* (*icalproperty_get_value_as_string)(const icalproperty* prop);
+    const char* (*icalproperty_get_x_name)(icalproperty* prop);
+    icalproperty* (*icalproperty_new_from_string)(const char* str);
+
     int (*icaltime_is_null_time)(const struct icaltimetype t);
     int (*icaltime_is_utc)(const struct icaltimetype t);
     const char* (*icaltime_as_ical_string) (const struct icaltimetype tt);
@@ -226,6 +233,7 @@ struct EDSAbiWrapper {
     // optional variants which allocate the returned string for us
     const char* (*icaltime_as_ical_string_r) (const struct icaltimetype tt);
     char* (*icalcomponent_as_ical_string_r) (icalcomponent* component);
+    char* (*icalproperty_get_value_as_string_r) (const icalproperty* prop);
 # endif /* ENABLE_ICAL */
 
 # ifdef ENABLE_BLUETOOTH
@@ -347,6 +355,7 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define icalparameter_get_tzid EDSAbiWrapperSingleton.icalparameter_get_tzid
 #   define icalparameter_set_tzid EDSAbiWrapperSingleton.icalparameter_set_tzid
 #   define icalparameter_new_from_value_string EDSAbiWrapperSingleton.icalparameter_new_from_value_string
+#   define icalparameter_new_clone EDSAbiWrapperSingleton.icalparameter_new_clone
 #   define icalproperty_new_clone EDSAbiWrapperSingleton.icalproperty_new_clone
 #   define icalproperty_free EDSAbiWrapperSingleton.icalproperty_free
 #   define icalproperty_get_description EDSAbiWrapperSingleton.icalproperty_get_description
@@ -364,12 +373,17 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define icalproperty_new_summary EDSAbiWrapperSingleton.icalproperty_new_summary
 #   define icalproperty_new_uid EDSAbiWrapperSingleton.icalproperty_new_uid
 #   define icalproperty_new_sequence EDSAbiWrapperSingleton.icalproperty_new_sequence
+#   define icalproperty_new_recurrenceid EDSAbiWrapperSingleton.icalproperty_new_recurrenceid
 #   define icalproperty_set_value_from_string EDSAbiWrapperSingleton.icalproperty_set_value_from_string
 #   define icalproperty_set_dtstamp EDSAbiWrapperSingleton.icalproperty_set_dtstamp
 #   define icalproperty_set_lastmodified EDSAbiWrapperSingleton.icalproperty_set_lastmodified
 #   define icalproperty_set_sequence EDSAbiWrapperSingleton.icalproperty_set_sequence
 #   define icalproperty_set_uid EDSAbiWrapperSingleton.icalproperty_set_uid
 #   define icalproperty_remove_parameter_by_kind EDSAbiWrapperSingleton.icalproperty_remove_parameter_by_kind
+#   define icalproperty_add_parameter EDSAbiWrapperSingleton.icalproperty_add_parameter
+#   define icalproperty_get_value_as_string (EDSAbiWrapperSingleton.icalproperty_get_value_as_string_r ? EDSAbiWrapperSingleton.icalproperty_get_value_as_string_r : (char *(*)(const icalproperty*))EDSAbiWrapperSingleton.icalproperty_get_value_as_string)
+#   define icalproperty_get_x_name EDSAbiWrapperSingleton.icalproperty_get_x_name
+#   define icalproperty_new_from_string EDSAbiWrapperSingleton.icalproperty_new_from_string
 #   define icaltime_is_null_time EDSAbiWrapperSingleton.icaltime_is_null_time
 #   define icaltime_is_utc EDSAbiWrapperSingleton.icaltime_is_utc
 #   define icaltime_as_ical_string (EDSAbiWrapperSingleton.icaltime_as_ical_string_r ? EDSAbiWrapperSingleton.icaltime_as_ical_string_r : EDSAbiWrapperSingleton.icaltime_as_ical_string)
@@ -418,6 +432,7 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #    define LIBICAL_MEMFIXES 1
 #    define icaltime_as_ical_string icaltime_as_ical_string_r
 #    define icalcomponent_as_ical_string icalcomponent_as_ical_string_r
+#    define icalproperty_get_value_as_string icalproperty_get_value_as_string_r
 #   endif /* LIBICAL_MEMFIXES */
 #  endif /* ENABLE_ICAL */
 # endif /* EDS_ABI_WRAPPER_NO_REDEFINE */

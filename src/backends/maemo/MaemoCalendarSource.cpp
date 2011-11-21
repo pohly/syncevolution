@@ -73,6 +73,14 @@ std::string MaemoCalendarSource::getMimeVersion() const
     }
 }
 
+void MaemoCalendarSource::getSynthesisInfo(SynthesisInfo &info,
+                                           XMLConfigFragments &fragments)
+{
+    TrackingSyncSource::getSynthesisInfo(info, fragments);
+    info.m_backendRule = "MAEMO-CALENDAR";
+    info.m_afterReadScript += "$FIX_EXDATE_SCRIPT;\n";
+}
+
 void MaemoCalendarSource::open()
 {
     string id = getDatabaseID();
@@ -211,7 +219,8 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
 {
     int err;
     CComponent *c;
-    bool r, u = false;
+    bool r;
+    InsertItemResultState u = ITEM_OKAY;
     TrackingSyncSource::InsertItemResult result;
 
     if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
@@ -270,7 +279,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
             throwError(string("creating item "));
         }
         if (err == CALENDAR_ENTRY_DUPLICATED) {
-            u = true;
+            u = ITEM_MERGED;
         }
     }
 

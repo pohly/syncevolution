@@ -231,8 +231,10 @@ extern "C" void EDSAbiWrapperInit()
 # endif // ENABLE_EBOOK
 
 # ifdef ENABLE_ECAL
+    static const int libecalMinVersion = 3,
+        libecalMaxVersion = 8;
     ecalhandle =
-    findSymbols("libecal-1.2.so", 3, 8,
+    findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
                 FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
                 &EDSAbiWrapperSingleton.e_cal_add_timezone, "e_cal_add_timezone",
                 &EDSAbiWrapperSingleton.e_cal_component_get_icalcomponent, "e_cal_component_get_icalcomponent",
@@ -282,6 +284,7 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.icalparameter_get_tzid, "icalparameter_get_tzid",
                 &EDSAbiWrapperSingleton.icalparameter_set_tzid, "icalparameter_set_tzid",
                 &EDSAbiWrapperSingleton.icalparameter_new_from_value_string, "icalparameter_new_from_value_string",
+                &EDSAbiWrapperSingleton.icalparameter_new_clone, "icalparameter_new_clone",
                 &EDSAbiWrapperSingleton.icalproperty_new_clone, "icalproperty_new_clone",
                 &EDSAbiWrapperSingleton.icalproperty_free, "icalproperty_free",
                 &EDSAbiWrapperSingleton.icalproperty_get_description, "icalproperty_get_description",
@@ -299,12 +302,17 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.icalproperty_new_summary, "icalproperty_new_summary",
                 &EDSAbiWrapperSingleton.icalproperty_new_uid, "icalproperty_new_uid",
                 &EDSAbiWrapperSingleton.icalproperty_new_sequence, "icalproperty_new_sequence",
+                &EDSAbiWrapperSingleton.icalproperty_new_recurrenceid, "icalproperty_new_recurrenceid",
                 &EDSAbiWrapperSingleton.icalproperty_set_value_from_string, "icalproperty_set_value_from_string",
                 &EDSAbiWrapperSingleton.icalproperty_set_dtstamp, "icalproperty_set_dtstamp",
                 &EDSAbiWrapperSingleton.icalproperty_set_lastmodified, "icalproperty_set_lastmodified",
                 &EDSAbiWrapperSingleton.icalproperty_set_sequence, "icalproperty_set_sequence",
                 &EDSAbiWrapperSingleton.icalproperty_set_uid, "icalproperty_set_uid",
                 &EDSAbiWrapperSingleton.icalproperty_remove_parameter_by_kind, "icalproperty_remove_parameter_by_kind",
+                &EDSAbiWrapperSingleton.icalproperty_add_parameter, "icalproperty_add_parameter",
+                &EDSAbiWrapperSingleton.icalproperty_get_value_as_string, "icalproperty_get_value_as_string",
+                &EDSAbiWrapperSingleton.icalproperty_get_x_name, "icalproperty_get_x_name",
+                &EDSAbiWrapperSingleton.icalproperty_new_from_string, "icalproperty_new_from_string",
                 &EDSAbiWrapperSingleton.icaltime_is_null_time, "icaltime_is_null_time",
                 &EDSAbiWrapperSingleton.icaltime_is_utc, "icaltime_is_utc",
                 &EDSAbiWrapperSingleton.icaltime_as_ical_string, "icaltime_as_ical_string",
@@ -325,10 +333,11 @@ extern "C" void EDSAbiWrapperInit()
                 (void *)0);
     EDSAbiHaveEcal = EDSAbiWrapperSingleton.e_cal_new != 0;
     ecalhandle =
-    findSymbols("libecal-1.2.so", 3, 7,
+        findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
                 FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
                 &EDSAbiWrapperSingleton.icalcomponent_as_ical_string_r, "icalcomponent_as_ical_string_r",
                 &EDSAbiWrapperSingleton.icaltime_as_ical_string_r, "icaltime_as_ical_string_r",
+                &EDSAbiWrapperSingleton.icalproperty_get_value_as_string_r, "icalproperty_get_value_as_string_r",
                 (void *)0);
 # endif // ENABLE_ECAL
 

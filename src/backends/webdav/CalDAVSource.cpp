@@ -25,6 +25,22 @@ static std::string SubIDName(const std::string &subid)
     return subid.empty() ? "<master>" : subid;
 }
 
+/** remove X-SYNCEVOLUTION-EXDATE-DETACHED from VEVENT */
+static void removeSyncEvolutionExdateDetached(icalcomponent *parent)
+{
+    icalproperty *prop = icalcomponent_get_first_property(parent, ICAL_ANY_PROPERTY);
+    while (prop) {
+        icalproperty *next = icalcomponent_get_next_property(parent, ICAL_ANY_PROPERTY);
+        const char *xname = icalproperty_get_x_name(prop);
+        if (xname &&
+            !strcmp(xname, "X-SYNCEVOLUTION-EXDATE-DETACHED")) {
+            icalcomponent_remove_property(parent, prop);
+            icalproperty_free(prop);
+        }
+        prop = next;
+    }
+}
+
 CalDAVSource::CalDAVSource(const SyncSourceParams &params,
                            const boost::shared_ptr<Neon::Settings> &settings) :
     WebDAVSource(params, settings)
@@ -328,6 +344,10 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
          comp = icalcomponent_get_next_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) {
         std::string subid = Event::getSubID(comp);
         EventCache::iterator it;
+        // remove X-SYNCEVOLUTION-EXDATE-DETACHED, could be added by
+        // the engine's read/modify/write cycle when resolving a
+        // conflict
+        removeSyncEvolutionExdateDetached(comp);
         if (!luid.empty() &&
             (it = m_cache.find(luid)) != m_cache.end()) {
             // Additional sanity check: ensure that the expected UID is set.
@@ -433,8 +453,9 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             Event &event = loadItem(*it->second);
             event.m_etag = res.m_revision;
             if (event.m_subids.find(subid) != event.m_subids.end()) {
-                // was already in that item but caller didn't seem to know
-                subres.m_merged = true;
+                // was already in that item but caller didn't seem to know,
+                // and now we replaced the data on the CalDAV server
+                subres.m_state = ITEM_REPLACED;
             } else {
                 // add to merged item
                 event.m_subids.insert(subid);                
@@ -466,6 +487,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                     icalproperty *lastmod = icalcomponent_get_first_property(firstcomp, ICAL_LASTMODIFIED_PROPERTY);
                     if (lastmod) {
                         lastmodtime = icaltime_from_timet(newEvent->m_lastmodtime, false);
+                        lastmodtime.is_utc = 1;
                         icalproperty_set_lastmodified(lastmod, lastmodtime);
                     }
                     icalproperty *dtstamp = icalcomponent_get_first_property(firstcomp, ICAL_DTSTAMP_PROPERTY);
@@ -496,10 +518,55 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             }
         }
     } else {
-        if (subid != knownSubID) {
-            SE_THROW("new CalDAV item does not have right RECURRENCE-ID");
+        if (!subid.empty() && subid != knownSubID) {
+            SE_THROW(StringPrintf("new CalDAV item does not have right RECURRENCE-ID: item %s != expected %s",
+                                  subid.c_str(), knownSubID.c_str()));
         }
         Event &event = loadItem(davLUID);
+
+        if (subid.empty() && subid != knownSubID) {
+            // fix incomplete iCalendar 2.0 item: should have had a RECURRENCE-ID
+            icalcomponent *newcomp =
+                icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT);
+            icalproperty *prop = icalcomponent_get_first_property(newcomp, ICAL_RECURRENCEID_PROPERTY);
+            if (prop) {
+                icalcomponent_remove_property(newcomp, prop);
+                icalproperty_free(prop);
+            }
+
+            // reconstruct RECURRENCE-ID with known value and TZID from start time of
+            // the parent event or (if not found) the current event
+            eptr<icalproperty> rid(icalproperty_new_recurrenceid(icaltime_from_string(knownSubID.c_str())),
+                                   "new rid");
+            icalproperty *dtstart = NULL;
+            icalcomponent *comp;
+            // look for parent first
+            for (comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
+                 comp && !dtstart;
+                 comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
+                if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+                    dtstart = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+                }
+            }
+            // fall back to current event
+            if (!dtstart) {
+                dtstart = icalcomponent_get_first_property(newcomp, ICAL_DTSTART_PROPERTY);
+            }
+            // ignore missing TZID
+            if (dtstart) {
+                icalparameter *tzid = icalproperty_get_first_parameter(dtstart, ICAL_TZID_PARAMETER);
+                if (tzid) {
+                    icalproperty_set_parameter(rid, icalparameter_new_clone(tzid));
+                }
+            }
+
+            // finally add RECURRENCE-ID and fix newEvent's meta information
+            icalcomponent_add_property(newcomp, rid.release());
+            subid = knownSubID;
+            newEvent->m_subids.erase("");
+            newEvent->m_subids.insert(subid);
+        }
+
         // no changes expected yet, copy previous attributes
         subres.m_mainid = davLUID;
         subres.m_uid = event.m_UID;
@@ -547,13 +614,11 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             }
         }
         if (davLUID != luid) {
-            // caller didn't know final UID: if found, the tell him that
-            // we merged the item for him, if not, then don't complain about
-            // it not being found (like we do when the item should exist
-            // but doesn't)
+            // caller didn't know final UID: if found, then tell him to
+            // merge the data and try again
             if (removeme) {
-                subres.m_merged = true;
-                icalcomponent_remove_component(event.m_calendar, removeme);
+                subres.m_state = ITEM_NEEDS_MERGE;
+                goto done;
             } else {
                 event.m_subids.insert(subid);
             }
@@ -561,6 +626,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             if (removeme) {
                 // this is what we expect when the caller mentions the DAV LUID
                 icalcomponent_remove_component(event.m_calendar, removeme);
+                icalcomponent_free(removeme);
             } else {
                 // caller confused?!
                 SE_THROW("event not found");
@@ -583,7 +649,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
         try {
             SE_LOG_DEBUG(this, NULL, "updating VEVENT");
             InsertItemResult res = insertItem(event.m_DAVluid, data, true);
-            if (res.m_merged ||
+            if (res.m_state != ITEM_OKAY ||
                 res.m_luid != event.m_DAVluid) {
                 // should not merge with anything, if so, our cache was invalid
                 SE_THROW("CalDAV item not updated as expected");
@@ -615,12 +681,56 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                 subres.m_merged = true;
                 subres.m_revision = event.m_etag;
 #endif
+            } else if (ex.syncMLStatus() == 409 &&
+                       strstr(ex.what(), "Can only store an event with a newer DTSTAMP")) {
+                SE_LOG_DEBUG(NULL, NULL, "resending VEVENT with updated SEQUENCE/LAST-MODIFIED/DTSTAMP to work around 409");
+
+                // Sometimes a PUT of two linked events updates one of them on the server
+                // (visible in modified SEQUENCE and LAST-MODIFIED values) and then
+                // fails with 409 because, presumably, the other item now has
+                // too low SEQUENCE/LAST-MODIFIED/DTSTAMP values.
+                //
+                // An attempt with splitting the PUT in advance worked for some cases,
+                // but then it still happened for others. So let's use brute force and
+                // try again once more after reading the updated event anew.
+                eptr<icalcomponent> fullcal = event.m_calendar;
+                loadItem(event);
+                event.m_sequence++;
+                lastmodtime = icaltime_from_timet(event.m_lastmodtime, false);
+                lastmodtime.is_utc = 1;
+                event.m_calendar = fullcal;
+                for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
+                     comp;
+                     comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
+                    if (!icaltime_is_null_time(lastmodtime)) {
+                        icalproperty *dtstamp = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
+                        if (dtstamp) {
+                            icalproperty_set_dtstamp(dtstamp, lastmodtime);
+                        }
+                        icalproperty *lastmod = icalcomponent_get_first_property(comp, ICAL_LASTMODIFIED_PROPERTY);
+                        if (lastmod) {
+                            icalproperty_set_lastmodified(lastmod, lastmodtime);
+                        }
+                    }
+                    Event::setSequence(comp, event.m_sequence);
+                }
+                eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
+                std::string data = icalstr.get();
+                InsertItemResult res = insertItem(event.m_DAVluid, data, true);
+                if (res.m_state != ITEM_OKAY ||
+                    res.m_luid != event.m_DAVluid) {
+                    // should not merge with anything, if so, our cache was invalid
+                    SE_THROW("CalDAV item not updated as expected");
+                }
+                event.m_etag = res.m_revision;
+                subres.m_revision = event.m_etag;
             } else {
                 throw;
             }
         }
     }
 
+ done:
     return subres;
 }
 
@@ -646,19 +756,57 @@ void CalDAVSource::readSubItem(const std::string &davLUID, const std::string &su
             icalcomponent_add_component(calendar, clone.release());
         }
         bool found = false;
+        icalcomponent *parent = NULL;
         for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
             if (Event::getSubID(comp) == subid) {
                 eptr<icalcomponent> clone(icalcomponent_new_clone(comp), "VEVENT");
+                if (subid.empty()) {
+                    parent = clone.get();
+                }
                 icalcomponent_add_component(calendar, clone.release());
                 found = true;
                 break;
             }
         }
+
         if (!found) {
             SE_THROW("event not found");
         }
+
+        // tell engine and peers about EXDATEs implied by
+        // RECURRENCE-IDs in detached recurrences by creating
+        // X-SYNCEVOLUTION-EXDATE-DETACHED in the parent
+        if (parent && event.m_subids.size() > 1) {
+            // remove all old X-SYNCEVOLUTION-EXDATE-DETACHED (just in case)
+            removeSyncEvolutionExdateDetached(parent);
+
+            // now populate with RECURRENCE-IDs of detached recurrences
+            for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
+                 comp;
+                 comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
+                icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+                if (prop) {
+                    eptr<char> rid(ical_strdup(icalproperty_get_value_as_string(prop)));
+                    icalproperty *exdate = icalproperty_new_from_string(StringPrintf("X-SYNCEVOLUTION-EXDATE-DETACHED:%s", rid.get()).c_str());
+                    if (exdate) {
+                        icalparameter *tzid = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+                        if (tzid) {
+                            icalproperty_add_parameter(exdate, icalparameter_new_clone(tzid));
+                        }
+#if 0
+                        // not needed
+                        if (icalproperty_get_recurrenceid(exdate).is_date) {
+                            icalproperty_add_parameter(exdate, icalparameter_new_value(ICAL_VALUE_DATE));
+                        }
+#endif
+                        icalcomponent_add_property(parent, exdate);
+                    }
+                }
+            }
+        }
+
         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(calendar)));
         item = icalstr.get();
     }
@@ -720,10 +868,12 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                         icalproperty *prop;
                         while ((prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) != NULL) {
                             icalcomponent_remove_property(comp, prop);
+                            icalproperty_free(prop);
                             updated = true;
                         }
                         while ((prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) != NULL) {
                             icalcomponent_remove_property(comp, prop);
+                            icalproperty_free(prop);
                             updated = true;
                         }
                     }
@@ -802,7 +952,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
         } else {
             res = insertItem(davLUID, icalstr.get(), true);
         }
-        if (res.m_merged ||
+        if (res.m_state != ITEM_OKAY ||
             res.m_luid != davLUID) {
             SE_THROW("unexpected result of removing sub event");
         }
@@ -1012,6 +1162,7 @@ void CalDAVSource::Event::fixIncomingCalendar(icalcomponent *calendar)
     // time.
     bool ridInUTC = false;
     const icaltimezone *zone = NULL;
+    icalcomponent *parent = NULL;
 
     for (icalcomponent *comp = icalcomponent_get_first_component(calendar, ICAL_VEVENT_COMPONENT);
          comp;
@@ -1025,6 +1176,7 @@ void CalDAVSource::Event::fixIncomingCalendar(icalcomponent *calendar)
         // is parent event? -> remember time zone unless it is UTC
         static const struct icaltimetype null = { 0 };
         if (!memcmp(&rid, &null, sizeof(null))) {
+            parent = comp;
             struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
             if (!icaltime_is_utc(dtstart)) {
                 zone = icaltime_get_timezone(dtstart);

@@ -772,7 +772,7 @@ class SyncEvolutionDist(AutotoolsBuild):
         cd(self.builddir)
         if self.packagesuffix:
             context.runCommand("%s %s BINSUFFIX=%s deb rpm" % (self.runner, context.make, self.packagesuffix))
-	    put, get = os.popen4("%s %s dpkg-architecture -qDEB_HOST_ARCH" % (self.runner, context.make))
+	    put, get = os.popen4("%s dpkg-architecture -qDEB_HOST_ARCH" % (self.runner))
 	    for arch in get.readlines():
 	           if "i386" in arch:
 		   	context.runCommand("%s %s BINSUFFIX=%s PKGARCH=lpia deb" % (self.runner, context.make, self.packagesuffix))
@@ -838,7 +838,7 @@ context.add(test)
 
 test = SyncEvolutionTest("davical", compile,
                          "", options.shell,
-                         "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::davical_caldav Client::Source::davical_carddav",
+                         "Client::Sync::eds_contact Client::Sync::eds_event Client::Source::davical_caldav Client::Source::davical_carddav",
                          [ "davical_caldav", "davical_carddav", "eds_event", "eds_contact" ],
                          "CLIENT_TEST_WEBDAV='davical caldav carddav' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
@@ -855,7 +855,6 @@ test = SyncEvolutionTest("apple", compile,
                          "CLIENT_TEST_WEBDAV='apple caldav carddav' "
                          "CLIENT_TEST_NUM_ITEMS=250 " # test is local, so we can afford a higher number
                          "CLIENT_TEST_ALARM=2400 " # but even with a local server does the test run a long time
-                         "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          ,
                          testPrefix=options.testprefix)
@@ -1001,6 +1000,15 @@ class FunambolTest(SyncEvolutionTest):
                                      "eds_task",
                                      "eds_memo" ],
                                    "CLIENT_TEST_SKIP="
+                                   # server duplicates items in add<->add conflict because it
+                                   # does not check UID
+                                   "Client::Sync::eds_event::testAddBothSides,"
+                                   "Client::Sync::eds_event::testAddBothSidesRefresh,"
+                                   "Client::Sync::eds_task::testAddBothSides,"
+                                   "Client::Sync::eds_task::testAddBothSidesRefresh,"
+                                   # test cannot pass because we don't have CtCap info about
+                                   # the Funambol server
+                                   "Client::Sync::eds_contact::testExtensions,"
                                    "Client::Sync::eds_event::Retry,"
                                    "Client::Sync::eds_event::Suspend,"
                                    "Client::Sync::eds_event::Resend,"
@@ -1097,6 +1105,12 @@ mobicaltest = SyncEvolutionTest("mobical", compile,
                                 "CLIENT_TEST_NOCHECK_SYNCMODE=1 "
                                 "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                 "CLIENT_TEST_SKIP="
+                                # server duplicates items in add<->add conflict because it
+                                # does not check UID
+                                "Client::Sync::eds_event::testAddBothSides,"
+                                "Client::Sync::eds_event::testAddBothSidesRefresh,"
+                                "Client::Sync::eds_task::testAddBothSides,"
+                                "Client::Sync::eds_task::testAddBothSidesRefresh,"
                                 "Client::Sync::eds_contact::Retry,"
                                 "Client::Sync::eds_contact::Suspend,"
                                 "Client::Sync::eds_contact::Resend,"
@@ -1174,12 +1188,18 @@ memotootest = SyncEvolutionTest("memotoo", compile,
                                 "CLIENT_TEST_NOCHECK_SYNCMODE=1 "
                                 "CLIENT_TEST_NUM_ITEMS=10 "
                                 "CLIENT_TEST_SKIP="
+                                # server duplicates items in add<->add conflict because it
+                                # does not check UID
+                                "Client::Sync::eds_event::testAddBothSides,"
+                                "Client::Sync::eds_event::testAddBothSidesRefresh,"
+                                "Client::Sync::eds_task::testAddBothSides,"
+                                "Client::Sync::eds_task::testAddBothSidesRefresh,"
                                 "Client::Sync::eds_contact::Retry,"
                                 "Client::Sync::eds_contact::Suspend,"
-                                "Client::Sync::eds_contact::testRefreshFromClientSync,"
-                                "Client::Sync::eds_contact::testRefreshFromClientSemantic,"
-                                "Client::Sync::eds_contact::testDeleteAllRefresh,"
-                                "Client::Sync::eds_contact::testOneWayFromServer,"
+                                # "Client::Sync::eds_contact::testRefreshFromClientSync,"
+                                # "Client::Sync::eds_contact::testRefreshFromClientSemantic,"
+                                # "Client::Sync::eds_contact::testDeleteAllRefresh,"
+                                # "Client::Sync::eds_contact::testOneWayFromServer,"
                                 "Client::Sync::eds_event::testRefreshFromClientSync,"
                                 "Client::Sync::eds_event::testRefreshFromClientSemantic,"
                                 "Client::Sync::eds_event::testOneWayFromServer,"
