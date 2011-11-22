@@ -24,7 +24,7 @@ themercdir = $(datadir)/syncevolution/
 themerc_DATA = \
 	sync-generic.png \
 	sync-spinner.gif \
-	sync-ui.rc
+	sync-ui.css
 
 desktopdir = $(datadir)/applications
 
