@@ -440,7 +440,7 @@ AC_ARG_ENABLE(dbus-service,
                fi])
 AM_CONDITIONAL([COND_DBUS], [test "$enable_dbus_service" = "yes"])
 
-AC_ARG_WITH(gio-gdbus,
+AC_ARG_WITH([gio-gdbus],
             AS_HELP_STRING([--with-gio-gdbus],
                            [enables use of GIO's GDBus instead of the in-tree, Bluez gdbus.]),
             with_gio_gdbus="$withval",
@@ -547,10 +547,10 @@ if test $enable_dbus_service = "yes"; then
     # pick gtk+-2.0 here, to be compatible with old libnotify releases
     # which had that hard-cored and because sync-ui also depends on
     # gtk+-2.0.
-    AC_ARG_ENABLE(notify,
+    AC_ARG_ENABLE([notify],
         AS_HELP_STRING([--enable-notify],
                        [send notifications for automatic sync events, using libnotify]),
-        with_gio_gdbus="$enableval",
+        enable_notify="$enableval",
         PKG_CHECK_EXISTS([libnotify gtk+-2.0],
                          [enable_notify="yes"],
                          [enable_notify="no"]))
@@ -1082,6 +1082,7 @@ for backend in $BACKENDS; do
     eval echo $backend: \${enable_${backend}}
 done
 echo "DBus service: $enable_dbus_service"
+echo "Notifications: $enable_notify"
 echo "GIO GDBus: $with_gio_gdbus"
 echo "GNOME keyring: $enable_gnome_keyring"
 echo "UI (DBus client): $enable_gui"
