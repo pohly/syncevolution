@@ -570,7 +570,7 @@ TrackingSyncSource::InsertItemResult QtContactsSource::insertItem(const string &
 
     return InsertItemResult(QtContactsData::getLUID(savedContact),
                             QtContactsData::getRev(finalContact),
-                            false);
+                            ITEM_OKAY);
 }
 
 

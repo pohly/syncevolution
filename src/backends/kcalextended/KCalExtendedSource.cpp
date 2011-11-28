@@ -402,7 +402,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     if (incidences.empty()) {
         throwError("iCalendar 2.0 item empty?!");
     }
-    bool updated;
+    InsertItemResultState updated;
     string newUID;
     string oldUID = uid;
 
@@ -437,7 +437,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     if (oldUID.empty()) {
         KCalCore::Incidence::Ptr incidence = incidences[0];
 
-        updated = false;
+        updated = ITEM_OKAY;
         if (!m_data->m_calendar->addIncidence(incidence)) {
             throwError("could not add incidence");
         }
@@ -445,7 +445,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         newUID = m_data->getItemID(incidence).getLUID();
     } else {
         KCalCore::Incidence::Ptr incidence = incidences[0];
-        updated = true;
+        updated = ITEM_MERGED;
         newUID = oldUID;
         KCalCore::Incidence::Ptr original = m_data->findIncidence(oldUID);
         if (!original) {
