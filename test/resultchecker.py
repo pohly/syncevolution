@@ -20,6 +20,7 @@
 '''
 import sys,os,glob,datetime,popen2
 import re
+import fnmatch
 
 """ 
 resultcheck.py: tranverse the test result directory, generate an XML
@@ -45,7 +46,7 @@ def check (resultdir, serverlist,resulturi, srcdir, shellprefix, backenddir):
     if(os.path.isfile(resultdir+"/output.txt")==False):
         print "main test output file not exist!"
     else:
-        indents,cont = step1(resultdir+"/output.txt",result,indents,resultdir,resulturi, shellprefix, srcdir)
+        indents,cont = step1(resultdir,result,indents,resultdir,resulturi, shellprefix, srcdir)
         if (cont):
             step2(resultdir,result,servers,indents,srcdir,shellprefix,backenddir)
         else:
@@ -55,12 +56,47 @@ def check (resultdir, serverlist,resulturi, srcdir, shellprefix, backenddir):
     result.write('''</nightly-test>\n''')
     result.close()
 
-def step1(input, result, indents, dir, resulturi, shellprefix, srcdir):
+patchsummary = re.compile('^Subject: (?:\[PATCH.*?\] )?(.*)\n')
+patchauthor = re.compile('^From: (.*?) <.*>\n')
+def extractPatchSummary(patchfile):
+    author = ""
+    for line in open(patchfile):
+        m = patchauthor.match(line)
+        if m:
+            author = m.group(1) + " - "
+        else:
+            m = patchsummary.match(line)
+            if m:
+                return author + m.group(1)
+    return os.path.basename(patchfile)
+
+def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     '''Step1 of the result checking, collect system information and 
     check the preparation steps (fetch, compile)'''
     cont = True
+    input = os.path.join(resultdir, "output.txt")
     indent =indents[-1]+space
     indents.append(indent)
+
+    # include information prepared by GitCopy in runtests.py
+    result.write(indent+'<source-info>\n')
+    files = os.listdir(resultdir)
+    files.sort()
+    for source in files:
+        m = re.match('(.*)-source.log', source)
+        if m:
+            name = m.group(1)
+            result.write('   <source name="%s"><description><![CDATA[%s]]></description>\n' %
+                         (name, open(os.path.join(resultdir, source)).read()))
+            result.write('       <patches>\n')
+            for patch in files:
+                if fnmatch.fnmatch(patch, name + '-*.patch'):
+                    result.write('          <patch><path>%s</path><summary><![CDATA[%s]]></summary></patch>\n' %
+                                 ( patch, extractPatchSummary(os.path.join(resultdir, patch)) ) )
+            result.write('       </patches>\n')
+            result.write('   </source>\n')
+    result.write(indent+'</source-info>\n')
+
     result.write(indent+'''<platform-info>\n''')
     indent =indents[-1]+space
     indents.append(indent)
@@ -274,11 +310,17 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 #======================================================================
                 # FAIL: TestDBusServer.testGetConfigsTemplates - Server.GetConfigsTemplates()
                 # ---------------------------------------------------------------------
+                #
+                # More recent Python 2.7 produces:
+                # FAIL: testSyncSecondSession (__main__.TestSessionAPIsReal)
 
                 # first build list of all tests, assuming that they pass
                 dbustests = {}
                 test_start = re.compile(r'''^Test(?P<cl>.*)\.test(?P<func>[^ ]*)''')
+                # FAIL/ERROR + description of test (old Python)
                 test_fail = re.compile(r'''(?P<type>FAIL|ERROR): Test(?P<cl>.*)\.test(?P<func>[^ ]*)''')
+                # FAIL/ERROR + function name of test (Python 2.7)
+                test_fail_27 = re.compile(r'''(?P<type>FAIL|ERROR): test(?P<func>[^ ]*) \(.*\.(?:Test(?P<cl>.*))\)''')
                 logfile = None
                 sepcount = 0
                 for line in open(rserver + "/output.txt"):
@@ -286,7 +328,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                     if m:
                         is_okay = True
                     else:
-                        m = test_fail.search(line)
+                        m = test_fail.search(line) or test_fail_27.search(line)
                         is_okay = False
                     if m:
                         # create log file
