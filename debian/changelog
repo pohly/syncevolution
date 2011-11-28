@@ -1,6 +1,9 @@
 syncevolution (1:1.2.1-1) unstable; urgency=low
 
   * SyncEvolution 1.2.1 for Maemo.
+  * Merged from Harmattan branch (irrelevant on Fremantle):
+    - Updated KCalExtended and QtContacts backends for new
+      insertItem() signature.
 
  -- Ove Kaaven <ovek@arcticnet.no>  Mon, 28 Nov 2011 22:40:09 +0100
 
