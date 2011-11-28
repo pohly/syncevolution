@@ -104,7 +104,7 @@ int main(int argc, char **argv, char **envp)
         DBusErrorCXX err;
         DBusConnectionPtr conn = dbus_get_bus_connection("SESSION",
                                                          "org.syncevolution",
-                                                         false,
+                                                         true,
                                                          &err);
         if (!conn) {
             err.throwFailure("dbus_get_bus_connection()", " failed - server already running?");
