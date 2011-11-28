@@ -68,8 +68,6 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
             err->set(error);
             return NULL;
         }
-        g_bus_own_name_on_connection(conn, name, G_BUS_NAME_OWNER_FLAGS_NONE,
-                                     NULL, NULL, NULL, NULL);
     }
 
     if(!conn) {
@@ -77,6 +75,8 @@ GDBusConnection *dbus_get_bus_connection(const char *busType,
     }
 
     if(name) {
+        g_bus_own_name_on_connection(conn, name, G_BUS_NAME_OWNER_FLAGS_NONE,
+                                     NULL, NULL, NULL, NULL);
         g_dbus_connection_set_exit_on_close(conn, TRUE);
     }
 
