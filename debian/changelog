@@ -1,6 +1,8 @@
 syncevolution (1:1.2.2-1) unstable; urgency=low
 
   * SyncEvolution 1.2.2 for Maemo.
+  * Merged from Harmattan branch (irrelevant on Fremantle):
+    - Only sync contacts which have a SyncTarget of "addressbook".
 
  -- Ove Kaaven <ovek@arcticnet.no>  Mon, 23 Jan 2012 23:19:33 +0100
 
