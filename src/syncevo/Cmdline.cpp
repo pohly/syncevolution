@@ -1720,20 +1720,37 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
     // Remember that comment and print it as late as possible,
     // that way related properties preceed their comment.
     string comment;
+    bool needComma = false;
     BOOST_FOREACH(const ConfigProperty *prop, validProps) {
         if (!prop->isHidden()) {
             string newComment = prop->getComment();
 
             if (newComment != "") {
                 if (!comment.empty()) {
+                    m_out << endl;
                     dumpComment(m_out, "   ", comment);
                     m_out << endl;
+                    needComma = false;
                 }
                 comment = newComment;
             }
-            m_out << prop->getMainName() << ":" << endl;
+            std::string def = prop->getDefValue();
+            if (def.empty()) {
+                def = "no default";
+            }
+            ConfigProperty::Sharing sharing = prop->getSharing();
+            if (needComma) {
+                m_out << ", ";
+            }
+            m_out << boost::join(prop->getNames(), " = ")
+                  << " (" << def << ", "
+                  << ConfigProperty::sharing2str(sharing)
+                  << (prop->isObligatory() ? ", required" : "")
+                  << ")";
+            needComma = true;
         }
     }
+    m_out << endl;
     dumpComment(m_out, "   ", comment);
     return true;
 }
@@ -2600,9 +2617,9 @@ protected:
                             NULL);
         cmdline.doit();
         string res = scanFiles(root, "some-other-server");
-        string expected = ScheduleWorldConfig();
+        string expected = DefaultConfig();
         sortConfig(expected);
-        boost::replace_all(expected, "/scheduleworld/", "/some-other-server/");
+        boost::replace_all(expected, "/syncevolution/", "/some-other-server/");
         CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
     }
 
@@ -2850,7 +2867,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             string actual = injectValues(filterConfig(cmdline.m_out.str()));
             CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            CPPUNIT_ASSERT_EQUAL_DIFF(filterConfig(internalToIni(ScheduleWorldConfig())),
+            CPPUNIT_ASSERT_EQUAL_DIFF(filterConfig(internalToIni(DefaultConfig())),
                                       actual);
         }
 
@@ -3101,15 +3118,25 @@ protected:
         help.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("--sync\n"
                                   "   Requests a certain synchronization mode when initiating a sync:\n"
-                                  "     two-way             = only send/receive changes since last sync\n"
-                                  "     slow                = exchange all items\n"
-                                  "     refresh-from-client = discard all remote items and replace with\n"
-                                  "                           the items on the client\n"
-                                  "     refresh-from-server = discard all local items and replace with\n"
-                                  "                           the items on the server\n"
-                                  "     one-way-from-client = transmit changes from client\n"
-                                  "     one-way-from-server = transmit changes from server\n"
-                                  "     disabled (or none)  = synchronization disabled\n"
+                                  "   \n"
+                                  "     two-way\n"
+                                  "       only send/receive changes since last sync\n"
+                                  "     slow\n"
+                                  "       exchange all items\n"
+                                  "     refresh-from-client\n"
+                                  "       discard all remote items and replace with the items on the client\n"
+                                  "     refresh-from-server\n"
+                                  "       discard all local items and replace with the items on the server\n"
+                                  "     one-way-from-client\n"
+                                  "       transmit changes from client\n"
+                                  "     one-way-from-server\n"
+                                  "       transmit changes from server\n"
+                                  "     disabled (or none)\n"
+                                  "       synchronization disabled\n"
+                                  "   \n"
+                                  "   **WARNING**: which side is `client` and which is `server` depends on\n"
+                                  "   the value of the ``peerIsClient`` property in the configuration.\n"
+                                  "   \n"
                                   "   When accepting a sync session in a SyncML server (HTTP server), only\n"
                                   "   sources with sync != disabled are made available to the client,\n"
                                   "   which chooses the final sync mode based on its own configuration.\n"
@@ -3250,94 +3277,93 @@ protected:
             CPPUNIT_ASSERT(shared.find("databaseFormat = text/x-vcard") != shared.npos);
         }
 
-        string syncProperties("syncURL:\n"
+        string syncProperties("syncURL (no default, unshared, required)\n"
                               "\n"
-                              "username:\n"
+                              "username (no default, unshared)\n"
                               "\n"
-                              "password:\n"
+                              "password (no default, unshared)\n"
                               "\n"
-                              "logdir:\n"
+                              "logdir (no default, shared)\n"
                               "\n"
-                              "loglevel:\n"
+                              "loglevel (0, unshared)\n"
                               "\n"
-                              "printChanges:\n"
+                              "printChanges (TRUE, unshared)\n"
                               "\n"
-                              "dumpData:\n"
+                              "dumpData (TRUE, unshared)\n"
                               "\n"
-                              "maxlogdirs:\n"
+                              "maxlogdirs (10, shared)\n"
                               "\n"
-                              "autoSync:\n"
+                              "autoSync (0, unshared)\n"
                               "\n"
-                              "autoSyncInterval:\n"
+                              "autoSyncInterval (30M, unshared)\n"
                               "\n"
-                              "autoSyncDelay:\n"
+                              "autoSyncDelay (5M, unshared)\n"
                               "\n"
-                              "preventSlowSync:\n"
+                              "preventSlowSync (TRUE, unshared)\n"
                               "\n"
-                              "useProxy:\n"
+                              "useProxy (FALSE, unshared)\n"
                               "\n"
-                              "proxyHost:\n"
+                              "proxyHost (no default, unshared)\n"
                               "\n"
-                              "proxyUsername:\n"
+                              "proxyUsername (no default, unshared)\n"
                               "\n"
-                              "proxyPassword:\n"
+                              "proxyPassword (no default, unshared)\n"
                               "\n"
-                              "clientAuthType:\n"
+                              "clientAuthType (md5, unshared)\n"
                               "\n"
-                              "RetryDuration:\n"
+                              "RetryDuration (5M, unshared)\n"
                               "\n"
-                              "RetryInterval:\n"
+                              "RetryInterval (2M, unshared)\n"
                               "\n"
-                              "remoteIdentifier:\n"
+                              "remoteIdentifier (no default, unshared)\n"
                               "\n"
-                              "PeerIsClient:\n"
+                              "PeerIsClient (FALSE, unshared)\n"
                               "\n"
-                              "SyncMLVersion:\n"
+                              "SyncMLVersion (no default, unshared)\n"
                               "\n"
-                              "PeerName:\n"
+                              "PeerName (no default, unshared)\n"
                               "\n"
-                              "deviceId:\n"
+                              "deviceId (no default, shared)\n"
                               "\n"
-                              "remoteDeviceId:\n"
+                              "remoteDeviceId (no default, unshared)\n"
                               "\n"
-                              "enableWBXML:\n"
+                              "enableWBXML (TRUE, unshared)\n"
                               "\n"
-                              "maxMsgSize:\n"
-                              "maxObjSize:\n"
+                              "maxMsgSize (150000, unshared), maxObjSize (4000000, unshared)\n"
                               "\n"
-                              "enableCompression:\n"
+                              "enableCompression (FALSE, unshared)\n"
                               "\n"
-                              "SSLServerCertificates:\n"
+                              "SSLServerCertificates (" SYNCEVOLUTION_SSL_SERVER_CERTIFICATES ", unshared)\n"
                               "\n"
-                              "SSLVerifyServer:\n"
+                              "SSLVerifyServer (TRUE, unshared)\n"
                               "\n"
-                              "SSLVerifyHost:\n"
+                              "SSLVerifyHost (TRUE, unshared)\n"
                               "\n"
-                              "WebURL:\n"
+                              "WebURL (no default, unshared)\n"
                               "\n"
-                              "IconURI:\n"
+                              "IconURI (no default, unshared)\n"
                               "\n"
-                              "ConsumerReady:\n"
+                              "ConsumerReady (FALSE, unshared)\n"
                               "\n"
-                              "peerType:\n"
+                              "peerType (no default, unshared)\n"
                               "\n"
-                              "defaultPeer:\n");
-        string sourceProperties("sync:\n"
+                              "defaultPeer (no default, global)\n");
+
+        string sourceProperties("sync (disabled, unshared, required)\n"
                                 "\n"
-                                "uri:\n"
+                                "uri (no default, unshared)\n"
                                 "\n"
-                                "backend:\n"
+                                "backend (select backend, shared)\n"
                                 "\n"
-                                "syncFormat:\n"
+                                "syncFormat (no default, unshared)\n"
                                 "\n"
-                                "forceSyncFormat:\n"
+                                "forceSyncFormat (FALSE, unshared)\n"
                                 "\n"
-                                "database:\n"
+                                "database = evolutionsource (no default, shared)\n"
                                 "\n"
-                                "databaseFormat:\n"
+                                "databaseFormat (no default, shared)\n"
                                 "\n"
-                                "databaseUser:\n"
-                                "databasePassword:\n");
+                                "databaseUser = evolutionuser (no default, shared), databasePassword = evolutionpassword (no default, shared)\n");
 
         {
             TestCmdline cmdline("--sync-property", "?",
@@ -4299,6 +4325,24 @@ private:
         vector<string> m_argvstr;
         boost::scoped_array<const char *> m_argv;
     };
+
+    string DefaultConfig() {
+        string config = ScheduleWorldConfig();
+        boost::replace_first(config,
+                             "syncURL = http://sync.scheduleworld.com/funambol/ds",
+                             "syncURL = http://yourserver:port");
+        boost::replace_first(config, "http://www.scheduleworld.com", "http://www.syncevolution.org");
+        boost::replace_all(config, "ScheduleWorld", "SyncEvolution");
+        boost::replace_all(config, "scheduleworld", "syncevolution");
+        boost::replace_first(config, "PeerName = SyncEvolution", "# PeerName = ");
+        boost::replace_first(config, "# ConsumerReady = 0", "ConsumerReady = 1");
+        boost::replace_first(config, "uri = card3", "uri = addressbook");
+        boost::replace_first(config, "uri = cal2", "uri = calendar");
+        boost::replace_first(config, "uri = task2", "uri = todo");
+        boost::replace_first(config, "uri = note", "uri = memo");
+        boost::replace_first(config, "syncFormat = text/vcard", "# syncFormat = ");
+        return config;
+    }
 
     string ScheduleWorldConfig(int contextMinVersion = CONFIG_CONTEXT_MIN_VERSION,
                                int contextCurVersion = CONFIG_CONTEXT_CUR_VERSION,

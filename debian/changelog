@@ -1,10 +1,11 @@
-syncevolution (1:1.2.0-4) unstable; urgency=low
+syncevolution (1:1.2.1-1) unstable; urgency=low
 
-  * SyncEvolution 1.2 for Harmattan.
-  * Packaging updates for Fremantle merged into Harmattan tree
-    (that's the reason for the version number jump on Harmattan).
+  * SyncEvolution 1.2.1 for Harmattan.
+  * Updated KCalExtended and QtContacts backends for new
+    insertItem() signature.
+  * Packaging updates for Fremantle merged into Harmattan tree.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Sun, 20 Nov 2011 19:19:24 +0100
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 29 Nov 2011 01:59:36 +0100
 
 syncevolution (1:1.1.99.6-2) unstable; urgency=low
 

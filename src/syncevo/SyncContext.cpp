@@ -1857,7 +1857,15 @@ void SyncContext::throwError(SyncMLStatus status, const string &error)
 
 void SyncContext::throwError(const string &action, int error)
 {
-    throwError(action + ": " + strerror(error));
+    std::string what = action + ": " + strerror(error);
+    // be as specific if we can be: relevant for the file backend,
+    // which is expected to return STATUS_NOT_FOUND == 404 for "file
+    // not found"
+    if (error == ENOENT) {
+        throwError(STATUS_NOT_FOUND, what);
+    } else {
+        throwError(what);
+    }
 }
 
 void SyncContext::fatalError(void *object, const char *error)
@@ -2733,6 +2741,11 @@ void SyncContext::initMain(const char *appname)
     g_thread_init(NULL);
     g_set_prgname(appname);
 #endif
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, &sa, NULL);
 
     // Initializing a potential use of EDS early is necessary for
     // libsynthesis when compiled with
