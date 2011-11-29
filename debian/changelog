@@ -3,6 +3,10 @@ syncevolution (1:1.2.1-1) unstable; urgency=low
   * SyncEvolution 1.2.1 for Harmattan.
   * Updated KCalExtended and QtContacts backends for new
     insertItem() signature.
+  * On Harmattan, only sync contacts which have a SyncTarget of
+    "addressbook", i.e. are physically stored in the phone's
+    internal addressbook. This should avoid syncing all your
+    Skype and Facebook contacts.
   * Packaging updates for Fremantle merged into Harmattan tree.
 
  -- Ove Kaaven <ovek@arcticnet.no>  Tue, 29 Nov 2011 01:59:36 +0100
