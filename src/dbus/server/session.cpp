@@ -459,7 +459,6 @@ Session::Session(Server &server,
     add(this, &Session::detach, "Detach");
     add(this, &Session::getFlags, "GetFlags");
     add(this, &Session::getNormalConfigName, "GetConfigName");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getConfigs, "GetConfigs");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
     add(this, &Session::setConfig, "SetConfig");

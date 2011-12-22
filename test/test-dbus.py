@@ -3019,7 +3019,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.setupConfigs()
         self.testOtherContext()
         self.setUpSession("bar")
-        peers = self.session.GetConfigs(False, utf8_strings=True)
+        peers = self.server.GetConfigs(False, utf8_strings=True)
         self.assertEqual(peers,
                              [ "bar", "foo", "foo@other_context" ])
         peers2 = self.server.GetConfigs(False, utf8_strings=True)
