@@ -451,7 +451,7 @@ void Connection::ready()
         ReadOperations::Config_t from;
         const std::string templateName = "SyncEvolution";
         // TODO: support SAN from other well known servers
-        ReadOperations ops(templateName, m_server);
+        ReadOperations ops(templateName);
         ops.getConfig(true , from);
         if (!m_peerBtAddr.empty()){
             from[""]["SyncURL"] = string ("obex-bt://") + m_peerBtAddr;
