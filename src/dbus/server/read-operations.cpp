@@ -18,58 +18,33 @@
  */
 
 #include "read-operations.h"
-#include "server.h"
 #include "dbus-user-interface.h"
 
 SE_BEGIN_CXX
 
-ReadOperations::ReadOperations(const std::string &config_name, Server &server) :
-    m_configName(config_name), m_server(server)
+ReadOperations::MatchedTemplates ReadOperations::m_matchedTempls;
+
+ReadOperations::ReadOperations(const std::string &config_name) :
+    m_configName(config_name)
 {}
 
-void ReadOperations::getConfigs(bool getTemplates, std::vector<std::string> &configNames)
+void ReadOperations::addPeerTempl(const string &templName,
+                          const boost::shared_ptr<SyncConfig::TemplateDescription> peerTempl)
 {
-    if (getTemplates) {
-        SyncConfig::DeviceList devices;
+    std::string lower = templName;
+    boost::to_lower(lower);
+    m_matchedTempls.insert(MatchedTemplates::value_type(lower, peerTempl));
+}
 
-        // get device list from dbus server, currently only bluetooth devices
-        m_server.getDeviceList(devices);
-
-        // also include server templates in search
-        devices.push_back(SyncConfig::DeviceDescription("", "", SyncConfig::MATCH_FOR_CLIENT_MODE));
-
-        //clear existing templates in dbus server
-        m_server.clearPeerTempls();
-
-        SyncConfig::TemplateList list = SyncConfig::getPeerTemplates(devices);
-        std::map<std::string, int> numbers;
-        BOOST_FOREACH(const boost::shared_ptr<SyncConfig::TemplateDescription> peer, list) {
-            //if it is not a template for device
-            if(peer->m_deviceName.empty()) {
-                configNames.push_back(peer->m_templateId);
-            } else {
-                string templName = "Bluetooth_";
-                templName += peer->m_deviceId;
-                templName += "_";
-                std::map<std::string, int>::iterator it = numbers.find(peer->m_deviceId);
-                if(it == numbers.end()) {
-                    numbers.insert(std::make_pair(peer->m_deviceId, 1));
-                    templName += "1";
-                } else {
-                    it->second++;
-                    stringstream seq;
-                    seq << it->second;
-                    templName += seq.str();
-                }
-                configNames.push_back(templName);
-                m_server.addPeerTempl(templName, peer);
-            }
-        }
+boost::shared_ptr<SyncConfig::TemplateDescription> ReadOperations::getPeerTempl(const string &peer)
+{
+    std::string lower = peer;
+    boost::to_lower(lower);
+    MatchedTemplates::iterator it = m_matchedTempls.find(lower);
+    if(it != m_matchedTempls.end()) {
+        return it->second;
     } else {
-        SyncConfig::ConfigList list = SyncConfig::getConfigs();
-        BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server, list) {
-            configNames.push_back(server.first);
-        }
+        return boost::shared_ptr<SyncConfig::TemplateDescription>();
     }
 }
 
@@ -114,7 +89,7 @@ void ReadOperations::getNamedConfig(const std::string &configName,
         string peer, context;
 
         boost::shared_ptr<SyncConfig::TemplateDescription> peerTemplate =
-            m_server.getPeerTempl(configName);
+            getPeerTempl(configName);
         if(peerTemplate) {
             SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(peerTemplate->m_templateId),
                     peer, context);
@@ -317,6 +292,7 @@ void ReadOperations::checkSource(const std::string &sourceName)
         SE_THROW_EXCEPTION(SourceUnusable, "The source '" + sourceName + "' is not usable");
     }
 }
+
 void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &databases)
 {
     boost::shared_ptr<SyncConfig> config(new SyncConfig(m_configName));

@@ -25,6 +25,8 @@
 
 SE_BEGIN_CXX
 
+class Server;
+
 class PresenceStatus {
     bool m_httpPresence;
     bool m_btPresence;
@@ -46,9 +48,9 @@ class PresenceStatus {
         INVALID
     };
 
-    typedef map<string, vector<pair <string, PeerStatus> > > StatusMap;
-    typedef pair<const string, vector<pair <string, PeerStatus> > > StatusPair;
-    typedef pair <string, PeerStatus> PeerStatusPair;
+    typedef std::map<std::string, std::vector<std::pair <std::string, PeerStatus> > > StatusMap;
+    typedef std::pair<const std::string, std::vector<std::pair <std::string, PeerStatus> > > StatusPair;
+    typedef std::pair<std::string, PeerStatus> PeerStatusPair;
     StatusMap m_peers;
 
     static std::string status2string (PeerStatus status) {
@@ -85,7 +87,7 @@ class PresenceStatus {
     void init();
 
     /* Implement Server::checkPresence*/
-    void checkPresence (const string &peer, string& status, std::vector<std::string> &transport);
+    void checkPresence (const std::string &peer, std::string& status, std::vector<std::string> &transport);
 
     void updateConfigPeers (const std::string &peer, const ReadOperations::Config_t &config);
 
