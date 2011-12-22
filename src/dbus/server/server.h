@@ -34,7 +34,6 @@
 SE_BEGIN_CXX
 
 class Session;
-class Connection;
 class DBusTransportAgent;
 class Server;
 class InfoReq;
