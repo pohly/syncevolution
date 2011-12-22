@@ -25,7 +25,7 @@
 #include "auto-sync-manager.h"
 #include "exceptions.h"
 #include "auto-term.h"
-#include "read-operations.h"
+#include "server-read-operations.h"
 #include "connman-client.h"
 #include "network-manager-client.h"
 #include "presence-status.h"
@@ -56,7 +56,7 @@ class GLibNotify;
  * that reference is guaranteed to remain valid.
  */
 class Server : public GDBusCXX::DBusObjectHelper,
-                   public LoggerBase
+               public LoggerBase
 {
     GMainLoop *m_loop;
     bool &m_shutdownRequested;
@@ -135,12 +135,6 @@ class Server : public GDBusCXX::DBusObjectHelper,
 
     // the index of last info request
     uint32_t m_lastInfoReq;
-
-    // a hash to represent matched templates for devices, the key is
-    // the peer name
-    typedef std::map<string, boost::shared_ptr<SyncConfig::TemplateDescription> > MatchedTemplates;
-
-    MatchedTemplates m_matchedTempls;
 
     boost::shared_ptr<BluezManager> m_bluezManager;
 
@@ -224,20 +218,20 @@ class Server : public GDBusCXX::DBusObjectHelper,
                                GDBusCXX::DBusObject_t &object);
 
     /** Server.GetConfig() */
-    void getConfig(const std::string &config_name,
+    void getConfig(const std::string &configName,
                    bool getTemplate,
                    ReadOperations::Config_t &config)
     {
-        ReadOperations ops(config_name, *this);
+        ReadOperations ops(configName);
         ops.getConfig(getTemplate , config);
     }
 
     /** Server.GetReports() */
-    void getReports(const std::string &config_name,
+    void getReports(const std::string &configName,
                     uint32_t start, uint32_t count,
                     ReadOperations::Reports_t &reports)
     {
-        ReadOperations ops(config_name, *this);
+        ReadOperations ops(configName);
         ops.getReports(start, count, reports);
     }
 
@@ -245,7 +239,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
     void checkSource(const std::string &configName,
                      const std::string &sourceName)
     {
-        ReadOperations ops(configName, *this);
+        ReadOperations ops(configName);
         ops.checkSource(sourceName);
     }
 
@@ -254,14 +248,14 @@ class Server : public GDBusCXX::DBusObjectHelper,
                       const string &sourceName,
                       ReadOperations::SourceDatabases_t &databases)
     {
-        ReadOperations ops(configName, *this);
+        ReadOperations ops(configName);
         ops.getDatabases(sourceName, databases);
     }
 
     void getConfigs(bool getTemplates,
                     std::vector<std::string> &configNames)
     {
-        ReadOperations ops("", *this);
+        ServerReadOperations ops("", *this);
         ops.getConfigs(getTemplates, configNames);
     }
 
@@ -452,11 +446,6 @@ public:
     void connmanCallback(const std::map <std::string, boost::variant <std::vector <std::string> > >& props, const string &error);
 
     PresenceStatus& getPresenceStatus() {return m_presence;}
-
-    void clearPeerTempls() { m_matchedTempls.clear(); }
-    void addPeerTempl(const string &templName, const boost::shared_ptr<SyncConfig::TemplateDescription> peerTempl);
-
-    boost::shared_ptr<SyncConfig::TemplateDescription> getPeerTempl(const string &peer);
 
     /**
      * methods to operate device list. See DeviceList definition.
