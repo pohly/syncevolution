@@ -21,6 +21,7 @@ src_dbus_server_server_cpp_files = \
   src/dbus/server/presence-status.cpp \
   src/dbus/server/progress-data.cpp \
   src/dbus/server/read-operations.cpp \
+  src/dbus/server/server-read-operations.cpp \
   src/dbus/server/server.cpp \
   src/dbus/server/session.cpp
 

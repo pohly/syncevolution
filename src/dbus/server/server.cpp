@@ -641,26 +641,6 @@ void Server::getDeviceList(SyncConfig::DeviceList &devices)
     devices = m_syncDevices;
 }
 
-void Server::addPeerTempl(const string &templName,
-                          const boost::shared_ptr<SyncConfig::TemplateDescription> peerTempl)
-{
-    std::string lower = templName;
-    boost::to_lower(lower);
-    m_matchedTempls.insert(MatchedTemplates::value_type(lower, peerTempl));
-}
-
-boost::shared_ptr<SyncConfig::TemplateDescription> Server::getPeerTempl(const string &peer)
-{
-    std::string lower = peer;
-    boost::to_lower(lower);
-    MatchedTemplates::iterator it = m_matchedTempls.find(lower);
-    if(it != m_matchedTempls.end()) {
-        return it->second;
-    } else {
-        return boost::shared_ptr<SyncConfig::TemplateDescription>();
-    }
-}
-
 bool Server::getDevice(const string &deviceId, SyncConfig::DeviceDescription &device)
 {
     SyncConfig::DeviceList::iterator syncDevIt;
