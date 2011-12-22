@@ -127,10 +127,10 @@ elif sys.argv[2] == "--getconfigs":
     length = len(sys.argv)
     r = {}
     if length == 3:
-        r = session.GetConfigs(1)
+        r = object.GetConfigs(1)
         print ' Available configuration templates:'
     else:
-        r = session.GetConfigs(0)
+        r = object.GetConfigs(0)
         print ' Configured servers:'
     for item in r:
         print '\t', item
