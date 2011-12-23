@@ -431,7 +431,6 @@ Connection::~Connection()
         }
         // DBusTransportAgent waiting? Wake it up.
         wakeupSession();
-        m_session.use_count();
         m_session.reset();
     } catch (...) {
         // log errors, but do not propagate them because we are
