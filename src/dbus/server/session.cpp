@@ -20,7 +20,6 @@
 #include <syncevo/LogRedirect.h>
 
 #include "session.h"
-#include "server.h"
 #include "restart.h"
 #include "info-req.h"
 #include "cmdline-wrapper.h"
@@ -312,7 +311,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
 
     // now that we have a DBusSync object, return from the main loop
     // and once that is done, transfer control to that object
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(getLoop());
 }
 
 void Session::abort()
@@ -324,7 +323,7 @@ void Session::abort()
     fireStatus(true);
 
     // state change, return to caller so that it can react
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(getLoop());
 }
 
 void Session::suspend()
@@ -334,7 +333,7 @@ void Session::suspend()
     }
     m_syncStatus = SYNC_SUSPEND;
     fireStatus(true);
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(getLoop());
 }
 
 void Session::getStatus(std::string &status,
@@ -546,7 +545,7 @@ bool Session::shutdownServer()
     } else {
         // leave server now
         m_server.m_shutdownRequested = true;
-        g_main_loop_quit(m_server.getLoop());
+        g_main_loop_quit(getLoop());
         SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
     }
 
@@ -776,7 +775,7 @@ void Session::run(LogRedirect &redirect)
                 // block until time for shutdown or restart if no
                 // shutdown requested already
                 if (!m_server.m_shutdownRequested) {
-                    g_main_loop_run(m_server.getLoop());
+                    g_main_loop_run(getLoop());
                 }
                 break;
             default:
@@ -861,7 +860,7 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     fireProgress(true);
     fireStatus(true);
 
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(getLoop());
 }
 
 void Session::SyncStatusOwner::setStatus(SyncStatus status)
@@ -937,7 +936,7 @@ void Session::execute(const vector<string> &args, const map<string, string> &var
     }
 
     m_runOperation = OP_CMDLINE;
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(getLoop());
 }
 
 inline void insertPair(std::map<string, string> &params,
