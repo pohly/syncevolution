@@ -33,10 +33,10 @@
 #include "timer.h"
 #include "timeout.h"
 #include "resource.h"
+#include "server.h"
 
 SE_BEGIN_CXX
 
-class Server;
 class Connection;
 class CmdlineWrapper;
 class DBusSync;
@@ -281,6 +281,9 @@ public:
      * automatically marks the session as completed before deleting it
      */
     ~Session();
+
+    /** access to the GMainLoop reference used by this Session instance */
+    GMainLoop *getLoop() { return m_server.getLoop(); }
 
     /** explicitly mark the session as completed, even if it doesn't get deleted yet */
     void done();
