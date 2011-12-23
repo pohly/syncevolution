@@ -371,8 +371,7 @@ public:
     /**
      * find client by its ID or create one anew
      */
-    boost::shared_ptr<Client> addClient(const GDBusCXX::DBusConnectionPtr &conn,
-                                        const GDBusCXX::Caller_t &ID,
+    boost::shared_ptr<Client> addClient(const GDBusCXX::Caller_t &ID,
                                         const boost::shared_ptr<GDBusCXX::Watch> &watch);
 
     /** detach this resource from all clients which own it */
