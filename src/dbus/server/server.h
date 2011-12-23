@@ -84,9 +84,11 @@ class Server : public GDBusCXX::DBusObjectHelper,
      */
     boost::shared_ptr<Session> m_shutdownSession;
 
-    /* Event source that regurally pool network manager
-     * */
+    /**
+     * Event source that regularly polls network manager
+     */
     GLibEvent m_pollConnman;
+
     /**
      * The session which currently holds the main lock on the server.
      * To avoid issues with concurrent modification of data or configs,
