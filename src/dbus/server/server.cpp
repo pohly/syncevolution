@@ -95,8 +95,7 @@ StringMap Server::getVersions()
 void Server::attachClient(const Caller_t &caller,
                           const boost::shared_ptr<Watch> &watch)
 {
-    boost::shared_ptr<Client> client = addClient(getConnection(),
-                                                 caller,
+    boost::shared_ptr<Client> client = addClient(caller,
                                                  watch);
     autoTermRef();
     client->increaseAttachCount();
@@ -158,8 +157,7 @@ void Server::connect(const Caller_t &caller,
                  c->getPath(),
                  c->m_description.c_str());
 
-    boost::shared_ptr<Client> client = addClient(getConnection(),
-                                                 caller,
+    boost::shared_ptr<Client> client = addClient(caller,
                                                  watch);
     client->attach(c);
     c->activate();
@@ -173,8 +171,7 @@ void Server::startSessionWithFlags(const Caller_t &caller,
                                    const std::vector<std::string> &flags,
                                    DBusObject_t &object)
 {
-    boost::shared_ptr<Client> client = addClient(getConnection(),
-                                                 caller,
+    boost::shared_ptr<Client> client = addClient(caller,
                                                  watch);
     std::string new_session = getNextSession();
     boost::shared_ptr<Session> session = Session::createSession(*this,
@@ -403,8 +400,7 @@ boost::shared_ptr<Client> Server::findClient(const Caller_t &ID)
     return boost::shared_ptr<Client>();
 }
 
-boost::shared_ptr<Client> Server::addClient(const DBusConnectionPtr &conn,
-                                            const Caller_t &ID,
+boost::shared_ptr<Client> Server::addClient(const Caller_t &ID,
                                             const boost::shared_ptr<Watch> &watch)
 {
     boost::shared_ptr<Client> client(findClient(ID));
