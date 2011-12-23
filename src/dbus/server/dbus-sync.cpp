@@ -20,7 +20,6 @@
 #include "dbus-sync.h"
 #include "session.h"
 #include "dbus-transport-agent.h"
-#include "server.h"
 
 SE_BEGIN_CXX
 
@@ -78,7 +77,7 @@ boost::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
 {
     if (m_session.useStubConnection()) {
         // use the D-Bus Connection to send and receive messages
-        boost::shared_ptr<TransportAgent> agent(new DBusTransportAgent(m_session.getServer().getLoop(),
+        boost::shared_ptr<TransportAgent> agent(new DBusTransportAgent(m_session.getLoop(),
                                                                        m_session,
                                                                        m_session.getStubConnection()));
         // We don't know whether we'll run as client or server.
@@ -90,7 +89,7 @@ boost::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
         return agent;
     } else {
         // no connection, use HTTP via libsoup/GMainLoop
-        GMainLoop *loop = m_session.getServer().getLoop();
+        GMainLoop *loop = m_session.getLoop();
         boost::shared_ptr<TransportAgent> agent = SyncContext::createTransportAgent(loop);
         return agent;
     }
