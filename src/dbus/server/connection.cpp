@@ -278,7 +278,7 @@ void Connection::process(const Caller_t &caller,
                 }
 
                 // abort previous session of this client
-                m_server.killSessions(info.m_deviceID);
+                DBUS_CALL::killSessions(info.m_deviceID);
                 peerDeviceID = info.m_deviceID;
             } else {
                 throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
@@ -286,8 +286,7 @@ void Connection::process(const Caller_t &caller,
 
             // run session as client or server
             m_state = PROCESSING;
-            m_session = Session::createSession(m_server,
-                                               peerDeviceID,
+            m_session = Session::createSession(peerDeviceID,
                                                config,
                                                m_sessionID);
             if (serverMode) {
@@ -296,13 +295,15 @@ void Connection::process(const Caller_t &caller,
                                       message_type);
             }
             m_session->setServerAlerted(serverAlerted);
-            m_session->setPriority(Session::PRI_CONNECTION);
+            m_session->setPriority(SessionCommon::PRI_CONNECTION);
             m_session->setStubConnection(myself);
             // this will be reset only when the connection shuts down okay
             // or overwritten with the error given to us in
             // Connection::close()
             m_session->setStubConnectionError("closed prematurely");
-            m_server.enqueue(m_session);
+            
+            DBUS_CALL::queueInServer(sessionPath);
+            //m_server.enqueue(m_session);
             break;
         }
         case PROCESSING:
@@ -349,7 +350,8 @@ void Connection::close(const Caller_t &caller,
                  error.empty() ? "" : ": ",
                  error.c_str());
 
-    boost::shared_ptr<Client> client(m_server.findClient(caller));
+    DBUS_CALL::serverHasClient(caller)
+    //boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
         throw runtime_error("unknown client");
     }
@@ -372,7 +374,7 @@ void Connection::close(const Caller_t &caller,
 
     // remove reference to us from client, will destruct *this*
     // instance!
-    client->detach(this);
+    DBUS_CALL::clientDetach(getPath);
 }
 
 void Connection::abort()
@@ -388,11 +390,10 @@ void Connection::shutdown()
 {
     // trigger removal of this connection by removing all
     // references to it
-    m_server.detach(this);
+    DBUS_CALL::m_server.detach(this);
 }
 
-Connection::Connection(Server &server,
-                       const DBusConnectionPtr &conn,
+Connection::Connection(const DBusConnectionPtr &conn,
                        const std::string &sessionID,
                        const StringMap &peer,
                        bool must_authenticate) :
@@ -400,7 +401,6 @@ Connection::Connection(Server &server,
                      std::string("/org/syncevolution/Connection/") + sessionID,
                      "org.syncevolution.Connection",
                      boost::bind(&Server::autoTermCallback, &server)),
-    m_server(server),
     m_peer(peer),
     m_mustAuthenticate(must_authenticate),
     m_state(SETUP),
@@ -415,7 +415,8 @@ Connection::Connection(Server &server,
     add(this, &Connection::close, "Close");
     add(sendAbort);
     add(reply);
-    m_server.autoTermRef();
+    
+    DBUS_SIG::server.autoTermRef();
 }
 
 Connection::~Connection()
@@ -437,7 +438,7 @@ Connection::~Connection()
         // destructing
         Exception::handle();
     }
-    m_server.autoTermUnref();
+    DBUS_SIG::server.autoTermUnref();
 }
 
 void Connection::ready()

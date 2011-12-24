@@ -18,7 +18,6 @@
  */
 
 #include "info-req.h"
-#include "session.h"
 #include "server.h"
 
 using namespace GDBusCXX;
@@ -28,9 +27,9 @@ SE_BEGIN_CXX
 InfoReq::InfoReq(Server &server,
                  const string &type,
                  const InfoMap &parameters,
-                 const Session *session,
+                 const string &sessionPath,
                  uint32_t timeout) :
-    m_server(server), m_session(session), m_infoState(IN_REQ),
+    m_server(server), m_sessionPath(sessionPath), m_infoState(IN_REQ),
     m_status(ST_RUN), m_type(type), m_param(parameters),
     m_timeout(timeout), m_timer(m_timeout * 1000)
 {
@@ -172,9 +171,8 @@ void InfoReq::setResponse(const Caller_t &caller, const string &state, const Inf
 
 string InfoReq::getSessionPath() const
 {
-    return m_session ? m_session->getPath() : "";
+    return m_sessionPath;
 }
-
 
 void InfoReq::done()
 {

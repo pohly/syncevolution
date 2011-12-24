@@ -28,7 +28,6 @@
 SE_BEGIN_CXX
 
 class Server;
-class Session;
 
 /**
  * A wrapper for handling info request and response.
@@ -52,7 +51,7 @@ public:
     InfoReq(Server &server,
             const std::string &type,
             const InfoMap &parameters,
-            const Session *session,
+            const std::string &sessionPath,
             uint32_t timeout = 120);
 
     ~InfoReq();
@@ -120,7 +119,7 @@ void setResponse(const GDBusCXX::Caller_t &caller, const std::string &state, con
     Server &m_server;
 
     /** caller's session, might be NULL */
-    const Session *m_session;
+    const std::string m_sessionPath;
 
     /** unique id of this info request */
     std::string m_id;

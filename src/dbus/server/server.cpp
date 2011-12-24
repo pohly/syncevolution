@@ -27,7 +27,7 @@
 #include "info-req.h"
 #include "connection.h"
 #include "bluez-manager.h"
-#include "session.h"
+#include "session-resource.h"
 #include "timeout.h"
 #include "restart.h"
 #include "client.h"
@@ -174,11 +174,12 @@ void Server::startSessionWithFlags(const Caller_t &caller,
     boost::shared_ptr<Client> client = addClient(caller,
                                                  watch);
     std::string new_session = getNextSession();
-    boost::shared_ptr<Session> session = Session::createSession(*this,
-                                                                "is this a client or server session?",
-                                                                server,
-                                                                new_session,
-                                                                flags);
+    boost::shared_ptr<SessionResource> session =
+        SessionResource::createSessionResource(*this,
+                                               "is this a client or server session?",
+                                               server,
+                                               new_session,
+                                               flags);
     client->attach(session);
     session->activate();
     enqueue(session);
@@ -198,8 +199,8 @@ void Server::getSessions(std::vector<DBusObject_t> &sessions)
     if (m_activeSession) {
         sessions.push_back(m_activeSession->getPath());
     }
-    BOOST_FOREACH(boost::weak_ptr<Session> &session, m_workQueue) {
-        boost::shared_ptr<Session> s = session.lock();
+    BOOST_FOREACH(boost::weak_ptr<SessionResource> &session, m_workQueue) {
+        boost::shared_ptr<SessionResource> s = session.lock();
         if (s) {
             sessions.push_back(s->getPath());
         }
@@ -293,11 +294,11 @@ void Server::fileModified()
         string newSession = getNextSession();
         vector<string> flags;
         flags.push_back("no-sync");
-        m_shutdownSession = Session::createSession(*this,
-                                                   "",  "",
-                                                   newSession,
-                                                   flags);
-        m_shutdownSession->setPriority(Session::PRI_AUTOSYNC);
+        m_shutdownSession = SessionResource::createSession(*this,
+                                                           "",  "",
+                                                           newSession,
+                                                           flags);
+        m_shutdownSession->setPriority(SessionCommon::PRI_AUTOSYNC);
         m_shutdownSession->startShutdown();
         enqueue(m_shutdownSession);
     }
@@ -349,7 +350,7 @@ void Server::run(LogRedirect &redirect)
             m_activeSession->readyToRun()) {
             // this session must be owned by someone, otherwise
             // it would not be set as active session
-            boost::shared_ptr<Session> session = m_activeSessionRef.lock();
+            boost::shared_ptr<SessionResource> session = m_activeSessionRef.lock();
             if (!session) {
                 throw runtime_error("internal error: session no longer available");
             }
@@ -424,7 +425,7 @@ void Server::detach(Resource *resource)
     }
 }
 
-void Server::enqueue(const boost::shared_ptr<Session> &session)
+void Server::enqueue(const boost::shared_ptr<SessionResource> &session)
 {
     WorkQueue_t::iterator it = m_workQueue.end();
     while (it != m_workQueue.begin()) {
@@ -442,19 +443,15 @@ void Server::enqueue(const boost::shared_ptr<Session> &session)
 int Server::killSessions(const std::string &peerDeviceID)
 {
     int count = 0;
-
     WorkQueue_t::iterator it = m_workQueue.begin();
     while (it != m_workQueue.end()) {
-        boost::shared_ptr<Session> session = it->lock();
+        boost::shared_ptr<SessionResource> session = it->lock();
         if (session && session->getPeerDeviceID() == peerDeviceID) {
             SE_LOG_DEBUG(NULL, NULL, "removing pending session %s because it matches deviceID %s",
                          session->getSessionID().c_str(),
                          peerDeviceID.c_str());
             // remove session and its corresponding connection
-            boost::shared_ptr<Connection> c = session->getStubConnection().lock();
-            if (c) {
-                c->shutdown();
-            }
+            session->shutdownConnection();
             it = m_workQueue.erase(it);
             count++;
         } else {
@@ -481,7 +478,7 @@ int Server::killSessions(const std::string &peerDeviceID)
     return count;
 }
 
-void Server::dequeue(Session *session)
+void Server::dequeue(SessionResource *session)
 {
     if (m_syncSession.get() == session) {
         // This is the running sync session.
@@ -521,7 +518,7 @@ void Server::checkQueue()
     }
 
     while (!m_workQueue.empty()) {
-        boost::shared_ptr<Session> session = m_workQueue.front().lock();
+        boost::shared_ptr<SessionResource> session = m_workQueue.front().lock();
         m_workQueue.pop_front();
         if (session) {
             // activate the session
@@ -538,7 +535,7 @@ void Server::checkQueue()
     }
 }
 
-bool Server::sessionExpired(const boost::shared_ptr<Session> &session)
+bool Server::sessionExpired(const boost::shared_ptr<SessionResource> &session)
 {
     SE_LOG_DEBUG(NULL, NULL, "session %s expired",
                  session->getSessionID().c_str());
@@ -546,7 +543,7 @@ bool Server::sessionExpired(const boost::shared_ptr<Session> &session)
     return false;
 }
 
-void Server::delaySessionDestruction(const boost::shared_ptr<Session> &session)
+void Server::delaySessionDestruction(const boost::shared_ptr<SessionResource> &session)
 {
     SE_LOG_DEBUG(NULL, NULL, "delaying destruction of session %s by one minute",
                  session->getSessionID().c_str());
@@ -594,7 +591,7 @@ void Server::infoResponse(const Caller_t &caller,
 
 boost::shared_ptr<InfoReq> Server::createInfoReq(const string &type,
                                                  const std::map<string, string> &parameters,
-                                                 const Session *session)
+                                                 const SessionResource *session)
 {
     boost::shared_ptr<InfoReq> infoReq(new InfoReq(*this, type, parameters, session));
     boost::weak_ptr<InfoReq> item(infoReq) ;

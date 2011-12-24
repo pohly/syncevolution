@@ -18,7 +18,7 @@
  */
 
 #include "auto-sync-manager.h"
-#include "session.h"
+#include "session-resource.h"
 #include "server.h"
 
 #include <glib.h>
@@ -181,12 +181,12 @@ void AutoSyncManager::update(const std::string &configName)
     initConfig(configName);
 
     //don't clear if the task is running
-    if(m_session && !hasActiveSession()
-            && boost::iequals(m_session->getConfigName(), configName)) {
+    if(m_sessionResource && !hasActiveSession()
+       && boost::iequals(m_sessionResource->getConfigName(), configName)) {
         SE_LOG_DEBUG(NULL, NULL, "auto sync: removing queued session for %s during update",
                      configName.c_str());
-        m_server.dequeue(m_session.get());
-        m_session.reset();
+        m_server.dequeue(m_sessionResource.get());
+        m_sessionResource.reset();
         m_activeTask.reset();
         startTask();
     }
@@ -234,7 +234,7 @@ bool AutoSyncManager::taskLikelyToRun(const AutoSyncTask &syncTask)
             if (timer.timeout(syncTask.m_delay * 1000 /* seconds to milliseconds */)) {
                 return true;
             }
-        } 
+        }
     } else if ((syncTask.m_transport == AutoSyncTask::NEEDS_BT && status.getBtPresence()) ||
                syncTask.m_transport == AutoSyncTask::NEEDS_OTHER) {
         // don't add duplicate tasks
@@ -249,40 +249,40 @@ void AutoSyncManager::startTask()
 {
     // get the front task and run a sync
     // if there has been a session for the front task, do nothing
-    if(hasTask() && !m_session) {
+    if(hasTask() && !m_sessionResource) {
         m_activeTask.reset(new AutoSyncTask(m_workQueue.front()));
         m_workQueue.pop_front();
         std::string newSession = m_server.getNextSession();
-        m_session = Session::createSession(m_server,
-                                           "",
-                                           m_activeTask->m_peer,
-                                           newSession);
-        m_session->setPriority(Session::PRI_AUTOSYNC);
-        m_session->addListener(this);
-        m_session->activate();
-        m_server.enqueue(m_session);
+        m_sessionResource = SessionResource::createSessionResource(m_server,
+                                                                   "",
+                                                                   m_activeTask->m_peer,
+                                                                   newSession);
+        m_sessionResource->setPriority(SessionCommon::PRI_AUTOSYNC);
+        m_sessionResource->addListener(this);
+        m_sessionResource->activate();
+        m_server.enqueue(m_sessionResource);
     }
 }
 
 bool AutoSyncManager::hasActiveSession()
 {
-    return m_session && m_session->getActive();
+    return m_sessionResource && m_sessionResource->getActive();
 }
 
 void AutoSyncManager::prepare()
 {
-    if(m_session && m_session->getActive()) {
+    if(m_sessionResource && m_sessionResource->getActive()) {
         // now a config may contain many urls, so replace it with our own temporarily
         // otherwise it only picks the first one
         ReadOperations::Config_t config;
         StringMap stringMap;
         stringMap["syncURL"] = m_activeTask->m_url;
         config[""] = stringMap;
-        m_session->setConfig(true, true, config);
+        m_sessionResource->setConfig(true, true, config);
 
         std::string mode;
-        Session::SourceModes_t sourceModes;
-        m_session->sync("", Session::SourceModes_t());
+        SessionCommon::SourceModes_t sourceModes;
+        m_sessionResource->sync("", SessionCommon::SourceModes_t());
     }
 }
 
@@ -337,10 +337,10 @@ void AutoSyncManager::syncDone(SyncMLStatus status)
     }
 
     // keep session around to give clients a chance to query it
-    m_server.delaySessionDestruction(m_session);
-    m_session->done();
+    m_server.delaySessionDestruction(m_sessionResource);
+    m_sessionResource->done();
 
-    m_session.reset();
+    m_sessionResource.reset();
     m_activeTask.reset();
     m_syncSuccessStart = false;
 }

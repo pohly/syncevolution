@@ -32,8 +32,7 @@
 SE_BEGIN_CXX
 
 class Server;
-class Session;
-
+class SessionResource;
 
 /**
  * Manager to manage automatic sync.
@@ -165,7 +164,7 @@ class AutoSyncManager : public SessionListener
      * the only session created for active task and is put in the session queue.
      * at most one session at any time no matter how many tasks we actually have
      */
-    boost::shared_ptr<Session> m_session;
+    boost::shared_ptr<SessionResource> m_sessionResource;
 
     /** the current sync of session is successfully started */
     bool m_syncSuccessStart;
