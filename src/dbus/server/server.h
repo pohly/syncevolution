@@ -33,7 +33,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-class Session;
+class SessionResource;
 class DBusTransportAgent;
 class Server;
 class InfoReq;
@@ -72,9 +72,10 @@ class Server : public GDBusCXX::DBusObjectHelper,
      * which might not be able to execute correctly. For example, a
      * sync with libsynthesis from 1.1 does not work with
      * SyncEvolution XML files from 1.2. The dummy session then waits
-     * for the changes to settle (see SHUTDOWN_QUIESENCE_SECONDS) and
-     * either shuts down or restarts.  The latter is necessary if the
-     * daemon has automatic syncing enabled in a config.
+     * for the changes to settle (see
+     * SessionCommon::SHUTDOWN_QUIESENCE_SECONDS) and either shuts
+     * down or restarts.  The latter is necessary if the daemon has
+     * automatic syncing enabled in a config.
      */
     list< boost::shared_ptr<GLibNotify> > m_files;
     void fileModified();
@@ -82,7 +83,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
     /**
      * session handling the shutdown in response to file modifications
      */
-    boost::shared_ptr<Session> m_shutdownSession;
+    boost::shared_ptr<SessionResource> m_shutdownSession;
 
     /**
      * Event source that regularly polls network manager
@@ -99,21 +100,21 @@ class Server : public GDBusCXX::DBusObjectHelper,
      * to the underlying pointer after the last corresponding shared
      * pointer is gone (which triggers the deconstructing of the session).
      */
-    Session *m_activeSession;
+    SessionResource *m_activeSession;
 
     /**
      * The weak pointer that corresponds to m_activeSession.
      */
-    boost::weak_ptr<Session> m_activeSessionRef;
+    boost::weak_ptr<SessionResource> m_activeSessionRef;
 
     /**
      * The running sync session. Having a separate reference to it
      * ensures that the object won't go away prematurely, even if all
      * clients disconnect.
      */
-    boost::shared_ptr<Session> m_syncSession;
+    boost::shared_ptr<SessionResource> m_syncSession;
 
-    typedef std::list< boost::weak_ptr<Session> > WorkQueue_t;
+    typedef std::list< boost::weak_ptr<SessionResource> > WorkQueue_t;
     /**
      * A queue of pending, idle Sessions. Sorted by priority, most
      * important one first. Currently this is used to give client
@@ -319,7 +320,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
                           string,
                           const std::string &> logOutput;
 
-    friend class Session;
+    friend class SessionResource; 
 
     PresenceStatus m_presence;
     ConnmanClient m_connman;
@@ -349,7 +350,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
     bool callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<bool ()> &callback);
 
     /** called 1 minute after last client detached from a session */
-    static bool sessionExpired(const boost::shared_ptr<Session> &session);
+    static bool sessionExpired(const boost::shared_ptr<SessionResource> &session);
 
 public:
     Server(GMainLoop *loop,
@@ -385,7 +386,7 @@ public:
      * by the creator of the session, *after* the session is
      * ready to run.
      */
-    void enqueue(const boost::shared_ptr<Session> &session);
+    void enqueue(const boost::shared_ptr<SessionResource> &session);
 
     /**
      * Remove all sessions with this device ID from the
@@ -400,7 +401,7 @@ public:
      * is "ready" (= holds a lock on its configuration), then release
      * that lock.
      */
-    void dequeue(Session *session);
+    void dequeue(SessionResource *session);
 
     /**
      * Checks whether the server is ready to run another session
@@ -421,7 +422,7 @@ public:
      * session. Once the timeout fires, it is called and then removed,
      * which removes the reference.
      */
-    void delaySessionDestruction(const boost::shared_ptr<Session> &session);
+    void delaySessionDestruction(const boost::shared_ptr<SessionResource> &session);
 
     /**
      * Invokes the given callback once in the given amount of seconds.
@@ -434,7 +435,7 @@ public:
 
     boost::shared_ptr<InfoReq> createInfoReq(const string &type,
                                              const std::map<string, string> &parameters,
-                                             const Session *session);
+                                             const SessionResource *session);
     void autoTermRef(int counts = 1) { m_autoTerm.ref(counts); }
 
     void autoTermUnref(int counts = 1) { m_autoTerm.unref(counts); }
@@ -476,19 +477,6 @@ public:
      * sessions.
      */
     std::string getNextSession();
-
-    /**
-     * Number of seconds to wait after file modifications are observed
-     * before shutting down or restarting. Shutting down could be done
-     * immediately, but restarting might not work right away. 10
-     * seconds was chosen because every single package is expected to
-     * be upgraded on disk in that interval. If a long-running system
-     * upgrade replaces additional packages later, then the server
-     * might restart multiple times during a system upgrade. Because it
-     * never runs operations directly after starting, that shouldn't
-     * be a problem.
-     */
-    static const int SHUTDOWN_QUIESENCE_SECONDS = 10;
 
     AutoSyncManager &getAutoSyncManager() { return m_autoSync; }
 
