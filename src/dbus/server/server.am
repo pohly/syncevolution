@@ -11,6 +11,7 @@ src_dbus_server_server_cpp_files = \
   src/dbus/server/bluez-manager.cpp \
   src/dbus/server/client.cpp \
   src/dbus/server/connection.cpp \
+  src/dbus/server/connection-resource.cpp \
   src/dbus/server/connman-client.cpp \
   src/dbus/server/dbus-sync.cpp \
   src/dbus/server/dbus-transport-agent.cpp \
@@ -23,6 +24,7 @@ src_dbus_server_server_cpp_files = \
   src/dbus/server/read-operations.cpp \
   src/dbus/server/server-read-operations.cpp \
   src/dbus/server/server.cpp \
+  src/dbus/server/session-resource.cpp \
   src/dbus/server/session.cpp
 
 src_dbus_server_server_h_files = \
@@ -35,6 +37,7 @@ src_dbus_server_server_h_files = \
   src/dbus/server/resource.h \
   src/dbus/server/restart.h \
   src/dbus/server/session-listener.h \
+  src/dbus/server/session-common.h \
   src/dbus/server/source-progress.h \
   src/dbus/server/source-status.h \
   src/dbus/server/timeout.h \
