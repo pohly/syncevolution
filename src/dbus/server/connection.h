@@ -38,9 +38,8 @@ class Server;
  * this means the Session has to abort, unless reconnecting is
  * supported.
  */
-class Connection : public GDBusCXX::DBusObjectHelper, public Resource
+class Connection : public GDBusCXX::DBusObjectHelper
 {
-    Server &m_server;
     StringMap m_peer;
     bool m_mustAuthenticate;
     enum {
@@ -56,7 +55,7 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
     /** first parameter for Session::sync() */
     std::string m_syncMode;
     /** second parameter for Session::sync() */
-    Session::SourceModes_t m_sourceModes;
+    SessionCommon::SourceModes_t m_sourceModes;
 
     const std::string m_sessionID;
     boost::shared_ptr<Session> m_session;

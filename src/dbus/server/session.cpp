@@ -35,24 +35,12 @@ SE_BEGIN_CXX
 
 void Session::attach(const Caller_t &caller)
 {
-    boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!client) {
-        throw runtime_error("unknown client");
-    }
-    boost::shared_ptr<Session> me = m_me.lock();
-    if (!me) {
-        throw runtime_error("session already deleted?!");
-    }
-    client->attach(me);
+    DBUS_CALL::attach(const Caller_t &caller)
 }
 
 void Session::detach(const Caller_t &caller)
 {
-    boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!client) {
-        throw runtime_error("unknown client");
-    }
-    client->detach(this);
+    DBUS_CALL::detach(const Caller_t &caller)
 }
 
 /**
@@ -153,7 +141,7 @@ void Session::setNamedConfig(const std::string &configName,
         }
     }
 
-    m_server.getPresenceStatus().updateConfigPeers (configName, config);
+    m_sessionResource.getPresenceStatus().updateConfigPeers (configName, config);
     /** check whether we need remove the entire configuration */
     if(!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(configName));
@@ -247,7 +235,7 @@ void Session::initServer(SharedBuffer data, const std::string &messageType)
     m_initialMessageType = messageType;
 }
 
-void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
+void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
 {
     if (!m_active) {
         SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
@@ -290,7 +278,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
     BOOST_FOREACH(const std::string &source,
                   m_sync->getSyncSources()) {
         filter = m_sourceFilters[source];
-        SourceModes_t::const_iterator it = source_modes.find(source);
+        SessionCommon::SourceModes_t::const_iterator it = source_modes.find(source);
         if (it != source_modes.end()) {
             filter["sync"] = it->second;
         }
@@ -406,19 +394,17 @@ string Session::syncStatusToString(SyncStatus state)
     };
 }
 
-boost::shared_ptr<Session> Session::createSession(Server &server,
-                                                  const std::string &peerDeviceID,
+boost::shared_ptr<Session> Session::createSession(const std::string &peerDeviceID,
                                                   const std::string &config_name,
                                                   const std::string &session,
                                                   const std::vector<std::string> &flags)
 {
-    boost::shared_ptr<Session> me(new Session(server, peerDeviceID, config_name, session, flags));
+    boost::shared_ptr<Session> me(new Session(peerDeviceID, config_name, session, flags));
     me->m_me = me;
     return me;
 }
 
-Session::Session(Server &server,
-                 const std::string &peerDeviceID,
+Session::Session(const std::string &peerDeviceID,
                  const std::string &config_name,
                  const std::string &session,
                  const std::vector<std::string> &flags) :
@@ -427,7 +413,6 @@ Session::Session(Server &server,
                      "org.syncevolution.Session",
                      boost::bind(&Server::autoTermCallback, &server)),
     ReadOperations(config_name),
-    m_server(server),
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
@@ -436,7 +421,6 @@ Session::Session(Server &server,
     m_tempConfig(false),
     m_setConfig(false),
     m_active(false),
-    m_done(false),
     m_remoteInitiated(false),
     m_syncStatus(SYNC_QUEUEING),
     m_stepIsWaiting(false),
@@ -481,26 +465,8 @@ Session::Session(Server &server,
 
 void Session::done()
 {
-    if (m_done) {
-        return;
-    }
-    SE_LOG_DEBUG(NULL, NULL, "session %s done", getPath());
-
-    /* update auto sync manager when a config is changed */
-    if (m_setConfig) {
-        m_server.getAutoSyncManager().update(m_configName);
-    }
-    m_server.dequeue(this);
-
-    // now tell other clients about config change?
-    if (m_setConfig) {
-        m_server.configChanged();
-    }
-
     // typically set by m_server.dequeue(), but let's really make sure...
     m_active = false;
-
-    m_done = true;
 }
 
 Session::~Session()
@@ -525,7 +491,7 @@ void Session::shutdownFileModified()
     if (m_active) {
         // (re)set shutdown timer: once it fires, we are ready to shut down;
         // brute-force approach, will reset timer many times
-        m_shutdownTimer.activate(Server::SHUTDOWN_QUIESENCE_SECONDS,
+        m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
                                  boost::bind(&Session::shutdownServer, this));
     }
 }
@@ -533,19 +499,18 @@ void Session::shutdownFileModified()
 bool Session::shutdownServer()
 {
     Timespec now = Timespec::monotonic();
-    bool autosync = m_server.getAutoSyncManager().hasTask() ||
-        m_server.getAutoSyncManager().hasAutoConfigs();
+    bool autosync = DBUS_CALL::autoSyncManagerHasTask ||
+                    DBUS_CALL::autoSyncManagerHasAutoConfigs;
     SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
                  now.tv_sec, now.tv_nsec,
                  autosync ? "on" : "off");
     if (autosync) {
         // suitable exec() call which restarts the server using the same environment it was in
         // when it was started
-        m_server.m_restart->restart();
+        DBUS_CALL::restartServer();
     } else {
         // leave server now
-        m_server.m_shutdownRequested = true;
-        g_main_loop_quit(getLoop());
+        DBUS_CALL::setServerShutdownRequested(true);
         SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
     }
 
@@ -577,12 +542,12 @@ void Session::setActive(bool active)
                              (unsigned long)m_shutdownLastMod.tv_nsec,
                              (unsigned long)now.tv_sec,
                              (unsigned long)now.tv_nsec);
-                if (m_shutdownLastMod + Server::SHUTDOWN_QUIESENCE_SECONDS <= now) {
+                if (m_shutdownLastMod + SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS <= now) {
                     // ready to shutdown immediately
                     shutdownServer();
                 } else {
                     // need to wait
-                    int secs = Server::SHUTDOWN_QUIESENCE_SECONDS -
+                    int secs = SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS -
                         (now - m_shutdownLastMod).tv_sec;
                     SE_LOG_DEBUG(NULL, NULL, "shut down in %ds", secs);
                     m_shutdownTimer.activate(secs, boost::bind(&Session::shutdownServer, this));
@@ -774,7 +739,7 @@ void Session::run(LogRedirect &redirect)
             case OP_SHUTDOWN:
                 // block until time for shutdown or restart if no
                 // shutdown requested already
-                if (!m_server.m_shutdownRequested) {
+                if (!DBUS_CALL::getShutdownRequested()) {
                     g_main_loop_run(getLoop());
                 }
                 break;
@@ -949,8 +914,8 @@ inline void insertPair(std::map<string, string> &params,
 }
 
 string Session::askPassword(const string &passwordName,
-                             const string &descr,
-                             const ConfigPasswordKey &key)
+                            const string &descr,
+                            const ConfigPasswordKey &key)
 {
     std::map<string, string> params;
     insertPair(params, "description", descr);
@@ -961,18 +926,26 @@ string Session::askPassword(const string &passwordName,
     insertPair(params, "protocol", key.protocol);
     insertPair(params, "authtype", key.authtype);
     insertPair(params, "port", key.port ? StringPrintf("%u",key.port) : "");
-    boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
     std::map<string, string> response;
-    if(req->wait(response) == InfoReq::ST_OK) {
-        std::map<string, string>::iterator it = response.find("password");
-        if (it == response.end()) {
-            SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort", SyncMLStatus(sysync::LOCERR_USERABORT));
-        } else {
-            return it->second;
-        }
-    }
 
-    SE_THROW_EXCEPTION_STATUS(StatusException, "can't get the password from clients. The password request is '" + req->getStatusStr() + "'", STATUS_PASSWORD_TIMEOUT);
+    /* TODO: make this a dbus call similar to this void makerequest(std::map<string, string> params, (in)
+                                                                    std::string sessionPath, (in)
+                                                                    std::map<string, string> response, (out)
+                                                                    std::string statusString (out) ) */
+    
+    // boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
+    // if(req->wait(response) == InfoReq::ST_OK) {
+    //     std::map<string, string>::iterator it = response.find("password");
+    //     if (it == response.end()) {
+    //         SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort", SyncMLStatus(sysync::LOCERR_USERABORT));
+    //     } else {
+    //         return it->second;
+    //     }
+    // }
+
+    SE_THROW_EXCEPTION_STATUS(StatusException,
+                              "can't get the password from clients. The password request is '" +
+                              statusString() + "'", STATUS_PASSWORD_TIMEOUT);
     return "";
 }
 
@@ -980,7 +953,7 @@ string Session::askPassword(const string &passwordName,
 void Session::checkPresence (string &status)
 {
     vector<string> transport;
-    m_server.m_presence.checkPresence (m_configName, status, transport);
+    DBUS_CALL::checkPresence (m_configName, status, transport);
 }
 
 void Session::syncSuccessStart()

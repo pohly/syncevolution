@@ -32,8 +32,7 @@
 #include "source-status.h"
 #include "timer.h"
 #include "timeout.h"
-#include "resource.h"
-#include "server.h"
+#include "session-resource.h"
 
 SE_BEGIN_CXX
 
@@ -49,11 +48,10 @@ class LogRedirect;
  * to it as long as the connection is needed.
  */
 class Session : public GDBusCXX::DBusObjectHelper,
-                public Resource,
                 private ReadOperations,
                 private boost::noncopyable
 {
-    Server &m_server;
+    SessionResource &m_sessionResource;
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
     std::string m_peerDeviceID;
@@ -89,11 +87,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
      * pointer.
      */
     bool m_active;
-
-    /**
-     * True once done() was called.
-     */
-    bool m_done;
 
     /**
      * Indicates whether this session was initiated by the peer or locally.
@@ -206,9 +199,10 @@ class Session : public GDBusCXX::DBusObjectHelper,
     Timeout m_shutdownTimer;
 
     /**
-     * Called Server::SHUTDOWN_QUIESENCE_SECONDS after last file modification,
-     * while shutdown session is active and thus ready to shut down the server.
-     * Then either triggers the shutdown or restarts.
+     * Called SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS after last
+     * file modification, while shutdown session is active and thus
+     * ready to shut down the server.  Then either triggers the
+     * shutdown or restarts.
      *
      * @return always false to disable timer
      */
@@ -283,7 +277,7 @@ public:
     ~Session();
 
     /** access to the GMainLoop reference used by this Session instance */
-    GMainLoop *getLoop() { return m_server.getLoop(); }
+    GMainLoop *getLoop() { return m_sessionResource.getLoop(); }
 
     /** explicitly mark the session as completed, even if it doesn't get deleted yet */
     void done();
@@ -297,13 +291,6 @@ private:
     boost::weak_ptr<Session> m_me;
 
 public:
-    enum {
-        PRI_CMDLINE = -10,
-        PRI_DEFAULT = 0,
-        PRI_CONNECTION = 10,
-        PRI_AUTOSYNC = 20,
-        PRI_SHUTDOWN = 256  // always higher than anything else
-    };
 
     /**
      * Default priority is 0. Higher means less important.
@@ -315,13 +302,13 @@ public:
      * Turns session into one which will shut down the server, must
      * be called before enqueing it. Will wait for a certain idle period
      * after file modifications before claiming to be ready for running
-     * (see Server::SHUTDOWN_QUIESENCE_SECONDS).
+     * (see SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS).
      */
     void startShutdown();
 
     /**
      * Called by server to tell shutdown session that a file was modified.
-     * Session uses that to determine when the quiesence period is over.
+     * Session uses that to determine when the quiescence period is over.
      */
     void shutdownFileModified();
 
@@ -348,8 +335,6 @@ public:
     void setStubConnectionError(const std::string error) { m_connectionError = error; }
     std::string getStubConnectionError() { return m_connectionError; }
 
-
-    Server &getServer() { return m_server; }
     std::string getConfigName() { return m_configName; }
     std::string getSessionID() const { return m_sessionID; }
     std::string getPeerDeviceID() const { return m_peerDeviceID; }
@@ -397,9 +382,8 @@ public:
                         bool update, bool temporary,
                         const ReadOperations::Config_t &config);
 
-    typedef StringMap SourceModes_t;
     /** Session.Sync() */
-    void sync(const std::string &mode, const SourceModes_t &source_modes);
+    void sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes);
     /** Session.Abort() */
     void abort();
     /** Session.Suspend() */
