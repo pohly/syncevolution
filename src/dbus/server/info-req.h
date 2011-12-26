@@ -64,9 +64,10 @@ public:
     Status check();
 
     /**
-     * wait the response until timeout, abort or suspend. It may be blocked.
-     * The response is returned though the parameter 'response' when the Status is
-     * 'ST_OK'. Otherwise, corresponding statuses are returned.
+     * Wait for response until timeout, abort or suspend. It may be
+     * blocked.  The response is returned though the parameter
+     * 'response' when the Status is 'ST_OK'. Otherwise, corresponding
+     * statuses are returned.
      * @param response the received response if gotten
      * @param interval the interval to check abort, suspend and timeout, in seconds
      * @return the current status
@@ -104,7 +105,7 @@ private:
     friend class Server;
 
     /** set response from dbus clients */
-void setResponse(const GDBusCXX::Caller_t &caller, const std::string &state, const InfoMap &response);
+    void setResponse(const GDBusCXX::Caller_t &caller, const std::string &state, const InfoMap &response);
 
     /** send 'done' state if needed */
     void done();

@@ -63,7 +63,8 @@ void AutoSyncManager::initConfig(const std::string &configName)
         any = true;
     } else {
         BOOST_FOREACH(std::string op,
-		      boost::tokenizer< boost::char_separator<char> >(autoSync, boost::char_separator<char>(","))) {
+		      boost::tokenizer< boost::char_separator<char> >(autoSync,
+                                                                      boost::char_separator<char>(","))) {
             if(boost::iequals(op, "http")) {
                 http = true;
             } else if(boost::iequals(op, "obex-bt")) {
@@ -75,7 +76,8 @@ void AutoSyncManager::initConfig(const std::string &configName)
     unsigned int interval = config.getAutoSyncInterval();
     unsigned int duration = config.getAutoSyncDelay();
 
-    SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: auto sync '%s', %s, %s, %d seconds repeat interval, %d seconds online duration",
+    SE_LOG_DEBUG(NULL, NULL,
+                 "auto sync: %s: auto sync '%s', %s, %s, %d seconds repeat interval, %d seconds online duration",
                  configName.c_str(),
                  autoSync.c_str(),
                  bt ? "Bluetooth" : "no Bluetooth",
@@ -185,7 +187,7 @@ void AutoSyncManager::update(const std::string &configName)
        && boost::iequals(m_sessionResource->getConfigName(), configName)) {
         SE_LOG_DEBUG(NULL, NULL, "auto sync: removing queued session for %s during update",
                      configName.c_str());
-        m_server.dequeue(m_sessionResource.get());
+        m_server.removeSession(m_sessionResource.get());
         m_sessionResource.reset();
         m_activeTask.reset();
         startTask();
@@ -257,10 +259,8 @@ void AutoSyncManager::startTask()
                                                                    "",
                                                                    m_activeTask->m_peer,
                                                                    newSession);
-        m_sessionResource->setPriority(SessionCommon::PRI_AUTOSYNC);
         m_sessionResource->addListener(this);
-        m_sessionResource->activate();
-        m_server.enqueue(m_sessionResource);
+        m_server.addSession(m_sessionResource);
     }
 }
 
@@ -289,10 +289,12 @@ void AutoSyncManager::prepare()
 void AutoSyncManager::syncSuccessStart()
 {
     m_syncSuccessStart = true;
-    SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been successfully started.\n", m_activeTask->m_peer.c_str());
+    SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been successfully started.\n",
+                m_activeTask->m_peer.c_str());
     if (m_server.notificationsEnabled()) {
         std::string summary = StringPrintf(_("%s is syncing"), m_activeTask->m_peer.c_str());
-        std::string body = StringPrintf(_("We have just started to sync your computer with the %s sync service."), m_activeTask->m_peer.c_str());
+        std::string body = StringPrintf(_("We have just started to sync your computer with the %s sync service."),
+                                        m_activeTask->m_peer.c_str());
         //TODO: set config information for 'sync-ui'
         m_notificationManager->publish(summary, body);
     }
@@ -323,7 +325,8 @@ void AutoSyncManager::syncDone(SyncMLStatus status)
         if(m_syncSuccessStart && status == STATUS_OK) {
             // if sync is successfully started and done
             summary = StringPrintf(_("%s sync complete"), m_activeTask->m_peer.c_str());
-            body = StringPrintf(_("We have just finished syncing your computer with the %s sync service."), m_activeTask->m_peer.c_str());
+            body = StringPrintf(_("We have just finished syncing your computer with the %s sync service."),
+                                m_activeTask->m_peer.c_str());
             //TODO: set config information for 'sync-ui'
             m_notificationManager->publish(summary, body);
         } else if (m_syncSuccessStart || !ErrorIsTemporary(status)) {

@@ -18,67 +18,58 @@
  */
 
 #include "session-resource.h"
+#include "client.h"
 
 SE_BEGIN_CXX
 
-void SessionResource::setPriority(int priority)
-{
-    m_session->setPriority(priority);
-}
-
-int SessionResource::getPriority() const
-{
-    return m_session->getPriority();
-}
-
 void SessionResource::startShutdown()
 {
-    m_session->startShutdown();
+    return;
 }
 
 void SessionResource::shutdownFileModified()
 {
-    m_session->shutDownFileModified();
+    return;
 }
 
 bool SessionResource::readyToRun()
 {
-    return m_session->readyToRun();
+    return true;
 }
 
 bool SessionResource::getActive()
 {
-    return m_session->getActive();
+    return true;
 }
 
 void SessionResource::setConfig(bool update, bool temporary, const ReadOperations::Config_t &config)
 {
-    m_session->setConfig(update, temporary, config);
+    return;
 }
 
 void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
 {
-    m_session->sync(mode, source_modes);
+    return;
 }
 
 void SessionResource::abort()
 {
-    m_session->abort();
+    return;
 }
 
 void SessionResource::suspend()
 {
-    m_session->suspend();
+    return;
 }
 
 SessionListener* SessionResource::addListener(SessionListener *listener)
 {
-    return m_session->addListener(listener);
+    return listener;
 }
 
 void SessionResource::activate()
 {
-    m_session->activate();
+    return;
 }
 
 void SessionResource::attach(const GDBusCXX::Caller_t &caller)
@@ -121,7 +112,6 @@ SessionResource::SessionResource(Server &server,
                                  const std::string &session,
                                  const std::vector<std::string> &flags) :
     m_server(server),
-    m_session(Session::createSession(this->m_server, peerDeviceID, config_name, session, flags));
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
@@ -133,34 +123,32 @@ SessionResource::SessionResource(Server &server,
 
 void SessionResource::done()
 {
-    if (m_done) {
-        return;
-    }
-    SE_LOG_DEBUG(NULL, NULL, "session %s done", getPath());
+    // if (m_done) {
+    //     return;
+    // }
+    // SE_LOG_DEBUG(NULL, NULL, "session %s done", getPath());
 
-    /* update auto sync manager when a config is changed */
-    if (m_setConfig) {
-        m_server.getAutoSyncManager().update(m_configName);
-    }
-    m_server.dequeue(this);
+    // /* update auto sync manager when a config is changed */
+    // if (m_setConfig) {
+    //     m_server.getAutoSyncManager().update(m_configName);
+    // }
+    // m_server.dequeue(this);
 
-    // now tell other clients about config change?
-    if (m_setConfig) {
-        m_server.configChanged();
-    }
+    // // now tell other clients about config change?
+    // if (m_setConfig) {
+    //     m_server.configChanged();
+    // }
 
-    // typically set by m_server.dequeue(), but let's really make sure...
-    m_active = false;
+    // // typically set by m_server.dequeue(), but let's really make sure...
+    // m_active = false;
 
-    m_done = true;
+    // m_done = true;
 }
 
 SessionResource::~SessionResource()
 {
     SE_LOG_DEBUG(NULL, NULL, "session resource %s deconstructing", getPath());
     done();
-}
-
 }
 
 SE_END_CXX

@@ -136,12 +136,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** step info: whether engine is waiting for something */
     bool m_stepIsWaiting;
 
-    /**
-     * Priority which determines position in queue.
-     * Lower is more important. PRI_DEFAULT is zero.
-     */
-    int m_priority;
-
     int32_t m_progress;
 
     /** progress data, holding progress calculation related info */
@@ -291,13 +285,6 @@ private:
     boost::weak_ptr<Session> m_me;
 
 public:
-
-    /**
-     * Default priority is 0. Higher means less important.
-     */
-    void setPriority(int priority) { m_priority = priority; }
-    int getPriority() const { return m_priority; }
-
     /**
      * Turns session into one which will shut down the server, must
      * be called before enqueing it. Will wait for a certain idle period

@@ -24,11 +24,7 @@
 #include "resource.h"
 #include "server.h"
 
-#include "session.h"
-
 SE_BEGIN_CXX
-
-class Session;
 
 /**
  * Handles supplying the session info needed by the server and
@@ -62,12 +58,6 @@ public:
     void done();
 
     const char *getPath() const { return m_path.c_str(); }
-
-    /**
-     * Default priority is 0. Higher means less important.
-     */
-    void setPriority(int priority);
-    int getPriority() const;
 
     /**
      * Turns session into one which will shut down the server, must
@@ -130,7 +120,6 @@ private:
     boost::weak_ptr<SessionResource> m_me;
 
     Server &m_server;
-    boost::shared_ptr<Session> m_session;
 
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
