@@ -141,7 +141,7 @@ void Session::setNamedConfig(const std::string &configName,
         }
     }
 
-    m_sessionResource.getPresenceStatus().updateConfigPeers (configName, config);
+    DBUS_SIG::updateConfigPeers(configName, config);
     /** check whether we need remove the entire configuration */
     if(!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(configName));
@@ -424,7 +424,6 @@ Session::Session(const std::string &peerDeviceID,
     m_remoteInitiated(false),
     m_syncStatus(SYNC_QUEUEING),
     m_stepIsWaiting(false),
-    m_priority(PRI_DEFAULT),
     m_progress(0),
     m_progData(m_progress),
     m_error(0),
@@ -465,7 +464,7 @@ Session::Session(const std::string &peerDeviceID,
 
 void Session::done()
 {
-    // typically set by m_server.dequeue(), but let's really make sure...
+    // typically set by m_server.removeSession(), but let's really make sure...
     m_active = false;
 }
 
