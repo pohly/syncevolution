@@ -17,9 +17,7 @@
  * 02110-1301  USA
  */
 
-#include "server.h"
 #include "connection.h"
-#include "client.h"
 
 #include <synthesis/san.h>
 #include <syncevo/TransportAgent.h>
@@ -43,41 +41,6 @@ void Connection::failed(const std::string &reason)
     m_state = FAILED;
 }
 
-std::string Connection::buildDescription(const StringMap &peer)
-{
-    StringMap::const_iterator
-        desc = peer.find("description"),
-        id = peer.find("id"),
-        trans = peer.find("transport"),
-        trans_desc = peer.find("transport_description");
-    std::string buffer;
-    buffer.reserve(256);
-    if (desc != peer.end()) {
-        buffer += desc->second;
-    }
-    if (id != peer.end() || trans != peer.end()) {
-        if (!buffer.empty()) {
-            buffer += " ";
-        }
-        buffer += "(";
-        if (id != peer.end()) {
-            buffer += id->second;
-            if (trans != peer.end()) {
-                buffer += " via ";
-            }
-        }
-        if (trans != peer.end()) {
-            buffer += trans->second;
-            if (trans_desc != peer.end()) {
-                buffer += " ";
-                buffer += trans_desc->second;
-            }
-        }
-        buffer += ")";
-    }
-    return buffer;
-}
-
 void Connection::wakeupSession()
 {
     if (m_loop) {
@@ -96,16 +59,17 @@ void Connection::process(const Caller_t &caller,
                  getPath(),
                  message_type.c_str());
 
-    boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!client) {
-        throw runtime_error("unknown client");
-    }
+    DBUS_CALL::ClientHasResource(Caller_t, )
+    // boost::shared_ptr<Client> client(m_server.findClient(caller));
+    // if (!client) {
+    //     throw runtime_error("unknown client");
+    // }
 
-    boost::shared_ptr<Connection> myself =
-        boost::static_pointer_cast<Connection, Resource>(client->findResource(this));
-    if (!myself) {
-        throw runtime_error("client does not own connection");
-    }
+    // boost::shared_ptr<Connection> myself =
+    //     boost::static_pointer_cast<Connection, Resource>(client->findResource(this));
+    // if (!myself) {
+    //     throw runtime_error("client does not own connection");
+    // }
 
     // any kind of error from now on terminates the connection
     try {
@@ -295,15 +259,16 @@ void Connection::process(const Caller_t &caller,
                                       message_type);
             }
             m_session->setServerAlerted(serverAlerted);
-            m_session->setPriority(SessionCommon::PRI_CONNECTION);
             m_session->setStubConnection(myself);
             // this will be reset only when the connection shuts down okay
             // or overwritten with the error given to us in
             // Connection::close()
             m_session->setStubConnectionError("closed prematurely");
-            
-            DBUS_CALL::queueInServer(sessionPath);
-            //m_server.enqueue(m_session);
+
+            // TODO: Eventhough queueing is not needed we may need to
+            // let the server know a session is running.
+            // DBUS_CALL::queueInServer(m_session->getPath());
+            // m_server.enqueue(m_session);
             break;
         }
         case PROCESSING:
@@ -400,7 +365,7 @@ Connection::Connection(const DBusConnectionPtr &conn,
     DBusObjectHelper(conn,
                      std::string("/org/syncevolution/Connection/") + sessionID,
                      "org.syncevolution.Connection",
-                     boost::bind(&Server::autoTermCallback, &server)),
+                     NULL),
     m_peer(peer),
     m_mustAuthenticate(must_authenticate),
     m_state(SETUP),
@@ -409,7 +374,6 @@ Connection::Connection(const DBusConnectionPtr &conn,
     sendAbort(*this, "Abort"),
     m_abortSent(false),
     reply(*this, "Reply"),
-    m_description(buildDescription(peer))
 {
     add(this, &Connection::process, "Process");
     add(this, &Connection::close, "Close");

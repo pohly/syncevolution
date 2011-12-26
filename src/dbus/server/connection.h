@@ -24,8 +24,6 @@
 
 SE_BEGIN_CXX
 
-class Server;
-
 /**
  * Represents and implements the Connection interface.
  *
@@ -98,11 +96,6 @@ class Connection : public GDBusCXX::DBusObjectHelper
      */
     void failed(const std::string &reason);
 
-    /**
-     * returns "<description> (<ID> via <transport> <transport_description>)"
-     */
-    static std::string buildDescription(const StringMap &peer);
-
     /** Connection.Process() */
     void process(const GDBusCXX::Caller_t &caller,
                  const GDBusCXX::DBusArray<uint8_t> &message,
@@ -126,10 +119,7 @@ class Connection : public GDBusCXX::DBusObjectHelper
     friend class DBusTransportAgent;
 
 public:
-    const std::string m_description;
-
-    Connection(Server &server,
-               const GDBusCXX::DBusConnectionPtr &conn,
+    Connection(const GDBusCXX::DBusConnectionPtr &conn,
                const std::string &session_num,
                const StringMap &peer,
                bool must_authenticate);
