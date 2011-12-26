@@ -48,11 +48,8 @@ class GLibNotify;
 /**
  * Implements the main org.syncevolution.Server interface.
  *
- * All objects created by it get a reference to the creating
- * Server instance so that they can call some of its
- * methods. Because that instance holds references to all
- * of these objects and deletes them before destructing itself,
- * that reference is guaranteed to remain valid.
+ * The Server class is responsible for listening to clients and
+ * spinning of sync sessions as requested by clients.
  */
 class Server : public GDBusCXX::DBusObjectHelper,
                public LoggerBase
@@ -114,18 +111,14 @@ class Server : public GDBusCXX::DBusObjectHelper,
      */
     boost::shared_ptr<SessionResource> m_syncSession;
 
-    typedef std::list< boost::weak_ptr<SessionResource> > WorkQueue_t;
+    typedef std::list< boost::weak_ptr<SessionResource> > SessionResources_t;
     /**
-     * A queue of pending, idle Sessions. Sorted by priority, most
-     * important one first. Currently this is used to give client
-     * requests a boost over remote connections and (in the future)
-     * automatic syncs.
+     * A lis of active or idle Sessions.
      *
-     * Active sessions are removed from this list and then continue
-     * to exist as long as a client in m_clients references it or
-     * it is the currently running sync session (m_syncSession).
+     * SessionResource objects are removed once the Session D-Bus
+     * interface disappears.
      */
-    WorkQueue_t m_workQueue;
+    SessionResources_t m_sessionResources;
 
     /**
      * a hash of pending InfoRequest
@@ -386,7 +379,7 @@ public:
      * by the creator of the session, *after* the session is
      * ready to run.
      */
-    void enqueue(const boost::shared_ptr<SessionResource> &session);
+    void addSession(const boost::shared_ptr<SessionResource> &session);
 
     /**
      * Remove all sessions with this device ID from the
@@ -396,12 +389,12 @@ public:
     int killSessions(const std::string &peerDeviceID);
 
     /**
-     * Remove a session from the work queue. If it is running a sync,
-     * it will keep running and nothing will change. Otherwise, if it
-     * is "ready" (= holds a lock on its configuration), then release
-     * that lock.
+     * Remove a session from the list of active sessions. If it is
+     * running a sync, it will keep running and nothing will
+     * change. Otherwise, if it is "ready" (= holds a lock on its
+     * configuration), then release that lock.
      */
-    void dequeue(SessionResource *session);
+    void removeSession(SessionResource *session);
 
     /**
      * Checks whether the server is ready to run another session

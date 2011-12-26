@@ -25,8 +25,8 @@
 
 #include "server.h"
 #include "info-req.h"
-#include "connection.h"
 #include "bluez-manager.h"
+#include "connection-resource.h"
 #include "session-resource.h"
 #include "timeout.h"
 #include "restart.h"
@@ -95,8 +95,7 @@ StringMap Server::getVersions()
 void Server::attachClient(const Caller_t &caller,
                           const boost::shared_ptr<Watch> &watch)
 {
-    boost::shared_ptr<Client> client = addClient(caller,
-                                                 watch);
+    boost::shared_ptr<Client> client = addClient(caller, watch);
     autoTermRef();
     client->increaseAttachCount();
 }
@@ -147,22 +146,19 @@ void Server::connect(const Caller_t &caller,
     }
     std::string new_session = getNextSession();
 
-    boost::shared_ptr<Connection> c(new Connection(*this,
-                                                   getConnection(),
-                                                   new_session,
-                                                   peer,
-                                                   must_authenticate));
+    boost::shared_ptr<ConnectionResource> cr(new ConnectionResource(*this,
+                                                                    new_session,
+                                                                    peer,
+                                                                    must_authenticate));
     SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
                  caller.c_str(),
-                 c->getPath(),
-                 c->m_description.c_str());
+                 cr->getPath(),
+                 cr->m_description.c_str());
 
-    boost::shared_ptr<Client> client = addClient(caller,
-                                                 watch);
-    client->attach(c);
-    c->activate();
+    boost::shared_ptr<Client> client = addClient(caller, watch);
+    client->attach(cr);
 
-    object = c->getPath();
+    object = cr->getPath();
 }
 
 void Server::startSessionWithFlags(const Caller_t &caller,
@@ -171,19 +167,17 @@ void Server::startSessionWithFlags(const Caller_t &caller,
                                    const std::vector<std::string> &flags,
                                    DBusObject_t &object)
 {
-    boost::shared_ptr<Client> client = addClient(caller,
-                                                 watch);
+    boost::shared_ptr<Client> client = addClient(caller, watch);
     std::string new_session = getNextSession();
-    boost::shared_ptr<SessionResource> session =
+    boost::shared_ptr<SessionResource> sessionResource =
         SessionResource::createSessionResource(*this,
                                                "is this a client or server session?",
                                                server,
                                                new_session,
                                                flags);
-    client->attach(session);
-    session->activate();
-    enqueue(session);
-    object = session->getPath();
+    client->attach(sessionResource);
+    addSession(sessionResource);
+    object = sessionResource->getPath();
 }
 
 void Server::checkPresence(const std::string &server,
@@ -195,14 +189,11 @@ void Server::checkPresence(const std::string &server,
 
 void Server::getSessions(std::vector<DBusObject_t> &sessions)
 {
-    sessions.reserve(m_workQueue.size() + 1);
-    if (m_activeSession) {
-        sessions.push_back(m_activeSession->getPath());
-    }
-    BOOST_FOREACH(boost::weak_ptr<SessionResource> &session, m_workQueue) {
-        boost::shared_ptr<SessionResource> s = session.lock();
-        if (s) {
-            sessions.push_back(s->getPath());
+    sessions.reserve(m_sessionResources.size() + 1);
+    BOOST_FOREACH(boost::weak_ptr<SessionResource> &sessionResources, m_sessionResources) {
+        boost::shared_ptr<SessionResource> sr = sessionResources.lock();
+        if (sr) {
+            sessions.push_back(sr->getPath());
         }
     }
 }
@@ -220,7 +211,6 @@ Server::Server(GMainLoop *loop,
     m_shutdownRequested(shutdownRequested),
     m_restart(restart),
     m_lastSession(time(NULL)),
-    m_activeSession(NULL),
     m_lastInfoReq(0),
     m_bluezManager(new BluezManager(*this)),
     sessionChanged(*this, "SessionChanged"),
@@ -283,7 +273,7 @@ Server::~Server()
 {
     // make sure all other objects are gone before destructing ourselves
     m_syncSession.reset();
-    m_workQueue.clear();
+    m_sessionResources.clear();
     m_clients.clear();
     LoggerBase::popLogger();
 }
@@ -294,13 +284,12 @@ void Server::fileModified()
         string newSession = getNextSession();
         vector<string> flags;
         flags.push_back("no-sync");
-        m_shutdownSession = SessionResource::createSession(*this,
-                                                           "",  "",
-                                                           newSession,
-                                                           flags);
-        m_shutdownSession->setPriority(SessionCommon::PRI_AUTOSYNC);
+        m_shutdownSession = SessionResource::createSessionResource(*this,
+                                                                   "",  "",
+                                                                   newSession,
+                                                                   flags);
         m_shutdownSession->startShutdown();
-        enqueue(m_shutdownSession);
+        addSession(m_shutdownSession);
     }
 
     m_shutdownSession->shutdownFileModified();
@@ -342,46 +331,23 @@ void Server::run(LogRedirect &redirect)
     }
 
     while (!m_shutdownRequested) {
-        if (!m_activeSession ||
-            !m_activeSession->readyToRun()) {
-            g_main_loop_run(m_loop);
-        }
-        if (m_activeSession &&
-            m_activeSession->readyToRun()) {
-            // this session must be owned by someone, otherwise
-            // it would not be set as active session
-            boost::shared_ptr<SessionResource> session = m_activeSessionRef.lock();
-            if (!session) {
-                throw runtime_error("internal error: session no longer available");
-            }
-            try {
-                // ensure that the session doesn't go away
-                m_syncSession.swap(session);
-                m_activeSession->run(redirect);
-            } catch (const std::exception &ex) {
-                SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
-            } catch (...) {
-                SE_LOG_ERROR(NULL, NULL, "unknown error");
-            }
-            session.swap(m_syncSession);
-            dequeue(session.get());
-        }
-
-        if (!m_shutdownRequested && m_autoSync.hasTask()) {
-            // if there is at least one pending task and no session is created for auto sync,
-            // pick one task and create a session
-            m_autoSync.startTask();
-        }
-        // Make sure check whether m_activeSession is owned by autosync
-        // Otherwise activeSession is owned by AutoSyncManager but it never
-        // be ready to run. Because methods of Session, like 'sync', are able to be
-        // called when it is active.
-        if (!m_shutdownRequested && m_autoSync.hasActiveSession())
-        {
-            // if the autosync is the active session, then invoke 'sync'
-            // to make it ready to run
-            m_autoSync.prepare();
-        }
+        g_main_loop_run(m_loop);
+        
+        // if (!m_shutdownRequested && m_autoSync.hasTask()) {
+        //     // if there is at least one pending task and no session is created for auto sync,
+        //     // pick one task and create a session
+        //     m_autoSync.startTask();
+        // }
+        // // Make sure check whether m_activeSession is owned by autosync
+        // // Otherwise activeSession is owned by AutoSyncManager but it never
+        // // be ready to run. Because methods of Session, like 'sync', are able to be
+        // // called when it is active.
+        // if (!m_shutdownRequested && m_autoSync.hasActiveSession())
+        // {
+        //     // if the autosync is the active session, then invoke 'sync'
+        //     // to make it ready to run
+        //     m_autoSync.prepare();
+        // }
     }
 }
 
@@ -425,111 +391,46 @@ void Server::detach(Resource *resource)
     }
 }
 
-void Server::enqueue(const boost::shared_ptr<SessionResource> &session)
+void Server::addSession(const boost::shared_ptr<SessionResource> &sessionResource)
 {
-    WorkQueue_t::iterator it = m_workQueue.end();
-    while (it != m_workQueue.begin()) {
-        --it;
-        if (it->lock()->getPriority() <= session->getPriority()) {
-            ++it;
-            break;
-        }
-    }
-    m_workQueue.insert(it, session);
-
-    checkQueue();
+    m_sessionResources.push_back(sessionResource);
 }
 
 int Server::killSessions(const std::string &peerDeviceID)
 {
     int count = 0;
-    WorkQueue_t::iterator it = m_workQueue.begin();
-    while (it != m_workQueue.end()) {
-        boost::shared_ptr<SessionResource> session = it->lock();
-        if (session && session->getPeerDeviceID() == peerDeviceID) {
+    SessionResources_t::iterator it = m_sessionResources.begin();
+    while (it != m_sessionResources.end()) {
+        boost::shared_ptr<SessionResource> sessionResource = it->lock();
+        if (sessionResource && sessionResource->getPeerDeviceID() == peerDeviceID) {
             SE_LOG_DEBUG(NULL, NULL, "removing pending session %s because it matches deviceID %s",
-                         session->getSessionID().c_str(),
+                         sessionResource->getSessionID().c_str(),
                          peerDeviceID.c_str());
             // remove session and its corresponding connection
-            session->shutdownConnection();
-            it = m_workQueue.erase(it);
+            sessionResource->abort();
+            it = m_sessionResources.erase(it);
+            removeSession(m_activeSession);
+
             count++;
         } else {
             ++it;
         }
     }
-
-    if (m_activeSession &&
-        m_activeSession->getPeerDeviceID() == peerDeviceID) {
-        SE_LOG_DEBUG(NULL, NULL, "aborting active session %s because it matches deviceID %s",
-                     m_activeSession->getSessionID().c_str(),
-                     peerDeviceID.c_str());
-        try {
-            // abort, even if not necessary right now
-            m_activeSession->abort();
-        } catch (...) {
-            // TODO: catch only that exception which indicates
-            // incorrect use of the function
-        }
-        dequeue(m_activeSession);
-        count++;
-    }
-
     return count;
 }
 
-void Server::dequeue(SessionResource *session)
+void Server::removeSession(SessionResource *session)
 {
-    if (m_syncSession.get() == session) {
-        // This is the running sync session.
-        // It's not in the work queue and we have to
-        // keep it active, so nothing to do.
-        return;
-    }
-
-    for (WorkQueue_t::iterator it = m_workQueue.begin();
-         it != m_workQueue.end();
+    for (SessionResources_t::iterator it = m_sessionResources.begin();
+         it != m_sessionResources.end();
          ++it) {
         if (it->lock().get() == session) {
+            // Signal end of session.
+            it->lock()->abort();
+            sessionChanged(session->getPath(), false);
             // remove from queue
-            m_workQueue.erase(it);
+            m_sessionResources.erase(it);
             // session was idle, so nothing else to do
-            return;
-        }
-    }
-
-    if (m_activeSession == session) {
-        // The session is releasing the lock, so someone else might
-        // run now.
-        session->setActive(false);
-        sessionChanged(session->getPath(), false);
-        m_activeSession = NULL;
-        m_activeSessionRef.reset();
-        checkQueue();
-        return;
-    }
-}
-
-void Server::checkQueue()
-{
-    if (m_activeSession) {
-        // still busy
-        return;
-    }
-
-    while (!m_workQueue.empty()) {
-        boost::shared_ptr<SessionResource> session = m_workQueue.front().lock();
-        m_workQueue.pop_front();
-        if (session) {
-            // activate the session
-            m_activeSession = session.get();
-            m_activeSessionRef = session;
-            session->setActive(true);
-            sessionChanged(session->getPath(), true);
-            //if the active session is changed, give a chance to quit the main loop
-            //and make it ready to run if it is owned by AutoSyncManager.
-            //Otherwise, server might be blocked.
-            g_main_loop_quit(m_loop);
             return;
         }
     }
@@ -563,7 +464,7 @@ bool Server::callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost:
 }
 
 void Server::addTimeout(const boost::function<bool ()> &callback,
-                            int seconds)
+                        int seconds)
 {
     boost::shared_ptr<Timeout> timeout(new Timeout);
     m_timeouts.push_back(timeout);
@@ -577,9 +478,9 @@ void Server::addTimeout(const boost::function<bool ()> &callback,
 }
 
 void Server::infoResponse(const Caller_t &caller,
-                              const std::string &id,
-                              const std::string &state,
-                              const std::map<string, string> &response)
+                          const std::string &id,
+                          const std::string &state,
+                          const std::map<string, string> &response)
 {
     InfoReqMap::iterator it = m_infoReqMap.find(id);
     // if not found, ignore
@@ -591,10 +492,10 @@ void Server::infoResponse(const Caller_t &caller,
 
 boost::shared_ptr<InfoReq> Server::createInfoReq(const string &type,
                                                  const std::map<string, string> &parameters,
-                                                 const SessionResource *session)
+                                                 const SessionResource *sessionResource)
 {
-    boost::shared_ptr<InfoReq> infoReq(new InfoReq(*this, type, parameters, session));
-    boost::weak_ptr<InfoReq> item(infoReq) ;
+    boost::shared_ptr<InfoReq> infoReq(new InfoReq(*this, type, parameters, sessionResource->getPath()));
+    boost::weak_ptr<InfoReq> item(infoReq);
     m_infoReqMap.insert(pair<string, boost::weak_ptr<InfoReq> >(infoReq->getId(), item));
     return infoReq;
 }
