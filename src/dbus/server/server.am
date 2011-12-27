@@ -12,8 +12,6 @@ src_dbus_server_server_cpp_files = \
   src/dbus/server/client.cpp \
   src/dbus/server/connection-resource.cpp \
   src/dbus/server/connman-client.cpp \
-  src/dbus/server/dbus-sync.cpp \
-  src/dbus/server/dbus-transport-agent.cpp \
   src/dbus/server/dbus-user-interface.cpp \
   src/dbus/server/exceptions.cpp \
   src/dbus/server/info-req.cpp \
