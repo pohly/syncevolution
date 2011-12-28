@@ -29,9 +29,14 @@ InfoReq::InfoReq(Server &server,
                  const InfoMap &parameters,
                  const string &sessionPath,
                  uint32_t timeout) :
-    m_server(server), m_sessionPath(sessionPath), m_infoState(IN_REQ),
-    m_status(ST_RUN), m_type(type), m_param(parameters),
-    m_timeout(timeout), m_timer(m_timeout * 1000)
+    m_server(server),
+    m_sessionPath(sessionPath),
+    m_infoState(IN_REQ),
+    m_status(ST_RUN),
+    m_type(type),
+    m_param(parameters),
+    m_timeout(timeout),
+    m_timer(m_timeout * 1000)
 {
     m_id = m_server.getNextInfoReq();
     m_server.emitInfoReq(*this);
@@ -49,7 +54,7 @@ InfoReq::Status InfoReq::check()
 {
     if(m_status == ST_RUN) {
         // give an opportunity to poll the sources on the main context
-        g_main_context_iteration(g_main_loop_get_context(m_server.getLoop()), false);
+        g_main_context_iteration(NULL, false);
         checkTimeout();
     }
     return m_status;
@@ -73,7 +78,7 @@ InfoReq::Status InfoReq::wait(InfoMap &response, uint32_t interval)
                                                   (GSourceFunc) checkCallback,
                                                   static_cast<gpointer>(this));
         while(m_status == ST_RUN) {
-            g_main_context_iteration(g_main_loop_get_context(m_server.getLoop()), true);
+            g_main_context_iteration(NULL, true);
         }
 
         // if the source is not removed

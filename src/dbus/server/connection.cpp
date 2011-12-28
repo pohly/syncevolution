@@ -59,7 +59,7 @@ void Connection::process(const Caller_t &caller,
                  getPath(),
                  message_type.c_str());
 
-    DBUS_CALL::ClientHasResource(Caller_t, )
+    //DBUS_CALL::ClientHasResource(Caller_t, )
     // boost::shared_ptr<Client> client(m_server.findClient(caller));
     // if (!client) {
     //     throw runtime_error("unknown client");
@@ -242,7 +242,7 @@ void Connection::process(const Caller_t &caller,
                 }
 
                 // abort previous session of this client
-                DBUS_CALL::killSessions(info.m_deviceID);
+                //DBUS_CALL::killSessions(info.m_deviceID);
                 peerDeviceID = info.m_deviceID;
             } else {
                 throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
@@ -250,7 +250,9 @@ void Connection::process(const Caller_t &caller,
 
             // run session as client or server
             m_state = PROCESSING;
-            m_session = Session::createSession(peerDeviceID,
+            m_session = Session::createSession(m_loop,
+                                               getConnection(),
+                                               peerDeviceID,
                                                config,
                                                m_sessionID);
             if (serverMode) {
@@ -259,7 +261,7 @@ void Connection::process(const Caller_t &caller,
                                       message_type);
             }
             m_session->setServerAlerted(serverAlerted);
-            m_session->setStubConnection(myself);
+            //FIXME: m_session->setStubConnection(myself);
             // this will be reset only when the connection shuts down okay
             // or overwritten with the error given to us in
             // Connection::close()
@@ -267,7 +269,7 @@ void Connection::process(const Caller_t &caller,
 
             // TODO: Eventhough queueing is not needed we may need to
             // let the server know a session is running.
-            // DBUS_CALL::queueInServer(m_session->getPath());
+            // //DBUS_CALL::queueInServer(m_session->getPath());
             // m_server.enqueue(m_session);
             break;
         }
@@ -315,9 +317,9 @@ void Connection::close(const Caller_t &caller,
                  error.empty() ? "" : ": ",
                  error.c_str());
 
-    DBUS_CALL::serverHasClient(caller)
+    //DBUS_CALL::serverHasClient(caller)
     //boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!client) {
+    if (!true){//FIXME: client) {
         throw runtime_error("unknown client");
     }
 
@@ -339,7 +341,7 @@ void Connection::close(const Caller_t &caller,
 
     // remove reference to us from client, will destruct *this*
     // instance!
-    DBUS_CALL::clientDetach(getPath);
+    //DBUS_CALL::clientDetach(getPath);
 }
 
 void Connection::abort()
@@ -355,10 +357,11 @@ void Connection::shutdown()
 {
     // trigger removal of this connection by removing all
     // references to it
-    DBUS_CALL::m_server.detach(this);
+    //DBUS_CALL::m_server.detach(this);
 }
 
-Connection::Connection(const DBusConnectionPtr &conn,
+Connection::Connection(GMainLoop *loop,
+                       const DBusConnectionPtr &conn,
                        const std::string &sessionID,
                        const StringMap &peer,
                        bool must_authenticate) :
@@ -370,23 +373,23 @@ Connection::Connection(const DBusConnectionPtr &conn,
     m_mustAuthenticate(must_authenticate),
     m_state(SETUP),
     m_sessionID(sessionID),
-    m_loop(NULL),
+    m_loop(loop),
     sendAbort(*this, "Abort"),
     m_abortSent(false),
-    reply(*this, "Reply"),
+    reply(*this, "Reply")
 {
     add(this, &Connection::process, "Process");
     add(this, &Connection::close, "Close");
     add(sendAbort);
     add(reply);
     
-    DBUS_SIG::server.autoTermRef();
+    //DBUS_SIG::server.autoTermRef();
 }
 
 Connection::~Connection()
 {
     SE_LOG_DEBUG(NULL, NULL, "done with connection to '%s'%s%s%s",
-                 m_description.c_str(),
+                 //m_description.c_str(),
                  m_state == DONE ? ", normal shutdown" : " unexpectedly",
                  m_failure.empty() ? "" : ": ",
                  m_failure.c_str());
@@ -402,7 +405,7 @@ Connection::~Connection()
         // destructing
         Exception::handle();
     }
-    DBUS_SIG::server.autoTermUnref();
+    //DBUS_SIG::server.autoTermUnref();
 }
 
 void Connection::ready()
