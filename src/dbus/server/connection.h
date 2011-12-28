@@ -119,7 +119,8 @@ class Connection : public GDBusCXX::DBusObjectHelper
     friend class DBusTransportAgent;
 
 public:
-    Connection(const GDBusCXX::DBusConnectionPtr &conn,
+    Connection(GMainLoop *loop,
+               const GDBusCXX::DBusConnectionPtr &conn,
                const std::string &session_num,
                const StringMap &peer,
                bool must_authenticate);

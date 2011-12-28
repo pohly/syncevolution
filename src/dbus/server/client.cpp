@@ -21,7 +21,7 @@
 #include "client.h"
 #include "session.h"
 #include "server.h"
-#include "resource.h"
+#include "session-resource.h"
 
 SE_BEGIN_CXX
 
