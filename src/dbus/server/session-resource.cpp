@@ -123,26 +123,21 @@ SessionResource::SessionResource(Server &server,
 
 void SessionResource::done()
 {
-    // if (m_done) {
-    //     return;
-    // }
-    // SE_LOG_DEBUG(NULL, NULL, "session %s done", getPath());
+    if (m_done) {
+        return;
+    }
+    SE_LOG_DEBUG(NULL, NULL, "session %s done", getPath());
 
-    // /* update auto sync manager when a config is changed */
-    // if (m_setConfig) {
-    //     m_server.getAutoSyncManager().update(m_configName);
-    // }
-    // m_server.dequeue(this);
+    /* update auto sync manager when a config is changed */
+    if (m_setConfig) {
+        m_server.getAutoSyncManager().update(m_configName);
+    }
+    m_server.removeSession(this);
 
-    // // now tell other clients about config change?
-    // if (m_setConfig) {
-    //     m_server.configChanged();
-    // }
-
-    // // typically set by m_server.dequeue(), but let's really make sure...
-    // m_active = false;
-
-    // m_done = true;
+    // now tell other clients about config change?
+    if (m_setConfig) {
+        m_server.configChanged();
+    }
 }
 
 SessionResource::~SessionResource()

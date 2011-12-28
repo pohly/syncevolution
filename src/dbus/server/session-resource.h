@@ -127,6 +127,7 @@ private:
     const std::string m_path;
 
     const std::string m_configName;
+    bool m_setConfig;
 
     /**
      * True once done() was called.

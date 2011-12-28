@@ -29,7 +29,7 @@
 #include "source-status.h"
 #include "timer.h"
 #include "timeout.h"
-#include "session-resource.h"
+#include "session-common.h"
 
 SE_BEGIN_CXX
 
@@ -48,7 +48,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
                 private ReadOperations,
                 private boost::noncopyable
 {
-    SessionResource &m_sessionResource;
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
     std::string m_peerDeviceID;
@@ -57,6 +56,8 @@ class Session : public GDBusCXX::DBusObjectHelper,
     bool m_serverAlerted;
     SharedBuffer m_initialMessage;
     string m_initialMessageType;
+
+    GMainLoop *m_loop;
 
     boost::weak_ptr<Connection> m_connection;
     std::string m_connectionError;
@@ -237,7 +238,8 @@ public:
      * so that it can create more shared pointers as
      * needed.
      */
-    static boost::shared_ptr<Session> createSession(Server &server,
+    static boost::shared_ptr<Session> createSession(GMainLoop *loop,
+                                                    const GDBusCXX::DBusConnectionPtr &conn,
                                                     const std::string &peerDeviceID,
                                                     const std::string &config_name,
                                                     const std::string &session,
@@ -249,13 +251,14 @@ public:
     ~Session();
 
     /** access to the GMainLoop reference used by this Session instance */
-    GMainLoop *getLoop() { return m_sessionResource.getLoop(); }
+    GMainLoop *getLoop() { return m_loop; }
 
     /** explicitly mark the session as completed, even if it doesn't get deleted yet */
     void done();
 
 private:
-    Session(Server &server,
+    Session(GMainLoop *loop,
+            const GDBusCXX::DBusConnectionPtr &conn,
             const std::string &peerDeviceID,
             const std::string &config_name,
             const std::string &session,
