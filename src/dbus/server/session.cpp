@@ -20,6 +20,7 @@
 #include <syncevo/LogRedirect.h>
 
 #include "session.h"
+#include "session-listener.h"
 #include "restart.h"
 #include "info-req.h"
 #include "cmdline-wrapper.h"
@@ -35,12 +36,12 @@ SE_BEGIN_CXX
 
 void Session::attach(const Caller_t &caller)
 {
-    DBUS_CALL::attach(const Caller_t &caller)
+    ////DBUS_CALL::attach(const Caller_t &caller)
 }
 
 void Session::detach(const Caller_t &caller)
 {
-    DBUS_CALL::detach(const Caller_t &caller)
+    //DBUS_CALL::detach(const Caller_t &caller)
 }
 
 /**
@@ -141,7 +142,7 @@ void Session::setNamedConfig(const std::string &configName,
         }
     }
 
-    DBUS_SIG::updateConfigPeers(configName, config);
+    //DBUS_SIG::updateConfigPeers(configName, config);
     /** check whether we need remove the entire configuration */
     if(!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(configName));
@@ -299,7 +300,7 @@ void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &
 
     // now that we have a DBusSync object, return from the main loop
     // and once that is done, transfer control to that object
-    g_main_loop_quit(getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::abort()
@@ -311,7 +312,7 @@ void Session::abort()
     fireStatus(true);
 
     // state change, return to caller so that it can react
-    g_main_loop_quit(getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::suspend()
@@ -321,7 +322,7 @@ void Session::suspend()
     }
     m_syncStatus = SYNC_SUSPEND;
     fireStatus(true);
-    g_main_loop_quit(getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::getStatus(std::string &status,
@@ -394,29 +395,34 @@ string Session::syncStatusToString(SyncStatus state)
     };
 }
 
-boost::shared_ptr<Session> Session::createSession(const std::string &peerDeviceID,
+boost::shared_ptr<Session> Session::createSession(GMainLoop *loop,
+                                                  const GDBusCXX::DBusConnectionPtr &conn,
+                                                  const std::string &peerDeviceID,
                                                   const std::string &config_name,
                                                   const std::string &session,
                                                   const std::vector<std::string> &flags)
 {
-    boost::shared_ptr<Session> me(new Session(peerDeviceID, config_name, session, flags));
+    boost::shared_ptr<Session> me(new Session(loop, conn, peerDeviceID, config_name, session, flags));
     me->m_me = me;
     return me;
 }
 
-Session::Session(const std::string &peerDeviceID,
+Session::Session(GMainLoop *loop,
+                 const GDBusCXX::DBusConnectionPtr &conn,
+                 const std::string &peerDeviceID,
                  const std::string &config_name,
                  const std::string &session,
                  const std::vector<std::string> &flags) :
-    DBusObjectHelper(server.getConnection(),
+    DBusObjectHelper(conn,
                      std::string("/org/syncevolution/Session/") + session,
                      "org.syncevolution.Session",
-                     boost::bind(&Server::autoTermCallback, &server)),
+                      NULL),
     ReadOperations(config_name),
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
     m_serverMode(false),
+    m_loop(loop),
     m_useConnection(false),
     m_tempConfig(false),
     m_setConfig(false),
@@ -464,8 +470,7 @@ Session::Session(const std::string &peerDeviceID,
 
 void Session::done()
 {
-    // typically set by m_server.removeSession(), but let's really make sure...
-    m_active = false;
+    // Emit done signal session
 }
 
 Session::~Session()
@@ -498,18 +503,18 @@ void Session::shutdownFileModified()
 bool Session::shutdownServer()
 {
     Timespec now = Timespec::monotonic();
-    bool autosync = DBUS_CALL::autoSyncManagerHasTask ||
-                    DBUS_CALL::autoSyncManagerHasAutoConfigs;
+    bool autosync = true;//DBUS_CALL::autoSyncManagerHasTask ||
+                         //DBUS_CALL::autoSyncManagerHasAutoConfigs;
     SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
                  now.tv_sec, now.tv_nsec,
                  autosync ? "on" : "off");
     if (autosync) {
         // suitable exec() call which restarts the server using the same environment it was in
         // when it was started
-        DBUS_CALL::restartServer();
+        //DBUS_CALL::restartServer();
     } else {
         // leave server now
-        DBUS_CALL::setServerShutdownRequested(true);
+        //DBUS_CALL::setServerShutdownRequested(true);
         SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
     }
 
@@ -738,8 +743,8 @@ void Session::run(LogRedirect &redirect)
             case OP_SHUTDOWN:
                 // block until time for shutdown or restart if no
                 // shutdown requested already
-                if (!DBUS_CALL::getShutdownRequested()) {
-                    g_main_loop_run(getLoop());
+                if (!true){//DBUS_CALL::getShutdownRequested()) {
+                    g_main_loop_run(m_loop);
                 }
                 break;
             default:
@@ -824,7 +829,7 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     fireProgress(true);
     fireStatus(true);
 
-    g_main_loop_quit(getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::SyncStatusOwner::setStatus(SyncStatus status)
@@ -900,7 +905,7 @@ void Session::execute(const vector<string> &args, const map<string, string> &var
     }
 
     m_runOperation = OP_CMDLINE;
-    g_main_loop_quit(getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 inline void insertPair(std::map<string, string> &params,
@@ -927,6 +932,7 @@ string Session::askPassword(const string &passwordName,
     insertPair(params, "port", key.port ? StringPrintf("%u",key.port) : "");
     std::map<string, string> response;
 
+    string statusString;
     /* TODO: make this a dbus call similar to this void makerequest(std::map<string, string> params, (in)
                                                                     std::string sessionPath, (in)
                                                                     std::map<string, string> response, (out)
@@ -943,8 +949,8 @@ string Session::askPassword(const string &passwordName,
     // }
 
     SE_THROW_EXCEPTION_STATUS(StatusException,
-                              "can't get the password from clients. The password request is '" +
-                              statusString() + "'", STATUS_PASSWORD_TIMEOUT);
+                              std::string("can't get the password from clients. The password request is '") +
+                              statusString + "'", STATUS_PASSWORD_TIMEOUT);
     return "";
 }
 
@@ -952,7 +958,7 @@ string Session::askPassword(const string &passwordName,
 void Session::checkPresence (string &status)
 {
     vector<string> transport;
-    DBUS_CALL::checkPresence (m_configName, status, transport);
+    //DBUS_CALL::checkPresence (m_configName, status, transport);
 }
 
 void Session::syncSuccessStart()
