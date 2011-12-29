@@ -157,7 +157,6 @@ void Server::connect(const Caller_t &caller,
 
     boost::shared_ptr<Client> client = addClient(caller, watch);
     client->attach(cr);
-
     object = cr->getPath();
 }
 
@@ -325,9 +324,11 @@ void Server::run(LogRedirect &redirect)
         }
     }
 
-    while (!m_shutdownRequested) {
+    SE_LOG_INFO(NULL, NULL, "%s", "Should enter main loop");
+    // while (!m_shutdownRequested)
+    {
         g_main_loop_run(m_loop);
-        
+
         // if (!m_shutdownRequested && m_autoSync.hasTask()) {
         //     // if there is at least one pending task and no session is created for auto sync,
         //     // pick one task and create a session
@@ -343,6 +344,7 @@ void Server::run(LogRedirect &redirect)
         //     // to make it ready to run
         //     m_autoSync.prepare();
         // }
+        SE_LOG_INFO(NULL, NULL, "%s", "Passed main loop");
     }
 }
 
@@ -377,7 +379,6 @@ boost::shared_ptr<Client> Server::addClient(const Caller_t &ID,
     return client;
 }
 
-
 void Server::detach(Resource *resource)
 {
     BOOST_FOREACH(const Clients_t::value_type &client_entry,
@@ -404,7 +405,7 @@ int Server::killSessions(const std::string &peerDeviceID)
             // remove session and its corresponding connection
             sessionResource->abort();
             it = m_sessionResources.erase(it);
-            removeSession(m_activeSession);
+            removeSession(sessionResource.get());
 
             count++;
         } else {
@@ -605,11 +606,12 @@ void Server::messagev(Level level,
     // for general server output, the object path field is dbus server
     // the object path can't be empty for object paths prevent using empty string.
     string strLevel = Logger::levelToStr(level);
-    if(m_activeSession) {
-        logOutput(m_activeSession->getPath(), strLevel, log);
-    } else {
+    // TODO: So what to do here?
+    // if(m_activeSession) {
+    //     // logOutput(m_activeSession->getPath(), strLevel, log);
+    // } else {
         logOutput(getPath(), strLevel, log);
-    }
+    // }
 }
 
 SE_END_CXX

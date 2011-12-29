@@ -252,7 +252,6 @@ void Connection::process(const Caller_t &caller,
             m_state = PROCESSING;
             m_session = Session::createSession(m_loop,
                                                getConnection(),
-                                               peerDeviceID,
                                                config,
                                                m_sessionID);
             if (serverMode) {
@@ -388,7 +387,7 @@ Connection::Connection(GMainLoop *loop,
 
 Connection::~Connection()
 {
-    SE_LOG_DEBUG(NULL, NULL, "done with connection to '%s'%s%s%s",
+    SE_LOG_DEBUG(NULL, NULL, "done with connection to %s%s%s",
                  //m_description.c_str(),
                  m_state == DONE ? ", normal shutdown" : " unexpectedly",
                  m_failure.empty() ? "" : ": ",
