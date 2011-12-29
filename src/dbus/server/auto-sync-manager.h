@@ -152,7 +152,8 @@ class AutoSyncManager : public SessionListener
 
     /**
      * a working queue that including tasks which are pending for doing sync.
-     * Tasks here are picked from m_peerMap and scheduled to do auto sync */
+     * Tasks here are picked from m_peerMap and scheduled to do auto sync
+     */
     std::list<AutoSyncTask> m_workQueue;
 
     /**

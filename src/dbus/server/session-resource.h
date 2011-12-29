@@ -24,15 +24,141 @@
 #include "resource.h"
 #include "server.h"
 
+#include <syncevo/ForkExec.h>
+#include <boost/lexical_cast.hpp>
+
 SE_BEGIN_CXX
+
+class SessionProxy : public GDBusCXX::DBusRemoteObject
+{
+public:
+  SessionProxy(const GDBusCXX::DBusConnectionPtr &conn, const std::string &session) :
+    GDBusCXX::DBusRemoteObject(conn.get(), "/dbushelper",
+                               std::string("dbushelper.Test.Session") + session,
+                               "direct.peer"),
+    m_hello(*this, "Hello")
+  {}
+
+    GDBusCXX::DBusClientCall1<std::string> m_hello;
+
+};
 
 /**
  * Handles supplying the session info needed by the server and
  * clients.
  */
-class SessionResource : public Resource,
+class SessionResource : public GDBusCXX::DBusObjectHelper,
+                        public Resource,
                         private boost::noncopyable
 {
+    bool autoSyncManagerHasTask()        { return m_server.getAutoSyncManager().hasTask(); }
+    bool autoSyncManagerHasAutoConfigs() { return m_server.getAutoSyncManager().hasAutoConfigs(); }
+
+    void checkPresenceOfServer(const std::string &server,
+                               std::string &status,
+                               std::vector<std::string> &transports)
+    { m_server.checkPresence(server, status, transports); }
+
+    /** access to the GMainLoop reference used by this Session instance */
+    GMainLoop *getLoop() { return m_server.getLoop(); }
+
+    Server &m_server;
+
+    std::vector<std::string> m_flags;
+    const std::string m_sessionID;
+    std::string m_peerDeviceID;
+    const std::string m_path;
+
+    const std::string m_configName;
+    bool m_setConfig;
+
+    boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
+    boost::scoped_ptr<SessionProxy> m_sessionProxy;
+
+    // Child session handlers
+    void onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn);
+    void onQuit(int status);
+    void onFailure(const std::string &error);
+
+    void helloCB(const std::string &res, const std::string &error);
+
+    /**
+     * True once done() was called.
+     */
+    bool m_done;
+
+    /**
+     * Called Server::SHUTDOWN_QUIESCENCE_SECONDS after last file
+     * modification, while shutdown session is active and thus ready
+     * to shut down the server.  Then either triggers the shutdown or
+     * restarts.
+     *
+     * @return always false to disable timer
+     */
+    bool shutdownServer();
+
+    /** Session.Attach() */
+    void attach(const GDBusCXX::Caller_t &caller);
+
+    /** Session.Detach() */
+    void detach(const GDBusCXX::Caller_t &caller);
+
+    /** Session.GetStatus() */
+    void getStatus(std::string &status, uint32_t &error, SessionCommon::SourceStatuses_t &sources);
+
+    /** Session.GetProgress() */
+    void getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources);
+
+    /** Session.Restore() */
+    void restore(const string &dir, bool before,const std::vector<std::string> &sources);
+
+    /** Session.checkPresence() */
+    void checkPresence (string &status);
+
+    /** Session.Execute() */
+    void execute(const vector<string> &args, const map<string, string> &vars);
+
+    /**
+     * Must be called each time that properties changing the
+     * overall status are changed. Ensures that the corresponding
+     * D-Bus signal is sent.
+     *
+     * Doesn't always send the signal immediately, because often it is
+     * likely that more status changes will follow shortly. To ensure
+     * that the "final" status is sent, call with flush=true.
+     *
+     * @param flush      force sending the current status
+     */
+    void fireStatus(bool flush = false);
+    /** like fireStatus() for progress information */
+    void fireProgress(bool flush = false);
+
+    /** Session.StatusChanged */
+    GDBusCXX::EmitSignal3<const std::string &,
+                          uint32_t,
+                          const SessionCommon::SourceStatuses_t &> emitStatus;
+    /** Session.ProgressChanged */
+    GDBusCXX::EmitSignal2<int32_t,
+                          const SessionCommon::SourceProgresses_t &> emitProgress;
+
+    /** implementation of D-Bus GetConfig() for m_configName as server configuration */
+    void getConfig(bool getTemplate, ReadOperations::Config_t &config);
+
+    /** implementation of D-Bus GetNamedConfig() for configuration named in parameter */
+    void getNamedConfig(const std::string &configName, bool getTemplate, ReadOperations::Config_t &config);
+
+    /** implementation of D-Bus GetReports() for m_configName as server configuration */
+    void getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports);
+
+    /** Session.CheckSource() */
+    void checkSource(const string &sourceName);
+
+    /** Session.GetDatabases() */
+    void getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases);
+
+    /** timer for fire status/progress usages */
+    Timer m_statusTimer;
+    Timer m_progressTimer;
 
 public:
     /**
@@ -57,8 +183,15 @@ public:
     /** explicitly mark the session as completed, even if it doesn't get deleted yet */
     void done();
 
-    const char *getPath() const { return m_path.c_str(); }
+private:
+    SessionResource(Server &server,
+                    const std::string &peerDeviceID,
+                    const std::string &config_name,
+                    const std::string &session,
+                    const std::vector<std::string> &flags = std::vector<std::string>());
+    boost::weak_ptr<SessionResource> m_me;
 
+public:
     /**
      * Turns session into one which will shut down the server, must
      * be called before enqueing it. Will wait for a certain idle period
@@ -84,58 +217,31 @@ public:
 
     bool getActive();
 
+    /** Session.GetFlags() */
     std::vector<std::string> getFlags() { return m_flags; }
 
+    /** Session.GetConfigName() */
+    std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
+
+    /** Session.SetConfig() */
     void setConfig(bool update, bool temporary, const ReadOperations::Config_t &config);
 
-    void sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes);
+    /** Session.SetNamedConfig() */
+    void setNamedConfig(const std::string &configName, bool update, bool temporary,
+                        const ReadOperations::Config_t &config);
 
+    typedef StringMap SourceModes_t;
+    /** Session.Sync() */
+    void sync(const std::string &mode, const SourceModes_t &source_modes);
+    /** Session.Abort() */
     void abort();
+    /** Session.Suspend() */
     void suspend();
 
     /**
      * add a listener of the session. Old set listener is returned
      */
     SessionListener* addListener(SessionListener *listener);
-
-    void activate();
-
-    bool autoSyncManagerHasTask()        { return m_server.getAutoSyncManager().hasTask(); }
-    bool autoSyncManagerHasAutoConfigs() { return m_server.getAutoSyncManager().hasAutoConfigs(); }
-
-    void checkPresenceOfServer(const std::string &server,
-                               std::string &status,
-                               std::vector<std::string> &transports)
-    { m_server.checkPresence(server, status, transports); }
-
-    /** access to the GMainLoop reference used by this Session instance */
-    GMainLoop *getLoop() { return m_server.getLoop(); }
-
-private:
-    SessionResource(Server &server,
-                    const std::string &peerDeviceID,
-                    const std::string &config_name,
-                    const std::string &session,
-                    const std::vector<std::string> &flags = std::vector<std::string>());
-    boost::weak_ptr<SessionResource> m_me;
-
-    Server &m_server;
-
-    std::vector<std::string> m_flags;
-    const std::string m_sessionID;
-    std::string m_peerDeviceID;
-    const std::string m_path;
-
-    const std::string m_configName;
-    bool m_setConfig;
-
-    /**
-     * True once done() was called.
-     */
-    bool m_done;
-
-    void attach(const GDBusCXX::Caller_t &caller);
-    void detach(const GDBusCXX::Caller_t &caller);
 };
 
 SE_END_CXX

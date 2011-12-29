@@ -24,21 +24,38 @@
 #include <iostream>
 
 #include "session.h"
-#include "connection.h"
+// #include "connection.h"
 
 #include <syncevo/SyncContext.h>
+#include <syncevo/ForkExec.h>
+
+#include <boost/bind.hpp>
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
 
 namespace {
     GMainLoop *loop = NULL;
+    boost::shared_ptr<Session> session;
 }
 
-void niam(int sig)
+static void niam(int sig)
 {
     SyncContext::handleSignal(sig);
     g_main_loop_quit (loop);
+}
+
+static void onFailure(const std::string &error)
+{
+    SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
+    g_main_loop_quit(loop);
+}
+
+static void onConnect(const DBusConnectionPtr &conn)
+{
+    session = Session::createSession(loop, conn, "foo",
+                                     boost::lexical_cast<string>(getpid()));
+    session->activate();
 }
 
 /**
@@ -66,9 +83,18 @@ int main(int argc, char **argv, char **envp)
                                         LoggerBase::DEBUG :
                                         LoggerBase::INFO);
 
-        SE_LOG_INFO(NULL, NULL, "%s: ready to run",  argv[0]);
+        boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1));
+        forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
+        forkexec->connect();
+
+        SE_LOG_INFO(NULL, NULL,
+                    "%s: Helper (pid %d) finished setup.",
+                    argv[0], getpid());
+
         g_main_loop_run(loop);
-        SE_LOG_INFO(NULL, NULL, "%s: terminating",  argv[0]);
+
+        SE_LOG_INFO(NULL, NULL, "%s: Terminating helper",  argv[0]);
         return 0;
     } catch ( const std::exception &ex ) {
         SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
