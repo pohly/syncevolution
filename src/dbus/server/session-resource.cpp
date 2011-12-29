@@ -19,58 +19,9 @@
 
 #include "session-resource.h"
 #include "client.h"
+#include "restart.h"
 
 SE_BEGIN_CXX
-
-void SessionResource::startShutdown()
-{
-    return;
-}
-
-void SessionResource::shutdownFileModified()
-{
-    return;
-}
-
-bool SessionResource::readyToRun()
-{
-    return true;
-}
-
-bool SessionResource::getActive()
-{
-    return true;
-}
-
-void SessionResource::setConfig(bool update, bool temporary, const ReadOperations::Config_t &config)
-{
-    return;
-}
-
-void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
-{
-    return;
-}
-
-void SessionResource::abort()
-{
-    return;
-}
-
-void SessionResource::suspend()
-{
-    return;
-}
-
-SessionListener* SessionResource::addListener(SessionListener *listener)
-{
-    return listener;
-}
-
-void SessionResource::activate()
-{
-    return;
-}
 
 void SessionResource::attach(const GDBusCXX::Caller_t &caller)
 {
@@ -94,6 +45,193 @@ void SessionResource::detach(const GDBusCXX::Caller_t &caller)
     client->detach(this);
 }
 
+void SessionResource::startShutdown()
+{
+    return;
+}
+
+void SessionResource::shutdownFileModified()
+{
+    return;
+}
+
+bool SessionResource::shutdownServer()
+{
+    Timespec now = Timespec::monotonic();
+    bool autosync = m_server.getAutoSyncManager().hasTask() ||
+        m_server.getAutoSyncManager().hasAutoConfigs();
+    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
+                 now.tv_sec, now.tv_nsec,
+                 autosync ? "on" : "off");
+    if (autosync) {
+        // suitable exec() call which restarts the server using the same environment it was in
+        // when it was started
+        m_server.m_restart->restart();
+    } else {
+        // leave server now
+        m_server.m_shutdownRequested = true;
+        g_main_loop_quit(m_server.getLoop());
+        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
+    }
+
+    return false;
+}
+
+bool SessionResource::readyToRun()
+{
+    return true;
+}
+
+void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
+{
+    return;
+}
+
+void SessionResource::execute(const vector<string> &args, const map<string, string> &vars)
+{
+    return;
+}
+
+void SessionResource::checkPresence (string &status)
+{
+    return;
+}
+
+bool SessionResource::getActive()
+{
+    return true;
+}
+
+void SessionResource::setConfig(bool update, bool temporary, const ReadOperations::Config_t &config)
+{
+    return;
+}
+
+void SessionResource::setNamedConfig(const std::string &configName, bool update, bool temporary,
+                             const ReadOperations::Config_t &config)
+{
+    return;
+}
+
+void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
+{
+    return;
+}
+
+void SessionResource::abort()
+{
+    return;
+}
+
+void SessionResource::suspend()
+{
+    return;
+}
+
+void SessionResource::getStatus(std::string &status, uint32_t &error, SessionCommon::SourceStatuses_t &sources)
+{
+    return;
+}
+
+void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources)
+{
+    return;
+}
+
+void SessionResource::fireStatus(bool flush)
+{
+    std::string status;
+    uint32_t error;
+    SessionCommon::SourceStatuses_t sources;
+
+    /** not force flushing and not timeout, return */
+    if(!flush && !m_statusTimer.timeout()) {
+        return;
+    }
+    m_statusTimer.reset();
+
+    getStatus(status, error, sources);
+    emitStatus(status, error, sources);
+}
+
+void SessionResource::fireProgress(bool flush)
+{
+    int32_t progress;
+    SessionCommon::SourceProgresses_t sources;
+
+    /** not force flushing and not timeout, return */
+    if(!flush && !m_progressTimer.timeout()) {
+        return;
+    }
+    m_progressTimer.reset();
+
+    getProgress(progress, sources);
+    emitProgress(progress, sources);
+}
+
+void SessionResource::getConfig(bool getTemplate, ReadOperations::Config_t &config)
+{
+    return;
+}
+
+void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate, ReadOperations::Config_t &config)
+{
+    return;
+}
+
+void SessionResource::getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports)
+{
+    return;
+}
+
+void SessionResource::checkSource(const string &sourceName)
+{
+    return;
+}
+
+void SessionResource::getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases)
+{
+    return;
+}
+
+SessionListener* SessionResource::addListener(SessionListener *listener)
+{
+    return listener;
+}
+
+void SessionResource::helloCB(const std::string &res, const std::string &error)
+{
+    std::string msg("");
+    // if (!error.empty()) {
+    //     msg << "call failed: " << error << std::endl;
+    // } else {
+    //     msg << "hello('hello') = " << res << std::endl;
+    // }
+
+    SE_LOG_INFO(NULL, NULL, "%s", error.empty() ? res.c_str() : error.c_str());
+}
+
+void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
+{
+    SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %d", m_forkExecParent->getChildPid());
+    if(!m_sessionProxy) {
+        m_sessionProxy.reset(new SessionProxy(conn, boost::lexical_cast<string>(m_forkExecParent->getChildPid())));
+        m_sessionProxy->m_hello(std::string("world"), boost::bind(&SessionResource::helloCB, this, _1, _2));
+
+        SE_LOG_INFO(NULL, NULL, "Session connection made.");
+    }
+}
+
+void SessionResource::onQuit(int status)
+{
+    SE_LOG_INFO(NULL, NULL, "dbus-helper quit with status: %d", status);
+}
+
+void SessionResource::onFailure(const std::string &error)
+{
+    SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
+}
+
 boost::shared_ptr<SessionResource> SessionResource::createSessionResource(Server &server,
                                                                           const std::string &peerDeviceID,
                                                                           const std::string &config_name,
@@ -111,13 +249,50 @@ SessionResource::SessionResource(Server &server,
                                  const std::string &configName,
                                  const std::string &session,
                                  const std::vector<std::string> &flags) :
+    DBusObjectHelper(server.getConnection(),
+                     std::string("/org/syncevolution/Session/") + session,
+                     "org.syncevolution.Session",
+                     boost::bind(&Server::autoTermCallback, &server)),
     m_server(server),
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
     m_path(std::string("/org/syncevolution/Session/") + session),
-    m_configName(configName)
+    m_configName(configName),
+    m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
+    emitStatus(*this, "StatusChanged"),
+    emitProgress(*this, "ProgressChanged")
 {
+    add(this, &SessionResource::attach, "Attach");
+    add(this, &SessionResource::detach, "Detach");
+    add(this, &SessionResource::getFlags, "GetFlags");
+    add(this, &SessionResource::getNormalConfigName, "GetConfigName");
+    add(this, &SessionResource::getConfig, "GetConfig");
+    add(this, &SessionResource::getNamedConfig, "GetNamedConfig");
+    add(this, &SessionResource::setConfig, "SetConfig");
+    add(this, &SessionResource::setNamedConfig, "SetNamedConfig");
+    add(this, &SessionResource::getReports, "GetReports");
+    add(this, &SessionResource::checkSource, "CheckSource");
+    add(this, &SessionResource::getDatabases, "GetDatabases");
+    add(this, &SessionResource::sync, "Sync");
+    add(this, &SessionResource::abort, "Abort");
+    add(this, &SessionResource::suspend, "Suspend");
+    add(this, &SessionResource::getStatus, "GetStatus");
+    add(this, &SessionResource::getProgress, "GetProgress");
+    add(this, &SessionResource::restore, "Restore");
+    add(this, &SessionResource::checkPresence, "checkPresence");
+    add(this, &SessionResource::execute, "Execute");
+    add(emitStatus);
+    add(emitProgress);
+    // add(this, &SessionResource::hello, "Hello");
+
+    SE_LOG_INFO(NULL, NULL, "SessionResource (%s) forking...", getPath());
+
+    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1));
+    m_forkExecParent->m_onQuit.connect(boost::bind(&SessionResource::onQuit, this, _1));
+    m_forkExecParent->m_onFailure.connect(boost::bind(&SessionResource::onFailure, this, _2));
+    m_forkExecParent->start();
+
     SE_LOG_DEBUG(NULL, NULL, "session resource %s created", getPath());
 }
 

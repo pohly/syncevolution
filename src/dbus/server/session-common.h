@@ -20,6 +20,8 @@
 #ifndef SESSION_COMMON_H
 #define SESSION_COMMON_H
 
+#include "source-status.h"
+#include "source-progress.h"
 #include "syncevo/util.h"
 
 SE_BEGIN_CXX
@@ -40,6 +42,9 @@ public:
         PRI_AUTOSYNC   =  20,
         PRI_SHUTDOWN   =  256  // always higher than anything else
     };
+
+    typedef std::map<std::string, SourceStatus>   SourceStatuses_t;
+    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
 
     /**
      * Number of seconds to wait after file modifications are observed

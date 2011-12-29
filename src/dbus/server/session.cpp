@@ -34,16 +34,6 @@ using namespace GDBusCXX;
 
 SE_BEGIN_CXX
 
-void Session::attach(const Caller_t &caller)
-{
-    ////DBUS_CALL::attach(const Caller_t &caller)
-}
-
-void Session::detach(const Caller_t &caller)
-{
-    //DBUS_CALL::detach(const Caller_t &caller)
-}
-
 /**
  * validate key/value property and copy it to the filter
  * if okay
@@ -327,7 +317,7 @@ void Session::suspend()
 
 void Session::getStatus(std::string &status,
                         uint32_t &error,
-                        SourceStatuses_t &sources)
+                        SessionCommon::SourceStatuses_t &sources)
 {
     status = syncStatusToString(m_syncStatus);
     if (m_stepIsWaiting) {
@@ -339,7 +329,7 @@ void Session::getStatus(std::string &status,
 }
 
 void Session::getProgress(int32_t &progress,
-                          SourceProgresses_t &sources)
+                          SessionCommon::SourceProgresses_t &sources)
 {
     progress = m_progress;
     sources = m_sourceProgress;
@@ -349,7 +339,7 @@ void Session::fireStatus(bool flush)
 {
     std::string status;
     uint32_t error;
-    SourceStatuses_t sources;
+    SessionCommon::SourceStatuses_t sources;
 
     /** not force flushing and not timeout, return */
     if(!flush && !m_statusTimer.timeout()) {
@@ -364,7 +354,7 @@ void Session::fireStatus(bool flush)
 void Session::fireProgress(bool flush)
 {
     int32_t progress;
-    SourceProgresses_t sources;
+    SessionCommon::SourceProgresses_t sources;
 
     /** not force flushing and not timeout, return */
     if(!flush && !m_progressTimer.timeout()) {
@@ -397,30 +387,28 @@ string Session::syncStatusToString(SyncStatus state)
 
 boost::shared_ptr<Session> Session::createSession(GMainLoop *loop,
                                                   const GDBusCXX::DBusConnectionPtr &conn,
-                                                  const std::string &peerDeviceID,
                                                   const std::string &config_name,
                                                   const std::string &session,
                                                   const std::vector<std::string> &flags)
 {
-    boost::shared_ptr<Session> me(new Session(loop, conn, peerDeviceID, config_name, session, flags));
+    boost::shared_ptr<Session> me(new Session(loop, conn, config_name, session, flags));
     me->m_me = me;
     return me;
 }
 
 Session::Session(GMainLoop *loop,
                  const GDBusCXX::DBusConnectionPtr &conn,
-                 const std::string &peerDeviceID,
                  const std::string &config_name,
                  const std::string &session,
                  const std::vector<std::string> &flags) :
     DBusObjectHelper(conn,
-                     std::string("/org/syncevolution/Session/") + session,
-                     "org.syncevolution.Session",
-                      NULL),
+                     std::string("/dbushelper"),
+                     std::string("dbushelper.Test.Session") + session,
+                     DBusObjectHelper::Callback_t(),
+                     true),
     ReadOperations(config_name),
     m_flags(flags),
     m_sessionID(session),
-    m_peerDeviceID(peerDeviceID),
     m_serverMode(false),
     m_loop(loop),
     m_useConnection(false),
@@ -428,7 +416,7 @@ Session::Session(GMainLoop *loop,
     m_setConfig(false),
     m_active(false),
     m_remoteInitiated(false),
-    m_syncStatus(SYNC_QUEUEING),
+    m_syncStatus(SYNC_IDLE),
     m_stepIsWaiting(false),
     m_progress(0),
     m_progData(m_progress),
@@ -443,8 +431,6 @@ Session::Session(GMainLoop *loop,
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
-    add(this, &Session::attach, "Attach");
-    add(this, &Session::detach, "Detach");
     add(this, &Session::getFlags, "GetFlags");
     add(this, &Session::getNormalConfigName, "GetConfigName");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
@@ -464,6 +450,7 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
+    add(this, &Session::hello, "Hello");
 
     SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
 }
