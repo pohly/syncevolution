@@ -22,6 +22,8 @@
 
 #include <syncevo/SynthesisEngine.h>
 #include <boost/weak_ptr.hpp>
+#include <boost/scoped_ptr.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "read-operations.h"
 #include "progress-data.h"
@@ -50,7 +52,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
 {
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
-    std::string m_peerDeviceID;
 
     bool m_serverMode;
     bool m_serverAlerted;
@@ -120,12 +121,10 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** progress data, holding progress calculation related info */
     ProgressData m_progData;
 
-    typedef std::map<std::string, SourceStatus> SourceStatuses_t;
-    SourceStatuses_t m_sourceStatus;
+    SessionCommon::SessionCommon::SourceStatuses_t m_sourceStatus;
 
     uint32_t m_error;
-    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
-    SourceProgresses_t m_sourceProgress;
+    SessionCommon::SessionCommon::SourceProgresses_t m_sourceProgress;
 
     /** timer for fire status/progress usages */
     Timer m_statusTimer;
@@ -181,19 +180,13 @@ class Session : public GDBusCXX::DBusObjectHelper,
      */
     bool shutdownServer();
 
-    /** Session.Attach() */
-    void attach(const GDBusCXX::Caller_t &caller);
-
-    /** Session.Detach() */
-    void detach(const GDBusCXX::Caller_t &caller);
-
     /** Session.GetStatus() */
     void getStatus(std::string &status,
                    uint32_t &error,
-                   SourceStatuses_t &sources);
+                   SessionCommon::SourceStatuses_t &sources);
     /** Session.GetProgress() */
     void getProgress(int32_t &progress,
-                     SourceProgresses_t &sources);
+                     SessionCommon::SourceProgresses_t &sources);
 
     /** Session.Restore() */
     void restore(const string &dir, bool before,const std::vector<std::string> &sources);
@@ -222,10 +215,10 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Session.StatusChanged */
     GDBusCXX::EmitSignal3<const std::string &,
                           uint32_t,
-                          const SourceStatuses_t &> emitStatus;
+                          const SessionCommon::SourceStatuses_t &> emitStatus;
     /** Session.ProgressChanged */
     GDBusCXX::EmitSignal2<int32_t,
-                          const SourceProgresses_t &> emitProgress;
+                          const SessionCommon::SourceProgresses_t &> emitProgress;
 
     static string syncStatusToString(SyncStatus state);
 
@@ -240,7 +233,6 @@ public:
      */
     static boost::shared_ptr<Session> createSession(GMainLoop *loop,
                                                     const GDBusCXX::DBusConnectionPtr &conn,
-                                                    const std::string &peerDeviceID,
                                                     const std::string &config_name,
                                                     const std::string &session,
                                                     const std::vector<std::string> &flags = std::vector<std::string>());
@@ -259,7 +251,6 @@ public:
 private:
     Session(GMainLoop *loop,
             const GDBusCXX::DBusConnectionPtr &conn,
-            const std::string &peerDeviceID,
             const std::string &config_name,
             const std::string &session,
             const std::vector<std::string> &flags = std::vector<std::string>());
@@ -305,7 +296,6 @@ public:
 
     std::string getConfigName() { return m_configName; }
     std::string getSessionID() const { return m_sessionID; }
-    std::string getPeerDeviceID() const { return m_peerDeviceID; }
 
     /**
      * TRUE if the session is ready to take over control
@@ -376,9 +366,16 @@ public:
     SessionListener* addListener(SessionListener *listener);
 
     void setRemoteInitiated (bool remote) { m_remoteInitiated = remote;}
+
 private:
     /** set m_syncFilter and m_sourceFilters to config */
     virtual bool setFilters(SyncConfig &config);
+
+    std::string hello(const std::string &in)
+    {
+        SE_LOG_INFO(NULL, NULL, "hello() called with %s", in.c_str());
+        return "world";
+    }
 };
 
 SE_END_CXX

@@ -59,7 +59,9 @@ src_dbus_server_dbus_helper_cpp_files = \
   src/dbus/server/connection.cpp \
   src/dbus/server/read-operations.cpp \
   src/dbus/server/dbus-sync.cpp \
-  src/dbus/server/dbus-transport-cpp \
+  src/dbus/server/dbus-transport-agent.cpp \
+  src/dbus/server/dbus-user-interface.cpp \
+  src/dbus/server/progress-data.cpp \
   src/dbus/server/exceptions.cpp
 
 src_dbus_server_dbus_helper_h_files = \
