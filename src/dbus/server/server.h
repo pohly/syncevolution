@@ -88,23 +88,6 @@ class Server : public GDBusCXX::DBusObjectHelper,
     GLibEvent m_pollConnman;
 
     /**
-     * The session which currently holds the main lock on the server.
-     * To avoid issues with concurrent modification of data or configs,
-     * only one session may make such modifications at a time. A
-     * plain pointer which is reset by the session's deconstructor.
-     *
-     * A weak pointer alone did not work because it does not provide access
-     * to the underlying pointer after the last corresponding shared
-     * pointer is gone (which triggers the deconstructing of the session).
-     */
-    SessionResource *m_activeSession;
-
-    /**
-     * The weak pointer that corresponds to m_activeSession.
-     */
-    boost::weak_ptr<SessionResource> m_activeSessionRef;
-
-    /**
      * The running sync session. Having a separate reference to it
      * ensures that the object won't go away prematurely, even if all
      * clients disconnect.
@@ -389,10 +372,10 @@ public:
     int killSessions(const std::string &peerDeviceID);
 
     /**
-     * Remove a session from the list of active sessions. If it is
-     * running a sync, it will keep running and nothing will
-     * change. Otherwise, if it is "ready" (= holds a lock on its
-     * configuration), then release that lock.
+     * Remove a session from the list of active sessions. If it is running a sync,
+     * it will keep running and nothing will change. Otherwise, if it
+     * is "ready" (= holds a lock on its configuration), then release
+     * that lock.
      */
     void removeSession(SessionResource *session);
 
@@ -458,7 +441,7 @@ public:
     /** update a device with the given device information. If not found, do nothing */
     void updateDevice(const string &deviceId, const SyncConfig::DeviceDescription &device);
 
-    /** emit a presence signal */
+    /* emit a presence signal */
     void emitPresence(const string &server, const string &status, const string &transport)
     {
         presence(server, status, transport);
