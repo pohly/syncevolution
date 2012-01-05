@@ -156,6 +156,12 @@ class ForkExecParent : public ForkExec
             IDLE;
     }
 
+    /**
+     * Get the childs pid. This can be used as a unique id common to
+     * both parent and child.
+     */
+    int getChildPid() { return static_cast<int>(m_childPid); }
+
  private:
     ForkExecParent(const std::string &helper);
 
