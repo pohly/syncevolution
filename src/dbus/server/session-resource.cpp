@@ -271,6 +271,7 @@ SessionResource::SessionResource(Server &server,
     add(this, &SessionResource::detach, "Detach");
     add(this, &SessionResource::getFlags, "GetFlags");
     add(this, &SessionResource::getNormalConfigName, "GetConfigName");
+    add(this, &SessionResource::getConfigs, "GetConfigs");
     add(this, &SessionResource::getConfig, "GetConfig");
     add(this, &SessionResource::getNamedConfig, "GetNamedConfig");
     add(this, &SessionResource::setConfig, "SetConfig");

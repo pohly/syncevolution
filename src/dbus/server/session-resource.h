@@ -141,13 +141,17 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     GDBusCXX::EmitSignal2<int32_t,
                           const SessionCommon::SourceProgresses_t &> emitProgress;
 
-    /** implementation of D-Bus GetConfig() for m_configName as server configuration */
+    /** Session.GetConfig() */
     void getConfig(bool getTemplate, ReadOperations::Config_t &config);
 
-    /** implementation of D-Bus GetNamedConfig() for configuration named in parameter */
+    /** Session.GetConfigs() == Server.GetConfigs*/
+    void getConfigs(bool getTemplates, std::vector<std::string> &configNames)
+    { m_server.getConfigs(getTemplates, configNames); }
+
+    /** Session.GetNamedConfig() */
     void getNamedConfig(const std::string &configName, bool getTemplate, ReadOperations::Config_t &config);
 
-    /** implementation of D-Bus GetReports() for m_configName as server configuration */
+    /** Session.GetReports() */
     void getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports);
 
     /** Session.CheckSource() */
