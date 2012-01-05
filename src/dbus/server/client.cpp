@@ -19,7 +19,6 @@
  */
 
 #include "client.h"
-#include "session.h"
 #include "server.h"
 #include "session-resource.h"
 
