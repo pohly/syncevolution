@@ -176,6 +176,7 @@ void Server::startSessionWithFlags(const Caller_t &caller,
                                                flags);
     client->attach(sessionResource);
     addSession(sessionResource);
+
     object = sessionResource->getPath();
 }
 
