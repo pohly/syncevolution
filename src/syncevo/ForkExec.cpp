@@ -19,6 +19,8 @@
 
 #include "ForkExec.h"
 
+#if defined(HAVE_GLIB) && defined(DBUS_SERVICE)
+
 SE_BEGIN_CXX
 
 #if defined(HAVE_GLIB)
@@ -263,3 +265,4 @@ const char *ForkExecChild::getParentDBusAddress()
 
 SE_END_CXX
 
+#endif // HAVE_GLIB
