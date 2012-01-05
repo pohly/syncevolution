@@ -216,9 +216,13 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
     SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %d", m_forkExecParent->getChildPid());
     if(!m_sessionProxy) {
         m_sessionProxy.reset(new SessionProxy(conn, boost::lexical_cast<string>(m_forkExecParent->getChildPid())));
-        m_sessionProxy->m_hello(std::string("world"), boost::bind(&SessionResource::helloCB, this, _1, _2));
 
-        SE_LOG_INFO(NULL, NULL, "Session connection made.");
+       /**
+        * Enable the session dbus interface.
+        */
+       activate();
+
+       SE_LOG_INFO(NULL, NULL, "Session connection made.");
     }
 }
 
