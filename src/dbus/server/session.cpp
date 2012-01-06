@@ -450,7 +450,6 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
-    add(this, &Session::hello, "Hello");
 
     SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
 }
