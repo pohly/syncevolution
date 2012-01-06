@@ -108,15 +108,9 @@ using namespace SyncEvo;
  */
 template<> struct dbus_traits<ReadOperations::SourceDatabase> :
     public dbus_struct_traits<ReadOperations::SourceDatabase,
-                              dbus_member<ReadOperations::SourceDatabase,
-                                          std::string,
-                                          &ReadOperations::SourceDatabase::m_name,
-                                          dbus_member<ReadOperations::SourceDatabase,
-                                                      std::string,
-                                                      &ReadOperations::SourceDatabase::m_uri,
-                                                      dbus_member_single<ReadOperations::SourceDatabase,
-                                                                         bool,
-                                                                         &ReadOperations::SourceDatabase::m_isDefault> > > >{};
+                              dbus_member<ReadOperations::SourceDatabase, std::string, &ReadOperations::SourceDatabase::m_name,
+                              dbus_member<ReadOperations::SourceDatabase, std::string, &ReadOperations::SourceDatabase::m_uri,
+                              dbus_member_single<ReadOperations::SourceDatabase, bool, &ReadOperations::SourceDatabase::m_isDefault> > > >{};
 }
 
 #endif // READ_OPERATIONS_H
