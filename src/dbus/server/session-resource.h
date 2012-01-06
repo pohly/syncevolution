@@ -107,8 +107,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void onQuit(int status);
     void onFailure(const std::string &error);
 
-    void helloCB(const std::string &res, const std::string &error);
-
     /**
      * True once done() was called.
      */
