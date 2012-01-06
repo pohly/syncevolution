@@ -36,11 +36,38 @@ public:
     GDBusCXX::DBusRemoteObject(conn.get(), "/dbushelper",
                                std::string("dbushelper.Test.Session") + session,
                                "direct.peer"),
-    m_hello(*this, "Hello")
-  {}
+         m_getFlags      (*this, "GetFlags"),
+         m_getNamedConfig(*this, "GetNamedConfig"),
+         m_setNamedConfig(*this, "SetNamedConfig"),
+         m_getReports    (*this, "GetReports"),
+         m_checkSource   (*this, "CheckSource"),
+         m_getDatabases  (*this, "GetDatabases"),
+         m_sync          (*this, "Sync"),
+         m_abort         (*this, "Abort"),
+         m_suspend       (*this, "Suspend"),
+         m_getStatus     (*this, "GetStatus"),
+         m_getProgress   (*this, "GetProgress"),
+         m_restore       (*this, "Restore"),
+         m_checkPresence (*this, "checkPresence"),
+         m_execute       (*this, "Execute")
+    {}
 
-    GDBusCXX::DBusClientCall1<std::string> m_hello;
-
+        GDBusCXX::DBusClientCall1<std::vector<std::string> >         m_getFlags;
+        GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
+        GDBusCXX::DBusClientCall0                                    m_setNamedConfig;
+        GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports;
+        GDBusCXX::DBusClientCall0                                    m_checkSource;
+        GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases;
+        GDBusCXX::DBusClientCall0                                    m_sync;
+        GDBusCXX::DBusClientCall0                                    m_abort;
+        GDBusCXX::DBusClientCall0                                    m_suspend;
+        GDBusCXX::DBusClientCall3<std::string, uint32_t,
+                                  SessionCommon::SourceStatuses_t>   m_getStatus;
+        GDBusCXX::DBusClientCall2<uint32_t,
+                                  SessionCommon::SourceProgresses_t> m_getProgress;
+        GDBusCXX::DBusClientCall0                                    m_restore;
+        GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_checkPresence;
+        GDBusCXX::DBusClientCall0                                    m_execute;
 };
 
 /**
