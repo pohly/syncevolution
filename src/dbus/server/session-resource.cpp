@@ -199,23 +199,12 @@ SessionListener* SessionResource::addListener(SessionListener *listener)
     return listener;
 }
 
-void SessionResource::helloCB(const std::string &res, const std::string &error)
-{
-    std::string msg("");
-    // if (!error.empty()) {
-    //     msg << "call failed: " << error << std::endl;
-    // } else {
-    //     msg << "hello('hello') = " << res << std::endl;
-    // }
-
-    SE_LOG_INFO(NULL, NULL, "%s", error.empty() ? res.c_str() : error.c_str());
-}
-
 void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
 {
     SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %d", m_forkExecParent->getChildPid());
     if(!m_sessionProxy) {
         m_sessionProxy.reset(new SessionProxy(conn, boost::lexical_cast<string>(m_forkExecParent->getChildPid())));
+
 
        /**
         * Enable the session dbus interface.
@@ -289,7 +278,6 @@ SessionResource::SessionResource(Server &server,
     add(this, &SessionResource::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
-    // add(this, &SessionResource::hello, "Hello");
 
     SE_LOG_INFO(NULL, NULL, "SessionResource (%s) forking...", getPath());
 

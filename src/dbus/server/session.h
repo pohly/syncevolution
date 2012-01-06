@@ -371,11 +371,6 @@ private:
     /** set m_syncFilter and m_sourceFilters to config */
     virtual bool setFilters(SyncConfig &config);
 
-    std::string hello(const std::string &in)
-    {
-        SE_LOG_INFO(NULL, NULL, "hello() called with %s", in.c_str());
-        return "world";
-    }
 };
 
 SE_END_CXX
