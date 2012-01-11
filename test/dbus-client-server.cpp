@@ -14,6 +14,8 @@ SyncEvo::GMainLoopCXX loop;
 // closes child connection
 boost::scoped_ptr<GDBusCXX::DBusObject> guard;
 
+static gboolean ping(gpointer user_data);
+
 class Test
 {
     GDBusCXX::DBusObjectHelper m_server;
@@ -23,11 +25,13 @@ class Test
 public:
     Test(const GDBusCXX::DBusConnectionPtr &conn) :
         // will close connection
-        m_server(conn, "/test", "org.example.Test", GDBusCXX::DBusObjectHelper::Callback_t(), true)
+        m_server(conn, "/test", "org.example.Test", GDBusCXX::DBusObjectHelper::Callback_t(), true),
         // m_dbusAPI(conn, DBUS_PATH_LOCAL, DBUS_INTERFACE_LOCAL, "" /* sender? */),
         // m_disconnected(m_dbusAPI, "Disconnected")
+        emitPing(m_server, "Ping")
     {
         m_server.add(this, &Test::hello, "Hello");
+        m_server.add(emitPing);
     }
 
     void activate()
@@ -43,10 +47,17 @@ public:
         // NULL);
     }
 
+
+    GDBusCXX::EmitSignal1<uint32_t> emitPing;
+
     std::string hello(const std::string &in)
     {
         std::cout << "hello() called with " << in << std::endl;
         return "world";
+
+        std::cout << "Test pinging client" << std::endl;
+        emitPing(time(NULL) % 10000);
+        // g_timeout_add_seconds(1, (GSourceFunc) ping, this);
     }
 
     void disconnected()
@@ -59,6 +70,16 @@ public:
     // std::cout << "connection disconnected";
     // }
 };
+
+static gboolean ping(gpointer user_data)
+{
+    std::cout << "Test pinging client" << std::endl;
+
+    Test *test = static_cast<Test*>(user_data);
+    test->emitPing(time(NULL) % 10000);
+
+    return FALSE;
+}
 
 static void newClientConnection(GDBusCXX::DBusServerCXX &server, GDBusCXX::DBusConnectionPtr &conn,
                                 boost::scoped_ptr<Test> &testptr)
@@ -98,10 +119,12 @@ class TestProxy : public GDBusCXX::DBusRemoteObject
 public:
     TestProxy(const GDBusCXX::DBusConnectionPtr &conn) :
         GDBusCXX::DBusRemoteObject(conn.get(), "/test", "org.example.Test", "direct.peer"),
-        m_hello(*this, "Hello") {
-    }
+        m_hello(*this, "Hello"),
+        m_ping(*this, "Ping")
+    {}
 
     GDBusCXX::DBusClientCall1<std::string> m_hello;
+    GDBusCXX::SignalWatch1<uint32_t>       m_ping;
 };
 
 static void helloCB(GMainLoop *loop, const std::string &res, const std::string &error)
@@ -111,7 +134,12 @@ static void helloCB(GMainLoop *loop, const std::string &res, const std::string &
     } else {
         std::cout << "hello('hello') = " << res << std::endl;
     }
-    g_main_loop_quit(loop);
+}
+
+static void pingCb(uint32_t)
+{
+    std::cout << "Client Pinged! Quiting..." << std::endl;
+    g_main_loop_quit(loop.get());
 }
 
 static void callServer(const GDBusCXX::DBusConnectionPtr &conn)
@@ -119,6 +147,7 @@ static void callServer(const GDBusCXX::DBusConnectionPtr &conn)
     TestProxy proxy(conn);
     std::cout << "calling server" << std::endl;
     proxy.m_hello(std::string("world"), boost::bind(helloCB, loop.get(), _1, _2));
+    proxy.m_ping.activate(boost::bind(pingCb, _1));
     // keep connection open until child quits
     guard.reset(new  GDBusCXX::DBusObject(conn, "foo", "bar", true));
 }
@@ -189,6 +218,9 @@ int main(int argc, char **argv)
             forkexec->m_onQuit.connect(onQuit);
             forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
             forkexec->start();
+
+            std::cout << "Parent Pid = " << getpid() << std::endl;
+
             g_main_loop_run(loop.get());
         } else if (opt_server) {
             boost::shared_ptr<GDBusCXX::DBusServerCXX> server =
@@ -206,6 +238,9 @@ int main(int argc, char **argv)
         } else if (SyncEvo::ForkExecChild::wasForked()) {
             boost::shared_ptr<SyncEvo::ForkExecChild> forkexec =
                 SyncEvo::ForkExecChild::create();
+
+            std::cout << "Child Pid = " << getpid() << std::endl;
+            sleep(8);
 
             forkexec->m_onConnect.connect(callServer);
             forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
