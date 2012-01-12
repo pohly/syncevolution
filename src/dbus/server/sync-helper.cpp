@@ -24,7 +24,6 @@
 #include <iostream>
 
 #include "session.h"
-// #include "connection.h"
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/ForkExec.h>
@@ -53,9 +52,11 @@ static void onFailure(const std::string &error)
 
 static void onConnect(const DBusConnectionPtr &conn)
 {
-    session = Session::createSession(loop, conn, "foo",
+   session = Session::createSession(loop, conn, "foo",
                                      boost::lexical_cast<string>(getpid()));
-    session->activate();
+   session->activate();
+   SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
+               session->getPath(), session->getInterface());
 }
 
 /**
