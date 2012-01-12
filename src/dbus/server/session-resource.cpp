@@ -21,6 +21,8 @@
 #include "client.h"
 #include "restart.h"
 
+#include <boost/foreach.hpp>
+
 SE_BEGIN_CXX
 
 void SessionResource::attach(const GDBusCXX::Caller_t &caller)
@@ -120,12 +122,24 @@ void SessionResource::sync(const std::string &mode, const SessionCommon::SourceM
 
 void SessionResource::abort()
 {
-    return;
+    m_sessionProxy->m_abort(boost::bind(&SessionResource::abortCb, this, _1));
+}
+
+void SessionResource::abortCb(const string &error)
+{
+    SE_LOG_INFO(NULL, NULL, "Session.Abort returned: error=%s",
+                error.empty() ? "None" : error.c_str());
 }
 
 void SessionResource::suspend()
 {
-    return;
+    m_sessionProxy->m_suspend(boost::bind(&SessionResource::suspendCb, this, _1));
+}
+
+void SessionResource::suspendCb(const string &error)
+{
+    SE_LOG_INFO(NULL, NULL, "Session.Suspend returned: error=%s",
+                error.empty() ? "None" : error.c_str());
 }
 
 void SessionResource::getStatus(std::string &status, uint32_t &error, SessionCommon::SourceStatuses_t &sources)
@@ -171,12 +185,33 @@ void SessionResource::fireProgress(bool flush)
 
 void SessionResource::getConfig(bool getTemplate, ReadOperations::Config_t &config)
 {
+    getNamedConfig(m_configName, getTemplate, config);
     return;
 }
 
-void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate, ReadOperations::Config_t &config)
+void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate,
+                                     ReadOperations::Config_t &config)
 {
-    return;
+    m_sessionProxy->m_getNamedConfig(configName, getTemplate,
+                                     boost::bind(&SessionResource::getNamedConfigCb, this, _1, _2));
+}
+
+void SessionResource::getNamedConfigCb(const ReadOperations::Config_t &config, const string &error)
+{
+    string configAsStr("");
+    BOOST_FOREACH(ReadOperations::Config_t::value_type configItem, config)
+    {
+        configAsStr.append(configItem.first + ":\n");
+
+        BOOST_FOREACH(StringMap::value_type &configItemKeyValue, configItem.second)
+        {
+            configAsStr.append(string("\t") + configItemKeyValue.first  + ": "
+                                            + configItemKeyValue.second + "\n");
+        }
+    }
+
+    SE_LOG_INFO(NULL, NULL, "Session.GetNamedCb returned: config = %s; error=%s", configAsStr.c_str(),
+                error.empty() ? "None" : error.c_str());
 }
 
 void SessionResource::getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports)
@@ -199,20 +234,31 @@ SessionListener* SessionResource::addListener(SessionListener *listener)
     return listener;
 }
 
+void SessionResource::statusChangedCb(const std::string &status, uint32_t error,
+                                      const SessionCommon::SourceStatuses_t &sources)
+{
+    SE_LOG_INFO(NULL, NULL, "Session.StatusChanged signal received: status=%s", status.c_str());
+    return;
+}
+
+void SessionResource::progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources)
+{
+    SE_LOG_INFO(NULL, NULL, "Session.ProgressChanged signal received: error=%d", error);
+    return;
+}
+
 void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
 {
     SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %d", m_forkExecParent->getChildPid());
-    if(!m_sessionProxy) {
-        m_sessionProxy.reset(new SessionProxy(conn, boost::lexical_cast<string>(m_forkExecParent->getChildPid())));
+    m_sessionProxy.reset(new SessionProxy(conn, boost::lexical_cast<string>(m_forkExecParent->getChildPid())));
 
+    /* Enable public dbus interface for Session. */
+    activate();
 
-       /**
-        * Enable the session dbus interface.
-        */
-       activate();
+    SE_LOG_INFO(NULL, NULL, "onSessionConnect called in session-resource (path: %s interface: %s)",
+                m_sessionProxy->getPath(), m_sessionProxy->getInterface());
 
-       SE_LOG_INFO(NULL, NULL, "Session connection made.");
-    }
+    SE_LOG_INFO(NULL, NULL, "Session connection made.");
 }
 
 void SessionResource::onQuit(int status)
@@ -252,6 +298,8 @@ SessionResource::SessionResource(Server &server,
     m_peerDeviceID(peerDeviceID),
     m_path(std::string("/org/syncevolution/Session/") + session),
     m_configName(configName),
+    m_replyTotal(0),
+    m_replyCounter(0),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
@@ -287,6 +335,22 @@ SessionResource::SessionResource(Server &server,
     m_forkExecParent->start();
 
     SE_LOG_DEBUG(NULL, NULL, "session resource %s created", getPath());
+}
+
+void SessionResource::replyInc()
+{
+    // increase counter and check whether all replies are returned
+    m_replyCounter++;
+    if(methodInvocationDone()) {
+        g_main_loop_quit(getLoop());
+    }
+}
+
+void SessionResource::waitForReply()
+{
+    while(!methodInvocationDone()) {
+        g_main_loop_run(getLoop());
+    }
 }
 
 void SessionResource::done()

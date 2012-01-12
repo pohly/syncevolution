@@ -34,40 +34,46 @@ class SessionProxy : public GDBusCXX::DBusRemoteObject
 public:
   SessionProxy(const GDBusCXX::DBusConnectionPtr &conn, const std::string &session) :
     GDBusCXX::DBusRemoteObject(conn.get(), "/dbushelper",
-                               std::string("dbushelper.Test.Session") + session,
+                               std::string("dbushelper.Session") + session,
                                "direct.peer"),
-         m_getFlags      (*this, "GetFlags"),
-         m_getNamedConfig(*this, "GetNamedConfig"),
-         m_setNamedConfig(*this, "SetNamedConfig"),
-         m_getReports    (*this, "GetReports"),
-         m_checkSource   (*this, "CheckSource"),
-         m_getDatabases  (*this, "GetDatabases"),
-         m_sync          (*this, "Sync"),
-         m_abort         (*this, "Abort"),
-         m_suspend       (*this, "Suspend"),
-         m_getStatus     (*this, "GetStatus"),
-         m_getProgress   (*this, "GetProgress"),
-         m_restore       (*this, "Restore"),
-         m_checkPresence (*this, "checkPresence"),
-         m_execute       (*this, "Execute")
+         m_getFlags       (*this, "GetFlags"),
+         m_getNamedConfig (*this, "GetNamedConfig"),
+         m_setNamedConfig (*this, "SetNamedConfig"),
+         m_getReports     (*this, "GetReports"),
+         m_checkSource    (*this, "CheckSource"),
+         m_getDatabases   (*this, "GetDatabases"),
+         m_sync           (*this, "Sync"),
+         m_abort          (*this, "Abort"),
+         m_suspend        (*this, "Suspend"),
+         m_getStatus      (*this, "GetStatus"),
+         m_getProgress    (*this, "GetProgress"),
+         m_restore        (*this, "Restore"),
+         m_checkPresence  (*this, "CheckPresence"),
+         m_execute        (*this, "Execute"),
+         m_statusChanged  (*this, "StatusChanged"),
+         m_progressChanged(*this, "ProgessChanged")
     {}
 
-        GDBusCXX::DBusClientCall1<std::vector<std::string> >         m_getFlags;
-        GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
-        GDBusCXX::DBusClientCall0                                    m_setNamedConfig;
-        GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports;
-        GDBusCXX::DBusClientCall0                                    m_checkSource;
-        GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases;
-        GDBusCXX::DBusClientCall0                                    m_sync;
-        GDBusCXX::DBusClientCall0                                    m_abort;
-        GDBusCXX::DBusClientCall0                                    m_suspend;
-        GDBusCXX::DBusClientCall3<std::string, uint32_t,
-                                  SessionCommon::SourceStatuses_t>   m_getStatus;
-        GDBusCXX::DBusClientCall2<uint32_t,
-                                  SessionCommon::SourceProgresses_t> m_getProgress;
-        GDBusCXX::DBusClientCall0                                    m_restore;
-        GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_checkPresence;
-        GDBusCXX::DBusClientCall0                                    m_execute;
+    GDBusCXX::DBusClientCall1<std::vector<std::string> >         m_getFlags;
+    GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
+    GDBusCXX::DBusClientCall0                                    m_setNamedConfig;
+    GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports;
+    GDBusCXX::DBusClientCall0                                    m_checkSource;
+    GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases;
+    GDBusCXX::DBusClientCall0                                    m_sync;
+    GDBusCXX::DBusClientCall0                                    m_abort;
+    GDBusCXX::DBusClientCall0                                    m_suspend;
+    GDBusCXX::DBusClientCall3<std::string, uint32_t,
+                              SessionCommon::SourceStatuses_t>   m_getStatus;
+    GDBusCXX::DBusClientCall2<int32_t,
+                              SessionCommon::SourceProgresses_t> m_getProgress;
+    GDBusCXX::DBusClientCall0                                    m_restore;
+    GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_checkPresence;
+    GDBusCXX::DBusClientCall0                                    m_execute;
+    GDBusCXX::SignalWatch3<std::string, uint32_t,
+                           SessionCommon::SourceStatuses_t>      m_statusChanged;
+    GDBusCXX::SignalWatch2<int32_t,
+                           SessionCommon::SourceProgresses_t>    m_progressChanged;
 };
 
 /**
@@ -174,7 +180,9 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     { m_server.getConfigs(getTemplates, configNames); }
 
     /** Session.GetNamedConfig() */
-    void getNamedConfig(const std::string &configName, bool getTemplate, ReadOperations::Config_t &config);
+    void getNamedConfig(const std::string &configName, bool getTemplate,
+                        ReadOperations::Config_t &config);
+    void getNamedConfigCb(const ReadOperations::Config_t &config, const std::string &error);
 
     /** Session.GetReports() */
     void getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports);
@@ -188,6 +196,15 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     /** timer for fire status/progress usages */
     Timer m_statusTimer;
     Timer m_progressTimer;
+
+    void statusChangedCb(const std::string &status, uint32_t error,
+                         const SessionCommon::SourceStatuses_t &sources);
+    void progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources);
+
+    // the number of total dbus calls
+    unsigned int m_replyTotal;
+    // the number of returned dbus calls
+    unsigned int m_replyCounter;
 
 public:
     /**
@@ -221,6 +238,15 @@ private:
     boost::weak_ptr<SessionResource> m_me;
 
 public:
+
+    /** whether the dbus call(s) has/have completed */
+    bool methodInvocationDone() { return m_replyTotal == m_replyCounter; }
+
+    /** set the total number of replies we must wait */
+    void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
+    void replyInc();
+    void waitForReply();
+
     /**
      * Turns session into one which will shut down the server, must
      * be called before enqueing it. Will wait for a certain idle period
@@ -264,8 +290,11 @@ public:
     void sync(const std::string &mode, const SourceModes_t &source_modes);
     /** Session.Abort() */
     void abort();
+    void abortCb(const std::string &error);
+
     /** Session.Suspend() */
     void suspend();
+    void suspendCb(const string &error);
 
     /**
      * add a listener of the session. Old set listener is returned
