@@ -36,7 +36,6 @@ public:
     GDBusCXX::DBusRemoteObject(conn.get(), "/dbushelper",
                                std::string("dbushelper.Session") + session,
                                "direct.peer"),
-         m_getFlags       (*this, "GetFlags"),
          m_getNamedConfig (*this, "GetNamedConfig"),
          m_setNamedConfig (*this, "SetNamedConfig"),
          m_getReports     (*this, "GetReports"),
@@ -54,7 +53,6 @@ public:
          m_progressChanged(*this, "ProgessChanged")
     {}
 
-    GDBusCXX::DBusClientCall1<std::vector<std::string> >         m_getFlags;
     GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
     GDBusCXX::DBusClientCall0                                    m_setNamedConfig;
     GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports;
