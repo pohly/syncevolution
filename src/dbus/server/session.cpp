@@ -403,7 +403,7 @@ Session::Session(GMainLoop *loop,
                  const std::vector<std::string> &flags) :
     DBusObjectHelper(conn,
                      std::string("/dbushelper"),
-                     std::string("dbushelper.Test.Session") + session,
+                     std::string("dbushelper.Session") + session,
                      DBusObjectHelper::Callback_t(),
                      true),
     ReadOperations(config_name),
@@ -431,7 +431,6 @@ Session::Session(GMainLoop *loop,
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
-    add(this, &Session::getFlags, "GetFlags");
     add(this, &Session::getNormalConfigName, "GetConfigName");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
@@ -446,7 +445,7 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::getStatus, "GetStatus");
     add(this, &Session::getProgress, "GetProgress");
     add(this, &Session::restore, "Restore");
-    add(this, &Session::checkPresence, "checkPresence");
+    add(this, &Session::checkPresence, "CheckPresence");
     add(this, &Session::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
