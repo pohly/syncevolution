@@ -298,11 +298,12 @@ SessionResource::SessionResource(Server &server,
     m_peerDeviceID(peerDeviceID),
     m_path(std::string("/org/syncevolution/Session/") + session),
     m_configName(configName),
-    m_replyTotal(0),
-    m_replyCounter(0),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     emitStatus(*this, "StatusChanged"),
-    emitProgress(*this, "ProgressChanged")
+    emitProgress(*this, "ProgressChanged"),
+    m_result(true),
+    m_replyTotal(0),
+    m_replyCounter(0)
 {
     add(this, &SessionResource::attach, "Attach");
     add(this, &SessionResource::detach, "Detach");
@@ -339,17 +340,31 @@ SessionResource::SessionResource(Server &server,
 
 void SessionResource::replyInc()
 {
-    // increase counter and check whether all replies are returned
     m_replyCounter++;
-    if(methodInvocationDone()) {
-        g_main_loop_quit(getLoop());
-    }
 }
 
-void SessionResource::waitForReply()
+void SessionResource::waitForReply(gint timeout)
 {
+    m_result = true;
+    gint fd = GDBusCXX::dbus_get_connection_fd(getConnection());
+
+    // Wakeup for any activity on the connection's fd.
+    GPollFD pollFd = { fd, G_IO_IN | G_IO_OUT | G_IO_HUP | G_IO_ERR, 0 };
     while(!methodInvocationDone()) {
-        g_main_loop_run(getLoop());
+        // Block until there is activity on the connection or 100ms elapses.
+        if (!g_poll(&pollFd, 1, timeout)) {
+            m_result = false; // This is taking too long. Get out of here.
+        } else if (pollFd.revents & (G_IO_HUP | G_IO_ERR)) {
+            m_result = false; // Error of connection lost
+        }
+
+        if(!m_result) {
+            replyInc();
+            return;
+        } else {
+            // Allow for processing of new message.
+            g_main_context_iteration(g_main_context_default(), TRUE);
+        }
     }
 }
 

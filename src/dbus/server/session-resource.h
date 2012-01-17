@@ -199,10 +199,21 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
                          const SessionCommon::SourceStatuses_t &sources);
     void progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources);
 
+    // Status of most recent dbus call to helper
+    bool m_result;
+
     // the number of total dbus calls
     unsigned int m_replyTotal;
     // the number of returned dbus calls
     unsigned int m_replyCounter;
+
+    /** whether the dbus call(s) has/have completed */
+    bool methodInvocationDone() { return m_replyTotal == m_replyCounter; }
+
+    /** set the total number of replies we must wait */
+    void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
+    void replyInc();
+    void waitForReply(gint timeout = 100 /*ms*/);
 
 public:
     /**
@@ -236,15 +247,6 @@ private:
     boost::weak_ptr<SessionResource> m_me;
 
 public:
-
-    /** whether the dbus call(s) has/have completed */
-    bool methodInvocationDone() { return m_replyTotal == m_replyCounter; }
-
-    /** set the total number of replies we must wait */
-    void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
-    void replyInc();
-    void waitForReply();
-
     /**
      * Turns session into one which will shut down the server, must
      * be called before enqueing it. Will wait for a certain idle period
