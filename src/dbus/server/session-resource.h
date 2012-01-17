@@ -50,7 +50,7 @@ public:
          m_checkPresence  (*this, "CheckPresence"),
          m_execute        (*this, "Execute"),
          m_statusChanged  (*this, "StatusChanged"),
-         m_progressChanged(*this, "ProgessChanged")
+         m_progressChanged(*this, "ProgressChanged")
     {}
 
     GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
