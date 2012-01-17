@@ -3975,6 +3975,34 @@ public:
                                      data,
                                      callDataUnref);
     }
+
+    template <class A1, class A2, class A3, class A4>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
+    {
+        DBusPendingCall *call;
+        DBusMessagePtr msg(dbus_message_new_method_call(
+                    m_destination.c_str(),
+                    m_path.c_str(),
+                    m_interface.c_str(),
+                    m_method.c_str()));
+        if (!msg) {
+            throw std::runtime_error("dbus_message_new_method_call() failed");
+        }
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
+
+        //parameter marshaling (none)
+        if (!dbus_connection_send_with_reply(m_conn.get(), msg.get(), &call, -1)) {
+            throw std::runtime_error("dbus_connection_send failed");
+        }
+
+        DBusPendingCallPtr mCall (call);
+        CallbackData *data = new CallbackData(m_conn, callback);
+        dbus_pending_call_set_notify(mCall.get(),
+                                     m_dbusCallback,
+                                     data,
+                                     callDataUnref);
+    }
+
 };
 
 /*
