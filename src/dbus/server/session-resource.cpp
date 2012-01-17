@@ -255,6 +255,10 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
     /* Enable public dbus interface for Session. */
     activate();
 
+    // Activate signal watch on helper signals.
+    m_sessionProxy->m_statusChanged.activate  (boost::bind(&SessionResource::statusChangedCb,   this, _1, _2, _3));
+    m_sessionProxy->m_progressChanged.activate(boost::bind(&SessionResource::progressChangedCb, this, _1, _2));
+
     SE_LOG_INFO(NULL, NULL, "onSessionConnect called in session-resource (path: %s interface: %s)",
                 m_sessionProxy->getPath(), m_sessionProxy->getInterface());
 
