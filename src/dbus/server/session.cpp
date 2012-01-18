@@ -431,10 +431,7 @@ Session::Session(GMainLoop *loop,
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
-    add(this, &Session::getNormalConfigName, "GetConfigName");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
-    add(this, &Session::setConfig, "SetConfig");
     add(this, &Session::setNamedConfig, "SetNamedConfig");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getReports, "GetReports");
     add(static_cast<ReadOperations *>(this), &ReadOperations::checkSource, "CheckSource");

@@ -347,12 +347,6 @@ public:
                        const string &descr,
                        const ConfigPasswordKey &key);
 
-    /** Session.GetFlags() */
-    std::vector<std::string> getFlags() { return m_flags; }
-
-    /** Session.GetConfigName() */
-    std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
-
     /** Session.SetConfig() */
     void setConfig(bool update, bool temporary,
                    const ReadOperations::Config_t &config);
