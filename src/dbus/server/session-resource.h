@@ -66,7 +66,7 @@ public:
     GDBusCXX::DBusClientCall2<int32_t,
                               SessionCommon::SourceProgresses_t> m_getProgress;
     GDBusCXX::DBusClientCall0                                    m_restore;
-    GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_checkPresence;
+    GDBusCXX::DBusClientCall1<std::string>                       m_checkPresence;
     GDBusCXX::DBusClientCall0                                    m_execute;
     GDBusCXX::SignalWatch3<std::string, uint32_t,
                            SessionCommon::SourceStatuses_t>      m_statusChanged;
@@ -133,19 +133,28 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void detach(const GDBusCXX::Caller_t &caller);
 
     /** Session.GetStatus() */
-    void getStatus(std::string &status, uint32_t &error, SessionCommon::SourceStatuses_t &sources);
+    void getStatus(std::string &status, uint32_t error, SessionCommon::SourceStatuses_t &sources);
+    void getStatusCb(std::string *status, uint32_t *errorCode, SessionCommon::SourceStatuses_t *sources,
+                     const std::string &rStatus, uint32_t rErrorCode,
+                     const SessionCommon::SourceStatuses_t &rSources, const std::string &error);
 
     /** Session.GetProgress() */
-    void getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources);
+    void getProgress(int32_t progress, SessionCommon::SourceProgresses_t &sources);
+    void getProgressCb(int32_t *progress, SessionCommon::SourceProgresses_t *sources,
+                       int32_t rProgress, const SessionCommon::SourceProgresses_t &rSources,
+                       const std::string &error);
 
     /** Session.Restore() */
-    void restore(const string &dir, bool before,const std::vector<std::string> &sources);
+    void restore(const std::string &dir, bool before,const std::vector<std::string> &sources);
+    void restoreCb(const std::string &error);
 
     /** Session.checkPresence() */
-    void checkPresence (string &status);
+    void checkPresence(std::string &status);
+    void checkPresenceCb(std::string *status, const std::string &rStatus, const std::string &error);
 
     /** Session.Execute() */
-    void execute(const vector<string> &args, const map<string, string> &vars);
+    void execute(const vector<std::string> &args, const map<std::string, std::string> &vars);
+    void executeCb(const std::string &error);
 
     /**
      * Must be called each time that properties changing the
@@ -171,7 +180,8 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
                           const SessionCommon::SourceProgresses_t &> emitProgress;
 
     /** Session.GetConfig() */
-    void getConfig(bool getTemplate, ReadOperations::Config_t &config);
+    void getConfig(bool getTemplate, ReadOperations::Config_t &config)
+    { getNamedConfig(m_configName, getTemplate, config); }
 
     /** Session.GetConfigs() == Server.GetConfigs*/
     void getConfigs(bool getTemplates, std::vector<std::string> &configNames)
@@ -180,21 +190,29 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     /** Session.GetNamedConfig() */
     void getNamedConfig(const std::string &configName, bool getTemplate,
                         ReadOperations::Config_t &config);
-    void getNamedConfigCb(const ReadOperations::Config_t &config, const std::string &error);
+    void getNamedConfigCb(ReadOperations::Config_t *config,
+                          const ReadOperations::Config_t &rConfig, const std::string &error);
 
     /** Session.GetReports() */
     void getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports);
+    void getReportsCb(ReadOperations::Reports_t *reports,
+                      const ReadOperations::Reports_t &rReports, const std::string &error);
 
     /** Session.CheckSource() */
-    void checkSource(const string &sourceName);
+    void checkSource(const std::string &sourceName);
+    void checkSourceCb(const std::string &error);
 
     /** Session.GetDatabases() */
-    void getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases);
+    void getDatabases(const std::string &sourceName, ReadOperations::SourceDatabases_t &databases);
+    void getDatabasesCb(ReadOperations::SourceDatabases_t *databases,
+                        const ReadOperations::SourceDatabases_t &rDatabases,
+                        const std::string &error);
 
     /** timer for fire status/progress usages */
     Timer m_statusTimer;
     Timer m_progressTimer;
 
+    /* Callbacks for signals fired from helper */
     void statusChangedCb(const std::string &status, uint32_t error,
                          const SessionCommon::SourceStatuses_t &sources);
     void progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources);
@@ -279,22 +297,26 @@ public:
     std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
 
     /** Session.SetConfig() */
-    void setConfig(bool update, bool temporary, const ReadOperations::Config_t &config);
+    void setConfig(bool update, bool temporary, const ReadOperations::Config_t &config)
+    { setNamedConfig(m_configName, update, temporary, config); }
 
     /** Session.SetNamedConfig() */
     void setNamedConfig(const std::string &configName, bool update, bool temporary,
                         const ReadOperations::Config_t &config);
+    void setNamedConfigCb(const std::string &error);
 
     typedef StringMap SourceModes_t;
     /** Session.Sync() */
     void sync(const std::string &mode, const SourceModes_t &source_modes);
+    void syncCb(const std::string &error);
+
     /** Session.Abort() */
     void abort();
     void abortCb(const std::string &error);
 
     /** Session.Suspend() */
     void suspend();
-    void suspendCb(const string &error);
+    void suspendCb(const std::string &error);
 
     /**
      * add a listener of the session. Old set listener is returned
