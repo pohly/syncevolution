@@ -33,9 +33,11 @@ class SessionProxy : public GDBusCXX::DBusRemoteObject
 {
 public:
   SessionProxy(const GDBusCXX::DBusConnectionPtr &conn, const std::string &session) :
-    GDBusCXX::DBusRemoteObject(conn.get(), "/dbushelper",
+    GDBusCXX::DBusRemoteObject(conn.get(),
+                               "/dbushelper",
                                std::string("dbushelper.Session") + session,
-                               "direct.peer"),
+                               "direct.peer",
+                               true), // This is a one-to-one connection. Close it.
          m_getNamedConfig (*this, "GetNamedConfig"),
          m_setNamedConfig (*this, "SetNamedConfig"),
          m_getReports     (*this, "GetReports"),
