@@ -360,7 +360,7 @@ void SessionResource::getReportsCb(ReadOperations::Reports_t *reports,
 
 void SessionResource::checkSource(const string &sourceName)
 {
-    m_sessionProxy->m_checkSource(boost::bind(&SessionResource::checkSourceCb, this, _1));
+    m_sessionProxy->m_checkSource(sourceName, boost::bind(&SessionResource::checkSourceCb, this, _1));
 }
 
 void SessionResource::checkSourceCb(const std::string &error)
