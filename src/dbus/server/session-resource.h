@@ -51,8 +51,8 @@ public:
          m_restore        (*this, "Restore"),
          m_checkPresence  (*this, "CheckPresence"),
          m_execute        (*this, "Execute"),
-         m_statusChanged  (*this, "StatusChanged"),
-         m_progressChanged(*this, "ProgressChanged")
+         m_statusChanged  (*this, "StatusChanged", false),
+         m_progressChanged(*this, "ProgressChanged", false)
     {}
 
     GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
