@@ -25,6 +25,8 @@
 #include <syncevo/TransportAgent.h>
 #include <syncevo/SyncContext.h>
 
+#include <boost/lexical_cast.hpp>
+
 using namespace GDBusCXX;
 
 SE_BEGIN_CXX
@@ -64,23 +66,152 @@ std::string ConnectionResource::buildDescription(const StringMap &peer)
     return buffer;
 }
 
+void ConnectionResource::process(const GDBusCXX::DBusArray<uint8_t> &msg, const std::string &msgType)
+{
+    m_connectionProxy->m_process(msg, msgType, boost::bind(&ConnectionResource::processCb, this, _1));
+}
+
+void ConnectionResource::processCb(const string &error)
+{
+    if(!error.empty()) {
+        m_result = false;
+        SE_LOG_INFO(NULL, NULL, "Connection.Close callback returned: error=%s",
+                    error.empty() ? "None" : error.c_str());
+        return;
+    }
+
+    m_result = true;
+    SE_LOG_INFO(NULL, NULL, "Connection.Close callback successfull");
+}
+
+void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error)
+{
+    m_connectionProxy->m_close(normal, error, boost::bind(&ConnectionResource::closeCb, this, _1));
+}
+
+void ConnectionResource::closeCb(const string &error)
+{
+    if(!error.empty()) {
+        m_result = false;
+        SE_LOG_INFO(NULL, NULL, "Connection.Close callback returned: error=%s",
+                    error.empty() ? "None" : error.c_str());
+        return;
+    }
+
+    m_result = true;
+    SE_LOG_INFO(NULL, NULL, "Connection.Close callback successfull");
+}
+
+void ConnectionResource::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
+                                 const StringMap &meta, bool final, const std::string &session)
+{
+    SE_LOG_INFO(NULL, NULL, "Connection.Reply signal received: replyType=%s, final=%s, session=%s",
+                replyType.c_str(), final ? "T" : "F", session.c_str());
+    return;
+}
+
+void ConnectionResource::sendAbortCb()
+{
+    SE_LOG_INFO(NULL, NULL, "Connection.Abort signal received");
+    return;
+}
+
+void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
+{
+    SE_LOG_INFO(NULL, NULL, "ConnectionProxy interface ending with: %s", m_sessionID.c_str());
+    m_connectionProxy.reset(new ConnectionProxy(conn, m_sessionID));
+
+    /* Enable public dbus interface for Connection. */
+    activate();
+
+    // Activate signal watch on helper signals.
+    m_connectionProxy->m_reply.activate(boost::bind(&ConnectionResource::replyCb, this, _1, _2, _3 ,_4, _5));
+    m_connectionProxy->m_abort.activate(boost::bind(&ConnectionResource::sendAbortCb, this));
+
+    SE_LOG_INFO(NULL, NULL, "onConnect called in ConnectionResource (path: %s interface: %s)",
+                m_connectionProxy->getPath(), m_connectionProxy->getInterface());
+}
+
+void ConnectionResource::onQuit(int status)
+{
+    SE_LOG_INFO(NULL, NULL, "dbus-helper quit with status: %d", status);
+}
+
+void ConnectionResource::onFailure(const std::string &error)
+{
+    SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
+}
+
 ConnectionResource::ConnectionResource(Server &server,
                                        const std::string &sessionID,
                                        const StringMap &peer,
                                        bool must_authenticate) :
+    DBusObjectHelper(server.getConnection(),
+                     std::string("/org/syncevolution/Connection/") + sessionID,
+                     "org.syncevolution.Connection",
+                     boost::bind(&Server::autoTermCallback, &server)),
     m_server(server),
     m_path(std::string("/org/syncevolution/Connection/") + sessionID),
     m_peer(peer),
     m_sessionID(sessionID),
     m_mustAuthenticate(must_authenticate),
+    emitAbort(*this, "Abort"),
+    m_abortSent(false),
+    emitReply(*this, "Reply"),
+    m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     m_description(buildDescription(peer))
-{    
+{
+    add(this, &ConnectionResource::process, "Process");
+    add(this, &ConnectionResource::close, "Close");
+    add(emitAbort);
+    add(emitReply);
+
     m_server.autoTermRef();
+
+    SE_LOG_INFO(NULL, NULL, "ConnectionResource (%s) forking...", getPath());
+
+    m_forkExecParent->m_onConnect.connect(boost::bind(&ConnectionResource::onConnect, this, _1));
+    m_forkExecParent->m_onQuit.connect(boost::bind(&ConnectionResource::onQuit, this, _1));
+    m_forkExecParent->m_onFailure.connect(boost::bind(&ConnectionResource::onFailure, this, _2));
+    m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "TRUE");
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
+    m_forkExecParent->start();
 }
 
 ConnectionResource::~ConnectionResource()
 {
     m_server.autoTermUnref();
+}
+
+// FIXME: Duplicated code from Session Resource.
+void ConnectionResource::replyInc()
+{
+    m_replyCounter++;
+}
+
+void ConnectionResource::waitForReply(gint timeout)
+{
+    m_result = true;
+    gint fd = GDBusCXX::dbus_get_connection_fd(getConnection());
+
+    // Wakeup for any activity on the connection's fd.
+    GPollFD pollFd = { fd, G_IO_IN | G_IO_OUT | G_IO_HUP | G_IO_ERR, 0 };
+    while(!methodInvocationDone()) {
+        // Block until there is activity on the connection or it times out.
+        if (!g_poll(&pollFd, 1, timeout)) {
+            m_result = false; // This is taking too long. Get out of here.
+        } else if (pollFd.revents & (G_IO_HUP | G_IO_ERR)) {
+            m_result = false; // Error of connection lost
+        }
+
+        if(!m_result) {
+            replyInc();
+            return;
+        } else {
+            // Allow for processing of new message.
+            g_main_context_iteration(g_main_context_default(), TRUE);
+        }
+    }
 }
 
 SE_END_CXX
