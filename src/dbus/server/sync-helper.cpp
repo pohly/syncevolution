@@ -24,6 +24,7 @@
 #include <iostream>
 
 #include "session.h"
+#include "connection.h"
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/ForkExec.h>
@@ -36,6 +37,7 @@ using namespace GDBusCXX;
 namespace {
     GMainLoop *loop = NULL;
     boost::shared_ptr<Session> session;
+    boost::shared_ptr<Connection> connection;
 }
 
 static void niam(int sig)
@@ -50,13 +52,19 @@ static void onFailure(const std::string &error)
     g_main_loop_quit(loop);
 }
 
-static void onConnect(const DBusConnectionPtr &conn)
+static void onConnect(const DBusConnectionPtr &conn, const std::string &sessionID, bool startSession)
 {
-   session = Session::createSession(loop, conn, "foo",
-                                     boost::lexical_cast<string>(getpid()));
-   session->activate();
-   SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
-               session->getPath(), session->getInterface());
+    if(startSession) {
+        session = Session::createSession(loop, conn, "foo", sessionID);
+        session->activate();
+        SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
+                    session->getPath(), session->getInterface());
+    } else {
+        connection.reset(new Connection(loop, conn, sessionID));
+        connection->activate();
+        SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
+                    connection->getPath(), connection->getInterface());
+    }
 }
 
 /**
@@ -84,8 +92,22 @@ int main(int argc, char **argv, char **envp)
                                         LoggerBase::DEBUG :
                                         LoggerBase::INFO);
 
+        // Should a Session or a Connection be created?
+        bool start_session = getenv("SYNCEVO_START_CONNECTION") ? false : true;
+
+        std::string session_id(getenv("SYNCEVO_SESSION_ID"));
+        if(session_id.empty()) {
+//            return 1;
+            session_id = boost::lexical_cast<string>(getpid());
+        }
+
+        SE_LOG_INFO(NULL, NULL, "SYNCEVO_START_CONNECTION = %s in helper", getenv("SYNCEVO_START_CONNECTION"));
+        SE_LOG_INFO(NULL, NULL, "SYNCEVO_SESSION_ID = %s - session_id = %s in helper",
+                    getenv("SYNCEVO_SESSION_ID"), session_id.c_str());
+        SE_LOG_INFO(NULL, NULL, "SYNCEVOLUTION_FORK_EXEC = %s in helper",  getenv("SYNCEVOLUTION_FORK_EXEC"));
+
         boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1));
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
