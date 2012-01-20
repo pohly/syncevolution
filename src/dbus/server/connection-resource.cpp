@@ -66,9 +66,11 @@ std::string ConnectionResource::buildDescription(const StringMap &peer)
     return buffer;
 }
 
-void ConnectionResource::process(const GDBusCXX::DBusArray<uint8_t> &msg, const std::string &msgType)
+void ConnectionResource::process(const GDBusCXX::DBusArray<uint8_t> &msg, const std::string &msgType,
+                                 const StringMap &peer, bool must_authenticate)
 {
-    m_connectionProxy->m_process(msg, msgType, boost::bind(&ConnectionResource::processCb, this, _1));
+    m_connectionProxy->m_process(msg, msgType, peer, must_authenticate,
+                                 boost::bind(&ConnectionResource::processCb, this, _1));
 }
 
 void ConnectionResource::processCb(const string &error)
