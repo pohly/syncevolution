@@ -360,16 +360,12 @@ void Connection::shutdown()
 }
 
 Connection::Connection(GMainLoop *loop,
-                       const DBusConnectionPtr &conn,
-                       const std::string &sessionID,
-                       const StringMap &peer,
-                       bool must_authenticate) :
+                       const DBusConnectionPtr &conn, const string &sessionID) :
     DBusObjectHelper(conn,
-                     std::string("/org/syncevolution/Connection/") + sessionID,
-                     "org.syncevolution.Connection",
-                     NULL),
-    m_peer(peer),
-    m_mustAuthenticate(must_authenticate),
+                     std::string("/dbushelper") + sessionID,
+                     "dbushelper.Connection",
+                     DBusObjectHelper::Callback_t(), true),
+    m_mustAuthenticate(false),
     m_state(SETUP),
     m_sessionID(sessionID),
     m_loop(loop),
