@@ -51,13 +51,18 @@ void Connection::wakeupSession()
 
 void Connection::process(const Caller_t &caller,
                          const GDBusCXX::DBusArray<uint8_t> &message,
-                         const std::string &message_type)
+                         const std::string &message_type,
+                         const StringMap &peer,
+                         bool must_authenticate)
 {
     SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s sends %lu bytes via connection %s, %s",
                  caller.c_str(),
                  (unsigned long)message.first,
                  getPath(),
                  message_type.c_str());
+
+    m_peer = peer;
+    m_mustAuthenticate = must_authenticate;
 
     //DBUS_CALL::ClientHasResource(Caller_t, )
     // boost::shared_ptr<Client> client(m_server.findClient(caller));
