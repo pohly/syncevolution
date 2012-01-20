@@ -99,7 +99,9 @@ class Connection : public GDBusCXX::DBusObjectHelper
     /** Connection.Process() */
     void process(const GDBusCXX::Caller_t &caller,
                  const GDBusCXX::DBusArray<uint8_t> &message,
-                 const std::string &message_type);
+                 const std::string &message_type,
+                 const StringMap &peer,
+                 bool must_authenticate);
     /** Connection.Close() */
     void close(const GDBusCXX::Caller_t &caller,
                bool normal,
