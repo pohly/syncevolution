@@ -336,7 +336,7 @@ void Connection::close(bool normal,
 void Connection::abort()
 {
     if (!m_abortSent) {
-        sendAbort();
+        emitAbort();
         m_abortSent = true;
         m_state = FAILED;
     }
@@ -359,14 +359,14 @@ Connection::Connection(GMainLoop *loop,
     m_state(SETUP),
     m_sessionID(sessionID),
     m_loop(loop),
-    sendAbort(*this, "Abort"),
+    emitAbort(*this, "Abort"),
     m_abortSent(false),
-    reply(*this, "Reply")
+    emitReply(*this, "Reply")
 {
     add(this, &Connection::process, "Process");
     add(this, &Connection::close, "Close");
-    add(sendAbort);
-    add(reply);
+    add(emitAbort);
+    add(emitReply);
     
     //DBUS_SIG::server.autoTermRef();
 }
