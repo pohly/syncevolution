@@ -104,17 +104,17 @@ class Connection : public GDBusCXX::DBusObjectHelper
     /** Connection.Close() */
     void close(bool normal,
                const std::string &error);
-    /** wrapper around sendAbort */
+    /** wrapper around emitAbort */
     void abort();
     /** Connection.Abort */
-    GDBusCXX::EmitSignal0 sendAbort;
+    GDBusCXX::EmitSignal0 emitAbort;
     bool m_abortSent;
     /** Connection.Reply */
     GDBusCXX::EmitSignal5<const GDBusCXX::DBusArray<uint8_t> &,
                           const std::string &,
                           const StringMap &,
                           bool,
-                          const std::string &> reply;
+                          const std::string &> emitReply;
 
     friend class DBusTransportAgent;
 
