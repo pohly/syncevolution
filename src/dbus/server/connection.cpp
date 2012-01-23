@@ -317,14 +317,7 @@ void Connection::close(bool normal,
                  error.empty() ? "" : ": ",
                  error.c_str());
 
-    //DBUS_CALL::serverHasClient(caller)
-    //boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!true){//FIXME: client) {
-        throw runtime_error("unknown client");
-    }
-
-    if (!normal ||
-        m_state != FINAL) {
+    if (!normal || m_state != FINAL) {
         std::string err = error.empty() ?
             "connection closed unexpectedly" :
             error;
@@ -338,10 +331,6 @@ void Connection::close(bool normal,
             m_session->setStubConnectionError("");
         }
     }
-
-    // remove reference to us from client, will destruct *this*
-    // instance!
-    //DBUS_CALL::clientDetach(getPath);
 }
 
 void Connection::abort()
