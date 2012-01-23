@@ -217,6 +217,12 @@ void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) thro
     }
 }
 
+void ForkExecParent::addEnvVar(const std::string &name, const std::string &value)
+{
+    if(!name.empty() && !value.empty()) {
+        m_envStrings.push_back(name + "=" + value);
+    }
+}
 
 void ForkExecParent::stop()
 {

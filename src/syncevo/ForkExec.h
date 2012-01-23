@@ -161,6 +161,8 @@ class ForkExecParent : public ForkExec
      */
     int getChildPid() { return static_cast<int>(m_childPid); }
 
+    void addEnvVar(const std::string &name, const std::string &value);
+
  private:
     ForkExecParent(const std::string &helper);
 
