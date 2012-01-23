@@ -97,14 +97,12 @@ class Connection : public GDBusCXX::DBusObjectHelper
     void failed(const std::string &reason);
 
     /** Connection.Process() */
-    void process(const GDBusCXX::Caller_t &caller,
-                 const GDBusCXX::DBusArray<uint8_t> &message,
+    void process(const GDBusCXX::DBusArray<uint8_t> &message,
                  const std::string &message_type,
                  const StringMap &peer,
                  bool must_authenticate);
     /** Connection.Close() */
-    void close(const GDBusCXX::Caller_t &caller,
-               bool normal,
+    void close(bool normal,
                const std::string &error);
     /** wrapper around sendAbort */
     void abort();

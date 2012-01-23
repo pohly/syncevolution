@@ -70,8 +70,8 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
     bool m_mustAuthenticate;
 
     /** Connection.Process */
-    void process(const GDBusCXX::DBusArray<uint8_t> &msg, const std::string &msgType,
-                 const StringMap &peer, bool must_authenticate);
+    void process(const GDBusCXX::Caller_t &caller, const GDBusCXX::DBusArray<uint8_t> &msg,
+                 const std::string &msgType);
     void processCb(const std::string &error);
 
     /** Connection.Close */

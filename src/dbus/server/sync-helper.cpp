@@ -97,7 +97,7 @@ int main(int argc, char **argv, char **envp)
 
         std::string session_id(getenv("SYNCEVO_SESSION_ID"));
         if(session_id.empty()) {
-//            return 1;
+            // return 1;
             session_id = boost::lexical_cast<string>(getpid());
         }
 
