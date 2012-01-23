@@ -49,14 +49,12 @@ void Connection::wakeupSession()
     }
 }
 
-void Connection::process(const Caller_t &caller,
-                         const GDBusCXX::DBusArray<uint8_t> &message,
+void Connection::process(const GDBusCXX::DBusArray<uint8_t> &message,
                          const std::string &message_type,
                          const StringMap &peer,
                          bool must_authenticate)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s sends %lu bytes via connection %s, %s",
-                 caller.c_str(),
+    SE_LOG_DEBUG(NULL, NULL, "D-Bus client sends %lu bytes via connection %s, %s",
                  (unsigned long)message.first,
                  getPath(),
                  message_type.c_str());
@@ -310,12 +308,10 @@ void Connection::process(const Caller_t &caller,
     }
 }
 
-void Connection::close(const Caller_t &caller,
-                       bool normal,
+void Connection::close(bool normal,
                        const std::string &error)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s closes connection %s %s%s%s",
-                 caller.c_str(),
+    SE_LOG_DEBUG(NULL, NULL, "D-Bus client closes connection %s %s%s%s",
                  getPath(),
                  normal ? "normally" : "with error",
                  error.empty() ? "" : ": ",
@@ -367,8 +363,8 @@ void Connection::shutdown()
 Connection::Connection(GMainLoop *loop,
                        const DBusConnectionPtr &conn, const string &sessionID) :
     DBusObjectHelper(conn,
-                     std::string("/dbushelper") + sessionID,
-                     "dbushelper.Connection",
+                     std::string("/dbushelper"),
+                     std::string("dbushelper.Connection") + sessionID,
                      DBusObjectHelper::Callback_t(), true),
     m_mustAuthenticate(false),
     m_state(SETUP),
