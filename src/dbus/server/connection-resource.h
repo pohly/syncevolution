@@ -76,7 +76,7 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
 
     /** Connection.Close */
     void close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error);
-    void closeCb(const std::string &error);
+    void closeCb(boost::shared_ptr<Client> &client, const std::string &error);
 
     GDBusCXX::EmitSignal0 emitAbort;
     bool m_abortSent;
