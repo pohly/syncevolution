@@ -30,6 +30,7 @@
 #include <syncevo/ForkExec.h>
 
 #include <boost/bind.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
@@ -93,21 +94,18 @@ int main(int argc, char **argv, char **envp)
                                         LoggerBase::INFO);
 
         // Should a Session or a Connection be created?
-        bool start_session = getenv("SYNCEVO_START_CONNECTION") ? false : true;
+        bool start_connection = boost::iequals(getenv("SYNCEVO_START_CONNECTION"), "FALSE") ? true : false;
 
         std::string session_id(getenv("SYNCEVO_SESSION_ID"));
         if(session_id.empty()) {
-            // return 1;
-            session_id = boost::lexical_cast<string>(getpid());
+            return 1;
         }
 
         SE_LOG_INFO(NULL, NULL, "SYNCEVO_START_CONNECTION = %s in helper", getenv("SYNCEVO_START_CONNECTION"));
-        SE_LOG_INFO(NULL, NULL, "SYNCEVO_SESSION_ID = %s - session_id = %s in helper",
-                    getenv("SYNCEVO_SESSION_ID"), session_id.c_str());
         SE_LOG_INFO(NULL, NULL, "SYNCEVOLUTION_FORK_EXEC = %s in helper",  getenv("SYNCEVOLUTION_FORK_EXEC"));
 
         boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_id, start_session));
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_id, start_connection));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
