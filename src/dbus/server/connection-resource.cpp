@@ -90,10 +90,22 @@ void ConnectionResource::processCb(const string &error)
 
 void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error)
 {
-    m_connectionProxy->m_close(normal, error, boost::bind(&ConnectionResource::closeCb, this, _1));
+    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s closes connection %s %s%s%s",
+                 caller.c_str(),
+                 getPath(),
+                 normal ? "normally" : "with error",
+                 error.empty() ? "" : ": ",
+                 error.c_str());
+
+    boost::shared_ptr<Client> client(m_server.findClient(caller));
+    if (!client) {
+        throw runtime_error("unknown client");
+    }
+
+    m_connectionProxy->m_close(normal, error, boost::bind(&ConnectionResource::closeCb, this, client, _1));
 }
 
-void ConnectionResource::closeCb(const string &error)
+void ConnectionResource::closeCb(boost::shared_ptr<Client> &client, const string &error)
 {
     if(!error.empty()) {
         m_result = false;
@@ -104,6 +116,8 @@ void ConnectionResource::closeCb(const string &error)
 
     m_result = true;
     SE_LOG_INFO(NULL, NULL, "Connection.Close callback successfull");
+
+    client->detach(this);
 }
 
 void ConnectionResource::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
