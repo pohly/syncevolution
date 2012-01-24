@@ -135,19 +135,19 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void detach(const GDBusCXX::Caller_t &caller);
 
     /** Session.GetStatus() */
-    void getStatus(std::string &status, uint32_t error, SessionCommon::SourceStatuses_t &sources);
+    void getStatus(std::string &status, uint32_t &error, SessionCommon::SourceStatuses_t &sources);
     void getStatusCb(std::string *status, uint32_t *errorCode, SessionCommon::SourceStatuses_t *sources,
                      const std::string &rStatus, uint32_t rErrorCode,
                      const SessionCommon::SourceStatuses_t &rSources, const std::string &error);
 
     /** Session.GetProgress() */
-    void getProgress(int32_t progress, SessionCommon::SourceProgresses_t &sources);
+    void getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources);
     void getProgressCb(int32_t *progress, SessionCommon::SourceProgresses_t *sources,
                        int32_t rProgress, const SessionCommon::SourceProgresses_t &rSources,
                        const std::string &error);
 
     /** Session.Restore() */
-    void restore(const std::string &dir, bool before,const std::vector<std::string> &sources);
+    void restore(const std::string &dir, bool before, const std::vector<std::string> &sources);
     void restoreCb(const std::string &error);
 
     /** Session.checkPresence() */

@@ -258,7 +258,7 @@ void SessionResource::suspendCb(const string &error)
     SE_LOG_INFO(NULL, NULL, "Session.Suspend callback successfull");
 }
 
-void SessionResource::getStatus(std::string &status, uint32_t error,
+void SessionResource::getStatus(std::string &status, uint32_t &error,
                                 SessionCommon::SourceStatuses_t &sources)
 {
     resetReplies();
@@ -289,7 +289,7 @@ void SessionResource::getStatusCb(std::string *status, uint32_t *errorCode,
     replyInc();
 }
 
-void SessionResource::getProgress(int32_t progress, SessionCommon::SourceProgresses_t &sources)
+void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources)
 {
     resetReplies();
     m_sessionProxy->m_getProgress(boost::bind(&SessionResource::getProgressCb, this,
