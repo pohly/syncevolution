@@ -167,6 +167,26 @@ void SessionResource::init()
 void SessionResource::setNamedConfig(const std::string &configName, bool update, bool temporary,
                                      const ReadOperations::Config_t &config)
 {
+    // avoid the check if effect is the same as setConfig()
+    if (m_configName != configName) {
+        bool found = false;
+        BOOST_FOREACH(const std::string &flag, m_flags) {
+            if (boost::iequals(flag, "all-configs")) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            SE_THROW_EXCEPTION(InvalidCall,
+                               "SetNameConfig() only allowed in 'all-configs' sessions");
+        }
+
+        if (temporary) {
+            SE_THROW_EXCEPTION(InvalidCall,
+                               "SetNameConfig() with temporary config change only supported for config named when starting the session");
+        }
+    }
+
     m_sessionProxy->m_setNamedConfig(configName, update, temporary, config,
                                      boost::bind(&SessionResource::setNamedConfigCb, this, _1));
 }
