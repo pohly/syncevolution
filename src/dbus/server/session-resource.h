@@ -258,6 +258,12 @@ public:
     /** explicitly mark the session as completed, even if it doesn't get deleted yet */
     void done();
 
+    /**
+     * Initialize the session: Activate interface, connect to helper,
+     * wait for helper to connect.
+     */
+    void init();
+
 private:
     SessionResource(Server &server,
                     const std::string &peerDeviceID,
