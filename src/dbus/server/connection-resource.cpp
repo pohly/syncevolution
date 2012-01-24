@@ -158,6 +158,7 @@ void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
 
     /* Enable public dbus interface for Connection. */
     activate();
+    replyInc(); // Init is waiting on a reply.
 
     // Activate signal watch on helper signals.
     m_connectionProxy->m_reply.activate(boost::bind(&ConnectionResource::replyCb, this, _1, _2, _3 ,_4, _5));
