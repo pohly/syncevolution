@@ -458,8 +458,8 @@ void SessionResource::progressChangedCb(int32_t error, const SessionCommon::Sour
 
 void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
 {
-    SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %d", m_forkExecParent->getChildPid());
-    m_sessionProxy.reset(new SessionProxy(conn, boost::lexical_cast<string>(m_forkExecParent->getChildPid())));
+    SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %s", m_sessionID.c_str());
+    m_sessionProxy.reset(new SessionProxy(conn, m_sessionID));
 
     /* Enable public dbus interface for Session. */
     activate();
