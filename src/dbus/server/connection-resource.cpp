@@ -201,12 +201,6 @@ ConnectionResource::~ConnectionResource()
     m_server.autoTermUnref();
 }
 
-// FIXME: Duplicated code from Session Resource.
-void ConnectionResource::replyInc()
-{
-    m_replyCounter++;
-}
-
 void ConnectionResource::waitForReply(gint timeout)
 {
     m_result = true;

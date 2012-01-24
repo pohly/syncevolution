@@ -105,22 +105,7 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
      */
     static std::string buildDescription(const StringMap &peer);
 
-    // FIXME: This is duplicated code from SessionResouce.
-    // Status of most recent dbus call to helper
-    bool m_result;
-
-    // the number of total dbus calls
-    unsigned int m_replyTotal;
-    // the number of returned dbus calls
-    unsigned int m_replyCounter;
-
-    /** whether the dbus call(s) has/have completed */
-    bool methodInvocationDone() { return m_replyTotal == m_replyCounter; }
-
-    /** set the total number of replies we must wait */
-    void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
-    void replyInc();
-    void waitForReply(gint timeout = 100 /*ms*/);
+    virtual void waitForReply(gint timeout = 100 /*ms*/);
 
 public:
     const std::string m_description;
