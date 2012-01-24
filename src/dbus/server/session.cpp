@@ -112,25 +112,6 @@ void Session::setNamedConfig(const std::string &configName,
         string msg = StringPrintf("%s started, cannot change configuration at this time", runOpToString(m_runOperation).c_str());
         SE_THROW_EXCEPTION(InvalidCall, msg);
     }
-    // avoid the check if effect is the same as setConfig()
-    if (m_configName != configName) {
-        bool found = false;
-        BOOST_FOREACH(const std::string &flag, m_flags) {
-            if (boost::iequals(flag, "all-configs")) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            SE_THROW_EXCEPTION(InvalidCall,
-                               "SetNameConfig() only allowed in 'all-configs' sessions");
-        }
-
-        if (temporary) {
-            SE_THROW_EXCEPTION(InvalidCall,
-                               "SetNameConfig() with temporary config change only supported for config named when starting the session");
-        }
-    }
 
     //DBUS_SIG::updateConfigPeers(configName, config);
     /** check whether we need remove the entire configuration */
@@ -414,7 +395,7 @@ Session::Session(GMainLoop *loop,
     m_useConnection(false),
     m_tempConfig(false),
     m_setConfig(false),
-    m_active(false),
+    m_active(true),
     m_remoteInitiated(false),
     m_syncStatus(SYNC_IDLE),
     m_stepIsWaiting(false),
