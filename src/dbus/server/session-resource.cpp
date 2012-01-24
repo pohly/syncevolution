@@ -516,9 +516,6 @@ SessionResource::SessionResource(Server &server,
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged"),
-    m_result(true),
-    m_replyTotal(0),
-    m_replyCounter(0)
 {
     add(this, &SessionResource::attach, "Attach");
     add(this, &SessionResource::detach, "Detach");
@@ -544,11 +541,6 @@ SessionResource::SessionResource(Server &server,
     add(emitProgress);
 
     SE_LOG_DEBUG(NULL, NULL, "session resource %s created", getPath());
-}
-
-void SessionResource::replyInc()
-{
-    m_replyCounter++;
 }
 
 void SessionResource::waitForReply(gint timeout)

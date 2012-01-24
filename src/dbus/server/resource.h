@@ -28,7 +28,25 @@ SE_BEGIN_CXX
  */
 class Resource {
 public:
+    Resource() : m_result(true), m_replyTotal(0), m_replyCounter(0) {}
     virtual ~Resource() {}
+
+protected:
+    // Status of most recent dbus call to helper
+    bool m_result;
+
+    // the number of total dbus calls
+    unsigned int m_replyTotal;
+    // the number of returned dbus calls
+    unsigned int m_replyCounter;
+
+    /** whether the dbus call(s) has/have completed */
+    bool methodInvocationDone() { return m_replyTotal == m_replyCounter; }
+
+    /** set the total number of replies we must wait */
+    void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
+    void replyInc() { m_replyCounter++; };
+    virtual void waitForReply(gint timeout = 100 /*ms*/) = 0;
 };
 
 SE_END_CXX
