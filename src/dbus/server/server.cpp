@@ -150,6 +150,7 @@ void Server::connect(const Caller_t &caller,
                                                                     new_session,
                                                                     peer,
                                                                     must_authenticate));
+    cr->init();
     SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
                  caller.c_str(),
                  cr->getPath(),

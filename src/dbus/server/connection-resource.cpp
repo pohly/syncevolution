@@ -134,6 +134,23 @@ void ConnectionResource::sendAbortCb()
     return;
 }
 
+void ConnectionResource::init()
+{
+    SE_LOG_INFO(NULL, NULL, "ConnectionResource (%s) forking...", getPath());
+
+    m_forkExecParent->m_onConnect.connect(boost::bind(&ConnectionResource::onConnect, this, _1));
+    m_forkExecParent->m_onQuit.connect(boost::bind(&ConnectionResource::onQuit, this, _1));
+    m_forkExecParent->m_onFailure.connect(boost::bind(&ConnectionResource::onFailure, this, _2));
+    m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "TRUE");
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
+    m_forkExecParent->start();
+
+    // Wait for onSessionConnect to be called so that the dbus
+    // interface is ready to be used.
+    resetReplies();
+    waitForReply();
+}
+
 void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
 {
     SE_LOG_INFO(NULL, NULL, "ConnectionProxy interface ending with: %s", m_sessionID.c_str());
@@ -185,15 +202,6 @@ ConnectionResource::ConnectionResource(Server &server,
     add(emitReply);
 
     m_server.autoTermRef();
-
-    SE_LOG_INFO(NULL, NULL, "ConnectionResource (%s) forking...", getPath());
-
-    m_forkExecParent->m_onConnect.connect(boost::bind(&ConnectionResource::onConnect, this, _1));
-    m_forkExecParent->m_onQuit.connect(boost::bind(&ConnectionResource::onQuit, this, _1));
-    m_forkExecParent->m_onFailure.connect(boost::bind(&ConnectionResource::onFailure, this, _2));
-    m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "TRUE");
-    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
-    m_forkExecParent->start();
 }
 
 ConnectionResource::~ConnectionResource()
