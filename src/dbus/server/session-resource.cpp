@@ -147,6 +147,23 @@ bool SessionResource::getActive()
     return true;
 }
 
+void SessionResource::init()
+{
+    SE_LOG_INFO(NULL, NULL, "SessionResource (%s) forking...", getPath());
+
+    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1));
+    m_forkExecParent->m_onQuit.connect(boost::bind(&SessionResource::onQuit, this, _1));
+    m_forkExecParent->m_onFailure.connect(boost::bind(&SessionResource::onFailure, this, _2));
+    m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "FALSE");
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
+    m_forkExecParent->start();
+
+    // Wait for onSessionConnect to be called so that the dbus
+    // interface is ready to be used.
+    resetReplies();
+    waitForReply();
+}
+
 void SessionResource::setNamedConfig(const std::string &configName, bool update, bool temporary,
                                      const ReadOperations::Config_t &config)
 {
@@ -426,6 +443,7 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
 
     /* Enable public dbus interface for Session. */
     activate();
+    replyInc(); // Init is waiting on a reply.
 
     // Activate signal watch on helper signals.
     m_sessionProxy->m_statusChanged.activate  (boost::bind(&SessionResource::statusChangedCb,   this, _1, _2, _3));
@@ -455,6 +473,7 @@ boost::shared_ptr<SessionResource> SessionResource::createSessionResource(Server
 {
     boost::shared_ptr<SessionResource> me(new SessionResource(server, peerDeviceID,
                                                               config_name, session, flags));
+    me->init();
     me->m_me = me;
     return me;
 }
@@ -503,13 +522,6 @@ SessionResource::SessionResource(Server &server,
     add(this, &SessionResource::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
-
-    SE_LOG_INFO(NULL, NULL, "SessionResource (%s) forking...", getPath());
-
-    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1));
-    m_forkExecParent->m_onQuit.connect(boost::bind(&SessionResource::onQuit, this, _1));
-    m_forkExecParent->m_onFailure.connect(boost::bind(&SessionResource::onFailure, this, _2));
-    m_forkExecParent->start();
 
     SE_LOG_DEBUG(NULL, NULL, "session resource %s created", getPath());
 }
