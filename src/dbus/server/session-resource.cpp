@@ -515,7 +515,7 @@ SessionResource::SessionResource(Server &server,
     m_configName(configName),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     emitStatus(*this, "StatusChanged"),
-    emitProgress(*this, "ProgressChanged"),
+    emitProgress(*this, "ProgressChanged")
 {
     add(this, &SessionResource::attach, "Attach");
     add(this, &SessionResource::detach, "Detach");
