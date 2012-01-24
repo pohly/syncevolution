@@ -117,6 +117,12 @@ public:
 
     ~ConnectionResource();
 
+    /**
+     * Set up the helper and connection to it. Wait until Conection
+     * interface is usable.
+     */
+    void init();
+
     /** peer is not trusted, must authenticate as part of SyncML */
     bool mustAuthenticate() const { return m_mustAuthenticate; }
 };
