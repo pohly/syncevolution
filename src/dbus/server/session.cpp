@@ -284,7 +284,7 @@ void Session::abort()
     if (m_runOperation != OP_SYNC && m_runOperation != OP_CMDLINE) {
         SE_THROW_EXCEPTION(InvalidCall, "sync not started, cannot abort at this time");
     }
-    m_syncStatus = SYNC_ABORT;
+    m_syncStatus = SessionCommon::SYNC_ABORT;
     fireStatus(true);
 
     // state change, return to caller so that it can react
@@ -296,7 +296,7 @@ void Session::suspend()
     if (m_runOperation != OP_SYNC && m_runOperation != OP_CMDLINE) {
         SE_THROW_EXCEPTION(InvalidCall, "sync not started, cannot suspend at this time");
     }
-    m_syncStatus = SYNC_SUSPEND;
+    m_syncStatus = SessionCommon::SYNC_SUSPEND;
     fireStatus(true);
     g_main_loop_quit(m_loop);
 }
@@ -351,20 +351,20 @@ void Session::fireProgress(bool flush)
     getProgress(progress, sources);
     emitProgress(progress, sources);
 }
-string Session::syncStatusToString(SyncStatus state)
+string Session::syncStatusToString(SessionCommon::SyncStatus state)
 {
     switch(state) {
-    case SYNC_QUEUEING:
+    case SessionCommon::SYNC_QUEUEING:
         return "queueing";
-    case SYNC_IDLE:
+    case SessionCommon::SYNC_IDLE:
         return "idle";
-    case SYNC_RUNNING:
+    case SessionCommon::SYNC_RUNNING:
         return "running";
-    case SYNC_ABORT:
+    case SessionCommon::SYNC_ABORT:
         return "aborting";
-    case SYNC_SUSPEND:
+    case SessionCommon::SYNC_SUSPEND:
         return "suspending";
-    case SYNC_DONE:
+    case SessionCommon::SYNC_DONE:
         return "done";
     default:
         return "";
@@ -402,7 +402,7 @@ Session::Session(GMainLoop *loop,
     m_setConfig(false),
     m_active(true),
     m_remoteInitiated(false),
-    m_syncStatus(SYNC_IDLE),
+    m_syncStatus(SessionCommon::SYNC_QUEUEING),
     m_stepIsWaiting(false),
     m_progress(0),
     m_progData(m_progress),
@@ -494,8 +494,8 @@ void Session::setActive(bool active)
     bool oldActive = m_active;
     m_active = active;
     if (active) {
-        if (m_syncStatus == SYNC_QUEUEING) {
-            m_syncStatus = SYNC_IDLE;
+        if (m_syncStatus == SessionCommon::SYNC_QUEUEING) {
+            m_syncStatus = SessionCommon::SYNC_IDLE;
             fireStatus(true);
         }
 
@@ -559,7 +559,7 @@ void Session::syncProgress(sysync::TProgressEventEnum type,
     case sysync::PEV_DELETING:
         break;
     case sysync::PEV_SUSPENDING:
-        m_syncStatus = SYNC_SUSPEND;
+        m_syncStatus = SessionCommon::SYNC_SUSPEND;
         fireStatus(true);
         break;
     default:
@@ -668,7 +668,7 @@ void Session::run(LogRedirect &redirect)
 {
     if (m_runOperation != OP_NULL) {
         try {
-            m_syncStatus = SYNC_RUNNING;
+            m_syncStatus = SessionCommon::SYNC_RUNNING;
             fireStatus(true);
             switch(m_runOperation) {
             case OP_SYNC: {
@@ -720,19 +720,19 @@ void Session::run(LogRedirect &redirect)
                 break;
             };
         } catch (...) {
-            // we must enter SYNC_DONE under all circumstances,
-            // even when failing during connection shutdown
-            // or while getting ready for SYNC_RUNNING
+            // we must enter SessionCommon::SYNC_DONE under all
+            // circumstances, even when failing during connection
+            // shutdown or while getting ready for SYNC_RUNNING
             SyncMLStatus status = Exception::handle();
             if (status && !m_error) {
                 m_error = status;
             }
-            m_syncStatus = SYNC_DONE;
+            m_syncStatus = SessionCommon::SYNC_DONE;
             m_stepIsWaiting = false;
             fireStatus(true);
             throw;
         }
-        m_syncStatus = SYNC_DONE;
+        m_syncStatus = SessionCommon::SYNC_DONE;
         m_stepIsWaiting = false;
         fireStatus(true);
     }

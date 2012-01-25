@@ -101,39 +101,25 @@ class Session : public GDBusCXX::DBusObjectHelper,
     boost::shared_ptr<DBusSync> m_sync;
 
     /**
-     * the sync status for session
-     */
-    enum SyncStatus {
-        SYNC_QUEUEING,    ///< waiting to become ready for use
-        SYNC_IDLE,        ///< ready, session is initiated but sync not started
-        SYNC_RUNNING, ///< sync is running
-        SYNC_ABORT, ///< sync is aborting
-        SYNC_SUSPEND, ///< sync is suspending
-        SYNC_DONE, ///< sync is done
-        SYNC_ILLEGAL
-    };
-
-    /**
      * current sync status; suspend and abort must be mirrored in global SuspendFlags
      */
     class SyncStatusOwner : boost::noncopyable {
     public:
-        SyncStatusOwner() : m_status(SYNC_QUEUEING), m_active(false) {}
-        SyncStatusOwner(SyncStatus status) : m_status(SYNC_QUEUEING), m_active(false)
+        SyncStatusOwner() : m_status(SessionCommon::SYNC_QUEUEING), m_active(false) {}
+        SyncStatusOwner(SessionCommon::SyncStatus status) : m_status(SessionCommon::SYNC_QUEUEING), m_active(false)
         {
             setStatus(status);
         }
-        operator SyncStatus () { return m_status; }
-        SyncStatusOwner &operator = (SyncStatus status) { setStatus(status); return *this; }
+        operator SessionCommon::SyncStatus () { return m_status; }
+        SyncStatusOwner &operator = (SessionCommon::SyncStatus status) { setStatus(status); return *this; }
 
-        void setStatus(SyncStatus status);
+        void setStatus(SessionCommon::SyncStatus status);
 
     private:
-        SyncStatus m_status;
+        SessionCommon::SyncStatus m_status;
         bool m_active;
         boost::shared_ptr<SuspendFlags::StateBlocker> m_blocker;
     } m_syncStatus;
-
 
     /** step info: whether engine is waiting for something */
     bool m_stepIsWaiting;
@@ -239,7 +225,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
     GDBusCXX::EmitSignal2<int32_t,
                           const SessionCommon::SourceProgresses_t &> emitProgress;
 
-    static string syncStatusToString(SyncStatus state);
+    static string syncStatusToString(SessionCommon::SyncStatus state);
 
 public:
     /**
@@ -319,7 +305,7 @@ public:
     /**
      * TRUE if the session is ready to take over control
      */
-    bool readyToRun() { return (m_syncStatus != SYNC_DONE) && (m_runOperation != OP_NULL); }
+    bool readyToRun() { return (m_syncStatus != SessionCommon::SYNC_DONE) && (m_runOperation != OP_NULL); }
 
     /**
      * transfer control to the session for the duration of the sync,
