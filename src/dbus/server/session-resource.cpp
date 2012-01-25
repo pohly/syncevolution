@@ -453,6 +453,7 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
     // Activate signal watch on helper signals.
     m_sessionProxy->m_statusChanged.activate  (boost::bind(&SessionResource::statusChangedCb,   this, _1, _2, _3));
     m_sessionProxy->m_progressChanged.activate(boost::bind(&SessionResource::progressChangedCb, this, _1, _2));
+    m_sessionProxy->m_done.activate           (boost::bind(&SessionResource::done,              this));
 
     SE_LOG_INFO(NULL, NULL, "onSessionConnect called in session-resource (path: %s interface: %s)",
                 m_sessionProxy->getPath(), m_sessionProxy->getInterface());
@@ -500,6 +501,7 @@ SessionResource::SessionResource(Server &server,
     m_configName(configName),
     m_setConfig(false),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
+    m_done(false),
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
