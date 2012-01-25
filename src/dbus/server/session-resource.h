@@ -49,14 +49,14 @@ public:
          m_getStatus      (*this, "GetStatus"),
          m_getProgress    (*this, "GetProgress"),
          m_restore        (*this, "Restore"),
-         m_checkPresence  (*this, "CheckPresence"),
          m_execute        (*this, "Execute"),
          m_statusChanged  (*this, "StatusChanged", false),
-         m_progressChanged(*this, "ProgressChanged", false)
+         m_progressChanged(*this, "ProgressChanged", false),
+         m_done           (*this, "Done", false)
     {}
 
     GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
-    GDBusCXX::DBusClientCall0                                    m_setNamedConfig;
+    GDBusCXX::DBusClientCall1<bool>                              m_setNamedConfig;
     GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports;
     GDBusCXX::DBusClientCall0                                    m_checkSource;
     GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases;
@@ -297,7 +297,7 @@ public:
     /** Session.SetNamedConfig() */
     void setNamedConfig(const std::string &configName, bool update, bool temporary,
                         const ReadOperations::Config_t &config);
-    void setNamedConfigCb(const std::string &error);
+    void setNamedConfigCb(bool setConfig, const std::string &error);
 
     typedef StringMap SourceModes_t;
     /** Session.Sync() */

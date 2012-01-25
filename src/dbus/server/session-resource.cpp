@@ -187,11 +187,15 @@ void SessionResource::setNamedConfig(const std::string &configName, bool update,
         }
     }
 
+    m_server.getPresenceStatus().updateConfigPeers (configName, config);
+
+    resetReplies();
     m_sessionProxy->m_setNamedConfig(configName, update, temporary, config,
-                                     boost::bind(&SessionResource::setNamedConfigCb, this, _1));
+                                     boost::bind(&SessionResource::setNamedConfigCb, this, _1, _2));
+    waitForReply();
 }
 
-void SessionResource::setNamedConfigCb(const std::string &error)
+void SessionResource::setNamedConfigCb(bool setConfig, const std::string &error)
 {
     if(!error.empty()) {
         m_result = false;
@@ -200,8 +204,11 @@ void SessionResource::setNamedConfigCb(const std::string &error)
         return;
     }
 
+    m_setConfig = setConfig;
     m_result = true;
-    SE_LOG_INFO(NULL, NULL, "Session.SetNamedConfig callback successfull");
+    SE_LOG_INFO(NULL, NULL, "Session.SetNamedConfig callback successfull: m_setConfig = %d", (int)setConfig);
+
+    replyInc();
 }
 
 void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
@@ -513,6 +520,7 @@ SessionResource::SessionResource(Server &server,
     m_peerDeviceID(peerDeviceID),
     m_path(std::string("/org/syncevolution/Session/") + session),
     m_configName(configName),
+    m_setConfig(false),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")

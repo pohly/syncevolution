@@ -98,10 +98,11 @@ static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNo
 void Session::setConfig(bool update, bool temporary,
                         const ReadOperations::Config_t &config)
 {
-    setNamedConfig(m_configName, update, temporary, config);
+    bool setConfig = m_setConfig;
+    setNamedConfig(setConfig, m_configName, update, temporary, config);
 }
 
-void Session::setNamedConfig(const std::string &configName,
+void Session::setNamedConfig(bool &setConfig, const std::string &configName,
                              bool update, bool temporary,
                              const ReadOperations::Config_t &config)
 {
@@ -109,11 +110,11 @@ void Session::setNamedConfig(const std::string &configName,
         SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
     }
     if (m_runOperation != OP_NULL) {
-        string msg = StringPrintf("%s started, cannot change configuration at this time", runOpToString(m_runOperation).c_str());
+        string msg = StringPrintf("%s started, cannot change configuration at this time",
+                                  runOpToString(m_runOperation).c_str());
         SE_THROW_EXCEPTION(InvalidCall, msg);
     }
 
-    //DBUS_SIG::updateConfigPeers(configName, config);
     /** check whether we need remove the entire configuration */
     if(!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(configName));
@@ -121,6 +122,7 @@ void Session::setNamedConfig(const std::string &configName,
             syncConfig->remove();
             m_setConfig = true;
         }
+        setConfig = m_setConfig;
         return;
     }
 
@@ -198,6 +200,8 @@ void Session::setNamedConfig(const std::string &configName,
         syncConfig->flush();
         m_setConfig = true;
     }
+
+    setConfig = m_setConfig;
 }
 
 void Session::initServer(SharedBuffer data, const std::string &messageType)
