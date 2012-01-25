@@ -120,28 +120,6 @@ void SessionResource::executeCb(const std::string &error)
     SE_LOG_INFO(NULL, NULL, "Session.Execute callback successfull");
 }
 
-void SessionResource::checkPresence(string &status)
-{
-    resetReplies();
-    m_sessionProxy->m_checkPresence(boost::bind(&SessionResource::checkPresenceCb, this, &status, _1, _2));
-    waitForReply();
-}
-
-void SessionResource::checkPresenceCb(string *status, const string &rStatus, const std::string &error)
-{
-    if(!error.empty()) {
-        m_result = false;
-        SE_LOG_INFO(NULL, NULL, "Session.CheckPresence callback returned: error=%s",
-                    error.empty() ? "None" : error.c_str());
-    } else {
-        m_result = true;
-        *status = rStatus;
-        SE_LOG_INFO(NULL, NULL, "Session.CheckPresence callback returned: progess=%s", status->c_str());
-    }
-
-    replyInc();
-}
-
 bool SessionResource::getActive()
 {
     return true;
