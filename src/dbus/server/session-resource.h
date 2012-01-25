@@ -87,11 +87,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     bool autoSyncManagerHasTask()        { return m_server.getAutoSyncManager().hasTask(); }
     bool autoSyncManagerHasAutoConfigs() { return m_server.getAutoSyncManager().hasAutoConfigs(); }
 
-    void checkPresenceOfServer(const std::string &server,
-                               std::string &status,
-                               std::vector<std::string> &transports)
-    { m_server.checkPresence(server, status, transports); }
-
     /** access to the GMainLoop reference used by this Session instance */
     GMainLoop *getLoop() { return m_server.getLoop(); }
 
@@ -151,8 +146,8 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void restoreCb(const std::string &error);
 
     /** Session.checkPresence() */
-    void checkPresence(std::string &status);
-    void checkPresenceCb(std::string *status, const std::string &rStatus, const std::string &error);
+    void checkPresence(const std::string &server, std::string &status, std::vector<std::string> &transports)
+    { m_server.checkPresence(server, status, transports); }
 
     /** Session.Execute() */
     void execute(const vector<std::string> &args, const map<std::string, std::string> &vars);
