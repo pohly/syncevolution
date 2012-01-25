@@ -924,13 +924,6 @@ string Session::askPassword(const string &passwordName,
     return "";
 }
 
-/*Implementation of Session.CheckPresence */
-void Session::checkPresence (string &status)
-{
-    vector<string> transport;
-    //DBUS_CALL::checkPresence (m_configName, status, transport);
-}
-
 void Session::syncSuccessStart()
 {
     // if listener, report 'sync started' to it

@@ -213,9 +213,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Session.Restore() */
     void restore(const string &dir, bool before,const std::vector<std::string> &sources);
 
-    /** Session.checkPresence() */
-    void checkPresence (string &status);
-
     /** Session.Execute() */
     void execute(const vector<string> &args, const map<string, string> &vars);
 
