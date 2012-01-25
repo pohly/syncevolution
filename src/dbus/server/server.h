@@ -96,7 +96,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
 
     typedef std::list< boost::weak_ptr<SessionResource> > SessionResources_t;
     /**
-     * A lis of active or idle Sessions.
+     * A list of active or idle Sessions.
      *
      * SessionResource objects are removed once the Session D-Bus
      * interface disappears.
