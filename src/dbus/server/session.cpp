@@ -415,7 +415,8 @@ Session::Session(GMainLoop *loop,
     m_runOperation(OP_NULL),
     m_listener(NULL),
     emitStatus(*this, "StatusChanged"),
-    emitProgress(*this, "ProgressChanged")
+    emitProgress(*this, "ProgressChanged"),
+    emitDone(*this, "Done")
 {
     add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
     add(this, &Session::setNamedConfig, "SetNamedConfig");
@@ -428,17 +429,12 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::getStatus, "GetStatus");
     add(this, &Session::getProgress, "GetProgress");
     add(this, &Session::restore, "Restore");
-    add(this, &Session::checkPresence, "CheckPresence");
     add(this, &Session::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
+    add(emitDone);
 
     SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
-}
-
-void Session::done()
-{
-    // Emit done signal session
 }
 
 Session::~Session()
