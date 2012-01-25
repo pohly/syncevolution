@@ -352,9 +352,8 @@ public:
                    const ReadOperations::Config_t &config);
 
     /** Session.SetNamedConfig() */
-    void setNamedConfig(const std::string &configName,
-                        bool update, bool temporary,
-                        const ReadOperations::Config_t &config);
+    void setNamedConfig(bool &setConfig, const std::string &configName, bool update,
+                        bool temporary, const ReadOperations::Config_t &config);
 
     /** Session.Sync() */
     void sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes);
