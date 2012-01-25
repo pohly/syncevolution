@@ -53,12 +53,14 @@ class AutoTerm {
             time_t now = time(NULL);
             if (at->m_lastUsed + at->m_interval <= now) {
                 // yes, shut down event loop and daemon
-                SE_LOG_DEBUG(NULL, NULL, "terminating because not in use and idle for more than %ld seconds", (long)at->m_interval);
+                SE_LOG_DEBUG(NULL, NULL, "terminating because not in use and idle for more than %ld seconds",
+                             (long)at->m_interval);
                 at->m_shutdownRequested = true;
                 g_main_loop_quit(at->getLoop());
             } else {
                 // check again later
-                SE_LOG_DEBUG(NULL, NULL, "not terminating because last used %ld seconds ago, check again in %ld seconds",
+                SE_LOG_DEBUG(NULL, NULL,
+                             "not terminating because last used %ld seconds ago, check again in %ld seconds",
                              (long)(now - at->m_lastUsed),
                              (long)(at->m_lastUsed + at->m_interval - now));
                 at->m_checkSource = g_timeout_add_seconds(at->m_lastUsed + at->m_interval - now,

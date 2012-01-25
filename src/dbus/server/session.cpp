@@ -56,7 +56,8 @@ static void copyProperty(const StringPair &keyvalue,
     filter.insert(keyvalue);
 }
 
-static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
+static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,
+                           std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
 {
     ReadOperations::Config_t::const_iterator it;
     for (it = config.begin(); it != config.end(); it++) {
@@ -694,7 +695,8 @@ void Session::run(LogRedirect &redirect)
             }
             case OP_RESTORE:
                 m_sync->restore(m_restoreDir,
-                                m_restoreBefore ? SyncContext::DATABASE_BEFORE_SYNC : SyncContext::DATABASE_AFTER_SYNC);
+                                m_restoreBefore ? SyncContext::DATABASE_BEFORE_SYNC :
+                                                  SyncContext::DATABASE_AFTER_SYNC);
                 break;
             case OP_CMDLINE:
                 try {
@@ -909,7 +911,8 @@ string Session::askPassword(const string &passwordName,
     // if(req->wait(response) == InfoReq::ST_OK) {
     //     std::map<string, string>::iterator it = response.find("password");
     //     if (it == response.end()) {
-    //         SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort", SyncMLStatus(sysync::LOCERR_USERABORT));
+    //         SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort",
+    //                                  SyncMLStatus(sysync::LOCERR_USERABORT));
     //     } else {
     //         return it->second;
     //     }
