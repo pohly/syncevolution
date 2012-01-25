@@ -68,12 +68,12 @@ public:
     GDBusCXX::DBusClientCall2<int32_t,
                               SessionCommon::SourceProgresses_t> m_getProgress;
     GDBusCXX::DBusClientCall0                                    m_restore;
-    GDBusCXX::DBusClientCall1<std::string>                       m_checkPresence;
     GDBusCXX::DBusClientCall0                                    m_execute;
     GDBusCXX::SignalWatch3<std::string, uint32_t,
                            SessionCommon::SourceStatuses_t>      m_statusChanged;
     GDBusCXX::SignalWatch2<int32_t,
                            SessionCommon::SourceProgresses_t>    m_progressChanged;
+    GDBusCXX::SignalWatch0                                       m_done;
 };
 
 /**

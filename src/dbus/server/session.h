@@ -224,6 +224,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Session.ProgressChanged */
     GDBusCXX::EmitSignal2<int32_t,
                           const SessionCommon::SourceProgresses_t &> emitProgress;
+    GDBusCXX::EmitSignal0 emitDone;
 
     static string syncStatusToString(SessionCommon::SyncStatus state);
 
@@ -250,8 +251,8 @@ public:
     /** access to the GMainLoop reference used by this Session instance */
     GMainLoop *getLoop() { return m_loop; }
 
-    /** explicitly mark the session as completed, even if it doesn't get deleted yet */
-    void done();
+    /** explicitly notify SessionResource we're done. */
+    void done() { emitDone(); }
 
 private:
     Session(GMainLoop *loop,

@@ -332,7 +332,7 @@ void Server::run(LogRedirect &redirect)
     }
 
     SE_LOG_INFO(NULL, NULL, "%s", "Should enter main loop");
-    // while (!m_shutdownRequested)
+    while (!m_shutdownRequested)
     {
         g_main_loop_run(m_loop);
 
