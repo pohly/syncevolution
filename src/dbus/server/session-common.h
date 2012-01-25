@@ -43,6 +43,19 @@ public:
         PRI_SHUTDOWN   =  256  // always higher than anything else
     };
 
+    /**
+     * the sync status for session
+     */
+    enum SyncStatus {
+        SYNC_QUEUEING,  ///< waiting to become ready for use
+        SYNC_IDLE,      ///< ready, session is initiated but sync not started
+        SYNC_RUNNING,   ///< sync is running
+        SYNC_ABORT,     ///< sync is aborting
+        SYNC_SUSPEND,   ///< sync is suspending
+        SYNC_DONE,      ///< sync is done
+        SYNC_ILLEGAL
+    };
+
     typedef std::map<std::string, SourceStatus>   SourceStatuses_t;
     typedef std::map<std::string, SourceProgress> SourceProgresses_t;
 
