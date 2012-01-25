@@ -94,7 +94,7 @@ int main(int argc, char **argv, char **envp)
                                         LoggerBase::INFO);
 
         // Should a Session or a Connection be created?
-        bool start_connection = boost::iequals(getenv("SYNCEVO_START_CONNECTION"), "FALSE") ? true : false;
+        bool start_session = boost::iequals(getenv("SYNCEVO_START_CONNECTION"), "FALSE") ? true : false;
 
         std::string session_id(getenv("SYNCEVO_SESSION_ID"));
         if(session_id.empty()) {
@@ -105,7 +105,7 @@ int main(int argc, char **argv, char **envp)
         SE_LOG_INFO(NULL, NULL, "SYNCEVOLUTION_FORK_EXEC = %s in helper",  getenv("SYNCEVOLUTION_FORK_EXEC"));
 
         boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_id, start_connection));
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
