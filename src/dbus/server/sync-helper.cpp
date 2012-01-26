@@ -27,6 +27,7 @@
 #include "connection.h"
 
 #include <syncevo/SyncContext.h>
+#include <syncevo/SuspendFlags.h>
 #include <syncevo/ForkExec.h>
 
 #include <boost/bind.hpp>
@@ -43,7 +44,7 @@ namespace {
 
 static void niam(int sig)
 {
-    SyncContext::handleSignal(sig);
+    SuspendFlags::getSuspendFlags().handleSignal(sig);
     g_main_loop_quit (loop);
 }
 
