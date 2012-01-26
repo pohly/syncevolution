@@ -797,35 +797,35 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     g_main_loop_quit(m_loop);
 }
 
-void Session::SyncStatusOwner::setStatus(SyncStatus status)
+void Session::SyncStatusOwner::setStatus(SessionCommon::SyncStatus status)
 {
     // skip operation before it even starts?
-    if (status == SYNC_RUNNING &&
-        (m_status == SYNC_SUSPEND || m_status == SYNC_ABORT)) {
+    if (status == SessionCommon::SYNC_RUNNING &&
+        (m_status == SessionCommon::SYNC_SUSPEND || m_status == SessionCommon::SYNC_ABORT)) {
         SE_LOG_DEBUG(NULL, NULL, "D-Bus session %s already before it started to run",
-                     m_status == SYNC_SUSPEND ? "suspended" : "aborted");
+                     m_status == SessionCommon::SYNC_SUSPEND ? "suspended" : "aborted");
         SE_THROW_EXCEPTION_STATUS(StatusException,
                                   "preventing start of session as requested by users",
                                   SyncMLStatus(sysync::LOCERR_USERABORT));
     }
 
-    if (status == SYNC_RUNNING) {
+    if (status == SessionCommon::SYNC_RUNNING) {
         // activated, allow blockers until we are done again
         m_active = true;
         SE_LOG_DEBUG(NULL, NULL, "D-Bus session running");
-    } else if (status == SYNC_DONE) {
+    } else if (status == SessionCommon::SYNC_DONE) {
         // deactivated
         m_active = false;
         m_blocker.reset();
         SE_LOG_DEBUG(NULL, NULL, "D-Bus session done, SuspendFlags state %d",
                      (int)SuspendFlags::getSuspendFlags().getState());
     } else if (m_active &&
-               (status == SYNC_SUSPEND || status == SYNC_ABORT)) {
+               (status == SessionCommon::SYNC_SUSPEND || status == SessionCommon::SYNC_ABORT)) {
         // only take global suspend or abort blockers while active
         SE_LOG_DEBUG(NULL, NULL, "running D-Bus session about to %s, taking blocker (SuspendFlags state %d)",
-                     status == SYNC_SUSPEND ? "suspend" : "abort",
+                     status == SessionCommon::SYNC_SUSPEND ? "suspend" : "abort",
                      (int)SuspendFlags::getSuspendFlags().getState());
-        m_blocker = status == SYNC_SUSPEND ?
+        m_blocker = status == SessionCommon::SYNC_SUSPEND ?
             SuspendFlags::getSuspendFlags().suspend() :
             SuspendFlags::getSuspendFlags().abort();
         SE_LOG_DEBUG(NULL, NULL, "SuspendFlags state %d after taking blocker in D-Bus session",
