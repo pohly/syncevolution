@@ -146,8 +146,7 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void restoreCb(const std::string &error);
 
     /** Session.checkPresence() */
-    void checkPresence(const std::string &server, std::string &status, std::vector<std::string> &transports)
-    { m_server.checkPresence(server, status, transports); }
+    void checkPresence(std::string &status);
 
     /** Session.Execute() */
     void execute(const vector<std::string> &args, const map<std::string, std::string> &vars);
