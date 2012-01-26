@@ -102,6 +102,12 @@ void SessionResource::restoreCb(const std::string &error)
     SE_LOG_INFO(NULL, NULL, "Session.Restore callback successfull");
 }
 
+void SessionResource::checkPresence(std::string &status)
+{
+    vector<string> transport;
+    m_server.checkPresence(m_configName, status, transport);
+}
+
 void SessionResource::execute(const vector<string> &args, const map<string, string> &vars)
 {
     m_sessionProxy->m_execute(args, vars, boost::bind(&SessionResource::executeCb, this, _1));
@@ -523,7 +529,7 @@ SessionResource::SessionResource(Server &server,
     add(this, &SessionResource::getStatus, "GetStatus");
     add(this, &SessionResource::getProgress, "GetProgress");
     add(this, &SessionResource::restore, "Restore");
-    add(this, &SessionResource::checkPresence, "checkPresence");
+    add(this, &SessionResource::checkPresence, "CheckPresence");
     add(this, &SessionResource::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
