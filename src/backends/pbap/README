@@ -1,0 +1,30 @@
+Usage
+=====
+
+The "pbap" backend provides access to an addressbook stored in a
+remote device using the Bluetooth PBAP protocol. This is achieved
+using the D-Bus services from obex-client (obexd), which needs to
+be running.
+
+The "database" property specifies the Bluetooth address of the
+device to be connected.
+
+# configure backend
+syncevolution --configure \
+                syncURL= \
+                addressbook/backend=pbap \
+		addressbook/database=obex-bt://XX:XX:XX:XX:XX:XX \
+                target-config@pbap addressbook
+
+# print items
+syncevolution --print-items \
+ 	        target-config@pbap addressbook
+
+# configure synchronization
+syncevolution --configure \
+                --template SyncEvolution_Client \
+                syncURL=local://@pbap \
+                pbap
+
+# run synchronization
+syncevolution --sync refresh-from-client pbap addressbook
