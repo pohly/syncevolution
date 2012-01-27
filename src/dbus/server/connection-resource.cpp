@@ -70,22 +70,23 @@ void ConnectionResource::process(const Caller_t &caller,
                                  const GDBusCXX::DBusArray<uint8_t> &msg,
                                  const std::string &msgType)
 {
+    resetReplies();
     // Passing in the peer and mustAuthenticate to complete connection initialization.
     m_connectionProxy->m_process(msg, msgType, m_peer, m_mustAuthenticate,
                                  boost::bind(&ConnectionResource::processCb, this, _1));
+    waitForReply();
+
+    if(!m_result) {
+        throwExceptionFromString(m_resultError);
+    }
 }
 
 void ConnectionResource::processCb(const string &error)
 {
-    if(!error.empty()) {
-        m_result = false;
-        SE_LOG_INFO(NULL, NULL, "Connection.Close callback returned: error=%s",
-                    error.empty() ? "None" : error.c_str());
-        return;
+    if(setResult(error)) {
+        SE_LOG_INFO(NULL, NULL, "Connection.Process callback successfull");
     }
-
-    m_result = true;
-    SE_LOG_INFO(NULL, NULL, "Connection.Close callback successfull");
+    replyInc();
 }
 
 void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error)
@@ -102,20 +103,21 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
         throw runtime_error("unknown client");
     }
 
+    resetReplies();
     m_connectionProxy->m_close(normal, error, boost::bind(&ConnectionResource::closeCb, this, client, _1));
+    waitForReply();
+
+    if(!m_result) {
+        throwExceptionFromString(m_resultError);
+    }
 }
 
 void ConnectionResource::closeCb(boost::shared_ptr<Client> &client, const string &error)
 {
-    if(!error.empty()) {
-        m_result = false;
-        SE_LOG_INFO(NULL, NULL, "Connection.Close callback returned: error=%s",
-                    error.empty() ? "None" : error.c_str());
-        return;
-    }
-
-    m_result = true;
+    if(setResult(error)) {
     SE_LOG_INFO(NULL, NULL, "Connection.Close callback successfull");
+    }
+    replyInc();
 
     client->detach(this);
 }
