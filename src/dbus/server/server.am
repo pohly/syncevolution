@@ -20,6 +20,7 @@ src_dbus_server_server_cpp_files = \
   src/dbus/server/presence-status.cpp \
   src/dbus/server/progress-data.cpp \
   src/dbus/server/read-operations.cpp \
+  src/dbus/server/resource.cpp \
   src/dbus/server/server-read-operations.cpp \
   src/dbus/server/server.cpp \
   src/dbus/server/session-resource.cpp
@@ -31,7 +32,6 @@ src_dbus_server_server_h_files = \
   src/dbus/server/notification-manager-base.h \
   src/dbus/server/auto-term.h \
   src/dbus/server/cmdline-wrapper.h \
-  src/dbus/server/resource.h \
   src/dbus/server/restart.h \
   src/dbus/server/session-listener.h \
   src/dbus/server/session-common.h \

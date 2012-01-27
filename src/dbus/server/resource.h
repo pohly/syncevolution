@@ -20,6 +20,9 @@
 #ifndef RESOURCE_H
 #define RESOURCE_H
 
+#include <string>
+
+#include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
 /**
@@ -34,6 +37,8 @@ public:
 protected:
     // Status of most recent dbus call to helper
     bool m_result;
+    std::string m_resultError;
+    bool setResult(const std::string &error);
 
     // the number of total dbus calls
     unsigned int m_replyTotal;
@@ -45,8 +50,11 @@ protected:
 
     /** set the total number of replies we must wait */
     void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
-    void replyInc() { m_replyCounter++; };
-    virtual void waitForReply(gint timeout = 100 /*ms*/) = 0;
+    void replyInc() { m_replyCounter++; }
+    virtual void waitForReply(int timeout = 100 /*ms*/) = 0;
+
+    // Determine and throw appropriate exception based on returned error string
+    void throwExceptionFromString(const std::string &errorString);
 };
 
 SE_END_CXX
