@@ -31,6 +31,8 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+class PbapSession;
+
 class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
 {
   public:
@@ -54,6 +56,10 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual void removeItem(const string &uid);
 
  private:
+    std::auto_ptr<PbapSession> m_session;
+
+    typedef std::map<std::string, std::string> Content;
+    Content m_content;
 };
 
 SE_END_CXX

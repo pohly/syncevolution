@@ -187,6 +187,7 @@ void PbapSession::removeSessionCb(const string &error)
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
 {
+    m_session.reset(new PbapSession());
 }
 
 std::string PbapSyncSource::getMimeType() const
@@ -209,11 +210,15 @@ void PbapSyncSource::open()
     }
 
     std::string address = database.substr(prefix.size());
+
+    m_session->initSession(address);
+    m_session->pullAll(m_content);
+    m_session->shutdown();
 }
 
 bool PbapSyncSource::isEmpty()
 {
-    return true;
+    return m_content.empty();
 }
 
 void PbapSyncSource::close()
@@ -231,10 +236,18 @@ PbapSyncSource::Databases PbapSyncSource::getDatabases()
 
 void PbapSyncSource::listAllItems(RevisionMap_t &revisions)
 {
+    typedef std::pair<std::string, std::string> Entry;
+    BOOST_FOREACH(const Entry &entry, m_content) {
+        revisions[entry.first] = "0";
+    }
 }
 
 void PbapSyncSource::readItem(const string &uid, std::string &item, bool raw)
 {
+    Content::iterator it = m_content.find(uid);
+    if(it != m_content.end()) {
+        item = it->second;
+    }
 }
 
 TrackingSyncSource::InsertItemResult PbapSyncSource::insertItem(const string &uid, const std::string &item, bool raw)
