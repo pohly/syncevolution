@@ -47,6 +47,143 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+#define OBC_SERVICE "org.openobex.client"
+#define OBC_CLIENT_INTERFACE "org.openobex.Client"
+#define OBC_PBAP_INTERFACE "org.openobex.PhonebookAccess"
+
+class PbapSession {
+public:
+    PbapSession(void);
+
+    void initSession(const std::string &address);
+
+    typedef std::map<std::string, std::string> Content;
+    void pullAll(Content &dst);
+
+    void shutdown(void);
+
+private:
+    GDBusCXX::DBusRemoteObject m_client;
+    std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
+
+    void createSessionCb(const GDBusCXX::DBusObject_t &session,
+                         const string &error);
+    void selectCb(const string &error);
+    void removeSessionCb(const string &error);
+
+    static GMainLoop *s_mainloop;
+    static std::auto_ptr<std::exception> s_mainloop_error;
+    static void runMainLoop(void);
+    static void exitMainLoop(std::exception *e = NULL);
+};
+
+GMainLoop *PbapSession::s_mainloop = NULL;
+std::auto_ptr<std::exception> PbapSession::s_mainloop_error;
+
+void PbapSession::runMainLoop(void)
+{
+    if(s_mainloop) {
+        throw std::runtime_error("Busy");
+    }
+
+    s_mainloop_error.reset();
+
+    s_mainloop = g_main_loop_new(NULL, FALSE);
+    g_main_loop_run(s_mainloop);
+
+    if(s_mainloop_error.get()) {
+        throw *s_mainloop_error.get();
+    }
+}
+
+void PbapSession::exitMainLoop(std::exception *e)
+{
+    s_mainloop_error.reset(e);
+    g_main_loop_quit(s_mainloop);
+    s_mainloop = NULL;
+}
+
+PbapSession::PbapSession(void) :
+    m_client(GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL),
+             "/", OBC_CLIENT_INTERFACE, OBC_SERVICE, true)
+{
+}
+
+void PbapSession::initSession(const std::string &address)
+{
+    if (m_session.get()) {
+        return;
+    }
+
+    typedef std::map<std::string, boost::variant<std::string> > Params;
+
+    GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
+        method(m_client, "CreateSession");
+
+    Params params;
+    params["Destination"] = std::string(address);
+    params["Target"] = std::string("PBAP");
+
+    method(params, boost::bind(&PbapSession::createSessionCb, this, _1, _2));
+
+    runMainLoop();
+}
+
+void PbapSession::createSessionCb(const GDBusCXX::DBusObject_t &session,
+                                  const string &error)
+{
+    if(!error.empty() || session.empty()) {
+        SE_LOG_ERROR(NULL, NULL, "Error in calling method CreateSession of interface org.openobex.Client: %s", error.c_str());
+        exitMainLoop(new std::runtime_error(error));
+        return;
+    }
+
+    m_session.reset(new GDBusCXX::DBusRemoteObject(
+                            m_client.getConnection(),
+                            session, OBC_PBAP_INTERFACE,
+                            OBC_SERVICE, true));
+
+    GDBusCXX::DBusClientCall0 method(*m_session, "Select");
+    method(std::string("int"), std::string("PB"), boost::bind(&PbapSession::selectCb, this, _1));
+}
+
+void PbapSession::selectCb(const string &error)
+{
+    if(!error.empty()) {
+        SE_LOG_ERROR(NULL, NULL, "Error in calling method Select of interface org.openobex.PhonebookAccess: %s", error.c_str());
+        exitMainLoop(new std::runtime_error(error));
+        return;
+    }
+
+    exitMainLoop();
+}
+
+void PbapSession::pullAll(Content &dst)
+{
+}
+
+void PbapSession::shutdown(void)
+{
+    GDBusCXX::DBusClientCall0 method(m_client, "RemoveSession");
+
+    method(std::string(m_session->getPath()), boost::bind(&PbapSession::removeSessionCb, this, _1));
+
+    runMainLoop();
+}
+
+void PbapSession::removeSessionCb(const string &error)
+{
+    if(!error.empty()) {
+        SE_LOG_ERROR(NULL, NULL, "Error in calling method RemoveSession of interface org.openobex.Client: %s", error.c_str());
+        exitMainLoop(new std::runtime_error(error));
+        return;
+    }
+
+    m_session.reset();
+
+    exitMainLoop();
+}
+
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
 {
