@@ -1066,7 +1066,7 @@ class TestNamedConfig(unittest.TestCase, DBusUtil):
         self.runTest(result)
 
     def testSetNamedConfigError(self):
-        """TestDBusSession.testSetNamedConfigError - SetNamedConfig() only allowed in 'all-configs' sessions"""
+        """TestNamedConfig.testSetNamedConfigError - SetNamedConfig() only allowed in 'all-configs' sessions"""
         self.setUpSession("")
         try:
             self.session.SetNamedConfig("foobar", False, False, {})
@@ -1077,7 +1077,7 @@ class TestNamedConfig(unittest.TestCase, DBusUtil):
             self.fail("no exception thrown")
 
     def testSetNamedConfigErrorTemporary(self):
-        """TestDBusSession.testSetNamedConfigErrorTemporary - SetNamedConfig() only implemented for session config"""
+        """TestNamedConfig.testSetNamedConfigErrorTemporary - SetNamedConfig() only implemented for session config"""
         self.setUpSession("foo", [ "all-configs" ])
         try:
             self.session.SetNamedConfig("foobar", False, True, {})
@@ -1092,7 +1092,7 @@ class TestNamedConfig(unittest.TestCase, DBusUtil):
         self.session.SetNamedConfig("", False, True, {})
 
     def testSetNamedConfig(self):
-        """TestDBusSession.testSetNamedConfig - create two different configs in one session"""
+        """TestNamedConfig.testSetNamedConfig - create two different configs in one session"""
         self.setUpSession("", [ "all-configs" ])
 
         fooConfig = {"": {"username": "foo", "configName": "foo"}}
