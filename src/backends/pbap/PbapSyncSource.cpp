@@ -39,7 +39,7 @@
 
 #include <syncevo/util.h>
 
-#include "src/gdbusxx/gdbus-cxx-bridge.h"
+#include "gdbus-cxx-bridge.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 
