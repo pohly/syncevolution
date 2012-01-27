@@ -69,6 +69,7 @@ private:
     void createSessionCb(const GDBusCXX::DBusObject_t &session,
                          const string &error);
     void selectCb(const string &error);
+    void pullAllCb(Content *dst, const std::string &content, const string &error);
     void removeSessionCb(const string &error);
 
     static GMainLoop *s_mainloop;
@@ -160,6 +161,85 @@ void PbapSession::selectCb(const string &error)
 
 void PbapSession::pullAll(Content &dst)
 {
+    GDBusCXX::DBusClientCall1<std::string> method(*m_session, "PullAll");
+    method(boost::bind(&PbapSession::pullAllCb, this, &dst, _1, _2));
+
+    runMainLoop();
+}
+
+void vcardParse(const std::string &content, std::size_t begin, std::size_t end, std::map<std::string, std::string> &dst)
+{
+    static const boost::char_separator<char> lineSep("\n\r");
+
+    typedef boost::tokenizer<boost::char_separator<char> > Tokenizer;
+    Tokenizer tok(content.begin() + begin, content.begin() + end, lineSep);
+
+    for(Tokenizer::iterator it = tok.begin(); it != tok.end(); it ++) {
+        const std::string &line = *it;
+        size_t i = line.find(':');
+        if(i != std::string::npos) {
+            std::size_t j = line.find(';');
+            j = (j == std::string::npos)? i : j;
+            std::string key = line.substr(0, j);
+            std::string value = line.substr(i + 1);
+            dst[key] = value;
+        }
+    }
+}
+
+void PbapSession::pullAllCb(Content *dst, const std::string &content, const string &error)
+{
+    if(!error.empty() || content.empty()) {
+        SE_LOG_ERROR(NULL, NULL, "Error in calling method PullAll of interface org.openobex.PhonebookAccess: %s", error.c_str());
+        exitMainLoop(new std::runtime_error(error));
+        return;
+    }
+
+    typedef std::map<std::string, int> CounterMap;
+    CounterMap counterMap;
+
+    std::size_t pos = 0;
+    while(pos < content.size()) {
+        static const std::string beginStr("BEGIN:VCARD");
+        static const std::string endStr("END:VCARD");
+
+        pos = content.find(beginStr, pos);
+        if(pos == std::string::npos) {
+            break;
+        }
+
+        std::size_t endPos = content.find(endStr, pos + beginStr.size());
+        if(endPos == std::string::npos) {
+            break;
+        }
+
+        endPos += endStr.size();
+
+        typedef std::map<std::string, std::string> VcardMap;
+        VcardMap vcard;
+        vcardParse(content, pos, endPos, vcard);
+
+        VcardMap::const_iterator it = vcard.find("FN");
+        if(it != vcard.end() && !it->second.empty()) {
+            const std::string &fn = it->second;
+
+            const std::pair<CounterMap::iterator, bool> &r =
+                counterMap.insert(CounterMap::value_type(fn, 0));
+            if(!r.second) {
+                r.first->second ++;
+            }
+
+            char suffix[8];
+            sprintf(suffix, "%07d", r.first->second);
+
+            std::string id = fn + std::string(suffix);
+            (*dst)[id] = content.substr(pos, endPos);
+        }
+
+        pos = endPos;
+    }
+
+    exitMainLoop();
 }
 
 void PbapSession::shutdown(void)
