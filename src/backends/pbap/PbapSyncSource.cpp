@@ -128,6 +128,8 @@ void PbapSession::initSession(const std::string &address)
     method(params, boost::bind(&PbapSession::createSessionCb, this, _1, _2));
 
     runMainLoop();
+
+    SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
 }
 
 void PbapSession::createSessionCb(const GDBusCXX::DBusObject_t &session,
@@ -143,6 +145,8 @@ void PbapSession::createSessionCb(const GDBusCXX::DBusObject_t &session,
                             m_client.getConnection(),
                             session, OBC_PBAP_INTERFACE,
                             OBC_SERVICE, true));
+
+    SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", session.c_str());
 
     GDBusCXX::DBusClientCall0 method(*m_session, "Select");
     method(std::string("int"), std::string("PB"), boost::bind(&PbapSession::selectCb, this, _1));
@@ -165,6 +169,8 @@ void PbapSession::pullAll(Content &dst)
     method(boost::bind(&PbapSession::pullAllCb, this, &dst, _1, _2));
 
     runMainLoop();
+
+    SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
 }
 
 void vcardParse(const std::string &content, std::size_t begin, std::size_t end, std::map<std::string, std::string> &dst)
@@ -249,6 +255,8 @@ void PbapSession::shutdown(void)
     method(std::string(m_session->getPath()), boost::bind(&PbapSession::removeSessionCb, this, _1));
 
     runMainLoop();
+
+    SE_LOG_DEBUG(NULL, NULL, "PBAP session closed");
 }
 
 void PbapSession::removeSessionCb(const string &error)
@@ -259,6 +267,7 @@ void PbapSession::removeSessionCb(const string &error)
         return;
     }
 
+    SE_LOG_DEBUG(NULL, NULL, "removed session: %s", m_session->getPath());
     m_session.reset();
 
     exitMainLoop();
