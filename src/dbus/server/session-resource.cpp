@@ -140,8 +140,8 @@ void SessionResource::init()
     m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1));
     m_forkExecParent->m_onQuit.connect(boost::bind(&SessionResource::onQuit, this, _1));
     m_forkExecParent->m_onFailure.connect(boost::bind(&SessionResource::onFailure, this, _2));
-    m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "FALSE");
     m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_CONFIG", m_configName);
     m_forkExecParent->start();
 
     // Wait for onSessionConnect to be called so that the dbus
@@ -477,12 +477,12 @@ void SessionResource::onFailure(const std::string &error)
 
 boost::shared_ptr<SessionResource> SessionResource::createSessionResource(Server &server,
                                                                           const std::string &peerDeviceID,
-                                                                          const std::string &config_name,
+                                                                          const std::string &configName,
                                                                           const std::string &session,
                                                                           const std::vector<std::string> &flags)
 {
     boost::shared_ptr<SessionResource> me(new SessionResource(server, peerDeviceID,
-                                                              config_name, session, flags));
+                                                              configName, session, flags));
     me->init();
     me->m_me = me;
     return me;

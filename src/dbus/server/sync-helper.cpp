@@ -54,10 +54,11 @@ static void onFailure(const std::string &error)
     g_main_loop_quit(loop);
 }
 
-static void onConnect(const DBusConnectionPtr &conn, const std::string &sessionID, bool startSession)
+static void onConnect(const DBusConnectionPtr &conn, const std::string &config,
+                      const std::string &sessionID, bool startSession)
 {
     if(startSession) {
-        session = Session::createSession(loop, conn, "foo", sessionID);
+        session = Session::createSession(loop, conn, config, sessionID);
         session->activate();
         SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
                     session->getPath(), session->getInterface());
@@ -94,19 +95,23 @@ int main(int argc, char **argv, char **envp)
                                         LoggerBase::DEBUG :
                                         LoggerBase::INFO);
 
-        // Should a Session or a Connection be created?
-        bool start_session = boost::iequals(getenv("SYNCEVO_START_CONNECTION"), "FALSE") ? true : false;
+        boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
 
-        std::string session_id(getenv("SYNCEVO_SESSION_ID"));
+        // Should a Session or a Connection be created?
+        bool start_session = forkexec->getEnvVar("SYNCEVO_START_CONNECTION").empty();
+
+        std::string session_config(forkexec->getEnvVar("SYNCEVO_SESSION_CONFIG"));
+        std::string session_id(forkexec->getEnvVar("SYNCEVO_SESSION_ID"));
         if(session_id.empty()) {
             return 1;
         }
 
-        SE_LOG_INFO(NULL, NULL, "SYNCEVO_START_CONNECTION = %s in helper", getenv("SYNCEVO_START_CONNECTION"));
-        SE_LOG_INFO(NULL, NULL, "SYNCEVOLUTION_FORK_EXEC = %s in helper",  getenv("SYNCEVOLUTION_FORK_EXEC"));
+        SE_LOG_INFO(NULL, NULL, "SYNCEVO_START_CONNECTION = %s in helper", start_session ? "F" : "T");
+        SE_LOG_INFO(NULL, NULL, "SYNCEVO_SESSION_CONFIG   = %s in helper", session_config.c_str());
+        SE_LOG_INFO(NULL, NULL, "SYNCEVO_SESSION_ID       = %s in helper", session_id.c_str());
+        SE_LOG_INFO(NULL, NULL, "SYNCEVOLUTION_FORK_EXEC  = %s in helper", getenv("SYNCEVOLUTION_FORK_EXEC"));
 
-        boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_id, start_session));
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_config, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
