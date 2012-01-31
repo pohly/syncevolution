@@ -161,6 +161,9 @@ class ForkExecParent : public ForkExec
      */
     int getChildPid() { return static_cast<int>(m_childPid); }
 
+    /*
+     * Simply pushes a new environment variable onto m_envStrings.
+     */
     void addEnvVar(const std::string &name, const std::string &value);
 
  private:
@@ -211,6 +214,12 @@ class ForkExecChild : public ForkExec
      * ForkExec::m_onFailure for failures
      */
     void connect();
+
+    /*
+     * Return the value for the environment variable name or and empty
+     * string is not found or set to ForkExecEnvVarEmpty.
+     */
+    std::string getEnvVar(const std::string &name);
 
     /**
      * true if the current process was created by ForkExecParent

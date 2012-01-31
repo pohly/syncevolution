@@ -25,6 +25,9 @@ SE_BEGIN_CXX
 
 #if defined(HAVE_GLIB)
 
+// Value to use for empty strings assigned to an environment variable.
+static const std::string ForkExecEnvVarEmpty("SE_EMPTY");
+
 static const std::string ForkExecEnvVar("SYNCEVOLUTION_FORK_EXEC=");
 
 ForkExec::ForkExec()
@@ -219,8 +222,8 @@ void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) thro
 
 void ForkExecParent::addEnvVar(const std::string &name, const std::string &value)
 {
-    if(!name.empty() && !value.empty()) {
-        m_envStrings.push_back(name + "=" + value);
+    if(!name.empty()) {
+        m_envStrings.push_back(name + "=" + (value.empty() ? ForkExecEnvVarEmpty : value));
     }
 }
 
@@ -267,6 +270,16 @@ void ForkExecChild::connect()
         dbusError.throwFailure("connecting to server");
     }
     m_onConnect(conn);
+}
+
+std::string ForkExecChild::getEnvVar(const std::string &name)
+{
+    gchar *pValue = getenv(name.c_str());
+    if(!pValue || boost::iequals(pValue, ForkExecEnvVarEmpty)) {
+        return std::string();
+    } else {
+        return std::string(pValue);
+    }
 }
 
 bool ForkExecChild::wasForked()
