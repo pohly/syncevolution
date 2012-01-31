@@ -429,7 +429,6 @@ void Server::removeSession(SessionResource *session)
          ++it) {
         if (it->lock().get() == session) {
             // Signal end of session.
-            it->lock()->abort();
             sessionChanged(session->getPath(), false);
             // remove from queue
             m_sessionResources.erase(it);
