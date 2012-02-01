@@ -224,7 +224,7 @@ void ConnectionResource::waitForReply(gint timeout)
         if (!g_poll(&pollFd, 1, timeout)) {
             m_result = false; // This is taking too long. Get out of here.
         } else if (pollFd.revents & (G_IO_HUP | G_IO_ERR)) {
-            m_result = false; // Error of connection lost
+            m_result = false; // Error or connection lost
         }
 
         if(!m_result) {
