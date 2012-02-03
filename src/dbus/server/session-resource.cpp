@@ -304,37 +304,6 @@ void SessionResource::getProgressCb(int32_t *progress, SessionCommon::SourceProg
     replyInc();
 }
 
-void SessionResource::fireStatus(bool flush)
-{
-    std::string status;
-    uint32_t error;
-    SessionCommon::SourceStatuses_t sources;
-
-    /** not force flushing and not timeout, return */
-    if(!flush && !m_statusTimer.timeout()) {
-        return;
-    }
-    m_statusTimer.reset();
-
-    getStatus(status, error, sources);
-    emitStatus(status, error, sources);
-}
-
-void SessionResource::fireProgress(bool flush)
-{
-    int32_t progress;
-    SessionCommon::SourceProgresses_t sources;
-
-    /** not force flushing and not timeout, return */
-    if(!flush && !m_progressTimer.timeout()) {
-        return;
-    }
-    m_progressTimer.reset();
-
-    getProgress(progress, sources);
-    emitProgress(progress, sources);
-}
-
 void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate,
                                      ReadOperations::Config_t &config)
 {
