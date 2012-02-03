@@ -152,21 +152,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void execute(const vector<std::string> &args, const map<std::string, std::string> &vars);
     void executeCb(const std::string &error);
 
-    /**
-     * Must be called each time that properties changing the
-     * overall status are changed. Ensures that the corresponding
-     * D-Bus signal is sent.
-     *
-     * Doesn't always send the signal immediately, because often it is
-     * likely that more status changes will follow shortly. To ensure
-     * that the "final" status is sent, call with flush=true.
-     *
-     * @param flush      force sending the current status
-     */
-    void fireStatus(bool flush = false);
-    /** like fireStatus() for progress information */
-    void fireProgress(bool flush = false);
-
     /** Session.StatusChanged */
     GDBusCXX::EmitSignal3<const std::string &,
                           uint32_t,
@@ -203,10 +188,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void getDatabasesCb(ReadOperations::SourceDatabases_t *databases,
                         const ReadOperations::SourceDatabases_t &rDatabases,
                         const std::string &error);
-
-    /** timer for fire status/progress usages */
-    Timer m_statusTimer;
-    Timer m_progressTimer;
 
     /* Callbacks for signals fired from helper */
     void statusChangedCb(const std::string &status, uint32_t error,
