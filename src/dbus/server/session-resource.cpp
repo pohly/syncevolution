@@ -48,36 +48,23 @@ void SessionResource::detach(const GDBusCXX::Caller_t &caller)
     client->detach(this);
 }
 
-void SessionResource::startShutdown()
+void SessionResource::serverShutdown()
 {
-    return;
-}
+    resetReplies();
+    m_sessionProxy->m_serverShutdown(boost::bind(&SessionResource::serverShutdownCb, this, _1));
+    waitForReply();
 
-void SessionResource::shutdownFileModified()
-{
-    return;
-}
-
-bool SessionResource::shutdownServer()
-{
-    Timespec now = Timespec::monotonic();
-    bool autosync = m_server.getAutoSyncManager().hasTask() ||
-        m_server.getAutoSyncManager().hasAutoConfigs();
-    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
-                 now.tv_sec, now.tv_nsec,
-                 autosync ? "on" : "off");
-    if (autosync) {
-        // suitable exec() call which restarts the server using the same environment it was in
-        // when it was started
-        m_server.m_restart->restart();
-    } else {
-        // leave server now
-        m_server.m_shutdownRequested = true;
-        g_main_loop_quit(m_server.getLoop());
-        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
+    if(m_result) {
+        throwExceptionFromString(m_resultError);
     }
+}
 
-    return false;
+void SessionResource::serverShutdownCb(const std::string &error)
+{
+    if(setResult(error)) {
+        SE_LOG_INFO(NULL, NULL, "Session.ServerShutdown callback successfull");
+    }
+    replyInc();
 }
 
 bool SessionResource::readyToRun()

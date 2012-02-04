@@ -433,6 +433,7 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::restore, "Restore");
     add(this, &Session::execute, "Execute");
     add(this, &Session::passwordResponse, "PasswordResponse");
+    add(this, &Session::serverShutdown, "ServerShutdown");
     add(emitStatus);
     add(emitProgress);
     add(emitPasswordRequest);
@@ -447,52 +448,13 @@ Session::~Session()
     done();
 }
 
-void Session::startShutdown()
+void Session::serverShutdown()
 {
-    m_runOperation = OP_SHUTDOWN;
-}
-
-void Session::shutdownFileModified()
-{
-    m_shutdownLastMod = Timespec::monotonic();
-    SE_LOG_DEBUG(NULL, NULL, "file modified at %lu.%09lus, %s",
-                 (unsigned long)m_shutdownLastMod.tv_sec,
-                 (unsigned long)m_shutdownLastMod.tv_nsec,
-                 m_active ? "active" : "not active");
-
-    if (m_active) {
-        // (re)set shutdown timer: once it fires, we are ready to shut down;
-        // brute-force approach, will reset timer many times
-        m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
-                                 boost::bind(&Session::shutdownServer, this));
-    }
-}
-
-bool Session::shutdownServer()
-{
-    Timespec now = Timespec::monotonic();
-    bool autosync = true;//DBUS_CALL::autoSyncManagerHasTask ||
-                         //DBUS_CALL::autoSyncManagerHasAutoConfigs;
-    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
-                 now.tv_sec, now.tv_nsec,
-                 autosync ? "on" : "off");
-    if (autosync) {
-        // suitable exec() call which restarts the server using the same environment it was in
-        // when it was started
-        //DBUS_CALL::restartServer();
-    } else {
-        // leave server now
-        //DBUS_CALL::setServerShutdownRequested(true);
-        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
-    }
-
-    return false;
+    // TODO: Server process is gone so we need to avoid emitting dbus signals, etc.
 }
 
 void Session::setActive(bool active)
 {
-    bool oldActive = m_active;
-    m_active = active;
     if (active) {
         if (m_syncStatus == SessionCommon::SYNC_QUEUEING) {
             m_syncStatus = SessionCommon::SYNC_IDLE;
@@ -502,29 +464,6 @@ void Session::setActive(bool active)
         boost::shared_ptr<Connection> c = m_connection.lock();
         if (c) {
             c->ready();
-        }
-
-        if (!oldActive &&
-            m_runOperation == OP_SHUTDOWN) {
-            // shutdown session activated: check if or when we can shut down
-            if (m_shutdownLastMod) {
-                Timespec now = Timespec::monotonic();
-                SE_LOG_DEBUG(NULL, NULL, "latest file modified at %lu.%09lus, now is %lu.%09lus",
-                             (unsigned long)m_shutdownLastMod.tv_sec,
-                             (unsigned long)m_shutdownLastMod.tv_nsec,
-                             (unsigned long)now.tv_sec,
-                             (unsigned long)now.tv_nsec);
-                if (m_shutdownLastMod + SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS <= now) {
-                    // ready to shutdown immediately
-                    shutdownServer();
-                } else {
-                    // need to wait
-                    int secs = SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS -
-                        (now - m_shutdownLastMod).tv_sec;
-                    SE_LOG_DEBUG(NULL, NULL, "shut down in %ds", secs);
-                    m_shutdownTimer.activate(secs, boost::bind(&Session::shutdownServer, this));
-                }
-            }
         }
     }
 }
@@ -708,13 +647,6 @@ void Session::run(LogRedirect &redirect)
                     }
                 }
                 m_setConfig = m_cmdline->configWasModified();
-                break;
-            case OP_SHUTDOWN:
-                // block until time for shutdown or restart if no
-                // shutdown requested already
-                if (!true){//DBUS_CALL::getShutdownRequested()) {
-                    g_main_loop_run(m_loop);
-                }
                 break;
             default:
                 break;

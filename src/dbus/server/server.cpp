@@ -279,21 +279,41 @@ Server::~Server()
     LoggerBase::popLogger();
 }
 
-void Server::fileModified()
+bool Server::shutdown()
 {
-    if (!m_shutdownSession) {
-        string newSession = getNextSession();
-        vector<string> flags;
-        flags.push_back("no-sync");
-        m_shutdownSession = SessionResource::createSessionResource(*this,
-                                                                   "",  "",
-                                                                   newSession,
-                                                                   flags);
-        m_shutdownSession->startShutdown();
-        addSession(m_shutdownSession);
+    // Let the sessions know the server is shutting down.
+    BOOST_FOREACH(boost::weak_ptr<SessionResource> &sessionResource, m_sessionResources)
+    {
+        boost::shared_ptr<SessionResource> sr = sessionResource.lock();
+        if (sr) {
+            sr->serverShutdown();
+        }
     }
 
-    m_shutdownSession->shutdownFileModified();
+    Timespec now = Timespec::monotonic();
+    bool autosync = m_autoSync.hasTask() || m_autoSync.hasAutoConfigs();
+    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
+                 now.tv_sec, now.tv_nsec, autosync ? "on" : "off");
+    if (autosync) {
+        // suitable exec() call which restarts the server using the same environment it was in
+        // when it was started
+        m_restart->restart();
+    } else {
+        // leave server now
+        g_main_loop_quit(m_loop);
+        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
+    }
+
+    return false;
+}
+
+void Server::fileModified()
+{
+    if(!m_shutdownRequested) {
+        m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
+                                 boost::bind(&Server::shutdown, this));
+        m_shutdownRequested = true;
+    }
 }
 
 void Server::run(LogRedirect &redirect)
@@ -331,28 +351,12 @@ void Server::run(LogRedirect &redirect)
         }
     }
 
-    SE_LOG_INFO(NULL, NULL, "%s", "Should enter main loop");
-    while (!m_shutdownRequested)
+    if (!m_shutdownRequested)
     {
         g_main_loop_run(m_loop);
-
-        // if (!m_shutdownRequested && m_autoSync.hasTask()) {
-        //     // if there is at least one pending task and no session is created for auto sync,
-        //     // pick one task and create a session
-        //     m_autoSync.startTask();
-        // }
-        // // Make sure check whether m_activeSession is owned by autosync
-        // // Otherwise activeSession is owned by AutoSyncManager but it never
-        // // be ready to run. Because methods of Session, like 'sync', are able to be
-        // // called when it is active.
-        // if (!m_shutdownRequested && m_autoSync.hasActiveSession())
-        // {
-        //     // if the autosync is the active session, then invoke 'sync'
-        //     // to make it ready to run
-        //     m_autoSync.prepare();
-        // }
-        SE_LOG_INFO(NULL, NULL, "%s", "Passed main loop");
     }
+
+    SE_LOG_INFO(NULL, NULL, "%s", "Exiting Server::run");
 }
 
 
