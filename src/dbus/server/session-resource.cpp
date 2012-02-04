@@ -426,14 +426,16 @@ SessionListener* SessionResource::addListener(SessionListener *listener)
 void SessionResource::statusChangedCb(const std::string &status, uint32_t error,
                                       const SessionCommon::SourceStatuses_t &sources)
 {
-    SE_LOG_INFO(NULL, NULL, "Session.StatusChanged signal received: status=%s", status.c_str());
-    return;
+    SE_LOG_INFO(NULL, NULL, "Session.StatusChanged signal received and relayed: status=%s", status.c_str());
+    // Relay signal to client.
+    emitStatus(status, error, sources);
 }
 
 void SessionResource::progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources)
 {
-    SE_LOG_INFO(NULL, NULL, "Session.ProgressChanged signal received: error=%d", error);
-    return;
+    SE_LOG_INFO(NULL, NULL, "Session.ProgressChanged signal received and relayed: error=%d", error);
+    // Relay signal to client.
+    emitProgress(error, sources);
 }
 
 void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
