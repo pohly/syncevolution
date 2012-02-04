@@ -43,6 +43,15 @@ public:
         PRI_SHUTDOWN   =  256  // always higher than anything else
     };
 
+    enum PwRespStatus {
+        PW_RES_IDLE,    // no active password request
+        PW_RES_WAITING, // request is running
+        PW_RES_OK,      // ok, response is gotten
+        PW_RES_TIMEOUT, // timeout
+        PW_RES_CANCEL,  // request is cancelled
+        PW_RES_INVALID  // invalid response sent
+    };
+
     /**
      * the sync status for session
      */
