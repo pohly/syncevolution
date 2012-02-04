@@ -243,11 +243,6 @@ public:
     std::string getSessionID() const { return m_sessionID; }
     std::string getPeerDeviceID() const { return m_peerDeviceID; }
 
-    /**
-     * TRUE if the session is ready to take over control
-     */
-    bool readyToRun();
-
     bool getActive();
 
     /** Session.GetFlags() */
