@@ -67,11 +67,6 @@ void SessionResource::serverShutdownCb(const std::string &error)
     replyInc();
 }
 
-bool SessionResource::readyToRun()
-{
-    return true;
-}
-
 void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
 {
     resetReplies();
