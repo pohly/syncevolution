@@ -59,9 +59,12 @@ static void onConnect(const DBusConnectionPtr &conn, const std::string &config,
 {
     if(startSession) {
         session = Session::createSession(loop, conn, config, sessionID);
-        session->activate();
         SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
                     session->getPath(), session->getInterface());
+        // Activate dbus interface.
+        session->activate();
+        // Set the session as active.
+        session->setActive(true);
     } else {
         connection.reset(new Connection(loop, conn, sessionID));
         connection->activate();

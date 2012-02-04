@@ -29,6 +29,7 @@
 #include "connman-client.h"
 #include "network-manager-client.h"
 #include "presence-status.h"
+#include "timeout.h"
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -76,11 +77,12 @@ class Server : public GDBusCXX::DBusObjectHelper,
      */
     list< boost::shared_ptr<GLibNotify> > m_files;
     void fileModified();
+    bool shutdown();
 
     /**
-     * session handling the shutdown in response to file modifications
+     * timer which counts seconds until server is meant to shut down
      */
-    boost::shared_ptr<SessionResource> m_shutdownSession;
+    Timeout m_shutdownTimer;
 
     /**
      * Event source that regularly polls network manager
