@@ -202,6 +202,9 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Session.Execute() */
     void execute(const vector<string> &args, const map<string, string> &vars);
 
+    std::string m_passwordReqResponse;
+    SessionCommon::PwRespStatus m_pwResponseStatus;
+
     /**
      * Must be called each time that properties changing the
      * overall status are changed. Ensures that the corresponding
@@ -224,7 +227,9 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Session.ProgressChanged */
     GDBusCXX::EmitSignal2<int32_t,
                           const SessionCommon::SourceProgresses_t &> emitProgress;
+
     GDBusCXX::EmitSignal0 emitDone;
+    GDBusCXX::EmitSignal1<const std::map<std::string, std::string> &> emitPasswordRequest;
 
     static string syncStatusToString(SessionCommon::SyncStatus state);
 
@@ -330,6 +335,8 @@ public:
     string askPassword(const string &passwordName,
                        const string &descr,
                        const ConfigPasswordKey &key);
+    /** One-to-one DBus method PasswordResponse() */
+    void passwordResponse(bool timed_out, const std::string &password);
 
     /** Session.SetConfig() */
     void setConfig(bool update, bool temporary,

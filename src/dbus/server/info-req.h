@@ -25,6 +25,8 @@
 #include "timer.h"
 #include "gdbus-cxx-bridge.h"
 
+#include <boost/signals2.hpp>
+
 SE_BEGIN_CXX
 
 class Server;
@@ -73,6 +75,11 @@ public:
      * @return the current status
      */
     Status wait(InfoMap &response, uint32_t interval = 3);
+
+    /**
+     * Connect to this signal to be notified that a response has been recieved.
+     */
+    boost::signals2::signal<void (const InfoMap &)> m_onResponse;
 
     /**
      * get response when it is ready. If false, nothing will be set in response

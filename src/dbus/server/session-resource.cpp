@@ -20,6 +20,7 @@
 #include "session-resource.h"
 #include "client.h"
 #include "restart.h"
+#include "info-req.h"
 
 #include <boost/foreach.hpp>
 
@@ -126,6 +127,45 @@ void SessionResource::executeCb(const std::string &error)
         SE_LOG_INFO(NULL, NULL, "Session.Execute callback successfull");
     }
     replyInc();
+}
+
+void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
+{
+    std::string password = "";
+    std::map<string, string> response;
+    if(infoReq->getResponse(response)) {
+        std::map<string, string>::const_iterator it = response.find("password");
+        if (it != response.end()) {
+            password = it->second;
+        }
+    }
+
+    resetReplies();
+    m_sessionProxy->m_passwordResponse(false, password,
+                                       boost::bind(&SessionResource::passwordResponseCb, this, _1));
+    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Waiting for password response");
+    waitForReply();
+
+    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Finished waiting for password response. Password %s recieved", m_result ? "" : "not");
+    if(m_result) {
+        throwExceptionFromString(m_resultError);
+    }
+}
+
+void SessionResource::passwordResponseCb(const std::string &error)
+{
+    if(setResult(error)) {
+        SE_LOG_INFO(NULL, NULL, "Password response successfully sent.");
+    }
+    replyInc();
+}
+
+void SessionResource::requestPasswordCb(const std::map<std::string, std::string> & params)
+{
+    boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
+    req->m_onResponse.connect(boost::bind(&SessionResource::onPasswordResponse, this, req));
+ 
+    SE_LOG_INFO(NULL, NULL, "SessionResource::requestPasswordCb: req->m_onResponse.connect");
 }
 
 bool SessionResource::getActive()
@@ -426,6 +466,7 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
     // Activate signal watch on helper signals.
     m_sessionProxy->m_statusChanged.activate  (boost::bind(&SessionResource::statusChangedCb,   this, _1, _2, _3));
     m_sessionProxy->m_progressChanged.activate(boost::bind(&SessionResource::progressChangedCb, this, _1, _2));
+    m_sessionProxy->m_passwordRequest.activate(boost::bind(&SessionResource::requestPasswordCb, this, _1));
     m_sessionProxy->m_done.activate           (boost::bind(&SessionResource::done,              this));
 
     SE_LOG_INFO(NULL, NULL, "onSessionConnect called in session-resource (path: %s interface: %s)",

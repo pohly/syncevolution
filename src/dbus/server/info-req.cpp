@@ -171,6 +171,7 @@ void InfoReq::setResponse(const Caller_t &caller, const string &state, const Inf
         m_handler = caller;
         done();
         m_status = ST_OK;
+        m_onResponse(m_response);
     }
 }
 
