@@ -50,6 +50,7 @@ public:
          m_getProgress      (*this, "GetProgress"),
          m_restore          (*this, "Restore"),
          m_execute          (*this, "Execute"),
+         m_serverShutdown   (*this, "ServerShutdown"),
          m_passwordResponse (*this, "PasswordResponse"),
          m_statusChanged    (*this, "StatusChanged", false),
          m_progressChanged  (*this, "ProgressChanged", false),
@@ -71,6 +72,7 @@ public:
                               SessionCommon::SourceProgresses_t> m_getProgress;
     GDBusCXX::DBusClientCall0                                    m_restore;
     GDBusCXX::DBusClientCall0                                    m_execute;
+    GDBusCXX::DBusClientCall0                                    m_serverShutdown;
     GDBusCXX::DBusClientCall0                                    m_passwordResponse;
     GDBusCXX::SignalWatch3<std::string, uint32_t,
                            SessionCommon::SourceStatuses_t>      m_statusChanged;
@@ -117,15 +119,7 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
      */
     bool m_done;
 
-    /**
-     * Called Server::SHUTDOWN_QUIESCENCE_SECONDS after last file
-     * modification, while shutdown session is active and thus ready
-     * to shut down the server.  Then either triggers the shutdown or
-     * restarts.
-     *
-     * @return always false to disable timer
-     */
-    bool shutdownServer();
+    void serverShutdownCb(const std::string &error);
 
     /** Session.Attach() */
     void attach(const GDBusCXX::Caller_t &caller);
@@ -244,19 +238,6 @@ private:
     boost::weak_ptr<SessionResource> m_me;
 
 public:
-    /**
-     * Turns session into one which will shut down the server, must
-     * be called before enqueing it. Will wait for a certain idle period
-     * after file modifications before claiming to be ready for running
-     * (see SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS).
-     */
-    void startShutdown();
-
-    /**
-     * Called by server to tell shutdown session that a file was modified.
-     * Session uses that to determine when the quiescence period is over.
-     */
-    void shutdownFileModified();
 
     std::string getConfigName() { return m_configName; }
     std::string getSessionID() const { return m_sessionID; }
@@ -296,6 +277,9 @@ public:
     /** Session.Suspend() */
     void suspend();
     void suspendCb(const std::string &error);
+
+    // Called when server is shutting down.
+    void serverShutdown();
 
     /**
      * add a listener of the session. Old set listener is returned
