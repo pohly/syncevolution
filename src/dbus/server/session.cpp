@@ -414,9 +414,11 @@ Session::Session(GMainLoop *loop,
     m_restoreSrcEnd(0),
     m_runOperation(OP_NULL),
     m_listener(NULL),
+    m_pwResponseStatus(SessionCommon::PW_RES_IDLE),
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged"),
-    emitDone(*this, "Done")
+    emitDone(*this, "Done"),
+    emitPasswordRequest(*this, "PasswordRequest")
 {
     add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
     add(this, &Session::setNamedConfig, "SetNamedConfig");
@@ -430,8 +432,10 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::getProgress, "GetProgress");
     add(this, &Session::restore, "Restore");
     add(this, &Session::execute, "Execute");
+    add(this, &Session::passwordResponse, "PasswordResponse");
     add(emitStatus);
     add(emitProgress);
+    add(emitPasswordRequest);
     add(emitDone);
 
     SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
@@ -882,6 +886,21 @@ inline void insertPair(std::map<string, string> &params,
     }
 }
 
+void Session::passwordResponse(bool timed_out, const std::string &password)
+{
+    m_passwordReqResponse.empty();
+    if (!timed_out) {
+        if (password.empty()) {
+            m_pwResponseStatus = SessionCommon::PW_RES_INVALID;
+        } else {
+            m_pwResponseStatus = SessionCommon::PW_RES_OK;
+            m_passwordReqResponse = password;
+        }
+    } else {
+        m_pwResponseStatus = SessionCommon::PW_RES_TIMEOUT;
+    }
+}
+
 string Session::askPassword(const string &passwordName,
                             const string &descr,
                             const ConfigPasswordKey &key)
@@ -895,28 +914,31 @@ string Session::askPassword(const string &passwordName,
     insertPair(params, "protocol", key.protocol);
     insertPair(params, "authtype", key.authtype);
     insertPair(params, "port", key.port ? StringPrintf("%u",key.port) : "");
-    std::map<string, string> response;
 
-    string statusString;
-    /* TODO: make this a dbus call similar to this void makerequest(std::map<string, string> params, (in)
-                                                                    std::string sessionPath, (in)
-                                                                    std::map<string, string> response, (out)
-                                                                    std::string statusString (out) ) */
-    
-    // boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
-    // if(req->wait(response) == InfoReq::ST_OK) {
-    //     std::map<string, string>::iterator it = response.find("password");
-    //     if (it == response.end()) {
-    //         SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort",
-    //                                  SyncMLStatus(sysync::LOCERR_USERABORT));
-    //     } else {
-    //         return it->second;
-    //     }
-    // }
+    m_pwResponseStatus = SessionCommon::PW_RES_WAITING;
+    emitPasswordRequest(params);
 
-    SE_THROW_EXCEPTION_STATUS(StatusException,
-                              std::string("can't get the password from clients. The password request is '") +
-                              statusString + "'", STATUS_PASSWORD_TIMEOUT);
+    // Wait till we've got a response from our password request.
+    while(m_pwResponseStatus == SessionCommon::PW_RES_WAITING) {
+        g_main_context_iteration(g_main_context_default(), true);
+    }
+
+    // Save the response state and reset status to idle.
+    SessionCommon::PwRespStatus respStatus = m_pwResponseStatus;
+    m_pwResponseStatus = SessionCommon::PW_RES_IDLE;
+
+    // Check status and take apropriate action.
+    if(respStatus == SessionCommon::PW_RES_OK) {
+        return m_passwordReqResponse;
+    } else if(respStatus == SessionCommon::PW_RES_TIMEOUT) {
+        SE_THROW_EXCEPTION_STATUS(StatusException,
+                                  std::string("can't get the password from clients. ") +
+                                  "The password request has timed out", STATUS_PASSWORD_TIMEOUT);
+    } else {
+        SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort",
+                                  SyncMLStatus(sysync::LOCERR_USERABORT));
+    }
+
     return "";
 }
 

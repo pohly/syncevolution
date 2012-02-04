@@ -38,21 +38,23 @@ public:
                                std::string("dbushelper.Session") + session,
                                "direct.peer",
                                true), // This is a one-to-one connection. Close it.
-         m_getNamedConfig (*this, "GetNamedConfig"),
-         m_setNamedConfig (*this, "SetNamedConfig"),
-         m_getReports     (*this, "GetReports"),
-         m_checkSource    (*this, "CheckSource"),
-         m_getDatabases   (*this, "GetDatabases"),
-         m_sync           (*this, "Sync"),
-         m_abort          (*this, "Abort"),
-         m_suspend        (*this, "Suspend"),
-         m_getStatus      (*this, "GetStatus"),
-         m_getProgress    (*this, "GetProgress"),
-         m_restore        (*this, "Restore"),
-         m_execute        (*this, "Execute"),
-         m_statusChanged  (*this, "StatusChanged", false),
-         m_progressChanged(*this, "ProgressChanged", false),
-         m_done           (*this, "Done", false)
+         m_getNamedConfig   (*this, "GetNamedConfig"),
+         m_setNamedConfig   (*this, "SetNamedConfig"),
+         m_getReports       (*this, "GetReports"),
+         m_checkSource      (*this, "CheckSource"),
+         m_getDatabases     (*this, "GetDatabases"),
+         m_sync             (*this, "Sync"),
+         m_abort            (*this, "Abort"),
+         m_suspend          (*this, "Suspend"),
+         m_getStatus        (*this, "GetStatus"),
+         m_getProgress      (*this, "GetProgress"),
+         m_restore          (*this, "Restore"),
+         m_execute          (*this, "Execute"),
+         m_passwordResponse (*this, "PasswordResponse"),
+         m_statusChanged    (*this, "StatusChanged", false),
+         m_progressChanged  (*this, "ProgressChanged", false),
+         m_passwordRequest  (*this, "PasswordRequest", false),
+         m_done             (*this, "Done", false)
     {}
 
     GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
@@ -69,10 +71,12 @@ public:
                               SessionCommon::SourceProgresses_t> m_getProgress;
     GDBusCXX::DBusClientCall0                                    m_restore;
     GDBusCXX::DBusClientCall0                                    m_execute;
+    GDBusCXX::DBusClientCall0                                    m_passwordResponse;
     GDBusCXX::SignalWatch3<std::string, uint32_t,
                            SessionCommon::SourceStatuses_t>      m_statusChanged;
     GDBusCXX::SignalWatch2<int32_t,
                            SessionCommon::SourceProgresses_t>    m_progressChanged;
+    GDBusCXX::SignalWatch1<std::map<std::string, std::string> >  m_passwordRequest;
     GDBusCXX::SignalWatch0                                       m_done;
 };
 
@@ -195,6 +199,12 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources);
 
     virtual void waitForReply(gint timeout = 100 /*ms*/);
+
+    // Callback for password request signal.
+    void requestPasswordCb(const std::map<std::string, std::string> & params);
+    // Callback for InfoReq's response signal.
+    void onPasswordResponse(boost::shared_ptr<InfoReq> infoReq);
+    void passwordResponseCb(const std::string &error);
 
 public:
     /**
