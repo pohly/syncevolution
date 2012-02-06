@@ -63,7 +63,7 @@ public:
     void stateChanged(uint32_t uiState);
 
     /** TRUE if watching Network Manager status */
-    bool isAvailable() { return getConnection() != NULL; }
+    bool isAvailable() { return getConnection().get() != NULL; }
 
 private:
 
