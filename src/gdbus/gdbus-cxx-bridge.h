@@ -174,7 +174,7 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
                                           DBusErrorCXX *err);
 
-gint dbus_get_connection_fd(DBusConnection *conn);
+gint dbus_get_connection_fd(const DBusConnectionPtr &conn);
 
 /**
  * Wrapper around DBusServer. Does intentionally not expose
@@ -419,7 +419,7 @@ class DBusObject
         }
     }
 
-    DBusConnection *getConnection() const { return m_conn.get(); }
+    DBusConnectionPtr getConnection() const { return m_conn; }
     const char *getPath() const { return m_path.c_str(); }
     const char *getInterface() const { return m_interface.c_str(); }
 };
@@ -464,7 +464,7 @@ class EmitSignal0
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
 
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -503,7 +503,7 @@ class EmitSignal1
         }
         AppendRetvals(msg) << a1;
 
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -543,7 +543,7 @@ class EmitSignal2
         }
         AppendRetvals(msg) << a1 << a2;
 
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -583,7 +583,7 @@ class EmitSignal3
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3;
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -624,7 +624,7 @@ class EmitSignal4
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4;
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -666,7 +666,7 @@ class EmitSignal5
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -709,7 +709,7 @@ class EmitSignal6
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
-        if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+        if (!dbus_connection_send(m_object.getConnection().get(), msg.get(), NULL)) {
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -855,7 +855,7 @@ class DBusObjectHelper : public DBusObject
                   BDBusSignalTable *signals,
                   BDBusPropertyTable *properties,
                   const Callback_t &callback) {
-        if (!b_dbus_register_interface_with_callback(getConnection(), getPath(), getInterface(),
+            if (!b_dbus_register_interface_with_callback(getConnection().get(), getPath(), getInterface(),
                                        methods, signals, properties, this, NULL, interfaceCallback)) {
             throw std::runtime_error(std::string("b_dbus_register_interface() failed for ") + getPath() + " " + getInterface());
         }
@@ -864,7 +864,7 @@ class DBusObjectHelper : public DBusObject
     }
 
     void activate() {
-        if (!b_dbus_register_interface_with_callback(getConnection(), getPath(), getInterface(),
+        if (!b_dbus_register_interface_with_callback(getConnection().get(), getPath(), getInterface(),
                                        m_methods.get(), m_signals.get(), NULL, this, NULL, interfaceCallback)) {
             throw std::runtime_error(std::string("b_dbus_register_interface() failed for ") + getPath() + " " + getInterface());
         }
@@ -874,7 +874,7 @@ class DBusObjectHelper : public DBusObject
     void deactivate()
     {
         if (m_activated) {
-            if (!b_dbus_unregister_interface(getConnection(),
+            if (!b_dbus_unregister_interface(getConnection().get(),
                                              getPath(),
                                              getInterface())) {
                 throw std::runtime_error(std::string("b_dbus_unregister_interface() failed for ") + getPath() + " " + getInterface());
@@ -3967,7 +3967,7 @@ public:
     {
     }
 
-    DBusConnection *getConnection() { return m_conn.get(); }
+    DBusConnectionPtr getConnection() { return m_conn; }
 
     void operator () (const Callback_t &callback)
     {
@@ -4215,7 +4215,8 @@ template <class T> class SignalWatch
 {
  public:
     SignalWatch(const DBusRemoteObject &object,
-                const std::string &signal, bool is_bus_conn = true)
+                const std::string &signal,
+                bool is_bus_conn = true)
         : m_object(object), m_signal(signal), m_tag(0), m_is_bus_conn(is_bus_conn)
     {
     }
@@ -4223,7 +4224,7 @@ template <class T> class SignalWatch
     ~SignalWatch()
     {
         if (m_tag) {
-            DBusConnection *connection = m_object.getConnection();
+            DBusConnection *connection = m_object.getConnection().get();
             if (connection) {
                 b_dbus_remove_watch(connection, m_tag);
             }
@@ -4264,7 +4265,7 @@ template <class T> class SignalWatch
         m_callback = callback;
 
         std::string rule = makeSignalRule();
-        m_tag = b_dbus_add_signal_watch(m_object.getConnection(),
+        m_tag = b_dbus_add_signal_watch(m_object.getConnection().get(),
                                         rule.c_str(),
                                         cb,
                                         this,
