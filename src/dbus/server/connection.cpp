@@ -367,8 +367,6 @@ Connection::Connection(GMainLoop *loop,
     add(this, &Connection::close, "Close");
     add(emitAbort);
     add(emitReply);
-    
-    //DBUS_SIG::server.autoTermRef();
 }
 
 Connection::~Connection()

@@ -282,8 +282,7 @@ Server::~Server()
 bool Server::shutdown()
 {
     // Let the sessions know the server is shutting down.
-    BOOST_FOREACH(boost::weak_ptr<SessionResource> &sessionResource, m_sessionResources)
-    {
+    BOOST_FOREACH(boost::weak_ptr<SessionResource> &sessionResource, m_sessionResources) {
         boost::shared_ptr<SessionResource> sr = sessionResource.lock();
         if (sr) {
             sr->serverShutdown();
