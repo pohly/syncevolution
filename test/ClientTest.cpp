@@ -6632,6 +6632,7 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
                         clientAdded, clientUpdated, clientDeleted,
                         serverAdded, serverUpdated, serverDeleted);
     str << "Expected sync mode: " << PrettyPrintSyncMode(syncMode) << "\n";
+    str << "Expected cycles: " << restarts + 1 << "\n";
     SE_LOG_INFO(NULL, NULL, "sync report:\n%s\n", str.str().c_str());
 
     if (mustSucceed) {
@@ -6669,6 +6670,8 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
         if (syncMode != SYNC_NONE && checkSyncMode) {
             CLIENT_TEST_EQUAL(name, syncMode, source.getFinalSyncMode());
         }
+
+        CLIENT_TEST_EQUAL(name, restarts + 1, source.getRestarts() + 1);
 
         if (clientAdded != -1 && checkSyncStats) {
             CLIENT_TEST_EQUAL(name, clientAdded,
