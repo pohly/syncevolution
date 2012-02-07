@@ -128,10 +128,10 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** progress data, holding progress calculation related info */
     ProgressData m_progData;
 
-    SessionCommon::SessionCommon::SourceStatuses_t m_sourceStatus;
+    SessionCommon::SourceStatuses_t m_sourceStatus;
 
     uint32_t m_error;
-    SessionCommon::SessionCommon::SourceProgresses_t m_sourceProgress;
+    SessionCommon::SourceProgresses_t m_sourceProgress;
 
     /** timer for fire status/progress usages */
     Timer m_statusTimer;

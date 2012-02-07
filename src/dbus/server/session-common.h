@@ -30,9 +30,8 @@ SE_BEGIN_CXX
  * This class hold constants and defines for Sessions and its
  * consumers.
  */
-class SessionCommon
+namespace SessionCommon
 {
-public:
     typedef StringMap SourceModes_t;
 
     enum {
@@ -80,7 +79,7 @@ public:
      * be a problem.
      */
     static const int SHUTDOWN_QUIESCENCE_SECONDS = 10;
-};
+}
 
 SE_END_CXX
 
