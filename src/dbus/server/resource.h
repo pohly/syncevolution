@@ -73,7 +73,7 @@ protected:
     /** set the total number of replies we must wait */
     void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
     void replyInc() { m_replyCounter++; }
-    virtual void waitForReply(int timeout = 100 /*ms*/) = 0;
+    void waitForReply(int timeout = 100 /*ms*/);
 
     // Determine and throw appropriate exception based on returned error string
     void throwExceptionFromString(const std::string &errorString);

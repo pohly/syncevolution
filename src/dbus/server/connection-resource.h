@@ -66,7 +66,7 @@ public:
 class ConnectionResource : public GDBusCXX::DBusObjectHelper,
                            public Resource
 {
-    Server &m_server;    
+    Server &m_server;
     std::string m_path;
 
     StringMap m_peer;
@@ -110,8 +110,6 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
      * returns "<description> (<ID> via <transport> <transport_description>)"
      */
     static std::string buildDescription(const StringMap &peer);
-
-    virtual void waitForReply(gint timeout = 100 /*ms*/);
 
 public:
     const std::string m_description;

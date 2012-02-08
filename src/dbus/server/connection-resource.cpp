@@ -246,29 +246,4 @@ ConnectionResource::~ConnectionResource()
     m_server.autoTermUnref();
 }
 
-void ConnectionResource::waitForReply(gint timeout)
-{
-    m_result = true;
-    gint fd = GDBusCXX::dbus_get_connection_fd(getConnection());
-
-    // Wakeup for any activity on the connection's fd.
-    GPollFD pollFd = { fd, G_IO_IN | G_IO_OUT | G_IO_HUP | G_IO_ERR, 0 };
-    while(!methodInvocationDone()) {
-        // Block until there is activity on the connection or it times out.
-        if (!g_poll(&pollFd, 1, timeout)) {
-            m_result = false; // This is taking too long. Get out of here.
-        } else if (pollFd.revents & (G_IO_HUP | G_IO_ERR)) {
-            m_result = false; // Error or connection lost
-        }
-
-        if(!m_result) {
-            replyInc();
-            return;
-        } else {
-            // Allow for processing of new message.
-            g_main_context_iteration(g_main_context_default(), TRUE);
-        }
-    }
-}
-
 SE_END_CXX
