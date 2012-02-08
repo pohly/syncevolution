@@ -25,6 +25,7 @@
 
 #include "server.h"
 #include "restart.h"
+#include "session-common.h"
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/SuspendFlags.h>
@@ -103,7 +104,7 @@ int main(int argc, char **argv, char **envp)
 
         DBusErrorCXX err;
         DBusConnectionPtr conn = dbus_get_bus_connection("SESSION",
-                                                         "org.syncevolution",
+                                                         SessionCommon::SERVICE_NAME,
                                                          true,
                                                          &err);
         if (!conn) {
