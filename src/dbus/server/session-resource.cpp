@@ -167,7 +167,7 @@ void SessionResource::requestPasswordCb(const std::map<std::string, std::string>
 {
     boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
     req->m_onResponse.connect(boost::bind(&SessionResource::onPasswordResponse, this, req));
- 
+
     SE_LOG_INFO(NULL, NULL, "SessionResource::requestPasswordCb: req->m_onResponse.connect");
 }
 
@@ -562,31 +562,6 @@ SessionResource::SessionResource(Server &server,
     add(emitProgress);
 
     SE_LOG_DEBUG(NULL, NULL, "session resource %s created", getPath());
-}
-
-void SessionResource::waitForReply(gint timeout)
-{
-    m_result = true;
-    gint fd = GDBusCXX::dbus_get_connection_fd(getConnection());
-
-    // Wakeup for any activity on the connection's fd.
-    GPollFD pollFd = { fd, G_IO_IN | G_IO_OUT | G_IO_HUP | G_IO_ERR, 0 };
-    while(!methodInvocationDone()) {
-        // Block until there is activity on the connection or 100ms elapses.
-        if (!g_poll(&pollFd, 1, timeout)) {
-            m_result = false; // This is taking too long. Get out of here.
-        } else if (pollFd.revents & (G_IO_HUP | G_IO_ERR)) {
-            m_result = false; // Error or connection lost.
-        }
-
-        if(!m_result) {
-            replyInc();
-            return;
-        } else {
-            // Allow for processing of new message.
-            g_main_context_iteration(g_main_context_default(), TRUE);
-        }
-    }
 }
 
 void SessionResource::done()
