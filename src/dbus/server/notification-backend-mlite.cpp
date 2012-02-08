@@ -22,16 +22,12 @@
 #ifdef HAS_MLITE
 
 #include "notification-backend-mlite.h"
+#include "session-common.h"
 
 #include <mlite/MNotification>
 #include <QString>
 
 SE_BEGIN_CXX
-
-/// TODO: these should really be in a common place.
-#define SYNCEVOLUTION_SERVICE_NAME "org.syncevolution"
-#define SYNCEVOLUTION_OBJECT_PATH  "/org/syncevolution/Server"
-#define SYNCEVOLUTION_INTERFACE    "org.syncevolution.Server"
 
 NotificationBackendMLite::NotificationBackendMLite()
 {
@@ -56,9 +52,9 @@ void NotificationBackendMLite::publish(
     n.setBody(QString::fromStdString(body));
     n.setImage("image://themedimage/icons/settings/sync");
 
-    MRemoteAction action(SYNCEVOLUTION_SERVICE_NAME,
-                         SYNCEVOLUTION_OBJECT_PATH,
-                         SYNCEVOLUTION_INTERFACE,
+    MRemoteAction action(SessionCommon::SERVICE_NAME,
+                         SessionCommon::SERVER_PATH,
+                         SessionCommon::SERVER_IFACE,
                          "NotificationAction");
     n.setAction(action);
 

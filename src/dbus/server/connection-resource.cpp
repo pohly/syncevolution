@@ -20,6 +20,7 @@
 #include "server.h"
 #include "client.h"
 #include "connection-resource.h"
+#include "session-common.h"
 
 #include <synthesis/san.h>
 #include <syncevo/TransportAgent.h>
@@ -212,11 +213,11 @@ ConnectionResource::ConnectionResource(Server &server,
                                        const StringMap &peer,
                                        bool must_authenticate) :
     DBusObjectHelper(server.getConnection(),
-                     std::string("/org/syncevolution/Connection/") + sessionID,
-                     "org.syncevolution.Connection",
+                     std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID,
+                     SessionCommon::CONNECTION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
     m_server(server),
-    m_path(std::string("/org/syncevolution/Connection/") + sessionID),
+    m_path(std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID),
     m_peer(peer),
     m_sessionID(sessionID),
     m_mustAuthenticate(must_authenticate),
