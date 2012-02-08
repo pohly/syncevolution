@@ -83,9 +83,8 @@ void ConnectionResource::process(const Caller_t &caller,
 
     resetReplies();
     // Passing in the peer and mustAuthenticate to complete connection initialization.
-    m_connectionProxy->m_process(msg, msgType, m_peer, m_mustAuthenticate,
-                                 boost::bind(&ConnectionResource::processCb, this, _1));
-    waitForReply();
+    m_connectionProxy->m_process.block(msg, msgType, m_peer, m_mustAuthenticate,
+                                       boost::bind(&ConnectionResource::processCb, this, _1));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -115,8 +114,8 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
     }
 
     resetReplies();
-    m_connectionProxy->m_close(normal, error, boost::bind(&ConnectionResource::closeCb, this, client, _1));
-    waitForReply();
+    m_connectionProxy->m_close.block(normal, error,
+                                     boost::bind(&ConnectionResource::closeCb, this, client, _1));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
