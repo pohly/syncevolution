@@ -3929,7 +3929,7 @@ protected:
         }
     }
 
-    void send(DBusMessagePtr &msg, const Callback_t &callback)
+    DBusPendingCallPtr sendImpl(DBusMessagePtr &msg, const Callback_t &callback)
     {
         DBusPendingCall *call;
         if (!dbus_connection_send_with_reply(m_conn.get(), msg.get(), &call, -1)) {
@@ -3943,7 +3943,23 @@ protected:
                                      m_dbusCallback,
                                      data,
                                      callDataUnref);
+
+        return mCall;
     }
+
+    void send(DBusMessagePtr &msg, const Callback_t &callback)
+    {
+        sendImpl(msg, callback);
+    }
+
+    void sendAndHandle(DBusMessagePtr &msg, const Callback_t &callback)
+    {
+        DBusPendingCallPtr call(sendImpl(msg, callback));
+
+        dbus_pending_call_block (call.get());
+    }
+
+
 
 public:
     struct CallbackData
@@ -3969,11 +3985,27 @@ public:
 
     DBusConnectionPtr getConnection() { return m_conn; }
 
+    void block (const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare (msg);
+        sendAndHandle(msg, callback);
+    }
+
     void operator () (const Callback_t &callback)
     {
         DBusMessagePtr msg;
         prepare(msg);
         send(msg, callback);
+    }
+
+    template <class A1>
+    void block (const A1 &a1, const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1>
@@ -3987,12 +4019,30 @@ public:
     }
 
     template <class A1, class A2>
+    void block (const A1 &a1, const A2 &a2, const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2>
     void operator () (const A1 &a1, const A2 &a2, const Callback_t &callback)
     {
         DBusMessagePtr msg;
         prepare(msg);
         AppendRetvals(msg) << a1 << a2;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3>
@@ -4005,6 +4055,15 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
     {
         DBusMessagePtr msg;
@@ -4014,12 +4073,32 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
     {
         DBusMessagePtr msg;
         prepare(msg);
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6,
+                const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6>
@@ -4033,6 +4112,17 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7,
+                const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                       const A6 &a6, const A7 &a7, const Callback_t &callback)
     {
@@ -4040,6 +4130,17 @@ public:
         prepare(msg);
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7, const A8 &a8,
+                const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
@@ -4053,6 +4154,17 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
+                const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                       const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const Callback_t &callback)
     {
@@ -4060,6 +4172,17 @@ public:
         prepare(msg);
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10,
+                const Callback_t &callback)
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
