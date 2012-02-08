@@ -51,9 +51,7 @@ void SessionResource::detach(const GDBusCXX::Caller_t &caller)
 void SessionResource::serverShutdown()
 {
     resetReplies();
-    m_sessionProxy->m_serverShutdown(boost::bind(&SessionResource::serverShutdownCb, this, _1));
-    waitForReply();
-
+    m_sessionProxy->m_serverShutdown.block(boost::bind(&SessionResource::serverShutdownCb, this, _1));
     if(m_result) {
         throwExceptionFromString(m_resultError);
     }
@@ -91,8 +89,8 @@ void SessionResource::setActiveCb(const std::string &error)
 void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
 {
     resetReplies();
-    m_sessionProxy->m_restore(dir, before, sources, boost::bind(&SessionResource::restoreCb, this, _1));
-    waitForReply();
+    m_sessionProxy->m_restore.block(dir, before, sources,
+                                    boost::bind(&SessionResource::restoreCb, this, _1));
 
     if(m_result) {
         throwExceptionFromString(m_resultError);
@@ -116,8 +114,8 @@ void SessionResource::checkPresence(std::string &status)
 void SessionResource::execute(const vector<string> &args, const map<string, string> &vars)
 {
     resetReplies();
-    m_sessionProxy->m_execute(args, vars, boost::bind(&SessionResource::executeCb, this, _1));
-    waitForReply();
+    m_sessionProxy->m_execute.block(args, vars,
+                                    boost::bind(&SessionResource::executeCb, this, _1));
 
     if(m_result) {
         throwExceptionFromString(m_resultError);
@@ -144,10 +142,9 @@ void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
     }
 
     resetReplies();
-    m_sessionProxy->m_passwordResponse(false, password,
-                                       boost::bind(&SessionResource::passwordResponseCb, this, _1));
     SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Waiting for password response");
-    waitForReply();
+    m_sessionProxy->m_passwordResponse.block(false, password,
+                                             boost::bind(&SessionResource::passwordResponseCb, this, _1));
 
     SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Finished waiting for password response. Password %s recieved", m_result ? "" : "not");
     if(m_result) {
@@ -219,9 +216,8 @@ void SessionResource::setNamedConfig(const std::string &configName, bool update,
     m_server.getPresenceStatus().updateConfigPeers (configName, config);
 
     resetReplies();
-    m_sessionProxy->m_setNamedConfig(configName, update, temporary, config,
-                                     boost::bind(&SessionResource::setNamedConfigCb, this, _1, _2));
-    waitForReply();
+    m_sessionProxy->m_setNamedConfig.block(configName, update, temporary, config,
+                                           boost::bind(&SessionResource::setNamedConfigCb, this, _1, _2));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -240,8 +236,8 @@ void SessionResource::setNamedConfigCb(bool setConfig, const std::string &error)
 void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
 {
     resetReplies();
-    m_sessionProxy->m_sync(mode, source_modes, boost::bind(&SessionResource::syncCb, this, _1));
-    waitForReply();
+    m_sessionProxy->m_sync.block(mode, source_modes,
+                                 boost::bind(&SessionResource::syncCb, this, _1));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -259,8 +255,7 @@ void SessionResource::syncCb(const std::string &error)
 void SessionResource::abort()
 {
     resetReplies();
-    m_sessionProxy->m_abort(boost::bind(&SessionResource::abortCb, this, _1));
-    waitForReply();
+    m_sessionProxy->m_abort.block(boost::bind(&SessionResource::abortCb, this, _1));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -278,8 +273,7 @@ void SessionResource::abortCb(const string &error)
 void SessionResource::suspend()
 {
     resetReplies();
-    m_sessionProxy->m_suspend(boost::bind(&SessionResource::suspendCb, this, _1));
-    waitForReply();
+    m_sessionProxy->m_suspend.block(boost::bind(&SessionResource::suspendCb, this, _1));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -298,9 +292,8 @@ void SessionResource::getStatus(std::string &status, uint32_t &error,
                                 SessionCommon::SourceStatuses_t &sources)
 {
     resetReplies();
-    m_sessionProxy->m_getStatus(boost::bind(&SessionResource::getStatusCb, this,
-                                            &status, &error, &sources, _1, _2, _3, _4));
-    waitForReply();
+    m_sessionProxy->m_getStatus.block(boost::bind(&SessionResource::getStatusCb, this,
+                                                  &status, &error, &sources, _1, _2, _3, _4));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -326,9 +319,8 @@ void SessionResource::getStatusCb(std::string *status, uint32_t *errorCode,
 void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources)
 {
     resetReplies();
-    m_sessionProxy->m_getProgress(boost::bind(&SessionResource::getProgressCb, this,
-                                              &progress, &sources, _1, _2, _3));
-    waitForReply();
+    m_sessionProxy->m_getProgress.block(boost::bind(&SessionResource::getProgressCb, this,
+                                                    &progress, &sources, _1, _2, _3));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -351,9 +343,8 @@ void SessionResource::getNamedConfig(const std::string &configName, bool getTemp
                                      ReadOperations::Config_t &config)
 {
     resetReplies();
-    m_sessionProxy->m_getNamedConfig(configName, getTemplate,
-                                     boost::bind(&SessionResource::getNamedConfigCb, this, &config, _1, _2));
-    waitForReply();
+    m_sessionProxy->m_getNamedConfig.block(configName, getTemplate,
+                                           boost::bind(&SessionResource::getNamedConfigCb, this, &config, _1, _2));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -373,9 +364,8 @@ void SessionResource::getNamedConfigCb(ReadOperations::Config_t *config,
 void SessionResource::getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports)
 {
     resetReplies();
-    m_sessionProxy->m_getReports(start, count,
-                                 boost::bind(&SessionResource::getReportsCb, this, &reports, _1, _2));
-    waitForReply();
+    m_sessionProxy->m_getReports.block(start, count,
+                                       boost::bind(&SessionResource::getReportsCb, this, &reports, _1, _2));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -400,8 +390,8 @@ void SessionResource::getReportsCb(ReadOperations::Reports_t *reports,
 void SessionResource::checkSource(const string &sourceName)
 {
     resetReplies();
-    m_sessionProxy->m_checkSource(sourceName, boost::bind(&SessionResource::checkSourceCb, this, _1));
-    waitForReply();
+    m_sessionProxy->m_checkSource.block(sourceName,
+                                        boost::bind(&SessionResource::checkSourceCb, this, _1));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
@@ -419,9 +409,8 @@ void SessionResource::checkSourceCb(const std::string &error)
 void SessionResource::getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases)
 {
     resetReplies();
-    m_sessionProxy->m_getDatabases(sourceName, boost::bind(&SessionResource::getDatabasesCb, this,
-                                                           &databases, _1, _2));
-    waitForReply();
+    m_sessionProxy->m_getDatabases.block(sourceName, boost::bind(&SessionResource::getDatabasesCb, this,
+                                                                 &databases, _1, _2));
 
     if(!m_result) {
         throwExceptionFromString(m_resultError);
