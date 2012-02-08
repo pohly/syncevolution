@@ -31,6 +31,7 @@
 #include "timeout.h"
 #include "restart.h"
 #include "client.h"
+#include "session-common.h"
 
 #include <boost/pointer_cast.hpp>
 
@@ -218,8 +219,8 @@ Server::Server(GMainLoop *loop,
                const DBusConnectionPtr &conn,
                int duration) :
     DBusObjectHelper(conn,
-                     "/org/syncevolution/Server",
-                     "org.syncevolution.Server",
+                     SessionCommon::SERVER_PATH,
+                     SessionCommon::SERVER_IFACE,
                      boost::bind(&Server::autoTermCallback, this)),
     m_loop(loop),
     m_shutdownRequested(shutdownRequested),

@@ -21,6 +21,7 @@
 #include "client.h"
 #include "restart.h"
 #include "info-req.h"
+#include "session-common.h"
 
 #include <boost/foreach.hpp>
 
@@ -508,14 +509,14 @@ SessionResource::SessionResource(Server &server,
                                  const std::string &session,
                                  const std::vector<std::string> &flags) :
     DBusObjectHelper(server.getConnection(),
-                     std::string("/org/syncevolution/Session/") + session,
-                     "org.syncevolution.Session",
+                     std::string(SessionCommon::SESSION_PATH) + "/" + session,
+                     SessionCommon::SESSION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
     m_server(server),
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
-    m_path(std::string("/org/syncevolution/Session/") + session),
+    m_path(std::string(SessionCommon::SESSION_PATH) + "/" + session),
     m_configName(configName),
     m_setConfig(false),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),

@@ -78,7 +78,15 @@ namespace SessionCommon
      * never runs operations directly after starting, that shouldn't
      * be a problem.
      */
-    static const int SHUTDOWN_QUIESCENCE_SECONDS = 10;
+    const int SHUTDOWN_QUIESCENCE_SECONDS = 10;
+
+    const char * const SERVICE_NAME = "org.syncevolution";
+    const char * const CONNECTION_PATH = "/org/syncevolution/Connection";
+    const char * const CONNECTION_IFACE = "org.syncevolution.Connection";
+    const char * const SESSION_PATH = "/org/syncevolution/Session";
+    const char * const SESSION_IFACE = "org.syncevolution.Session";
+    const char * const SERVER_PATH = "/org/syncevolution/Server";
+    const char * const SERVER_IFACE = "org.syncevolution.Server";
 }
 
 SE_END_CXX
