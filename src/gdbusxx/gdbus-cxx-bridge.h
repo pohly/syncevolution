@@ -3941,6 +3941,19 @@ protected:
     typedef GAsyncReadyCallback DBusCallback;
     DBusCallback m_dbusCallback;
 
+    typedef T Callback_t;
+
+    struct CallbackData
+    {
+        //only keep connection, for DBusClientCall instance is absent when 'dbus client call' returns
+        //suppose connection is available in the callback handler
+        const DBusConnectionPtr m_conn;
+        Callback_t m_callback;
+        CallbackData(const DBusConnectionPtr &conn, const Callback_t &callback)
+            :m_conn(conn), m_callback(callback)
+        {}
+    };
+
      /**
      * called by GDBus to free the user_data pointer set in
      * dbus_pending_call_set_notify()
@@ -3949,7 +3962,7 @@ protected:
         delete static_cast<CallbackData *>(user_data);
     }
 
-    typedef T Callback_t;
+    virtual void handleMessage(GDBusMessagePtr &msg, CallbackData *data, GError* error) = 0;
 
     void prepare(GDBusMessagePtr &msg)
     {
@@ -3970,18 +3983,22 @@ protected:
                                                   NULL, NULL, m_dbusCallback, data);
     }
 
-public:
-    struct CallbackData
+    void sendAndHandle(GDBusMessagePtr &msg, const Callback_t &callback)
     {
-        //only keep connection, for DBusClientCall instance is absent when 'dbus client call' returns
-        //suppose connection is available in the callback handler
-        const DBusConnectionPtr m_conn;
-        Callback_t m_callback;
-        CallbackData(const DBusConnectionPtr &conn, const Callback_t &callback)
-            :m_conn(conn), m_callback(callback)
-        {}
-    };
+        GError* error = NULL;
+        CallbackData *data = new CallbackData(m_conn, callback);
+        GDBusMessagePtr message(g_dbus_connection_send_message_with_reply_sync(m_conn.get(),
+                                                                               msg.get(),
+                                                                               G_DBUS_SEND_MESSAGE_FLAGS_NONE,
+                                                                               G_MAXINT, // no timeout
+                                                                               NULL,
+                                                                               NULL,
+                                                                               &error));
 
+        handleMessage(message, data, error);
+    }
+
+public:
     DBusClientCall(const DBusRemoteObject &object, const std::string &method, DBusCallback dbusCallback)
         :m_destination (object.getDestination()),
          m_path (object.getPath()),
@@ -3994,11 +4011,27 @@ public:
 
     DBusConnectionPtr getConnection() { return m_conn; }
 
+    void block (const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        sendAndHandle(msg, callback);
+    }
+
     void operator () (const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
         send(msg, callback);
+    }
+
+    template <class A1>
+    void block (const A1 &a1, const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1>
@@ -4011,12 +4044,30 @@ public:
     }
 
     template <class A1, class A2>
+    void block (const A1 &a1, const A2 &a2, const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2>
     void operator () (const A1 &a1, const A2 &a2, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
         AppendRetvals(msg.get()) << a1 << a2;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3>
@@ -4029,6 +4080,15 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
@@ -4038,12 +4098,32 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
         AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6,
+                const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6>
@@ -4058,6 +4138,17 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7,
+                const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                       const A6 &a6, const A7 &a7,
                       const Callback_t &callback)
@@ -4066,6 +4157,17 @@ public:
         prepare(msg);
         AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
         send(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7, const A8 &a8,
+                const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        sendAndHandle(msg, callback);
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
@@ -4080,6 +4182,17 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
+                const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                       const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
                       const Callback_t &callback)
@@ -4091,8 +4204,19 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
+    void block (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10,
+                const Callback_t &callback)
+    {
+        GDBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        sendAndHandle(msg, callback);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10, 
+                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10,
                       const Callback_t &callback)
     {
         GDBusMessagePtr msg;
@@ -4112,21 +4236,31 @@ class DBusClientCall0 : public DBusClientCall<boost::function<void (const std::s
      * called when result of call is available or an error occurred (non-empty string)
      */
     typedef boost::function<void (const std::string &)> Callback_t;
+    typedef DBusClientCall<Callback_t>::CallbackData CallbackData;
+
+    static void handleMessageImpl(GDBusMessagePtr &/*msg*/, CallbackData *data, GError* error)
+    {
+        //unmarshal the return results and call user callback
+        (data->m_callback)(error ? error->message : "");
+        delete data;
+        if (error != NULL) {
+            g_error_free (error);
+        }
+    }
+
+    virtual void handleMessage(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        handleMessageImpl(msg, data, error);
+    }
 
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef DBusClientCall<Callback_t>::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
-        //unmarshal the return results and call user callback
-        (data->m_callback)(err ? err->message : "");
-        delete data;
-        if (err != NULL) {
-            g_error_free (err);
-        }
+        handleMessageImpl(reply, data, err);
     }
 
 public:
@@ -4144,27 +4278,36 @@ class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, 
      * called when the call is returned or an error occurred (non-empty string)
      */
     typedef boost::function<void (const R1 &, const std::string &)> Callback_t;
+    typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+
+    static void handleMessageImpl(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        typename dbus_traits<R1>::host_type r;
+        if (error == NULL && !g_dbus_message_to_gerror(msg.get(), &error)) {
+            ExtractArgs(data->m_conn.get(), msg.get()) >> Get<R1>(r);
+        }
+
+        //unmarshal the return results and call user callback
+        (data->m_callback)(r, error ? error->message : "");
+        delete data;
+        if (error != NULL) {
+          g_error_free (error);
+        }
+    }
+
+    virtual void handleMessage(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        handleMessageImpl(msg, data, error);
+    }
 
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
-        typename dbus_traits<R1>::host_type r;
-        if (err == NULL && !g_dbus_message_to_gerror(reply.get(), &err)) {
-            ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r);
-        }
-
-        //unmarshal the return results and call user callback
-        //(*static_cast <Callback_t *>(user_data))(r, err->message);
-        (data->m_callback)(r, err ? err->message : "");
-        delete data;
-        if (err != NULL) {
-            g_error_free (err);
-        }
+        handleMessageImpl(reply, data, err);
     }
 
 public:
@@ -4184,26 +4327,37 @@ class DBusClientCall2 : public DBusClientCall<boost::function<
      * called when the call is returned or an error occurred (non-empty string)
      */
     typedef boost::function<void (const R1 &, const R2 &, const std::string &)> Callback_t;
+    typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+
+    static void handleMessageImpl(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        typename dbus_traits<R1>::host_type r1;
+        typename dbus_traits<R2>::host_type r2;
+        if (error == NULL && !g_dbus_message_to_gerror(msg.get(), &error)) {
+            ExtractArgs(data->m_conn.get(), msg.get()) >> Get<R1>(r1) >> Get<R2>(r2);
+        }
+        //unmarshal the return results and call user callback
+        (data->m_callback)(r1, r2, error ? error->message : "");
+        delete data;
+        if (error != NULL) {
+            g_error_free (error);
+        }
+    }
+
+    virtual void handleMessage(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        handleMessageImpl(msg, data, error);
+    }
 
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
-        typename dbus_traits<R1>::host_type r1;
-        typename dbus_traits<R2>::host_type r2;
-        if (err == NULL && !g_dbus_message_to_gerror(reply.get(), &err)) {
-            ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2);
-        }
-        //unmarshal the return results and call user callback
-        (data->m_callback)(r1, r2, err ? err->message : "");
-        delete data;
-        if (err != NULL) {
-            g_error_free (err);
-        }
+        handleMessageImpl(reply, data, err);
     }
 
 public:
@@ -4223,27 +4377,37 @@ class DBusClientCall3 : public DBusClientCall<boost::function<
      * called when the call is returned or an error occurred (non-empty string)
      */
     typedef boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)> Callback_t;
+    typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+
+    static void handleMessageImpl(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        typename dbus_traits<R1>::host_type r1;
+        typename dbus_traits<R2>::host_type r2;
+        typename dbus_traits<R3>::host_type r3;
+        if (error == NULL && !g_dbus_message_to_gerror(msg.get(), &error)) {
+            ExtractArgs(data->m_conn.get(), msg.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
+        }
+        //unmarshal the return results and call user callback
+        (data->m_callback)(r1, r2, r3, error ? error->message : "");
+        delete data;
+        if (error != NULL) {
+            g_error_free (error);
+        }
+    }
+
+    virtual void handleMessage(GDBusMessagePtr &msg, CallbackData *data, GError* error)
+    {
+        handleMessageImpl(msg, data, error);
+    }
 
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
-        typename dbus_traits<R1>::host_type r1;
-        typename dbus_traits<R2>::host_type r2;
-        typename dbus_traits<R3>::host_type r3;
-        if (err == NULL && !g_dbus_message_to_gerror(reply.get(), &err)) {
-            ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
-        }
-        //unmarshal the return results and call user callback
-        (data->m_callback)(r1, r2, r3, err ? err->message : "");
-        delete data;
-        if (err != NULL) {
-            g_error_free (err);
-        }
+        handleMessageImpl(reply, data, err);
     }
 
 public:
