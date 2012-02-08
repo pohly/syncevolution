@@ -61,4 +61,23 @@ void Resource::throwExceptionFromString(const std::string &errorString)
     }
 }
 
+void Resource::waitForReply(gint timeout)
+{
+    m_result = true;
+    guint counter (0);
+    const guint counter_max(10);
+
+    // sleeps ten times for one tenth of given timeout
+    while(!methodInvocationDone()) {
+        if (counter == counter_max) {
+            replyInc();
+            m_result = false;
+            return;
+        }
+        g_usleep(timeout * 100);
+        g_main_context_iteration(g_main_context_default(), TRUE);
+        ++counter;
+    }
+}
+
 SE_END_CXX

@@ -197,8 +197,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
                          const SessionCommon::SourceStatuses_t &sources);
     void progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources);
 
-    virtual void waitForReply(gint timeout = 100 /*ms*/);
-
     // Callback for password request signal.
     void requestPasswordCb(const std::map<std::string, std::string> & params);
     // Callback for InfoReq's response signal.
