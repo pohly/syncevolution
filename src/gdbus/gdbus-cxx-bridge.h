@@ -3895,6 +3895,9 @@ struct MakeMethodEntry< boost::function<void ()> >
 template <class T>
 class DBusClientCall
 {
+public:
+    typedef T Callback_t;
+
 protected:
     const std::string m_destination;
     const std::string m_path;
@@ -3905,6 +3908,17 @@ protected:
     typedef DBusPendingCallNotifyFunction DBusCallback;
     DBusCallback m_dbusCallback;
 
+    struct CallbackData
+    {
+        //only keep connection, for DBusClientCall instance is absent when 'dbus client call' returns
+        //suppose connection is available in the callback handler
+        const DBusConnectionPtr m_conn;
+        Callback_t m_callback;
+        CallbackData(const DBusConnectionPtr &conn, const Callback_t &callback)
+            :m_conn(conn), m_callback(callback)
+        {}
+    };
+
     /**
      * called by libdbus to free the user_data pointer set in 
      * dbus_pending_call_set_notify()
@@ -3912,8 +3926,6 @@ protected:
     static void callDataUnref(void *user_data) {
         delete static_cast<CallbackData *>(user_data);
     }
-
-    typedef T Callback_t;
 
     void prepare(DBusMessagePtr &msg)
     {
@@ -3962,17 +3974,6 @@ protected:
 
 
 public:
-    struct CallbackData
-    {
-        //only keep connection, for DBusClientCall instance is absent when 'dbus client call' returns
-        //suppose connection is available in the callback handler
-        const DBusConnectionPtr m_conn;
-        Callback_t m_callback;
-        CallbackData(const DBusConnectionPtr &conn, const Callback_t &callback)
-            :m_conn(conn), m_callback(callback)
-        {}
-    };
-
     DBusClientCall(const DBusRemoteObject &object, const std::string &method, DBusCallback dbusCallback)
         :m_destination (object.getDestination()),
          m_path (object.getPath()),
@@ -3984,6 +3985,7 @@ public:
     }
 
     DBusConnectionPtr getConnection() { return m_conn; }
+    std::string getMethod() const { return m_method; }
 
     void block (const Callback_t &callback)
     {
@@ -4206,12 +4208,13 @@ bool CheckError(const DBusMessagePtr &reply,
  */
 class DBusClientCall0 : public DBusClientCall<boost::function<void (const std::string &)> >
 {
+public:
+    typedef boost::function<void (const std::string &)> Callback_t;
+
+private:
     /**
      * called when result of call is available or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const std::string &)> Callback_t;
-
-    /** called by libdbus on error or completion of call */
     static void dbusCallback (DBusPendingCall *call, void *user_data)
     {
         CallbackData *data = static_cast<CallbackData *>(user_data);
@@ -4227,18 +4230,31 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall0::dbusCallback)
     {
     }
+
+    static void genericCb (std::string *str_error, const std::string &error)
+    {
+        if (!error.empty()) {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(std::string *str_error)
+    {
+        return boost::bind(&genericCb, str_error, _1);
+    }
 };
 
 /** 1 return value and 0 or more parameters */
 template <class R1>
 class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, const std::string &)> >
 {
+public:
+    typedef boost::function<void (const R1 &, const std::string &)> Callback_t;
+
+private:
     /**
      * called when the call is returned or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const R1 &, const std::string &)> Callback_t;
-
-    /** called by libdbus on error or completion of call */
     static void dbusCallback (DBusPendingCall *call, void *user_data)
     {
         typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
@@ -4250,7 +4266,6 @@ class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, 
             ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r);
         }
         //unmarshal the return results and call user callback
-        //(*static_cast <Callback_t *>(user_data))(r, error);
         (data->m_callback)(r, error);
     }
 
@@ -4258,6 +4273,22 @@ public:
     DBusClientCall1 (const DBusRemoteObject &object, const std::string &method)
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall1::dbusCallback)
     {
+    }
+
+    static void genericCb (R1 *r1,
+                           const R1 &rr1,
+                           std::string *str_error, const std::string &error)
+    {
+        if (error.empty()) {
+            *r1 = rr1;
+        } else {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(R1 *r1, std::string *str_error)
+    {
+        return boost::bind(&genericCb, r1, _1, str_error, _2);
     }
 };
 
@@ -4267,12 +4298,13 @@ class DBusClientCall2 : public DBusClientCall<boost::function<
                                void (const R1 &, const R2 &, const std::string &)> >
 
 {
+public:
+    typedef boost::function<void (const R1 &, const R2 &, const std::string &)> Callback_t;
+
+private:
     /**
      * called when the call is returned or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const R1 &, const R2 &, const std::string &)> Callback_t;
-
-    /** called by libdbus on error or completion of call */
     static void dbusCallback (DBusPendingCall *call, void *user_data)
     {
         typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
@@ -4293,6 +4325,25 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall2::dbusCallback)
     {
     }
+
+    static void genericCb (R1 *r1,
+                           R2 *r2,
+                           const R1 &rr1,
+                           const R2 &rr2,
+                           std::string *str_error, const std::string &error)
+    {
+        if (error.empty()) {
+            *r1 = rr1;
+            *r2 = rr2;
+        } else {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(R1 *r1, R2 *r2, std::string *str_error)
+    {
+        return boost::bind(&genericCb, r1, r2, _1, _2, str_error, _3);
+    }
 };
 
 /** 3 return value and 0 or more parameters */
@@ -4301,12 +4352,13 @@ class DBusClientCall3 : public DBusClientCall<boost::function<
                                void (const R1 &, const R2 &, const R3 &, const std::string &)> >
 
 {
+public:
+    typedef boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)> Callback_t;
+
+private:
     /**
      * called when the call is returned or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)> Callback_t;
-
-    /** called by libdbus on error or completion of call */
     static void dbusCallback (DBusPendingCall *call, void *user_data)
     {
         typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
@@ -4327,6 +4379,28 @@ public:
     DBusClientCall3 (const DBusRemoteObject &object, const std::string &method)
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall3::dbusCallback)
     {
+    }
+
+    static void genericCb (R1 *r1,
+                           R2 *r2,
+                           R3 *r3,
+                           const R1 &rr1,
+                           const R2 &rr2,
+                           const R3 &rr3,
+                           std::string *str_error, const std::string &error)
+    {
+        if (error.empty()) {
+            *r1 = rr1;
+            *r2 = rr2;
+            *r3 = rr3;
+        } else {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(R1 *r1, R2 *r2, R3 *r3, std::string *str_error)
+    {
+        return boost::bind(&genericCb, r1, r2, r3, _1, _2, _3, str_error, _4);
     }
 };
 

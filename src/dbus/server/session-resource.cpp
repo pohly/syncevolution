@@ -51,59 +51,35 @@ void SessionResource::detach(const GDBusCXX::Caller_t &caller)
 
 void SessionResource::serverShutdown()
 {
-    resetReplies();
-    m_sessionProxy->m_serverShutdown.block(boost::bind(&SessionResource::serverShutdownCb, this, _1));
-    if(m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
+    std::string str_error;
 
-void SessionResource::serverShutdownCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.ServerShutdown callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_serverShutdown,
+                m_sessionProxy->m_serverShutdown.bindGeneric(&str_error),
+                str_error);
 }
 
 void SessionResource::setActive(bool active)
 {
-    resetReplies();
-    m_sessionProxy->m_setActive(active, boost::bind(&SessionResource::setActiveCb, this, _1));
-    waitForReply();
+    std::string str_error;
 
-    if(m_result) {
-        throwExceptionFromString(m_resultError);
-    }
+    genericCall(m_sessionProxy->m_setActive,
+                m_sessionProxy->m_setActive.bindGeneric(&str_error),
+                active,
+                str_error);
 
     m_active = active;
 }
 
-void SessionResource::setActiveCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.setActive callback successfull");
-    }
-    replyInc();
-}
-
 void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
 {
-    resetReplies();
-    m_sessionProxy->m_restore.block(dir, before, sources,
-                                    boost::bind(&SessionResource::restoreCb, this, _1));
+    std::string str_error;
 
-    if(m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::restoreCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.Restore callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_restore,
+                m_sessionProxy->m_restore.bindGeneric(&str_error),
+                dir,
+                before,
+                sources,
+                str_error);
 }
 
 void SessionResource::checkPresence(std::string &status)
@@ -114,21 +90,13 @@ void SessionResource::checkPresence(std::string &status)
 
 void SessionResource::execute(const vector<string> &args, const map<string, string> &vars)
 {
-    resetReplies();
-    m_sessionProxy->m_execute.block(args, vars,
-                                    boost::bind(&SessionResource::executeCb, this, _1));
+    std::string str_error;
 
-    if(m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::executeCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.Execute callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_execute,
+                m_sessionProxy->m_execute.bindGeneric(&str_error),
+                args,
+                vars,
+                str_error);
 }
 
 void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
@@ -142,23 +110,16 @@ void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
         }
     }
 
-    resetReplies();
     SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Waiting for password response");
-    m_sessionProxy->m_passwordResponse.block(false, password,
-                                             boost::bind(&SessionResource::passwordResponseCb, this, _1));
+    std::string str_error;
 
-    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Finished waiting for password response. Password %s recieved", m_result ? "" : "not");
-    if(m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
+    genericCall(m_sessionProxy->m_passwordResponse,
+                m_sessionProxy->m_passwordResponse.bindGeneric(&str_error),
+                false,
+                password,
+                str_error);
 
-void SessionResource::passwordResponseCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Password response successfully sent.");
-    }
-    replyInc();
+    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Finished waiting for password response. Password%s received", str_error.empty() ? "" : " not");
 }
 
 void SessionResource::requestPasswordCb(const std::map<std::string, std::string> & params)
@@ -216,217 +177,113 @@ void SessionResource::setNamedConfig(const std::string &configName, bool update,
 
     m_server.getPresenceStatus().updateConfigPeers (configName, config);
 
-    resetReplies();
-    m_sessionProxy->m_setNamedConfig.block(configName, update, temporary, config,
-                                           boost::bind(&SessionResource::setNamedConfigCb, this, _1, _2));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
+    genericCall(m_sessionProxy->m_setNamedConfig,
+                m_sessionProxy->m_setNamedConfig.bindGeneric(&m_setConfig, &str_error),
+                configName,
+                update,
+                temporary,
+                config,
+                str_error);
 
-void SessionResource::setNamedConfigCb(bool setConfig, const std::string &error)
-{
-    if(setResult(error)) {
-        m_setConfig = setConfig;
-        SE_LOG_INFO(NULL, NULL, "Session.SetNamedConfig callback successfull: m_setConfig = %d", (int)setConfig);
-    }
-    replyInc();
+    SE_LOG_INFO(NULL, NULL, "m_setConfig = %d", (int)m_setConfig);
 }
 
 void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
 {
-    resetReplies();
-    m_sessionProxy->m_sync.block(mode, source_modes,
-                                 boost::bind(&SessionResource::syncCb, this, _1));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::syncCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.Sync callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_sync,
+                m_sessionProxy->m_sync.bindGeneric(&str_error),
+                mode,
+                source_modes,
+                str_error);
 }
 
 void SessionResource::abort()
 {
-    resetReplies();
-    m_sessionProxy->m_abort.block(boost::bind(&SessionResource::abortCb, this, _1));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::abortCb(const string &error)
-{
-    if(!setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.Abort callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_abort,
+                m_sessionProxy->m_abort.bindGeneric(&str_error),
+                str_error);
 }
 
 void SessionResource::suspend()
 {
-    resetReplies();
-    m_sessionProxy->m_suspend.block(boost::bind(&SessionResource::suspendCb, this, _1));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::suspendCb(const string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.Suspend callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_suspend,
+                m_sessionProxy->m_suspend.bindGeneric(&str_error),
+                str_error);
 }
 
 void SessionResource::getStatus(std::string &status, uint32_t &error,
                                 SessionCommon::SourceStatuses_t &sources)
 {
-    resetReplies();
-    m_sessionProxy->m_getStatus.block(boost::bind(&SessionResource::getStatusCb, this,
-                                                  &status, &error, &sources, _1, _2, _3, _4));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
+    genericCall(m_sessionProxy->m_getStatus,
+                m_sessionProxy->m_getStatus.bindGeneric(&status, &error, &sources, &str_error),
+                str_error);
 
-void SessionResource::getStatusCb(std::string *status, uint32_t *errorCode,
-                                  SessionCommon::SourceStatuses_t *sources,
-                                  const std::string &rStatus, uint32_t rErrorCode,
-                                  const SessionCommon::SourceStatuses_t &rSources,
-                                  const std::string &error)
-{
-    if(setResult(error)) {
-        *status    = rStatus;
-        *errorCode = rErrorCode;
-        *sources   = rSources;
-        SE_LOG_INFO(NULL, NULL, "Session.GetStatus callback returned: status=%s, error code=%d",
-                    status->c_str(), *errorCode);
-    }
-    replyInc();
+    SE_LOG_INFO(NULL, NULL, "status=%s, error code=%d",
+                status.c_str(), error);
 }
 
 void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources)
 {
-    resetReplies();
-    m_sessionProxy->m_getProgress.block(boost::bind(&SessionResource::getProgressCb, this,
-                                                    &progress, &sources, _1, _2, _3));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
+    genericCall(m_sessionProxy->m_getProgress,
+                m_sessionProxy->m_getProgress.bindGeneric(&progress, &sources, &str_error),
+                str_error);
 
-void SessionResource::getProgressCb(int32_t *progress, SessionCommon::SourceProgresses_t *sources,
-                                    int32_t rProgress, const SessionCommon::SourceProgresses_t &rSources,
-                                    const std::string &error)
-{
-    if(setResult(error)) {
-        *progress = rProgress;
-        *sources  = rSources;
-        SE_LOG_INFO(NULL, NULL, "Session.GetProgress callback returned: progess=%d", *progress);
-    }
-    replyInc();
+    SE_LOG_INFO(NULL, NULL, "Progress=%d", progress);
 }
 
 void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate,
                                      ReadOperations::Config_t &config)
 {
-    resetReplies();
-    m_sessionProxy->m_getNamedConfig.block(configName, getTemplate,
-                                           boost::bind(&SessionResource::getNamedConfigCb, this, &config, _1, _2));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::getNamedConfigCb(ReadOperations::Config_t *config,
-                                       const ReadOperations::Config_t &rConfig, const string &error)
-{
-    if(setResult(error)) {
-        *config    = rConfig;
-        SE_LOG_INFO(NULL, NULL, "Session.GetNamedConfig callback returned: success");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_getNamedConfig,
+                m_sessionProxy->m_getNamedConfig.bindGeneric(&config, &str_error),
+                configName,
+                getTemplate,
+                str_error);
 }
 
 void SessionResource::getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports)
 {
-    resetReplies();
-    m_sessionProxy->m_getReports.block(start, count,
-                                       boost::bind(&SessionResource::getReportsCb, this, &reports, _1, _2));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::getReportsCb(ReadOperations::Reports_t *reports,
-                                   const ReadOperations::Reports_t &rReports, const std::string &error)
-{
-    if(!error.empty()) {
-        m_result = false;
-        SE_LOG_INFO(NULL, NULL, "Session.GetReports callback returned: error=%s",
-                    error.empty() ? "None" : error.c_str());
-    } else {
-        m_result = true;
-        *reports    = rReports;
-        SE_LOG_INFO(NULL, NULL, "Session.GetReports callback returned: success");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_getReports,
+                m_sessionProxy->m_getReports.bindGeneric(&reports, &str_error),
+                start,
+                count,
+                str_error);
 }
 
 void SessionResource::checkSource(const string &sourceName)
 {
-    resetReplies();
-    m_sessionProxy->m_checkSource.block(sourceName,
-                                        boost::bind(&SessionResource::checkSourceCb, this, _1));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::checkSourceCb(const std::string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Session.Abort callback successfull");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_checkSource,
+                m_sessionProxy->m_checkSource.bindGeneric(&str_error),
+                sourceName,
+                str_error);
 }
 
 void SessionResource::getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases)
 {
-    resetReplies();
-    m_sessionProxy->m_getDatabases.block(sourceName, boost::bind(&SessionResource::getDatabasesCb, this,
-                                                                 &databases, _1, _2));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void SessionResource::getDatabasesCb(ReadOperations::SourceDatabases_t *databases,
-                                     const ReadOperations::SourceDatabases_t &rDatabases,
-                                     const std::string &error)
-{
-    if(setResult(error)) {
-        *databases    = rDatabases;
-        SE_LOG_INFO(NULL, NULL, "Session.GetDatabases callback returned: success");
-    }
-    replyInc();
+    genericCall(m_sessionProxy->m_getDatabases,
+                m_sessionProxy->m_getDatabases.bindGeneric(&databases, &str_error),
+                sourceName,
+                str_error);
 }
 
 SessionListener* SessionResource::addListener(SessionListener *listener)
@@ -512,6 +369,7 @@ SessionResource::SessionResource(Server &server,
                      std::string(SessionCommon::SESSION_PATH) + "/" + session,
                      SessionCommon::SESSION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
+    Resource("Session"),
     m_server(server),
     m_flags(flags),
     m_sessionID(session),

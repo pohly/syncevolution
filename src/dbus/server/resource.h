@@ -40,7 +40,7 @@ public:
         PRI_AUTOSYNC = 20
     };
 
-    Resource() : m_priority(PRI_DEFAULT), m_isRunning(false), m_result(true), m_replyTotal(0), m_replyCounter(0) {}
+    Resource(const std::string &resourceName) : m_priority(PRI_DEFAULT), m_isRunning(false), m_result(true), m_resourceName(resourceName), m_replyTotal(0), m_replyCounter(0) {}
     virtual ~Resource() {}
 
     Priority getPriority() { return m_priority; }
@@ -61,6 +61,7 @@ protected:
     bool m_result;
     std::string m_resultError;
     bool setResult(const std::string &error);
+    std::string m_resourceName;
 
     // the number of total dbus calls
     unsigned int m_replyTotal;
@@ -77,6 +78,44 @@ protected:
 
     // Determine and throw appropriate exception based on returned error string
     void throwExceptionFromString(const std::string &errorString);
+
+    // Some generic DBus callers
+    void genericErrorHandler(const std::string &error, const std::string &method);
+
+    template<class DC>
+    void genericCall(DC& call, const typename DC::Callback_t &callback, std::string& str_error)
+    {
+        call.block(callback);
+        genericErrorHandler(str_error, call.getMethod());
+    }
+
+    template <class DC, class A1>
+    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, std::string& str_error)
+    {
+        call.block(a1, callback);
+        genericErrorHandler(str_error, call.getMethod());
+    }
+
+    template <class DC, class A1, class A2>
+    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, std::string& str_error)
+    {
+        call.block(a1, a2, callback);
+        genericErrorHandler(str_error, call.getMethod());
+    }
+
+    template <class DC, class A1, class A2, class A3>
+    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, const A3 &a3, std::string& str_error)
+    {
+        call.block(a1, a2, a3, callback);
+        genericErrorHandler(str_error, call.getMethod());
+    }
+
+    template <class DC, class A1, class A2, class A3, class A4>
+    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, std::string& str_error)
+    {
+        call.block(a1, a2, a3, a4, callback);
+        genericErrorHandler(str_error, call.getMethod());
+    }
 };
 
 SE_END_CXX

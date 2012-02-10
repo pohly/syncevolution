@@ -80,4 +80,13 @@ void Resource::waitForReply(gint timeout)
     }
 }
 
+void Resource::genericErrorHandler(const std::string &error, const std::string &method)
+{
+    if (error.empty()) {
+        SE_LOG_INFO(NULL, NULL, "%s.%s successfull.", m_resourceName.c_str(), method.c_str());
+    } else {
+        throwExceptionFromString(error);
+    }
+}
+
 SE_END_CXX
