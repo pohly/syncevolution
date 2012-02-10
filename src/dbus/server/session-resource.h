@@ -122,10 +122,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     bool m_done;
     bool m_active;
 
-    void serverShutdownCb(const std::string &error);
-
-    void setActiveCb(const std::string &error);
-
     /** Session.Attach() */
     void attach(const GDBusCXX::Caller_t &caller);
 
@@ -134,26 +130,18 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
 
     /** Session.GetStatus() */
     void getStatus(std::string &status, uint32_t &error, SessionCommon::SourceStatuses_t &sources);
-    void getStatusCb(std::string *status, uint32_t *errorCode, SessionCommon::SourceStatuses_t *sources,
-                     const std::string &rStatus, uint32_t rErrorCode,
-                     const SessionCommon::SourceStatuses_t &rSources, const std::string &error);
 
     /** Session.GetProgress() */
     void getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources);
-    void getProgressCb(int32_t *progress, SessionCommon::SourceProgresses_t *sources,
-                       int32_t rProgress, const SessionCommon::SourceProgresses_t &rSources,
-                       const std::string &error);
 
     /** Session.Restore() */
     void restore(const std::string &dir, bool before, const std::vector<std::string> &sources);
-    void restoreCb(const std::string &error);
 
     /** Session.checkPresence() */
     void checkPresence(std::string &status);
 
     /** Session.Execute() */
     void execute(const vector<std::string> &args, const map<std::string, std::string> &vars);
-    void executeCb(const std::string &error);
 
     /** Session.StatusChanged */
     GDBusCXX::EmitSignal3<const std::string &,
@@ -174,23 +162,15 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     /** Session.GetNamedConfig() */
     void getNamedConfig(const std::string &configName, bool getTemplate,
                         ReadOperations::Config_t &config);
-    void getNamedConfigCb(ReadOperations::Config_t *config,
-                          const ReadOperations::Config_t &rConfig, const std::string &error);
 
     /** Session.GetReports() */
     void getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports);
-    void getReportsCb(ReadOperations::Reports_t *reports,
-                      const ReadOperations::Reports_t &rReports, const std::string &error);
 
     /** Session.CheckSource() */
     void checkSource(const std::string &sourceName);
-    void checkSourceCb(const std::string &error);
 
     /** Session.GetDatabases() */
     void getDatabases(const std::string &sourceName, ReadOperations::SourceDatabases_t &databases);
-    void getDatabasesCb(ReadOperations::SourceDatabases_t *databases,
-                        const ReadOperations::SourceDatabases_t &rDatabases,
-                        const std::string &error);
 
     /* Callbacks for signals fired from helper */
     void statusChangedCb(const std::string &status, uint32_t error,
@@ -201,7 +181,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     void requestPasswordCb(const std::map<std::string, std::string> & params);
     // Callback for InfoReq's response signal.
     void onPasswordResponse(boost::shared_ptr<InfoReq> infoReq);
-    void passwordResponseCb(const std::string &error);
 
 public:
     /**
@@ -261,20 +240,16 @@ public:
     /** Session.SetNamedConfig() */
     void setNamedConfig(const std::string &configName, bool update, bool temporary,
                         const ReadOperations::Config_t &config);
-    void setNamedConfigCb(bool setConfig, const std::string &error);
 
     typedef StringMap SourceModes_t;
     /** Session.Sync() */
     void sync(const std::string &mode, const SourceModes_t &source_modes);
-    void syncCb(const std::string &error);
 
     /** Session.Abort() */
     void abort();
-    void abortCb(const std::string &error);
 
     /** Session.Suspend() */
     void suspend();
-    void suspendCb(const std::string &error);
 
     // Called when server is shutting down.
     void serverShutdown();

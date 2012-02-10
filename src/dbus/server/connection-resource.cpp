@@ -82,22 +82,15 @@ void ConnectionResource::process(const Caller_t &caller,
         throw runtime_error("client does not own connection");
     }
 
-    resetReplies();
-    // Passing in the peer and mustAuthenticate to complete connection initialization.
-    m_connectionProxy->m_process.block(msg, msgType, m_peer, m_mustAuthenticate,
-                                       boost::bind(&ConnectionResource::processCb, this, _1));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
-
-void ConnectionResource::processCb(const string &error)
-{
-    if(setResult(error)) {
-        SE_LOG_INFO(NULL, NULL, "Connection.Process callback successfull");
-    }
-    replyInc();
+    genericCall(m_connectionProxy->m_process,
+                m_connectionProxy->m_process.bindGeneric(&str_error),
+                msg,
+                msgType,
+                m_peer,
+                m_mustAuthenticate,
+                str_error);
 }
 
 void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error)
@@ -114,22 +107,15 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
         throw runtime_error("unknown client");
     }
 
-    resetReplies();
-    m_connectionProxy->m_close.block(normal, error,
-                                     boost::bind(&ConnectionResource::closeCb, this, client, _1));
+    std::string str_error;
 
-    if(!m_result) {
-        throwExceptionFromString(m_resultError);
-    }
-}
+    genericCall(m_connectionProxy->m_close,
+                m_connectionProxy->m_close.bindGeneric(&str_error),
+                normal,
+                error,
+                str_error);
 
-void ConnectionResource::closeCb(boost::shared_ptr<Client> &client, const string &error)
-{
-    if(setResult(error)) {
-    SE_LOG_INFO(NULL, NULL, "Connection.Close callback successfull");
-    }
-    replyInc();
-
+    // if we get there, then call was successfull.
     client->detach(this);
 }
 
@@ -216,6 +202,7 @@ ConnectionResource::ConnectionResource(Server &server,
                      std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID,
                      SessionCommon::CONNECTION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
+    Resource("Connection"),
     m_server(server),
     m_path(std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID),
     m_peer(peer),
