@@ -3933,6 +3933,9 @@ struct MakeMethodEntry< boost::function<void ()> >
 template <class T>
 class DBusClientCall
 {
+public:
+    typedef T Callback_t;
+
 protected:
     const std::string m_destination;
     const std::string m_path;
@@ -3942,8 +3945,6 @@ protected:
 
     typedef GAsyncReadyCallback DBusCallback;
     DBusCallback m_dbusCallback;
-
-    typedef T Callback_t;
 
     struct CallbackData
     {
@@ -4012,6 +4013,7 @@ public:
     }
 
     DBusConnectionPtr getConnection() { return m_conn; }
+    std::string getMethod() const { return m_method; }
 
     void block (const Callback_t &callback)
     {
@@ -4234,10 +4236,13 @@ public:
  */
 class DBusClientCall0 : public DBusClientCall<boost::function<void (const std::string &)> >
 {
+public:
+    typedef boost::function<void (const std::string &)> Callback_t;
+
+private:
     /**
      * called when result of call is available or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const std::string &)> Callback_t;
     typedef DBusClientCall<Callback_t>::CallbackData CallbackData;
 
     static void handleMessageImpl(GDBusMessagePtr &/*msg*/, CallbackData *data, GError* error)
@@ -4270,16 +4275,31 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall0::dbusCallback)
     {
     }
+
+    static void genericCb (std::string *str_error, const std::string &error)
+    {
+        if (!error.empty()) {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(std::string *str_error)
+    {
+        return boost::bind(&genericCb, str_error, _1);
+    }
 };
 
 /** 1 return value and 0 or more parameters */
 template <class R1>
 class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, const std::string &)> >
 {
+public:
+    typedef boost::function<void (const R1 &, const std::string &)> Callback_t;
+
+private:
     /**
      * called when the call is returned or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const R1 &, const std::string &)> Callback_t;
     typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
 
     static void handleMessageImpl(GDBusMessagePtr &msg, CallbackData *data, GError* error)
@@ -4317,6 +4337,22 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall1::dbusCallback)
     {
     }
+
+    static void genericCb (R1 *r1,
+                           const R1 &rr1,
+                           std::string *str_error, const std::string &error)
+    {
+        if (error.empty()) {
+            *r1 = rr1;
+        } else {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(R1 *r1, std::string *str_error)
+    {
+        return boost::bind(&genericCb, r1, _1, str_error, _2);
+    }
 };
 
 /** 2 return value and 0 or more parameters */
@@ -4325,10 +4361,13 @@ class DBusClientCall2 : public DBusClientCall<boost::function<
                                void (const R1 &, const R2 &, const std::string &)> >
 
 {
+public:
+    typedef boost::function<void (const R1 &, const R2 &, const std::string &)> Callback_t;
+
+private:
     /**
      * called when the call is returned or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const R1 &, const R2 &, const std::string &)> Callback_t;
     typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
 
     static void handleMessageImpl(GDBusMessagePtr &msg, CallbackData *data, GError* error)
@@ -4367,6 +4406,25 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall2::dbusCallback)
     {
     }
+
+    static void genericCb (R1 *r1,
+                           R2 *r2,
+                           const R1 &rr1,
+                           const R2 &rr2,
+                           std::string *str_error, const std::string &error)
+    {
+        if (error.empty()) {
+            *r1 = rr1;
+            *r2 = rr2;
+        } else {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(R1 *r1, R2 *r2, std::string *str_error)
+    {
+        return boost::bind(&genericCb, r1, r2, _1, _2, str_error, _3);
+    }
 };
 
 /** 3 return value and 0 or more parameters */
@@ -4375,10 +4433,13 @@ class DBusClientCall3 : public DBusClientCall<boost::function<
                                void (const R1 &, const R2 &, const R3 &, const std::string &)> >
 
 {
+public:
+    typedef boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)> Callback_t;
+
+private:
     /**
      * called when the call is returned or an error occurred (non-empty string)
      */
-    typedef boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)> Callback_t;
     typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
 
     static void handleMessageImpl(GDBusMessagePtr &msg, CallbackData *data, GError* error)
@@ -4417,6 +4478,28 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall3::dbusCallback)
     {
     }
+
+    static void genericCb (R1 *r1,
+                           R2 *r2,
+                           R3 *r3,
+                           const R1 &rr1,
+                           const R2 &rr2,
+                           const R3 &rr3,
+                           std::string *str_error, const std::string &error)
+    {
+        if (error.empty()) {
+            *r1 = rr1;
+            *r2 = rr2;
+            *r3 = rr3;
+        } else {
+            *str_error = error;
+        }
+    }
+
+    static Callback_t bindGeneric(R1 *r1, R2 *r2, R3 *r3, std::string *str_error)
+    {
+        return boost::bind(&genericCb, r1, r2, r3, _1, _2, _3, str_error, _4);
+    }
 };
 
 /**
@@ -4444,7 +4527,7 @@ template <class T> class SignalWatch
     }
 
     typedef T Callback_t;
-    const Callback_t &getCallback() const{ return m_callback; }
+    const Callback_t &getCallback() const { return m_callback; }
 
  protected:
     const DBusRemoteObject &m_object;
