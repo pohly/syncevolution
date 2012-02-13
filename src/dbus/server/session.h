@@ -242,7 +242,6 @@ private:
             const std::string &config_name,
             const std::string &session,
             const std::vector<std::string> &flags = std::vector<std::string>());
-    boost::weak_ptr<Session> m_me;
 
 public:
     /**
