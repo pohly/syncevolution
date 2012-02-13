@@ -490,11 +490,13 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
 
 void SessionResource::onQuit(int status)
 {
+    m_server.checkQueue();
     SE_LOG_INFO(NULL, NULL, "dbus-helper quit with status: %d", status);
 }
 
 void SessionResource::onFailure(const std::string &error)
 {
+    m_server.checkQueue();
     SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
 }
 
@@ -598,7 +600,7 @@ void SessionResource::done()
     if (m_setConfig) {
         m_server.getAutoSyncManager().update(m_configName);
     }
-    m_server.removeSession(this);
+    m_server.removeResource(m_me.lock());
 
     // now tell other clients about config change?
     if (m_setConfig) {

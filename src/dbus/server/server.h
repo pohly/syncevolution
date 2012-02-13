@@ -20,8 +20,11 @@
 #ifndef SYNCEVO_DBUS_SERVER_H
 #define SYNCEVO_DBUS_SERVER_H
 
+#include <set>
+
 #include <boost/weak_ptr.hpp>
 
+#include "resource.h"
 #include "auto-sync-manager.h"
 #include "exceptions.h"
 #include "auto-term.h"
@@ -42,7 +45,6 @@ class BluezManager;
 class Timeout;
 class Restart;
 class Client;
-class Resource;
 class LogRedirect;
 class GLibNotify;
 
@@ -89,21 +91,50 @@ class Server : public GDBusCXX::DBusObjectHelper,
      */
     GLibEvent m_pollConnman;
 
-    /**
-     * The running sync session. Having a separate reference to it
-     * ensures that the object won't go away prematurely, even if all
-     * clients disconnect.
-     */
-    boost::shared_ptr<SessionResource> m_syncSession;
+    // Define types for Resource containers
+    typedef boost::shared_ptr<Resource> Resource_t;
+    typedef std::list<Resource_t> Resources_t;
+    typedef boost::weak_ptr<Resource> WeakResource_t;
 
-    typedef std::list< boost::weak_ptr<SessionResource> > SessionResources_t;
+    class PriorityCompare
+    {
+      public:
+        bool operator() (const WeakResource_t &lhs, const WeakResource_t &rhs) const
+        {
+            boost::shared_ptr<Resource> lsr = lhs.lock();
+            boost::shared_ptr<Resource> rsr = rhs.lock();
+            if (lsr && rsr) {
+                return lsr->getPriority() > rsr->getPriority();
+            } else if (lsr) {
+                return true;
+            }
+            return false;
+        }
+    };
+
     /**
-     * A list of active or idle Sessions.
+     * A list of active Sessions & Connections.
      *
-     * SessionResource objects are removed once the Session D-Bus
-     * interface disappears.
+     * Resource objects are removed once the Session D-Bus interface
+     * disappears.
      */
-    SessionResources_t m_sessionResources;
+    Resources_t m_activeResources;
+
+    /**
+     * A std::set disguised as a priority queue. std::priority_queue
+     * does not allow interating over its elements. But both allow for
+     * setting a Compare class.
+     */
+    typedef std::set<WeakResource_t, PriorityCompare> ResourceWaitQueue_t;
+
+    /**
+     * The waiting Sessions and Connections.
+     *
+     * This is a multimap where the key is the priority and the value
+     * is a WeakResource_t. The compare functor insures that the next
+     * multimap::begin points to the highest priority element.
+     */
+    ResourceWaitQueue_t m_waitingResources;
 
     /**
      * a hash of pending InfoRequest
@@ -298,7 +329,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
                           string,
                           const std::string &> logOutput;
 
-    friend class SessionResource; 
+    friend class SessionResource;
 
     PresenceStatus m_presence;
     ConnmanClient m_connman;
@@ -359,31 +390,31 @@ public:
     void detach(Resource *resource);
 
     /**
-     * Enqueue a session. Might also make it ready immediately,
-     * if nothing else is first in the queue. To be called
-     * by the creator of the session, *after* the session is
-     * ready to run.
+     * Add a session. Might also make it ready immediately, if no
+     * sessions with conflicting sources are active. To be called by
+     * the creator of the session, *after* the session is ready to
+     * run.
      */
-    void addSession(const boost::shared_ptr<SessionResource> &session);
+    void addResource(const Resource_t &session);
 
     /**
      * Remove all sessions with this device ID from the
      * queue. If the active session also has this ID,
      * the session will be aborted and/or deactivated.
      */
-    int killSessions(const std::string &peerDeviceID);
+    void killSessions(const std::string &peerDeviceID);
 
     /**
-     * Remove a session from the list of active sessions. If it is running a sync,
-     * it will keep running and nothing will change. Otherwise, if it
-     * is "ready" (= holds a lock on its configuration), then release
-     * that lock.
+     * Remove a resource from the list of active resources. If it is
+     * running a sync, it will keep running and nothing will
+     * change. Otherwise, if it is "ready" (= holds a lock on its
+     * configuration), then release that lock.
      */
-    void removeSession(SessionResource *session);
+    void removeResource(Resource_t resource);
 
     /**
-     * Checks whether the server is ready to run another session
-     * and if so, activates the first one in the queue.
+     * Checks whether the server is ready to run another resource and
+     * if so, activates the first one in the queue.
      */
     void checkQueue();
 

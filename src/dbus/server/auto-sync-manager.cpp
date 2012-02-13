@@ -187,7 +187,7 @@ void AutoSyncManager::update(const std::string &configName)
        && boost::iequals(m_sessionResource->getConfigName(), configName)) {
         SE_LOG_DEBUG(NULL, NULL, "auto sync: removing queued session for %s during update",
                      configName.c_str());
-        m_server.removeSession(m_sessionResource.get());
+        m_server.removeResource(boost::static_pointer_cast<Resource>(m_sessionResource));
         m_sessionResource.reset();
         m_activeTask.reset();
         startTask();
@@ -260,7 +260,7 @@ void AutoSyncManager::startTask()
                                                                    m_activeTask->m_peer,
                                                                    newSession);
         m_sessionResource->addListener(this);
-        m_server.addSession(m_sessionResource);
+        m_server.addResource(m_sessionResource);
     }
 }
 
