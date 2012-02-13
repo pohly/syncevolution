@@ -38,10 +38,12 @@ public:
                                std::string("dbushelper.Connection") + sessionID,
                                "direct.peer",
                                true), // This is a one-to-one connection. Close it.
-         m_process (*this, "Process"),
-         m_close   (*this, "Close"),
-         m_reply   (*this, "Reply", false),
-         m_abort   (*this, "Abort", false)
+         m_process     (*this, "Process"),
+         m_close       (*this, "Close"),
+         m_reply       (*this, "Reply", false),
+         m_abort       (*this, "Abort", false),
+         m_shutdown    (*this, "Shutdown", false),
+         m_killSessions(*this, "KillSessions", false)
     {}
 
     GDBusCXX::DBusClientCall0                   m_process;
@@ -52,6 +54,8 @@ public:
                            bool,
                            const std::string &> m_reply;
     GDBusCXX::SignalWatch0                      m_abort;
+    GDBusCXX::SignalWatch0                      m_shutdown;
+    GDBusCXX::SignalWatch1<std::string>         m_killSessions;
 };
 
 /**
@@ -91,6 +95,8 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
     void replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
                  const StringMap &meta, bool final, const std::string &session);
     void sendAbortCb();
+    void shutdownCb();
+    void killSessionsCb(const std::string &peerDeviceId);
 
     boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
     boost::scoped_ptr<ConnectionProxy> m_connectionProxy;

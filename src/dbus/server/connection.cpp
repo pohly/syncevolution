@@ -62,24 +62,11 @@ void Connection::process(const GDBusCXX::DBusArray<uint8_t> &message,
     m_peer = peer;
     m_mustAuthenticate = must_authenticate;
 
-    //DBUS_CALL::ClientHasResource(Caller_t, )
-    // boost::shared_ptr<Client> client(m_server.findClient(caller));
-    // if (!client) {
-    //     throw runtime_error("unknown client");
-    // }
-
-    // boost::shared_ptr<Connection> myself =
-    //     boost::static_pointer_cast<Connection, Resource>(client->findResource(this));
-    // if (!myself) {
-    //     throw runtime_error("client does not own connection");
-    // }
-
     // any kind of error from now on terminates the connection
     try {
         switch (m_state) {
         case SETUP: {
             std::string config;
-            std::string peerDeviceID;
             bool serverMode = false;
             bool serverAlerted = false;
             // check message type, determine whether we act
@@ -240,15 +227,14 @@ void Connection::process(const GDBusCXX::DBusArray<uint8_t> &message,
                 }
                 if (config.empty()) {
                     // TODO: proper exception
-                    throw runtime_error(string("no configuration found for ") +
-                                        info.toString());
+                    throw runtime_error(string("no configuration found for ") + info.toString());
                 }
 
-                // abort previous session of this client
-                //DBUS_CALL::killSessions(info.m_deviceID);
-                peerDeviceID = info.m_deviceID;
+                // send signal to abort previous session of this client
+                emitKillSessions(info.m_deviceID);
             } else {
-                throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
+                throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync",
+                                                 message_type.c_str()));
             }
 
             // run session as client or server
@@ -262,17 +248,13 @@ void Connection::process(const GDBusCXX::DBusArray<uint8_t> &message,
                                                    message.first),
                                       message_type);
             }
+
             m_session->setServerAlerted(serverAlerted);
-            //FIXME: m_session->setStubConnection(myself);
+            m_session->setStubConnection(m_me.lock());
             // this will be reset only when the connection shuts down okay
             // or overwritten with the error given to us in
             // Connection::close()
             m_session->setStubConnectionError("closed prematurely");
-
-            // TODO: Eventhough queueing is not needed we may need to
-            // let the server know a session is running.
-            // //DBUS_CALL::queueInServer(m_session->getPath());
-            // m_server.enqueue(m_session);
             break;
         }
         case PROCESSING:
@@ -344,9 +326,16 @@ void Connection::abort()
 
 void Connection::shutdown()
 {
-    // trigger removal of this connection by removing all
-    // references to it
-    //DBUS_CALL::m_server.detach(this);
+    emitShutdown();
+}
+
+boost::shared_ptr<Connection> Connection::createConnection(GMainLoop *loop,
+                                                           const GDBusCXX::DBusConnectionPtr &conn,
+                                                           const std::string &sessionID)
+{
+    boost::shared_ptr<Connection> me(new Connection(loop, conn, sessionID));
+    me->m_me = me;
+    return me;
 }
 
 Connection::Connection(GMainLoop *loop,
@@ -361,12 +350,16 @@ Connection::Connection(GMainLoop *loop,
     m_loop(loop),
     emitAbort(*this, "Abort"),
     m_abortSent(false),
-    emitReply(*this, "Reply")
+    emitReply(*this, "Reply"),
+    emitShutdown(*this, "Shutdown"),
+    emitKillSessions(*this, "KillSessions")
 {
     add(this, &Connection::process, "Process");
     add(this, &Connection::close, "Close");
     add(emitAbort);
+    add(emitShutdown);
     add(emitReply);
+    add(emitKillSessions);
 }
 
 Connection::~Connection()

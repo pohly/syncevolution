@@ -70,6 +70,17 @@ void ConnectionResource::process(const Caller_t &caller,
                                  const GDBusCXX::DBusArray<uint8_t> &msg,
                                  const std::string &msgType)
 {
+    boost::shared_ptr<Client> client(m_server.findClient(caller));
+    if (!client) {
+        throw runtime_error("unknown client");
+    }
+
+    boost::shared_ptr<ConnectionResource> myself =
+        boost::static_pointer_cast<ConnectionResource, Resource>(client->findResource(this));
+    if (!myself) {
+        throw runtime_error("client does not own connection");
+    }
+
     resetReplies();
     // Passing in the peer and mustAuthenticate to complete connection initialization.
     m_connectionProxy->m_process(msg, msgType, m_peer, m_mustAuthenticate,
@@ -130,6 +141,20 @@ void ConnectionResource::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, cons
     return;
 }
 
+void ConnectionResource::shutdownCb()
+{
+    SE_LOG_INFO(NULL, NULL, "Connection.Shutdown signal received: detaching connection from server.");
+    m_server.detach(this);
+    return;
+}
+
+void ConnectionResource::killSessionsCb(const string &peerDeviceId)
+{
+    SE_LOG_INFO(NULL, NULL, "Connection.KillSessions signal received: peerDeviceId=%s.", peerDeviceId.c_str());
+    m_server.killSessions(peerDeviceId);
+    return;
+}
+
 void ConnectionResource::sendAbortCb()
 {
     SE_LOG_INFO(NULL, NULL, "Connection.Abort signal received");
@@ -163,8 +188,11 @@ void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
     replyInc(); // Init is waiting on a reply.
 
     // Activate signal watch on helper signals.
-    m_connectionProxy->m_reply.activate(boost::bind(&ConnectionResource::replyCb, this, _1, _2, _3 ,_4, _5));
-    m_connectionProxy->m_abort.activate(boost::bind(&ConnectionResource::sendAbortCb, this));
+    m_connectionProxy->m_reply.activate       (boost::bind(&ConnectionResource::replyCb,
+                                                           this, _1, _2, _3 ,_4, _5));
+    m_connectionProxy->m_abort.activate       (boost::bind(&ConnectionResource::sendAbortCb, this));
+    m_connectionProxy->m_shutdown.activate    (boost::bind(&ConnectionResource::shutdownCb, this));
+    m_connectionProxy->m_killSessions.activate(boost::bind(&ConnectionResource::killSessionsCb, this, _1));
 
     SE_LOG_INFO(NULL, NULL, "onConnect called in ConnectionResource (path: %s interface: %s)",
                 m_connectionProxy->getPath(), m_connectionProxy->getInterface());
