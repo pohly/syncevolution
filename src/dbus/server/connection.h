@@ -115,14 +115,29 @@ class Connection : public GDBusCXX::DBusObjectHelper
                           const StringMap &,
                           bool,
                           const std::string &> emitReply;
+    GDBusCXX::EmitSignal0 emitShutdown;
+    GDBusCXX::EmitSignal1<std::string> emitKillSessions;
 
     friend class DBusTransportAgent;
 
 public:
+    /**
+     * Connections must always be held in a shared pointer to ensure
+     * that we have a weak pointer to the instance itself, so
+     * that it can create more shared pointers as needed. This is
+     * needed, for instance, to set the session's connection stub.
+     */
+    static boost::shared_ptr<Connection> createConnection(GMainLoop *loop,
+                                                          const GDBusCXX::DBusConnectionPtr &conn,
+                                                          const std::string &sessionID);
+
+private:
     Connection(GMainLoop *loop,
                const GDBusCXX::DBusConnectionPtr &conn,
                const std::string &sessionID);
+    boost::weak_ptr<Connection> m_me;
 
+public:
     ~Connection();
 
     /** session requested by us is ready to run a sync */
