@@ -726,6 +726,8 @@ protected:
     virtual void testRefreshFromServerSemantic();
     virtual void testRefreshStatus();
 
+    void testTwoWayRestart();
+
     void testCopy();
 
     virtual void testUpdate();

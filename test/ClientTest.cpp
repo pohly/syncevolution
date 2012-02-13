@@ -58,6 +58,10 @@
 #include <boost/bind.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/assign.hpp>
+#include <boost/lambda/lambda.hpp>
+#include <boost/lambda/bind.hpp>
+#include <boost/lambda/if.hpp>
+#include <boost/lambda/casts.hpp>
 
 #include <pcrecpp.h>
 
@@ -2408,6 +2412,8 @@ void SyncTests::addTests(bool isFirstSource) {
                 ADD_TEST(SyncTests, testRefreshFromClientSemantic);
                 ADD_TEST(SyncTests, testRefreshStatus);
 
+                ADD_TEST(SyncTests, testTwoWayRestart);
+
                 if (accessClientB &&
                     config.m_dump &&
                     config.m_compare) {
@@ -2808,6 +2814,84 @@ void SyncTests::testRefreshStatus() {
            "two-way",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,0, true, SYNC_TWO_WAY)));
+}
+
+static void log(const char *text)
+{
+    CLIENT_TEST_LOG("%s", text);
+}
+
+/**
+ * Helper function, to be used inside a SyncOptions start callback
+ * to connect all sources instantiated for a sync with the given
+ * pre-operation signal.
+ */
+template<class W> bool connectSourcePreSignal(SyncContext &context,
+                                              W SyncSource::Operations::*operation,
+                                              const boost::function<typename W::PreSignal::signature_type> &start)
+{
+    BOOST_FOREACH(const SyncSource *source, *context.getSources())  {
+        (source->getOperations().*operation).getPreSignal().connect(start);
+    }
+    return false;
+}
+
+// two-way sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => one item sent to peer
+void SyncTests::testTwoWayRestart()
+{
+    CT_ASSERT_NO_THROW(deleteAll());
+    int startCount = 0;
+    bool needToConnect = true;
+    typedef std::map<std::string, SyncSourceReport> Reports_t;
+    typedef std::map<int, Reports_t> Cycles_t;
+    Cycles_t results;
+
+    // Triggered once when all sourcs are done with their m_startDataRead
+    // implementation, then inserts a new item in all sources and
+    // requests a restart.
+    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
+        boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
+                               (boost::lambda::bind(log, "inserting one item and requesting restart"),
+                                boost::lambda::bind(&SyncTests::allSourcesInsert, this),
+                                boost::lambda::bind(SyncContext::requestAnotherSync)));
+
+    // Triggered at the beginning of the first m_endDataWrite,
+    // stores the sync report of that source so that we can check it later.
+    boost::function<SyncSource::Operations::EndDataWrite_t::PreSignal::signature_type> end =
+        (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, boost::lambda::_1)]
+         [boost::lambda::bind(&SyncSource::getName, boost::lambda::_1)] =
+         boost::lambda::_1);
+
+    SyncOptions::Callback_t setup =
+        (boost::lambda::if_then(boost::lambda::var(needToConnect),
+                                (boost::lambda::var(needToConnect) = false,
+                                 boost::lambda::bind(connectSourcePreSignal<SyncSource::Operations::StartDataRead_t>,
+                                                     boost::lambda::_1,
+                                                     &SyncSource::Operations::m_startDataRead,
+                                                     boost::cref(start)),
+                                 boost::lambda::bind(connectSourcePreSignal<SyncSource::Operations::EndDataWrite_t>,
+                                                     boost::lambda::_1,
+                                                     &SyncSource::Operations::m_endDataWrite,
+                                                     boost::cref(end))
+                                 )),
+         boost::lambda::constant(false));
+
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              SyncOptions(SYNC_TWO_WAY,
+                                          CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)
+                                          .setRestarts(1))
+                              .setStartCallback(setup)
+                              ));
+
+    // nothing transferred in first cycle
+    CT_ASSERT_EQUAL((size_t)2, results.size());
+    CT_ASSERT_EQUAL(sources.size(), results[0].size());
+    BOOST_FOREACH(const Reports_t::value_type &entry, results[0]) {
+        CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0, 0,0,0).check(entry.first, entry.second));
+    }
 }
 
 // test that a two-way sync copies an item from one address book into the other
