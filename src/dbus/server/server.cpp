@@ -148,19 +148,21 @@ void Server::connect(const Caller_t &caller,
     }
     std::string new_session = getNextSession();
 
-    boost::shared_ptr<ConnectionResource> cr(new ConnectionResource(*this,
+    boost::shared_ptr<ConnectionResource> connectionResource(new ConnectionResource(*this,
                                                                     new_session,
                                                                     peer,
                                                                     must_authenticate));
-    cr->init();
+    connectionResource->init();
     SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
                  caller.c_str(),
-                 cr->getPath(),
-                 cr->m_description.c_str());
+                 connectionResource->getPath(),
+                 connectionResource->m_description.c_str());
 
     boost::shared_ptr<Client> client = addClient(caller, watch);
-    client->attach(cr);
-    object = cr->getPath();
+    client->attach(connectionResource);
+    addResource(connectionResource);
+
+    object = connectionResource->getPath();
 }
 
 void Server::startSessionWithFlags(const Caller_t &caller,
