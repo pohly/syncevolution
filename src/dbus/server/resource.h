@@ -22,6 +22,8 @@
 
 #include <string>
 
+#include <syncevo/SmartPtr.h>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -31,10 +33,30 @@ SE_BEGIN_CXX
  */
 class Resource {
 public:
-    Resource() : m_result(true), m_replyTotal(0), m_replyCounter(0) {}
+    enum Priority {
+        PRI_CMDLINE = -10,
+        PRI_DEFAULT = 0,
+        PRI_CONNECTION = 10,
+        PRI_AUTOSYNC = 20
+    };
+
+    Resource() : m_priority(PRI_DEFAULT), m_isRunning(false), m_result(true), m_replyTotal(0), m_replyCounter(0) {}
     virtual ~Resource() {}
 
+    Priority getPriority() { return m_priority; }
+    void setPriority(Priority priority) { m_priority = priority; }
+
+    bool getIsRunning() { return m_isRunning; }
+
+    // This base class always assumes concurrent syncing is not
+    // possible. Override this in ConnectionResource and
+    // SessionResource if you want to enable running concurrent syncs.
+    virtual bool canRunConcurrently(boost::shared_ptr<Resource> resource) { return false; }
+
 protected:
+    Priority m_priority;
+    bool m_isRunning;
+
     // Status of most recent dbus call to helper
     bool m_result;
     std::string m_resultError;
