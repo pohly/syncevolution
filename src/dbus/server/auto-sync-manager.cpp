@@ -259,6 +259,7 @@ void AutoSyncManager::startTask()
                                                                    "",
                                                                    m_activeTask->m_peer,
                                                                    newSession);
+        m_sessionResource->setPriority(Resource::PRI_AUTOSYNC);
         m_sessionResource->addListener(this);
         m_server.addResource(m_sessionResource);
     }
