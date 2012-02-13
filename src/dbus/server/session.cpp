@@ -373,7 +373,6 @@ boost::shared_ptr<Session> Session::createSession(GMainLoop *loop,
                                                   const std::vector<std::string> &flags)
 {
     boost::shared_ptr<Session> me(new Session(loop, conn, config_name, session, flags));
-    me->m_me = me;
     return me;
 }
 
