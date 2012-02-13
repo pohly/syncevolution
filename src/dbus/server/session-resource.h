@@ -52,6 +52,7 @@ public:
          m_execute          (*this, "Execute"),
          m_serverShutdown   (*this, "ServerShutdown"),
          m_passwordResponse (*this, "PasswordResponse"),
+         m_setActive        (*this, "SetActive"),
          m_statusChanged    (*this, "StatusChanged", false),
          m_progressChanged  (*this, "ProgressChanged", false),
          m_passwordRequest  (*this, "PasswordRequest", false),
@@ -74,6 +75,7 @@ public:
     GDBusCXX::DBusClientCall0                                    m_execute;
     GDBusCXX::DBusClientCall0                                    m_serverShutdown;
     GDBusCXX::DBusClientCall0                                    m_passwordResponse;
+    GDBusCXX::DBusClientCall0                                    m_setActive;
     GDBusCXX::SignalWatch3<std::string, uint32_t,
                            SessionCommon::SourceStatuses_t>      m_statusChanged;
     GDBusCXX::SignalWatch2<int32_t,
@@ -118,8 +120,11 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
      * True once done() was called.
      */
     bool m_done;
+    bool m_active;
 
     void serverShutdownCb(const std::string &error);
+
+    void setActiveCb(const std::string &error);
 
     /** Session.Attach() */
     void attach(const GDBusCXX::Caller_t &caller);
@@ -275,6 +280,8 @@ public:
 
     // Called when server is shutting down.
     void serverShutdown();
+
+    void setActive(bool active);
 
     /**
      * add a listener of the session. Old set listener is returned

@@ -67,6 +67,27 @@ void SessionResource::serverShutdownCb(const std::string &error)
     replyInc();
 }
 
+void SessionResource::setActive(bool active)
+{
+    resetReplies();
+    m_sessionProxy->m_setActive(active, boost::bind(&SessionResource::setActiveCb, this, _1));
+    waitForReply();
+
+    if(m_result) {
+        throwExceptionFromString(m_resultError);
+    }
+
+    m_active = active;
+}
+
+void SessionResource::setActiveCb(const std::string &error)
+{
+    if(setResult(error)) {
+        SE_LOG_INFO(NULL, NULL, "Session.setActive callback successfull");
+    }
+    replyInc();
+}
+
 void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
 {
     resetReplies();
@@ -152,7 +173,7 @@ void SessionResource::requestPasswordCb(const std::map<std::string, std::string>
 
 bool SessionResource::getActive()
 {
-    return true;
+    return m_active;
 }
 
 void SessionResource::init()
@@ -500,6 +521,7 @@ SessionResource::SessionResource(Server &server,
     m_setConfig(false),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     m_done(false),
+    m_active(false),
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
