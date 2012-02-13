@@ -27,7 +27,7 @@
 SE_BEGIN_CXX
 
 /**
- * This class hold constants and defines for Sessions and its
+ * This namespace holds constants and defines for Sessions and its
  * consumers.
  */
 namespace SessionCommon
