@@ -434,6 +434,7 @@ Session::Session(GMainLoop *loop,
     add(this, &Session::execute, "Execute");
     add(this, &Session::passwordResponse, "PasswordResponse");
     add(this, &Session::serverShutdown, "ServerShutdown");
+    add(this, &Session::setActive, "SetActive");
     add(emitStatus);
     add(emitProgress);
     add(emitPasswordRequest);
