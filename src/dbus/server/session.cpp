@@ -273,10 +273,6 @@ void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &
     fireProgress(true);
     fireStatus(true);
     m_runOperation = OP_SYNC;
-
-    // now that we have a DBusSync object, return from the main loop
-    // and once that is done, transfer control to that object
-    g_main_loop_quit(m_loop);
 }
 
 void Session::abort()
@@ -298,7 +294,6 @@ void Session::suspend()
     }
     m_syncStatus = SessionCommon::SYNC_SUSPEND;
     fireStatus(true);
-    g_main_loop_quit(m_loop);
 }
 
 void Session::getStatus(std::string &status,
@@ -730,8 +725,6 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     }
     fireProgress(true);
     fireStatus(true);
-
-    g_main_loop_quit(m_loop);
 }
 
 void Session::SyncStatusOwner::setStatus(SessionCommon::SyncStatus status)
@@ -807,7 +800,6 @@ void Session::execute(const vector<string> &args, const map<string, string> &var
     }
 
     m_runOperation = OP_CMDLINE;
-    g_main_loop_quit(m_loop);
 }
 
 inline void insertPair(std::map<string, string> &params,
