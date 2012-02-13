@@ -850,6 +850,10 @@ protected:
         CT_WRAP_ASSERT(file, line, doSync(options));
     }
     virtual void postSync(int res, const std::string &logname);
+
+ private:
+    void allSourcesInsert();
+    void allSourcesDeleteAll();
 };
 
 /*

@@ -2581,7 +2581,6 @@ bool SyncTests::compareDatabases(const char *refFileBase, bool raiseAssert) {
 
 /** deletes all items locally and on server */
 void SyncTests::deleteAll(DeleteAllMode mode) {
-    source_it it;
     SyncPrefix prefix("deleteall", *this);
 
     const char *value = getenv ("CLIENT_TEST_DELETE_REFRESH");
@@ -2592,14 +2591,10 @@ void SyncTests::deleteAll(DeleteAllMode mode) {
     switch(mode) {
      case DELETE_ALL_SYNC:
         // a refresh from server would slightly reduce the amount of data exchanged, but not all servers support it
-        for (it = sources.begin(); it != sources.end(); ++it) {
-            CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-        }
+        CT_ASSERT_NO_THROW(allSourcesDeleteAll());
         doSync(__FILE__, __LINE__, "init", SyncOptions(SYNC_SLOW));
         // now that client and server are in sync, delete locally and sync again
-        for (it = sources.begin(); it != sources.end(); ++it) {
-            CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-        }
+        CT_ASSERT_NO_THROW(allSourcesDeleteAll());
         doSync(__FILE__, __LINE__,
                "twoway",
                SyncOptions(SYNC_TWO_WAY,
@@ -2607,9 +2602,7 @@ void SyncTests::deleteAll(DeleteAllMode mode) {
         break;
      case DELETE_ALL_REFRESH:
         // delete locally and then tell the server to "copy" the empty databases
-        for (it = sources.begin(); it != sources.end(); ++it) {
-            CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-        }
+        CT_ASSERT_NO_THROW(allSourcesDeleteAll());
         doSync(__FILE__, __LINE__,
                "refreshserver",
                SyncOptions(RefreshFromLocalMode(),
@@ -2629,10 +2622,7 @@ void SyncTests::doCopy() {
     accessClientB->deleteAll();
 
     // insert into first database, copy to server
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
@@ -2653,11 +2643,7 @@ void SyncTests::doCopy() {
  * servers do no support SYNC_REFRESH_FROM_SERVER
  */
 void SyncTests::refreshClient(SyncOptions options) {
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
-
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     doSync(__FILE__, __LINE__,
            "refresh",
            options
@@ -2671,15 +2657,11 @@ void SyncTests::testDeleteAllRefresh() {
     source_it it;
 
     // start with clean local data
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
     // copy something to server first; doesn't matter whether it has the
     // item already or not, as long as it exists there afterwards
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__, "insert", SyncOptions(SYNC_SLOW));
 
     // now ensure we can delete it
@@ -2755,9 +2737,7 @@ void SyncTests::testRefreshFromServerSemantic() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // insert item, then refresh from empty server
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "refresh",
            SyncOptions(RefreshFromPeerMode(),
@@ -2785,18 +2765,14 @@ void SyncTests::testRefreshFromClientSemantic() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // insert item, send to server
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // delete locally
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
     // refresh from client
     doSync(__FILE__, __LINE__,
@@ -2820,15 +2796,9 @@ void SyncTests::testRefreshFromClientSemantic() {
 void SyncTests::testRefreshStatus() {
     source_it it;
 
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "refresh-from-client",
            SyncOptions(RefreshFromLocalMode(),
@@ -2911,10 +2881,7 @@ void SyncTests::testDelete() {
     CT_ASSERT_NO_THROW(doCopy());
 
     // delete it on A
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
     // transfer change from A to server to B
     doSync(__FILE__, __LINE__,
@@ -2927,7 +2894,7 @@ void SyncTests::testDelete() {
                                       CheckSyncReport(0,0,1, 0,0,0, true, SYNC_TWO_WAY)));
 
     // check client B: shouldn't have any items now
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         TestingSyncSourcePtr copy;
         SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(it->second->createSourceA()));
         SOURCE_ASSERT_EQUAL(copy.get(), 0, countItems(copy.get()));
@@ -3675,9 +3642,7 @@ void SyncTests::testManyDeletes() {
     CT_ASSERT_NO_THROW(compareDatabases());
 
     // delete everything locally
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
-        source_pair.second->deleteAll(source_pair.second->createSourceA);
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     doSync(__FILE__, __LINE__,
            "delete-server",
            SyncOptions(SYNC_TWO_WAY,
@@ -3721,9 +3686,7 @@ void SyncTests::testSlowSyncSemantic()
                           "refresh",
                           SyncOptions(SYNC_TWO_WAY,
                                       CheckSyncReport(0,-1,0, 0,0,0, true, SYNC_TWO_WAY)));
-    BOOST_FOREACH(source_array_t::value_type &source_pair, accessClientB->sources)  {
-        source_pair.second->deleteAll(source_pair.second->createSourceA);
-    }
+    CT_ASSERT_NO_THROW(accessClientB->allSourcesDeleteAll());
     accessClientB->doSync(__FILE__, __LINE__,
                           "delete",
                           SyncOptions(SYNC_TWO_WAY,
@@ -3770,9 +3733,7 @@ void SyncTests::testComplexRefreshFromServerSemantic()
     }
 
     // delete that item via A, check again
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
-        source_pair.second->deleteAll(source_pair.second->createSourceA);
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     doSync(__FILE__, __LINE__,
            "delete-item",
            SyncOptions(SYNC_TWO_WAY,
@@ -3801,18 +3762,14 @@ void SyncTests::testDeleteBothSides()
 {
     CT_ASSERT_NO_THROW(testCopy());
 
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
+    CT_ASSERT_NO_THROW(accessClientB->allSourcesDeleteAll());
 
     doSync(__FILE__, __LINE__,
            "delete-item-A",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
+    source_it it;
     for (it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
@@ -5114,6 +5071,21 @@ void SyncTests::postSync(int res, const std::string &logname)
 {
     client.postSync(res, logname);
 }
+
+void SyncTests::allSourcesInsert()
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->testSimpleInsert());
+    }
+}
+
+void SyncTests::allSourcesDeleteAll()
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->deleteAll(source_pair.second->createSourceA));
+    }
+}
+
 
 /** generates tests on demand based on what the client supports */
 class ClientTestFactory : public CppUnit::TestFactory {
