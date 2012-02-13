@@ -66,7 +66,7 @@ static void onConnect(const DBusConnectionPtr &conn, const std::string &config,
         // Set the session as active.
         session->setActive(true);
     } else {
-        connection.reset(new Connection(loop, conn, sessionID));
+        connection = Connection::createConnection(loop, conn, sessionID);
         connection->activate();
         SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
                     connection->getPath(), connection->getInterface());
