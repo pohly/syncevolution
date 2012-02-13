@@ -199,6 +199,12 @@ ConnectionResource::ConnectionResource(Server &server,
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
     m_description(buildDescription(peer))
 {
+    m_priority = Resource::PRI_CONNECTION;
+    // FIXME: A Connection is always marked as running for now as we
+    // have no way of knowing the state of the session started by the
+    // Connection.
+    m_isRunning = true;
+
     add(this, &ConnectionResource::process, "Process");
     add(this, &ConnectionResource::close, "Close");
     add(emitAbort);

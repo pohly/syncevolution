@@ -448,6 +448,14 @@ void SessionResource::statusChangedCb(const std::string &status, uint32_t error,
                                       const SessionCommon::SourceStatuses_t &sources)
 {
     SE_LOG_INFO(NULL, NULL, "Session.StatusChanged signal received and relayed: status=%s", status.c_str());
+
+    // Keep track of weather this session is running.
+    if(status.find("running") != std::string::npos) {
+        m_isRunning = true;
+    } else {
+        m_isRunning = false;
+    }
+
     // Relay signal to client.
     emitStatus(status, error, sources);
 }
@@ -525,6 +533,9 @@ SessionResource::SessionResource(Server &server,
     emitStatus(*this, "StatusChanged"),
     emitProgress(*this, "ProgressChanged")
 {
+    m_priority = Resource::PRI_DEFAULT;
+    m_isRunning = false;
+
     add(this, &SessionResource::attach, "Attach");
     add(this, &SessionResource::detach, "Detach");
     add(this, &SessionResource::getFlags, "GetFlags");
