@@ -20,7 +20,7 @@
 
 #include <fstream>
 
-#include <syncevo/LogRedirect.h>
+#include <syncevo/Logging.h>
 #include <syncevo/GLibSupport.h>
 
 #include "server.h"
@@ -330,7 +330,7 @@ void Server::fileModified()
     }
 }
 
-void Server::run(LogRedirect &redirect)
+void Server::run(const boost::shared_ptr<LoggerBase> &/*logger*/)
 {
     // This has the intended side effect that it loads everything into
     // memory which might be dynamically loadable, like backend
