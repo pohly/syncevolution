@@ -92,7 +92,7 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
     /** Signal callbacks */
     void replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
                  const StringMap &meta, bool final, const std::string &session);
-    void sendAbortCb();
+    void abortCb();
     void shutdownCb();
     void killSessionsCb(const std::string &peerDeviceId);
 

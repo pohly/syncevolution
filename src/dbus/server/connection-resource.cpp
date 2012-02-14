@@ -141,7 +141,7 @@ void ConnectionResource::killSessionsCb(const string &peerDeviceId)
     return;
 }
 
-void ConnectionResource::sendAbortCb()
+void ConnectionResource::abortCb()
 {
     SE_LOG_INFO(NULL, NULL, "Connection.Abort signal received");
     return;
@@ -176,7 +176,7 @@ void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
     // Activate signal watch on helper signals.
     m_connectionProxy->m_reply.activate       (boost::bind(&ConnectionResource::replyCb,
                                                            this, _1, _2, _3 ,_4, _5));
-    m_connectionProxy->m_abort.activate       (boost::bind(&ConnectionResource::sendAbortCb, this));
+    m_connectionProxy->m_abort.activate       (boost::bind(&ConnectionResource::abortCb, this));
     m_connectionProxy->m_shutdown.activate    (boost::bind(&ConnectionResource::shutdownCb, this));
     m_connectionProxy->m_killSessions.activate(boost::bind(&ConnectionResource::killSessionsCb, this, _1));
 
