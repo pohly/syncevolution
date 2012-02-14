@@ -45,7 +45,6 @@ class BluezManager;
 class Timeout;
 class Restart;
 class Client;
-class LogRedirect;
 class GLibNotify;
 
 /**
@@ -373,7 +372,7 @@ public:
     GMainLoop *getLoop() { return m_loop; }
 
     /** process D-Bus calls until the server is ready to quit */
-    void run(LogRedirect &redirect);
+    void run();
 
     /**
      * look up client by its ID

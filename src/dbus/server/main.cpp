@@ -95,8 +95,6 @@ int main(int argc, char **argv, char **envp)
         signal(SIGTERM, niam);
         signal(SIGINT, niam);
 
-        LogRedirect redirect(true);
-
         // make daemon less chatty - long term this should be a command line option
         LoggerBase::instance().setLevel(getenv("SYNCEVOLUTION_DEBUG") ?
                                         LoggerBase::DEBUG :
@@ -117,7 +115,7 @@ int main(int argc, char **argv, char **envp)
         server.activate();
 
         SE_LOG_INFO(NULL, NULL, "%s: ready to run",  argv[0]);
-        server.run(redirect);
+        server.run();
         SE_LOG_INFO(NULL, NULL, "%s: terminating",  argv[0]);
         return 0;
     } catch ( const std::exception &ex ) {

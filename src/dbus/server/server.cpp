@@ -20,7 +20,6 @@
 
 #include <fstream>
 
-#include <syncevo/LogRedirect.h>
 #include <syncevo/GLibSupport.h>
 
 #include "server.h"
@@ -330,7 +329,7 @@ void Server::fileModified()
     }
 }
 
-void Server::run(LogRedirect &redirect)
+void Server::run()
 {
     // This has the intended side effect that it loads everything into
     // memory which might be dynamically loadable, like backend
