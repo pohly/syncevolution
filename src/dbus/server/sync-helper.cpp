@@ -29,6 +29,7 @@
 #include <syncevo/SyncContext.h>
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/ForkExec.h>
+#include <syncevo/LogRedirect.h>
 
 #include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
@@ -40,21 +41,20 @@ namespace {
     GMainLoop *loop = NULL;
     boost::shared_ptr<Session> session;
     boost::shared_ptr<Connection> connection;
-}
 
-static void niam(int sig)
+void niam(int sig)
 {
     SuspendFlags::getSuspendFlags().handleSignal(sig);
     g_main_loop_quit (loop);
 }
 
-static void onFailure(const std::string &error)
+void onFailure(const std::string &error)
 {
     SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
     g_main_loop_quit(loop);
 }
 
-static void onConnect(const DBusConnectionPtr &conn, const std::string &config,
+void onConnect(const DBusConnectionPtr &conn, const std::string &config,
                       const std::string &sessionID, bool startSession)
 {
     if(startSession) {
@@ -72,6 +72,8 @@ static void onConnect(const DBusConnectionPtr &conn, const std::string &config,
                     connection->getPath(), connection->getInterface());
     }
 }
+
+} // anonymous namespace
 
 /**
  * This program is a helper of syncevo-dbus-server which provides the
@@ -95,6 +97,8 @@ int main(int argc, char **argv, char **envp)
 
     signal(SIGTERM, niam);
     signal(SIGINT, niam);
+
+    LogRedirect redirect(true);
 
     try {
         if (getenv("SYNCEVOLUTION_DEBUG")) {
