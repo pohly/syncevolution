@@ -124,21 +124,18 @@ void ConnectionResource::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, cons
 {
     SE_LOG_INFO(NULL, NULL, "Connection.Reply signal received: replyType=%s, final=%s, session=%s",
                 replyType.c_str(), final ? "T" : "F", session.c_str());
-    return;
 }
 
 void ConnectionResource::shutdownCb()
 {
     SE_LOG_INFO(NULL, NULL, "Connection.Shutdown signal received: detaching connection from server.");
     m_server.detach(this);
-    return;
 }
 
 void ConnectionResource::killSessionsCb(const string &peerDeviceId)
 {
     SE_LOG_INFO(NULL, NULL, "Connection.KillSessions signal received: peerDeviceId=%s.", peerDeviceId.c_str());
     m_server.killSessions(peerDeviceId);
-    return;
 }
 
 void ConnectionResource::abortCb()
