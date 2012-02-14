@@ -45,7 +45,7 @@ class BluezManager;
 class Timeout;
 class Restart;
 class Client;
-class LogRedirect;
+class LoggerBase;
 class GLibNotify;
 
 /**
@@ -373,7 +373,7 @@ public:
     GMainLoop *getLoop() { return m_loop; }
 
     /** process D-Bus calls until the server is ready to quit */
-    void run(LogRedirect &redirect);
+    void run(const boost::shared_ptr<LoggerBase> &logger);
 
     /**
      * look up client by its ID
