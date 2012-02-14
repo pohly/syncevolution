@@ -187,11 +187,13 @@ void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
 
 void ConnectionResource::onQuit(int status)
 {
+    m_server.checkQueue();
     SE_LOG_INFO(NULL, NULL, "dbus-helper quit with status: %d", status);
 }
 
 void ConnectionResource::onFailure(const std::string &error)
 {
+    m_server.checkQueue();
     SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
 }
 
