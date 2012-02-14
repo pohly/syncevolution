@@ -144,7 +144,11 @@ void ConnectionResource::killSessionsCb(const string &peerDeviceId)
 void ConnectionResource::abortCb()
 {
     SE_LOG_INFO(NULL, NULL, "Connection.Abort signal received");
-    return;
+
+    if(!m_abortSent) {
+        emitAbort();
+        m_abortSent = true;
+    }
 }
 
 void ConnectionResource::init()
