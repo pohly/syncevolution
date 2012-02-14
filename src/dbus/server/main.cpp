@@ -29,6 +29,8 @@
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/SuspendFlags.h>
+#include <syncevo/LogRedirect.h>
+#include <syncevo/LogSyslog.h>
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
@@ -36,7 +38,8 @@ using namespace GDBusCXX;
 namespace {
     GMainLoop *loop = NULL;
     bool shutdownRequested = false;
-}
+    const char * const execName = "syncevo-dbus-server";
+    const char * const debugEnv = "SYNCEVOLUTION_DEBUG";
 
 void niam(int sig)
 {
@@ -45,7 +48,7 @@ void niam(int sig)
     g_main_loop_quit (loop);
 }
 
-static bool parseDuration(int &duration, const char* value)
+bool parseDuration(int &duration, const char* value)
 {
     if(value == NULL) {
         return false;
@@ -58,6 +61,18 @@ static bool parseDuration(int &duration, const char* value)
         return false;
     }
 }
+
+LoggerBase* getRedirectLogger()
+{
+    return new LogRedirect(true);
+}
+
+LoggerBase* getSyslogLogger()
+{
+    return new LoggerSyslog(execName);
+}
+
+} // anonymous namespace
 
 int main(int argc, char **argv, char **envp)
 {
@@ -85,7 +100,7 @@ int main(int argc, char **argv, char **envp)
         opt++;
     }
     try {
-        SyncContext::initMain("syncevo-dbus-server");
+        SyncContext::initMain(execName);
 
         loop = g_main_loop_new (NULL, FALSE);
 
@@ -95,8 +110,15 @@ int main(int argc, char **argv, char **envp)
         signal(SIGTERM, niam);
         signal(SIGINT, niam);
 
+        const char *debugVar(getenv(debugEnv));
+        const bool debugEnabled(debugVar && *debugVar);
+
+        boost::shared_ptr<LoggerBase> logger(debugEnabled ?
+                                             getRedirectLogger() :
+                                             getSyslogLogger());
+
         // make daemon less chatty - long term this should be a command line option
-        LoggerBase::instance().setLevel(getenv("SYNCEVOLUTION_DEBUG") ?
+        LoggerBase::instance().setLevel(debugEnabled ?
                                         LoggerBase::DEBUG :
                                         LoggerBase::INFO);
 
