@@ -38,7 +38,6 @@
 SE_BEGIN_CXX
 
 class SessionResource;
-class DBusTransportAgent;
 class Server;
 class InfoReq;
 class BluezManager;
