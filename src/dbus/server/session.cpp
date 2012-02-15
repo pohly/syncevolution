@@ -252,8 +252,7 @@ void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &
         filter["sync"] = mode;
     }
     m_sync->setConfigFilter(false, "", filter);
-    BOOST_FOREACH(const std::string &source,
-                  m_sync->getSyncSources()) {
+    BOOST_FOREACH(const std::string &source, m_sync->getSyncSources()) {
         filter = m_sourceFilters[source];
         SessionCommon::SourceModes_t::const_iterator it = source_modes.find(source);
         if (it != source_modes.end()) {
@@ -265,8 +264,7 @@ void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &
     // Update status and progress. From now on, all configured sources
     // have their default entry (referencing them by name creates the
     // entry).
-    BOOST_FOREACH(const std::string source,
-                  m_sync->getSyncSources()) {
+    BOOST_FOREACH(const std::string source, m_sync->getSyncSources()) {
         m_sourceStatus[source];
         m_sourceProgress[source];
     }
@@ -723,8 +721,7 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     m_runOperation = OP_RESTORE;
 
     // initiate status and progress and sourceProgress is not calculated currently
-    BOOST_FOREACH(const std::string source,
-                  m_sync->getSyncSources()) {
+    BOOST_FOREACH(const std::string source, m_sync->getSyncSources()) {
         m_sourceStatus[source];
     }
     fireProgress(true);
