@@ -62,6 +62,7 @@
 
 #include <map>
 #include <vector>
+#include <utility>
 
 #include <boost/bind.hpp>
 #include <boost/intrusive_ptr.hpp>
@@ -69,6 +70,7 @@
 #include <boost/variant.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/tuple/tuple.hpp>
 
 /* The SyncEvolution exception handler must integrate into the D-Bus
  * C++ wrapper. In contrast to the rest of the code, that handler uses
@@ -3951,6 +3953,30 @@ protected:
 
     typedef T Callback_t;
 
+    /**
+     * Blocking method call: execute call and check for error.
+     * Encoding parameters and decoding return values must be done by
+     * caller.
+     */
+    void doCall(GDBusMessagePtr &msg, GDBusMessagePtr &reply)
+    {
+        GError *err = NULL;
+        // Constructor steals reference, reset() doesn't!
+        // Therefore use constructor+copy instead of reset().
+        reply = GDBusMessagePtr(g_dbus_connection_send_message_with_reply_sync(DBusClientCall<Callback_t>::m_conn.get(),
+                                                                               msg.get(),
+                                                                               G_DBUS_SEND_MESSAGE_FLAGS_NONE,
+                                                                               -1,
+                                                                               NULL,
+                                                                               NULL,
+                                                                               &err));
+        if (err != NULL || g_dbus_message_to_gerror(reply.get(), &err)) {
+            std::string explanation = m_method + ": " + err->message;
+            g_error_free(err);
+            throw std::runtime_error(explanation);
+        }
+    }
+
     void prepare(GDBusMessagePtr &msg)
     {
         // Constructor steals reference, reset() doesn't!
@@ -3996,7 +4022,7 @@ public:
 
     GDBusConnection *getConnection() { return m_conn.get(); }
 
-    void operator () (const Callback_t &callback)
+    void start(const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4004,7 +4030,7 @@ public:
     }
 
     template <class A1>
-    void operator () (const A1 &a1, const Callback_t &callback)
+    void start(const A1 &a1, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4013,7 +4039,7 @@ public:
     }
 
     template <class A1, class A2>
-    void operator () (const A1 &a1, const A2 &a2, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4022,7 +4048,7 @@ public:
     }
 
     template <class A1, class A2, class A3>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4031,7 +4057,7 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4040,7 +4066,7 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4049,9 +4075,9 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6,
-                      const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+               const A6 &a6,
+               const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4060,9 +4086,9 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7,
-                      const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+               const A6 &a6, const A7 &a7,
+               const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4071,9 +4097,9 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8,
-                      const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+               const A6 &a6, const A7 &a7, const A8 &a8,
+               const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4082,9 +4108,9 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
-                      const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+               const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
+               const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4093,9 +4119,9 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10, 
-                      const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+               const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10, 
+               const Callback_t &callback)
     {
         GDBusMessagePtr msg;
         prepare(msg);
@@ -4115,10 +4141,11 @@ class DBusClientCall0 : public DBusClientCall<boost::function<void (const std::s
      */
     typedef boost::function<void (const std::string &)> Callback_t;
 
+    typedef DBusClientCall<Callback_t> inherited;
+
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef DBusClientCall<Callback_t>::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
@@ -4136,6 +4163,120 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall0::dbusCallback)
     {
     }
+
+        // return once the call is done, throws runtime_error if it fails
+    void operator () ()
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1>
+    void operator () (const A1 &a1)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2>
+    void operator () (const A1 &a1, const A2 &a2)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                      const A6 &a6)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                      const A6 &a6, const A7 &a7)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                      const A6 &a6, const A7 &a7, const A8 &a8)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+    }
 };
 
 /** 1 return value and 0 or more parameters */
@@ -4147,10 +4288,12 @@ class DBusClientCall1 : public DBusClientCall<boost::function<void (const R1 &, 
      */
     typedef boost::function<void (const R1 &, const std::string &)> Callback_t;
 
+    typedef DBusClientCall<Callback_t> inherited;
+
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+        typedef typename inherited::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
@@ -4174,6 +4317,153 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall1::dbusCallback)
     {
     }
+
+    // return result of the call once it is done, throws runtime_error if it fails
+    R1 operator () ()
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1>
+    R1 operator () (const A1 &a1)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2>
+    R1 operator () (const A1 &a1, const A2 &a2)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                    const A6 &a6)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                    const A6 &a6, const A7 &a7)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                    const A6 &a6, const A7 &a7, const A8 &a8)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                    const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
+    R1 operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                    const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        R1 r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
+    }
 };
 
 /** 2 return value and 0 or more parameters */
@@ -4187,10 +4477,12 @@ class DBusClientCall2 : public DBusClientCall<boost::function<
      */
     typedef boost::function<void (const R1 &, const R2 &, const std::string &)> Callback_t;
 
+    typedef DBusClientCall<Callback_t> inherited;
+
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+        typedef typename inherited::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
@@ -4213,6 +4505,153 @@ public:
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall2::dbusCallback)
     {
     }
+
+    // return result of the call as std::pair once it is done, throws runtime_error if it fails
+    std::pair<R1, R2> operator () ()
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1>
+    std::pair<R1, R2> operator () (const A1 &a1)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                   const A6 &a6)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                   const A6 &a6, const A7 &a7)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                   const A6 &a6, const A7 &a7, const A8 &a8)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                   const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
+    std::pair<R1, R2> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                   const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        std::pair<R1, R2> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
+    }
 };
 
 /** 3 return value and 0 or more parameters */
@@ -4226,10 +4665,12 @@ class DBusClientCall3 : public DBusClientCall<boost::function<
      */
     typedef boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)> Callback_t;
 
+    typedef DBusClientCall<Callback_t> inherited;
+
     /** called by gdbus on error or completion of call */
     static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data)
     {
-        typedef typename DBusClientCall<Callback_t>::CallbackData CallbackData;
+        typedef typename inherited::CallbackData CallbackData;
         CallbackData *data = static_cast<CallbackData *>(user_data);
 
         GError *err = NULL;
@@ -4252,6 +4693,153 @@ public:
     DBusClientCall3 (const DBusRemoteObject &object, const std::string &method)
         : DBusClientCall<Callback_t>(object, method, &DBusClientCall3::dbusCallback)
     {
+    }
+
+    // return result of the call as boost::tuple once it is done, throws runtime_error if it fails
+    boost::tuple<R1, R2, R3> operator () ()
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                          const A6 &a6)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                          const A6 &a6, const A7 &a7)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                          const A6 &a6, const A7 &a7, const A8 &a8)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                          const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
+    }
+
+    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
+    boost::tuple<R1, R2, R3> operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
+                                          const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10)
+    {
+        GDBusMessagePtr msg;
+        inherited::prepare(msg);
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        GDBusMessagePtr reply;
+        inherited::doCall(msg, reply);
+        boost::tuple<R1, R2, R3> r;
+        ExtractArgs(inherited::m_conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
     }
 };
 
