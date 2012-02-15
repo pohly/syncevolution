@@ -271,8 +271,8 @@ class AppendRetvals {
     GVariantBuilder m_builder;
 
  public:
-    AppendRetvals(GDBusMessage *msg) {
-        m_msg = msg;
+    AppendRetvals(GDBusMessagePtr &msg) {
+        m_msg = msg.get();
         g_variant_builder_init(&m_builder, G_VARIANT_TYPE_TUPLE);
     }
 
@@ -561,7 +561,7 @@ class EmitSignal1
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
 
-        AppendRetvals(msg.get()) << a1;
+        AppendRetvals(msg) << a1;
 
         if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
@@ -606,7 +606,7 @@ class EmitSignal2
         if (!msg) {
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
-        AppendRetvals(msg.get()) << a1 << a2;
+        AppendRetvals(msg) << a1 << a2;
 
         if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
@@ -652,7 +652,7 @@ class EmitSignal3
         if (!msg) {
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
-        AppendRetvals(msg.get()) << a1 << a2 << a3;
+        AppendRetvals(msg) << a1 << a2 << a3;
         if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
@@ -698,7 +698,7 @@ class EmitSignal4
         if (!msg) {
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
         if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
@@ -745,7 +745,7 @@ class EmitSignal5
         if (!msg) {
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
         if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message");
@@ -793,7 +793,7 @@ class EmitSignal6
         if (!msg) {
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
         if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
@@ -2029,7 +2029,7 @@ class DBusResult1 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1;
+        AppendRetvals(reply) << a1;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2057,7 +2057,7 @@ class DBusResult2 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2;
+        AppendRetvals(reply) << a1 << a2;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2090,7 +2090,7 @@ class DBusResult3 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3;
+        AppendRetvals(reply) << a1 << a2 << a3;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2123,7 +2123,7 @@ class DBusResult4 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2155,7 +2155,7 @@ class DBusResult5 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4 << a5;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2189,7 +2189,7 @@ class DBusResult6 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4 << a5 << a6;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2223,7 +2223,7 @@ class DBusResult7 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2257,7 +2257,7 @@ class DBusResult8 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2291,7 +2291,7 @@ class DBusResult9 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -2325,7 +2325,7 @@ class DBusResult10 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        AppendRetvals(reply.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
         if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
         }
@@ -4183,7 +4183,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1;
+        AppendRetvals(msg) << a1;
         sendAndHandle(msg, callback);
     }
 
@@ -4192,7 +4192,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1;
+        AppendRetvals(msg) << a1;
         return sendAndReturn(msg);
     }
 
@@ -4201,7 +4201,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1;
+        AppendRetvals(msg) << a1;
         send(msg, callback);
     }
 
@@ -4210,7 +4210,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2;
+        AppendRetvals(msg) << a1 << a2;
         sendAndHandle(msg, callback);
     }
 
@@ -4219,7 +4219,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2;
+        AppendRetvals(msg) << a1 << a2;
         return sendAndReturn(msg);
     }
 
@@ -4228,7 +4228,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2;
+        AppendRetvals(msg) << a1 << a2;
         send(msg, callback);
     }
 
@@ -4237,7 +4237,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3;
+        AppendRetvals(msg) << a1 << a2 << a3;
         sendAndHandle(msg, callback);
     }
 
@@ -4246,7 +4246,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3;
+        AppendRetvals(msg) << a1 << a2 << a3;
         sendAndReturn(msg);
     }
 
@@ -4255,7 +4255,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3;
+        AppendRetvals(msg) << a1 << a2 << a3;
         send(msg, callback);
     }
 
@@ -4264,7 +4264,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
         sendAndHandle(msg, callback);
     }
 
@@ -4273,7 +4273,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
         sendAndReturn(msg);
     }
 
@@ -4282,7 +4282,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4;
         send(msg, callback);
     }
 
@@ -4291,7 +4291,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
         sendAndHandle(msg, callback);
     }
 
@@ -4300,7 +4300,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
         sendAndReturn(msg);
     }
 
@@ -4309,7 +4309,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
         send(msg, callback);
     }
 
@@ -4320,7 +4320,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
         sendAndHandle(msg, callback);
     }
 
@@ -4330,7 +4330,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
         sendAndReturn(msg);
     }
 
@@ -4341,7 +4341,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
         send(msg, callback);
     }
 
@@ -4352,7 +4352,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
         sendAndHandle(msg, callback);
     }
 
@@ -4362,7 +4362,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
         sendAndReturn(msg);
     }
 
@@ -4373,7 +4373,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
         send(msg, callback);
     }
 
@@ -4384,7 +4384,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
         sendAndHandle(msg, callback);
     }
 
@@ -4394,7 +4394,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
         sendAndReturn(msg);
     }
 
@@ -4405,7 +4405,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
         send(msg, callback);
     }
 
@@ -4416,7 +4416,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
         sendAndHandle(msg, callback);
     }
 
@@ -4426,7 +4426,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
         sendAndReturn(msg);
     }
 
@@ -4437,7 +4437,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
         send(msg, callback);
     }
 
@@ -4448,7 +4448,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
         sendAndHandle(msg, callback);
     }
 
@@ -4458,7 +4458,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
         sendAndReturn(msg);
     }
 
@@ -4469,7 +4469,7 @@ public:
     {
         GDBusMessagePtr msg;
         prepare(msg);
-        AppendRetvals(msg.get()) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
+        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
         send(msg, callback);
     }
 };
