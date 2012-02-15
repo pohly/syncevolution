@@ -114,11 +114,6 @@ int main(int argc, char **argv, char **envp)
             return 1;
         }
 
-        SE_LOG_INFO(NULL, NULL, "SYNCEVO_START_CONNECTION = %s in helper", start_session ? "F" : "T");
-        SE_LOG_INFO(NULL, NULL, "SYNCEVO_SESSION_CONFIG   = %s in helper", session_config.c_str());
-        SE_LOG_INFO(NULL, NULL, "SYNCEVO_SESSION_ID       = %s in helper", session_id.c_str());
-        SE_LOG_INFO(NULL, NULL, "SYNCEVOLUTION_FORK_EXEC  = %s in helper", getenv("SYNCEVOLUTION_FORK_EXEC"));
-
         forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_config, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
