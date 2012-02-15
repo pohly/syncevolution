@@ -42,37 +42,36 @@ namespace {
     boost::shared_ptr<Session> session;
     boost::shared_ptr<Connection> connection;
 
-void niam(int sig)
-{
-    SuspendFlags::getSuspendFlags().handleSignal(sig);
-    g_main_loop_quit (loop);
-}
-
-void onFailure(const std::string &error)
-{
-    SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
-    g_main_loop_quit(loop);
-}
-
-void onConnect(const DBusConnectionPtr &conn, const std::string &config,
-                      const std::string &sessionID, bool startSession)
-{
-    if(startSession) {
-        session = Session::createSession(loop, conn, config, sessionID);
-        SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
-                    session->getPath(), session->getInterface());
-        // Activate dbus interface.
-        session->activate();
-        // Set the session as active.
-        session->setActive(true);
-    } else {
-        connection = Connection::createConnection(loop, conn, sessionID);
-        connection->activate();
-        SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
-                    connection->getPath(), connection->getInterface());
+    void niam(int sig)
+    {
+        SuspendFlags::getSuspendFlags().handleSignal(sig);
+        g_main_loop_quit (loop);
     }
-}
 
+    void onFailure(const std::string &error)
+    {
+        SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
+        g_main_loop_quit(loop);
+    }
+
+    void onConnect(const DBusConnectionPtr &conn, const std::string &config,
+                          const std::string &sessionID, bool startSession)
+    {
+        if(startSession) {
+            session = Session::createSession(loop, conn, config, sessionID);
+            SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
+                        session->getPath(), session->getInterface());
+            // Activate dbus interface.
+            session->activate();
+            // Set the session as active.
+            session->setActive(true);
+        } else {
+            connection = Connection::createConnection(loop, conn, sessionID);
+            connection->activate();
+            SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
+                        connection->getPath(), connection->getInterface());
+        }
+    }
 } // anonymous namespace
 
 /**
