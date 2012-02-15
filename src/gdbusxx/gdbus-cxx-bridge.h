@@ -4150,6 +4150,9 @@ class DBusClientCall0 : public DBusClientCall<boost::function<void (const std::s
 
         GError *err = NULL;
         GDBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
+        if (err == NULL) {
+            g_dbus_message_to_gerror(reply.get(), &err);
+        }
         //unmarshal the return results and call user callback
         (data->m_callback)(err ? err->message : "");
         delete data;
