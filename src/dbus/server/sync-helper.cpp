@@ -80,23 +80,28 @@ static void onConnect(const DBusConnectionPtr &conn, const std::string &config,
  */
 int main(int argc, char **argv, char **envp)
 {
+    // delay the client for debugging purposes
+    const char *delay = getenv("SYNCEVOLUTION_LOCAL_CHILD_DELAY");
+    if (delay) {
+        sleep(atoi(delay));
+    }
+
+    SyncContext::initMain("syncevo-dbus-helper");
+
+    loop = g_main_loop_new(NULL, FALSE);
+
+    setvbuf(stderr, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
+
+    signal(SIGTERM, niam);
+    signal(SIGINT, niam);
+
     try {
-        SyncContext::initMain("syncevo-dbus-helper");
-
-        loop = g_main_loop_new(NULL, FALSE);
-
-        setvbuf(stderr, NULL, _IONBF, 0);
-        setvbuf(stdout, NULL, _IONBF, 0);
-
-        signal(SIGTERM, niam);
-        signal(SIGINT, niam);
-
-        // LogRedirect redirect(true);
-
-        // make daemon less chatty - long term this should be a command line option
-        LoggerBase::instance().setLevel(getenv("SYNCEVOLUTION_DEBUG") ?
-                                        LoggerBase::DEBUG :
-                                        LoggerBase::INFO);
+        if (getenv("SYNCEVOLUTION_DEBUG")) {
+            LoggerBase::instance().setLevel(Logger::DEBUG);
+        }
+        // process name will be set to target config name once it is known
+        Logger::setProcessName("syncevo-dbus-helper");
 
         boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
 
