@@ -3917,8 +3917,8 @@ struct VoidReturn {};
 struct VoidTraits : public TraitsBase<boost::function<void (const std::string &)>, VoidReturn>
 {
     typedef TraitsBase<boost::function<void (const std::string &)>, VoidReturn> base;
-    typedef typename base::Callback_t Callback_t;
-    typedef typename base::Return_t Return_t;
+    typedef base::Callback_t Callback_t;
+    typedef base::Return_t Return_t;
 
     static Return_t demarshal(DBusMessagePtr &/*reply*/, const DBusConnectionPtr &/*conn*/)
     {
