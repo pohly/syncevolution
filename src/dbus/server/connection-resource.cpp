@@ -82,15 +82,10 @@ void ConnectionResource::process(const Caller_t &caller,
         throw runtime_error("client does not own connection");
     }
 
-    std::string str_error;
-
-    genericCall(m_connectionProxy->m_process,
-                m_connectionProxy->m_process.bindGeneric(&str_error),
-                msg,
-                msgType,
-                m_peer,
-                m_mustAuthenticate,
-                str_error);
+    m_connectionProxy->m_process(msg,
+                                 msgType,
+                                 m_peer,
+                                 m_mustAuthenticate);
 }
 
 void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error)
@@ -107,13 +102,8 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
         throw runtime_error("unknown client");
     }
 
-    std::string str_error;
-
-    genericCall(m_connectionProxy->m_close,
-                m_connectionProxy->m_close.bindGeneric(&str_error),
-                normal,
-                error,
-                str_error);
+    m_connectionProxy->m_close(normal,
+                               error);
 
     // if we get there, then call was successfull.
     client->detach(this);

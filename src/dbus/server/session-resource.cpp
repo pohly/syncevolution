@@ -53,33 +53,21 @@ void SessionResource::serverShutdown()
 {
     std::string str_error;
 
-    genericCall(m_sessionProxy->m_serverShutdown,
-                m_sessionProxy->m_serverShutdown.bindGeneric(&str_error),
-                str_error);
+    m_sessionProxy->m_serverShutdown();
 }
 
 void SessionResource::setActive(bool active)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_setActive,
-                m_sessionProxy->m_setActive.bindGeneric(&str_error),
-                active,
-                str_error);
+    m_sessionProxy->m_setActive(active);
 
     m_active = active;
 }
 
 void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_restore,
-                m_sessionProxy->m_restore.bindGeneric(&str_error),
-                dir,
-                before,
-                sources,
-                str_error);
+    m_sessionProxy->m_restore(dir,
+                              before,
+                              sources);
 }
 
 void SessionResource::checkPresence(std::string &status)
@@ -90,13 +78,8 @@ void SessionResource::checkPresence(std::string &status)
 
 void SessionResource::execute(const vector<string> &args, const map<string, string> &vars)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_execute,
-                m_sessionProxy->m_execute.bindGeneric(&str_error),
-                args,
-                vars,
-                str_error);
+    m_sessionProxy->m_execute(args,
+                              vars);
 }
 
 void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
@@ -110,16 +93,8 @@ void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
         }
     }
 
-    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Waiting for password response");
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_passwordResponse,
-                m_sessionProxy->m_passwordResponse.bindGeneric(&str_error),
-                false,
-                password,
-                str_error);
-
-    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Finished waiting for password response. Password%s received", str_error.empty() ? "" : " not");
+    m_sessionProxy->m_passwordResponse(false,
+                                       password);
 }
 
 void SessionResource::requestPasswordCb(const std::map<std::string, std::string> & params)
@@ -179,44 +154,28 @@ void SessionResource::setNamedConfig(const std::string &configName, bool update,
 
     std::string str_error;
 
-    genericCall(m_sessionProxy->m_setNamedConfig,
-                m_sessionProxy->m_setNamedConfig.bindGeneric(&m_setConfig, &str_error),
-                configName,
-                update,
-                temporary,
-                config,
-                str_error);
+    m_sessionProxy->m_setNamedConfig(configName,
+                                     update,
+                                     temporary,
+                                     config);
 
     SE_LOG_INFO(NULL, NULL, "m_setConfig = %d", (int)m_setConfig);
 }
 
 void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_sync,
-                m_sessionProxy->m_sync.bindGeneric(&str_error),
-                mode,
-                source_modes,
-                str_error);
+    m_sessionProxy->m_sync(mode,
+                           source_modes);
 }
 
 void SessionResource::abort()
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_abort,
-                m_sessionProxy->m_abort.bindGeneric(&str_error),
-                str_error);
+    m_sessionProxy->m_abort();
 }
 
 void SessionResource::suspend()
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_suspend,
-                m_sessionProxy->m_suspend.bindGeneric(&str_error),
-                str_error);
+    m_sessionProxy->m_suspend();
 }
 
 void SessionResource::getStatus(std::string &status, uint32_t &error,
@@ -224,9 +183,9 @@ void SessionResource::getStatus(std::string &status, uint32_t &error,
 {
     std::string str_error;
 
-    genericCall(m_sessionProxy->m_getStatus,
-                m_sessionProxy->m_getStatus.bindGeneric(&status, &error, &sources, &str_error),
-                str_error);
+    // assign to return values directly via tuple containing refs to them
+    boost::tuple<std::string &, uint32_t &, SessionCommon::SourceStatuses_t &> res(status, error, sources);
+    res = m_sessionProxy->m_getStatus();
 
     SE_LOG_INFO(NULL, NULL, "status=%s, error code=%d",
                 status.c_str(), error);
@@ -234,11 +193,9 @@ void SessionResource::getStatus(std::string &status, uint32_t &error,
 
 void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_getProgress,
-                m_sessionProxy->m_getProgress.bindGeneric(&progress, &sources, &str_error),
-                str_error);
+    // same direct assignment as in SessionResource::getStatus()
+    boost::tuple<int32_t &, SessionCommon::SourceProgresses_t &> res(progress, sources);
+    res = m_sessionProxy->m_getProgress();
 
     SE_LOG_INFO(NULL, NULL, "Progress=%d", progress);
 }
@@ -246,44 +203,24 @@ void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgre
 void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate,
                                      ReadOperations::Config_t &config)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_getNamedConfig,
-                m_sessionProxy->m_getNamedConfig.bindGeneric(&config, &str_error),
-                configName,
-                getTemplate,
-                str_error);
+    m_sessionProxy->m_getNamedConfig(configName,
+                                     getTemplate);
 }
 
 void SessionResource::getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_getReports,
-                m_sessionProxy->m_getReports.bindGeneric(&reports, &str_error),
-                start,
-                count,
-                str_error);
+    m_sessionProxy->m_getReports(start,
+                                 count);
 }
 
 void SessionResource::checkSource(const string &sourceName)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_checkSource,
-                m_sessionProxy->m_checkSource.bindGeneric(&str_error),
-                sourceName,
-                str_error);
+    m_sessionProxy->m_checkSource(sourceName);
 }
 
 void SessionResource::getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_getDatabases,
-                m_sessionProxy->m_getDatabases.bindGeneric(&databases, &str_error),
-                sourceName,
-                str_error);
+    m_sessionProxy->m_getDatabases(sourceName);
 }
 
 SessionListener* SessionResource::addListener(SessionListener *listener)

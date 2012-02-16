@@ -75,47 +75,6 @@ protected:
     void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
     void replyInc() { m_replyCounter++; }
     void waitForReply(int timeout = 100 /*ms*/);
-
-    // Determine and throw appropriate exception based on returned error string
-    void throwExceptionFromString(const std::string &errorString);
-
-    // Some generic DBus callers
-    void genericErrorHandler(const std::string &error, const std::string &method);
-
-    template<class DC>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, std::string& str_error)
-    {
-        call.block(callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
-
-    template <class DC, class A1>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, std::string& str_error)
-    {
-        call.block(a1, callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
-
-    template <class DC, class A1, class A2>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, std::string& str_error)
-    {
-        call.block(a1, a2, callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
-
-    template <class DC, class A1, class A2, class A3>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, const A3 &a3, std::string& str_error)
-    {
-        call.block(a1, a2, a3, callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
-
-    template <class DC, class A1, class A2, class A3, class A4>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, std::string& str_error)
-    {
-        call.block(a1, a2, a3, a4, callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
 };
 
 SE_END_CXX

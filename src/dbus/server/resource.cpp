@@ -35,32 +35,6 @@ bool Resource::setResult(const std::string &error)
     return m_result;
 }
 
-/**
- * Determine and throw appropriate exception based on returned error string
- */
-void Resource::throwExceptionFromString(const std::string &errorString)
-{
-    size_t pos = errorString.find_first_of(':');
-    if(pos == std::string::npos) {
-        return;
-    }
-
-    std::string exName(errorString.substr(0, pos));
-    std::string msg(errorString.substr(pos + 2)); // Don't include colon nor following space.
-
-    if(boost::iequals(exName, "org.syncevolution.NoSuchConfig")) {
-        SE_THROW_EXCEPTION(NoSuchConfig, msg);
-    } else if (boost::iequals(exName, "org.syncevolution.NoSuchSource")) {
-        SE_THROW_EXCEPTION(NoSuchSource, msg);
-    } else if (boost::iequals(exName, "org.syncevolution.InvalidCall")) {
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    } else if (boost::iequals(exName, "org.syncevolution.SourceUnusable")) {
-        SE_THROW_EXCEPTION(SourceUnusable, msg);
-    } else {
-        SE_THROW_EXCEPTION(DBusSyncException, msg);
-    }
-}
-
 void Resource::waitForReply(gint timeout)
 {
     m_result = true;
@@ -77,15 +51,6 @@ void Resource::waitForReply(gint timeout)
         g_usleep(timeout * 100);
         g_main_context_iteration(g_main_context_default(), TRUE);
         ++counter;
-    }
-}
-
-void Resource::genericErrorHandler(const std::string &error, const std::string &method)
-{
-    if (error.empty()) {
-        SE_LOG_INFO(NULL, NULL, "%s.%s successfull.", m_resourceName.c_str(), method.c_str());
-    } else {
-        throwExceptionFromString(error);
     }
 }
 
