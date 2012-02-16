@@ -74,10 +74,12 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
 
     /** Connection.Process */
     void process(const GDBusCXX::Caller_t &caller, const GDBusCXX::DBusArray<uint8_t> &msg,
-                 const std::string &msgType);
+                 const std::string &msgType,
+                 const boost::shared_ptr<GDBusCXX::Result0> &result);
 
     /** Connection.Close */
-    void close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error);
+    void close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
+               const boost::shared_ptr<GDBusCXX::Result0> &result);
 
     GDBusCXX::EmitSignal0 emitAbort;
     bool m_abortSent;

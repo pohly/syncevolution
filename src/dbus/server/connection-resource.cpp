@@ -21,12 +21,14 @@
 #include "client.h"
 #include "connection-resource.h"
 #include "session-common.h"
+#include "dbus-proxy.h"
 
 #include <synthesis/san.h>
 #include <syncevo/TransportAgent.h>
 #include <syncevo/SyncContext.h>
 
 #include <boost/lexical_cast.hpp>
+#include <boost/bind.hpp>
 
 using namespace GDBusCXX;
 
@@ -69,7 +71,8 @@ std::string ConnectionResource::buildDescription(const StringMap &peer)
 
 void ConnectionResource::process(const Caller_t &caller,
                                  const GDBusCXX::DBusArray<uint8_t> &msg,
-                                 const std::string &msgType)
+                                 const std::string &msgType,
+                                 const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
@@ -82,18 +85,15 @@ void ConnectionResource::process(const Caller_t &caller,
         throw runtime_error("client does not own connection");
     }
 
-    std::string str_error;
-
-    genericCall(m_connectionProxy->m_process,
-                m_connectionProxy->m_process.bindGeneric(&str_error),
-                msg,
-                msgType,
-                m_peer,
-                m_mustAuthenticate,
-                str_error);
+    m_connectionProxy->m_process.start(msg,
+                                       msgType,
+                                       m_peer,
+                                       m_mustAuthenticate,
+                                       MakeProxyCallback(result));
 }
 
-void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error)
+void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
+                               const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
     SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s closes connection %s %s%s%s",
                  caller.c_str(),
@@ -107,16 +107,27 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
         throw runtime_error("unknown client");
     }
 
-    std::string str_error;
+    // Does the client have to own this resource to close it?
+    // Probably. We also need the smart pointer below.
+    boost::shared_ptr<ConnectionResource> myself =
+        boost::static_pointer_cast<ConnectionResource, Resource>(client->findResource(this));
+    if (!myself) {
+        throw runtime_error("client does not own connection");
+    }
 
-    genericCall(m_connectionProxy->m_close,
-                m_connectionProxy->m_close.bindGeneric(&str_error),
-                normal,
-                error,
-                str_error);
-
-    // if we get there, then call was successfull.
-    client->detach(this);
+    // If the close() call succeeds, then we remove ourselves from
+    // the client. boost::signals2 tracking ensures that
+    // Client::detach() will not be called with a stale Client or
+    // ConnectionResource pointer.
+    //
+    // static_cast is necessary because detach() is ambiguous.
+    ProxyCallback<GDBusCXX::Result0> callback(result);
+    callback.m_success->connect(DBusSuccessSignal_t::slot_type(static_cast< void (Client::*) (Resource *)>(&Client::detach),
+                                                               client.get(),
+                                                               myself.get()).track(client).track(myself));
+    m_connectionProxy->m_close.start(normal,
+                                     error,
+                                     callback);
 }
 
 void ConnectionResource::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,

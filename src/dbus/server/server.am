@@ -27,6 +27,7 @@ src_dbus_server_server_cpp_files = \
 
 src_dbus_server_server_h_files = \
   $(src_dbus_server_server_cpp_files:.cpp=.h) \
+  src/dbus/server/dbus-proxy.h \
   src/dbus/server/notification-backend-base.h \
   src/dbus/server/notification-manager.h \
   src/dbus/server/notification-manager-base.h \
