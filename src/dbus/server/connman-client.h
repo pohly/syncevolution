@@ -45,7 +45,7 @@ public:
     void getPropCb(const std::map <std::string, boost::variant<std::string> >& props, const std::string &error);
 
     /** TRUE if watching ConnMan status */
-    bool isAvailable() { return getConnection().get() != NULL; }
+    bool isAvailable() { return getConnection() != NULL; }
 
 private:
     Server &m_server;
