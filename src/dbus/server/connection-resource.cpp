@@ -122,6 +122,7 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
 void ConnectionResource::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
                                  const StringMap &meta, bool final, const std::string &session)
 {
+    emitReply(reply, replyType, meta, final, session);
     SE_LOG_INFO(NULL, NULL, "Connection.Reply signal received: replyType=%s, final=%s, session=%s",
                 replyType.c_str(), final ? "T" : "F", session.c_str());
 }
