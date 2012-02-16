@@ -4135,7 +4135,7 @@ protected:
                                                                              &error));
 
 
-        if (error) {
+        if (error || g_dbus_message_to_gerror(reply.get(), &error)) {
             DBusErrorCXX(error).throwFailure(m_method);
         }
         return CallTraits::demarshal(reply, m_conn);
