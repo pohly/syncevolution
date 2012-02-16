@@ -203,6 +203,9 @@ libexec_PROGRAMS += src/syncevo-dbus-helper
 
 src_syncevo_dbus_helper_SOURCES = \
   $(CORE_SOURCES)
+if ENABLE_UNIT_TESTS
+nodist_src_syncevo_dbus_helper_SOURCES = test/test.cpp
+endif
 
 src_syncevo_dbus_helper_LDADD = $(builddir)/src/dbus/server/libsyncevodbushelper.la $(gdbus_build_dir)/libgdbussyncevo.la $(CORE_LDADD) $(KEYRING_LIBS) $(KDE_KWALLET_LIBS) $(DBUS_LIBS)
 src_syncevo_dbus_helper_CPPFLAGS = -DHAVE_CONFIG_H -I$(gdbus_dir) $(src_cppflags) -DSYNCEVOLUTION_LOCALEDIR=\"${SYNCEVOLUTION_LOCALEDIR}\"
