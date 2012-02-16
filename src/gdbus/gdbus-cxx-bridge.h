@@ -3957,7 +3957,6 @@ struct Ret1Traits : public TraitsBase<boost::function<void (const R1 &, const st
 
     //unmarshal the return results and call user callback
     (data->m_callback)(r, error);
-    delete data;
   }
 };
 
@@ -3986,7 +3985,6 @@ struct Ret2Traits : public TraitsBase<boost::function<void (const R1 &, const R2
 
     //unmarshal the return results and call user callback
     (data->m_callback)(r1, r2, error);
-    delete data;
   }
 };
 
@@ -4016,7 +4014,6 @@ struct Ret3Traits : public TraitsBase<boost::function<void (const R1 &, const R2
 
     //unmarshal the return results and call user callback
     (data->m_callback)(r1, r2, r3, error);
-    delete data;
   }
 };
 
