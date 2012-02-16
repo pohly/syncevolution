@@ -381,7 +381,6 @@ Connection::~Connection()
         // destructing
         Exception::handle();
     }
-    //DBUS_SIG::server.autoTermUnref();
 }
 
 void Connection::ready()
