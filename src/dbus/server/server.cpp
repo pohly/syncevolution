@@ -149,9 +149,9 @@ void Server::connect(const Caller_t &caller,
     std::string new_session = getNextSession();
 
     boost::shared_ptr<ConnectionResource> connectionResource(new ConnectionResource(*this,
-                                                                    new_session,
-                                                                    peer,
-                                                                    must_authenticate));
+                                                                                    new_session,
+                                                                                    peer,
+                                                                                    must_authenticate));
     connectionResource->init();
     SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
                  caller.c_str(),

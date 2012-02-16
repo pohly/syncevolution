@@ -27,6 +27,8 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+class Server;
+
 /**
  * Anything that can be owned by a client, like a connection
  * or session.
@@ -40,7 +42,14 @@ public:
         PRI_AUTOSYNC = 20
     };
 
-    Resource(const std::string &resourceName) : m_priority(PRI_DEFAULT), m_isRunning(false), m_result(true), m_resourceName(resourceName), m_replyTotal(0), m_replyCounter(0) {}
+    Resource(Server &server, const std::string &resourceName) :
+        m_server(server),
+        m_priority(PRI_DEFAULT),
+        m_isRunning(false),
+        m_result(true),
+        m_resourceName(resourceName),
+        m_replyTotal(0),
+        m_replyCounter(0) {}
     virtual ~Resource() {}
 
     Priority getPriority() { return m_priority; }
@@ -54,6 +63,8 @@ public:
     virtual bool canRunConcurrently(boost::shared_ptr<Resource> resource) { return false; }
 
 protected:
+    Server &m_server;
+
     Priority m_priority;
     bool m_isRunning;
 

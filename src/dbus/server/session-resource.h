@@ -98,8 +98,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     /** access to the GMainLoop reference used by this Session instance */
     GMainLoop *getLoop() { return m_server.getLoop(); }
 
-    Server &m_server;
-
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
     std::string m_peerDeviceID;

@@ -66,7 +66,6 @@ public:
 class ConnectionResource : public GDBusCXX::DBusObjectHelper,
                            public Resource
 {
-    Server &m_server;
     std::string m_path;
 
     StringMap m_peer;
