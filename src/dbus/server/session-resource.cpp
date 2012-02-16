@@ -428,6 +428,8 @@ void SessionResource::done()
     if (m_setConfig) {
         m_server.configChanged();
     }
+
+    m_done = true;
 }
 
 SessionResource::~SessionResource()
