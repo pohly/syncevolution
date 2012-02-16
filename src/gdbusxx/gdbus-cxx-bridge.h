@@ -449,7 +449,7 @@ class DBusObject
         }
     }
 
-    DBusConnectionPtr getConnection() const { return m_conn; }
+    GDBusConnection *getConnection() const { return m_conn.get(); }
     const char *getPath() const { return m_path.c_str(); }
     const char *getInterface() const { return m_interface.c_str(); }
 };
@@ -494,7 +494,7 @@ class EmitSignal0
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
 
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
         }
@@ -563,7 +563,7 @@ class EmitSignal1
 
         AppendRetvals(msg) << a1;
 
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
         }
@@ -608,7 +608,7 @@ class EmitSignal2
         }
         AppendRetvals(msg) << a1 << a2;
 
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
         }
@@ -653,7 +653,7 @@ class EmitSignal3
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3;
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
         }
@@ -699,7 +699,7 @@ class EmitSignal4
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4;
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
         }
@@ -746,7 +746,7 @@ class EmitSignal5
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message");
         }
@@ -794,7 +794,7 @@ class EmitSignal6
             throw std::runtime_error("g_dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
-        if (!g_dbus_connection_send_message(m_object.getConnection().get(), msg.get(),
+        if (!g_dbus_connection_send_message(m_object.getConnection(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, NULL)) {
             throw std::runtime_error("g_dbus_connection_send_message failed");
         }
@@ -1053,7 +1053,7 @@ class DBusObjectHelper : public DBusObject
         ifVTable.get_property = NULL;
         ifVTable.set_property = NULL;
 
-        if ((m_connId = g_dbus_connection_register_object(getConnection().get(),
+        if ((m_connId = g_dbus_connection_register_object(getConnection(),
                                                           getPath(),
                                                           ifInfo,
                                                           &ifVTable,
@@ -1091,7 +1091,7 @@ class DBusObjectHelper : public DBusObject
         ifVTable.get_property = NULL;
         ifVTable.set_property = NULL;
 
-        if ((m_connId = g_dbus_connection_register_object(getConnection().get(),
+        if ((m_connId = g_dbus_connection_register_object(getConnection(),
                                                           getPath(),
                                                           ifInfo,
                                                           &ifVTable,
@@ -1107,7 +1107,7 @@ class DBusObjectHelper : public DBusObject
     void deactivate()
     {
         if (m_activated) {
-            if (!g_dbus_connection_unregister_object(getConnection().get(), m_connId)) {
+            if (!g_dbus_connection_unregister_object(getConnection(), m_connId)) {
                 throw std::runtime_error(std::string("g_dbus_connection_unregister_object() failed for ") +
                                          getPath() + " " + getInterface());
             }
@@ -4166,7 +4166,7 @@ public:
     {
     }
 
-    DBusConnectionPtr getConnection() { return m_conn; }
+    GDBusConnection *getConnection() { return m_conn.get(); }
     std::string getMethod() const { return m_method; }
 
     void block (const Callback_t &callback)
@@ -4618,7 +4618,7 @@ template <class T> class SignalWatch
     ~SignalWatch()
     {
         if (m_tag) {
-            GDBusConnection *connection = m_object.getConnection().get();
+            GDBusConnection *connection = m_object.getConnection();
             if (connection) {
                 g_dbus_connection_signal_unsubscribe(connection, m_tag);
             }
@@ -4644,7 +4644,7 @@ template <class T> class SignalWatch
     void activateInternal(const Callback_t &callback, GDBusSignalCallback cb)
     {
         m_callback = callback;
-        m_tag = g_dbus_connection_signal_subscribe(m_object.getConnection().get(),
+        m_tag = g_dbus_connection_signal_subscribe(m_object.getConnection(),
                                                    NULL,
                                                    m_object.getInterface(),
                                                    m_signal.c_str(),

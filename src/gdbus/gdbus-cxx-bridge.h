@@ -4121,7 +4121,7 @@ public:
     {
     }
 
-    DBusConnectionPtr getConnection() { return m_conn; }
+    DBusConnection *getConnection() { return m_conn.get(); }
     std::string getMethod() const { return m_method; }
 
     void block (const Callback_t &callback)
