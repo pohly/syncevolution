@@ -660,11 +660,13 @@ void Session::run(LogRedirect &redirect)
             m_syncStatus = SessionCommon::SYNC_DONE;
             m_stepIsWaiting = false;
             fireStatus(true);
+            done();
             throw;
         }
         m_syncStatus = SessionCommon::SYNC_DONE;
         m_stepIsWaiting = false;
         fireStatus(true);
+        done();
     }
 }
 
