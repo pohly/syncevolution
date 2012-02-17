@@ -51,14 +51,6 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
     return conn;
 }
 
-gint dbus_get_connection_fd(DBusConnection *conn)
-{
-    gint fd;
-    dbus_connection_get_socket(conn, &fd);
-
-    return fd;
-}
-
 
 boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &address, DBusErrorCXX *err)
 {

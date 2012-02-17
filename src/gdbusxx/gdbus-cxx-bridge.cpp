@@ -107,25 +107,6 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
     return conn;
 }
 
-gint dbus_get_connection_fd(const DBusConnectionPtr &conn)
-{
-  GDBusConnection *connection(conn.get());
-
-  if (connection) {
-    GIOStream *io_stream(g_dbus_connection_get_stream(connection));
-
-    if (io_stream != NULL && G_IS_SOCKET_CONNECTION(io_stream)) {
-      GSocketConnection *socket_connection(G_SOCKET_CONNECTION(io_stream));
-      GSocket *socket(g_socket_connection_get_socket(socket_connection));
-
-      if (socket) {
-        return g_socket_get_fd (socket);
-      }
-    }
-  }
-
-  return -1;
-}
 
 boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &address, DBusErrorCXX *err)
 {

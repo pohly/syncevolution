@@ -176,8 +176,6 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
                                           DBusErrorCXX *err);
 
-gint dbus_get_connection_fd(DBusConnection *conn);
-
 /**
  * Wrapper around DBusServer. Does intentionally not expose
  * any of the underlying methods so that the public API
