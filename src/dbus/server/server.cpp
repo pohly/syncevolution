@@ -421,11 +421,11 @@ void Server::checkQueue()
 {
     // Iterate over the wait queue...
     ResourceWaitQueue_t::iterator wq_iter;
-    for (wq_iter = m_waitingResources.begin(); wq_iter != m_waitingResources.end(); ++wq_iter) {
+    for (wq_iter = m_waitingResources.begin(); wq_iter != m_waitingResources.end();) {
         Resource_t waitingResource = wq_iter->lock();
         // ...removing any empty weak pointers...
         if (!waitingResource) {
-            m_waitingResources.erase(wq_iter);
+            m_waitingResources.erase(wq_iter++);
         } else {
             bool canRun = true;
             Resources_t::iterator rl_iter;
@@ -450,6 +450,7 @@ void Server::checkQueue()
                 }
                 m_waitingResources.erase(wq_iter);
             }
+            ++wq_iter;
         }
     }
 }
