@@ -2864,12 +2864,21 @@ void SyncContext::initMain(const char *appname)
 
     KCmdLineArgs::init(argc, argv, &aboutData);
     if (!kapp) {
+        // Don't allow KApplication to mess with SIGINT/SIGTERM.
+        // Restore current behavior after construction.
+        struct sigaction oldsigint, oldsigterm;
+        sigaction(SIGINT, NULL, &oldsigint);
+        sigaction(SIGTERM, NULL, &oldsigterm);
+
         // Explicitly disable GUI mode in the KApplication.  Otherwise
         // the whole binary will fail to run when there is no X11
         // display.
         new KApplication(false);
         //To stop KApplication from spawning it's own DBus Service ... Will have to patch KApplication about this
         QDBusConnection::sessionBus().unregisterService("org.syncevolution.syncevolution-"+QString::number(getpid()));
+
+        sigaction(SIGINT, &oldsigint, NULL);
+        sigaction(SIGTERM, &oldsigterm, NULL);
     }
 #endif
 
@@ -3312,6 +3321,7 @@ SyncMLStatus SyncContext::doSync()
     // install signal handlers unless this was explicitly disabled
     bool catchSignals = getenv("SYNCEVOLUTION_NO_SYNC_SIGNALS") == NULL;
     if (catchSignals) {
+        SE_LOG_DEBUG(NULL, NULL, "sync is starting, catch signals");
         signalGuard = SuspendFlags::getSuspendFlags().activate();
     }
 

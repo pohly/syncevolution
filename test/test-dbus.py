@@ -2290,7 +2290,7 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         # done as part of post-processing in runTest()
         self.runTestDBusCheck = checkDBusLog
 
-    @timeout(60)
+    @timeout(120)
     def testAutoSyncLocalSuccess(self):
         """TestSessionAPIsDummy.testAutoSyncLocalSuccess - test that auto-sync is done successfully for local sync between file backends"""
         # create @foobar config
@@ -2312,7 +2312,10 @@ class TestSessionAPIsDummy(unittest.TestCase, DBusUtil):
         config[""]["PeerIsClient"] = "1"
         config[""]["autoSync"] = "1"
         config[""]["autoSyncDelay"] = "0"
-        config[""]["autoSyncInterval"] = "10s"
+        # must be small enough (otherwise test runs a long time)
+        # but not too small (otherwise the next sync already starts
+        # before we can check the result and kill the daemon)
+        config[""]["autoSyncInterval"] = usingValgrind() and "60s" or "10s"
         config["source/addressbook"]["uri"] = "addressbook"
         self.session.SetConfig(False, False, config, utf8_strings=True)
 
@@ -3098,6 +3101,7 @@ class TestLocalSync(unittest.TestCase, DBusUtil):
                                                         "databaseFormat": "text/vcard",
                                                         "database": "file://" + xdg_root + "/server" } })
 
+    @timeout(100)
     def testSync(self):
         """TestLocalSync.testSync - run a simple slow sync between local dirs"""
         os.makedirs(xdg_root + "/server")
@@ -3117,6 +3121,7 @@ END:VCARD''')
         self.assertTrue("FN:John Doe" in input.read())
 
     @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY=5")
+    @timeout(100)
     def testConcurrency(self):
         """TestLocalSync.testConcurrency - D-Bus server must remain responsive while sync runs"""
         self.setUpListeners(self.sessionpath)
@@ -3206,7 +3211,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
             time.sleep(4)
         self.assertFalse(self.isServerRunning())
 
-    @timeout(60)
+    @timeout(100)
     def testRestart(self):
         """TestFileNotify.testRestart - set up auto sync, then check that server restarts"""
         self.assertTrue(self.isServerRunning())
@@ -3219,7 +3224,10 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         self.modifyServerFile()
         bus_name = self.server.bus_name
         # give server time to restart
-        time.sleep(15)
+        if usingValgrind():
+            time.sleep(40)
+        else:
+            time.sleep(15)
         self.setUpServer()
         self.assertNotEqual(bus_name, self.server.bus_name)
         # serverExecutable() will fail if the service wasn't properly
