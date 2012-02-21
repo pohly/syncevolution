@@ -65,44 +65,7 @@ public:
 private:
     GDBusCXX::DBusRemoteObject m_client;
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
-
-    void createSessionCb(const GDBusCXX::DBusObject_t &session,
-                         const string &error);
-    void selectCb(const string &error);
-    void pullAllCb(Content *dst, const std::string &content, const string &error);
-    void removeSessionCb(const string &error);
-
-    static GMainLoop *s_mainloop;
-    static std::auto_ptr<std::exception> s_mainloop_error;
-    static void runMainLoop(void);
-    static void exitMainLoop(std::exception *e = NULL);
 };
-
-GMainLoop *PbapSession::s_mainloop = NULL;
-std::auto_ptr<std::exception> PbapSession::s_mainloop_error;
-
-void PbapSession::runMainLoop(void)
-{
-    if(s_mainloop) {
-        throw std::runtime_error("Busy");
-    }
-
-    s_mainloop_error.reset();
-
-    s_mainloop = g_main_loop_new(NULL, FALSE);
-    g_main_loop_run(s_mainloop);
-
-    if(s_mainloop_error.get()) {
-        throw *s_mainloop_error.get();
-    }
-}
-
-void PbapSession::exitMainLoop(std::exception *e)
-{
-    s_mainloop_error.reset(e);
-    g_main_loop_quit(s_mainloop);
-    s_mainloop = NULL;
-}
 
 PbapSession::PbapSession(void) :
     m_client(GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL),
@@ -119,58 +82,29 @@ void PbapSession::initSession(const std::string &address)
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
     GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
-        method(m_client, "CreateSession");
+        createSession(m_client, "CreateSession");
 
     Params params;
     params["Destination"] = std::string(address);
     params["Target"] = std::string("PBAP");
 
-    method(params, boost::bind(&PbapSession::createSessionCb, this, _1, _2));
+    std::string session = createSession(params);
+    if (session.empty()) {
+        SE_THROW("PBAP: got empty session from CreateSession()");
+    }
 
-    runMainLoop();
+    m_session.reset(new GDBusCXX::DBusRemoteObject(m_client.getConnection(),
+                                                   session,
+                                                   OBC_PBAP_INTERFACE,
+                                                   OBC_SERVICE,
+                                                   true));
+
+    SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", m_session->getPath());
+
+    GDBusCXX::DBusClientCall0 select(*m_session, "Select");
+    select(std::string("int"), std::string("PB"));
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
-}
-
-void PbapSession::createSessionCb(const GDBusCXX::DBusObject_t &session,
-                                  const string &error)
-{
-    if(!error.empty() || session.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "Error in calling method CreateSession of interface org.openobex.Client: %s", error.c_str());
-        exitMainLoop(new std::runtime_error(error));
-        return;
-    }
-
-    m_session.reset(new GDBusCXX::DBusRemoteObject(
-                            m_client.getConnection(),
-                            session, OBC_PBAP_INTERFACE,
-                            OBC_SERVICE, true));
-
-    SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", session.c_str());
-
-    GDBusCXX::DBusClientCall0 method(*m_session, "Select");
-    method(std::string("int"), std::string("PB"), boost::bind(&PbapSession::selectCb, this, _1));
-}
-
-void PbapSession::selectCb(const string &error)
-{
-    if(!error.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "Error in calling method Select of interface org.openobex.PhonebookAccess: %s", error.c_str());
-        exitMainLoop(new std::runtime_error(error));
-        return;
-    }
-
-    exitMainLoop();
-}
-
-void PbapSession::pullAll(Content &dst)
-{
-    GDBusCXX::DBusClientCall1<std::string> method(*m_session, "PullAll");
-    method(boost::bind(&PbapSession::pullAllCb, this, &dst, _1, _2));
-
-    runMainLoop();
-
-    SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
 }
 
 void vcardParse(const std::string &content, std::size_t begin, std::size_t end, std::map<std::string, std::string> &dst)
@@ -193,13 +127,12 @@ void vcardParse(const std::string &content, std::size_t begin, std::size_t end, 
     }
 }
 
-void PbapSession::pullAllCb(Content *dst, const std::string &content, const string &error)
+void PbapSession::pullAll(Content &dst)
 {
-    if(!error.empty() || content.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "Error in calling method PullAll of interface org.openobex.PhonebookAccess: %s", error.c_str());
-        exitMainLoop(new std::runtime_error(error));
-        return;
-    }
+    GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
+    std::string content = pullall();
+
+    // empty content not treated as an error
 
     typedef std::map<std::string, int> CounterMap;
     CounterMap counterMap;
@@ -239,38 +172,27 @@ void PbapSession::pullAllCb(Content *dst, const std::string &content, const stri
             sprintf(suffix, "%07d", r.first->second);
 
             std::string id = fn + std::string(suffix);
-            (*dst)[id] = content.substr(pos, endPos);
+            dst[id] = content.substr(pos, endPos);
         }
 
         pos = endPos;
     }
 
-    exitMainLoop();
+    SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
 }
 
 void PbapSession::shutdown(void)
 {
-    GDBusCXX::DBusClientCall0 method(m_client, "RemoveSession");
+    GDBusCXX::DBusClientCall0 removeSession(m_client, "RemoveSession");
 
-    method(std::string(m_session->getPath()), boost::bind(&PbapSession::removeSessionCb, this, _1));
+    // always clear pointer, even if method call fails
+    std::string path = m_session->getPath();
+    m_session.reset();
+    SE_LOG_DEBUG(NULL, NULL, "removed session: %s", path.c_str());
 
-    runMainLoop();
+    removeSession(path);
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session closed");
-}
-
-void PbapSession::removeSessionCb(const string &error)
-{
-    if(!error.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "Error in calling method RemoveSession of interface org.openobex.Client: %s", error.c_str());
-        exitMainLoop(new std::runtime_error(error));
-        return;
-    }
-
-    SE_LOG_DEBUG(NULL, NULL, "removed session: %s", m_session->getPath());
-    m_session.reset();
-
-    exitMainLoop();
 }
 
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :

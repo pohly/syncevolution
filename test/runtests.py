@@ -226,6 +226,7 @@ class Context:
             cmd.insert(0, "VALGRIND_LOG=%s" % os.getenv("VALGRIND_LOG", ""))
             cmd.insert(0, "VALGRIND_ARGS=%s" % os.getenv("VALGRIND_ARGS", ""))
             cmd.insert(0, "VALGRIND_LEAK_CHECK_ONLY_FIRST=%s" % os.getenv("VALGRIND_LEAK_CHECK_ONLY_FIRST", ""))
+            cmd.insert(0, "VALGRIND_LEAK_CHECK_SKIP=%s" % os.getenv("VALGRIND_LEAK_CHECK_SKIP", ""))
 
         # move "sudo" or "env" command invocation in front of
         # all the leading env variable assignments: necessary
@@ -1006,6 +1007,11 @@ evolutiontest = SyncEvolutionTest("evolution", compile,
                                   "", options.shell,
                                   "Client::Source SyncEvolution",
                                   [],
+                                  "CLIENT_TEST_FAILURES="
+                                  "Client::Source::kde_.*::testDelete404,"
+                                  "Client::Source::kde_.*::testImport.*,"
+                                  "Client::Source::kde_.*::testRemoveProperties,"
+                                  " "
                                   "CLIENT_TEST_SKIP="
                                   "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsInsertBothUpdateChildNoIDs,"
                                   "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsUpdateChildNoIDs,"
