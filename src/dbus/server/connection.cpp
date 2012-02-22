@@ -389,6 +389,8 @@ Connection::~Connection()
 
 void Connection::ready()
 {
+    m_session->setActive(true);
+
     //if configuration not yet created
     std::string configName = m_session->getConfigName();
     SyncConfig config (configName);

@@ -463,11 +463,6 @@ void Session::setActive(bool active)
             m_syncStatus = SessionCommon::SYNC_IDLE;
             fireStatus(true);
         }
-
-        boost::shared_ptr<Connection> c = m_connection.lock();
-        if (c) {
-            c->ready();
-        }
     }
 }
 
