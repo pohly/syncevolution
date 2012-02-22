@@ -726,7 +726,13 @@ protected:
     virtual void testRefreshFromServerSemantic();
     virtual void testRefreshStatus();
 
+    void doRestartSync(SyncMode mode);
     void testTwoWayRestart();
+    void testSlowRestart();
+    void testRefreshFromLocalRestart();
+    void testOneWayFromLocalRestart();
+    void testRefreshFromRemoteRestart();
+    void testOneWayFromRemoteRestart();
 
     void testCopy();
 
