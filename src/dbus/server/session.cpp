@@ -823,7 +823,7 @@ inline void insertPair(std::map<string, string> &params,
 
 void Session::passwordResponse(bool timed_out, const std::string &password)
 {
-    m_passwordReqResponse.empty();
+    m_passwordReqResponse.clear();
     if (!timed_out) {
         if (password.empty()) {
             m_pwResponseStatus = SessionCommon::PW_RES_INVALID;
