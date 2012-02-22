@@ -39,8 +39,6 @@ using namespace GDBusCXX;
 
 namespace {
     GMainLoop *loop = NULL;
-    boost::shared_ptr<Session> session;
-    boost::shared_ptr<Connection> connection;
 
     bool shutdownRequested = false;
 
@@ -57,23 +55,20 @@ namespace {
         g_main_loop_quit(loop);
     }
 
-    void onConnect(const DBusConnectionPtr &conn, const std::string &config,
-                          const std::string &sessionID, bool startSession)
+    void onConnect(const DBusConnectionPtr &conn, boost::shared_ptr<DBusObjectHelper> &dbusObjectHelper,
+                   const std::string &config, const std::string &sessionID, bool startSession)
     {
         if(startSession) {
-            session = Session::createSession(loop, conn, config, sessionID);
+            dbusObjectHelper = Session::createSession(loop, shutdownRequested, conn, config, sessionID);
             SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
-                        session->getPath(), session->getInterface());
-            // Activate dbus interface.
-            session->activate();
-            // Set the session as active.
-            session->setActive(true);
+                        dbusObjectHelper->getPath(), dbusObjectHelper->getInterface());
         } else {
-            connection = Connection::createConnection(loop, conn, sessionID);
-            connection->activate();
+            dbusObjectHelper = Connection::createConnection(loop, shutdownRequested, conn, sessionID);
             SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
-                        connection->getPath(), connection->getInterface());
+                        dbusObjectHelper->getPath(), dbusObjectHelper->getInterface());
         }
+        // Activate dbus interface.
+        dbusObjectHelper->activate();
     }
 } // anonymous namespace
 
@@ -116,11 +111,13 @@ int main(int argc, char **argv, char **envp)
 
         std::string session_config(forkexec->getEnvVar("SYNCEVO_SESSION_CONFIG"));
         std::string session_id(forkexec->getEnvVar("SYNCEVO_SESSION_ID"));
-        if(session_id.empty()) {
+        if (session_id.empty()) {
             return 1;
         }
 
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, session_config, session_id, start_session));
+        boost::shared_ptr<DBusObjectHelper> dbusObjectHelper;
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, dbusObjectHelper,
+                                                  session_config, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
