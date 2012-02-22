@@ -864,6 +864,7 @@ protected:
 
  private:
     void allSourcesInsert();
+    void allSourcesUpdate();
     void allSourcesDeleteAll();
 };
 

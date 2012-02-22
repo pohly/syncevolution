@@ -5284,6 +5284,14 @@ void SyncTests::allSourcesInsert()
     }
 }
 
+void SyncTests::allSourcesUpdate()
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->update(source_pair.second->createSourceA,
+                                                      source_pair.second->config.m_updateItem));
+    }
+}
+
 void SyncTests::allSourcesDeleteAll()
 {
     BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
