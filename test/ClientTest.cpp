@@ -2874,49 +2874,57 @@ void SyncTests::doRestartSync(SyncMode mode)
     //
     // It records the current source statistics for later checking and
     // logs it.
-    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> startPre =
-        ((boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, boost::lambda::_1)]
+    //
+    // Also requests a restart at the very beginning, once. Must be
+    // done before m_endDataWrite, because then it might be too late
+    // to restart.
+    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
+        (boost::lambda::if_then(boost::lambda::bind(&Cycles_t::empty, boost::ref(results)),
+                                (boost::lambda::bind(log, "requesting restart"),
+                                 boost::lambda::bind(SyncContext::requestAnotherSync))),
+         (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, boost::lambda::_1)]
           [boost::lambda::bind(&SyncSource::getName, boost::lambda::_1)] =
           boost::lambda::_1),
          boost::lambda::bind(logSyncSourceReport,
                              boost::lambda::_1)
          );
 
-    // Triggered at the end of each m_startDataWrite.
+    // Triggered at the end of each m_endDataWrite.
     //
-    // When all sourcs are done with their m_startDataRead
-    // implementation, it inserts a new item in all sources and
-    // requests a restart.
-    boost::function<SyncSource::Operations::StartDataRead_t::PostSignal::signature_type> startPost =
+    // Adds a new item or (in later syncs) updates/deletes
+    // it. Because the cycle is other, those changes won't
+    // interfere with the cycle. Doing real concurrent
+    // changes is something for another tests...
+    boost::function<SyncSource::Operations::EndDataWrite_t::PostSignal::signature_type> end =
         boost::bind(boost::function<void ()>(
                                              boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
-                                                                    (boost::lambda::bind(log, "inserting one item and requesting restart"),
-                                                                     boost::lambda::bind(&SyncTests::allSourcesInsert, this),
-                                                                     boost::lambda::bind(SyncContext::requestAnotherSync))))
-                    );
+                                                                    (boost::lambda::bind(log, "inserting one item"),
+                                                                     boost::lambda::bind(&SyncTests::allSourcesInsert, this)))
+                                             ));
 
     SyncOptions::Callback_t setup =
         (boost::lambda::if_then(boost::lambda::var(needToConnect),
                                 (boost::lambda::var(needToConnect) = false,
                                  boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
                                                                          typeof(&SyncSource::Operations::StartDataRead_t::getPreSignal),
-                                                                         typeof(startPre)>,
+                                                                         typeof(start)>,
                                                          boost::lambda::_1,
                                                          &SyncSource::Operations::m_startDataRead,
                                                          &SyncSource::Operations::StartDataRead_t::getPreSignal,
-                                                         boost::cref(startPre)),
-                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
-                                                                         typeof(&SyncSource::Operations::StartDataRead_t::getPostSignal),
-                                                                         typeof(startPost)>,
+                                                         boost::cref(start)),
+                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::EndDataWrite_t,
+                                                                         typeof(&SyncSource::Operations::EndDataWrite_t::getPostSignal),
+                                                                         typeof(end)>,
                                                          boost::lambda::_1,
-                                                         &SyncSource::Operations::m_startDataRead,
-                                                         &SyncSource::Operations::StartDataRead_t::getPostSignal,
-                                                         boost::cref(startPost))
+                                                         &SyncSource::Operations::m_endDataWrite,
+                                                         &SyncSource::Operations::EndDataWrite_t::getPostSignal,
+                                                         boost::cref(end))
                                 )),
          boost::lambda::constant(false)
         );
 
     CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              "add",
                               SyncOptions(mode,
                                           CheckSyncReport(0,
                                                           0,
@@ -2939,23 +2947,15 @@ void SyncTests::doRestartSync(SyncMode mode)
     // two cycles
     CT_ASSERT_EQUAL((size_t)2, results.size());
 
-    // empty initially
-    int cycle = 0;
-    CT_ASSERT_EQUAL(sources.size(), results[cycle].size());
-    BOOST_FOREACH(const Reports_t::value_type &entry, results[cycle]) {
-        CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
-                                           0,0,0)
-                           .check(entry.first, entry.second));
-    }
-
-    // nothing transferred in first cycle
-    cycle = 1;
-    CT_ASSERT_EQUAL(sources.size(), results[cycle].size());
-    BOOST_FOREACH(const Reports_t::value_type &entry, results[cycle]) {
-        CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0,
-                                           0,0,0)
-                           .setRestarts(cycle)
-                           .check(entry.first, entry.second));
+    // nothing transfered before first or second cycle
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
+                                               0,0,0)
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
     }
 
     // one item exists now, in all cases
@@ -2964,6 +2964,127 @@ void SyncTests::doRestartSync(SyncMode mode)
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
         CT_ASSERT_EQUAL(1, countItems(source.get()));
+    }
+
+    if (mode == SYNC_REFRESH_FROM_REMOTE) {
+        // Can't continue testing for refresh-from-remote, because the
+        // item was never sent to remote and will be gone locally
+        // after the next refresh-from-remote (prevents updating and
+        // deleting it locally).
+        return;
+    }
+
+    // update item while the sync runs
+    needToConnect = true;
+    startCount = 0;
+    results.clear();
+    end =
+        boost::bind(boost::function<void ()>(
+                                             boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
+                                                                    (boost::lambda::bind(log, "update one item"),
+                                                                     boost::lambda::bind(&SyncTests::allSourcesUpdate, this)))
+                                             ));
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              "update",
+                              SyncOptions(mode,
+                                          CheckSyncReport(0,0,0,
+
+                                                          // refresh-from-local and slow sync transfer existing item
+                                                          // in first cycle anew
+                                                          (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                           mode == SYNC_SLOW) ? 1 : 0,
+                                                          // nothing transferred when item only exists locally
+                                                          // and not transferring to peer
+                                                          mode == SYNC_ONE_WAY_FROM_REMOTE ? 0 : 1,
+                                                          0,
+                                                          true, mode)
+                                          .setRestarts(1))
+                              .setStartCallback(setup)
+                              ));
+
+    // two cycles
+    CT_ASSERT_EQUAL((size_t)2, results.size());
+
+    // nothing transfered before first or second cycle
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CLIENT_TEST_LOG("checking cycle #%d", cycle.first);
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0,
+
+                                               // refresh-from-local and slow sync transfer existing item
+                                               // in first cycle anew
+                                               (cycle.first == 1 &&
+                                                (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                 mode == SYNC_SLOW)) ? 1 : 0,
+                                               0,0)
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // one item exists now, in all cases
+    // (but see remark about refresh-from-remote!)
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(1, countItems(source.get()));
+    }
+
+    // delete item while the sync runs
+    needToConnect = true;
+    startCount = 0;
+    results.clear();
+    end =
+        boost::bind(boost::function<void ()>(
+                                             boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
+                                                                    (boost::lambda::bind(log, "delete one item"),
+                                                                     boost::lambda::bind(&SyncTests::allSourcesDeleteAll, this)))
+                                             ));
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              "delete",
+                              SyncOptions(mode,
+                                          CheckSyncReport(0,0,0,
+
+                                                          // refresh-from-local and slow sync transfer existing item
+                                                          // in first cycle anew
+                                                          (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                           mode == SYNC_SLOW) ? 1 : 0,
+                                                          0,
+                                                          // nothing transferred when item only existed locally
+                                                          // and not transferring to peer
+                                                          mode == SYNC_ONE_WAY_FROM_REMOTE ? 0 : 1,
+                                                          true, mode)
+                                          .setRestarts(1))
+                              .setStartCallback(setup)
+                              ));
+
+    // two cycles
+    CT_ASSERT_EQUAL((size_t)2, results.size());
+
+    // nothing transfered before first or second cycle
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
+                                               // refresh-from-local and slow sync transfer existing item
+                                               // in first cycle anew
+                                               (cycle.first == 1 &&
+                                                (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                 mode == SYNC_SLOW)) ? 1 : 0,
+                                               0,0)
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // no item exists now, in all cases
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(0, countItems(source.get()));
     }
 }
 
