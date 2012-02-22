@@ -50,6 +50,11 @@ class Connection : public GDBusCXX::DBusObjectHelper
     } m_state;
     std::string m_failure;
 
+    /**
+     * True if a shutdown signal was received.
+     */
+    bool m_shutdownRequested;
+
     /** first parameter for Session::sync() */
     std::string m_syncMode;
     /** second parameter for Session::sync() */
@@ -128,11 +133,13 @@ public:
      * needed, for instance, to set the session's connection stub.
      */
     static boost::shared_ptr<Connection> createConnection(GMainLoop *loop,
+                                                          bool &shutdownRequested,
                                                           const GDBusCXX::DBusConnectionPtr &conn,
                                                           const std::string &sessionID);
 
 private:
     Connection(GMainLoop *loop,
+               bool &shutdownRequested,
                const GDBusCXX::DBusConnectionPtr &conn,
                const std::string &sessionID);
     boost::weak_ptr<Connection> m_me;

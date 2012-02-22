@@ -240,6 +240,7 @@ void Connection::process(const GDBusCXX::DBusArray<uint8_t> &message,
             // run session as client or server
             m_state = PROCESSING;
             m_session = Session::createSession(m_loop,
+                                               m_shutdownRequested,
                                                getConnection(),
                                                config,
                                                m_sessionID);
@@ -330,22 +331,25 @@ void Connection::shutdown()
 }
 
 boost::shared_ptr<Connection> Connection::createConnection(GMainLoop *loop,
+                                                           bool &shutdownRequested,
                                                            const GDBusCXX::DBusConnectionPtr &conn,
                                                            const std::string &sessionID)
 {
-    boost::shared_ptr<Connection> me(new Connection(loop, conn, sessionID));
+    boost::shared_ptr<Connection> me(new Connection(loop, shutdownRequested, conn, sessionID));
     me->m_me = me;
     return me;
 }
 
 Connection::Connection(GMainLoop *loop,
-                       const DBusConnectionPtr &conn, const string &sessionID) :
+                       bool &shutdownRequested,
+                       const DBusConnectionPtr &conn,
+                       const string &sessionID) :
     DBusObjectHelper(conn,
                      std::string("/dbushelper"),
                      std::string("dbushelper.Connection") + sessionID,
                      DBusObjectHelper::Callback_t(), true),
     m_mustAuthenticate(false),
-    m_state(SETUP),
+    m_shutdownRequested(shutdownRequested),
     m_sessionID(sessionID),
     m_loop(loop),
     emitAbort(*this, "Abort"),

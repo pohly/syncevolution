@@ -90,6 +90,12 @@ class Session : public GDBusCXX::DBusObjectHelper,
     bool m_active;
 
     /**
+     * True once the server process has called ServerShutdown or a
+     * shutdown signal was received.
+     */
+    bool m_shutdownRequested;
+
+    /**
      * Indicates whether this session was initiated by the peer or locally.
      */
     bool m_remoteInitiated;
@@ -220,6 +226,7 @@ public:
      * needed.
      */
     static boost::shared_ptr<Session> createSession(GMainLoop *loop,
+                                                    bool &shutdownRequested,
                                                     const GDBusCXX::DBusConnectionPtr &conn,
                                                     const std::string &config_name,
                                                     const std::string &session,
@@ -238,6 +245,7 @@ public:
 
 private:
     Session(GMainLoop *loop,
+            bool &shutdownRequested,
             const GDBusCXX::DBusConnectionPtr &conn,
             const std::string &config_name,
             const std::string &session,
@@ -293,6 +301,11 @@ public:
     void setActive(bool active);
 
     bool getActive() { return m_active; }
+
+    /**
+     * This will be true if the server has called ServerShutdown
+     */
+    bool getShutdownRequested() { return m_shutdownRequested; }
 
     void syncProgress(sysync::TProgressEventEnum type,
                       int32_t extra1, int32_t extra2, int32_t extra3);

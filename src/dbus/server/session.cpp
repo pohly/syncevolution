@@ -370,16 +370,18 @@ string Session::syncStatusToString(SessionCommon::SyncStatus state)
 }
 
 boost::shared_ptr<Session> Session::createSession(GMainLoop *loop,
+                                                  bool &shutdownRequested,
                                                   const GDBusCXX::DBusConnectionPtr &conn,
                                                   const std::string &config_name,
                                                   const std::string &session,
                                                   const std::vector<std::string> &flags)
 {
-    boost::shared_ptr<Session> me(new Session(loop, conn, config_name, session, flags));
+    boost::shared_ptr<Session> me(new Session(loop, shutdownRequested, conn, config_name, session, flags));
     return me;
 }
 
 Session::Session(GMainLoop *loop,
+                 bool &shutdownRequested,
                  const GDBusCXX::DBusConnectionPtr &conn,
                  const std::string &config_name,
                  const std::string &session,
@@ -398,6 +400,7 @@ Session::Session(GMainLoop *loop,
     m_tempConfig(false),
     m_setConfig(false),
     m_active(true),
+    m_shutdownRequested(shutdownRequested),
     m_remoteInitiated(false),
     m_syncStatus(SessionCommon::SYNC_QUEUEING),
     m_stepIsWaiting(false),
@@ -448,7 +451,8 @@ Session::~Session()
 
 void Session::serverShutdown()
 {
-    // TODO: Server process is gone so we need to avoid emitting dbus signals, etc.
+    m_shutdownRequested = true;
+    g_main_loop_quit(m_loop);
 }
 
 void Session::setActive(bool active)
@@ -849,9 +853,15 @@ string Session::askPassword(const string &passwordName,
     m_pwResponseStatus = SessionCommon::PW_RES_WAITING;
     emitPasswordRequest(params);
 
-    // Wait till we've got a response from our password request.
-    while(m_pwResponseStatus == SessionCommon::PW_RES_WAITING) {
+    // Wait till we've got a response from our password request or a
+    // shutdown signal is recieved.
+    while(!getShutdownRequested() && m_pwResponseStatus == SessionCommon::PW_RES_WAITING) {
         g_main_context_iteration(g_main_context_default(), true);
+    }
+
+    // If a shutdown signal was recieved just return.
+    if(getShutdownRequested()) {
+        return "";
     }
 
     // Save the response state and reset status to idle.

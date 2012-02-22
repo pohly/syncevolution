@@ -42,8 +42,11 @@ namespace {
     boost::shared_ptr<Session> session;
     boost::shared_ptr<Connection> connection;
 
+    bool shutdownRequested = false;
+
     void niam(int sig)
     {
+        shutdownRequested = true;
         SuspendFlags::getSuspendFlags().handleSignal(sig);
         g_main_loop_quit (loop);
     }
