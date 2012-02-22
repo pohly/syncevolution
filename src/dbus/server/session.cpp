@@ -457,7 +457,8 @@ void Session::serverShutdown()
 
 void Session::setActive(bool active)
 {
-    if (active) {
+    m_active = active;
+    if (m_active) {
         if (m_syncStatus == SessionCommon::SYNC_QUEUEING) {
             m_syncStatus = SessionCommon::SYNC_IDLE;
             fireStatus(true);
