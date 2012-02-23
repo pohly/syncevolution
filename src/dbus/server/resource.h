@@ -47,10 +47,7 @@ public:
         m_server(server),
         m_priority(PRI_DEFAULT),
         m_isRunning(false),
-        m_result(true),
-        m_resourceName(resourceName),
-        m_replyTotal(0),
-        m_replyCounter(0) {}
+        m_resourceName(resourceName) {}
     virtual ~Resource() {}
 
     Priority getPriority() { return m_priority; }
@@ -69,24 +66,7 @@ protected:
     Priority m_priority;
     bool m_isRunning;
 
-    // Status of most recent dbus call to helper
-    bool m_result;
-    std::string m_resultError;
-    bool setResult(const std::string &error);
     std::string m_resourceName;
-
-    // the number of total dbus calls
-    unsigned int m_replyTotal;
-    // the number of returned dbus calls
-    unsigned int m_replyCounter;
-
-    /** whether the dbus call(s) has/have completed */
-    bool methodInvocationDone() { return m_replyTotal == m_replyCounter; }
-
-    /** set the total number of replies we must wait */
-    void resetReplies(int total = 1) { m_replyTotal = total; m_replyCounter = 0; }
-    void replyInc() { m_replyCounter++; }
-    void waitForReply(int timeout = 100 /*ms*/);
 
     // Determine and throw appropriate exception based on returned error string
     static void throwExceptionFromString(const std::string &errorString);
