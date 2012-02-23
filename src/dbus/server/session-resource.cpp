@@ -22,6 +22,9 @@
 #include "restart.h"
 #include "info-req.h"
 #include "session-common.h"
+#include "dbus-proxy.h"
+
+#include <memory>
 
 #include <boost/foreach.hpp>
 
@@ -51,35 +54,28 @@ void SessionResource::detach(const GDBusCXX::Caller_t &caller)
 
 void SessionResource::serverShutdown()
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_serverShutdown,
-                m_sessionProxy->m_serverShutdown.bindGeneric(&str_error),
-                str_error);
+    m_sessionProxy->m_serverShutdown.start(boost::bind(&Resource::printStatus,
+                                                       _1,
+                                                       m_resourceName,
+                                                       m_sessionProxy->m_serverShutdown.getMethod()));
 }
 
 void SessionResource::setActive(bool active)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_setActive,
-                m_sessionProxy->m_setActive.bindGeneric(&str_error),
-                active,
-                str_error);
-
+    m_sessionProxy->m_setActive.start(active, boost::bind(&Resource::printStatus,
+                                                          _1,
+                                                          m_resourceName,
+                                                          m_sessionProxy->m_setActive.getMethod()));
     m_active = active;
 }
 
-void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources)
+void SessionResource::restore(const string &dir, bool before, const std::vector<std::string> &sources,
+                              const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    std::string str_error;
+    ProxyCallback0 callback(result);
 
-    genericCall(m_sessionProxy->m_restore,
-                m_sessionProxy->m_restore.bindGeneric(&str_error),
-                dir,
-                before,
-                sources,
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_restore.getMethod());
+    m_sessionProxy->m_restore.start(dir, before, sources, callback);
 }
 
 void SessionResource::checkPresence(std::string &status)
@@ -88,15 +84,13 @@ void SessionResource::checkPresence(std::string &status)
     m_server.checkPresence(m_configName, status, transport);
 }
 
-void SessionResource::execute(const vector<string> &args, const map<string, string> &vars)
+void SessionResource::execute(const vector<string> &args, const map<string, string> &vars,
+                              const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    std::string str_error;
+    ProxyCallback0 callback(result);
 
-    genericCall(m_sessionProxy->m_execute,
-                m_sessionProxy->m_execute.bindGeneric(&str_error),
-                args,
-                vars,
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_execute.getMethod());
+    m_sessionProxy->m_execute.start(args, vars, callback);
 }
 
 void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
@@ -111,15 +105,11 @@ void SessionResource::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
     }
 
     SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Waiting for password response");
-    std::string str_error;
 
-    genericCall(m_sessionProxy->m_passwordResponse,
-                m_sessionProxy->m_passwordResponse.bindGeneric(&str_error),
-                false,
-                password,
-                str_error);
-
-    SE_LOG_INFO(NULL, NULL, "SessionResource::onPasswordResponse: Finished waiting for password response. Password%s received", str_error.empty() ? "" : " not");
+    m_sessionProxy->m_passwordResponse.start(false, password, boost::bind(&Resource::printStatus,
+                                                                          _1,
+                                                                          m_resourceName,
+                                                                          m_sessionProxy->m_passwordResponse.getMethod()));
 }
 
 void SessionResource::requestPasswordCb(const std::map<std::string, std::string> & params)
@@ -135,25 +125,26 @@ bool SessionResource::getActive()
     return m_active;
 }
 
-void SessionResource::init()
+void SessionResource::init(const Callback_t &callback)
 {
     SE_LOG_INFO(NULL, NULL, "SessionResource (%s) forking...", getPath());
 
-    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1));
+    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, callback, _1));
     m_forkExecParent->m_onQuit.connect(boost::bind(&SessionResource::onQuit, this, _1));
     m_forkExecParent->m_onFailure.connect(boost::bind(&SessionResource::onFailure, this, _2));
     m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
     m_forkExecParent->addEnvVar("SYNCEVO_SESSION_CONFIG", m_configName);
     m_forkExecParent->start();
-
-    // Wait for onSessionConnect to be called so that the dbus
-    // interface is ready to be used.
-    resetReplies();
-    waitForReply();
 }
 
-void SessionResource::setNamedConfig(const std::string &configName, bool update, bool temporary,
-                                     const ReadOperations::Config_t &config)
+void SessionResource::setNamedConfigCb(bool setConfig)
+{
+    m_setConfig = setConfig;
+    SE_LOG_INFO(NULL, NULL, "m_setConfig = %d", (int)m_setConfig);
+}
+
+void SessionResource::setNamedConfigCommon(const std::string &configName, bool temporary,
+                                           const ReadOperations::Config_t &config)
 {
     // avoid the check if effect is the same as setConfig()
     if (m_configName != configName) {
@@ -176,114 +167,144 @@ void SessionResource::setNamedConfig(const std::string &configName, bool update,
     }
 
     m_server.getPresenceStatus().updateConfigPeers (configName, config);
-
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_setNamedConfig,
-                m_sessionProxy->m_setNamedConfig.bindGeneric(&m_setConfig, &str_error),
-                configName,
-                update,
-                temporary,
-                config,
-                str_error);
-
-    SE_LOG_INFO(NULL, NULL, "m_setConfig = %d", (int)m_setConfig);
 }
 
-void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
+void SessionResource::setNamedConfigAsync(const std::string &configName, bool update, bool temporary,
+                                          const ReadOperations::Config_t &config)
 {
-    std::string str_error;
+    setNamedConfigCommon(configName, temporary, config);
 
-    genericCall(m_sessionProxy->m_sync,
-                m_sessionProxy->m_sync.bindGeneric(&str_error),
-                mode,
-                source_modes,
-                str_error);
+    m_sessionProxy->m_setNamedConfig.start(configName, update, temporary, config,
+                                           boost::bind(&SessionResource::setNamedConfigCb,
+                                                       this,
+                                                       _1));
 }
 
-void SessionResource::abort()
+void SessionResource::setNamedConfig(const std::string &configName, bool update, bool temporary,
+                                     const ReadOperations::Config_t &config,
+                                     const boost::shared_ptr<GDBusCXX::Result1<bool> > &result)
 {
-    std::string str_error;
+    setNamedConfigCommon(configName, temporary, config);
 
-    genericCall(m_sessionProxy->m_abort,
-                m_sessionProxy->m_abort.bindGeneric(&str_error),
-                str_error);
+    typedef ProxyCallback1<bool> Callback_t;
+    Callback_t callback(result);
+
+    callback.m_success->connect(Callback_t::SuccessSignalType::slot_type(&SessionResource::setNamedConfigCb, this, _1).track(m_me));
+    defaultConnectToFailure(callback, m_sessionProxy->m_setNamedConfig.getMethod());
+    m_sessionProxy->m_setNamedConfig.start(configName, update, temporary, config, callback);
 }
 
-void SessionResource::suspend()
+void SessionResource::syncAsync(const std::string &mode,
+                                const SessionCommon::SourceModes_t &source_modes)
 {
-    std::string str_error;
-
-    genericCall(m_sessionProxy->m_suspend,
-                m_sessionProxy->m_suspend.bindGeneric(&str_error),
-                str_error);
+    m_sessionProxy->m_sync.start(mode, source_modes,
+                                 boost::bind(&Resource::printStatus,
+                                             _1,
+                                             m_resourceName,
+                                             m_sessionProxy->m_sync.getMethod()));
 }
 
-void SessionResource::getStatus(std::string &status, uint32_t &error,
-                                SessionCommon::SourceStatuses_t &sources)
+void SessionResource::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes,
+                           const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    std::string str_error;
+    ProxyCallback0 callback(result);
 
-    genericCall(m_sessionProxy->m_getStatus,
-                m_sessionProxy->m_getStatus.bindGeneric(&status, &error, &sources, &str_error),
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_sync.getMethod());
+    m_sessionProxy->m_sync.start(mode, source_modes, callback);
+}
 
+void SessionResource::abortSession()
+{
+    m_sessionProxy->m_abort.start(boost::bind(&Resource::printStatus,
+                                              _1,
+                                              m_resourceName,
+                                              m_sessionProxy->m_abort.getMethod()));
+}
+
+void SessionResource::abort(const boost::shared_ptr<GDBusCXX::Result0> &result)
+{
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_abort.getMethod());
+    m_sessionProxy->m_abort.start(callback);
+}
+
+void SessionResource::suspend(const boost::shared_ptr<GDBusCXX::Result0> &result)
+{
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_suspend.getMethod());
+    m_sessionProxy->m_suspend.start(callback);
+}
+
+// static
+void SessionResource::getStatusCb(const std::string &status, const uint32_t &error)
+{
     SE_LOG_INFO(NULL, NULL, "status=%s, error code=%d",
                 status.c_str(), error);
+
 }
 
-void SessionResource::getProgress(int32_t &progress, SessionCommon::SourceProgresses_t &sources)
+void SessionResource::getStatus(const boost::shared_ptr<GDBusCXX::Result3<std::string, uint32_t, SessionCommon::SourceStatuses_t> >&result)
 {
-    std::string str_error;
+    typedef ProxyCallback3<std::string, uint32_t, SessionCommon::SourceStatuses_t> Callback_t;
+    Callback_t callback(result);
 
-    genericCall(m_sessionProxy->m_getProgress,
-                m_sessionProxy->m_getProgress.bindGeneric(&progress, &sources, &str_error),
-                str_error);
+    callback.m_success->connect(Callback_t::SuccessSignalType::slot_type(&SessionResource::getStatusCb, _1, _2));
+    defaultConnectToFailure(callback, m_sessionProxy->m_getStatus.getMethod());
+    m_sessionProxy->m_getStatus.start(callback);
 
+}
+// static
+void SessionResource::getProgressCb(const int32_t &progress)
+{
     SE_LOG_INFO(NULL, NULL, "Progress=%d", progress);
 }
 
+void SessionResource::getProgress(const boost::shared_ptr<GDBusCXX::Result2<int32_t, SessionCommon::SourceProgresses_t> > &result)
+{
+    typedef ProxyCallback2<int32_t, SessionCommon::SourceProgresses_t> Callback_t;
+    Callback_t callback(result);
+
+    callback.m_success->connect(Callback_t::SuccessSignalType::slot_type(&getProgressCb, _1));
+    defaultConnectToFailure(callback, m_sessionProxy->m_getProgress.getMethod());
+    m_sessionProxy->m_getProgress.start(callback);
+}
+
 void SessionResource::getNamedConfig(const std::string &configName, bool getTemplate,
-                                     ReadOperations::Config_t &config)
+                                     const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Config_t> > &result)
 {
-    std::string str_error;
+    ProxyCallback1<ReadOperations::Config_t> callback(result);
 
-    genericCall(m_sessionProxy->m_getNamedConfig,
-                m_sessionProxy->m_getNamedConfig.bindGeneric(&config, &str_error),
-                configName,
-                getTemplate,
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_getNamedConfig.getMethod());
+    m_sessionProxy->m_getNamedConfig.start(configName, getTemplate, callback);
 }
 
-void SessionResource::getReports(uint32_t start, uint32_t count, ReadOperations::Reports_t &reports)
+void SessionResource::getReports(uint32_t start, uint32_t count,
+                                 const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Reports_t> > &result)
 {
-    std::string str_error;
+    ProxyCallback1<ReadOperations::Reports_t> callback(result);
 
-    genericCall(m_sessionProxy->m_getReports,
-                m_sessionProxy->m_getReports.bindGeneric(&reports, &str_error),
-                start,
-                count,
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_getReports.getMethod());
+    m_sessionProxy->m_getReports.start(start, count, callback);
 }
 
-void SessionResource::checkSource(const string &sourceName)
+void SessionResource::checkSource(const string &sourceName,
+                                  const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    std::string str_error;
+    ProxyCallback0 callback(result);
 
-    genericCall(m_sessionProxy->m_checkSource,
-                m_sessionProxy->m_checkSource.bindGeneric(&str_error),
-                sourceName,
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_checkSource.getMethod());
+    m_sessionProxy->m_checkSource.start(sourceName, callback);
 }
 
-void SessionResource::getDatabases(const string &sourceName, ReadOperations::SourceDatabases_t &databases)
+void SessionResource::getDatabases(const string &sourceName,
+                                   const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::SourceDatabases_t> > &result)
 {
-    std::string str_error;
+    ProxyCallback1<ReadOperations::SourceDatabases_t> callback(result);
 
-    genericCall(m_sessionProxy->m_getDatabases,
-                m_sessionProxy->m_getDatabases.bindGeneric(&databases, &str_error),
-                sourceName,
-                str_error);
+    defaultConnectToBoth(callback, m_sessionProxy->m_getDatabases.getMethod());
+    m_sessionProxy->m_getDatabases.start(sourceName, callback);
 }
 
 SessionListener* SessionResource::addListener(SessionListener *listener)
@@ -296,7 +317,7 @@ void SessionResource::statusChangedCb(const std::string &status, uint32_t error,
 {
     SE_LOG_INFO(NULL, NULL, "Session.StatusChanged signal received and relayed: status=%s", status.c_str());
 
-    // Keep track of weather this session is running.
+    // Keep track of whether this session is running.
     if(status.find("running") != std::string::npos) {
         m_isRunning = true;
     } else {
@@ -314,14 +335,14 @@ void SessionResource::progressChangedCb(int32_t error, const SessionCommon::Sour
     emitProgress(error, sources);
 }
 
-void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
+void SessionResource::onSessionConnect(const Callback_t &callback,
+                                       const GDBusCXX::DBusConnectionPtr &conn)
 {
     SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %s", m_sessionID.c_str());
     m_sessionProxy.reset(new SessionProxy(conn, m_sessionID));
 
     /* Enable public dbus interface for Session. */
     activate();
-    replyInc(); // Init is waiting on a reply.
 
     // Activate signal watch on helper signals.
     m_sessionProxy->m_statusChanged.activate  (boost::bind(&SessionResource::statusChangedCb,   this, _1, _2, _3));
@@ -333,6 +354,11 @@ void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
                 m_sessionProxy->getPath(), m_sessionProxy->getInterface());
 
     SE_LOG_INFO(NULL, NULL, "Session connection made.");
+    boost::shared_ptr<SessionResource> me(this);
+    m_me = me;
+    // if callback owner won't copy this shared pointer
+    // then session resource will be destroyed.
+    callback(me);
 }
 
 void SessionResource::onQuit(int status)
@@ -347,17 +373,23 @@ void SessionResource::onFailure(const std::string &error)
     SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
 }
 
-boost::shared_ptr<SessionResource> SessionResource::createSessionResource(Server &server,
-                                                                          const std::string &peerDeviceID,
-                                                                          const std::string &configName,
-                                                                          const std::string &session,
-                                                                          const std::vector<std::string> &flags)
+void SessionResource::createSessionResource(const Callback_t &callback,
+                                            Server &server,
+                                            const std::string &peerDeviceID,
+                                            const std::string &configName,
+                                            const std::string &session,
+                                            const std::vector<std::string> &flags)
 {
-    boost::shared_ptr<SessionResource> me(new SessionResource(server, peerDeviceID,
-                                                              configName, session, flags));
-    me->init();
-    me->m_me = me;
-    return me;
+    std::auto_ptr<SessionResource> resource(new SessionResource(server,
+                                                                peerDeviceID,
+                                                                configName,
+                                                                session,
+                                                                flags));
+
+    resource->init(callback);
+    // init did not throw any exception, so we guess that child was spawned successfully.
+    // thus we release the auto_ptr, so it will not delete the resource.
+    resource.release();
 }
 
 SessionResource::SessionResource(Server &server,
@@ -377,10 +409,12 @@ SessionResource::SessionResource(Server &server,
     m_configName(configName),
     m_setConfig(false),
     m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
+    m_sessionProxy(),
     m_done(false),
     m_active(false),
     emitStatus(*this, "StatusChanged"),
-    emitProgress(*this, "ProgressChanged")
+    emitProgress(*this, "ProgressChanged"),
+    m_me()
 {
     m_priority = Resource::PRI_DEFAULT;
     m_isRunning = false;
