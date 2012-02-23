@@ -39,6 +39,7 @@ using namespace GDBusCXX;
 
 namespace {
     GMainLoop *loop = NULL;
+    bool connected = false;
 
     bool shutdownRequested = false;
 
@@ -52,12 +53,14 @@ namespace {
     void onFailure(const std::string &error)
     {
         SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
+        connected = false;
         g_main_loop_quit(loop);
     }
 
     void onConnect(const DBusConnectionPtr &conn, boost::shared_ptr<DBusObjectHelper> &dbusObjectHelper,
                    const std::string &config, const std::string &sessionID, bool startSession)
     {
+        connected = true;
         if(startSession) {
             dbusObjectHelper = Session::createSession(loop, shutdownRequested, conn, config, sessionID);
             SE_LOG_INFO(NULL, NULL, "onConnect called in helper (path: %s interface: %s)",
