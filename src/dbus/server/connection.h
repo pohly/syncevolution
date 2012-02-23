@@ -156,7 +156,10 @@ public:
     /** session requested by us is ready to run a sync */
     void ready();
 
-    /** connection is no longer needed, ensure that it gets deleted */
+    bool isSessionReadyToRun();
+
+    void runSession(LogRedirect &redirect);
+
     void shutdown();
 
     /** peer is not trusted, must authenticate as part of SyncML */

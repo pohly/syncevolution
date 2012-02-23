@@ -454,4 +454,20 @@ void Connection::ready()
     m_session->sync(m_syncMode, m_sourceModes);
 }
 
+bool Connection::isSessionReadyToRun()
+{
+    if(m_session) {
+        return m_session->readyToRun();
+    }
+
+    return false;
+}
+
+void Connection::runSession(LogRedirect &redirect)
+{
+    if(isSessionReadyToRun()) {
+        m_session->run(redirect);
+    }
+}
+
 SE_END_CXX
