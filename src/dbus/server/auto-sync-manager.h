@@ -202,6 +202,11 @@ class AutoSyncManager : public SessionListener
      */
     bool taskLikelyToRun(const AutoSyncTask &syncTask);
 
+    /**
+     * called when session resource is created and its helper is up and ready
+     */
+    void startTaskCb(const boost::shared_ptr<SessionResource> &resource);
+
  public:
     AutoSyncManager(Server &server)
         : m_server(server), m_syncSuccessStart(false)

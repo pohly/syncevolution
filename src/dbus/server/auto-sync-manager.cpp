@@ -247,6 +247,16 @@ bool AutoSyncManager::taskLikelyToRun(const AutoSyncTask &syncTask)
     return false;
 }
 
+void AutoSyncManager::startTaskCb(const boost::shared_ptr<SessionResource> &resource)
+{
+    if (resource) {
+         m_sessionResource = resource;
+         m_sessionResource->setPriority(Resource::PRI_AUTOSYNC);
+         m_sessionResource->addListener(this);
+         m_server.addResource(m_sessionResource);
+    }
+}
+
 void AutoSyncManager::startTask()
 {
     // get the front task and run a sync
@@ -255,13 +265,11 @@ void AutoSyncManager::startTask()
         m_activeTask.reset(new AutoSyncTask(m_workQueue.front()));
         m_workQueue.pop_front();
         std::string newSession = m_server.getNextSession();
-        m_sessionResource = SessionResource::createSessionResource(m_server,
-                                                                   "",
-                                                                   m_activeTask->m_peer,
-                                                                   newSession);
-        m_sessionResource->setPriority(Resource::PRI_AUTOSYNC);
-        m_sessionResource->addListener(this);
-        m_server.addResource(m_sessionResource);
+        SessionResource::createSessionResource(boost::bind(&AutoSyncManager::startTaskCb, this, _1),
+                                               m_server,
+                                               "",
+                                               m_activeTask->m_peer,
+                                               newSession);
     }
 }
 
@@ -279,11 +287,13 @@ void AutoSyncManager::prepare()
         StringMap stringMap;
         stringMap["syncURL"] = m_activeTask->m_url;
         config[""] = stringMap;
-        m_sessionResource->setConfig(true, true, config);
+        // TODO: this is async call now, probably will need to setup callback or something? krnowak
+        m_sessionResource->setConfigAsync(true, true, config);
 
         std::string mode;
         SessionCommon::SourceModes_t sourceModes;
-        m_sessionResource->sync("", SessionCommon::SourceModes_t());
+        // TODO: this is async call now, probably will need to setup callback or something? krnowak
+        m_sessionResource->syncAsync("", SessionCommon::SourceModes_t());
     }
 }
 

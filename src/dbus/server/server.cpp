@@ -135,54 +135,71 @@ bool Server::notificationsEnabled()
     return true;
 }
 
+void Server::connectCb(const GDBusCXX::Caller_t &caller,
+                       const boost::shared_ptr<ConnectionResource> &resource,
+                       const boost::shared_ptr<Client> &client,
+                       const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result)
+{
+    SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
+                 caller.c_str(),
+                 resource->getPath(),
+                 resource->m_description.c_str());
+
+    client->attach(resource);
+    addResource(resource);
+
+    result->done(resource->getPath());
+}
+
 void Server::connect(const Caller_t &caller,
                      const boost::shared_ptr<Watch> &watch,
                      const StringMap &peer,
                      bool must_authenticate,
                      const std::string &session,
-                     DBusObject_t &object)
+                     const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result)
 {
     if (!session.empty()) {
         // reconnecting to old connection is not implemented yet
         throw std::runtime_error("not implemented");
     }
     std::string new_session = getNextSession();
-
-    boost::shared_ptr<ConnectionResource> connectionResource(new ConnectionResource(*this,
-                                                                                    new_session,
-                                                                                    peer,
-                                                                                    must_authenticate));
-    connectionResource->init();
-    SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
-                 caller.c_str(),
-                 connectionResource->getPath(),
-                 connectionResource->m_description.c_str());
-
     boost::shared_ptr<Client> client = addClient(caller, watch);
-    client->attach(connectionResource);
-    addResource(connectionResource);
 
-    object = connectionResource->getPath();
+    ConnectionResource::createConnectionResource(boost::bind(&Server::connectCb, this, caller, _1, client, result),
+                                                 *this,
+                                                 new_session,
+                                                 peer,
+                                                 must_authenticate);
+}
+
+void Server::startSessionCb(const boost::shared_ptr<Client> &client,
+                            const boost::shared_ptr<SessionResource> &resource,
+                            const boost::shared_ptr<GDBusCXX::Result1<DBusObject_t> > &result)
+{
+    if (client && resource) {
+        client->attach(resource);
+        addResource(resource);
+
+        result->done(resource->getPath());
+    } else if (result) {
+      result->failed(GDBusCXX::dbus_error("org.Syncevolution.Server", "Ajwaj!"));
+    }
 }
 
 void Server::startSessionWithFlags(const Caller_t &caller,
                                    const boost::shared_ptr<Watch> &watch,
                                    const std::string &server,
                                    const std::vector<std::string> &flags,
-                                   DBusObject_t &object)
+                                   const boost::shared_ptr<GDBusCXX::Result1<DBusObject_t> > &result)
 {
     boost::shared_ptr<Client> client = addClient(caller, watch);
     std::string new_session = getNextSession();
-    boost::shared_ptr<SessionResource> sessionResource =
-        SessionResource::createSessionResource(*this,
-                                               "is this a client or server session?",
-                                               server,
-                                               new_session,
-                                               flags);
-    client->attach(sessionResource);
-    addResource(sessionResource);
-
-    object = sessionResource->getPath();
+    SessionResource::createSessionResource(boost::bind(&Server::startSessionCb, this, client, _1, result),
+                                           *this,
+                                           "is this a client or server session?",
+                                           server,
+                                           new_session,
+                                           flags);
 }
 
 void Server::checkPresence(const std::string &server,
@@ -483,7 +500,7 @@ void Server::killSessions(const std::string &peerDeviceID)
                          peerDeviceID.c_str());
             try {
                 // abort, even if not necessary right now
-                session->abort();
+                session->abortSession();
             } catch (...) {
                 // TODO: catch only that exception which indicates
                 // incorrect use of the function

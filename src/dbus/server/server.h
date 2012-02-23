@@ -45,6 +45,7 @@ class Timeout;
 class Restart;
 class Client;
 class GLibNotify;
+class ConnectionResource;
 
 /**
  * Implements the main org.syncevolution.Server interface.
@@ -203,20 +204,29 @@ class Server : public GDBusCXX::DBusObjectHelper,
                           const GDBusCXX::Caller_t &caller,
                           const string &notifications);
 
+    void connectCb(const GDBusCXX::Caller_t &caller,
+                   const boost::shared_ptr<ConnectionResource> &resource,
+                   const boost::shared_ptr<Client> &client,
+                   const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result);
+
     /** Server.Connect() */
     void connect(const GDBusCXX::Caller_t &caller,
                  const boost::shared_ptr<GDBusCXX::Watch> &watch,
                  const StringMap &peer,
                  bool must_authenticate,
                  const std::string &session,
-                 GDBusCXX::DBusObject_t &object);
+                 const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result);
+
+    void startSessionCb(const boost::shared_ptr<Client> &client,
+                        const boost::shared_ptr<SessionResource> &resource,
+                        const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result);
 
     /** Server.StartSession() */
     void startSession(const GDBusCXX::Caller_t &caller,
                       const boost::shared_ptr<GDBusCXX::Watch> &watch,
                       const std::string &server,
-                      GDBusCXX::DBusObject_t &object) {
-        startSessionWithFlags(caller, watch, server, std::vector<std::string>(), object);
+                      const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result) {
+        startSessionWithFlags(caller, watch, server, std::vector<std::string>(), result);
     }
 
     /** Server.StartSessionWithFlags() */
@@ -224,7 +234,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
                                const boost::shared_ptr<GDBusCXX::Watch> &watch,
                                const std::string &server,
                                const std::vector<std::string> &flags,
-                               GDBusCXX::DBusObject_t &object);
+                               const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result);
 
     /** Server.GetConfig() */
     void getConfig(const std::string &configName,
