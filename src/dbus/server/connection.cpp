@@ -356,7 +356,8 @@ Connection::Connection(GMainLoop *loop,
     m_abortSent(false),
     emitReply(*this, "Reply"),
     emitShutdown(*this, "Shutdown"),
-    emitKillSessions(*this, "KillSessions")
+    emitKillSessions(*this, "KillSessions"),
+    m_state(SETUP)
 {
     add(this, &Connection::process, "Process");
     add(this, &Connection::close, "Close");

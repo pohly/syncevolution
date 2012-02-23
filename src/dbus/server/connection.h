@@ -40,14 +40,7 @@ class Connection : public GDBusCXX::DBusObjectHelper
 {
     StringMap m_peer;
     bool m_mustAuthenticate;
-    enum {
-        SETUP,          /**< ready for first message */
-        PROCESSING,     /**< received message, waiting for engine's reply */
-        WAITING,        /**< waiting for next follow-up message */
-        FINAL,          /**< engine has sent final reply, wait for ACK by peer */
-        DONE,           /**< peer has closed normally after the final reply */
-        FAILED          /**< in a failed state, no further operation possible */
-    } m_state;
+
     std::string m_failure;
 
     /**
@@ -137,6 +130,15 @@ public:
                                                           const GDBusCXX::DBusConnectionPtr &conn,
                                                           const std::string &sessionID);
 
+    enum State {
+        SETUP,          /**< ready for first message */
+        PROCESSING,     /**< received message, waiting for engine's reply */
+        WAITING,        /**< waiting for next follow-up message */
+        FINAL,          /**< engine has sent final reply, wait for ACK by peer */
+        DONE,           /**< peer has closed normally after the final reply */
+        FAILED          /**< in a failed state, no further operation possible */
+    };
+
 private:
     Connection(GMainLoop *loop,
                bool &shutdownRequested,
@@ -144,8 +146,12 @@ private:
                const std::string &sessionID);
     boost::weak_ptr<Connection> m_me;
 
+    State m_state;
+
 public:
     ~Connection();
+
+    State getState() { return m_state; }
 
     /** session requested by us is ready to run a sync */
     void ready();
