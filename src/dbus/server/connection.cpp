@@ -289,6 +289,9 @@ void Connection::process(const GDBusCXX::DBusArray<uint8_t> &message,
         failed("unknown exception in Connection::process");
         throw;
     }
+
+    // Allow helper to check state.
+    g_main_loop_quit(m_loop);
 }
 
 void Connection::close(bool normal,
@@ -314,6 +317,9 @@ void Connection::close(bool normal,
             m_session->setStubConnectionError("");
         }
     }
+
+    // Allow helper to check state.
+    g_main_loop_quit(m_loop);
 }
 
 void Connection::abort()

@@ -72,6 +72,8 @@ namespace {
         }
         // Activate dbus interface.
         dbusObjectHelper->activate();
+        // Allow syncevo-dbus-helper to proceed.
+        g_main_loop_quit(loop);
     }
 } // anonymous namespace
 
@@ -128,8 +130,35 @@ int main(int argc, char **argv, char **envp)
                     "%s: Helper (pid %d) finished setup.",
                     argv[0], getpid());
 
+        // Wait for the connect or failure signal to return.
         g_main_loop_run(loop);
 
+        // If we are not connected this means onFailure or niam was
+        // invoked. In either case, bail.
+        if (!connected) {
+            SE_LOG_INFO(NULL, NULL, "%s: Could not connect to parent. Terminating.",  argv[0]);
+            return 1;
+        }
+
+        // Run the session or connection.
+        if (start_session) {
+            boost::shared_ptr<Session> session = boost::dynamic_pointer_cast<Session>(dbusObjectHelper);
+            while (!session->getShutdownRequested() && connected) {
+                if (!session->readyToRun()) {
+                    g_main_loop_run(loop);
+                } else {
+                    try {
+                        session->run(redirect);
+                    } catch (const std::exception &ex) {
+                        SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
+                    } catch (...) {
+                        SE_LOG_ERROR(NULL, NULL, "unknown error");
+                    }
+                }
+            }
+        } else {
+            // TODO: Deal with Connection.
+        }
         SE_LOG_INFO(NULL, NULL, "%s: Terminating helper",  argv[0]);
         return 0;
     } catch ( const std::exception &ex ) {
