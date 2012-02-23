@@ -30,6 +30,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/bind.hpp>
 
+#include <memory>
+
 using namespace GDBusCXX;
 
 SE_BEGIN_CXX
@@ -85,11 +87,14 @@ void ConnectionResource::process(const Caller_t &caller,
         throw runtime_error("client does not own connection");
     }
 
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_connectionProxy->m_process.getMethod());
     m_connectionProxy->m_process.start(msg,
                                        msgType,
                                        m_peer,
                                        m_mustAuthenticate,
-                                       MakeProxyCallback(result));
+                                       callback);
 }
 
 void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
@@ -121,10 +126,12 @@ void ConnectionResource::close(const GDBusCXX::Caller_t &caller, bool normal, co
     // ConnectionResource pointer.
     //
     // static_cast is necessary because detach() is ambiguous.
-    ProxyCallback<GDBusCXX::Result0> callback(result);
-    callback.m_success->connect(DBusSuccessSignal_t::slot_type(static_cast< void (Client::*) (Resource *)>(&Client::detach),
-                                                               client.get(),
-                                                               myself.get()).track(client).track(myself));
+    ProxyCallback0 callback(result);
+
+    callback.m_success->connect(ProxyCallback0::SuccessSignalType::slot_type(static_cast< void (Client::*) (Resource *)>(&Client::detach),
+                                                                             client.get(),
+                                                                             myself.get()).track(client).track(myself));
+    defaultConnectToFailure(callback, m_connectionProxy->m_close.getMethod());
     m_connectionProxy->m_close.start(normal,
                                      error,
                                      callback);
@@ -160,31 +167,26 @@ void ConnectionResource::abortCb()
     }
 }
 
-void ConnectionResource::init()
+void ConnectionResource::init(const Callback_t &callback)
 {
     SE_LOG_INFO(NULL, NULL, "ConnectionResource (%s) forking...", getPath());
 
-    m_forkExecParent->m_onConnect.connect(boost::bind(&ConnectionResource::onConnect, this, _1));
+    m_forkExecParent->m_onConnect.connect(boost::bind(&ConnectionResource::onConnect, this, callback, _1));
     m_forkExecParent->m_onQuit.connect(boost::bind(&ConnectionResource::onQuit, this, _1));
     m_forkExecParent->m_onFailure.connect(boost::bind(&ConnectionResource::onFailure, this, _2));
     m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "TRUE");
     m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
     m_forkExecParent->start();
-
-    // Wait for onSessionConnect to be called so that the dbus
-    // interface is ready to be used.
-    resetReplies();
-    waitForReply();
 }
 
-void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
+void ConnectionResource::onConnect(const Callback_t &callback,
+                                   const GDBusCXX::DBusConnectionPtr &conn)
 {
     SE_LOG_INFO(NULL, NULL, "ConnectionProxy interface ending with: %s", m_sessionID.c_str());
     m_connectionProxy.reset(new ConnectionProxy(conn, m_sessionID));
 
     /* Enable public dbus interface for Connection. */
     activate();
-    replyInc(); // Init is waiting on a reply.
 
     // Activate signal watch on helper signals.
     m_connectionProxy->m_reply.activate       (boost::bind(&ConnectionResource::replyCb,
@@ -195,6 +197,11 @@ void ConnectionResource::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
 
     SE_LOG_INFO(NULL, NULL, "onConnect called in ConnectionResource (path: %s interface: %s)",
                 m_connectionProxy->getPath(), m_connectionProxy->getInterface());
+
+    boost::shared_ptr<ConnectionResource> me(this);
+    // if callback owner won't copy this shared pointer
+    // then connection resource will be destroyed.
+    callback(me);
 }
 
 void ConnectionResource::onQuit(int status)
@@ -209,6 +216,23 @@ void ConnectionResource::onFailure(const std::string &error)
     SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
 }
 
+void ConnectionResource::createConnectionResource(const Callback_t &callback,
+                                                  Server &server,
+                                                  const std::string &session_num,
+                                                  const StringMap &peer,
+                                                  bool must_authenticate)
+{
+    std::auto_ptr<ConnectionResource> resource(new ConnectionResource(server,
+                                                                      session_num,
+                                                                      peer,
+                                                                      must_authenticate));
+
+    resource->init(callback);
+    // init did not throw any exception, so we guess that child was spawned successfully.
+    // thus we release the auto_ptr, so it will not delete the resource.
+    resource.release();
+}
+
 ConnectionResource::ConnectionResource(Server &server,
                                        const std::string &sessionID,
                                        const StringMap &peer,
@@ -218,6 +242,7 @@ ConnectionResource::ConnectionResource(Server &server,
                      SessionCommon::CONNECTION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
     Resource(server, "Connection"),
+    m_description(buildDescription(peer)),
     m_path(std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID),
     m_peer(peer),
     m_sessionID(sessionID),
@@ -225,8 +250,7 @@ ConnectionResource::ConnectionResource(Server &server,
     emitAbort(*this, "Abort"),
     m_abortSent(false),
     emitReply(*this, "Reply"),
-    m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
-    m_description(buildDescription(peer))
+    m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper"))
 {
     m_priority = Resource::PRI_CONNECTION;
     // FIXME: A Connection is always marked as running for now as we

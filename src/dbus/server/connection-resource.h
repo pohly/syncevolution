@@ -66,20 +66,27 @@ public:
 class ConnectionResource : public GDBusCXX::DBusObjectHelper,
                            public Resource
 {
+ public:
+    typedef boost::function<void (const boost::shared_ptr<ConnectionResource> &)> Callback_t;
+
+    const std::string m_description;
+
+    static void createConnectionResource(const Callback_t &callback,
+                                         Server &server,
+                                         const std::string &session_num,
+                                         const StringMap &peer,
+                                         bool must_authenticate);
+
+    ~ConnectionResource();
+
+    /** peer is not trusted, must authenticate as part of SyncML */
+    bool mustAuthenticate() const { return m_mustAuthenticate; }
+ private:
     std::string m_path;
 
     StringMap m_peer;
     const std::string m_sessionID;
     bool m_mustAuthenticate;
-
-    /** Connection.Process */
-    void process(const GDBusCXX::Caller_t &caller, const GDBusCXX::DBusArray<uint8_t> &msg,
-                 const std::string &msgType,
-                 const boost::shared_ptr<GDBusCXX::Result0> &result);
-
-    /** Connection.Close */
-    void close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
-               const boost::shared_ptr<GDBusCXX::Result0> &result);
 
     GDBusCXX::EmitSignal0 emitAbort;
     bool m_abortSent;
@@ -90,6 +97,18 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
                           bool,
                           const std::string &> emitReply;
 
+    boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
+    boost::scoped_ptr<ConnectionProxy> m_connectionProxy;
+
+    /** Connection.Process */
+    void process(const GDBusCXX::Caller_t &caller, const GDBusCXX::DBusArray<uint8_t> &msg,
+                 const std::string &msgType,
+                 const boost::shared_ptr<GDBusCXX::Result0> &result);
+
+    /** Connection.Close */
+    void close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
+               const boost::shared_ptr<GDBusCXX::Result0> &result);
+
     /** Signal callbacks */
     void replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
                  const StringMap &meta, bool final, const std::string &session);
@@ -97,11 +116,9 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
     void shutdownCb();
     void killSessionsCb(const std::string &peerDeviceId);
 
-    boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
-    boost::scoped_ptr<ConnectionProxy> m_connectionProxy;
-
     // Child process handlers
-    void onConnect(const GDBusCXX::DBusConnectionPtr &conn);
+    void onConnect(const Callback_t &callback,
+                   const GDBusCXX::DBusConnectionPtr &conn);
     void onQuit(int status);
     void onFailure(const std::string &error);
 
@@ -110,24 +127,16 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
      */
     static std::string buildDescription(const StringMap &peer);
 
-public:
-    const std::string m_description;
-
     ConnectionResource(Server &server,
                        const std::string &session_num,
                        const StringMap &peer,
                        bool must_authenticate);
 
-    ~ConnectionResource();
-
     /**
      * Set up the helper and connection to it. Wait until Conection
      * interface is usable.
      */
-    void init();
-
-    /** peer is not trusted, must authenticate as part of SyncML */
-    bool mustAuthenticate() const { return m_mustAuthenticate; }
+    void init(const Callback_t &callback);
 };
 
 SE_END_CXX
