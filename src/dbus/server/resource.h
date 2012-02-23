@@ -22,8 +22,9 @@
 
 #include <string>
 
-#include <syncevo/SmartPtr.h>
+#include <boost/bind.hpp>
 
+#include <syncevo/SmartPtr.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -88,44 +89,37 @@ protected:
     void waitForReply(int timeout = 100 /*ms*/);
 
     // Determine and throw appropriate exception based on returned error string
-    void throwExceptionFromString(const std::string &errorString);
+    static void throwExceptionFromString(const std::string &errorString);
 
-    // Some generic DBus callers
-    void genericErrorHandler(const std::string &error, const std::string &method);
 
-    template<class DC>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, std::string& str_error)
+    // static, so we don't have to track the instance of resource.
+    static void printStatus(const std::string &error,
+                            const std::string &name,
+                            const std::string &method);
+
+    template <class R>
+    void defaultConnectToSuccess(R &proxyCallback, const std::string &method)
     {
-        call.block(callback);
-        genericErrorHandler(str_error, call.getMethod());
+        proxyCallback.m_success->connect(typename R::SuccessSignalType::slot_type(&Resource::printStatus,
+                                                                                  std::string(),
+                                                                                  m_resourceName,
+                                                                                  method));
     }
 
-    template <class DC, class A1>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, std::string& str_error)
+    template <class R>
+    void defaultConnectToFailure(R &proxyCallback, const std::string &method)
     {
-        call.block(a1, callback);
-        genericErrorHandler(str_error, call.getMethod());
+        proxyCallback.m_failure->connect(typename R::FailureSignalType::slot_type(&Resource::printStatus,
+                                                                                  _1,
+                                                                                  m_resourceName,
+                                                                                  method));
     }
 
-    template <class DC, class A1, class A2>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, std::string& str_error)
+    template <class R>
+    void defaultConnectToBoth(R &proxyCallback, const std::string &method)
     {
-        call.block(a1, a2, callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
-
-    template <class DC, class A1, class A2, class A3>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, const A3 &a3, std::string& str_error)
-    {
-        call.block(a1, a2, a3, callback);
-        genericErrorHandler(str_error, call.getMethod());
-    }
-
-    template <class DC, class A1, class A2, class A3, class A4>
-    void genericCall(DC& call, const typename DC::Callback_t &callback, const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, std::string& str_error)
-    {
-        call.block(a1, a2, a3, a4, callback);
-        genericErrorHandler(str_error, call.getMethod());
+        defaultConnectToSuccess(proxyCallback, method);
+        defaultConnectToFailure(proxyCallback, method);
     }
 };
 
