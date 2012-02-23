@@ -561,6 +561,26 @@ public:
     virtual std::list<std::string> insertManyItems(TestingSyncSource *source, int startIndex = 1, int numItems = 0, int size = -1);
 
     /**
+     * Update existing items. Must match a corresponding previous call to
+     * insertManyItems().
+     *
+     * @param revision    revision number, used to distinguish different generations of each item
+     * @param luids       result from corresponding insertManyItems() call
+     * @param offset      skip that many items at the start of luids before updating the following ones
+     */
+    void updateManyItems(CreateSource createSource, int startIndex, int numItems, int size,
+                         int revision,
+                         std::list<std::string> &luids,
+                         int offset);
+
+    /**
+     * Delete items. Skips offset items in luids before deleting numItems.
+     */
+    void removeManyItems(CreateSource createSource, int numItems,
+                         std::list<std::string> &luids,
+                         int offset);
+
+    /**
      * update every single item, using config.update
      */
     virtual void updateData(CreateSource createSource);
@@ -866,6 +886,15 @@ protected:
     void allSourcesInsert();
     void allSourcesUpdate();
     void allSourcesDeleteAll();
+    void allSourcesInsertMany(int startIndex, int numItems,
+                              std::map<int, std::list<std::string> > &luids);
+    void allSourcesUpdateMany(int startIndex, int numItems,
+                              int revision,
+                              std::map<int, std::list<std::string> > &luids,
+                              int offset);
+    void allSourcesRemoveMany(int numItems,
+                              std::map<int, std::list<std::string> > &luids,
+                              int offset);
 };
 
 /*

@@ -328,6 +328,15 @@ static void updateItem(TestingSyncSource *source, std::string &data, const std::
     CT_ASSERT_EQUAL(luid, res.m_luid);
 }
 
+/** remove existing item */
+static void removeItem(TestingSyncSource *source, const std::string &luid)
+{
+    CT_ASSERT(source);
+    CT_ASSERT(!luid.empty());
+
+    SOURCE_ASSERT_NO_FAILURE(source, source->deleteItem(luid));
+}
+
 static void restoreStorage(const ClientTest::Config &config, ClientTest &client)
 {
 #ifdef ENABLE_BUTEO_TESTS
@@ -830,6 +839,52 @@ std::list<std::string> LocalTests::insertManyItems(TestingSyncSource *source, in
     }
 
     return luids;
+}
+
+void LocalTests::updateManyItems(CreateSource createSource, int startIndex, int numItems, int size,
+                                 int revision,
+                                 std::list<std::string> &luids,
+                                 int offset)
+{
+    CT_ASSERT(!config.m_templateItem.empty());
+
+    restoreStorage(config, client);
+    TestingSyncSourcePtr source;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
+
+    int firstIndex = startIndex;
+    if (firstIndex < 0) {
+        firstIndex = 1;
+    }
+    int lastIndex = firstIndex + (numItems >= 1 ? numItems : defNumItems()) - 1;
+    std::string revstring = StringPrintf("REVISION #%d", revision);
+    std::list<std::string>::const_iterator it = luids.begin();
+    for (int i = 0; i < offset && it != luids.end(); i++, ++it) {}
+    for (int item = firstIndex;
+         item <= lastIndex && it != luids.end();
+         item++, ++it) {
+        std::string data = createItem(item, revstring, size);
+        updateItem(source.get(), data, *it);
+    }
+    backupStorage(config, client);
+}
+
+void LocalTests::removeManyItems(CreateSource createSource, int numItems,
+                                 std::list<std::string> &luids,
+                                 int offset)
+{
+    restoreStorage(config, client);
+    TestingSyncSourcePtr source;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
+
+    std::list<std::string>::const_iterator it = luids.begin();
+    for (int i = 0; i < offset && it != luids.end(); i++, ++it) {}
+    for (int item = 0;
+         item < numItems && it != luids.end();
+         item++, ++it) {
+        removeItem(source.get(), *it);
+    }
+    backupStorage(config, client);
 }
 
 // update every single item in the database
@@ -5417,6 +5472,50 @@ void SyncTests::allSourcesDeleteAll()
 {
     BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
         CT_ASSERT_NO_THROW(source_pair.second->deleteAll(source_pair.second->createSourceA));
+    }
+}
+
+void SyncTests::allSourcesInsertMany(int startIndex, int numItems,
+                                     std::map<int, std::list<std::string> > &luids)
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        std::list<std::string> l;
+        CT_ASSERT_NO_THROW(l = source_pair.second->insertManyItems(source_pair.second->createSourceA,
+                                                                   startIndex,
+                                                                   numItems,
+                                                                   0));
+        CT_ASSERT_EQUAL((size_t)numItems, l.size());
+        // append instead of overwriting - useful when multiple
+        // insertMany calls share the same luid buffer
+        luids[source_pair.first].insert(luids[source_pair.first].end(), l.begin(), l.end());
+    }
+}
+
+void SyncTests::allSourcesUpdateMany(int startIndex, int numItems,
+                                     int revision,
+                                     std::map<int, std::list<std::string> > &luids,
+                                     int offset)
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->updateManyItems(source_pair.second->createSourceA,
+                                                               startIndex,
+                                                               numItems,
+                                                               0,
+                                                               revision,
+                                                               luids[source_pair.first],
+                                                               offset));
+    }
+}
+
+void SyncTests::allSourcesRemoveMany(int numItems,
+                                     std::map<int, std::list<std::string> > &luids,
+                                     int offset)
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->removeManyItems(source_pair.second->createSourceA,
+                                                               numItems,
+                                                               luids[source_pair.first],
+                                                               offset));
     }
 }
 
