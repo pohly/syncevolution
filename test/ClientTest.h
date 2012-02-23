@@ -753,6 +753,7 @@ protected:
     void testOneWayFromLocalRestart();
     void testRefreshFromRemoteRestart();
     void testOneWayFromRemoteRestart();
+    void testManyRestarts();
 
     void testCopy();
 

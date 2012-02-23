@@ -62,6 +62,7 @@
 #include <boost/lambda/bind.hpp>
 #include <boost/lambda/if.hpp>
 #include <boost/lambda/casts.hpp>
+#include <boost/lambda/switch.hpp>
 
 #include <pcrecpp.h>
 
@@ -2473,6 +2474,7 @@ void SyncTests::addTests(bool isFirstSource) {
                 ADD_TEST(SyncTests, testOneWayFromLocalRestart);
                 ADD_TEST(SyncTests, testRefreshFromRemoteRestart);
                 ADD_TEST(SyncTests, testOneWayFromRemoteRestart);
+                ADD_TEST(SyncTests, testManyRestarts);
 
                 if (accessClientB &&
                     config.m_dump &&
@@ -3189,6 +3191,170 @@ void SyncTests::testRefreshFromRemoteRestart()
 void SyncTests::testOneWayFromRemoteRestart()
 {
     CT_ASSERT_NO_THROW(doRestartSync(SYNC_ONE_WAY_FROM_REMOTE));
+}
+
+// Start with empty database, refresh peer.
+// Then add 1, 2, 4, 8 items in four cycles,
+// update them the same way, and finally delete them.
+// Results in 12 cycles with different changes and
+// one empty, final cycle.
+void SyncTests::testManyRestarts()
+{
+    CT_ASSERT_NO_THROW(deleteAll());
+    int startCount = 0;
+    bool needToConnect = true;
+    typedef std::map<std::string, SyncSourceReport> Reports_t;
+    typedef std::map<int, Reports_t> Cycles_t;
+    Cycles_t results;
+    std::map<int, std::list<std::string> > luids;
+
+    // Triggered for every m_startDataRead.
+    //
+    // It records the current source statistics for later checking,
+    // logs it, and does the item changes.
+    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
+        (boost::lambda::if_then(boost::lambda::var(startCount) % sources.size() == 0,
+         (
+           boost::lambda::switch_statement(boost::lambda::var(startCount) / sources.size(),
+               boost::lambda::case_statement<0>(
+                  (boost::lambda::bind(log, "insert 1 item, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 1, 1, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<1>(
+                  (boost::lambda::bind(log, "insert 2 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 2, 2, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<2>(
+                  (boost::lambda::bind(log, "insert 4 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 4, 4, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<3>(
+                  (boost::lambda::bind(log, "insert 8 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 8, 8, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<4>(
+                  (boost::lambda::bind(log, "update 1 item, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 1, 1, 1, boost::ref(luids), 0),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<5>(
+                  (boost::lambda::bind(log, "update 2 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 2, 2, 1, boost::ref(luids), 1),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<6>(
+                  (boost::lambda::bind(log, "update 4 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 4, 4, 1, boost::ref(luids), 3),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<7>(
+                  (boost::lambda::bind(log, "update 8 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 8, 8, 1, boost::ref(luids), 7),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  ))
+           ),
+           // must break up switch statement, it only has a limited number of case slots
+           boost::lambda::switch_statement(boost::lambda::var(startCount) / sources.size(),
+               boost::lambda::case_statement<8>(
+                  (boost::lambda::bind(log, "delete 1 item, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 1, boost::ref(luids), 0),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<9>(
+                  (boost::lambda::bind(log, "delete 2 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 2, boost::ref(luids), 1),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<10>(
+                  (boost::lambda::bind(log, "delete 4 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 4, boost::ref(luids), 3),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<11>(
+                  (boost::lambda::bind(log, "delete 8 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 8, boost::ref(luids), 7),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  ))
+           )
+          )
+         ),
+         (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, boost::lambda::_1)]
+          [boost::lambda::bind(&SyncSource::getName, boost::lambda::_1)] = boost::lambda::_1
+         ),
+         boost::lambda::bind(logSyncSourceReport,
+                             boost::lambda::_1),
+         ++boost::lambda::var(startCount)
+         );
+
+    SyncOptions::Callback_t setup =
+        (boost::lambda::if_then(boost::lambda::var(needToConnect),
+                                (boost::lambda::var(needToConnect) = false,
+                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
+                                                                         typeof(&SyncSource::Operations::StartDataRead_t::getPreSignal),
+                                                                         typeof(start)>,
+                                                         boost::lambda::_1,
+                                                         &SyncSource::Operations::m_startDataRead,
+                                                         &SyncSource::Operations::StartDataRead_t::getPreSignal,
+                                                         boost::cref(start))
+                                )),
+         boost::lambda::constant(false)
+        );
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              SyncOptions(SYNC_TWO_WAY,
+                                          CheckSyncReport(0,
+                                                          0,
+                                                          0,
+
+                                                          15,
+                                                          15,
+                                                          15,
+                                                          true, SYNC_TWO_WAY)
+                                          .setRestarts(12))
+                              .setStartCallback(setup)
+                              ));
+
+    // 13 cycles
+    CT_ASSERT_EQUAL((size_t)13, results.size());
+    static const int changes[13][3] = {
+        {  0,  0,  0 }, // nothing before first cycle
+        {  1,  0,  0 }, // result of first cycle
+        {  3,  0,  0 }, // statistics are cummulative: first + second
+        {  7,  0,  0 },
+        { 15,  0,  0 },
+        { 15,  1,  0 },
+        { 15,  3,  0 },
+        { 15,  7,  0 },
+        { 15, 15,  0 },
+        { 15, 15,  1 },
+        { 15, 15,  3 },
+        { 15, 15,  7 },
+        { 15, 15, 15 }
+    };
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            const int *c = changes[cycle.first];
+            CLIENT_TEST_LOG("Checking stats before cycle #%d, source %s: expected remote %d/%d/%d",
+                            cycle.first, entry.first.c_str(),
+                            c[0], c[1], c[2]);
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0,
+                                               c[0], c[1], c[2])
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // no item exists now
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(0, countItems(source.get()));
+    }
 }
 
 // test that a two-way sync copies an item from one address book into the other
