@@ -1,0 +1,29 @@
+dist_noinst_DATA += src/backends/pbap/configure-sub.in
+
+src_backends_pbap_lib = src/backends/pbap/syncpbap.la
+MOSTLYCLEANFILES += $(src_backends_pbap_lib)
+if ENABLE_MODULES
+src_backends_pbap_backenddir = $(BACKENDS_DIRECTORY)
+src_backends_pbap_backend_LTLIBRARIES = $(src_backends_pbap_lib)
+else
+noinst_LTLIBRARIES += $(src_backends_pbap_lib)
+endif
+
+src_backends_pbap_src = \
+  src/backends/pbap/PbapSyncSource.h \
+  src/backends/pbap/PbapSyncSource.cpp
+
+src_backends_pbap_syncpbap_la_SOURCES = $(src_backends_pbap_src)
+src_backends_pbap_syncpbap_la_LIBADD = $(PBAP_LIBS) $(SYNCEVOLUTION_LIBS) $(DBUS_LIBS) $(gdbus_build_dir)/libgdbussyncevo.la
+src_backends_pbap_syncpbap_la_LDFLAGS = -module -avoid-version $(DBUS_LIBS)
+src_backends_pbap_syncpbap_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(DBUS_CFLAGS)
+src_backends_pbap_syncpbap_la_CPPFLAGS = $(SYNCEVOLUTION_CFLAGS) -I$(gdbus_dir) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
+src_backends_pbap_syncpbap_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS) $(gdbus_build_dir)/libgdbussyncevo.la
+
+# If you need special test cases for your sync source, then
+# install them here. Here's how the sqlite backend does that:
+#
+#../../testcases/sqlite_vcard21.vcf: $(FUNAMBOL_SUBDIR)/test/test/testcases/vcard21.vcf
+#	mkdir -p ${@D}
+#	perl -e '$$_ = join("", <>); s/^(ADR|TEL|EMAIL|PHOTO).*?(?=^\S)//msg; s/;X-EVOLUTION-UI-SLOT=\d+//g; print;' $< >$@
+#all: ../../testcases/sqlite_vcard21.vcf

@@ -1,0 +1,36 @@
+dnl -*- mode: Autoconf; -*-
+dnl Invoke autogen.sh to produce a configure script.
+
+dnl Checks for required libraris can go here; none required for simple files.
+dnl
+dnl This is from the sqlite backend:
+dnl PKG_CHECK_MODULES(SQLITE, sqlite3, SQLITEFOUND=yes, [SQLITEFOUND=no])
+dnl AC_SUBST(SQLITE_CFLAGS)
+dnl AC_SUBST(SQLITE_LIBS)
+
+PBAP_CFLAGS=
+PBAP_LIBS=
+AC_SUBST(PBAP_CFLAGS)
+AC_SUBST(BAP_LIBS)
+
+dnl If additional compile flags are necessary to include the header
+dnl files of the backend, then add them here.
+BACKEND_CPPFLAGS="$BACKEND_CPPFLAGS $PBAP_CFLAGS"
+
+dnl name of backend library (there could be more than one per directory),
+dnl name of the directory,
+dnl help string,
+dnl --enable/disable chosen explicitly
+dnl default, may depend on availability of prerequisites in more complex backends
+SE_ARG_ENABLE_BACKEND(pbap,
+                      pbap,
+                      [AS_HELP_STRING([--disable-pbap],
+                                      [disable pbap-based backend which provides one-way synchronization (default on)])],
+                      [enable_pbap="$enableval"],
+                      [enable_pbap="yes"]
+                     )
+
+if test "$enable_pbap" = "yes"; then
+        dnl It's good to check the prerequisites here, in case --enable-pbap was used.
+        AC_DEFINE(ENABLE_PBAP, 1, [pbap available])
+fi
