@@ -469,7 +469,6 @@ void SessionResource::done()
 SessionResource::~SessionResource()
 {
     SE_LOG_DEBUG(NULL, NULL, "session resource %s deconstructing", getPath());
-    done();
 }
 
 SE_END_CXX
