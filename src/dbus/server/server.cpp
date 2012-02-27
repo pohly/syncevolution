@@ -449,7 +449,7 @@ void Server::checkQueue()
             // ...then iterate over the active resources...
             for (rl_iter = m_activeResources.begin(); rl_iter != m_activeResources.end(); ++rl_iter) {
                 Resource_t activeResource = *rl_iter;
-                // ...to see if there are any resources than can't be run concurrently.
+                // ...to see if there are any resources that can't be run concurrently.
                 if (!waitingResource->canRunConcurrently(activeResource)) {
                     canRun = false;
                     break;
