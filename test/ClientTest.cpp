@@ -2468,13 +2468,20 @@ void SyncTests::addTests(bool isFirstSource) {
                 ADD_TEST(SyncTests, testRefreshFromClientSemantic);
                 ADD_TEST(SyncTests, testRefreshStatus);
 
+                // This test works regardless whether the peer can
+                // restart: if restarts are not possible, it checks
+                // that they don't occur. The rest of the tests then
+                // only make sense when restarting works.
                 ADD_TEST(SyncTests, testTwoWayRestart);
-                ADD_TEST(SyncTests, testSlowRestart);
-                ADD_TEST(SyncTests, testRefreshFromLocalRestart);
-                ADD_TEST(SyncTests, testOneWayFromLocalRestart);
-                ADD_TEST(SyncTests, testRefreshFromRemoteRestart);
-                ADD_TEST(SyncTests, testOneWayFromRemoteRestart);
-                ADD_TEST(SyncTests, testManyRestarts);
+                if (getenv("CLIENT_TEST_PEER_CAN_RESTART")) {
+                    ADD_TEST(SyncTests, testTwoWayRestart);
+                    ADD_TEST(SyncTests, testSlowRestart);
+                    ADD_TEST(SyncTests, testRefreshFromLocalRestart);
+                    ADD_TEST(SyncTests, testOneWayFromLocalRestart);
+                    ADD_TEST(SyncTests, testRefreshFromRemoteRestart);
+                    ADD_TEST(SyncTests, testOneWayFromRemoteRestart);
+                    ADD_TEST(SyncTests, testManyRestarts);
+                }
 
                 if (accessClientB &&
                     config.m_dump &&
@@ -2980,6 +2987,9 @@ void SyncTests::doRestartSync(SyncMode mode)
          boost::lambda::constant(false)
         );
 
+    bool canRestart = getenv("CLIENT_TEST_PEER_CAN_RESTART") != NULL &&
+        !isServerMode();
+
     CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
                               "add",
                               SyncOptions(mode,
@@ -2992,17 +3002,18 @@ void SyncTests::doRestartSync(SyncMode mode)
 
                                                           // nothing transferred when item only exists locally
                                                           // and not transferring to peer
+                                                          !canRestart ? 0 :
                                                           (mode == SYNC_ONE_WAY_FROM_REMOTE ||
                                                            mode == SYNC_REFRESH_FROM_REMOTE) ? 0 : 1,
                                                           0,
                                                           0,
                                                           true, mode)
-                                          .setRestarts(1))
+                                          .setRestarts(canRestart ? 1 : 0))
                               .setStartCallback(setup)
                               ));
 
-    // two cycles
-    CT_ASSERT_EQUAL((size_t)2, results.size());
+    // two cycles if restarted, one otherwise
+    CT_ASSERT_EQUAL((size_t)(canRestart ? 2 : 1), results.size());
 
     // nothing transfered before first or second cycle
     BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
@@ -3023,11 +3034,15 @@ void SyncTests::doRestartSync(SyncMode mode)
         CT_ASSERT_EQUAL(1, countItems(source.get()));
     }
 
-    if (mode == SYNC_REFRESH_FROM_REMOTE) {
+    if (mode == SYNC_REFRESH_FROM_REMOTE ||
+        !canRestart) {
         // Can't continue testing for refresh-from-remote, because the
         // item was never sent to remote and will be gone locally
         // after the next refresh-from-remote (prevents updating and
         // deleting it locally).
+        // Without restart support further tests don't make much sense.
+        // We already verified above that a restart request was
+        // correctly rejected/ignored.
         return;
     }
 
