@@ -339,13 +339,11 @@ bool Server::shutdown()
 
 void Server::fileModified()
 {
-    if(!m_shutdownRequested) {
-        if (m_activeResources.empty()) {
-            m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
+    if (m_activeResources.empty()) {
+        m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
                                      boost::bind(&Server::shutdown, this));
-        }
-        m_shutdownRequested = true;
     }
+    m_shutdownRequested = true;
 }
 
 void Server::run()
