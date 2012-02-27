@@ -212,7 +212,7 @@ void Server::checkPresence(const std::string &server,
 void Server::getSessions(std::vector<DBusObject_t> &sessions)
 {
     sessions.reserve(m_waitingResources.size() + m_activeResources.size());
-    BOOST_FOREACH(const boost::weak_ptr<Resource> &resource, m_waitingResources) {
+    BOOST_FOREACH(const WeakResource_t &resource, m_waitingResources) {
         boost::shared_ptr<SessionResource> session =
                     boost::dynamic_pointer_cast<SessionResource>(resource.lock());
         if (session) {
@@ -220,9 +220,9 @@ void Server::getSessions(std::vector<DBusObject_t> &sessions)
         }
     }
 
-    BOOST_FOREACH(const boost::shared_ptr<Resource> &resource, m_activeResources) {
+    BOOST_FOREACH(const WeakResource_t &resource, m_activeResources) {
         boost::shared_ptr<SessionResource> session =
-                    boost::dynamic_pointer_cast<SessionResource>(resource);
+                    boost::dynamic_pointer_cast<SessionResource>(resource.lock());
         if (session) {
             sessions.push_back(session->getPath());
         }
@@ -313,8 +313,8 @@ Server::~Server()
 bool Server::shutdown()
 {
     // Let the sessions know the server is shutting down.
-    BOOST_FOREACH(const Resource_t &resource, m_activeResources) {
-        boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(resource);
+    BOOST_FOREACH(const WeakResource_t &resource, m_activeResources) {
+        boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(resource.lock());
         if (session) {
             session->serverShutdown();
         }
@@ -340,8 +340,10 @@ bool Server::shutdown()
 void Server::fileModified()
 {
     if(!m_shutdownRequested) {
-        m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
-                                 boost::bind(&Server::shutdown, this));
+        if (m_activeResources.empty()) {
+            m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
+                                     boost::bind(&Server::shutdown, this));
+        }
         m_shutdownRequested = true;
     }
 }
@@ -445,14 +447,23 @@ void Server::checkQueue()
             m_waitingResources.erase(wq_iter++);
         } else {
             bool canRun = true;
-            Resources_t::iterator rl_iter;
+            WeakResources_t::iterator rl_iter;
             // ...then iterate over the active resources...
-            for (rl_iter = m_activeResources.begin(); rl_iter != m_activeResources.end(); ++rl_iter) {
-                Resource_t activeResource = *rl_iter;
-                // ...to see if there are any resources that can't be run concurrently.
-                if (!waitingResource->canRunConcurrently(activeResource)) {
-                    canRun = false;
-                    break;
+            for (rl_iter = m_activeResources.begin(); rl_iter != m_activeResources.end();) {
+                Resource_t activeResource(rl_iter->lock());
+                // ...removing any empty weak pointers again...
+                if (!activeResource) {
+                    rl_iter = m_activeResources.erase(rl_iter);
+                } else if (canRun) {
+                    // ...to see if there are any resources that can't be run concurrently.
+                    if (!waitingResource->canRunConcurrently(activeResource)) {
+                        canRun = false;
+                        // (We are not breaking the loop here, because we want to cleanup
+                        // list from empty weak pointers.)
+                    }
+                    ++rl_iter;
+                } else {
+                    ++rl_iter;
                 }
             }
             // If not we activate the resource and place it in the active resource list.
@@ -465,9 +476,10 @@ void Server::checkQueue()
                     session->setActive(true);
                     sessionChanged(session->getPath(), true);
                 }
-                m_waitingResources.erase(wq_iter);
+                m_waitingResources.erase(wq_iter++);
+            } else {
+                ++wq_iter;
             }
-            ++wq_iter;
         }
     }
 }
@@ -483,17 +495,19 @@ void Server::killSessions(const std::string &peerDeviceID)
         if (session && session->getPeerDeviceID() == peerDeviceID) {
             SE_LOG_DEBUG(NULL, NULL, "removing pending session %s because it matches deviceID %s",
                          session->getSessionID().c_str(), peerDeviceID.c_str());
-            m_waitingResources.erase(wq_iter);
+            m_waitingResources.erase(wq_iter++);
         } else {
             ++wq_iter;
         }
     }
 
     // Check active resources.
-    Resources_t::iterator ar_iter = m_activeResources.begin();
+    WeakResources_t::iterator ar_iter = m_activeResources.begin();
     while (ar_iter != m_activeResources.end()) {
         // boost::dynamic_pointer_cast returns null-pointer if cast is not allowed.
-        boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(*ar_iter);
+        boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(ar_iter->lock());
+
+        ++ar_iter;
         if (session && session->getPeerDeviceID() == peerDeviceID) {
             SE_LOG_DEBUG(NULL, NULL, "aborting active session %s because it matches deviceID %s",
                          session->getSessionID().c_str(),
@@ -506,46 +520,57 @@ void Server::killSessions(const std::string &peerDeviceID)
                 // incorrect use of the function
             }
             removeResource(session);
-        } else {
-            ++ar_iter;
         }
     }
 }
 
-void Server::removeResource(Resource_t resource)
+void Server::removeResource(const Resource_t& resource)
 {
-    boost::shared_ptr<SessionResource> session;
+    if (resource) {
+        bool found(false);
 
-    // See if the session is among the active sessions.
-    Resources_t::iterator ar_iter = std::find(m_activeResources.begin(), m_activeResources.end(), resource);
-    if (ar_iter != m_activeResources.end()) {
-        // We can only remove from the active resources if the resource is not running.
-        if (!(*ar_iter)->getIsRunning()) {
-            boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(*ar_iter);
-            if (session) {
-                // Signal end of session.
-                sessionChanged(session->getPath(), false);
-            }
-            m_activeResources.erase(ar_iter);
-        }
-    } else {
-        // If not in active resources, check the waiting resources.
-        for (ResourceWaitQueue_t::iterator it = m_waitingResources.begin(); it != m_waitingResources.end(); ++it) {
-            Resource_t res = it->lock();
-            if (res == resource) {
-                boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(res);
-                if (session) {
-                    // Signal end of session.
-                    sessionChanged(session->getPath(), false);
+        // See if the session is among the active sessions.
+        for (WeakResources_t::iterator ar_iter = m_activeResources.begin(); ar_iter != m_activeResources.end(); ++ar_iter) {
+            Resource_t shared_resource(ar_iter->lock());
+            // We can only remove from the active resources if the resource is not running.
+            if (shared_resource && shared_resource == resource) {
+                if (!shared_resource->getIsRunning()) {
+                    boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(shared_resource);
+                    if (session) {
+                        // Signal end of session.
+                        sessionChanged(session->getPath(), false);
+                    }
+                    m_activeResources.erase(ar_iter);
                 }
-                // remove from queue
-                m_waitingResources.erase(it);
-                // session was idle, so nothing else to do
+                found = true;
                 break;
             }
         }
+        if (!found) {
+            // If not in active resources, check the waiting resources.
+            for (ResourceWaitQueue_t::iterator it = m_waitingResources.begin(); it != m_waitingResources.end(); ++it) {
+                Resource_t res = it->lock();
+                if (res == resource) {
+                    boost::shared_ptr<SessionResource> session = boost::dynamic_pointer_cast<SessionResource>(res);
+                    if (session) {
+                        // Signal end of session.
+                        sessionChanged(session->getPath(), false);
+                    }
+                    // remove from queue
+                    m_waitingResources.erase(it);
+                    // session was idle, so nothing else to do
+                    break;
+                }
+            }
+        }
     }
-    checkQueue();
+    if (m_shutdownRequested) {
+        if (m_activeResources.empty()) {
+            shutdown();
+        }
+    } else {
+        checkQueue();
+    }
 }
 
 bool Server::sessionExpired(const boost::shared_ptr<SessionResource> &session)
