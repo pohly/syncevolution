@@ -126,16 +126,16 @@ int main(int argc, char **argv, char **envp)
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
-        SE_LOG_INFO(NULL, NULL,
-                    "%s: Helper (pid %d) finished setup.",
-                    argv[0], getpid());
-
         // If we are not connected this means onFailure or niam was
         // invoked. In either case, bail.
         if (!connected) {
             SE_LOG_INFO(NULL, NULL, "%s: Could not connect to parent. Terminating.",  argv[0]);
             return 1;
         }
+
+        SE_LOG_INFO(NULL, NULL,
+                    "%s: Helper (pid %d) finished setup.",
+                    argv[0], getpid());
 
         // Run the session or connection.
         if (start_session) {
