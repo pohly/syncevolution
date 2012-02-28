@@ -51,11 +51,12 @@ namespace {
         g_main_loop_quit (loop);
     }
 
+    // that one is actually never called. probably a bug in ForkExec - it should
+    // call m_onFailure instead of throwing an exception
     void onFailure(const std::string &error)
     {
         SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
         connected = false;
-        g_main_loop_quit(loop);
     }
 
     void onConnect(const DBusConnectionPtr &conn, boost::shared_ptr<DBusObjectHelper> &dbusObjectHelper,
@@ -125,9 +126,7 @@ int main(int argc, char **argv, char **envp)
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
 
-        SE_LOG_INFO(NULL, NULL,
-                    "%s: Helper (pid %d) finished setup.",
-                    argv[0], getpid());
+        SE_LOG_INFO(NULL, NULL, "%s: Helper (pid %d) finished setup.", argv[0], getpid());
 
         // If we are not connected this means onFailure or niam was
         // invoked. In either case, bail.

@@ -92,8 +92,8 @@ class Server : public GDBusCXX::DBusObjectHelper,
 
     // Define types for Resource containers
     typedef boost::shared_ptr<Resource> Resource_t;
-    typedef std::list<Resource_t> Resources_t;
     typedef boost::weak_ptr<Resource> WeakResource_t;
+    typedef std::list<WeakResource_t> WeakResources_t;
 
     class PriorityCompare
     {
@@ -117,7 +117,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
      * Resource objects are removed once the Session D-Bus interface
      * disappears.
      */
-    Resources_t m_activeResources;
+    WeakResources_t m_activeResources;
 
     /**
      * A std::set disguised as a priority queue. std::priority_queue
@@ -418,7 +418,7 @@ public:
      * change. Otherwise, if it is "ready" (= holds a lock on its
      * configuration), then release that lock.
      */
-    void removeResource(Resource_t resource);
+    void removeResource(const Resource_t &resource);
 
     /**
      * Checks whether the server is ready to run another resource and

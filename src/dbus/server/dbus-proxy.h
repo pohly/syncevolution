@@ -108,6 +108,26 @@ template <class T> class ProxyCallbackBase
      */
     boost::shared_ptr<FailureSignalType> m_failure;
 
+    bool checkError (const std::string &error)
+    {
+      if (!error.empty()) {
+          const size_t pos = error.find_first_of(':');
+
+          if (pos != std::string::npos) {
+              const std::string exName(error.substr(0, pos));
+              const std::string msg(error.substr(pos + 2)); // Don't include colon nor following space.
+
+              m_result->failed(GDBusCXX::dbus_error(exName, msg));
+          } else {
+              m_result->failed(GDBusCXX::dbus_error("org.syncevolution.gdbuscxx.Exception",
+                                                    error));
+          }
+          (*(m_failure))(error);
+          return false;
+      }
+      return true;
+    }
+
  protected:
     boost::shared_ptr<ResultType> m_result;
 };
@@ -121,13 +141,7 @@ class ProxyCallback0 : public ProxyCallbackBase<ProxyCallbackTraits0>
 
     void operator () (const std::string &error)
     {
-        if (!error.empty()) {
-            // TODO: split error into bus name + description and relay exactly that
-            // (see Chris' code for that)
-            m_result->failed(GDBusCXX::dbus_error("org.syncevolution.gdbuscxx.Exception",
-                                                  error));
-            (*m_failure)(error);
-        } else {
+        if (checkError(error)) {
             m_result->done();
             (*m_success)();
         }
@@ -146,14 +160,9 @@ class ProxyCallback1 : public ProxyCallbackBase<ProxyCallbackTraits1<A1> >
                       const std::string &error)
     {
         // using this-> notation, because otherwise compiler says
-        // that m_{failure,success,result} is undefined.
-        if (!error.empty()) {
-            // TODO: split error into bus name + description and relay exactly that
-            // (see Chris' code for that)
-            this->m_result->failed(GDBusCXX::dbus_error("org.syncevolution.gdbuscxx.Exception",
-                                                        error));
-            (*(this->m_failure))(error);
-        } else {
+        // that m_{failure,success,result} is undefined or
+        // checkError() declaration is unavailable.
+        if (this->checkError(error)) {
             this->m_result->done(a1);
             (*(this->m_success))(a1);
         }
@@ -172,14 +181,9 @@ class ProxyCallback2 : public ProxyCallbackBase<ProxyCallbackTraits2<A1, A2> >
                       const std::string &error)
     {
         // using this-> notation, because otherwise compiler says
-        // that m_{failure,success,result} is undefined.
-        if (!error.empty()) {
-            // TODO: split error into bus name + description and relay exactly that
-            // (see Chris' code for that)
-            this->m_result->failed(GDBusCXX::dbus_error("org.syncevolution.gdbuscxx.Exception",
-                                                        error));
-            (*(this->m_failure))(error);
-        } else {
+        // that m_{failure,success,result} is undefined or
+        // checkError() declaration is unavailable.
+        if (this->checkError(error)) {
             this->m_result->done(a1, a2);
             (*(this->m_success))(a1, a2);
         }
@@ -198,14 +202,9 @@ template <class A1, class A2, class A3>
                       const std::string &error)
     {
         // using this-> notation, because otherwise compiler says
-        // that m_{failure,success,result} is undefined.
-        if (!error.empty()) {
-            // TODO: split error into bus name + description and relay exactly that
-            // (see Chris' code for that)
-            this->m_result->failed(GDBusCXX::dbus_error("org.syncevolution.gdbuscxx.Exception",
-                                                        error));
-            (*(this->m_failure))(error);
-        } else {
+        // that m_{failure,success,result} is undefined or
+        // checkError() declaration is unavailable.
+        if (this->checkError(error)) {
             this->m_result->done(a1, a2, a3);
             (*(this->m_success))(a1, a2, a3);
         }
