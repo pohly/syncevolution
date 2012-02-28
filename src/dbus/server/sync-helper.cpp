@@ -32,6 +32,7 @@
 #include <syncevo/LogRedirect.h>
 
 #include <boost/bind.hpp>
+#include <boost/ref.hpp>
 #include <boost/algorithm/string.hpp>
 
 using namespace SyncEvo;
@@ -50,11 +51,12 @@ namespace {
         g_main_loop_quit (loop);
     }
 
+    // that one is actually never called. probably a bug in ForkExec - it should
+    // call m_onFailure instead of throwing an exception
     void onFailure(const std::string &error)
     {
         SE_LOG_INFO(NULL, NULL, "failure, quitting now: %s",  error.c_str());
         connected = false;
-        g_main_loop_quit(loop);
     }
 
     void onConnect(const DBusConnectionPtr &conn, boost::shared_ptr<DBusObjectHelper> &dbusObjectHelper,
@@ -72,8 +74,6 @@ namespace {
         }
         // Activate dbus interface.
         dbusObjectHelper->activate();
-        // Allow syncevo-dbus-helper to proceed.
-        g_main_loop_quit(loop);
     }
 } // anonymous namespace
 
@@ -121,7 +121,7 @@ int main(int argc, char **argv, char **envp)
         }
 
         boost::shared_ptr<DBusObjectHelper> dbusObjectHelper;
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, dbusObjectHelper,
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, boost::ref(dbusObjectHelper),
                                                   session_config, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
@@ -129,9 +129,6 @@ int main(int argc, char **argv, char **envp)
         SE_LOG_INFO(NULL, NULL,
                     "%s: Helper (pid %d) finished setup.",
                     argv[0], getpid());
-
-        // Wait for the connect or failure signal to return.
-        g_main_loop_run(loop);
 
         // If we are not connected this means onFailure or niam was
         // invoked. In either case, bail.
