@@ -55,7 +55,8 @@ void Resource::printStatus(const std::string &error,
     if (error.empty()) {
         SE_LOG_INFO(NULL, NULL, "%s.%s call succeeded.", name.c_str(), method.c_str());
     } else {
-        throwExceptionFromString(error);
+        SE_LOG_ERROR(NULL, NULL, "%s.%s call failed: %s", name.c_str(), method.c_str(), error.c_str());
+        //throwExceptionFromString(error);
     }
 }
 
