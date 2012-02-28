@@ -73,8 +73,6 @@ namespace {
         }
         // Activate dbus interface.
         dbusObjectHelper->activate();
-        // Allow syncevo-dbus-helper to proceed.
-        g_main_loop_quit(loop);
     }
 } // anonymous namespace
 
@@ -130,9 +128,6 @@ int main(int argc, char **argv, char **envp)
         SE_LOG_INFO(NULL, NULL,
                     "%s: Helper (pid %d) finished setup.",
                     argv[0], getpid());
-
-        // Wait for the connect or failure signal to return.
-        g_main_loop_run(loop);
 
         // If we are not connected this means onFailure or niam was
         // invoked. In either case, bail.
