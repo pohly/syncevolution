@@ -212,7 +212,7 @@ void Server::checkPresence(const std::string &server,
 void Server::getSessions(std::vector<DBusObject_t> &sessions)
 {
     sessions.reserve(m_waitingResources.size() + m_activeResources.size());
-    BOOST_FOREACH(const WeakResource_t &resource, m_waitingResources) {
+    BOOST_FOREACH(const WeakResource_t &resource, m_activeResources) {
         boost::shared_ptr<SessionResource> session =
                     boost::dynamic_pointer_cast<SessionResource>(resource.lock());
         if (session) {
@@ -220,7 +220,7 @@ void Server::getSessions(std::vector<DBusObject_t> &sessions)
         }
     }
 
-    BOOST_FOREACH(const WeakResource_t &resource, m_activeResources) {
+    BOOST_FOREACH(const WeakResource_t &resource, m_waitingResources) {
         boost::shared_ptr<SessionResource> session =
                     boost::dynamic_pointer_cast<SessionResource>(resource.lock());
         if (session) {
