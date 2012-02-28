@@ -32,6 +32,7 @@
 #include <syncevo/LogRedirect.h>
 
 #include <boost/bind.hpp>
+#include <boost/ref.hpp>
 #include <boost/algorithm/string.hpp>
 
 using namespace SyncEvo;
@@ -121,7 +122,7 @@ int main(int argc, char **argv, char **envp)
         }
 
         boost::shared_ptr<DBusObjectHelper> dbusObjectHelper;
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, dbusObjectHelper,
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, boost::ref(dbusObjectHelper),
                                                   session_config, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
         forkexec->connect();
