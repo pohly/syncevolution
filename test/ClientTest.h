@@ -642,7 +642,6 @@ public:
     ClientTestConfig::LinkedItems_t getParentChildData();
 };
 
-int countItemsOfType(TestingSyncSource *source, int state);
 std::list<std::string> listItemsOfType(TestingSyncSource *source, int state);
 
 /**

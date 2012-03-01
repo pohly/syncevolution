@@ -72,6 +72,60 @@
 #include "client-test-buteo.h"
 #endif
 
+namespace CppUnit {
+
+/**
+ * behaves like an int and can be compared against one in ASSERT_EQUAL,
+ * but includes the item list when being printed
+ */
+struct ItemCount
+{
+    SyncEvo::SyncSourceChanges::Items_t m_items;
+
+    ItemCount() {}
+    ItemCount(const SyncEvo::SyncSourceChanges::Items_t &items) : m_items(items) {}
+    int size() const { return m_items.size(); }
+    operator int () const { return size(); }
+};
+
+static std::ostream &operator << (ostream &out, const ItemCount &count)
+{
+    out << count.size() << " ( ";
+    BOOST_FOREACH(const std::string &id, count.m_items) {
+        out << id << " ";
+    }
+    out << ")";
+    return out;
+}
+
+template<> struct assertion_traits<ItemCount>
+{
+    template <class E> static bool equal(const E &expected, const ItemCount &count) { return expected == count; }
+    static std::string toString(const ItemCount &count)
+    {
+        std::ostringstream out;
+        out << count;
+        return out.str();
+    }
+};
+
+/** comparison between arbitrary type A and B */
+template <class A, class B>
+void assertEquals(const A& expected,
+                  const B& actual,
+                  SourceLine sourceLine,
+                  const std::string &message)
+{
+    if (!assertion_traits<B>::equal(expected,actual)) {
+        Asserter::failNotEqual(assertion_traits<A>::toString(expected),
+                               assertion_traits<B>::toString(actual),
+                               sourceLine,
+                               message);
+    }
+}
+
+}
+
 SE_BEGIN_CXX
 
 static set<ClientTest::Cleanup_t> cleanupSet;
@@ -296,12 +350,11 @@ static std::list<std::string> listUpdatedItems(TestingSyncSource *source) { retu
 static std::list<std::string> listDeletedItems(TestingSyncSource *source) { return listItemsOfType(source, SyncSourceChanges::DELETED); }
 static std::list<std::string> listItems(TestingSyncSource *source) { return listItemsOfType(source, SyncSourceChanges::ANY); }
 
-int countItemsOfType(TestingSyncSource *source, int type) { return source->getItems(SyncSourceChanges::State(type)).size(); }
-static int countNewItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::NEW); }
-static int countUpdatedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::UPDATED); }
-static int countDeletedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::DELETED); }
-static int countItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::ANY); }
-
+static CppUnit::ItemCount countItemsOfType(TestingSyncSource *source, int type) { return source->getItems(SyncSourceChanges::State(type)); }
+static CppUnit::ItemCount countNewItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::NEW); }
+static CppUnit::ItemCount countUpdatedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::UPDATED); }
+static CppUnit::ItemCount countDeletedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::DELETED); }
+static CppUnit::ItemCount countItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::ANY); }
 
 /** insert new item, return LUID */
 static std::string importItem(TestingSyncSource *source, const ClientTestConfig &config, std::string &data)
@@ -6759,7 +6812,8 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "END:VEVENT\n"
                 "END:VCALENDAR\n";
         } else if (server == "memotoo") {
-	    // local time, except for detached recurrence
+	    // local floating time, always, regardless what the original
+            // time zone might have been (TZID, UTC, floating)
             config.m_linkedItems[0].m_name = "LocalTime";
 	    config.m_linkedItems[0][0] =
 	        "BEGIN:VCALENDAR\n"
@@ -6787,8 +6841,8 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "BEGIN:VEVENT\n"
                 "UID:20080407T193125Z-19554-727-1-50@gollum\n"
                 "DTSTAMP:20080407T193125Z\n"
-                "DTSTART:20080413T050000Z\n"
-                "DTEND:20080413T053000Z\n"
+                "DTSTART:20080413T070000\n"
+                "DTEND:20080413T073000\n"
                 "TRANSP:OPAQUE\n"
                 "SEQUENCE:XXX\n"
                 "SUMMARY:Recurring: Modified\n"
@@ -6799,6 +6853,17 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "DESCRIPTION:second instance modified\n"
                 "END:VEVENT\n"
                 "END:VCALENDAR\n";
+
+            // also affects normal test items
+            std::string *items[] = { &config.m_insertItem,
+                                     &config.m_updateItem,
+                                     &config.m_mergeItem1,
+                                     &config.m_mergeItem2 };
+            BOOST_FOREACH(std::string *item, items) {
+                static const pcrecpp::RE times("^(DTSTART|DTEND)(.*)Z$",
+                                               pcrecpp::RE_Options().set_multiline(true));
+                times.GlobalReplace("\\1\\2", item);
+            }
         } else if (server == "exchange") {
             config.m_linkedItems[0].m_name = "StandardTZ";
             BOOST_FOREACH(std::string &item, config.m_linkedItems[0]) {
@@ -6815,6 +6880,10 @@ void ClientTest::getTestData(const char *type, Config &config)
 
             recurringAllDay = true;
             subsets = true;
+        } else if (server == "radicale") {
+            // don't do the tests, Radicale has problems with detached
+            // recurrences (only stores one VEVENT per item)
+            config.m_linkedItems.clear();
         } else {
             // in particular for Google Calendar: also try with
             // VALARM, because testing showed that the server works
