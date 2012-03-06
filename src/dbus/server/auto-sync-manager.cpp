@@ -250,10 +250,13 @@ bool AutoSyncManager::taskLikelyToRun(const AutoSyncTask &syncTask)
 void AutoSyncManager::startTaskCb(const boost::shared_ptr<SessionResource> &resource)
 {
     if (resource) {
-         m_sessionResource = resource;
-         m_sessionResource->setPriority(Resource::PRI_AUTOSYNC);
-         m_sessionResource->addListener(this);
-         m_server.addResource(m_sessionResource);
+        m_sessionResource = resource;
+        m_sessionResource->setPriority(Resource::PRI_AUTOSYNC);
+        m_sessionResource->addListener(this);
+        m_server.addResource(m_sessionResource);
+        SE_LOG_DEBUG(NULL, NULL, "AutoSync Callback finished");
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "AutoSync Callback finished but resource is NULL");
     }
 }
 
@@ -270,6 +273,7 @@ void AutoSyncManager::startTask()
                                                "",
                                                m_activeTask->m_peer,
                                                newSession);
+        SE_LOG_DEBUG(NULL, NULL, "Just created new session");
     }
 }
 
