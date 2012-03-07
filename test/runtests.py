@@ -854,7 +854,7 @@ class SyncEvolutionCheckout(GitCheckout):
                              name, context.workdir,
                              # parameter to autogen.sh in SyncEvolution: also
                              # check for clean Synthesis source
-                             "env SYNTHESISSRC=../libsynthesis %s" % options.shell,
+                             "SYNTHESISSRC=../libsynthesis %s" % options.shell,
                              "git@gitorious.org:meego-middleware/syncevolution.git",
                              revision)
 
@@ -922,7 +922,7 @@ if options.sourcedir:
     else:
         sync = GitCopy("syncevolution",
                        options.workdir,
-                       "env SYNTHESISSRC=%s %s" % (libsynthesis.basedir, options.shell),
+                       "SYNTHESISSRC=%s %s" % (libsynthesis.basedir, options.shell),
                        options.sourcedir,
                        options.syncevotag)
 else:
@@ -1167,7 +1167,7 @@ context.add(test)
 test = SyncEvolutionTest("syncevohttp",
                          compile,
                          "", options.shell,
-                         "Client::Sync::eds_event Client::Sync::eds_contact",
+                         "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
                          [ "eds_event", "eds_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=10 "
                          "CLIENT_TEST_LOG=syncevohttp.log "
@@ -1178,6 +1178,8 @@ test = SyncEvolutionTest("syncevohttp",
                          # server supports refresh-from-client, use it for
                          # more efficient test setup
                          "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
                          "CLIENT_TEST_SKIP="
                          # server does not detect duplicates (uses file backend), detecting on the
                          # client breaks syncing (see '[SyncEvolution] 409 "item merged" in client')

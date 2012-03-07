@@ -141,10 +141,13 @@ struct URI {
      * Split URL into parts. Throws TransportAgentException on
      * invalid url.  Port will be set to default for scheme if not set
      * in URL. Path is normalized.
+     *
+     * @param collection    set to true if the normalized path is for
+     *                      a collection and shall have a trailing sl
      */
-    static URI parse(const std::string &url);
+    static URI parse(const std::string &url, bool collection=false);
 
-    static URI fromNeon(const ne_uri &other);
+    static URI fromNeon(const ne_uri &other, bool collection=false);
 
     /**
      * produce new URI from current path and new one (may be absolute
@@ -164,7 +167,9 @@ struct URI {
     /**
      * Removes differences caused by escaping different characters.
      * Appends slash if path is a collection (or meant to be one) and
-     * doesn't have a trailing slash.
+     * doesn't have a trailing slash. Removes double slashes.
+     *
+     * @param path   an absolute path (leading slash)
      */
     static std::string normalizePath(const std::string &path, bool collection);
 

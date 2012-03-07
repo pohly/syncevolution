@@ -73,15 +73,15 @@ class CheckSyncReport {
         serverAdded(srAdded),
         serverUpdated(srUpdated),
         serverDeleted(srDeleted),
+        restarts(0),
         mustSucceed(mstSucceed),
         syncMode(mode),
         m_report(NULL)
         {}
 
-    virtual ~CheckSyncReport() {}
-
     int clientAdded, clientUpdated, clientDeleted,
         serverAdded, serverUpdated, serverDeleted;
+    int restarts;
     bool mustSucceed;
     SyncMode syncMode;
 
@@ -90,7 +90,7 @@ class CheckSyncReport {
 
     CheckSyncReport &setMode(SyncMode mode) { syncMode = mode; return *this; }
     CheckSyncReport &setReport(SyncReport *report) { m_report = report; return *this; }
-
+    CheckSyncReport &setRestarts(int r) { restarts = r; return *this; }
 
     /**
      * checks that the sync completed as expected and throws
@@ -99,7 +99,12 @@ class CheckSyncReport {
      * @param res     return code from SyncClient::sync()
      * @param report  the sync report stored in the SyncClient
      */
-    virtual void check(SyncMLStatus status, SyncReport &report) const;
+    void check(SyncMLStatus status, SyncReport &report) const;
+
+    /**
+     * checks that the source report matches with expectations
+     */
+    void check(const std::string &name, const SyncSourceReport &report) const;
 };
 
 /**
@@ -135,13 +140,13 @@ struct SyncOptions {
     
     bool m_isAborted;
 
-    typedef boost::function<bool (SyncContext &,
-                                  SyncOptions &)> Callback_t;
     /**
      * Callback to be invoked after setting up local sources, but
      * before running the engine. May throw exception to indicate
      * error and return true to stop sync without error.
      */
+    typedef boost::function<bool (SyncContext &,
+                                  SyncOptions &)> Callback_t;
     Callback_t m_startCallback;
 
     /**
@@ -556,6 +561,26 @@ public:
     virtual std::list<std::string> insertManyItems(TestingSyncSource *source, int startIndex = 1, int numItems = 0, int size = -1);
 
     /**
+     * Update existing items. Must match a corresponding previous call to
+     * insertManyItems().
+     *
+     * @param revision    revision number, used to distinguish different generations of each item
+     * @param luids       result from corresponding insertManyItems() call
+     * @param offset      skip that many items at the start of luids before updating the following ones
+     */
+    void updateManyItems(CreateSource createSource, int startIndex, int numItems, int size,
+                         int revision,
+                         std::list<std::string> &luids,
+                         int offset);
+
+    /**
+     * Delete items. Skips offset items in luids before deleting numItems.
+     */
+    void removeManyItems(CreateSource createSource, int numItems,
+                         std::list<std::string> &luids,
+                         int offset);
+
+    /**
      * update every single item, using config.update
      */
     virtual void updateData(CreateSource createSource);
@@ -586,7 +611,9 @@ public:
     virtual void testLocalDeleteAll();
     virtual void testComplexInsert();
     virtual void testLocalUpdate();
+    void doChanges(bool restart);
     virtual void testChanges();
+    virtual void testChangesMultiCycles();
     virtual void testImport();
     virtual void testImportDelete();
     virtual void testRemoveProperties();
@@ -615,7 +642,6 @@ public:
     ClientTestConfig::LinkedItems_t getParentChildData();
 };
 
-int countItemsOfType(TestingSyncSource *source, int state);
 std::list<std::string> listItemsOfType(TestingSyncSource *source, int state);
 
 /**
@@ -718,6 +744,15 @@ protected:
     virtual void testRefreshFromClientSemantic();
     virtual void testRefreshFromServerSemantic();
     virtual void testRefreshStatus();
+
+    void doRestartSync(SyncMode mode);
+    void testTwoWayRestart();
+    void testSlowRestart();
+    void testRefreshFromLocalRestart();
+    void testOneWayFromLocalRestart();
+    void testRefreshFromRemoteRestart();
+    void testOneWayFromRemoteRestart();
+    void testManyRestarts();
 
     void testCopy();
 
@@ -846,6 +881,20 @@ protected:
         CT_WRAP_ASSERT(file, line, doSync(options));
     }
     virtual void postSync(int res, const std::string &logname);
+
+ private:
+    void allSourcesInsert();
+    void allSourcesUpdate();
+    void allSourcesDeleteAll();
+    void allSourcesInsertMany(int startIndex, int numItems,
+                              std::map<int, std::list<std::string> > &luids);
+    void allSourcesUpdateMany(int startIndex, int numItems,
+                              int revision,
+                              std::map<int, std::list<std::string> > &luids,
+                              int offset);
+    void allSourcesRemoveMany(int numItems,
+                              std::map<int, std::list<std::string> > &luids,
+                              int offset);
 };
 
 /*

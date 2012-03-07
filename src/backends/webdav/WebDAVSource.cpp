@@ -333,7 +333,7 @@ void WebDAVSource::contactServer()
     std::string database = getDatabaseID();
     if (!database.empty() &&
         m_contextSettings) {
-        m_calendar = Neon::URI::parse(database);
+        m_calendar = Neon::URI::parse(database, true);
         // m_contextSettings = m_settings, so this sets m_settings->getURL()
         m_contextSettings->setURL(database);
         // start talking to host defined by m_settings->getURL()
@@ -596,11 +596,15 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // First dump WebDAV "allprops" properties (does not contain
                 // properties which must be asked for explicitly!). Only
                 // relevant for debugging.
-                SE_LOG_DEBUG(NULL, NULL, "debugging: read all WebDAV properties of %s", path.c_str());
-                Neon::Session::PropfindPropCallback_t callback =
-                    boost::bind(&WebDAVSource::openPropCallback,
-                                this, _1, _2, _3, _4);
-                m_session->propfindProp(path, 0, NULL, callback, deadline);
+                try {
+                    SE_LOG_DEBUG(NULL, NULL, "debugging: read all WebDAV properties of %s", path.c_str());
+                    Neon::Session::PropfindPropCallback_t callback =
+                        boost::bind(&WebDAVSource::openPropCallback,
+                                    this, _1, _2, _3, _4);
+                    m_session->propfindProp(path, 0, NULL, callback, Timespec());
+                } catch (...) {
+                    handleException();
+                }
             }
         
             // Now ask for some specific properties of interest for us.
@@ -666,7 +670,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             success = true;
         } catch (const Neon::RedirectException &ex) {
             // follow to new location
-            Neon::URI next = Neon::URI::parse(ex.getLocation());
+            Neon::URI next = Neon::URI::parse(ex.getLocation(), true);
             Neon::URI old = m_session->getURI();
             // keep old host + scheme + port if not set in next location
             if (next.m_scheme.empty()) {
@@ -744,7 +748,8 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // which returns information about "/dav" when asked about "/".
                 // Move to that path.
                 if (!m_davProps.empty()) {
-                    string newpath = m_davProps.begin()->first;
+                    pathProps = m_davProps.begin();
+                    string newpath = pathProps->first;
                     SE_LOG_DEBUG(NULL, NULL, "use properties for '%s' instead of '%s'",
                                  newpath.c_str(), path.c_str());
                     path = newpath;
@@ -1161,11 +1166,15 @@ void WebDAVSource::listAllItemsCallback(const Neon::URI &uri,
 
 std::string WebDAVSource::path2luid(const std::string &path)
 {
-    if (boost::starts_with(path, m_calendar.m_path)) {
-        return Neon::URI::unescape(path.substr(m_calendar.m_path.size()));
+    // m_calendar.m_path is normalized, path is not.
+    // Before comparing, normalize it.
+    std::string res = Neon::URI::normalizePath(path, false);
+    if (boost::starts_with(res, m_calendar.m_path)) {
+        res = Neon::URI::unescape(res.substr(m_calendar.m_path.size()));
     } else {
-        return path;
+        // keep full, absolute path as LUID
     }
+    return res;
 }
 
 std::string WebDAVSource::luid2path(const std::string &luid)

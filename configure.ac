@@ -8,7 +8,7 @@ dnl Invoke autogen.sh to produce a configure script.
 #
 # Starting with the 1.1 release cycle, the rpm-style
 # .99 pseudo-version number is used to mark a pre-release.
-AC_INIT([syncevolution], [m4_esyscmd([build/gen-git-version.sh 1.2.2])])
+AC_INIT([syncevolution], [m4_esyscmd([build/gen-git-version.sh 1.2.99])])
 # STABLE_VERSION=1.0.1+
 AC_SUBST(STABLE_VERSION)
 
@@ -498,10 +498,10 @@ then
   then
     KDEKWALLETFOUND=yes
     if ! test "$KDE_KWALLET_CFLAGS"; then
-      KDE_KWALLET_CFLAGS="-I`$KDE4_CONFIG --path include` -I`$KDE4_CONFIG --path include`/KDE -I`$QMAKE -query QT_INSTALL_HEADERS` `pkg-config --cflags QtDBus`"
+      KDE_KWALLET_CFLAGS="-I`$KDE4_CONFIG --path include` -I`$KDE4_CONFIG --path include`/KDE `pkg-config --cflags QtDBus QtCore`"
     fi
     if ! test "$KDE_KWALLET_LIBS"; then
-      KDE_KWALLET_LIBS="-lkdeui -lkdecore `pkg-config --libs QtDBus`"
+      KDE_KWALLET_LIBS="-lkdeui -lkdecore -L`kde4-config --install lib` `pkg-config --libs QtDBus QtCore`"
     fi
     AC_LANG_PUSH(C++)
     old_CPPFLAGS="$CPPFLAGS"

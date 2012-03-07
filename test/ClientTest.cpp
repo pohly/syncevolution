@@ -58,6 +58,11 @@
 #include <boost/bind.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/assign.hpp>
+#include <boost/lambda/lambda.hpp>
+#include <boost/lambda/bind.hpp>
+#include <boost/lambda/if.hpp>
+#include <boost/lambda/casts.hpp>
+#include <boost/lambda/switch.hpp>
 
 #include <pcrecpp.h>
 
@@ -66,6 +71,60 @@
 #ifdef ENABLE_BUTEO_TESTS
 #include "client-test-buteo.h"
 #endif
+
+namespace CppUnit {
+
+/**
+ * behaves like an int and can be compared against one in ASSERT_EQUAL,
+ * but includes the item list when being printed
+ */
+struct ItemCount
+{
+    SyncEvo::SyncSourceChanges::Items_t m_items;
+
+    ItemCount() {}
+    ItemCount(const SyncEvo::SyncSourceChanges::Items_t &items) : m_items(items) {}
+    int size() const { return m_items.size(); }
+    operator int () const { return size(); }
+};
+
+static std::ostream &operator << (ostream &out, const ItemCount &count)
+{
+    out << count.size() << " ( ";
+    BOOST_FOREACH(const std::string &id, count.m_items) {
+        out << id << " ";
+    }
+    out << ")";
+    return out;
+}
+
+template<> struct assertion_traits<ItemCount>
+{
+    template <class E> static bool equal(const E &expected, const ItemCount &count) { return expected == count; }
+    static std::string toString(const ItemCount &count)
+    {
+        std::ostringstream out;
+        out << count;
+        return out.str();
+    }
+};
+
+/** comparison between arbitrary type A and B */
+template <class A, class B>
+void assertEquals(const A& expected,
+                  const B& actual,
+                  SourceLine sourceLine,
+                  const std::string &message)
+{
+    if (!assertion_traits<B>::equal(expected,actual)) {
+        Asserter::failNotEqual(assertion_traits<A>::toString(expected),
+                               assertion_traits<B>::toString(actual),
+                               sourceLine,
+                               message);
+    }
+}
+
+}
 
 SE_BEGIN_CXX
 
@@ -200,12 +259,13 @@ static void stripComponent(std::string &data,
 class TestingSyncSourcePtr : public std::auto_ptr<TestingSyncSource>
 {
     typedef std::auto_ptr<TestingSyncSource> base_t;
+    bool m_active;
 
     static StringMap m_anchors;
     static std::string m_testName;
 
 public:
-    TestingSyncSourcePtr() {}
+    TestingSyncSourcePtr() : m_active(false) {}
     ~TestingSyncSourcePtr()
     {
         // We can skip the full cleanup if the test has already failed.
@@ -222,36 +282,62 @@ public:
 
     void reset(TestingSyncSource *source = NULL)
     {
-        if (this->get()) {
-            BOOST_FOREACH(const SyncSource::Operations::CallbackFunctor_t &callback,
-                          get()->getOperations().m_endSession) {
-                CT_ASSERT_NO_THROW(callback());
-            }
-            string node = get()->getTrackingNode()->getName();
-            string anchor;
-            CT_ASSERT_NO_THROW(anchor = get()->endSync(true));
-            m_anchors[node] = anchor;
-            CT_ASSERT_NO_THROW(get()->close());
+        if (get() && m_active) {
+            stopAccess();
         }
-        base_t::reset(source);
+        // avoid deleting the instance that we are setting
+        // (shouldn't happen)
+        if (get() != source) {
+            base_t::reset(source);
+        }
         if (source) {
-            int delay = atoi(getEnv("CLIENT_TEST_SOURCE_DELAY", "0"));
-            if (delay) {
-                CLIENT_TEST_LOG("CLIENT_TEST_SOURCE_DELAY: sleep for %d seconds", delay);
-                sleep(delay);
-            }
-            CT_ASSERT_NO_THROW(source->open());
-            string node = source->getTrackingNode()->getName();
-            string anchor = m_anchors[node];
-            source->beginSync(anchor, "");
-            if (isServerMode()) {
-                CT_ASSERT_NO_THROW(source->enableServerMode());
-            }
-            BOOST_FOREACH(const SyncSource::Operations::CallbackFunctor_t &callback,
-                          source->getOperations().m_endSession) {
-                CT_ASSERT_NO_THROW(callback());
-            }
+            startAccess();
         }
+    }
+
+    /**
+     * done automatically as part of reset(), only to be called
+     * after an explicit stopAccess()
+     */
+    void startAccess()
+    {
+        CT_ASSERT(get());
+        CT_ASSERT(!m_active);
+        int delay = atoi(getEnv("CLIENT_TEST_SOURCE_DELAY", "0"));
+        if (delay) {
+            CLIENT_TEST_LOG("CLIENT_TEST_SOURCE_DELAY: sleep for %d seconds", delay);
+            sleep(delay);
+        }
+        CT_ASSERT_NO_THROW(get()->open());
+        string node = get()->getTrackingNode()->getName();
+        string anchor = m_anchors[node];
+        get()->beginSync(anchor, "");
+        if (isServerMode()) {
+            CT_ASSERT_NO_THROW(get()->enableServerMode());
+        }
+        // the replaced m_endSession callback was invoked here,
+        // which shouldn't have been necessary - not calling
+        // m_endDataWrite post-signal at the moment
+        // CT_ASSERT_NO_THROW(get()->getOperations().m_endDataWrite.getPostSignal()());
+        m_active = true;
+    }
+
+    /**
+     * finish change tracking, source must be activated again
+     * with startAccess()
+     */
+    void stopAccess()
+    {
+        CT_ASSERT(get());
+        CT_ASSERT(m_active);
+        m_active = false;
+        char *dummy = const_cast<char *>("testing-source");
+        CT_ASSERT_NO_THROW(get()->getOperations().m_endDataWrite.getPostSignal()(*get(), OPERATION_FINISHED, sysync::LOCERR_OK, true, &dummy));
+        string node = get()->getTrackingNode()->getName();
+        string anchor;
+        CT_ASSERT_NO_THROW(anchor = get()->endSync(true));
+        m_anchors[node] = anchor;
+        CT_ASSERT_NO_THROW(get()->close());
     }
 };
 
@@ -283,12 +369,11 @@ static std::list<std::string> listUpdatedItems(TestingSyncSource *source) { retu
 static std::list<std::string> listDeletedItems(TestingSyncSource *source) { return listItemsOfType(source, SyncSourceChanges::DELETED); }
 static std::list<std::string> listItems(TestingSyncSource *source) { return listItemsOfType(source, SyncSourceChanges::ANY); }
 
-int countItemsOfType(TestingSyncSource *source, int type) { return source->getItems(SyncSourceChanges::State(type)).size(); }
-static int countNewItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::NEW); }
-static int countUpdatedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::UPDATED); }
-static int countDeletedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::DELETED); }
-static int countItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::ANY); }
-
+static CppUnit::ItemCount countItemsOfType(TestingSyncSource *source, int type) { return source->getItems(SyncSourceChanges::State(type)); }
+static CppUnit::ItemCount countNewItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::NEW); }
+static CppUnit::ItemCount countUpdatedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::UPDATED); }
+static CppUnit::ItemCount countDeletedItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::DELETED); }
+static CppUnit::ItemCount countItems(TestingSyncSource *source) { return countItemsOfType(source, SyncSourceChanges::ANY); }
 
 /** insert new item, return LUID */
 static std::string importItem(TestingSyncSource *source, const ClientTestConfig &config, std::string &data)
@@ -314,6 +399,15 @@ static void updateItem(TestingSyncSource *source, std::string &data, const std::
     SyncSourceRaw::InsertItemResult res;
     SOURCE_ASSERT_NO_FAILURE(source, res = source->insertItemRaw(luid, data));
     CT_ASSERT_EQUAL(luid, res.m_luid);
+}
+
+/** remove existing item */
+static void removeItem(TestingSyncSource *source, const std::string &luid)
+{
+    CT_ASSERT(source);
+    CT_ASSERT(!luid.empty());
+
+    SOURCE_ASSERT_NO_FAILURE(source, source->deleteItem(luid));
 }
 
 static void restoreStorage(const ClientTest::Config &config, ClientTest &client)
@@ -351,6 +445,7 @@ void LocalTests::addTests() {
 
                 if (config.m_createSourceB) {
                     ADD_TEST(LocalTests, testChanges);
+                    ADD_TEST(LocalTests, testChangesMultiCycles);
                 }
             }
 
@@ -819,6 +914,52 @@ std::list<std::string> LocalTests::insertManyItems(TestingSyncSource *source, in
     return luids;
 }
 
+void LocalTests::updateManyItems(CreateSource createSource, int startIndex, int numItems, int size,
+                                 int revision,
+                                 std::list<std::string> &luids,
+                                 int offset)
+{
+    CT_ASSERT(!config.m_templateItem.empty());
+
+    restoreStorage(config, client);
+    TestingSyncSourcePtr source;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
+
+    int firstIndex = startIndex;
+    if (firstIndex < 0) {
+        firstIndex = 1;
+    }
+    int lastIndex = firstIndex + (numItems >= 1 ? numItems : defNumItems()) - 1;
+    std::string revstring = StringPrintf("REVISION #%d", revision);
+    std::list<std::string>::const_iterator it = luids.begin();
+    for (int i = 0; i < offset && it != luids.end(); i++, ++it) {}
+    for (int item = firstIndex;
+         item <= lastIndex && it != luids.end();
+         item++, ++it) {
+        std::string data = createItem(item, revstring, size);
+        updateItem(source.get(), data, *it);
+    }
+    backupStorage(config, client);
+}
+
+void LocalTests::removeManyItems(CreateSource createSource, int numItems,
+                                 std::list<std::string> &luids,
+                                 int offset)
+{
+    restoreStorage(config, client);
+    TestingSyncSourcePtr source;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
+
+    std::list<std::string>::const_iterator it = luids.begin();
+    for (int i = 0; i < offset && it != luids.end(); i++, ++it) {}
+    for (int item = 0;
+         item < numItems && it != luids.end();
+         item++, ++it) {
+        removeItem(source.get(), *it);
+    }
+    backupStorage(config, client);
+}
+
 // update every single item in the database
 void LocalTests::updateData(CreateSource createSource) {
     // check additional requirements
@@ -943,8 +1084,10 @@ void LocalTests::testLocalUpdate() {
     CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
 }
 
-// complex sequence of changes
-void LocalTests::testChanges() {
+// Complex sequence of changes, with one restarted instance of source
+// B to observe the changes or multiple instances of it.
+// Changes are made both via source A and via source B itself.
+void LocalTests::doChanges(bool restart) {
     SyncSourceChanges::Items_t::const_iterator it, it2;
 
     // check additional requirements
@@ -960,10 +1103,10 @@ void LocalTests::testChanges() {
     CLIENT_TEST_LOG("clean changes in sync source B by creating and closing it");
     TestingSyncSourcePtr source;
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(source.reset());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("no new changes now in source B");
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
@@ -978,12 +1121,12 @@ void LocalTests::testChanges() {
     // it because it gets only IDs and data of added or updated items.
     // Don't test it.
     // SOURCE_ASSERT_NO_FAILURE(source.get(), source->readItem(*it, item));
-    CT_ASSERT_NO_THROW(source.reset());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("delete item again via sync source A");
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
     CLIENT_TEST_LOG("check for deleted item via source B");
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
@@ -992,12 +1135,45 @@ void LocalTests::testChanges() {
     CT_ASSERT(it != source->getDeletedItems().end());
     CT_ASSERT(!it->empty());
     CT_ASSERT_EQUAL(luid, *it);
-    CT_ASSERT_NO_THROW(source.reset());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
+
+    // now make changes via source B directly: these changes are not to be
+    // reported back
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    // add
+    std::string mangled = config.m_mangleItem(config.m_insertItem, false);
+    SyncSourceRaw::InsertItemResult res;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), res = source->insertItemRaw("", mangled));
+    CT_ASSERT(!res.m_luid.empty());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
+    // update
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
+    mangled = config.m_mangleItem(config.m_updateItem, false);
+    SOURCE_ASSERT_NO_FAILURE(source.get(), res = source->insertItemRaw(res.m_luid, mangled));
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
+    // delete
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source->deleteItem(res.m_luid));
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("insert another item via source A");
     CT_ASSERT_NO_THROW(testSimpleInsert());
     CLIENT_TEST_LOG("check for new item via source B");
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countNewItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
@@ -1011,12 +1187,12 @@ void LocalTests::testChanges() {
     CT_ASSERT(it != source->getNewItems().end());
     SOURCE_ASSERT_NO_FAILURE(source.get(), source->readItem(*it, item));
     CT_ASSERT_EQUAL(luid, *it);
-    CT_ASSERT_NO_THROW(source.reset());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("update item via source A");
     CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
     CLIENT_TEST_LOG("check for updated item via source B");
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countUpdatedItems(source.get()));
@@ -1026,33 +1202,41 @@ void LocalTests::testChanges() {
     CT_ASSERT(it != source->getUpdatedItems().end());
     SOURCE_ASSERT_NO_FAILURE(source.get(), source->readItem(*it, updatedItem));
     CT_ASSERT_EQUAL(luid, *it);
-    CT_ASSERT_NO_THROW(source.reset());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
+
+    CLIENT_TEST_LOG("one item, no changes in source B");
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
+    SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("start anew in both sources");
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(source.reset());
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create and update an item in source A");
     CT_ASSERT_NO_THROW(testSimpleInsert());
     CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, but not both");
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countNewItems(source.get()) + countUpdatedItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
-    CT_ASSERT_NO_THROW(source.reset());
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("start anew once more in both sources");
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(source.reset());
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
+    CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create, delete and recreate an item in source A");
     CT_ASSERT_NO_THROW(testSimpleInsert());
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
     CT_ASSERT_NO_THROW(testSimpleInsert());
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, even if\n "
                     "(as for calendar with UID) the same LUID gets reused");
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceB()));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countNewItems(source.get()) + countUpdatedItems(source.get()));
     if (countDeletedItems(source.get()) == 1) {
@@ -1070,6 +1254,22 @@ void LocalTests::testChanges() {
     } else {
         SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
     }
+
+    CT_ASSERT_NO_THROW(source.reset());
+}
+
+// complex sequence of changes, with source B instantiated anew
+// after each change
+void LocalTests::testChanges()
+{
+    doChanges(false);
+}
+
+// complex sequence of changes, with source B only instantiated once
+// and restarted multiple times
+void LocalTests::testChangesMultiCycles()
+{
+    doChanges(true);
 }
 
 // clean database, import file, then export again and compare
@@ -2341,6 +2541,21 @@ void SyncTests::addTests(bool isFirstSource) {
                 ADD_TEST(SyncTests, testRefreshFromClientSemantic);
                 ADD_TEST(SyncTests, testRefreshStatus);
 
+                // This test works regardless whether the peer can
+                // restart: if restarts are not possible, it checks
+                // that they don't occur. The rest of the tests then
+                // only make sense when restarting works.
+                ADD_TEST(SyncTests, testTwoWayRestart);
+                if (getenv("CLIENT_TEST_PEER_CAN_RESTART")) {
+                    ADD_TEST(SyncTests, testTwoWayRestart);
+                    ADD_TEST(SyncTests, testSlowRestart);
+                    ADD_TEST(SyncTests, testRefreshFromLocalRestart);
+                    ADD_TEST(SyncTests, testOneWayFromLocalRestart);
+                    ADD_TEST(SyncTests, testRefreshFromRemoteRestart);
+                    ADD_TEST(SyncTests, testOneWayFromRemoteRestart);
+                    ADD_TEST(SyncTests, testManyRestarts);
+                }
+
                 if (accessClientB &&
                     config.m_dump &&
                     config.m_compare) {
@@ -2514,7 +2729,6 @@ bool SyncTests::compareDatabases(const char *refFileBase, bool raiseAssert) {
 
 /** deletes all items locally and on server */
 void SyncTests::deleteAll(DeleteAllMode mode) {
-    source_it it;
     SyncPrefix prefix("deleteall", *this);
 
     const char *value = getenv ("CLIENT_TEST_DELETE_REFRESH");
@@ -2525,14 +2739,10 @@ void SyncTests::deleteAll(DeleteAllMode mode) {
     switch(mode) {
      case DELETE_ALL_SYNC:
         // a refresh from server would slightly reduce the amount of data exchanged, but not all servers support it
-        for (it = sources.begin(); it != sources.end(); ++it) {
-            CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-        }
+        CT_ASSERT_NO_THROW(allSourcesDeleteAll());
         doSync(__FILE__, __LINE__, "init", SyncOptions(SYNC_SLOW));
         // now that client and server are in sync, delete locally and sync again
-        for (it = sources.begin(); it != sources.end(); ++it) {
-            CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-        }
+        CT_ASSERT_NO_THROW(allSourcesDeleteAll());
         doSync(__FILE__, __LINE__,
                "twoway",
                SyncOptions(SYNC_TWO_WAY,
@@ -2540,9 +2750,7 @@ void SyncTests::deleteAll(DeleteAllMode mode) {
         break;
      case DELETE_ALL_REFRESH:
         // delete locally and then tell the server to "copy" the empty databases
-        for (it = sources.begin(); it != sources.end(); ++it) {
-            CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-        }
+        CT_ASSERT_NO_THROW(allSourcesDeleteAll());
         doSync(__FILE__, __LINE__,
                "refreshserver",
                SyncOptions(RefreshFromLocalMode(),
@@ -2562,10 +2770,7 @@ void SyncTests::doCopy() {
     accessClientB->deleteAll();
 
     // insert into first database, copy to server
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
@@ -2586,11 +2791,7 @@ void SyncTests::doCopy() {
  * servers do no support SYNC_REFRESH_FROM_SERVER
  */
 void SyncTests::refreshClient(SyncOptions options) {
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
-
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     doSync(__FILE__, __LINE__,
            "refresh",
            options
@@ -2604,15 +2805,11 @@ void SyncTests::testDeleteAllRefresh() {
     source_it it;
 
     // start with clean local data
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
     // copy something to server first; doesn't matter whether it has the
     // item already or not, as long as it exists there afterwards
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__, "insert", SyncOptions(SYNC_SLOW));
 
     // now ensure we can delete it
@@ -2688,9 +2885,7 @@ void SyncTests::testRefreshFromServerSemantic() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // insert item, then refresh from empty server
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "refresh",
            SyncOptions(RefreshFromPeerMode(),
@@ -2718,18 +2913,14 @@ void SyncTests::testRefreshFromClientSemantic() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // insert item, send to server
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // delete locally
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
     // refresh from client
     doSync(__FILE__, __LINE__,
@@ -2753,15 +2944,9 @@ void SyncTests::testRefreshFromClientSemantic() {
 void SyncTests::testRefreshStatus() {
     source_it it;
 
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->testSimpleInsert());
-    }
+    CT_ASSERT_NO_THROW(allSourcesInsert());
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
+    CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "refresh-from-client",
            SyncOptions(RefreshFromLocalMode(),
@@ -2771,6 +2956,493 @@ void SyncTests::testRefreshStatus() {
            "two-way",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,0, true, SYNC_TWO_WAY)));
+}
+
+static void log(const char *text)
+{
+    CLIENT_TEST_LOG("%s", text);
+}
+
+static void logSyncSourceReport(SyncSource *source)
+{
+    CLIENT_TEST_LOG("source %s, start of cycle #%d: local new/mod/del/conflict %d/%d/%d/%d, remote %d/%d/%d/%d, mode %s",
+                    source->getName().c_str(),
+                    source->getRestarts(),
+                    source->getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_ADDED, SyncSource::ITEM_TOTAL),
+                    source->getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_UPDATED, SyncSource::ITEM_TOTAL),
+                    source->getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_REMOVED, SyncSource::ITEM_TOTAL),
+                    source->getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_ANY, SyncSource::ITEM_REJECT),
+
+                    source->getItemStat(SyncSourceReport::ITEM_REMOTE, SyncSourceReport::ITEM_ADDED, SyncSource::ITEM_TOTAL),
+                    source->getItemStat(SyncSourceReport::ITEM_REMOTE, SyncSourceReport::ITEM_UPDATED, SyncSource::ITEM_TOTAL),
+                    source->getItemStat(SyncSourceReport::ITEM_REMOTE, SyncSourceReport::ITEM_REMOVED, SyncSource::ITEM_TOTAL),
+                    source->getItemStat(SyncSourceReport::ITEM_REMOTE, SyncSourceReport::ITEM_ANY, SyncSource::ITEM_REJECT),
+
+                    PrettyPrintSyncMode(source->getFinalSyncMode()).c_str());
+}
+
+/**
+ * Helper function, to be used inside a SyncOptions start callback
+ * to connect all sources instantiated for a sync with the given
+ * pre-operation signal.
+ */
+template<class W, class M, class S>
+bool connectSourceSignal(SyncContext &context,
+                         W SyncSource::Operations::*operation,
+                         M getSignal,
+                         const S &slot)
+{
+    BOOST_FOREACH(const SyncSource *source, *context.getSources())  {
+        ((source->getOperations().*operation).*getSignal)().connect(slot);
+    }
+    return false;
+}
+
+void SyncTests::doRestartSync(SyncMode mode)
+{
+    CT_ASSERT_NO_THROW(deleteAll());
+    int startCount = 0;
+    bool needToConnect = true;
+    typedef std::map<std::string, SyncSourceReport> Reports_t;
+    typedef std::map<int, Reports_t> Cycles_t;
+    Cycles_t results;
+
+    // Triggered for every m_startDataRead.
+    //
+    // It records the current source statistics for later checking and
+    // logs it.
+    //
+    // Also requests a restart at the very beginning, once. Must be
+    // done before m_endDataWrite, because then it might be too late
+    // to restart.
+    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
+        (boost::lambda::if_then(boost::lambda::bind(&Cycles_t::empty, boost::ref(results)),
+                                (boost::lambda::bind(log, "requesting restart"),
+                                 boost::lambda::bind(SyncContext::requestAnotherSync))),
+         (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, &boost::lambda::_1)]
+          [boost::lambda::bind(&SyncSource::getName, &boost::lambda::_1)] =
+          boost::lambda::_1),
+         boost::lambda::bind(logSyncSourceReport,
+                             &boost::lambda::_1)
+         );
+
+    // Triggered at the end of each m_endDataWrite.
+    //
+    // Adds a new item or (in later syncs) updates/deletes
+    // it. Because the cycle is other, those changes won't
+    // interfere with the cycle. Doing real concurrent
+    // changes is something for another tests...
+    boost::function<SyncSource::Operations::EndDataWrite_t::PostSignal::signature_type> end =
+        boost::bind(boost::function<void ()>(
+                                             boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
+                                                                    (boost::lambda::bind(log, "inserting one item"),
+                                                                     boost::lambda::bind(&SyncTests::allSourcesInsert, this)))
+                                             ));
+
+    SyncOptions::Callback_t setup =
+        (boost::lambda::if_then(boost::lambda::var(needToConnect),
+                                (boost::lambda::var(needToConnect) = false,
+                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
+                                                                         typeof(&SyncSource::Operations::StartDataRead_t::getPreSignal),
+                                                                         typeof(start)>,
+                                                         boost::lambda::_1,
+                                                         &SyncSource::Operations::m_startDataRead,
+                                                         &SyncSource::Operations::StartDataRead_t::getPreSignal,
+                                                         boost::cref(start)),
+                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::EndDataWrite_t,
+                                                                         typeof(&SyncSource::Operations::EndDataWrite_t::getPostSignal),
+                                                                         typeof(end)>,
+                                                         boost::lambda::_1,
+                                                         &SyncSource::Operations::m_endDataWrite,
+                                                         &SyncSource::Operations::EndDataWrite_t::getPostSignal,
+                                                         boost::cref(end))
+                                )),
+         boost::lambda::constant(false)
+        );
+
+    bool canRestart = getenv("CLIENT_TEST_PEER_CAN_RESTART") != NULL &&
+        !isServerMode();
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              "add",
+                              SyncOptions(mode,
+                                          CheckSyncReport(0,
+                                                          0,
+                                                          // TODO (?): should the item added after the initial refresh-from-remote be deleted in the second cycle?
+                                                          // Right now it isn't, because the second sync is
+                                                          // a one-way-from-remote.
+                                                          mode == SYNC_REFRESH_FROM_REMOTE ? /* 1 */ 0 : 0,
+
+                                                          // nothing transferred when item only exists locally
+                                                          // and not transferring to peer
+                                                          !canRestart ? 0 :
+                                                          (mode == SYNC_ONE_WAY_FROM_REMOTE ||
+                                                           mode == SYNC_REFRESH_FROM_REMOTE) ? 0 : 1,
+                                                          0,
+                                                          0,
+                                                          true, mode)
+                                          .setRestarts(canRestart ? 1 : 0))
+                              .setStartCallback(setup)
+                              ));
+
+    // two cycles if restarted, one otherwise
+    CT_ASSERT_EQUAL((size_t)(canRestart ? 2 : 1), results.size());
+
+    // nothing transfered before first or second cycle
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
+                                               0,0,0)
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // one item exists now, in all cases
+    // (but see remark about refresh-from-remote!)
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(1, countItems(source.get()));
+    }
+
+    if (mode == SYNC_REFRESH_FROM_REMOTE ||
+        !canRestart) {
+        // Can't continue testing for refresh-from-remote, because the
+        // item was never sent to remote and will be gone locally
+        // after the next refresh-from-remote (prevents updating and
+        // deleting it locally).
+        // Without restart support further tests don't make much sense.
+        // We already verified above that a restart request was
+        // correctly rejected/ignored.
+        return;
+    }
+
+    // update item while the sync runs
+    needToConnect = true;
+    startCount = 0;
+    results.clear();
+    end =
+        boost::bind(boost::function<void ()>(
+                                             boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
+                                                                    (boost::lambda::bind(log, "update one item"),
+                                                                     boost::lambda::bind(&SyncTests::allSourcesUpdate, this)))
+                                             ));
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              "update",
+                              SyncOptions(mode,
+                                          CheckSyncReport(0,0,0,
+
+                                                          // refresh-from-local and slow sync transfer existing item
+                                                          // in first cycle anew
+                                                          (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                           mode == SYNC_SLOW) ? 1 : 0,
+                                                          // nothing transferred when item only exists locally
+                                                          // and not transferring to peer
+                                                          mode == SYNC_ONE_WAY_FROM_REMOTE ? 0 : 1,
+                                                          0,
+                                                          true, mode)
+                                          .setRestarts(1))
+                              .setStartCallback(setup)
+                              ));
+
+    // two cycles
+    CT_ASSERT_EQUAL((size_t)2, results.size());
+
+    // nothing transfered before first or second cycle
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CLIENT_TEST_LOG("checking cycle #%d", cycle.first);
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0,
+
+                                               // refresh-from-local and slow sync transfer existing item
+                                               // in first cycle anew
+                                               (cycle.first == 1 &&
+                                                (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                 mode == SYNC_SLOW)) ? 1 : 0,
+                                               0,0)
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // one item exists now, in all cases
+    // (but see remark about refresh-from-remote!)
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(1, countItems(source.get()));
+    }
+
+    // delete item while the sync runs
+    needToConnect = true;
+    startCount = 0;
+    results.clear();
+    end =
+        boost::bind(boost::function<void ()>(
+                                             boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
+                                                                    (boost::lambda::bind(log, "delete one item"),
+                                                                     boost::lambda::bind(&SyncTests::allSourcesDeleteAll, this)))
+                                             ));
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              "delete",
+                              SyncOptions(mode,
+                                          CheckSyncReport(0,0,0,
+
+                                                          // refresh-from-local and slow sync transfer existing item
+                                                          // in first cycle anew
+                                                          (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                           mode == SYNC_SLOW) ? 1 : 0,
+                                                          0,
+                                                          // nothing transferred when item only existed locally
+                                                          // and not transferring to peer
+                                                          mode == SYNC_ONE_WAY_FROM_REMOTE ? 0 : 1,
+                                                          true, mode)
+                                          .setRestarts(1))
+                              .setStartCallback(setup)
+                              ));
+
+    // two cycles
+    CT_ASSERT_EQUAL((size_t)2, results.size());
+
+    // nothing transfered before first or second cycle
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
+                                               // refresh-from-local and slow sync transfer existing item
+                                               // in first cycle anew
+                                               (cycle.first == 1 &&
+                                                (mode == SYNC_REFRESH_FROM_LOCAL ||
+                                                 mode == SYNC_SLOW)) ? 1 : 0,
+                                               0,0)
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // no item exists now, in all cases
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(0, countItems(source.get()));
+    }
+}
+
+// two-way sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => one item sent to peer
+void SyncTests::testTwoWayRestart()
+{
+    CT_ASSERT_NO_THROW(doRestartSync(SYNC_TWO_WAY));
+}
+
+// slow sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => one item sent to peer
+void SyncTests::testSlowRestart()
+{
+    CT_ASSERT_NO_THROW(doRestartSync(SYNC_SLOW));
+}
+
+// refresh-from-local sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => one item sent to peer
+void SyncTests::testRefreshFromLocalRestart()
+{
+    CT_ASSERT_NO_THROW(doRestartSync(SYNC_REFRESH_FROM_LOCAL));
+}
+
+// one-way-from-local sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => one item sent to peer
+void SyncTests::testOneWayFromLocalRestart()
+{
+    CT_ASSERT_NO_THROW(doRestartSync(SYNC_ONE_WAY_FROM_LOCAL));
+}
+
+// refresh-from-remote sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => *nothing* sent to peer
+void SyncTests::testRefreshFromRemoteRestart()
+{
+    CT_ASSERT_NO_THROW(doRestartSync(SYNC_REFRESH_FROM_REMOTE));
+}
+
+// one-way-from-remote sync when both sides are empty,
+// insert item locally while sync runs, restart
+// => *nothing* sent to peer
+void SyncTests::testOneWayFromRemoteRestart()
+{
+    CT_ASSERT_NO_THROW(doRestartSync(SYNC_ONE_WAY_FROM_REMOTE));
+}
+
+// Start with empty database, refresh peer.
+// Then add 1, 2, 4, 8 items in four cycles,
+// update them the same way, and finally delete them.
+// Results in 12 cycles with different changes and
+// one empty, final cycle.
+void SyncTests::testManyRestarts()
+{
+    CT_ASSERT_NO_THROW(deleteAll());
+    int startCount = 0;
+    bool needToConnect = true;
+    typedef std::map<std::string, SyncSourceReport> Reports_t;
+    typedef std::map<int, Reports_t> Cycles_t;
+    Cycles_t results;
+    std::map<int, std::list<std::string> > luids;
+
+    // Triggered for every m_startDataRead.
+    //
+    // It records the current source statistics for later checking,
+    // logs it, and does the item changes.
+    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
+        (boost::lambda::if_then(boost::lambda::var(startCount) % sources.size() == 0,
+         (
+           boost::lambda::switch_statement(boost::lambda::var(startCount) / sources.size(),
+               boost::lambda::case_statement<0>(
+                  (boost::lambda::bind(log, "insert 1 item, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 1, 1, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<1>(
+                  (boost::lambda::bind(log, "insert 2 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 2, 2, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<2>(
+                  (boost::lambda::bind(log, "insert 4 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 4, 4, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<3>(
+                  (boost::lambda::bind(log, "insert 8 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 8, 8, boost::ref(luids)),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<4>(
+                  (boost::lambda::bind(log, "update 1 item, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 1, 1, 1, boost::ref(luids), 0),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<5>(
+                  (boost::lambda::bind(log, "update 2 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 2, 2, 1, boost::ref(luids), 1),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<6>(
+                  (boost::lambda::bind(log, "update 4 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 4, 4, 1, boost::ref(luids), 3),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<7>(
+                  (boost::lambda::bind(log, "update 8 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 8, 8, 1, boost::ref(luids), 7),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  ))
+           ),
+           // must break up switch statement, it only has a limited number of case slots
+           boost::lambda::switch_statement(boost::lambda::var(startCount) / sources.size(),
+               boost::lambda::case_statement<8>(
+                  (boost::lambda::bind(log, "delete 1 item, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 1, boost::ref(luids), 0),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<9>(
+                  (boost::lambda::bind(log, "delete 2 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 2, boost::ref(luids), 1),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<10>(
+                  (boost::lambda::bind(log, "delete 4 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 4, boost::ref(luids), 3),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  )),
+               boost::lambda::case_statement<11>(
+                  (boost::lambda::bind(log, "delete 8 items, restart"),
+                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 8, boost::ref(luids), 7),
+                   boost::lambda::bind(SyncContext::requestAnotherSync)
+                  ))
+           )
+          )
+         ),
+         (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, &boost::lambda::_1)]
+          [boost::lambda::bind(&SyncSource::getName, &boost::lambda::_1)] = boost::lambda::_1
+         ),
+         boost::lambda::bind(logSyncSourceReport,
+                             &boost::lambda::_1),
+         ++boost::lambda::var(startCount)
+         );
+
+    SyncOptions::Callback_t setup =
+        (boost::lambda::if_then(boost::lambda::var(needToConnect),
+                                (boost::lambda::var(needToConnect) = false,
+                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
+                                                                         typeof(&SyncSource::Operations::StartDataRead_t::getPreSignal),
+                                                                         typeof(start)>,
+                                                         boost::lambda::_1,
+                                                         &SyncSource::Operations::m_startDataRead,
+                                                         &SyncSource::Operations::StartDataRead_t::getPreSignal,
+                                                         boost::cref(start))
+                                )),
+         boost::lambda::constant(false)
+        );
+
+    CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
+                              SyncOptions(SYNC_TWO_WAY,
+                                          CheckSyncReport(0,
+                                                          0,
+                                                          0,
+
+                                                          15,
+                                                          15,
+                                                          15,
+                                                          true, SYNC_TWO_WAY)
+                                          .setRestarts(12))
+                              .setStartCallback(setup)
+                              ));
+
+    // 13 cycles
+    CT_ASSERT_EQUAL((size_t)13, results.size());
+    static const int changes[13][3] = {
+        {  0,  0,  0 }, // nothing before first cycle
+        {  1,  0,  0 }, // result of first cycle
+        {  3,  0,  0 }, // statistics are cummulative: first + second
+        {  7,  0,  0 },
+        { 15,  0,  0 },
+        { 15,  1,  0 },
+        { 15,  3,  0 },
+        { 15,  7,  0 },
+        { 15, 15,  0 },
+        { 15, 15,  1 },
+        { 15, 15,  3 },
+        { 15, 15,  7 },
+        { 15, 15, 15 }
+    };
+    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+        CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
+        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+            const int *c = changes[cycle.first];
+            CLIENT_TEST_LOG("Checking stats before cycle #%d, source %s: expected remote %d/%d/%d",
+                            cycle.first, entry.first.c_str(),
+                            c[0], c[1], c[2]);
+            CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0,
+                                               c[0], c[1], c[2])
+                               .setRestarts(cycle.first)
+                               .check(entry.first, entry.second));
+        }
+    }
+
+    // no item exists now
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        TestingSyncSourcePtr source;
+        SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
+        CT_ASSERT_EQUAL(0, countItems(source.get()));
+    }
 }
 
 // test that a two-way sync copies an item from one address book into the other
@@ -2844,10 +3516,7 @@ void SyncTests::testDelete() {
     CT_ASSERT_NO_THROW(doCopy());
 
     // delete it on A
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
     // transfer change from A to server to B
     doSync(__FILE__, __LINE__,
@@ -2860,7 +3529,7 @@ void SyncTests::testDelete() {
                                       CheckSyncReport(0,0,1, 0,0,0, true, SYNC_TWO_WAY)));
 
     // check client B: shouldn't have any items now
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         TestingSyncSourcePtr copy;
         SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(it->second->createSourceA()));
         SOURCE_ASSERT_EQUAL(copy.get(), 0, countItems(copy.get()));
@@ -3608,9 +4277,7 @@ void SyncTests::testManyDeletes() {
     CT_ASSERT_NO_THROW(compareDatabases());
 
     // delete everything locally
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
-        source_pair.second->deleteAll(source_pair.second->createSourceA);
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     doSync(__FILE__, __LINE__,
            "delete-server",
            SyncOptions(SYNC_TWO_WAY,
@@ -3654,9 +4321,7 @@ void SyncTests::testSlowSyncSemantic()
                           "refresh",
                           SyncOptions(SYNC_TWO_WAY,
                                       CheckSyncReport(0,-1,0, 0,0,0, true, SYNC_TWO_WAY)));
-    BOOST_FOREACH(source_array_t::value_type &source_pair, accessClientB->sources)  {
-        source_pair.second->deleteAll(source_pair.second->createSourceA);
-    }
+    CT_ASSERT_NO_THROW(accessClientB->allSourcesDeleteAll());
     accessClientB->doSync(__FILE__, __LINE__,
                           "delete",
                           SyncOptions(SYNC_TWO_WAY,
@@ -3703,9 +4368,7 @@ void SyncTests::testComplexRefreshFromServerSemantic()
     }
 
     // delete that item via A, check again
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
-        source_pair.second->deleteAll(source_pair.second->createSourceA);
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     doSync(__FILE__, __LINE__,
            "delete-item",
            SyncOptions(SYNC_TWO_WAY,
@@ -3734,18 +4397,14 @@ void SyncTests::testDeleteBothSides()
 {
     CT_ASSERT_NO_THROW(testCopy());
 
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
-        CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
-    }
+    CT_ASSERT_NO_THROW(allSourcesDeleteAll());
+    CT_ASSERT_NO_THROW(accessClientB->allSourcesDeleteAll());
 
     doSync(__FILE__, __LINE__,
            "delete-item-A",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
+    source_it it;
     for (it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
@@ -3817,6 +4476,11 @@ bool addBothSidesMayUpdate = false;
 // Add commands as "added items" even if they are turned into updates
 bool addBothSidesAddStatsBroken = false;
 
+// if true, then the peer is a SyncML server which does not
+// support UID/RECURRENCE-ID and thus doesn't detect
+// duplicates itself; the client needs to do that
+bool addBothSidesServerIsDumb = getenv("CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB") != NULL;
+
 void SyncTests::testAddBothSides()
 {
     CT_ASSERT_NO_THROW(deleteAll());
@@ -3864,6 +4528,18 @@ void SyncTests::testAddBothSides()
                                                       0,
 
                                                       true, SYNC_TWO_WAY) :
+                                      addBothSidesServerIsDumb ?
+                                      CheckSyncReport(addBothSidesServerIsDumb ? 1 : 0,
+                                                      addBothSidesMayUpdate ? -1 : 0,
+                                                      0,
+
+                                                      // client got one redundant item from
+                                                      // server, had to receive it, match against
+                                                      // its own copy, then tell the server to
+                                                      // update one copy and delete the other;
+                                                      // no update necessary on server because
+                                                      // it already had the latest copy
+                                                      1,0,1, true, SYNC_TWO_WAY).setRestarts(1) :
                                       CheckSyncReport(0,
                                                       addBothSidesMayUpdate ? -1 : 0,
                                                       0,
@@ -3876,6 +4552,12 @@ void SyncTests::testAddBothSides()
     doSync(__FILE__, __LINE__,
            "update",
            SyncOptions(SYNC_TWO_WAY,
+                       (!isServerMode() && addBothSidesServerIsDumb) ?
+                       // server had to be told to update old item
+                       // and delete redundant one, which is what it now
+                       // also tells us here
+                       CheckSyncReport(1,0,1,
+                                       0,0,0, true, SYNC_TWO_WAY) :
                        CheckSyncReport(0,
                                        addBothSidesMayUpdate ? -1 :
                                        addBothSidesUsesUpdateItem ? 1 : 0,
@@ -3953,6 +4635,19 @@ void SyncTests::testAddBothSidesRefresh()
                                                       0,
 
                                                       true, SYNC_TWO_WAY) :
+                                      // When the server is dumb, it
+                                      // will just accept the added
+                                      // item and send us an <Add>
+                                      // with an item that has the
+                                      // same UID as the one it just
+                                      // received. The client then
+                                      // must start a second sync and
+                                      // fix the server by sending an update
+                                      // (of the old version) and a delete (of the
+                                      // new one)
+                                      addBothSidesServerIsDumb ?
+                                      CheckSyncReport(1,0,0,
+                                                      1,1,1, true, SYNC_TWO_WAY).setRestarts(1) :
                                       CheckSyncReport(0,
                                                       addBothSidesMayUpdate ? -1 :
                                                       addBothSidesUsesUpdateItem ? 1 : 0,
@@ -3962,10 +4657,13 @@ void SyncTests::testAddBothSidesRefresh()
                                                       // an update
                                                       1,0,0, true, SYNC_TWO_WAY)));
 
-    // update sent to client A (result of merge)
+    // potentially send update to A
     doSync(__FILE__, __LINE__,
            "nopA",
            SyncOptions(SYNC_TWO_WAY,
+                       (!isServerMode() && addBothSidesServerIsDumb) ?
+                       // receives extra changes because dumb server had to be fixed
+                       CheckSyncReport(1,0,1, 0,0,0, true, SYNC_TWO_WAY) :
                        CheckSyncReport(0,addBothSidesMayUpdate ? -1 : 0,0, 0,0,0, true, SYNC_TWO_WAY)));
 
     // nothing necessary for client B (already synchronized completely above in one sync)
@@ -5008,6 +5706,73 @@ void SyncTests::postSync(int res, const std::string &logname)
 {
     client.postSync(res, logname);
 }
+
+void SyncTests::allSourcesInsert()
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->testSimpleInsert());
+    }
+}
+
+void SyncTests::allSourcesUpdate()
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->update(source_pair.second->createSourceA,
+                                                      source_pair.second->config.m_updateItem));
+    }
+}
+
+void SyncTests::allSourcesDeleteAll()
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->deleteAll(source_pair.second->createSourceA));
+    }
+}
+
+void SyncTests::allSourcesInsertMany(int startIndex, int numItems,
+                                     std::map<int, std::list<std::string> > &luids)
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        std::list<std::string> l;
+        CT_ASSERT_NO_THROW(l = source_pair.second->insertManyItems(source_pair.second->createSourceA,
+                                                                   startIndex,
+                                                                   numItems,
+                                                                   0));
+        CT_ASSERT_EQUAL((size_t)numItems, l.size());
+        // append instead of overwriting - useful when multiple
+        // insertMany calls share the same luid buffer
+        luids[source_pair.first].insert(luids[source_pair.first].end(), l.begin(), l.end());
+    }
+}
+
+void SyncTests::allSourcesUpdateMany(int startIndex, int numItems,
+                                     int revision,
+                                     std::map<int, std::list<std::string> > &luids,
+                                     int offset)
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->updateManyItems(source_pair.second->createSourceA,
+                                                               startIndex,
+                                                               numItems,
+                                                               0,
+                                                               revision,
+                                                               luids[source_pair.first],
+                                                               offset));
+    }
+}
+
+void SyncTests::allSourcesRemoveMany(int numItems,
+                                     std::map<int, std::list<std::string> > &luids,
+                                     int offset)
+{
+    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+        CT_ASSERT_NO_THROW(source_pair.second->removeManyItems(source_pair.second->createSourceA,
+                                                               numItems,
+                                                               luids[source_pair.first],
+                                                               offset));
+    }
+}
+
 
 /** generates tests on demand based on what the client supports */
 class ClientTestFactory : public CppUnit::TestFactory {
@@ -6067,7 +6832,8 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "END:VEVENT\n"
                 "END:VCALENDAR\n";
         } else if (server == "memotoo") {
-	    // local time, except for detached recurrence
+	    // local floating time, always, regardless what the original
+            // time zone might have been (TZID, UTC, floating)
             config.m_linkedItems[0].m_name = "LocalTime";
 	    config.m_linkedItems[0][0] =
 	        "BEGIN:VCALENDAR\n"
@@ -6095,8 +6861,8 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "BEGIN:VEVENT\n"
                 "UID:20080407T193125Z-19554-727-1-50@gollum\n"
                 "DTSTAMP:20080407T193125Z\n"
-                "DTSTART:20080413T050000Z\n"
-                "DTEND:20080413T053000Z\n"
+                "DTSTART:20080413T070000\n"
+                "DTEND:20080413T073000\n"
                 "TRANSP:OPAQUE\n"
                 "SEQUENCE:XXX\n"
                 "SUMMARY:Recurring: Modified\n"
@@ -6107,6 +6873,17 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "DESCRIPTION:second instance modified\n"
                 "END:VEVENT\n"
                 "END:VCALENDAR\n";
+
+            // also affects normal test items
+            std::string *items[] = { &config.m_insertItem,
+                                     &config.m_updateItem,
+                                     &config.m_mergeItem1,
+                                     &config.m_mergeItem2 };
+            BOOST_FOREACH(std::string *item, items) {
+                static const pcrecpp::RE times("^(DTSTART|DTEND)(.*)Z$",
+                                               pcrecpp::RE_Options().set_multiline(true));
+                times.GlobalReplace("\\1\\2", item);
+            }
         } else if (server == "exchange") {
             config.m_linkedItems[0].m_name = "StandardTZ";
             BOOST_FOREACH(std::string &item, config.m_linkedItems[0]) {
@@ -6632,6 +7409,7 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
                         clientAdded, clientUpdated, clientDeleted,
                         serverAdded, serverUpdated, serverDeleted);
     str << "Expected sync mode: " << PrettyPrintSyncMode(syncMode) << "\n";
+    str << "Expected cycles: " << restarts + 1 << "\n";
     SE_LOG_INFO(NULL, NULL, "sync report:\n%s\n", str.str().c_str());
 
     if (mustSucceed) {
@@ -6642,7 +7420,6 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
         CT_ASSERT_EQUAL(STATUS_OK, status);
     }
 
-    // this code is intentionally duplicated to produce nicer CPPUNIT asserts
     BOOST_FOREACH(SyncReport::value_type &entry, report) {
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
@@ -6651,64 +7428,72 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
         if (mustSucceed) {
             CLIENT_TEST_EQUAL(name, STATUS_OK, source.getStatus());
         }
-        CLIENT_TEST_EQUAL(name, 0, source.getItemStat(SyncSourceReport::ITEM_LOCAL,
-                                                      SyncSourceReport::ITEM_ANY,
-                                                      SyncSourceReport::ITEM_REJECT));
-        CLIENT_TEST_EQUAL(name, 0, source.getItemStat(SyncSourceReport::ITEM_REMOTE,
-                                                      SyncSourceReport::ITEM_ANY,
-                                                      SyncSourceReport::ITEM_REJECT));
-
-        const char* checkSyncModeStr = getenv("CLIENT_TEST_NOCHECK_SYNCMODE");
-        bool checkSyncMode = true;
-        bool checkSyncStats = getenv ("CLIENT_TEST_NOCHECK_SYNCSTATS") ? false : true;
-        if (checkSyncModeStr && 
-                (!strcmp(checkSyncModeStr, "1") || !strcasecmp(checkSyncModeStr, "t"))) {
-            checkSyncMode = false;
-        }
-
-        if (syncMode != SYNC_NONE && checkSyncMode) {
-            CLIENT_TEST_EQUAL(name, syncMode, source.getFinalSyncMode());
-        }
-
-        if (clientAdded != -1 && checkSyncStats) {
-            CLIENT_TEST_EQUAL(name, clientAdded,
-                              source.getItemStat(SyncSourceReport::ITEM_LOCAL,
-                                                 SyncSourceReport::ITEM_ADDED,
-                                                 SyncSourceReport::ITEM_TOTAL));
-        }
-        if (clientUpdated != -1 && checkSyncStats) {
-            CLIENT_TEST_EQUAL(name, clientUpdated,
-                              source.getItemStat(SyncSourceReport::ITEM_LOCAL,
-                                                 SyncSourceReport::ITEM_UPDATED,
-                                                 SyncSourceReport::ITEM_TOTAL));
-        }
-        if (clientDeleted != -1 && checkSyncStats) {
-            CLIENT_TEST_EQUAL(name, clientDeleted,
-                              source.getItemStat(SyncSourceReport::ITEM_LOCAL,
-                                                 SyncSourceReport::ITEM_REMOVED,
-                                                 SyncSourceReport::ITEM_TOTAL));
-        }
-
-        if (serverAdded != -1 && checkSyncStats) {
-            CLIENT_TEST_EQUAL(name, serverAdded,
-                              source.getItemStat(SyncSourceReport::ITEM_REMOTE,
-                                                 SyncSourceReport::ITEM_ADDED,
-                                                 SyncSourceReport::ITEM_TOTAL));
-        }
-        if (serverUpdated != -1 && checkSyncStats) {
-            CLIENT_TEST_EQUAL(name, serverUpdated,
-                              source.getItemStat(SyncSourceReport::ITEM_REMOTE,
-                                                 SyncSourceReport::ITEM_UPDATED,
-                                                 SyncSourceReport::ITEM_TOTAL));
-        }
-        if (serverDeleted != -1 && checkSyncStats) {
-            CLIENT_TEST_EQUAL(name, serverDeleted,
-                              source.getItemStat(SyncSourceReport::ITEM_REMOTE,
-                                                 SyncSourceReport::ITEM_REMOVED,
-                                                 SyncSourceReport::ITEM_TOTAL));
-        }
+        check(name, source);
     }
     SE_LOG_DEBUG(NULL, NULL, "Done with checking sync report.");
+}
+
+void CheckSyncReport::check(const std::string &name, const SyncSourceReport &source) const
+{
+    // this code is intentionally duplicated to produce nicer CPPUNIT asserts
+    CLIENT_TEST_EQUAL(name, 0, source.getItemStat(SyncSourceReport::ITEM_LOCAL,
+                                                  SyncSourceReport::ITEM_ANY,
+                                                  SyncSourceReport::ITEM_REJECT));
+    CLIENT_TEST_EQUAL(name, 0, source.getItemStat(SyncSourceReport::ITEM_REMOTE,
+                                                  SyncSourceReport::ITEM_ANY,
+                                                  SyncSourceReport::ITEM_REJECT));
+
+    const char* checkSyncModeStr = getenv("CLIENT_TEST_NOCHECK_SYNCMODE");
+    bool checkSyncMode = true;
+    bool checkSyncStats = getenv ("CLIENT_TEST_NOCHECK_SYNCSTATS") ? false : true;
+    if (checkSyncModeStr && 
+        (!strcmp(checkSyncModeStr, "1") || !strcasecmp(checkSyncModeStr, "t"))) {
+        checkSyncMode = false;
+    }
+
+    if (syncMode != SYNC_NONE && checkSyncMode) {
+        CLIENT_TEST_EQUAL(name, syncMode, source.getFinalSyncMode());
+    }
+
+    CLIENT_TEST_EQUAL(name, restarts + 1, source.getRestarts() + 1);
+
+    if (clientAdded != -1 && checkSyncStats) {
+        CLIENT_TEST_EQUAL(name, clientAdded,
+                          source.getItemStat(SyncSourceReport::ITEM_LOCAL,
+                                             SyncSourceReport::ITEM_ADDED,
+                                             SyncSourceReport::ITEM_TOTAL));
+    }
+    if (clientUpdated != -1 && checkSyncStats) {
+        CLIENT_TEST_EQUAL(name, clientUpdated,
+                          source.getItemStat(SyncSourceReport::ITEM_LOCAL,
+                                             SyncSourceReport::ITEM_UPDATED,
+                                             SyncSourceReport::ITEM_TOTAL));
+    }
+    if (clientDeleted != -1 && checkSyncStats) {
+        CLIENT_TEST_EQUAL(name, clientDeleted,
+                          source.getItemStat(SyncSourceReport::ITEM_LOCAL,
+                                             SyncSourceReport::ITEM_REMOVED,
+                                             SyncSourceReport::ITEM_TOTAL));
+    }
+
+    if (serverAdded != -1 && checkSyncStats) {
+        CLIENT_TEST_EQUAL(name, serverAdded,
+                          source.getItemStat(SyncSourceReport::ITEM_REMOTE,
+                                             SyncSourceReport::ITEM_ADDED,
+                                             SyncSourceReport::ITEM_TOTAL));
+    }
+    if (serverUpdated != -1 && checkSyncStats) {
+        CLIENT_TEST_EQUAL(name, serverUpdated,
+                          source.getItemStat(SyncSourceReport::ITEM_REMOTE,
+                                             SyncSourceReport::ITEM_UPDATED,
+                                             SyncSourceReport::ITEM_TOTAL));
+    }
+    if (serverDeleted != -1 && checkSyncStats) {
+        CLIENT_TEST_EQUAL(name, serverDeleted,
+                          source.getItemStat(SyncSourceReport::ITEM_REMOTE,
+                                             SyncSourceReport::ITEM_REMOVED,
+                                             SyncSourceReport::ITEM_TOTAL));
+    }
 }
 
 /** @} */

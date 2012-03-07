@@ -1059,6 +1059,9 @@ private:
     }
 
 public:
+    /** allow iterating over sources */
+    const inherited *getSourceSet() const { return this; }
+
     LogLevel getLogLevel() const { return m_logLevel; }
     void setLogLevel(LogLevel logLevel) { m_logLevel = logLevel; }
 
@@ -1277,21 +1280,28 @@ public:
 
     // call when all sync sources are ready to dump
     // pre-sync databases
-    // @param excludeSource   when non-empty, limit preparation to that source
-    void syncPrepare(const string &excludeSource = "") {
+    // @param sourceName   limit preparation to that source
+    void syncPrepare(const string &sourceName) {
+        if (m_prepared.find(sourceName) != m_prepared.end()) {
+            // data dump was already done (can happen when running multiple
+            // SyncML sessions)
+            return;
+        }
+
         if (m_logdir.getLogfile().size() &&
             m_doLogging &&
             (m_client.getDumpData() || m_client.getPrintChanges())) {
             // dump initial databases
-            SE_LOG_INFO(NULL, NULL, "creating complete data backup before sync (%s)",
+            SE_LOG_INFO(NULL, NULL, "creating complete data backup of source %s before sync (%s)",
+                        sourceName.c_str(),
                         (m_client.getDumpData() && m_client.getPrintChanges()) ? "enabled with dumpData and needed for printChanges" :
                         m_client.getDumpData() ? "because it was enabled with dumpData" :
                         m_client.getPrintChanges() ? "needed for printChanges" :
                         "???");
-            dumpDatabases("before", &SyncSourceReport::m_backupBefore, excludeSource);
+            dumpDatabases("before", &SyncSourceReport::m_backupBefore, sourceName);
             if (m_client.getPrintChanges()) {
                 // compare against the old "after" database dump
-                dumpLocalChanges("", "after", "before", excludeSource,
+                dumpLocalChanges("", "after", "before", sourceName,
                                  StringPrintf("%s data changes to be applied during synchronization:\n",
                                               m_client.isLocalSync() ? m_client.getContextName().c_str() : "Local"));
             }
@@ -1462,6 +1472,27 @@ string SyncContext::askPassword(const string &passwordName, const string &descr,
         return "";
     }
 }
+
+void SyncContext::requestAnotherSync()
+{
+    if (m_activeContext &&
+        m_activeContext->m_engine.get() &&
+        m_activeContext->m_session) {
+        SharedKey sessionKey =
+            m_activeContext->m_engine.OpenSessionKey(m_activeContext->m_session);
+        m_activeContext->m_engine.SetInt32Value(sessionKey,
+                                                "restartsync",
+                                                true);
+    }
+}
+
+const std::vector<SyncSource *> *SyncContext::getSources() const
+{
+    return m_sourceListPtr ?
+        m_sourceListPtr->getSourceSet() :
+        NULL;
+}
+
 
 void SyncContext::readStdin(string &content)
 {
@@ -1677,9 +1708,18 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 }
                 break;
             }
-            source.recordFinalSyncMode(SyncMode(mode));
-            source.recordFirstSync(extra1 == 2);
-            source.recordResumeSync(extra2 == 1);
+            if (source.getFinalSyncMode() == SYNC_NONE) {
+                source.recordFinalSyncMode(SyncMode(mode));
+                source.recordFirstSync(extra1 == 2);
+                source.recordResumeSync(extra2 == 1);
+            } else if (SyncMode(mode) != SYNC_NONE) {
+                // may happen when the source is used in multiple
+                // SyncML sessions; only remember the initial sync
+                // mode in that case and count all following syncs
+                // (they should only finish the work of the initial
+                // one)
+                source.recordRestart();
+            }
         } else {
             SE_LOG_INFO(NULL, NULL, "%s: restore from backup", source.getDisplayName().c_str());
             source.recordFinalSyncMode(SYNC_RESTORE_FROM_BACKUP);
@@ -2428,6 +2468,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             debug << "<xmltranslate>" << (loglevel >= 4 ? "yes" : "no") << "</xmltranslate>\n";
             if (loglevel >= 3) {
                 debug <<
+                    "    <sourcelink>doxygen</sourcelink>\n"
                     "    <enable option=\"all\"/>\n"
                     "    <enable option=\"userdata\"/>\n"
                     "    <enable option=\"scripts\"/>\n"
@@ -3009,7 +3050,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
                 }
 
                 // request callback when starting to use source
-                source->addCallback(boost::bind(&SyncContext::startSourceAccess, this, source), &SyncSource::Operations::m_startAccess);
+                source->getOperations().m_startDataRead.getPreSignal().connect(boost::bind(&SyncContext::startSourceAccess, this, source));
             }
 
             // ready to go
