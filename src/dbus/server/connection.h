@@ -24,8 +24,6 @@
 
 SE_BEGIN_CXX
 
-class Server;
-
 /**
  * Represents and implements the Connection interface.
  *
@@ -38,25 +36,22 @@ class Server;
  * this means the Session has to abort, unless reconnecting is
  * supported.
  */
-class Connection : public GDBusCXX::DBusObjectHelper, public Resource
+class Connection : public GDBusCXX::DBusObjectHelper
 {
-    Server &m_server;
     StringMap m_peer;
     bool m_mustAuthenticate;
-    enum {
-        SETUP,          /**< ready for first message */
-        PROCESSING,     /**< received message, waiting for engine's reply */
-        WAITING,        /**< waiting for next follow-up message */
-        FINAL,          /**< engine has sent final reply, wait for ACK by peer */
-        DONE,           /**< peer has closed normally after the final reply */
-        FAILED          /**< in a failed state, no further operation possible */
-    } m_state;
+
     std::string m_failure;
+
+    /**
+     * True if a shutdown signal was received.
+     */
+    bool m_shutdownRequested;
 
     /** first parameter for Session::sync() */
     std::string m_syncMode;
     /** second parameter for Session::sync() */
-    Session::SourceModes_t m_sourceModes;
+    SessionCommon::SourceModes_t m_sourceModes;
 
     const std::string m_sessionID;
     boost::shared_ptr<Session> m_session;
@@ -99,48 +94,72 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
      */
     void failed(const std::string &reason);
 
-    /**
-     * returns "<description> (<ID> via <transport> <transport_description>)"
-     */
-    static std::string buildDescription(const StringMap &peer);
-
     /** Connection.Process() */
-    void process(const GDBusCXX::Caller_t &caller,
-                 const GDBusCXX::DBusArray<uint8_t> &message,
-                 const std::string &message_type);
+    void process(const GDBusCXX::DBusArray<uint8_t> &message,
+                 const std::string &message_type,
+                 const StringMap &peer,
+                 bool must_authenticate);
     /** Connection.Close() */
-    void close(const GDBusCXX::Caller_t &caller,
-               bool normal,
+    void close(bool normal,
                const std::string &error);
-    /** wrapper around sendAbort */
+    /** wrapper around emitAbort */
     void abort();
     /** Connection.Abort */
-    GDBusCXX::EmitSignal0 sendAbort;
+    GDBusCXX::EmitSignal0 emitAbort;
     bool m_abortSent;
     /** Connection.Reply */
     GDBusCXX::EmitSignal5<const GDBusCXX::DBusArray<uint8_t> &,
                           const std::string &,
                           const StringMap &,
                           bool,
-                          const std::string &> reply;
+                          const std::string &> emitReply;
+    GDBusCXX::EmitSignal0 emitShutdown;
+    GDBusCXX::EmitSignal1<std::string> emitKillSessions;
 
     friend class DBusTransportAgent;
 
 public:
-    const std::string m_description;
+    /**
+     * Connections must always be held in a shared pointer to ensure
+     * that we have a weak pointer to the instance itself, so
+     * that it can create more shared pointers as needed. This is
+     * needed, for instance, to set the session's connection stub.
+     */
+    static boost::shared_ptr<Connection> createConnection(GMainLoop *loop,
+                                                          bool &shutdownRequested,
+                                                          const GDBusCXX::DBusConnectionPtr &conn,
+                                                          const std::string &sessionID);
 
-    Connection(Server &server,
+    enum State {
+        SETUP,          /**< ready for first message */
+        PROCESSING,     /**< received message, waiting for engine's reply */
+        WAITING,        /**< waiting for next follow-up message */
+        FINAL,          /**< engine has sent final reply, wait for ACK by peer */
+        DONE,           /**< peer has closed normally after the final reply */
+        FAILED          /**< in a failed state, no further operation possible */
+    };
+
+private:
+    Connection(GMainLoop *loop,
+               bool &shutdownRequested,
                const GDBusCXX::DBusConnectionPtr &conn,
-               const std::string &session_num,
-               const StringMap &peer,
-               bool must_authenticate);
+               const std::string &sessionID);
+    boost::weak_ptr<Connection> m_me;
 
+    State m_state;
+
+public:
     ~Connection();
+
+    State getState() { return m_state; }
 
     /** session requested by us is ready to run a sync */
     void ready();
 
-    /** connection is no longer needed, ensure that it gets deleted */
+    bool isSessionReadyToRun();
+
+    void runSession(LogRedirect &redirect);
+
     void shutdown();
 
     /** peer is not trusted, must authenticate as part of SyncML */
