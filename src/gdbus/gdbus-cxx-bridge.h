@@ -93,6 +93,8 @@ static inline void intrusive_ptr_release(DBusServer *server) { dbus_server_unref
 
 namespace GDBusCXX {
 
+class DBusMessagePtr;
+
 class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
 {
  public:
@@ -100,7 +102,7 @@ class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
     // connections are typically created once, so increment the ref counter by default
     DBusConnectionPtr(DBusConnection *conn, bool add_ref = true) :
       boost::intrusive_ptr<DBusConnection>(conn, add_ref)
-    {}
+    { init_priv(); }
 
     DBusConnection *reference(void) throw()
     {
@@ -108,6 +110,20 @@ class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
         dbus_connection_ref(conn);
         return conn;
     }
+
+    typedef boost::function<bool(DBusConnectionPtr &, DBusMessagePtr &)> FilterFunc;
+
+    unsigned int add_filter(const FilterFunc &filter);
+    void remove_filter(unsigned int id);
+
+    // throws std::runtime_error on failure.
+    void send(const DBusMessagePtr &message);
+
+ private:
+    struct Priv;
+    boost::shared_ptr<Priv> priv;
+
+    void init_priv();
 };
 
 class DBusMessagePtr : public boost::intrusive_ptr<DBusMessage>
@@ -121,12 +137,23 @@ class DBusMessagePtr : public boost::intrusive_ptr<DBusMessage>
       boost::intrusive_ptr<DBusMessage>(msg, add_ref)
     {}
 
+    static DBusMessagePtr create_empty_signal();
+
     DBusMessage *reference(void) throw()
     {
         DBusMessage *msg = get();
         dbus_message_ref(msg);
         return msg;
     }
+
+    void set_path(const std::string &name);
+    std::string get_path() const;
+
+    void set_interface(const std::string &name);
+    std::string get_interface() const;
+
+    void set_member(const std::string &name);
+    std::string get_member() const;
 };
 
 class DBusPendingCallPtr : public boost::intrusive_ptr<DBusPendingCall>
