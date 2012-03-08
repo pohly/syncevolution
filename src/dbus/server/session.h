@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation
+ * Copyright (C) 2012 Intel Corporation
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,22 +21,22 @@
 #define SESSION_H
 
 #include <syncevo/SynthesisEngine.h>
+#include <syncevo/SuspendFlags.h>
+
 #include <boost/weak_ptr.hpp>
 #include <boost/utility.hpp>
-
-#include <syncevo/SuspendFlags.h>
+#include <boost/scoped_ptr.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "read-operations.h"
 #include "progress-data.h"
 #include "source-progress.h"
 #include "source-status.h"
 #include "timer.h"
-#include "timeout.h"
-#include "resource.h"
+#include "session-common.h"
 
 SE_BEGIN_CXX
 
-class Server;
 class Connection;
 class CmdlineWrapper;
 class DBusSync;
@@ -49,19 +49,18 @@ class LogRedirect;
  * to it as long as the connection is needed.
  */
 class Session : public GDBusCXX::DBusObjectHelper,
-                public Resource,
                 private ReadOperations,
                 private boost::noncopyable
 {
-    Server &m_server;
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
-    std::string m_peerDeviceID;
 
     bool m_serverMode;
     bool m_serverAlerted;
     SharedBuffer m_initialMessage;
     string m_initialMessageType;
+
+    GMainLoop *m_loop;
 
     boost::weak_ptr<Connection> m_connection;
     std::string m_connectionError;
@@ -91,9 +90,10 @@ class Session : public GDBusCXX::DBusObjectHelper,
     bool m_active;
 
     /**
-     * True once done() was called.
+     * True once the server process has called ServerShutdown or a
+     * shutdown signal was received.
      */
-    bool m_done;
+    bool m_shutdownRequested;
 
     /**
      * Indicates whether this session was initiated by the peer or locally.
@@ -106,60 +106,38 @@ class Session : public GDBusCXX::DBusObjectHelper,
     boost::shared_ptr<DBusSync> m_sync;
 
     /**
-     * the sync status for session
-     */
-    enum SyncStatus {
-        SYNC_QUEUEING,    ///< waiting to become ready for use
-        SYNC_IDLE,        ///< ready, session is initiated but sync not started
-        SYNC_RUNNING, ///< sync is running
-        SYNC_ABORT, ///< sync is aborting
-        SYNC_SUSPEND, ///< sync is suspending
-        SYNC_DONE, ///< sync is done
-        SYNC_ILLEGAL
-    };
-
-    /**
      * current sync status; suspend and abort must be mirrored in global SuspendFlags
      */
     class SyncStatusOwner : boost::noncopyable {
     public:
-        SyncStatusOwner() : m_status(SYNC_QUEUEING), m_active(false) {}
-        SyncStatusOwner(SyncStatus status) : m_status(SYNC_QUEUEING), m_active(false)
+        SyncStatusOwner() : m_status(SessionCommon::SYNC_QUEUEING), m_active(false) {}
+        SyncStatusOwner(SessionCommon::SyncStatus status) : m_status(SessionCommon::SYNC_QUEUEING), m_active(false)
         {
             setStatus(status);
         }
-        operator SyncStatus () { return m_status; }
-        SyncStatusOwner &operator = (SyncStatus status) { setStatus(status); return *this; }
+        operator SessionCommon::SyncStatus () { return m_status; }
+        SyncStatusOwner &operator = (SessionCommon::SyncStatus status) { setStatus(status); return *this; }
 
-        void setStatus(SyncStatus status);
+        void setStatus(SessionCommon::SyncStatus status);
 
     private:
-        SyncStatus m_status;
+        SessionCommon::SyncStatus m_status;
         bool m_active;
         boost::shared_ptr<SuspendFlags::StateBlocker> m_blocker;
     } m_syncStatus;
 
-
     /** step info: whether engine is waiting for something */
     bool m_stepIsWaiting;
-
-    /**
-     * Priority which determines position in queue.
-     * Lower is more important. PRI_DEFAULT is zero.
-     */
-    int m_priority;
 
     int32_t m_progress;
 
     /** progress data, holding progress calculation related info */
     ProgressData m_progData;
 
-    typedef std::map<std::string, SourceStatus> SourceStatuses_t;
-    SourceStatuses_t m_sourceStatus;
+    SessionCommon::SourceStatuses_t m_sourceStatus;
 
     uint32_t m_error;
-    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
-    SourceProgresses_t m_sourceProgress;
+    SessionCommon::SourceProgresses_t m_sourceProgress;
 
     /** timer for fire status/progress usages */
     Timer m_statusTimer;
@@ -180,7 +158,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
         OP_SYNC,            /**< running a sync */
         OP_RESTORE,         /**< restoring data */
         OP_CMDLINE,         /**< executing command line */
-        OP_SHUTDOWN,        /**< will shutdown server as soon as possible */
         OP_NULL             /**< idle, accepting commands via D-Bus */
     };
 
@@ -194,48 +171,22 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Cmdline to execute command line args */
     boost::shared_ptr<CmdlineWrapper> m_cmdline;
 
-    /**
-     * time of latest file modification relevant for shutdown
-     */
-    Timespec m_shutdownLastMod;
-
-    /**
-     * timer which counts seconds until server is meant to shut down:
-     * set only while the session is active and thus shutdown is allowed
-     */
-    Timeout m_shutdownTimer;
-
-    /**
-     * Called Server::SHUTDOWN_QUIESENCE_SECONDS after last file modification,
-     * while shutdown session is active and thus ready to shut down the server.
-     * Then either triggers the shutdown or restarts.
-     *
-     * @return always false to disable timer
-     */
-    bool shutdownServer();
-
-    /** Session.Attach() */
-    void attach(const GDBusCXX::Caller_t &caller);
-
-    /** Session.Detach() */
-    void detach(const GDBusCXX::Caller_t &caller);
-
     /** Session.GetStatus() */
     void getStatus(std::string &status,
                    uint32_t &error,
-                   SourceStatuses_t &sources);
+                   SessionCommon::SourceStatuses_t &sources);
     /** Session.GetProgress() */
     void getProgress(int32_t &progress,
-                     SourceProgresses_t &sources);
+                     SessionCommon::SourceProgresses_t &sources);
 
     /** Session.Restore() */
     void restore(const string &dir, bool before,const std::vector<std::string> &sources);
 
-    /** Session.checkPresence() */
-    void checkPresence (string &status);
-
     /** Session.Execute() */
     void execute(const vector<string> &args, const map<string, string> &vars);
+
+    std::string m_passwordReqResponse;
+    SessionCommon::PwRespStatus m_pwResponseStatus;
 
     /**
      * Must be called each time that properties changing the
@@ -255,12 +206,15 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** Session.StatusChanged */
     GDBusCXX::EmitSignal3<const std::string &,
                           uint32_t,
-                          const SourceStatuses_t &> emitStatus;
+                          const SessionCommon::SourceStatuses_t &> emitStatus;
     /** Session.ProgressChanged */
     GDBusCXX::EmitSignal2<int32_t,
-                          const SourceProgresses_t &> emitProgress;
+                          const SessionCommon::SourceProgresses_t &> emitProgress;
 
-    static string syncStatusToString(SyncStatus state);
+    GDBusCXX::EmitSignal0 emitDone;
+    GDBusCXX::EmitSignal1<const std::map<std::string, std::string> &> emitPasswordRequest;
+
+    static string syncStatusToString(SessionCommon::SyncStatus state);
 
 public:
     /**
@@ -271,8 +225,9 @@ public:
      * so that it can create more shared pointers as
      * needed.
      */
-    static boost::shared_ptr<Session> createSession(Server &server,
-                                                    const std::string &peerDeviceID,
+    static boost::shared_ptr<Session> createSession(GMainLoop *loop,
+                                                    bool &shutdownRequested,
+                                                    const GDBusCXX::DBusConnectionPtr &conn,
                                                     const std::string &config_name,
                                                     const std::string &session,
                                                     const std::vector<std::string> &flags = std::vector<std::string>());
@@ -282,45 +237,25 @@ public:
      */
     ~Session();
 
-    /** explicitly mark the session as completed, even if it doesn't get deleted yet */
-    void done();
+    /** access to the GMainLoop reference used by this Session instance */
+    GMainLoop *getLoop() { return m_loop; }
+
+    /** explicitly notify SessionResource we're done. */
+    void done() { emitDone(); }
 
 private:
-    Session(Server &server,
-            const std::string &peerDeviceID,
+    Session(GMainLoop *loop,
+            bool &shutdownRequested,
+            const GDBusCXX::DBusConnectionPtr &conn,
             const std::string &config_name,
             const std::string &session,
             const std::vector<std::string> &flags = std::vector<std::string>());
-    boost::weak_ptr<Session> m_me;
 
 public:
-    enum {
-        PRI_CMDLINE = -10,
-        PRI_DEFAULT = 0,
-        PRI_CONNECTION = 10,
-        PRI_AUTOSYNC = 20,
-        PRI_SHUTDOWN = 256  // always higher than anything else
-    };
-
     /**
-     * Default priority is 0. Higher means less important.
+     * Notifies the helper session that the server is shutting down.
      */
-    void setPriority(int priority) { m_priority = priority; }
-    int getPriority() const { return m_priority; }
-
-    /**
-     * Turns session into one which will shut down the server, must
-     * be called before enqueing it. Will wait for a certain idle period
-     * after file modifications before claiming to be ready for running
-     * (see Server::SHUTDOWN_QUIESENCE_SECONDS).
-     */
-    void startShutdown();
-
-    /**
-     * Called by server to tell shutdown session that a file was modified.
-     * Session uses that to determine when the quiesence period is over.
-     */
-    void shutdownFileModified();
+    void serverShutdown();
 
     bool isServerAlerted() const { return m_serverAlerted; }
     void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
@@ -345,16 +280,13 @@ public:
     void setStubConnectionError(const std::string error) { m_connectionError = error; }
     std::string getStubConnectionError() { return m_connectionError; }
 
-
-    Server &getServer() { return m_server; }
     std::string getConfigName() { return m_configName; }
     std::string getSessionID() const { return m_sessionID; }
-    std::string getPeerDeviceID() const { return m_peerDeviceID; }
 
     /**
      * TRUE if the session is ready to take over control
      */
-    bool readyToRun() { return (m_syncStatus != SYNC_DONE) && (m_runOperation != OP_NULL); }
+    bool readyToRun() { return (m_syncStatus != SessionCommon::SYNC_DONE) && (m_runOperation != OP_NULL); }
 
     /**
      * transfer control to the session for the duration of the sync,
@@ -370,6 +302,11 @@ public:
 
     bool getActive() { return m_active; }
 
+    /**
+     * This will be true if the server has called ServerShutdown
+     */
+    bool getShutdownRequested() { return m_shutdownRequested; }
+
     void syncProgress(sysync::TProgressEventEnum type,
                       int32_t extra1, int32_t extra2, int32_t extra3);
     void sourceProgress(sysync::TProgressEventEnum type,
@@ -378,25 +315,19 @@ public:
     string askPassword(const string &passwordName,
                        const string &descr,
                        const ConfigPasswordKey &key);
-
-    /** Session.GetFlags() */
-    std::vector<std::string> getFlags() { return m_flags; }
-
-    /** Session.GetConfigName() */
-    std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
+    /** One-to-one DBus method PasswordResponse() */
+    void passwordResponse(bool timed_out, const std::string &password);
 
     /** Session.SetConfig() */
     void setConfig(bool update, bool temporary,
                    const ReadOperations::Config_t &config);
 
     /** Session.SetNamedConfig() */
-    void setNamedConfig(const std::string &configName,
-                        bool update, bool temporary,
-                        const ReadOperations::Config_t &config);
+    void setNamedConfig(bool &setConfig, const std::string &configName, bool update,
+                        bool temporary, const ReadOperations::Config_t &config);
 
-    typedef StringMap SourceModes_t;
     /** Session.Sync() */
-    void sync(const std::string &mode, const SourceModes_t &source_modes);
+    void sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes);
     /** Session.Abort() */
     void abort();
     /** Session.Suspend() */
@@ -418,6 +349,7 @@ public:
     SessionListener* addListener(SessionListener *listener);
 
     void setRemoteInitiated (bool remote) { m_remoteInitiated = remote;}
+
 private:
     /** set m_syncFilter and m_sourceFilters to config */
     virtual bool setFilters(SyncConfig &config);

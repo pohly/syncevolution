@@ -1445,8 +1445,9 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     static TestRegistry &getTestRegistry();
 
     struct Database {
-    Database(const string &name, const string &uri, bool isDefault = false) :
-        m_name( name ), m_uri( uri ), m_isDefault(isDefault) {}
+        Database(const string &name, const string &uri, bool isDefault = false) :
+            m_name( name ), m_uri( uri ), m_isDefault(isDefault) {}
+        Database() {}
         string m_name;
         string m_uri;
         bool m_isDefault;
