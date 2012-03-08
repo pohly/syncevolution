@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation
+ * Copyright (C) 2012 Intel Corporation
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@
 #include <syncevo/LogRedirect.h>
 
 #include "session.h"
-#include "server.h"
+#include "session-listener.h"
 #include "restart.h"
 #include "info-req.h"
 #include "cmdline-wrapper.h"
@@ -33,28 +33,6 @@
 using namespace GDBusCXX;
 
 SE_BEGIN_CXX
-
-void Session::attach(const Caller_t &caller)
-{
-    boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!client) {
-        throw runtime_error("unknown client");
-    }
-    boost::shared_ptr<Session> me = m_me.lock();
-    if (!me) {
-        throw runtime_error("session already deleted?!");
-    }
-    client->attach(me);
-}
-
-void Session::detach(const Caller_t &caller)
-{
-    boost::shared_ptr<Client> client(m_server.findClient(caller));
-    if (!client) {
-        throw runtime_error("unknown client");
-    }
-    client->detach(this);
-}
 
 /**
  * validate key/value property and copy it to the filter
@@ -78,7 +56,8 @@ static void copyProperty(const StringPair &keyvalue,
     filter.insert(keyvalue);
 }
 
-static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
+static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,
+                           std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
 {
     ReadOperations::Config_t::const_iterator it;
     for (it = config.begin(); it != config.end(); it++) {
@@ -120,10 +99,11 @@ static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNo
 void Session::setConfig(bool update, bool temporary,
                         const ReadOperations::Config_t &config)
 {
-    setNamedConfig(m_configName, update, temporary, config);
+    bool setConfig = m_setConfig;
+    setNamedConfig(setConfig, m_configName, update, temporary, config);
 }
 
-void Session::setNamedConfig(const std::string &configName,
+void Session::setNamedConfig(bool &setConfig, const std::string &configName,
                              bool update, bool temporary,
                              const ReadOperations::Config_t &config)
 {
@@ -131,37 +111,19 @@ void Session::setNamedConfig(const std::string &configName,
         SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
     }
     if (m_runOperation != OP_NULL) {
-        string msg = StringPrintf("%s started, cannot change configuration at this time", runOpToString(m_runOperation).c_str());
+        string msg = StringPrintf("%s started, cannot change configuration at this time",
+                                  runOpToString(m_runOperation).c_str());
         SE_THROW_EXCEPTION(InvalidCall, msg);
     }
-    // avoid the check if effect is the same as setConfig()
-    if (m_configName != configName) {
-        bool found = false;
-        BOOST_FOREACH(const std::string &flag, m_flags) {
-            if (boost::iequals(flag, "all-configs")) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            SE_THROW_EXCEPTION(InvalidCall,
-                               "SetNameConfig() only allowed in 'all-configs' sessions");
-        }
 
-        if (temporary) {
-            SE_THROW_EXCEPTION(InvalidCall,
-                               "SetNameConfig() with temporary config change only supported for config named when starting the session");
-        }
-    }
-
-    m_server.getPresenceStatus().updateConfigPeers (configName, config);
     /** check whether we need remove the entire configuration */
-    if(!update && !temporary && config.empty()) {
+    if (!update && !temporary && config.empty()) {
         boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(configName));
-        if(syncConfig.get()) {
+        if (syncConfig.get()) {
             syncConfig->remove();
             m_setConfig = true;
         }
+        setConfig = m_setConfig;
         return;
     }
 
@@ -197,17 +159,17 @@ void Session::setNamedConfig(const std::string &configName,
         /* need to save configurations */
         boost::shared_ptr<SyncConfig> from(new SyncConfig(configName));
         /* if it is not clear mode and config does not exist, an error throws */
-        if(update && !from->exists()) {
+        if (update && !from->exists()) {
             SE_THROW_EXCEPTION(NoSuchConfig, "The configuration '" + configName + "' doesn't exist" );
         }
-        if(!update) {
+        if (!update) {
             list<string> sources = from->getSyncSources();
             list<string>::iterator it;
-            for(it = sources.begin(); it != sources.end(); ++it) {
+            for (it = sources.begin(); it != sources.end(); ++it) {
                 string source = "source/";
                 source += *it;
                 ReadOperations::Config_t::const_iterator configIt = config.find(source);
-                if(configIt == config.end()) {
+                if (configIt == config.end()) {
                     /** if no config for this source, we remove it */
                     from->removeSyncSource(*it);
                 } else {
@@ -220,7 +182,7 @@ void Session::setNamedConfig(const std::string &configName,
         /** generate new sources in the config map */
         for (ReadOperations::Config_t::const_iterator it = config.begin(); it != config.end(); ++it) {
             string sourceName = it->first;
-            if(sourceName.find("source/") == 0) {
+            if (sourceName.find("source/") == 0) {
                 sourceName = sourceName.substr(7); ///> 7 is the length of "source/"
                 from->getSyncSourceNodes(sourceName);
             }
@@ -239,6 +201,8 @@ void Session::setNamedConfig(const std::string &configName,
         syncConfig->flush();
         m_setConfig = true;
     }
+
+    setConfig = m_setConfig;
 }
 
 void Session::initServer(SharedBuffer data, const std::string &messageType)
@@ -248,7 +212,7 @@ void Session::initServer(SharedBuffer data, const std::string &messageType)
     m_initialMessageType = messageType;
 }
 
-void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
+void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes)
 {
     if (!m_active) {
         SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
@@ -288,10 +252,9 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
         filter["sync"] = mode;
     }
     m_sync->setConfigFilter(false, "", filter);
-    BOOST_FOREACH(const std::string &source,
-                  m_sync->getSyncSources()) {
+    BOOST_FOREACH(const std::string &source, m_sync->getSyncSources()) {
         filter = m_sourceFilters[source];
-        SourceModes_t::const_iterator it = source_modes.find(source);
+        SessionCommon::SourceModes_t::const_iterator it = source_modes.find(source);
         if (it != source_modes.end()) {
             filter["sync"] = it->second;
         }
@@ -301,8 +264,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
     // Update status and progress. From now on, all configured sources
     // have their default entry (referencing them by name creates the
     // entry).
-    BOOST_FOREACH(const std::string source,
-                  m_sync->getSyncSources()) {
+    BOOST_FOREACH(const std::string source, m_sync->getSyncSources()) {
         m_sourceStatus[source];
         m_sourceProgress[source];
     }
@@ -312,7 +274,7 @@ void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
 
     // now that we have a DBusSync object, return from the main loop
     // and once that is done, transfer control to that object
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::abort()
@@ -320,11 +282,11 @@ void Session::abort()
     if (m_runOperation != OP_SYNC && m_runOperation != OP_CMDLINE) {
         SE_THROW_EXCEPTION(InvalidCall, "sync not started, cannot abort at this time");
     }
-    m_syncStatus = SYNC_ABORT;
+    m_syncStatus = SessionCommon::SYNC_ABORT;
     fireStatus(true);
 
     // state change, return to caller so that it can react
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::suspend()
@@ -332,14 +294,14 @@ void Session::suspend()
     if (m_runOperation != OP_SYNC && m_runOperation != OP_CMDLINE) {
         SE_THROW_EXCEPTION(InvalidCall, "sync not started, cannot suspend at this time");
     }
-    m_syncStatus = SYNC_SUSPEND;
+    m_syncStatus = SessionCommon::SYNC_SUSPEND;
     fireStatus(true);
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 void Session::getStatus(std::string &status,
                         uint32_t &error,
-                        SourceStatuses_t &sources)
+                        SessionCommon::SourceStatuses_t &sources)
 {
     status = syncStatusToString(m_syncStatus);
     if (m_stepIsWaiting) {
@@ -351,7 +313,7 @@ void Session::getStatus(std::string &status,
 }
 
 void Session::getProgress(int32_t &progress,
-                          SourceProgresses_t &sources)
+                          SessionCommon::SourceProgresses_t &sources)
 {
     progress = m_progress;
     sources = m_sourceProgress;
@@ -361,10 +323,10 @@ void Session::fireStatus(bool flush)
 {
     std::string status;
     uint32_t error;
-    SourceStatuses_t sources;
+    SessionCommon::SourceStatuses_t sources;
 
     /** not force flushing and not timeout, return */
-    if(!flush && !m_statusTimer.timeout()) {
+    if (!flush && !m_statusTimer.timeout()) {
         return;
     }
     m_statusTimer.reset();
@@ -376,10 +338,10 @@ void Session::fireStatus(bool flush)
 void Session::fireProgress(bool flush)
 {
     int32_t progress;
-    SourceProgresses_t sources;
+    SessionCommon::SourceProgresses_t sources;
 
     /** not force flushing and not timeout, return */
-    if(!flush && !m_progressTimer.timeout()) {
+    if (!flush && !m_progressTimer.timeout()) {
         return;
     }
     m_progressTimer.reset();
@@ -387,61 +349,61 @@ void Session::fireProgress(bool flush)
     getProgress(progress, sources);
     emitProgress(progress, sources);
 }
-string Session::syncStatusToString(SyncStatus state)
+string Session::syncStatusToString(SessionCommon::SyncStatus state)
 {
     switch(state) {
-    case SYNC_QUEUEING:
+    case SessionCommon::SYNC_QUEUEING:
         return "queueing";
-    case SYNC_IDLE:
+    case SessionCommon::SYNC_IDLE:
         return "idle";
-    case SYNC_RUNNING:
+    case SessionCommon::SYNC_RUNNING:
         return "running";
-    case SYNC_ABORT:
+    case SessionCommon::SYNC_ABORT:
         return "aborting";
-    case SYNC_SUSPEND:
+    case SessionCommon::SYNC_SUSPEND:
         return "suspending";
-    case SYNC_DONE:
+    case SessionCommon::SYNC_DONE:
         return "done";
     default:
         return "";
     };
 }
 
-boost::shared_ptr<Session> Session::createSession(Server &server,
-                                                  const std::string &peerDeviceID,
+boost::shared_ptr<Session> Session::createSession(GMainLoop *loop,
+                                                  bool &shutdownRequested,
+                                                  const GDBusCXX::DBusConnectionPtr &conn,
                                                   const std::string &config_name,
                                                   const std::string &session,
                                                   const std::vector<std::string> &flags)
 {
-    boost::shared_ptr<Session> me(new Session(server, peerDeviceID, config_name, session, flags));
-    me->m_me = me;
+    boost::shared_ptr<Session> me(new Session(loop, shutdownRequested, conn, config_name, session, flags));
     return me;
 }
 
-Session::Session(Server &server,
-                 const std::string &peerDeviceID,
+Session::Session(GMainLoop *loop,
+                 bool &shutdownRequested,
+                 const GDBusCXX::DBusConnectionPtr &conn,
                  const std::string &config_name,
                  const std::string &session,
                  const std::vector<std::string> &flags) :
-    DBusObjectHelper(server.getConnection(),
-                     std::string("/org/syncevolution/Session/") + session,
-                     "org.syncevolution.Session",
-                     boost::bind(&Server::autoTermCallback, &server)),
-    ReadOperations(config_name, server),
-    m_server(server),
+    DBusObjectHelper(conn,
+                     std::string("/dbushelper"),
+                     std::string("dbushelper.Session") + session,
+                     DBusObjectHelper::Callback_t(),
+                     true),
+    ReadOperations(config_name),
     m_flags(flags),
     m_sessionID(session),
-    m_peerDeviceID(peerDeviceID),
     m_serverMode(false),
+    m_loop(loop),
     m_useConnection(false),
     m_tempConfig(false),
     m_setConfig(false),
     m_active(false),
-    m_done(false),
+    m_shutdownRequested(shutdownRequested),
     m_remoteInitiated(false),
-    m_syncStatus(SYNC_QUEUEING),
+    m_syncStatus(SessionCommon::SYNC_QUEUEING),
     m_stepIsWaiting(false),
-    m_priority(PRI_DEFAULT),
     m_progress(0),
     m_progData(m_progress),
     m_error(0),
@@ -452,17 +414,13 @@ Session::Session(Server &server,
     m_restoreSrcEnd(0),
     m_runOperation(OP_NULL),
     m_listener(NULL),
+    m_pwResponseStatus(SessionCommon::PW_RES_IDLE),
     emitStatus(*this, "StatusChanged"),
-    emitProgress(*this, "ProgressChanged")
+    emitProgress(*this, "ProgressChanged"),
+    emitDone(*this, "Done"),
+    emitPasswordRequest(*this, "PasswordRequest")
 {
-    add(this, &Session::attach, "Attach");
-    add(this, &Session::detach, "Detach");
-    add(this, &Session::getFlags, "GetFlags");
-    add(this, &Session::getNormalConfigName, "GetConfigName");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getConfigs, "GetConfigs");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
-    add(this, &Session::setConfig, "SetConfig");
     add(this, &Session::setNamedConfig, "SetNamedConfig");
     add(static_cast<ReadOperations *>(this), &ReadOperations::getReports, "GetReports");
     add(static_cast<ReadOperations *>(this), &ReadOperations::checkSource, "CheckSource");
@@ -473,36 +431,16 @@ Session::Session(Server &server,
     add(this, &Session::getStatus, "GetStatus");
     add(this, &Session::getProgress, "GetProgress");
     add(this, &Session::restore, "Restore");
-    add(this, &Session::checkPresence, "checkPresence");
     add(this, &Session::execute, "Execute");
+    add(this, &Session::passwordResponse, "PasswordResponse");
+    add(this, &Session::serverShutdown, "ServerShutdown");
+    add(this, &Session::setActive, "SetActive");
     add(emitStatus);
     add(emitProgress);
+    add(emitPasswordRequest);
+    add(emitDone);
 
     SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
-}
-
-void Session::done()
-{
-    if (m_done) {
-        return;
-    }
-    SE_LOG_DEBUG(NULL, NULL, "session %s done", getPath());
-
-    /* update auto sync manager when a config is changed */
-    if (m_setConfig) {
-        m_server.getAutoSyncManager().update(m_configName);
-    }
-    m_server.dequeue(this);
-
-    // now tell other clients about config change?
-    if (m_setConfig) {
-        m_server.configChanged();
-    }
-
-    // typically set by m_server.dequeue(), but let's really make sure...
-    m_active = false;
-
-    m_done = true;
 }
 
 Session::~Session()
@@ -511,85 +449,19 @@ Session::~Session()
     done();
 }
 
-void Session::startShutdown()
+void Session::serverShutdown()
 {
-    m_runOperation = OP_SHUTDOWN;
-}
-
-void Session::shutdownFileModified()
-{
-    m_shutdownLastMod = Timespec::monotonic();
-    SE_LOG_DEBUG(NULL, NULL, "file modified at %lu.%09lus, %s",
-                 (unsigned long)m_shutdownLastMod.tv_sec,
-                 (unsigned long)m_shutdownLastMod.tv_nsec,
-                 m_active ? "active" : "not active");
-
-    if (m_active) {
-        // (re)set shutdown timer: once it fires, we are ready to shut down;
-        // brute-force approach, will reset timer many times
-        m_shutdownTimer.activate(Server::SHUTDOWN_QUIESENCE_SECONDS,
-                                 boost::bind(&Session::shutdownServer, this));
-    }
-}
-
-bool Session::shutdownServer()
-{
-    Timespec now = Timespec::monotonic();
-    bool autosync = m_server.getAutoSyncManager().hasTask() ||
-        m_server.getAutoSyncManager().hasAutoConfigs();
-    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
-                 now.tv_sec, now.tv_nsec,
-                 autosync ? "on" : "off");
-    if (autosync) {
-        // suitable exec() call which restarts the server using the same environment it was in
-        // when it was started
-        m_server.m_restart->restart();
-    } else {
-        // leave server now
-        m_server.m_shutdownRequested = true;
-        g_main_loop_quit(m_server.getLoop());
-        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
-    }
-
-    return false;
+    m_shutdownRequested = true;
+    g_main_loop_quit(m_loop);
 }
 
 void Session::setActive(bool active)
 {
-    bool oldActive = m_active;
     m_active = active;
-    if (active) {
-        if (m_syncStatus == SYNC_QUEUEING) {
-            m_syncStatus = SYNC_IDLE;
+    if (m_active) {
+        if (m_syncStatus == SessionCommon::SYNC_QUEUEING) {
+            m_syncStatus = SessionCommon::SYNC_IDLE;
             fireStatus(true);
-        }
-
-        boost::shared_ptr<Connection> c = m_connection.lock();
-        if (c) {
-            c->ready();
-        }
-
-        if (!oldActive &&
-            m_runOperation == OP_SHUTDOWN) {
-            // shutdown session activated: check if or when we can shut down
-            if (m_shutdownLastMod) {
-                Timespec now = Timespec::monotonic();
-                SE_LOG_DEBUG(NULL, NULL, "latest file modified at %lu.%09lus, now is %lu.%09lus",
-                             (unsigned long)m_shutdownLastMod.tv_sec,
-                             (unsigned long)m_shutdownLastMod.tv_nsec,
-                             (unsigned long)now.tv_sec,
-                             (unsigned long)now.tv_nsec);
-                if (m_shutdownLastMod + Server::SHUTDOWN_QUIESENCE_SECONDS <= now) {
-                    // ready to shutdown immediately
-                    shutdownServer();
-                } else {
-                    // need to wait
-                    int secs = Server::SHUTDOWN_QUIESENCE_SECONDS -
-                        (now - m_shutdownLastMod).tv_sec;
-                    SE_LOG_DEBUG(NULL, NULL, "shut down in %ds", secs);
-                    m_shutdownTimer.activate(secs, boost::bind(&Session::shutdownServer, this));
-                }
-            }
         }
     }
 }
@@ -603,7 +475,7 @@ void Session::syncProgress(sysync::TProgressEventEnum type,
         fireProgress(true);
         break;
     case sysync::PEV_SESSIONEND:
-        if((uint32_t)extra1 != m_error) {
+        if ((uint32_t)extra1 != m_error) {
             m_error = extra1;
             fireStatus(true);
         }
@@ -624,7 +496,7 @@ void Session::syncProgress(sysync::TProgressEventEnum type,
     case sysync::PEV_DELETING:
         break;
     case sysync::PEV_SUSPENDING:
-        m_syncStatus = SYNC_SUSPEND;
+        m_syncStatus = SessionCommon::SYNC_SUSPEND;
         fireStatus(true);
         break;
     default:
@@ -642,19 +514,19 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
         SourceStatus &status = m_sourceStatus[source.getName()];
         switch(type) {
         case sysync::PEV_SYNCSTART:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
+            if (source.getFinalSyncMode() != SYNC_NONE) {
                 m_progData.setStep(ProgressData::PRO_SYNC_UNINIT);
                 fireProgress();
             }
             break;
         case sysync::PEV_SYNCEND:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
+            if (source.getFinalSyncMode() != SYNC_NONE) {
                 status.set(PrettyPrintSyncMode(source.getFinalSyncMode()), "done", extra1);
                 fireStatus(true);
             }
             break;
         case sysync::PEV_PREPARING:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
+            if (source.getFinalSyncMode() != SYNC_NONE) {
                 progress.m_phase        = "preparing";
                 progress.m_prepareCount = extra1;
                 progress.m_prepareTotal = extra2;
@@ -663,7 +535,7 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
             }
             break;
         case sysync::PEV_ITEMSENT:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
+            if (source.getFinalSyncMode() != SYNC_NONE) {
                 progress.m_phase     = "sending";
                 progress.m_sendCount = extra1;
                 progress.m_sendTotal = extra2;
@@ -671,7 +543,7 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
             }
             break;
         case sysync::PEV_ITEMRECEIVED:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
+            if (source.getFinalSyncMode() != SYNC_NONE) {
                 progress.m_phase        = "receiving";
                 progress.m_receiveCount = extra1;
                 progress.m_receiveTotal = extra2;
@@ -680,7 +552,7 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
             }
             break;
         case sysync::PEV_ALERTED:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
+            if (source.getFinalSyncMode() != SYNC_NONE) {
                 status.set(PrettyPrintSyncMode(source.getFinalSyncMode()), "running", 0);
                 fireStatus(true);
                 m_progData.setStep(ProgressData::PRO_SYNC_DATA);
@@ -733,7 +605,7 @@ void Session::run(LogRedirect &redirect)
 {
     if (m_runOperation != OP_NULL) {
         try {
-            m_syncStatus = SYNC_RUNNING;
+            m_syncStatus = SessionCommon::SYNC_RUNNING;
             fireStatus(true);
             switch(m_runOperation) {
             case OP_SYNC: {
@@ -753,14 +625,15 @@ void Session::run(LogRedirect &redirect)
                     c->shutdown();
                 }
                 // report 'sync done' event to listener
-                if(m_listener) {
+                if (m_listener) {
                     m_listener->syncDone(status);
                 }
                 break;
             }
             case OP_RESTORE:
                 m_sync->restore(m_restoreDir,
-                                m_restoreBefore ? SyncContext::DATABASE_BEFORE_SYNC : SyncContext::DATABASE_AFTER_SYNC);
+                                m_restoreBefore ? SyncContext::DATABASE_BEFORE_SYNC :
+                                                  SyncContext::DATABASE_AFTER_SYNC);
                 break;
             case OP_CMDLINE:
                 try {
@@ -773,32 +646,27 @@ void Session::run(LogRedirect &redirect)
                 }
                 m_setConfig = m_cmdline->configWasModified();
                 break;
-            case OP_SHUTDOWN:
-                // block until time for shutdown or restart if no
-                // shutdown requested already
-                if (!m_server.m_shutdownRequested) {
-                    g_main_loop_run(m_server.getLoop());
-                }
-                break;
             default:
                 break;
             };
         } catch (...) {
-            // we must enter SYNC_DONE under all circumstances,
-            // even when failing during connection shutdown
-            // or while getting ready for SYNC_RUNNING
+            // we must enter SessionCommon::SYNC_DONE under all
+            // circumstances, even when failing during connection
+            // shutdown or while getting ready for SYNC_RUNNING
             SyncMLStatus status = Exception::handle();
             if (status && !m_error) {
                 m_error = status;
             }
-            m_syncStatus = SYNC_DONE;
+            m_syncStatus = SessionCommon::SYNC_DONE;
             m_stepIsWaiting = false;
             fireStatus(true);
+            done();
             throw;
         }
-        m_syncStatus = SYNC_DONE;
+        m_syncStatus = SessionCommon::SYNC_DONE;
         m_stepIsWaiting = false;
         fireStatus(true);
+        done();
     }
 }
 
@@ -816,7 +684,7 @@ bool Session::setFilters(SyncConfig &config)
 void Session::setStepInfo(bool isWaiting)
 {
     // if stepInfo doesn't change, then ignore it to avoid duplicate status info
-    if(m_stepIsWaiting != isWaiting) {
+    if (m_stepIsWaiting != isWaiting) {
         m_stepIsWaiting = isWaiting;
         fireStatus(true);
     }
@@ -839,7 +707,7 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
 
     m_sync.reset(new DBusSync(getConfigName(), *this));
 
-    if(!sources.empty()) {
+    if (!sources.empty()) {
         BOOST_FOREACH(const std::string &source, sources) {
             FilterConfigNode::ConfigFilter filter;
             filter["sync"] = "two-way";
@@ -855,45 +723,44 @@ void Session::restore(const string &dir, bool before, const std::vector<std::str
     m_runOperation = OP_RESTORE;
 
     // initiate status and progress and sourceProgress is not calculated currently
-    BOOST_FOREACH(const std::string source,
-                  m_sync->getSyncSources()) {
+    BOOST_FOREACH(const std::string source, m_sync->getSyncSources()) {
         m_sourceStatus[source];
     }
     fireProgress(true);
     fireStatus(true);
 
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(m_loop);
 }
 
-void Session::SyncStatusOwner::setStatus(SyncStatus status)
+void Session::SyncStatusOwner::setStatus(SessionCommon::SyncStatus status)
 {
     // skip operation before it even starts?
-    if (status == SYNC_RUNNING &&
-        (m_status == SYNC_SUSPEND || m_status == SYNC_ABORT)) {
+    if (status == SessionCommon::SYNC_RUNNING &&
+        (m_status == SessionCommon::SYNC_SUSPEND || m_status == SessionCommon::SYNC_ABORT)) {
         SE_LOG_DEBUG(NULL, NULL, "D-Bus session %s already before it started to run",
-                     m_status == SYNC_SUSPEND ? "suspended" : "aborted");
+                     m_status == SessionCommon::SYNC_SUSPEND ? "suspended" : "aborted");
         SE_THROW_EXCEPTION_STATUS(StatusException,
                                   "preventing start of session as requested by users",
                                   SyncMLStatus(sysync::LOCERR_USERABORT));
     }
 
-    if (status == SYNC_RUNNING) {
+    if (status == SessionCommon::SYNC_RUNNING) {
         // activated, allow blockers until we are done again
         m_active = true;
         SE_LOG_DEBUG(NULL, NULL, "D-Bus session running");
-    } else if (status == SYNC_DONE) {
+    } else if (status == SessionCommon::SYNC_DONE) {
         // deactivated
         m_active = false;
         m_blocker.reset();
         SE_LOG_DEBUG(NULL, NULL, "D-Bus session done, SuspendFlags state %d",
                      (int)SuspendFlags::getSuspendFlags().getState());
     } else if (m_active &&
-               (status == SYNC_SUSPEND || status == SYNC_ABORT)) {
+               (status == SessionCommon::SYNC_SUSPEND || status == SessionCommon::SYNC_ABORT)) {
         // only take global suspend or abort blockers while active
         SE_LOG_DEBUG(NULL, NULL, "running D-Bus session about to %s, taking blocker (SuspendFlags state %d)",
-                     status == SYNC_SUSPEND ? "suspend" : "abort",
+                     status == SessionCommon::SYNC_SUSPEND ? "suspend" : "abort",
                      (int)SuspendFlags::getSuspendFlags().getState());
-        m_blocker = status == SYNC_SUSPEND ?
+        m_blocker = status == SessionCommon::SYNC_SUSPEND ?
             SuspendFlags::getSuspendFlags().suspend() :
             SuspendFlags::getSuspendFlags().abort();
         SE_LOG_DEBUG(NULL, NULL, "SuspendFlags state %d after taking blocker in D-Bus session",
@@ -932,27 +799,42 @@ void Session::execute(const vector<string> &args, const map<string, string> &var
     //create ostream with a specified streambuf
     m_cmdline.reset(new CmdlineWrapper(*this, args, vars));
 
-    if(!m_cmdline->parse()) {
+    if (!m_cmdline->parse()) {
         m_cmdline.reset();
         SE_THROW_EXCEPTION(DBusSyncException, "arguments parsing error");
     }
 
     m_runOperation = OP_CMDLINE;
-    g_main_loop_quit(m_server.getLoop());
+    g_main_loop_quit(m_loop);
 }
 
 inline void insertPair(std::map<string, string> &params,
                        const string &key,
                        const string &value)
 {
-    if(!value.empty()) {
+    if (!value.empty()) {
         params.insert(pair<string, string>(key, value));
     }
 }
 
+void Session::passwordResponse(bool timed_out, const std::string &password)
+{
+    m_passwordReqResponse.clear();
+    if (!timed_out) {
+        if (password.empty()) {
+            m_pwResponseStatus = SessionCommon::PW_RES_INVALID;
+        } else {
+            m_pwResponseStatus = SessionCommon::PW_RES_OK;
+            m_passwordReqResponse = password;
+        }
+    } else {
+        m_pwResponseStatus = SessionCommon::PW_RES_TIMEOUT;
+    }
+}
+
 string Session::askPassword(const string &passwordName,
-                             const string &descr,
-                             const ConfigPasswordKey &key)
+                            const string &descr,
+                            const ConfigPasswordKey &key)
 {
     std::map<string, string> params;
     insertPair(params, "description", descr);
@@ -963,32 +845,44 @@ string Session::askPassword(const string &passwordName,
     insertPair(params, "protocol", key.protocol);
     insertPair(params, "authtype", key.authtype);
     insertPair(params, "port", key.port ? StringPrintf("%u",key.port) : "");
-    boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
-    std::map<string, string> response;
-    if(req->wait(response) == InfoReq::ST_OK) {
-        std::map<string, string>::iterator it = response.find("password");
-        if (it == response.end()) {
-            SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort", SyncMLStatus(sysync::LOCERR_USERABORT));
-        } else {
-            return it->second;
-        }
+
+    m_pwResponseStatus = SessionCommon::PW_RES_WAITING;
+    emitPasswordRequest(params);
+
+    // Wait till we've got a response from our password request or a
+    // shutdown signal is recieved.
+    while(!getShutdownRequested() && m_pwResponseStatus == SessionCommon::PW_RES_WAITING) {
+        g_main_context_iteration(g_main_context_default(), true);
     }
 
-    SE_THROW_EXCEPTION_STATUS(StatusException, "can't get the password from clients. The password request is '" + req->getStatusStr() + "'", STATUS_PASSWORD_TIMEOUT);
-    return "";
-}
+    // If a shutdown signal was recieved just return.
+    if (getShutdownRequested()) {
+        return "";
+    }
 
-/*Implementation of Session.CheckPresence */
-void Session::checkPresence (string &status)
-{
-    vector<string> transport;
-    m_server.m_presence.checkPresence (m_configName, status, transport);
+    // Save the response state and reset status to idle.
+    SessionCommon::PwRespStatus respStatus = m_pwResponseStatus;
+    m_pwResponseStatus = SessionCommon::PW_RES_IDLE;
+
+    // Check status and take apropriate action.
+    if (respStatus == SessionCommon::PW_RES_OK) {
+        return m_passwordReqResponse;
+    } else if (respStatus == SessionCommon::PW_RES_TIMEOUT) {
+        SE_THROW_EXCEPTION_STATUS(StatusException,
+                                  std::string("can't get the password from clients. ") +
+                                  "The password request has timed out", STATUS_PASSWORD_TIMEOUT);
+    } else {
+        SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort",
+                                  SyncMLStatus(sysync::LOCERR_USERABORT));
+    }
+
+    return "";
 }
 
 void Session::syncSuccessStart()
 {
     // if listener, report 'sync started' to it
-    if(m_listener) {
+    if (m_listener) {
         m_listener->syncSuccessStart();
     }
 }
