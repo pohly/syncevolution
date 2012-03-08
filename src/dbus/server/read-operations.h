@@ -24,11 +24,9 @@
 #include <syncevo/SmartPtr.h>
 
 #include "gdbus-cxx-bridge.h"
+#include "exceptions.h"
 
 SE_BEGIN_CXX
-
-class DBusSync;
-class Server;
 
 /**
  * Implements the read-only methods in a Session and the Server.
@@ -40,9 +38,7 @@ class ReadOperations
 public:
     const std::string m_configName;
 
-    Server &m_server;
-
-    ReadOperations(const std::string &config_name, Server &server);
+    ReadOperations(const std::string &config_name);
 
     /** the double dictionary used to represent configurations */
     typedef std::map< std::string, StringMap > Config_t;
@@ -54,27 +50,32 @@ public:
     typedef SyncSource::Database SourceDatabase;
     typedef SyncSource::Databases SourceDatabases_t;
 
-    /** implementation of D-Bus GetConfigs() */
-    void getConfigs(bool getTemplates, std::vector<std::string> &configNames);
-
     /** implementation of D-Bus GetConfig() for m_configName as server configuration */
-    void getConfig(bool getTemplate,
-                   Config_t &config);
+    void getConfig(bool getTemplate, Config_t &config);
 
     /** implementation of D-Bus GetNamedConfig() for configuration named in parameter */
-    void getNamedConfig(const std::string &configName,
-                        bool getTemplate,
-                        Config_t &config);
+    void getNamedConfig(const std::string &configName, bool getTemplate, Config_t &config);
 
     /** implementation of D-Bus GetReports() for m_configName as server configuration */
-    void getReports(uint32_t start, uint32_t count,
-                    Reports_t &reports);
+    void getReports(uint32_t start, uint32_t count, Reports_t &reports);
 
     /** Session.CheckSource() */
     void checkSource(const string &sourceName);
 
     /** Session.GetDatabases() */
     void getDatabases(const string &sourceName, SourceDatabases_t &databases);
+
+protected:
+    // a hash to represent matched templates for devices, the key is
+    // the peer name
+    typedef std::map<string, boost::shared_ptr<SyncConfig::TemplateDescription> > MatchedTemplates;
+
+    static MatchedTemplates m_matchedTempls;
+
+    void clearPeerTempls() { m_matchedTempls.clear(); }
+    void addPeerTempl(const string &templName,
+                      const boost::shared_ptr<SyncConfig::TemplateDescription> peerTempl);
+    boost::shared_ptr<SyncConfig::TemplateDescription> getPeerTempl(const string &peer);
 
 private:
     /**
