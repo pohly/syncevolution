@@ -1066,7 +1066,7 @@ class TestNamedConfig(unittest.TestCase, DBusUtil):
         self.runTest(result)
 
     def testSetNamedConfigError(self):
-        """TestDBusSession.testSetNamedConfigError - SetNamedConfig() only allowed in 'all-configs' sessions"""
+        """TestNamedConfig.testSetNamedConfigError - SetNamedConfig() only allowed in 'all-configs' sessions"""
         self.setUpSession("")
         try:
             self.session.SetNamedConfig("foobar", False, False, {})
@@ -1077,7 +1077,7 @@ class TestNamedConfig(unittest.TestCase, DBusUtil):
             self.fail("no exception thrown")
 
     def testSetNamedConfigErrorTemporary(self):
-        """TestDBusSession.testSetNamedConfigErrorTemporary - SetNamedConfig() only implemented for session config"""
+        """TestNamedConfig.testSetNamedConfigErrorTemporary - SetNamedConfig() only implemented for session config"""
         self.setUpSession("foo", [ "all-configs" ])
         try:
             self.session.SetNamedConfig("foobar", False, True, {})
@@ -1092,7 +1092,7 @@ class TestNamedConfig(unittest.TestCase, DBusUtil):
         self.session.SetNamedConfig("", False, True, {})
 
     def testSetNamedConfig(self):
-        """TestDBusSession.testSetNamedConfig - create two different configs in one session"""
+        """TestNamedConfig.testSetNamedConfig - create two different configs in one session"""
         self.setUpSession("", [ "all-configs" ])
 
         fooConfig = {"": {"username": "foo", "configName": "foo"}}
@@ -1280,7 +1280,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         self.setUpSession("foobar")
         self.session.SetConfig(False, False, {"" : {"syncURL":
             "obex-bt://bt-client-mixed http://http-client-mixed"}})
-        status = self.session.checkPresence()
+        status = self.session.CheckPresence()
         self.failUnlessEqual (status, "")
 
         # go offline; Bluetooth remains on
@@ -1296,14 +1296,14 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
         match.remove()
 
         # config uses Bluetooth, so syncing still possible
-        status = self.session.checkPresence()
+        status = self.session.CheckPresence()
         self.failUnlessEqual (status, "")
 
         # now the same without Bluetooth, while offline
         self.session.Detach()
         self.setUpSession("foo")
         self.session.SetConfig(False, False, {"" : {"syncURL": "http://http-only"}})
-        status = self.session.checkPresence()
+        status = self.session.CheckPresence()
         self.assertEqual (status, "no transport")
 
         # go online
@@ -1317,7 +1317,7 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
                                         byte_arrays=True,
                                         utf8_strings=True)
         match.remove()
-        status = self.session.checkPresence()
+        status = self.session.CheckPresence()
         self.failUnlessEqual (status, "")
 
         # temporary config change shall always affect the
@@ -1332,10 +1332,10 @@ class TestDBusServerPresence(unittest.TestCase, DBusUtil):
                                         byte_arrays=True,
                                         utf8_strings=True)
         match.remove()
-        status = self.session.checkPresence()
+        status = self.session.CheckPresence()
         self.failUnlessEqual (status, "no transport")
         self.session.SetConfig(True, False, {"" : {"syncURL": "obex-bt://bt-client-mixed"}})
-        status = self.session.checkPresence()
+        status = self.session.CheckPresence()
         self.failUnlessEqual (status, "")
 
     def run(self, result):
