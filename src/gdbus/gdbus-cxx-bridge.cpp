@@ -31,6 +31,140 @@ void intrusive_ptr_release(DBusPendingCall *call) { dbus_pending_call_unref (cal
 
 namespace GDBusCXX {
 
+struct FilterData
+{
+    FilterData(const DBusConnectionPtr::FilterFunc &filter)
+      : m_filter(filter) {}
+    DBusConnectionPtr::FilterFunc m_filter;
+};
+
+void filter_data_free(gpointer user_data)
+{
+    FilterData* filter_data(static_cast<FilterData*>(user_data));
+
+    delete filter_data;
+}
+
+DBusHandlerResult filter_cb(DBusConnection *conn,
+                            DBusMessage *message,
+                            void* user_data)
+{
+    if (user_data != NULL) {
+        FilterData* filter_data(static_cast<FilterData*>(user_data));
+        DBusMessagePtr message_ptr(message, true);
+        DBusConnectionPtr connection_ptr(conn, true);
+
+        if (!filter_data->m_filter(connection_ptr, message_ptr)) {
+            return DBUS_HANDLER_RESULT_HANDLED;
+        }
+    }
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+struct DBusConnectionPtr::Priv
+{
+  Priv() :
+    ids_to_data(),
+    counter(0)
+  {}
+
+  typedef std::map<unsigned int, FilterData*> FilterIds;
+
+  FilterIds ids_to_data;
+  unsigned int counter;
+};
+
+void DBusConnectionPtr::init_priv()
+{
+  priv.reset(new Priv);
+}
+
+unsigned int DBusConnectionPtr::add_filter(const DBusConnectionPtr::FilterFunc &filter)
+{
+    FilterData* filter_data(new FilterData(filter));
+
+    ++priv->counter;
+    priv->ids_to_data.insert(std::make_pair(priv->counter, filter_data));
+    dbus_connection_add_filter(get(),
+                               filter_cb,
+                               static_cast<void*>(filter_data),
+                               filter_data_free);
+
+    return priv->counter;
+}
+
+void DBusConnectionPtr::remove_filter(unsigned int id)
+{
+    Priv::FilterIds::iterator iter(priv->ids_to_data.find(id));
+
+    if (iter != priv->ids_to_data.end()) {
+        dbus_connection_remove_filter(get(), filter_cb, iter->second);
+        priv->ids_to_data.erase(iter);
+    }
+}
+
+void DBusConnectionPtr::send(const DBusMessagePtr &message)
+{
+    if (!dbus_connection_send(get(), message.get(), 0)) {
+        throw std::runtime_error("Failed to send message");
+    }
+}
+
+// static
+DBusMessagePtr DBusMessagePtr::create_empty_signal()
+{
+    DBusMessage *message(dbus_message_new(DBUS_MESSAGE_TYPE_SIGNAL));
+
+    return DBusMessagePtr(message, false);
+}
+void DBusMessagePtr::set_path(const std::string &path)
+{
+    dbus_message_set_path(get(), path.c_str());
+}
+
+std::string DBusMessagePtr::get_path() const
+{
+    const char *const path(dbus_message_get_path(get()));
+
+    if (path) {
+        return std::string(path);
+    } else {
+        return std::string();
+    }
+}
+
+void DBusMessagePtr::set_interface(const std::string &iface)
+{
+    dbus_message_set_interface(get(), iface.c_str());
+}
+
+std::string DBusMessagePtr::get_interface() const
+{
+    const char *const iface(dbus_message_get_interface(get()));
+
+    if (iface) {
+        return std::string(iface);
+    } else {
+        return std::string();
+    }
+}
+
+void DBusMessagePtr::set_member(const std::string &member)
+{
+    dbus_message_set_member(get(), member.c_str());
+}
+
+std::string DBusMessagePtr::get_member() const
+{
+    const char *const member(dbus_message_get_member(get()));
+
+    if (member) {
+        return std::string(member);
+    } else {
+        return std::string();
+    }
+}
+
 DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           const char *name,
                                           bool unshared,
