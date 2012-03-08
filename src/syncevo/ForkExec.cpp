@@ -30,6 +30,10 @@ static const std::string ForkExecEnvVarEmpty("SE_EMPTY");
 
 static const std::string ForkExecEnvVar("SYNCEVOLUTION_FORK_EXEC=");
 
+static const std::string ForkExecReadyIface("org.syncevo.helperisready");
+static const std::string ForkExecReadyPath("/org/syncevo/helperisready");
+static const std::string ForkExecReadySignal("ready");
+
 ForkExec::ForkExec()
 {
 }
@@ -41,7 +45,8 @@ ForkExecParent::ForkExecParent(const std::string &helper) :
     m_hasQuit(false),
     m_sigIntSent(false),
     m_sigTermSent(false),
-    m_watchChild(NULL)
+    m_watchChild(NULL),
+    m_filter_id(0)
 {
 }
 
@@ -202,6 +207,27 @@ void ForkExecParent::watchChildCallback(GPid pid,
     }
 }
 
+bool ForkExecParent::connectionFilter(GDBusCXX::DBusConnectionPtr &conn,
+                                      GDBusCXX::DBusMessagePtr &message)
+{
+    const std::string iface(message.get_interface());
+    const std::string path(message.get_path());
+    const std::string member(message.get_member());
+
+    SE_LOG_DEBUG(NULL, NULL, "Interface: %s, path: %s, member: %s", iface.c_str(), path.c_str(), member.c_str());
+    if (iface == ForkExecReadyIface &&
+        path == ForkExecReadyPath &&
+        member == ForkExecReadySignal) {
+        SE_LOG_DEBUG(NULL, NULL, "Ready message received, removing filter");
+        conn.remove_filter(m_filter_id);
+        m_filter_id = 0;
+        m_onReady();
+        // false, so we don't route this message further.
+        return false;
+    }
+    return true;
+}
+
 void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw()
 {
     try {
@@ -209,6 +235,11 @@ void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) thro
                      m_helper.c_str());
         m_hasConnected = true;
         m_onConnect(conn);
+        SE_LOG_DEBUG(NULL, NULL, "Connection established, installing filter");
+        m_filter_id = conn.add_filter(boost::bind(&ForkExecParent::connectionFilter,
+                                                  this,
+                                                  _1,
+                                                  _2));
     } catch (...) {
         std::string explanation;
         SyncMLStatus status = Exception::handle(explanation);
@@ -264,12 +295,14 @@ void ForkExecChild::connect()
     SE_LOG_DEBUG(NULL, NULL, "ForkExecChild: connecting to parent with D-Bus address %s",
                  address);
     GDBusCXX::DBusErrorCXX dbusError;
-    GDBusCXX::DBusConnectionPtr conn = dbus_get_bus_connection(address,
-                                                               &dbusError);
-    if (!conn) {
+
+    m_conn = GDBusCXX::DBusConnectionPtr(dbus_get_bus_connection(address,
+                                                                 &dbusError));
+    if (!m_conn) {
         dbusError.throwFailure("connecting to server");
     }
-    m_onConnect(conn);
+    m_onConnect(m_conn);
+}
 
 std::string ForkExecChild::getEnvVar(const std::string &name)
 {
@@ -289,6 +322,18 @@ bool ForkExecChild::wasForked()
 const char *ForkExecChild::getParentDBusAddress()
 {
     return getenv(ForkExecEnvVar.substr(0, ForkExecEnvVar.size() - 1).c_str());
+}
+
+void ForkExecChild::ready()
+{
+    GDBusCXX::DBusMessagePtr message(GDBusCXX::DBusMessagePtr::create_empty_signal());
+
+    message.set_path(ForkExecReadyPath);
+    message.set_interface(ForkExecReadyIface);
+    message.set_member(ForkExecReadySignal);
+    SE_LOG_DEBUG(NULL, NULL, "Sending ready message");
+
+    m_conn.send(message);
 }
 
 #endif // HAVE_GLIB
