@@ -20,7 +20,16 @@
 #ifndef RESOURCE_H
 #define RESOURCE_H
 
+#include <string>
+
+#include <boost/bind.hpp>
+#include <boost/function.hpp>
+
+#include <syncevo/SmartPtr.h>
+#include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+class Server;
 
 /**
  * Anything that can be owned by a client, like a connection
@@ -28,7 +37,73 @@ SE_BEGIN_CXX
  */
 class Resource {
 public:
+    enum Priority {
+        PRI_CMDLINE = -10,
+        PRI_DEFAULT = 0,
+        PRI_CONNECTION = 10,
+        PRI_AUTOSYNC = 20
+    };
+
+    Resource(Server &server, const std::string &resourceName) :
+        m_server(server),
+        m_priority(PRI_DEFAULT),
+        m_isRunning(false),
+        m_resourceName(resourceName) {}
     virtual ~Resource() {}
+
+    Priority getPriority() { return m_priority; }
+    void setPriority(Priority priority) { m_priority = priority; }
+
+    bool getIsRunning() { return m_isRunning; }
+
+    // This base class always assumes concurrent syncing is not
+    // possible. Override this in Connection and
+    // Session if you want to enable running concurrent syncs.
+    virtual bool canRunConcurrently(boost::shared_ptr<Resource> resource) { return false; }
+
+protected:
+    Server &m_server;
+
+    Priority m_priority;
+    bool m_isRunning;
+
+    std::string m_resourceName;
+
+    // static, so we don't have to track the instance of resource.
+    static void printStatus(const std::string &error,
+                            const std::string &name,
+                            const std::string &method);
+
+    // static, so we don't have to track the instance of resource.
+    static void printStatusWithCallback(const std::string &error,
+                                        const std::string &name,
+                                        const std::string &method,
+                                        const boost::function<void()> &callback);
+
+    template <class R>
+    void defaultConnectToSuccess(R &proxyCallback, const std::string &method)
+    {
+        proxyCallback.m_success->connect(typename R::SuccessSignalType::slot_type(&Resource::printStatus,
+                                                                                  std::string(),
+                                                                                  m_resourceName,
+                                                                                  method));
+    }
+
+    template <class R>
+    void defaultConnectToFailure(R &proxyCallback, const std::string &method)
+    {
+        proxyCallback.m_failure->connect(typename R::FailureSignalType::slot_type(&Resource::printStatus,
+                                                                                  _1,
+                                                                                  m_resourceName,
+                                                                                  method));
+    }
+
+    template <class R>
+    void defaultConnectToBoth(R &proxyCallback, const std::string &method)
+    {
+        defaultConnectToSuccess(proxyCallback, method);
+        defaultConnectToFailure(proxyCallback, method);
+    }
 };
 
 SE_END_CXX

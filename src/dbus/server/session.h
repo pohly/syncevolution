@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation
+ * Copyright (C) 2012 Intel Corporation
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,202 +17,188 @@
  * 02110-1301  USA
  */
 
-#ifndef SESSION_H
-#define SESSION_H
+#ifndef SESSION_RESOURCE_H
+#define SESSION_RESOURCE_H
 
-#include <syncevo/SynthesisEngine.h>
-#include <boost/weak_ptr.hpp>
-#include <boost/utility.hpp>
-
-#include <syncevo/SuspendFlags.h>
-
-#include "read-operations.h"
-#include "progress-data.h"
-#include "source-progress.h"
-#include "source-status.h"
-#include "timer.h"
-#include "timeout.h"
+#include "session-common.h"
 #include "resource.h"
+#include "server.h"
+
+#include <syncevo/ForkExec.h>
+#include <boost/lexical_cast.hpp>
 
 SE_BEGIN_CXX
 
-class Server;
-class Connection;
-class CmdlineWrapper;
-class DBusSync;
-class SessionListener;
-class LogRedirect;
+/** A Proxy to the remote session. */
+class SessionProxy : public GDBusCXX::DBusRemoteObject
+{
+public:
+  SessionProxy(const GDBusCXX::DBusConnectionPtr &conn, const std::string &session) :
+    GDBusCXX::DBusRemoteObject(conn.get(),
+                               "/dbushelper",
+                               std::string("dbushelper.Session") + session,
+                               "direct.peer",
+                               true), // This is a one-to-one connection. Close it.
+         m_getNamedConfig   (*this, "GetNamedConfig"),
+         m_setNamedConfig   (*this, "SetNamedConfig"),
+         m_getReports       (*this, "GetReports"),
+         m_checkSource      (*this, "CheckSource"),
+         m_getDatabases     (*this, "GetDatabases"),
+         m_sync             (*this, "Sync"),
+         m_abort            (*this, "Abort"),
+         m_suspend          (*this, "Suspend"),
+         m_getStatus        (*this, "GetStatus"),
+         m_getProgress      (*this, "GetProgress"),
+         m_restore          (*this, "Restore"),
+         m_execute          (*this, "Execute"),
+         m_serverShutdown   (*this, "ServerShutdown"),
+         m_passwordResponse (*this, "PasswordResponse"),
+         m_setActive        (*this, "SetActive"),
+         m_statusChanged    (*this, "StatusChanged", false),
+         m_progressChanged  (*this, "ProgressChanged", false),
+         m_passwordRequest  (*this, "PasswordRequest", false),
+         m_done             (*this, "Done", false)
+    {}
+
+    GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig;
+    GDBusCXX::DBusClientCall1<bool>                              m_setNamedConfig;
+    GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports;
+    GDBusCXX::DBusClientCall0                                    m_checkSource;
+    GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases;
+    GDBusCXX::DBusClientCall0                                    m_sync;
+    GDBusCXX::DBusClientCall0                                    m_abort;
+    GDBusCXX::DBusClientCall0                                    m_suspend;
+    GDBusCXX::DBusClientCall3<std::string, uint32_t,
+                              SessionCommon::SourceStatuses_t>   m_getStatus;
+    GDBusCXX::DBusClientCall2<int32_t,
+                              SessionCommon::SourceProgresses_t> m_getProgress;
+    GDBusCXX::DBusClientCall0                                    m_restore;
+    GDBusCXX::DBusClientCall0                                    m_execute;
+    GDBusCXX::DBusClientCall0                                    m_serverShutdown;
+    GDBusCXX::DBusClientCall0                                    m_passwordResponse;
+    GDBusCXX::DBusClientCall0                                    m_setActive;
+    GDBusCXX::SignalWatch3<std::string, uint32_t,
+                           SessionCommon::SourceStatuses_t>      m_statusChanged;
+    GDBusCXX::SignalWatch2<int32_t,
+                           SessionCommon::SourceProgresses_t>    m_progressChanged;
+    GDBusCXX::SignalWatch1<std::map<std::string, std::string> >  m_passwordRequest;
+    GDBusCXX::SignalWatch0                                       m_done;
+};
 
 /**
- * Represents and implements the Session interface.  Use
- * boost::shared_ptr to track it and ensure that there are references
- * to it as long as the connection is needed.
+ * Handles supplying the session info needed by the server and
+ * clients.
  */
 class Session : public GDBusCXX::DBusObjectHelper,
-                public Resource,
-                private ReadOperations,
-                private boost::noncopyable
+    public Resource,
+    private boost::noncopyable
 {
-    Server &m_server;
+ public:
+    typedef StringMap SourceModes_t;
+    typedef boost::function<void (const boost::shared_ptr<Session> &)> Callback_t;
+
+    /**
+     * Session resource is created asynchronously. The passed callback
+     * will be called when session is ready to be used. The callback
+     * will receive a shared pointer to the session resource.
+     * Session resources must always be held in a shared pointer
+     * because some operations depend on that.
+     */
+    static void createSession(const Callback_t &callback,
+                              Server &server,
+                              const std::string &peerDeviceID,
+                              const std::string &config_name,
+                              const std::string &session,
+                              const std::vector<std::string> &flags = std::vector<std::string>());
+
+    /**
+     * automatically marks the session as completed before deleting it
+     */
+    ~Session();
+
+    /** Explicitly mark the session as completed, even if it doesn't get deleted yet. */
+    void done();
+
+    std::string getConfigName() { return m_configName; }
+    std::string getSessionID() const { return m_sessionID; }
+    std::string getPeerDeviceID() const { return m_peerDeviceID; }
+
+    /**
+     * Initialize the session: Activate interface, connect to helper,
+     * wait for helper to connect.
+     */
+    void init(const Callback_t &callback);
+
+    bool getActive();
+
+    void setConfigAsync(bool update, bool temporary,
+                        const ReadOperations::Config_t &config,
+                        const boost::function<void()> &callback)
+    { setNamedConfigAsync(m_configName, update, temporary, config, callback); }
+
+
+    void setNamedConfigAsync(const std::string &configName, bool update, bool temporary,
+                             const ReadOperations::Config_t &config,
+                             const boost::function<void()> &callback);
+
+    void syncAsync(const std::string &mode, const SourceModes_t &source_modes,
+                   const boost::function<void()> &callback);
+
+    // for use by server
+    void abortAsync(const boost::function<void()> &callback);
+
+    // Called when server is shutting down.
+    void serverShutdown();
+
+    void setActiveAsync(bool active, const boost::function<void ()> &callback);
+
+    /**
+     * Add a listener of the session. Old set listener is returned
+     */
+    SessionListener* addListener(SessionListener *listener);
+
+ private:
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
     std::string m_peerDeviceID;
+    const std::string m_path;
 
-    bool m_serverMode;
-    bool m_serverAlerted;
-    SharedBuffer m_initialMessage;
-    string m_initialMessageType;
-
-    boost::weak_ptr<Connection> m_connection;
-    std::string m_connectionError;
-    bool m_useConnection;
-
-    /** temporary config changes */
-    FilterConfigNode::ConfigFilter m_syncFilter;
-    FilterConfigNode::ConfigFilter m_sourceFilter;
-    typedef std::map<std::string, FilterConfigNode::ConfigFilter> SourceFilters_t;
-    SourceFilters_t m_sourceFilters;
-
-    /** whether dbus clients set temporary configs */
-    bool m_tempConfig;
-
-    /**
-     * whether the dbus clients updated, removed or cleared configs,
-     * ignoring temporary configuration changes
-     */
+    const std::string m_configName;
     bool m_setConfig;
 
-    /**
-     * True while clients are allowed to make calls other than Detach(),
-     * which is always allowed. Some calls are not allowed while this
-     * session runs a sync, which is indicated by a non-NULL m_sync
-     * pointer.
-     */
-    bool m_active;
+    boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
+    boost::scoped_ptr<SessionProxy> m_sessionProxy;
+
+    GDBusCXX::DBusConnectionPtr m_helper_conn;
 
     /**
-     * True once done() was called.
+     * True once done() is called.
      */
     bool m_done;
-
-    /**
-     * Indicates whether this session was initiated by the peer or locally.
-     */
-    bool m_remoteInitiated;
-
-    /**
-     * The SyncEvolution instance which currently prepares or runs a sync.
-     */
-    boost::shared_ptr<DBusSync> m_sync;
-
-    /**
-     * the sync status for session
-     */
-    enum SyncStatus {
-        SYNC_QUEUEING,    ///< waiting to become ready for use
-        SYNC_IDLE,        ///< ready, session is initiated but sync not started
-        SYNC_RUNNING, ///< sync is running
-        SYNC_ABORT, ///< sync is aborting
-        SYNC_SUSPEND, ///< sync is suspending
-        SYNC_DONE, ///< sync is done
-        SYNC_ILLEGAL
-    };
-
-    /**
-     * current sync status; suspend and abort must be mirrored in global SuspendFlags
-     */
-    class SyncStatusOwner : boost::noncopyable {
-    public:
-        SyncStatusOwner() : m_status(SYNC_QUEUEING), m_active(false) {}
-        SyncStatusOwner(SyncStatus status) : m_status(SYNC_QUEUEING), m_active(false)
-        {
-            setStatus(status);
-        }
-        operator SyncStatus () { return m_status; }
-        SyncStatusOwner &operator = (SyncStatus status) { setStatus(status); return *this; }
-
-        void setStatus(SyncStatus status);
-
-    private:
-        SyncStatus m_status;
-        bool m_active;
-        boost::shared_ptr<SuspendFlags::StateBlocker> m_blocker;
-    } m_syncStatus;
+    bool m_active;
 
 
-    /** step info: whether engine is waiting for something */
-    bool m_stepIsWaiting;
+    /** Session.StatusChanged */
+    GDBusCXX::EmitSignal3<const std::string &,
+                          uint32_t,
+                          const SessionCommon::SourceStatuses_t &> emitStatus;
+    /** Session.ProgressChanged */
+    GDBusCXX::EmitSignal2<int32_t,
+                          const SessionCommon::SourceProgresses_t &> emitProgress;
 
-    /**
-     * Priority which determines position in queue.
-     * Lower is more important. PRI_DEFAULT is zero.
-     */
-    int m_priority;
+    boost::weak_ptr<Session> m_me;
 
-    int32_t m_progress;
+    bool autoSyncManagerHasTask()        { return m_server.getAutoSyncManager().hasTask(); }
+    bool autoSyncManagerHasAutoConfigs() { return m_server.getAutoSyncManager().hasAutoConfigs(); }
 
-    /** progress data, holding progress calculation related info */
-    ProgressData m_progData;
+    /** access to the GMainLoop reference used by this Session instance */
+    GMainLoop *getLoop() { return m_server.getLoop(); }
 
-    typedef std::map<std::string, SourceStatus> SourceStatuses_t;
-    SourceStatuses_t m_sourceStatus;
-
-    uint32_t m_error;
-    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
-    SourceProgresses_t m_sourceProgress;
-
-    /** timer for fire status/progress usages */
-    Timer m_statusTimer;
-    Timer m_progressTimer;
-
-    /** restore used */
-    string m_restoreDir;
-    bool m_restoreBefore;
-    /** the total number of sources to be restored */
-    int m_restoreSrcTotal;
-    /** the number of sources that have been restored */
-    int m_restoreSrcEnd;
-
-    /**
-     * status of the session
-     */
-    enum RunOperation {
-        OP_SYNC,            /**< running a sync */
-        OP_RESTORE,         /**< restoring data */
-        OP_CMDLINE,         /**< executing command line */
-        OP_SHUTDOWN,        /**< will shutdown server as soon as possible */
-        OP_NULL             /**< idle, accepting commands via D-Bus */
-    };
-
-    static string runOpToString(RunOperation op);
-
-    RunOperation m_runOperation;
-
-    /** listener to listen to changes of sync */
-    SessionListener *m_listener;
-
-    /** Cmdline to execute command line args */
-    boost::shared_ptr<CmdlineWrapper> m_cmdline;
-
-    /**
-     * time of latest file modification relevant for shutdown
-     */
-    Timespec m_shutdownLastMod;
-
-    /**
-     * timer which counts seconds until server is meant to shut down:
-     * set only while the session is active and thus shutdown is allowed
-     */
-    Timeout m_shutdownTimer;
-
-    /**
-     * Called Server::SHUTDOWN_QUIESENCE_SECONDS after last file modification,
-     * while shutdown session is active and thus ready to shut down the server.
-     * Then either triggers the shutdown or restarts.
-     *
-     * @return always false to disable timer
-     */
-    bool shutdownServer();
+    // Child session handlers
+    void onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn);
+    void onSessionReady(const Callback_t &callback);
+    void onQuit(int status);
+    void onFailure(const std::string &error);
 
     /** Session.Attach() */
     void attach(const GDBusCXX::Caller_t &caller);
@@ -221,208 +207,98 @@ class Session : public GDBusCXX::DBusObjectHelper,
     void detach(const GDBusCXX::Caller_t &caller);
 
     /** Session.GetStatus() */
-    void getStatus(std::string &status,
-                   uint32_t &error,
-                   SourceStatuses_t &sources);
+    void getStatus(const boost::shared_ptr<GDBusCXX::Result3<std::string, uint32_t, SessionCommon::SourceStatuses_t> > &result);
+
     /** Session.GetProgress() */
-    void getProgress(int32_t &progress,
-                     SourceProgresses_t &sources);
+    void getProgress(const boost::shared_ptr<GDBusCXX::Result2<int32_t, SessionCommon::SourceProgresses_t> > &result);
 
     /** Session.Restore() */
-    void restore(const string &dir, bool before,const std::vector<std::string> &sources);
+    void restore(const std::string &dir, bool before, const std::vector<std::string> &sources,
+                 const boost::shared_ptr<GDBusCXX::Result0> &result);
 
     /** Session.checkPresence() */
-    void checkPresence (string &status);
+    void checkPresence(std::string &status);
 
     /** Session.Execute() */
-    void execute(const vector<string> &args, const map<string, string> &vars);
+    void execute(const vector<std::string> &args, const map<std::string, std::string> &vars,
+                 const boost::shared_ptr<GDBusCXX::Result0> &result);
 
-    /**
-     * Must be called each time that properties changing the
-     * overall status are changed. Ensures that the corresponding
-     * D-Bus signal is sent.
-     *
-     * Doesn't always send the signal immediately, because often it is
-     * likely that more status changes will follow shortly. To ensure
-     * that the "final" status is sent, call with flush=true.
-     *
-     * @param flush      force sending the current status
-     */
-    void fireStatus(bool flush = false);
-    /** like fireStatus() for progress information */
-    void fireProgress(bool flush = false);
+    /** Session.GetConfig() */
+    void getConfig(bool getTemplate,
+                   const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Config_t> > &result)
+    { getNamedConfig(m_configName, getTemplate, result); }
 
-    /** Session.StatusChanged */
-    GDBusCXX::EmitSignal3<const std::string &,
-                          uint32_t,
-                          const SourceStatuses_t &> emitStatus;
-    /** Session.ProgressChanged */
-    GDBusCXX::EmitSignal2<int32_t,
-                          const SourceProgresses_t &> emitProgress;
+    /** Session.GetConfigs() == Server.GetConfigs*/
+    void getConfigs(bool getTemplates, std::vector<std::string> &configNames)
+    { m_server.getConfigs(getTemplates, configNames); }
 
-    static string syncStatusToString(SyncStatus state);
+    /** Session.GetNamedConfig() */
+    void getNamedConfig(const std::string &configName, bool getTemplate,
+                        const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Config_t> > &result);
 
-public:
-    /**
-     * Sessions must always be held in a shared pointer
-     * because some operations depend on that. This
-     * constructor function here ensures that and
-     * also adds a weak pointer to the instance itself,
-     * so that it can create more shared pointers as
-     * needed.
-     */
-    static boost::shared_ptr<Session> createSession(Server &server,
-                                                    const std::string &peerDeviceID,
-                                                    const std::string &config_name,
-                                                    const std::string &session,
-                                                    const std::vector<std::string> &flags = std::vector<std::string>());
+    /** Session.GetReports() */
+    void getReports(uint32_t start, uint32_t count,
+                    const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Reports_t> > &result);
 
-    /**
-     * automatically marks the session as completed before deleting it
-     */
-    ~Session();
+    /** Session.CheckSource() */
+    void checkSource(const std::string &sourceName,
+                     const boost::shared_ptr<GDBusCXX::Result0> &result);
 
-    /** explicitly mark the session as completed, even if it doesn't get deleted yet */
-    void done();
+    /** Session.GetDatabases() */
+    void getDatabases(const string &sourceName,
+                      const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::SourceDatabases_t> > &result);
 
-private:
+    /** Session.GetFlags() */
+    std::vector<std::string> getFlags() { return m_flags; }
+
+    /** Session.SetConfig() */
+    void setConfig(bool update, bool temporary, const ReadOperations::Config_t &config,
+                   const boost::shared_ptr<GDBusCXX::Result1<bool> > &result)
+    { setNamedConfig(m_configName, update, temporary, config, result); }
+
+    /** Session.SetNamedConfig() */
+    void setNamedConfig(const std::string &configName, bool update, bool temporary,
+                        const ReadOperations::Config_t &config,
+                        const boost::shared_ptr<GDBusCXX::Result1<bool> > &result);
+
+    /** Session.Sync() */
+    void sync(const std::string &mode, const SourceModes_t &source_modes,
+              const boost::shared_ptr<GDBusCXX::Result0> &result);
+
+    /** Session.Abort() */
+    void abort(const boost::shared_ptr<GDBusCXX::Result0> &result);
+
+    /** Session.GetConfigName() */
+    std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
+
+    /** Session.Suspend() */
+    void suspend(const boost::shared_ptr<GDBusCXX::Result0> &result);
+
+    void onPasswordResponse(boost::shared_ptr<InfoReq> infoReq);
+
+    void setNamedConfigCommon(const std::string &configName, bool temporary,
+                              const ReadOperations::Config_t &config);
+
     Session(Server &server,
             const std::string &peerDeviceID,
             const std::string &config_name,
             const std::string &session,
             const std::vector<std::string> &flags = std::vector<std::string>());
-    boost::weak_ptr<Session> m_me;
 
-public:
-    enum {
-        PRI_CMDLINE = -10,
-        PRI_DEFAULT = 0,
-        PRI_CONNECTION = 10,
-        PRI_AUTOSYNC = 20,
-        PRI_SHUTDOWN = 256  // always higher than anything else
-    };
-
-    /**
-     * Default priority is 0. Higher means less important.
-     */
-    void setPriority(int priority) { m_priority = priority; }
-    int getPriority() const { return m_priority; }
-
-    /**
-     * Turns session into one which will shut down the server, must
-     * be called before enqueing it. Will wait for a certain idle period
-     * after file modifications before claiming to be ready for running
-     * (see Server::SHUTDOWN_QUIESENCE_SECONDS).
-     */
-    void startShutdown();
-
-    /**
-     * Called by server to tell shutdown session that a file was modified.
-     * Session uses that to determine when the quiesence period is over.
-     */
-    void shutdownFileModified();
-
-    bool isServerAlerted() const { return m_serverAlerted; }
-    void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
-
-    void initServer(SharedBuffer data, const std::string &messageType);
-    void setStubConnection(const boost::shared_ptr<Connection> c) { m_connection = c; m_useConnection = c; }
-    boost::weak_ptr<Connection> getStubConnection() { return m_connection; }
-    bool useStubConnection() { return m_useConnection; }
-
-    /**
-     * After the connection closes, the Connection instance is
-     * destructed immediately. This is necessary so that the
-     * corresponding cleanup can remove all other classes
-     * only referenced by the Connection.
-     *
-     * This leads to the problem that an active sync cannot
-     * query the final error code of the connection. This
-     * is solved by setting a generic error code here when
-     * the sync starts and overwriting it when the connection
-     * closes.
-     */
-    void setStubConnectionError(const std::string error) { m_connectionError = error; }
-    std::string getStubConnectionError() { return m_connectionError; }
-
-
-    Server &getServer() { return m_server; }
-    std::string getConfigName() { return m_configName; }
-    std::string getSessionID() const { return m_sessionID; }
-    std::string getPeerDeviceID() const { return m_peerDeviceID; }
-
-    /**
-     * TRUE if the session is ready to take over control
-     */
-    bool readyToRun() { return (m_syncStatus != SYNC_DONE) && (m_runOperation != OP_NULL); }
-
-    /**
-     * transfer control to the session for the duration of the sync,
-     * returns when the sync is done (successfully or unsuccessfully)
-     */
-    void run(LogRedirect &redirect);
-
-    /**
-     * called when the session is ready to run (true) or
-     * lost the right to make changes (false)
-     */
-    void setActive(bool active);
-
-    bool getActive() { return m_active; }
-
-    void syncProgress(sysync::TProgressEventEnum type,
-                      int32_t extra1, int32_t extra2, int32_t extra3);
-    void sourceProgress(sysync::TProgressEventEnum type,
-                        SyncSource &source,
-                        int32_t extra1, int32_t extra2, int32_t extra3);
-    string askPassword(const string &passwordName,
-                       const string &descr,
-                       const ConfigPasswordKey &key);
-
-    /** Session.GetFlags() */
-    std::vector<std::string> getFlags() { return m_flags; }
-
-    /** Session.GetConfigName() */
-    std::string getNormalConfigName() { return SyncConfig::normalizeConfigString(m_configName); }
-
-    /** Session.SetConfig() */
-    void setConfig(bool update, bool temporary,
-                   const ReadOperations::Config_t &config);
-
-    /** Session.SetNamedConfig() */
-    void setNamedConfig(const std::string &configName,
-                        bool update, bool temporary,
-                        const ReadOperations::Config_t &config);
-
-    typedef StringMap SourceModes_t;
-    /** Session.Sync() */
-    void sync(const std::string &mode, const SourceModes_t &source_modes);
-    /** Session.Abort() */
-    void abort();
-    /** Session.Suspend() */
-    void suspend();
-
-    /**
-     * step info for engine: whether the engine is blocked by something
-     * If yes, 'waiting' will be appended as specifiers in the status string.
-     * see GetStatus documentation.
-     */
-    void setStepInfo(bool isWaiting);
-
-    /** sync is successfully started */
-    void syncSuccessStart();
-
-    /**
-     * add a listener of the session. Old set listener is returned
-     */
-    SessionListener* addListener(SessionListener *listener);
-
-    void setRemoteInitiated (bool remote) { m_remoteInitiated = remote;}
-private:
-    /** set m_syncFilter and m_sourceFilters to config */
-    virtual bool setFilters(SyncConfig &config);
+    /** Callbacks for signals fired from helper */
+    void statusChangedCb(const std::string &status, uint32_t error,
+                         const SessionCommon::SourceStatuses_t &sources);
+    void progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources);
+    void requestPasswordCb(const std::map<std::string, std::string> & params);
+    void setNamedConfigCb(bool setConfig);
+    void setNamedConfigAsyncCb(bool setConfig,
+                               const std::string &error,
+                               const boost::function<void()> &callback);
+    void setActiveAsyncCb(bool active,
+                          const std::string &error,
+                          const boost::function<void()> &callback);
 };
 
 SE_END_CXX
 
-#endif // SESSION_H
+#endif // SESSION_RESOURCE_H

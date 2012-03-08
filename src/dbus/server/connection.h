@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation
+ * Copyright (C) 2012 Intel Corporation
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,136 +17,130 @@
  * 02110-1301  USA
  */
 
-#ifndef CONNECTION_H
-#define CONNECTION_H
+#ifndef CONNECTION_RESOURCE_H
+#define CONNECTION_RESOURCE_H
 
-#include "session.h"
+#include "resource.h"
+#include "read-operations.h"
+
+#include <syncevo/ForkExec.h>
 
 SE_BEGIN_CXX
 
 class Server;
 
-/**
- * Represents and implements the Connection interface.
- *
- * The connection interacts with a Session by creating the Session and
- * exchanging data with it. For that, the connection registers itself
- * with the Session and unregisters again when it goes away.
- *
- * In contrast to clients, the Session only keeps a weak_ptr, which
- * becomes invalid when the referenced object gets deleted. Typically
- * this means the Session has to abort, unless reconnecting is
- * supported.
- */
-class Connection : public GDBusCXX::DBusObjectHelper, public Resource
+/** A Proxy to the remote connection. */
+class ConnectionProxy : public GDBusCXX::DBusRemoteObject
 {
-    Server &m_server;
+public:
+  ConnectionProxy(const GDBusCXX::DBusConnectionPtr &conn, const std::string &sessionID) :
+    GDBusCXX::DBusRemoteObject(conn.get(),
+                               "/dbushelper",
+                               std::string("dbushelper.Connection") + sessionID,
+                               "direct.peer",
+                               true), // This is a one-to-one connection. Close it.
+         m_process     (*this, "Process"),
+         m_close       (*this, "Close"),
+         m_reply       (*this, "Reply", false),
+         m_abort       (*this, "Abort", false),
+         m_shutdown    (*this, "Shutdown", false),
+         m_killSessions(*this, "KillSessions", false)
+    {}
+
+    GDBusCXX::DBusClientCall0                   m_process;
+    GDBusCXX::DBusClientCall0                   m_close;
+    GDBusCXX::SignalWatch5<const GDBusCXX::DBusArray<uint8_t> &,
+                           const std::string &,
+                           const StringMap &,
+                           bool,
+                           const std::string &> m_reply;
+    GDBusCXX::SignalWatch0                      m_abort;
+    GDBusCXX::SignalWatch0                      m_shutdown;
+    GDBusCXX::SignalWatch1<std::string>         m_killSessions;
+};
+
+/**
+ * The Connection is held by the Server and facilitates
+ * communication between the Server and Connection which runs in a
+ * seperate binary.
+ */
+class Connection : public GDBusCXX::DBusObjectHelper,
+                           public Resource
+{
+ public:
+    typedef boost::function<void (const boost::shared_ptr<Connection> &)> Callback_t;
+
+    const std::string m_description;
+
+    static void createConnection(const Callback_t &callback,
+                                 Server &server,
+                                 const std::string &session_num,
+                                 const StringMap &peer,
+                                 bool must_authenticate);
+
+    ~Connection();
+
+    /** peer is not trusted, must authenticate as part of SyncML */
+    bool mustAuthenticate() const { return m_mustAuthenticate; }
+ private:
+    std::string m_path;
+
     StringMap m_peer;
-    bool m_mustAuthenticate;
-    enum {
-        SETUP,          /**< ready for first message */
-        PROCESSING,     /**< received message, waiting for engine's reply */
-        WAITING,        /**< waiting for next follow-up message */
-        FINAL,          /**< engine has sent final reply, wait for ACK by peer */
-        DONE,           /**< peer has closed normally after the final reply */
-        FAILED          /**< in a failed state, no further operation possible */
-    } m_state;
-    std::string m_failure;
-
-    /** first parameter for Session::sync() */
-    std::string m_syncMode;
-    /** second parameter for Session::sync() */
-    Session::SourceModes_t m_sourceModes;
-
     const std::string m_sessionID;
-    boost::shared_ptr<Session> m_session;
+    bool m_mustAuthenticate;
 
-    /**
-     * main loop that our DBusTransportAgent is currently waiting in,
-     * NULL if not waiting
-     */
-    GMainLoop *m_loop;
-
-    /**
-     * get our peer session out of the DBusTransportAgent,
-     * if it is currently waiting for us (indicated via m_loop)
-     */
-    void wakeupSession();
-
-    /**
-     * buffer for received data, waiting here for engine to ask
-     * for it via DBusTransportAgent::getReply().
-     */
-    SharedBuffer m_incomingMsg;
-    std::string m_incomingMsgType;
-
-    struct SANContent {
-        std::vector <string> m_syncType;
-        std::vector <uint32_t> m_contentType;
-        std::vector <string> m_serverURI;
-    };
-
-    /**
-     * The content of a parsed SAN package to be processed via
-     * connection.ready
-     */
-    boost::shared_ptr <SANContent> m_SANContent;
-    std::string m_peerBtAddr;
-
-    /**
-     * records the reason for the failure, sends Abort signal and puts
-     * the connection into the FAILED state.
-     */
-    void failed(const std::string &reason);
-
-    /**
-     * returns "<description> (<ID> via <transport> <transport_description>)"
-     */
-    static std::string buildDescription(const StringMap &peer);
-
-    /** Connection.Process() */
-    void process(const GDBusCXX::Caller_t &caller,
-                 const GDBusCXX::DBusArray<uint8_t> &message,
-                 const std::string &message_type);
-    /** Connection.Close() */
-    void close(const GDBusCXX::Caller_t &caller,
-               bool normal,
-               const std::string &error);
-    /** wrapper around sendAbort */
-    void abort();
-    /** Connection.Abort */
-    GDBusCXX::EmitSignal0 sendAbort;
+    GDBusCXX::EmitSignal0 emitAbort;
     bool m_abortSent;
     /** Connection.Reply */
     GDBusCXX::EmitSignal5<const GDBusCXX::DBusArray<uint8_t> &,
                           const std::string &,
                           const StringMap &,
                           bool,
-                          const std::string &> reply;
+                          const std::string &> emitReply;
 
-    friend class DBusTransportAgent;
+    boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
+    boost::scoped_ptr<ConnectionProxy> m_connectionProxy;
+    GDBusCXX::DBusConnectionPtr m_helper_conn;
 
-public:
-    const std::string m_description;
+    /** Connection.Process */
+    void process(const GDBusCXX::Caller_t &caller, const GDBusCXX::DBusArray<uint8_t> &msg,
+                 const std::string &msgType,
+                 const boost::shared_ptr<GDBusCXX::Result0> &result);
+
+    /** Connection.Close */
+    void close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
+               const boost::shared_ptr<GDBusCXX::Result0> &result);
+
+    /**
+     * returns "<description> (<ID> via <transport> <transport_description>)"
+     */
+    static std::string buildDescription(const StringMap &peer);
+
+    /**
+     * Set up the helper and connection to it. Wait until Conection
+     * interface is usable.
+     */
+    void init(const Callback_t &callback);
 
     Connection(Server &server,
-               const GDBusCXX::DBusConnectionPtr &conn,
                const std::string &session_num,
                const StringMap &peer,
                bool must_authenticate);
 
-    ~Connection();
+    /** Callbacks for signals fired from helper */
+    void replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
+                 const StringMap &meta, bool final, const std::string &session);
+    void abortCb();
+    void shutdownCb();
+    void killSessionsCb(const std::string &peerDeviceId);
 
-    /** session requested by us is ready to run a sync */
-    void ready();
-
-    /** connection is no longer needed, ensure that it gets deleted */
-    void shutdown();
-
-    /** peer is not trusted, must authenticate as part of SyncML */
-    bool mustAuthenticate() const { return m_mustAuthenticate; }
+    // Child process handlers
+    void onConnect(const GDBusCXX::DBusConnectionPtr &conn);
+    void onReady(const Callback_t &callback);
+    void onQuit(int status);
+    void onFailure(const std::string &error);
 };
 
 SE_END_CXX
 
-#endif // CONNECTION_H
+#endif

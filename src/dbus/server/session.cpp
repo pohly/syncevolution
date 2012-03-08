@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation
+ * Copyright (C) 2012 Intel Corporation
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,24 +17,36 @@
  * 02110-1301  USA
  */
 
-#include <syncevo/LogRedirect.h>
-
 #include "session.h"
-#include "server.h"
+#include "client.h"
 #include "restart.h"
 #include "info-req.h"
-#include "cmdline-wrapper.h"
-#include "connection.h"
-#include "client.h"
-#include "dbus-sync.h"
+#include "session-common.h"
+#include "dbus-proxy.h"
+#include "dbus-callbacks.h"
+
+#include <memory>
 
 #include <boost/foreach.hpp>
 
-using namespace GDBusCXX;
-
 SE_BEGIN_CXX
 
-void Session::attach(const Caller_t &caller)
+namespace {
+
+void getStatusCb(const std::string &status, const uint32_t &error)
+{
+    SE_LOG_DEBUG(NULL, NULL, "status=%s, error code=%d",
+                 status.c_str(), error);
+}
+
+void getProgressCb(const int32_t &progress)
+{
+    SE_LOG_DEBUG(NULL, NULL, "Progress=%d", progress);
+}
+
+}
+
+void Session::attach(const GDBusCXX::Caller_t &caller)
 {
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
@@ -42,12 +54,12 @@ void Session::attach(const Caller_t &caller)
     }
     boost::shared_ptr<Session> me = m_me.lock();
     if (!me) {
-        throw runtime_error("session already deleted?!");
+        throw runtime_error("session resource already deleted?!");
     }
     client->attach(me);
 }
 
-void Session::detach(const Caller_t &caller)
+void Session::detach(const GDBusCXX::Caller_t &caller)
 {
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
@@ -56,84 +68,115 @@ void Session::detach(const Caller_t &caller)
     client->detach(this);
 }
 
-/**
- * validate key/value property and copy it to the filter
- * if okay
- */
-static void copyProperty(const StringPair &keyvalue,
-                         ConfigPropertyRegistry &registry,
-                         FilterConfigNode::ConfigFilter &filter)
+void Session::serverShutdown()
 {
-    const std::string &name = keyvalue.first;
-    const std::string &value = keyvalue.second;
-    const ConfigProperty *prop = registry.find(name);
-    if (!prop) {
-        SE_THROW_EXCEPTION(InvalidCall, StringPrintf("unknown property '%s'", name.c_str()));
-    }
-    std::string error;
-    if (!prop->checkValue(value, error)) {
-        SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid value '%s' for property '%s': '%s'",
-                                                     value.c_str(), name.c_str(), error.c_str()));
-    }
-    filter.insert(keyvalue);
+    m_sessionProxy->m_serverShutdown.start(boost::bind(&Resource::printStatus,
+                                                       _1,
+                                                       m_resourceName,
+                                                       m_sessionProxy->m_serverShutdown.getMethod()));
 }
 
-static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
+void Session::setActiveAsyncCb(bool active,
+                               const std::string &error,
+                               const boost::function<void()> &callback)
 {
-    ReadOperations::Config_t::const_iterator it;
-    for (it = config.begin(); it != config.end(); it++) {
-        map<string, string>::const_iterator sit;
-        string name = it->first;
-        if (name.empty()) {
-            ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
-            for (sit = it->second.begin(); sit != it->second.end(); sit++) {
-                // read-only properties can (and have to be) ignored
-                static const char *init[] = {
-                    "configName",
-                    "description",
-                    "score",
-                    "deviceName",
-                    "hardwareName",
-                    "templateName",
-                    "fingerprint"
-                };
-                static const set< std::string, Nocase<std::string> >
-                    special(init,
-                            init + (sizeof(init) / sizeof(*init)));
-                if (special.find(sit->first) == special.end()) {
-                    copyProperty(*sit, registry, syncFilter);
-                }
-            }
-        } else if (boost::starts_with(name, "source/")) {
-            name = name.substr(strlen("source/"));
-            FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
-            ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-            for (sit = it->second.begin(); sit != it->second.end(); sit++) {
-                copyProperty(*sit, registry, sourceFilter);
-            }
-        } else {
-            SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid config entry '%s'", name.c_str()));
+    if (error.empty()) {
+        m_active = active;
+        SE_LOG_DEBUG(NULL, NULL, "m_active = %s", m_active ? "yes" : "no");
+        callback();
+    } else {
+        SE_LOG_ERROR(NULL, NULL, "setActiveAsync failed: %s", error.c_str());
+    }
+}
+
+
+void Session::setActiveAsync(bool active, const boost::function<void ()> &callback)
+{
+    m_sessionProxy->m_setActive.start(active, boost::bind(&Session::setActiveAsyncCb,
+                                                          this,
+                                                          active,
+                                                          _1,
+                                                          callback));
+}
+
+void Session::restore(const string &dir, bool before, const std::vector<std::string> &sources,
+                      const boost::shared_ptr<GDBusCXX::Result0> &result)
+{
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_restore.getMethod());
+    m_sessionProxy->m_restore.start(dir, before, sources, callback);
+}
+
+void Session::checkPresence(std::string &status)
+{
+    vector<string> transport;
+    m_server.checkPresence(m_configName, status, transport);
+}
+
+void Session::execute(const vector<string> &args, const map<string, string> &vars,
+                      const boost::shared_ptr<GDBusCXX::Result0> &result)
+{
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_execute.getMethod());
+    m_sessionProxy->m_execute.start(args, vars, callback);
+}
+
+void Session::onPasswordResponse(boost::shared_ptr<InfoReq> infoReq)
+{
+    std::string password = "";
+    std::map<string, string> response;
+    if(infoReq->getResponse(response)) {
+        std::map<string, string>::const_iterator it = response.find("password");
+        if (it != response.end()) {
+            password = it->second;
         }
     }
+
+    SE_LOG_INFO(NULL, NULL, "Session::onPasswordResponse: Waiting for password response");
+
+    m_sessionProxy->m_passwordResponse.start(false, password, boost::bind(&Resource::printStatus,
+                                                                          _1,
+                                                                          m_resourceName,
+                                                                          m_sessionProxy->m_passwordResponse.getMethod()));
 }
 
-void Session::setConfig(bool update, bool temporary,
-                        const ReadOperations::Config_t &config)
+void Session::requestPasswordCb(const std::map<std::string, std::string> & params)
 {
-    setNamedConfig(m_configName, update, temporary, config);
+    boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
+    req->m_onResponse.connect(boost::bind(&Session::onPasswordResponse, this, req));
+
+    SE_LOG_INFO(NULL, NULL, "Session::requestPasswordCb: req->m_onResponse.connect");
 }
 
-void Session::setNamedConfig(const std::string &configName,
-                             bool update, bool temporary,
-                             const ReadOperations::Config_t &config)
+bool Session::getActive()
 {
-    if (!m_active) {
-        SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
-    }
-    if (m_runOperation != OP_NULL) {
-        string msg = StringPrintf("%s started, cannot change configuration at this time", runOpToString(m_runOperation).c_str());
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    }
+    return m_active;
+}
+
+void Session::init(const Callback_t &callback)
+{
+    SE_LOG_INFO(NULL, NULL, "Session (%s) forking...", getPath());
+
+    m_forkExecParent->m_onReady.connect(boost::bind(&Session::onSessionReady, this, callback));
+    m_forkExecParent->m_onConnect.connect(boost::bind(&Session::onSessionConnect, this, _1));
+    m_forkExecParent->m_onQuit.connect(boost::bind(&Session::onQuit, this, _1));
+    m_forkExecParent->m_onFailure.connect(boost::bind(&Session::onFailure, this, _2));
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_CONFIG", m_configName);
+    m_forkExecParent->start();
+}
+
+void Session::setNamedConfigCb(bool setConfig)
+{
+    m_setConfig = setConfig;
+    SE_LOG_INFO(NULL, NULL, "m_setConfig = %d", (int)m_setConfig);
+}
+
+void Session::setNamedConfigCommon(const std::string &configName, bool temporary,
+                                   const ReadOperations::Config_t &config)
+{
     // avoid the check if effect is the same as setConfig()
     if (m_configName != configName) {
         bool found = false;
@@ -155,330 +198,294 @@ void Session::setNamedConfig(const std::string &configName,
     }
 
     m_server.getPresenceStatus().updateConfigPeers (configName, config);
-    /** check whether we need remove the entire configuration */
-    if(!update && !temporary && config.empty()) {
-        boost::shared_ptr<SyncConfig> syncConfig(new SyncConfig(configName));
-        if(syncConfig.get()) {
-            syncConfig->remove();
-            m_setConfig = true;
-        }
-        return;
-    }
+}
 
-    /*
-     * validate input config and convert to filters;
-     * if validation fails, no harm was done at this point yet
-     */
-    FilterConfigNode::ConfigFilter syncFilter;
-    SourceFilters_t sourceFilters;
-    setSyncFilters(config, syncFilter, sourceFilters);
-
-    if (temporary) {
-        /* save temporary configs in session filters, either erasing old
-           temporary settings or adding to them */
-        if (update) {
-            m_syncFilter.insert(syncFilter.begin(), syncFilter.end());
-            BOOST_FOREACH(SourceFilters_t::value_type &source, sourceFilters) {
-                SourceFilters_t::iterator it = m_sourceFilters.find(source.first);
-                if (it != m_sourceFilters.end()) {
-                    // add to existing source filter
-                    it->second.insert(source.second.begin(), source.second.end());
-                } else {
-                    // add source filter
-                    m_sourceFilters.insert(source);
-                }
-            }
-        } else {
-            m_syncFilter = syncFilter;
-            m_sourceFilters = sourceFilters;
-        }
-        m_tempConfig = true;
+void Session::setNamedConfigAsyncCb(bool setConfig,
+                                    const std::string &error,
+                                    const boost::function<void()> &callback)
+{
+    if (error.empty()) {
+        m_setConfig = setConfig;
+        SE_LOG_INFO(NULL, NULL, "m_setConfig = %d", (int)m_setConfig);
+        callback();
     } else {
-        /* need to save configurations */
-        boost::shared_ptr<SyncConfig> from(new SyncConfig(configName));
-        /* if it is not clear mode and config does not exist, an error throws */
-        if(update && !from->exists()) {
-            SE_THROW_EXCEPTION(NoSuchConfig, "The configuration '" + configName + "' doesn't exist" );
-        }
-        if(!update) {
-            list<string> sources = from->getSyncSources();
-            list<string>::iterator it;
-            for(it = sources.begin(); it != sources.end(); ++it) {
-                string source = "source/";
-                source += *it;
-                ReadOperations::Config_t::const_iterator configIt = config.find(source);
-                if(configIt == config.end()) {
-                    /** if no config for this source, we remove it */
-                    from->removeSyncSource(*it);
-                } else {
-                    /** just clear visiable properties, remove them and their values */
-                    from->clearSyncSourceProperties(*it);
-                }
-            }
-            from->clearSyncProperties();
-        }
-        /** generate new sources in the config map */
-        for (ReadOperations::Config_t::const_iterator it = config.begin(); it != config.end(); ++it) {
-            string sourceName = it->first;
-            if(sourceName.find("source/") == 0) {
-                sourceName = sourceName.substr(7); ///> 7 is the length of "source/"
-                from->getSyncSourceNodes(sourceName);
-            }
-        }
-        /* apply user settings */
-        from->setConfigFilter(true, "", syncFilter);
-        map<string, FilterConfigNode::ConfigFilter>::iterator it;
-        for ( it = sourceFilters.begin(); it != sourceFilters.end(); it++ ) {
-            from->setConfigFilter(false, it->first, it->second);
-        }
-        boost::shared_ptr<DBusSync> syncConfig(new DBusSync(configName, *this));
-        syncConfig->prepareConfigForWrite();
-        syncConfig->copy(*from, NULL);
-
-        syncConfig->preFlush(*syncConfig);
-        syncConfig->flush();
-        m_setConfig = true;
+        SE_LOG_ERROR(NULL, NULL, "setNamedConfigAsync failed: %s", error.c_str());
     }
 }
 
-void Session::initServer(SharedBuffer data, const std::string &messageType)
+void Session::setNamedConfigAsync(const std::string &configName, bool update, bool temporary,
+                                  const ReadOperations::Config_t &config,
+                                  const boost::function<void()> &callback)
 {
-    m_serverMode = true;
-    m_initialMessage = data;
-    m_initialMessageType = messageType;
+    setNamedConfigCommon(configName, temporary, config);
+
+    m_sessionProxy->m_setNamedConfig.start(configName, update, temporary, config,
+                                           boost::bind(&Session::setNamedConfigAsyncCb,
+                                                       this,
+                                                       _1,
+                                                       _2,
+                                                       callback));
 }
 
-void Session::sync(const std::string &mode, const SourceModes_t &source_modes)
+void Session::setNamedConfig(const std::string &configName, bool update, bool temporary,
+                             const ReadOperations::Config_t &config,
+                             const boost::shared_ptr<GDBusCXX::Result1<bool> > &result)
 {
-    if (!m_active) {
-        SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
-    }
-    if (m_runOperation == OP_SYNC) {
-        string msg = StringPrintf("%s started, cannot start again", runOpToString(m_runOperation).c_str());
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    } else if (m_runOperation != OP_NULL) {
-        string msg = StringPrintf("%s started, cannot start sync", runOpToString(m_runOperation).c_str());
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    }
+    setNamedConfigCommon(configName, temporary, config);
 
-    m_sync.reset(new DBusSync(getConfigName(), *this));
-    m_sync->setServerAlerted(m_serverAlerted);
-    if (m_serverMode) {
-        m_sync->initServer(m_sessionID,
-                           m_initialMessage,
-                           m_initialMessageType);
-        boost::shared_ptr<Connection> c = m_connection.lock();
-        if (c && !c->mustAuthenticate()) {
-            // unsetting username/password disables checking them
-            m_syncFilter["password"] = "";
-            m_syncFilter["username"] = "";
-        }
-    }
+    typedef ProxyCallback1<bool> Callback_t;
+    Callback_t callback(result);
 
-    if (m_remoteInitiated) {
-        m_sync->setRemoteInitiated (true);
-    }
-
-    // Apply temporary config filters. The parameters of this function
-    // override the source filters, if set.
-    m_sync->setConfigFilter(true, "", m_syncFilter);
-    FilterConfigNode::ConfigFilter filter;
-    filter = m_sourceFilter;
-    if (!mode.empty()) {
-        filter["sync"] = mode;
-    }
-    m_sync->setConfigFilter(false, "", filter);
-    BOOST_FOREACH(const std::string &source,
-                  m_sync->getSyncSources()) {
-        filter = m_sourceFilters[source];
-        SourceModes_t::const_iterator it = source_modes.find(source);
-        if (it != source_modes.end()) {
-            filter["sync"] = it->second;
-        }
-        m_sync->setConfigFilter(false, source, filter);
-    }
-
-    // Update status and progress. From now on, all configured sources
-    // have their default entry (referencing them by name creates the
-    // entry).
-    BOOST_FOREACH(const std::string source,
-                  m_sync->getSyncSources()) {
-        m_sourceStatus[source];
-        m_sourceProgress[source];
-    }
-    fireProgress(true);
-    fireStatus(true);
-    m_runOperation = OP_SYNC;
-
-    // now that we have a DBusSync object, return from the main loop
-    // and once that is done, transfer control to that object
-    g_main_loop_quit(m_server.getLoop());
+    callback.m_success->connect(Callback_t::SuccessSignalType::slot_type(&Session::setNamedConfigCb, this, _1).track(m_me));
+    defaultConnectToFailure(callback, m_sessionProxy->m_setNamedConfig.getMethod());
+    m_sessionProxy->m_setNamedConfig.start(configName, update, temporary, config, callback);
 }
 
-void Session::abort()
+void Session::syncAsync(const std::string &mode,
+                        const SessionCommon::SourceModes_t &source_modes,
+                        const boost::function<void()> &callback)
 {
-    if (m_runOperation != OP_SYNC && m_runOperation != OP_CMDLINE) {
-        SE_THROW_EXCEPTION(InvalidCall, "sync not started, cannot abort at this time");
-    }
-    m_syncStatus = SYNC_ABORT;
-    fireStatus(true);
-
-    // state change, return to caller so that it can react
-    g_main_loop_quit(m_server.getLoop());
+    m_sessionProxy->m_sync.start(mode, source_modes, boost::bind(&Resource::printStatusWithCallback,
+                                                                 _1,
+                                                                 m_resourceName,
+                                                                 m_sessionProxy->m_sync.getMethod(),
+                                                                 callback));
 }
 
-void Session::suspend()
+void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &source_modes,
+                   const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    if (m_runOperation != OP_SYNC && m_runOperation != OP_CMDLINE) {
-        SE_THROW_EXCEPTION(InvalidCall, "sync not started, cannot suspend at this time");
-    }
-    m_syncStatus = SYNC_SUSPEND;
-    fireStatus(true);
-    g_main_loop_quit(m_server.getLoop());
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_sync.getMethod());
+    m_sessionProxy->m_sync.start(mode, source_modes, callback);
 }
 
-void Session::getStatus(std::string &status,
-                        uint32_t &error,
-                        SourceStatuses_t &sources)
+void Session::abortAsync(const boost::function<void ()> &callback)
 {
-    status = syncStatusToString(m_syncStatus);
-    if (m_stepIsWaiting) {
-        status += ";waiting";
-    }
-
-    error = m_error;
-    sources = m_sourceStatus;
+    m_sessionProxy->m_abort.start(boost::bind(&Resource::printStatusWithCallback,
+                                              _1,
+                                              m_resourceName,
+                                              m_sessionProxy->m_abort.getMethod(),
+                                              callback));
 }
 
-void Session::getProgress(int32_t &progress,
-                          SourceProgresses_t &sources)
+void Session::abort(const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    progress = m_progress;
-    sources = m_sourceProgress;
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_abort.getMethod());
+    m_sessionProxy->m_abort.start(callback);
 }
 
-void Session::fireStatus(bool flush)
+void Session::suspend(const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    std::string status;
-    uint32_t error;
-    SourceStatuses_t sources;
+    ProxyCallback0 callback(result);
 
-    /** not force flushing and not timeout, return */
-    if(!flush && !m_statusTimer.timeout()) {
-        return;
+    defaultConnectToBoth(callback, m_sessionProxy->m_suspend.getMethod());
+    m_sessionProxy->m_suspend.start(callback);
+}
+
+void Session::getStatus(const boost::shared_ptr<GDBusCXX::Result3<std::string, uint32_t, SessionCommon::SourceStatuses_t> >&result)
+{
+    typedef ProxyCallback3<std::string, uint32_t, SessionCommon::SourceStatuses_t> Callback_t;
+    Callback_t callback(result);
+
+    callback.m_success->connect(Callback_t::SuccessSignalType::slot_type(&getStatusCb, _1, _2));
+    defaultConnectToFailure(callback, m_sessionProxy->m_getStatus.getMethod());
+    m_sessionProxy->m_getStatus.start(callback);
+
+}
+
+void Session::getProgress(const boost::shared_ptr<GDBusCXX::Result2<int32_t, SessionCommon::SourceProgresses_t> > &result)
+{
+    typedef ProxyCallback2<int32_t, SessionCommon::SourceProgresses_t> Callback_t;
+    Callback_t callback(result);
+
+    callback.m_success->connect(Callback_t::SuccessSignalType::slot_type(&getProgressCb, _1));
+    defaultConnectToFailure(callback, m_sessionProxy->m_getProgress.getMethod());
+    m_sessionProxy->m_getProgress.start(callback);
+}
+
+void Session::getNamedConfig(const std::string &configName, bool getTemplate,
+                             const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Config_t> > &result)
+{
+    ProxyCallback1<ReadOperations::Config_t> callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_getNamedConfig.getMethod());
+    m_sessionProxy->m_getNamedConfig.start(configName, getTemplate, callback);
+}
+
+void Session::getReports(uint32_t start, uint32_t count,
+                         const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::Reports_t> > &result)
+{
+    ProxyCallback1<ReadOperations::Reports_t> callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_getReports.getMethod());
+    m_sessionProxy->m_getReports.start(start, count, callback);
+}
+
+void Session::checkSource(const string &sourceName,
+                          const boost::shared_ptr<GDBusCXX::Result0> &result)
+{
+    ProxyCallback0 callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_checkSource.getMethod());
+    m_sessionProxy->m_checkSource.start(sourceName, callback);
+}
+
+void Session::getDatabases(const string &sourceName,
+                           const boost::shared_ptr<GDBusCXX::Result1<ReadOperations::SourceDatabases_t> > &result)
+{
+    ProxyCallback1<ReadOperations::SourceDatabases_t> callback(result);
+
+    defaultConnectToBoth(callback, m_sessionProxy->m_getDatabases.getMethod());
+    m_sessionProxy->m_getDatabases.start(sourceName, callback);
+}
+
+SessionListener* Session::addListener(SessionListener *listener)
+{
+    return listener;
+}
+
+void Session::statusChangedCb(const std::string &status, uint32_t error,
+                              const SessionCommon::SourceStatuses_t &sources)
+{
+    SE_LOG_INFO(NULL, NULL, "Session.StatusChanged signal received and relayed: status=%s", status.c_str());
+
+    // Keep track of whether this session is running.
+    if(status.find("running") != std::string::npos) {
+        m_isRunning = true;
+    } else {
+        m_isRunning = false;
     }
-    m_statusTimer.reset();
 
-    getStatus(status, error, sources);
+    // Relay signal to client.
     emitStatus(status, error, sources);
 }
 
-void Session::fireProgress(bool flush)
+void Session::progressChangedCb(int32_t error, const SessionCommon::SourceProgresses_t &sources)
 {
-    int32_t progress;
-    SourceProgresses_t sources;
-
-    /** not force flushing and not timeout, return */
-    if(!flush && !m_progressTimer.timeout()) {
-        return;
-    }
-    m_progressTimer.reset();
-
-    getProgress(progress, sources);
-    emitProgress(progress, sources);
-}
-string Session::syncStatusToString(SyncStatus state)
-{
-    switch(state) {
-    case SYNC_QUEUEING:
-        return "queueing";
-    case SYNC_IDLE:
-        return "idle";
-    case SYNC_RUNNING:
-        return "running";
-    case SYNC_ABORT:
-        return "aborting";
-    case SYNC_SUSPEND:
-        return "suspending";
-    case SYNC_DONE:
-        return "done";
-    default:
-        return "";
-    };
+    SE_LOG_INFO(NULL, NULL, "Session.ProgressChanged signal received and relayed: error=%d", error);
+    // Relay signal to client.
+    emitProgress(error, sources);
 }
 
-boost::shared_ptr<Session> Session::createSession(Server &server,
-                                                  const std::string &peerDeviceID,
-                                                  const std::string &config_name,
-                                                  const std::string &session,
-                                                  const std::vector<std::string> &flags)
+void Session::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
 {
-    boost::shared_ptr<Session> me(new Session(server, peerDeviceID, config_name, session, flags));
-    me->m_me = me;
-    return me;
+    m_helper_conn = conn;
+}
+
+void Session::onSessionReady(const Callback_t &callback)
+{
+    SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %s", m_sessionID.c_str());
+    m_sessionProxy.reset(new SessionProxy(m_helper_conn, m_sessionID));
+
+    /* Enable public dbus interface for Session. */
+    activate();
+
+    // Activate signal watch on helper signals.
+    m_sessionProxy->m_statusChanged.activate  (boost::bind(&Session::statusChangedCb,   this, _1, _2, _3));
+    m_sessionProxy->m_progressChanged.activate(boost::bind(&Session::progressChangedCb, this, _1, _2));
+    m_sessionProxy->m_passwordRequest.activate(boost::bind(&Session::requestPasswordCb, this, _1));
+    m_sessionProxy->m_done.activate           (boost::bind(&Session::done,              this));
+
+    SE_LOG_INFO(NULL, NULL, "onSessionConnect called in session (path: %s interface: %s)",
+                m_sessionProxy->getPath(), m_sessionProxy->getInterface());
+
+    SE_LOG_INFO(NULL, NULL, "Session connection made.");
+    boost::shared_ptr<Session> me(this);
+    // This adds a weak pointer to the instance itself, so that it can
+    // create more shared pointers as needed.
+    m_me = me;
+    // if callback owner won't copy this shared pointer
+    // then session resource will be destroyed.
+    callback(me);
+}
+
+void Session::onQuit(int status)
+{
+    m_server.checkQueue(boost::function<void()>(&NullCb));
+    SE_LOG_INFO(NULL, NULL, "dbus-helper quit with status: %d", status);
+}
+
+void Session::onFailure(const std::string &error)
+{
+    m_server.checkQueue(boost::function<void()>(&NullCb));
+    SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
+}
+
+void Session::createSession(const Callback_t &callback,
+                            Server &server,
+                            const std::string &peerDeviceID,
+                            const std::string &configName,
+                            const std::string &session,
+                            const std::vector<std::string> &flags)
+{
+    std::auto_ptr<Session> resource(new Session(server,
+                                                peerDeviceID,
+                                                configName,
+                                                session,
+                                                flags));
+
+    resource->init(callback);
+    // init did not throw an exception, so we guess that child was
+    // spawned successfully.  thus we release the auto_ptr, so it will
+    // not delete the resource.
+    resource.release();
 }
 
 Session::Session(Server &server,
                  const std::string &peerDeviceID,
-                 const std::string &config_name,
+                 const std::string &configName,
                  const std::string &session,
                  const std::vector<std::string> &flags) :
     DBusObjectHelper(server.getConnection(),
-                     std::string("/org/syncevolution/Session/") + session,
-                     "org.syncevolution.Session",
+                     std::string(SessionCommon::SESSION_PATH) + "/" + session,
+                     SessionCommon::SESSION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
-    ReadOperations(config_name, server),
-    m_server(server),
+    Resource(server, "Session"),
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
-    m_serverMode(false),
-    m_useConnection(false),
-    m_tempConfig(false),
+    m_path(std::string(SessionCommon::SESSION_PATH) + "/" + session),
+    m_configName(configName),
     m_setConfig(false),
-    m_active(false),
+    m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper")),
+    m_sessionProxy(),
     m_done(false),
-    m_remoteInitiated(false),
-    m_syncStatus(SYNC_QUEUEING),
-    m_stepIsWaiting(false),
-    m_priority(PRI_DEFAULT),
-    m_progress(0),
-    m_progData(m_progress),
-    m_error(0),
-    m_statusTimer(100),
-    m_progressTimer(50),
-    m_restoreBefore(true),
-    m_restoreSrcTotal(0),
-    m_restoreSrcEnd(0),
-    m_runOperation(OP_NULL),
-    m_listener(NULL),
+    m_active(false),
     emitStatus(*this, "StatusChanged"),
-    emitProgress(*this, "ProgressChanged")
+    emitProgress(*this, "ProgressChanged"),
+    m_me()
 {
+    m_priority = Resource::PRI_DEFAULT;
+    m_isRunning = false;
+
     add(this, &Session::attach, "Attach");
     add(this, &Session::detach, "Detach");
     add(this, &Session::getFlags, "GetFlags");
     add(this, &Session::getNormalConfigName, "GetConfigName");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getConfigs, "GetConfigs");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getConfig, "GetConfig");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getNamedConfig, "GetNamedConfig");
+    add(this, &Session::getConfigs, "GetConfigs");
+    add(this, &Session::getConfig, "GetConfig");
+    add(this, &Session::getNamedConfig, "GetNamedConfig");
     add(this, &Session::setConfig, "SetConfig");
     add(this, &Session::setNamedConfig, "SetNamedConfig");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getReports, "GetReports");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::checkSource, "CheckSource");
-    add(static_cast<ReadOperations *>(this), &ReadOperations::getDatabases, "GetDatabases");
+    add(this, &Session::getReports, "GetReports");
+    add(this, &Session::checkSource, "CheckSource");
+    add(this, &Session::getDatabases, "GetDatabases");
     add(this, &Session::sync, "Sync");
     add(this, &Session::abort, "Abort");
     add(this, &Session::suspend, "Suspend");
     add(this, &Session::getStatus, "GetStatus");
     add(this, &Session::getProgress, "GetProgress");
     add(this, &Session::restore, "Restore");
-    add(this, &Session::checkPresence, "checkPresence");
+    add(this, &Session::checkPresence, "CheckPresence");
     add(this, &Session::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
 
-    SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
+    SE_LOG_DEBUG(NULL, NULL, "session resource %s created", getPath());
 }
 
 void Session::done()
@@ -492,512 +499,19 @@ void Session::done()
     if (m_setConfig) {
         m_server.getAutoSyncManager().update(m_configName);
     }
-    m_server.dequeue(this);
+    m_server.removeResource(m_me.lock(), boost::function<void ()>(&NullCb));
 
     // now tell other clients about config change?
     if (m_setConfig) {
         m_server.configChanged();
     }
 
-    // typically set by m_server.dequeue(), but let's really make sure...
-    m_active = false;
-
     m_done = true;
 }
 
 Session::~Session()
 {
-    SE_LOG_DEBUG(NULL, NULL, "session %s deconstructing", getPath());
-    done();
-}
-
-void Session::startShutdown()
-{
-    m_runOperation = OP_SHUTDOWN;
-}
-
-void Session::shutdownFileModified()
-{
-    m_shutdownLastMod = Timespec::monotonic();
-    SE_LOG_DEBUG(NULL, NULL, "file modified at %lu.%09lus, %s",
-                 (unsigned long)m_shutdownLastMod.tv_sec,
-                 (unsigned long)m_shutdownLastMod.tv_nsec,
-                 m_active ? "active" : "not active");
-
-    if (m_active) {
-        // (re)set shutdown timer: once it fires, we are ready to shut down;
-        // brute-force approach, will reset timer many times
-        m_shutdownTimer.activate(Server::SHUTDOWN_QUIESENCE_SECONDS,
-                                 boost::bind(&Session::shutdownServer, this));
-    }
-}
-
-bool Session::shutdownServer()
-{
-    Timespec now = Timespec::monotonic();
-    bool autosync = m_server.getAutoSyncManager().hasTask() ||
-        m_server.getAutoSyncManager().hasAutoConfigs();
-    SE_LOG_DEBUG(NULL, NULL, "shut down server at %lu.%09lu because of file modifications, auto sync %s",
-                 now.tv_sec, now.tv_nsec,
-                 autosync ? "on" : "off");
-    if (autosync) {
-        // suitable exec() call which restarts the server using the same environment it was in
-        // when it was started
-        m_server.m_restart->restart();
-    } else {
-        // leave server now
-        m_server.m_shutdownRequested = true;
-        g_main_loop_quit(m_server.getLoop());
-        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
-    }
-
-    return false;
-}
-
-void Session::setActive(bool active)
-{
-    bool oldActive = m_active;
-    m_active = active;
-    if (active) {
-        if (m_syncStatus == SYNC_QUEUEING) {
-            m_syncStatus = SYNC_IDLE;
-            fireStatus(true);
-        }
-
-        boost::shared_ptr<Connection> c = m_connection.lock();
-        if (c) {
-            c->ready();
-        }
-
-        if (!oldActive &&
-            m_runOperation == OP_SHUTDOWN) {
-            // shutdown session activated: check if or when we can shut down
-            if (m_shutdownLastMod) {
-                Timespec now = Timespec::monotonic();
-                SE_LOG_DEBUG(NULL, NULL, "latest file modified at %lu.%09lus, now is %lu.%09lus",
-                             (unsigned long)m_shutdownLastMod.tv_sec,
-                             (unsigned long)m_shutdownLastMod.tv_nsec,
-                             (unsigned long)now.tv_sec,
-                             (unsigned long)now.tv_nsec);
-                if (m_shutdownLastMod + Server::SHUTDOWN_QUIESENCE_SECONDS <= now) {
-                    // ready to shutdown immediately
-                    shutdownServer();
-                } else {
-                    // need to wait
-                    int secs = Server::SHUTDOWN_QUIESENCE_SECONDS -
-                        (now - m_shutdownLastMod).tv_sec;
-                    SE_LOG_DEBUG(NULL, NULL, "shut down in %ds", secs);
-                    m_shutdownTimer.activate(secs, boost::bind(&Session::shutdownServer, this));
-                }
-            }
-        }
-    }
-}
-
-void Session::syncProgress(sysync::TProgressEventEnum type,
-                           int32_t extra1, int32_t extra2, int32_t extra3)
-{
-    switch(type) {
-    case sysync::PEV_SESSIONSTART:
-        m_progData.setStep(ProgressData::PRO_SYNC_INIT);
-        fireProgress(true);
-        break;
-    case sysync::PEV_SESSIONEND:
-        if((uint32_t)extra1 != m_error) {
-            m_error = extra1;
-            fireStatus(true);
-        }
-        m_progData.setStep(ProgressData::PRO_SYNC_INVALID);
-        fireProgress(true);
-        break;
-    case sysync::PEV_SENDSTART:
-        m_progData.sendStart();
-        break;
-    case sysync::PEV_SENDEND:
-    case sysync::PEV_RECVSTART:
-    case sysync::PEV_RECVEND:
-        m_progData.receiveEnd();
-        fireProgress();
-        break;
-    case sysync::PEV_DISPLAY100:
-    case sysync::PEV_SUSPENDCHECK:
-    case sysync::PEV_DELETING:
-        break;
-    case sysync::PEV_SUSPENDING:
-        m_syncStatus = SYNC_SUSPEND;
-        fireStatus(true);
-        break;
-    default:
-        ;
-    }
-}
-
-void Session::sourceProgress(sysync::TProgressEventEnum type,
-                             SyncSource &source,
-                             int32_t extra1, int32_t extra2, int32_t extra3)
-{
-    switch(m_runOperation) {
-    case OP_SYNC: {
-        SourceProgress &progress = m_sourceProgress[source.getName()];
-        SourceStatus &status = m_sourceStatus[source.getName()];
-        switch(type) {
-        case sysync::PEV_SYNCSTART:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
-                m_progData.setStep(ProgressData::PRO_SYNC_UNINIT);
-                fireProgress();
-            }
-            break;
-        case sysync::PEV_SYNCEND:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
-                status.set(PrettyPrintSyncMode(source.getFinalSyncMode()), "done", extra1);
-                fireStatus(true);
-            }
-            break;
-        case sysync::PEV_PREPARING:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
-                progress.m_phase        = "preparing";
-                progress.m_prepareCount = extra1;
-                progress.m_prepareTotal = extra2;
-                m_progData.itemPrepare();
-                fireProgress(true);
-            }
-            break;
-        case sysync::PEV_ITEMSENT:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
-                progress.m_phase     = "sending";
-                progress.m_sendCount = extra1;
-                progress.m_sendTotal = extra2;
-                fireProgress(true);
-            }
-            break;
-        case sysync::PEV_ITEMRECEIVED:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
-                progress.m_phase        = "receiving";
-                progress.m_receiveCount = extra1;
-                progress.m_receiveTotal = extra2;
-                m_progData.itemReceive(source.getName(), extra1, extra2);
-                fireProgress(true);
-            }
-            break;
-        case sysync::PEV_ALERTED:
-            if(source.getFinalSyncMode() != SYNC_NONE) {
-                status.set(PrettyPrintSyncMode(source.getFinalSyncMode()), "running", 0);
-                fireStatus(true);
-                m_progData.setStep(ProgressData::PRO_SYNC_DATA);
-                m_progData.addSyncMode(source.getFinalSyncMode());
-                fireProgress();
-            }
-            break;
-        default:
-            ;
-        }
-        break;
-    }
-    case OP_RESTORE: {
-        switch(type) {
-        case sysync::PEV_ALERTED:
-            // count the total number of sources to be restored
-            m_restoreSrcTotal++;
-            break;
-        case sysync::PEV_SYNCSTART: {
-            if (source.getFinalSyncMode() != SYNC_NONE) {
-                SourceStatus &status = m_sourceStatus[source.getName()];
-                // set statuses as 'restore-from-backup'
-                status.set(PrettyPrintSyncMode(source.getFinalSyncMode()), "running", 0);
-                fireStatus(true);
-            }
-            break;
-        }
-        case sysync::PEV_SYNCEND: {
-            if (source.getFinalSyncMode() != SYNC_NONE) {
-                m_restoreSrcEnd++;
-                SourceStatus &status = m_sourceStatus[source.getName()];
-                status.set(PrettyPrintSyncMode(source.getFinalSyncMode()), "done", 0);
-                m_progress = 100 * m_restoreSrcEnd / m_restoreSrcTotal;
-                fireStatus(true);
-                fireProgress(true);
-            }
-            break;
-        }
-        default:
-            break;
-        }
-        break;
-    }
-    default:
-        break;
-    }
-}
-
-void Session::run(LogRedirect &redirect)
-{
-    if (m_runOperation != OP_NULL) {
-        try {
-            m_syncStatus = SYNC_RUNNING;
-            fireStatus(true);
-            switch(m_runOperation) {
-            case OP_SYNC: {
-                SyncMLStatus status;
-                m_progData.setStep(ProgressData::PRO_SYNC_PREPARE);
-                try {
-                    status = m_sync->sync();
-                } catch (...) {
-                    status = m_sync->handleException();
-                }
-                if (!m_error) {
-                    m_error = status;
-                }
-                // if there is a connection, then it is no longer needed
-                boost::shared_ptr<Connection> c = m_connection.lock();
-                if (c) {
-                    c->shutdown();
-                }
-                // report 'sync done' event to listener
-                if(m_listener) {
-                    m_listener->syncDone(status);
-                }
-                break;
-            }
-            case OP_RESTORE:
-                m_sync->restore(m_restoreDir,
-                                m_restoreBefore ? SyncContext::DATABASE_BEFORE_SYNC : SyncContext::DATABASE_AFTER_SYNC);
-                break;
-            case OP_CMDLINE:
-                try {
-                    m_cmdline->run(redirect);
-                } catch (...) {
-                    SyncMLStatus status = Exception::handle();
-                    if (!m_error) {
-                        m_error = status;
-                    }
-                }
-                m_setConfig = m_cmdline->configWasModified();
-                break;
-            case OP_SHUTDOWN:
-                // block until time for shutdown or restart if no
-                // shutdown requested already
-                if (!m_server.m_shutdownRequested) {
-                    g_main_loop_run(m_server.getLoop());
-                }
-                break;
-            default:
-                break;
-            };
-        } catch (...) {
-            // we must enter SYNC_DONE under all circumstances,
-            // even when failing during connection shutdown
-            // or while getting ready for SYNC_RUNNING
-            SyncMLStatus status = Exception::handle();
-            if (status && !m_error) {
-                m_error = status;
-            }
-            m_syncStatus = SYNC_DONE;
-            m_stepIsWaiting = false;
-            fireStatus(true);
-            throw;
-        }
-        m_syncStatus = SYNC_DONE;
-        m_stepIsWaiting = false;
-        fireStatus(true);
-    }
-}
-
-bool Session::setFilters(SyncConfig &config)
-{
-    /** apply temporary configs to config */
-    config.setConfigFilter(true, "", m_syncFilter);
-    // set all sources in the filter to config
-    BOOST_FOREACH(const SourceFilters_t::value_type &value, m_sourceFilters) {
-        config.setConfigFilter(false, value.first, value.second);
-    }
-    return m_tempConfig;
-}
-
-void Session::setStepInfo(bool isWaiting)
-{
-    // if stepInfo doesn't change, then ignore it to avoid duplicate status info
-    if(m_stepIsWaiting != isWaiting) {
-        m_stepIsWaiting = isWaiting;
-        fireStatus(true);
-    }
-}
-
-void Session::restore(const string &dir, bool before, const std::vector<std::string> &sources)
-{
-    if (!m_active) {
-        SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
-    }
-    if (m_runOperation == OP_RESTORE) {
-        string msg = StringPrintf("restore started, cannot restore again");
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    } else if (m_runOperation != OP_NULL) {
-        // actually this never happen currently, for during the real restore process,
-        // it never poll the sources in default main context
-        string msg = StringPrintf("%s started, cannot restore", runOpToString(m_runOperation).c_str());
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    }
-
-    m_sync.reset(new DBusSync(getConfigName(), *this));
-
-    if(!sources.empty()) {
-        BOOST_FOREACH(const std::string &source, sources) {
-            FilterConfigNode::ConfigFilter filter;
-            filter["sync"] = "two-way";
-            m_sync->setConfigFilter(false, source, filter);
-        }
-        // disable other sources
-        FilterConfigNode::ConfigFilter disabled;
-        disabled["sync"] = "disabled";
-        m_sync->setConfigFilter(false, "", disabled);
-    }
-    m_restoreBefore = before;
-    m_restoreDir = dir;
-    m_runOperation = OP_RESTORE;
-
-    // initiate status and progress and sourceProgress is not calculated currently
-    BOOST_FOREACH(const std::string source,
-                  m_sync->getSyncSources()) {
-        m_sourceStatus[source];
-    }
-    fireProgress(true);
-    fireStatus(true);
-
-    g_main_loop_quit(m_server.getLoop());
-}
-
-void Session::SyncStatusOwner::setStatus(SyncStatus status)
-{
-    // skip operation before it even starts?
-    if (status == SYNC_RUNNING &&
-        (m_status == SYNC_SUSPEND || m_status == SYNC_ABORT)) {
-        SE_LOG_DEBUG(NULL, NULL, "D-Bus session %s already before it started to run",
-                     m_status == SYNC_SUSPEND ? "suspended" : "aborted");
-        SE_THROW_EXCEPTION_STATUS(StatusException,
-                                  "preventing start of session as requested by users",
-                                  SyncMLStatus(sysync::LOCERR_USERABORT));
-    }
-
-    if (status == SYNC_RUNNING) {
-        // activated, allow blockers until we are done again
-        m_active = true;
-        SE_LOG_DEBUG(NULL, NULL, "D-Bus session running");
-    } else if (status == SYNC_DONE) {
-        // deactivated
-        m_active = false;
-        m_blocker.reset();
-        SE_LOG_DEBUG(NULL, NULL, "D-Bus session done, SuspendFlags state %d",
-                     (int)SuspendFlags::getSuspendFlags().getState());
-    } else if (m_active &&
-               (status == SYNC_SUSPEND || status == SYNC_ABORT)) {
-        // only take global suspend or abort blockers while active
-        SE_LOG_DEBUG(NULL, NULL, "running D-Bus session about to %s, taking blocker (SuspendFlags state %d)",
-                     status == SYNC_SUSPEND ? "suspend" : "abort",
-                     (int)SuspendFlags::getSuspendFlags().getState());
-        m_blocker = status == SYNC_SUSPEND ?
-            SuspendFlags::getSuspendFlags().suspend() :
-            SuspendFlags::getSuspendFlags().abort();
-        SE_LOG_DEBUG(NULL, NULL, "SuspendFlags state %d after taking blocker in D-Bus session",
-                     (int)SuspendFlags::getSuspendFlags().getState());
-    }
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus session changes state %d -> %d",
-                 (int)m_status, (int)status);
-    m_status = status;
-}
-
-string Session::runOpToString(RunOperation op)
-{
-    switch(op) {
-    case OP_SYNC:
-        return "sync";
-    case OP_RESTORE:
-        return "restore";
-    case OP_CMDLINE:
-        return "cmdline";
-    default:
-        return "";
-    };
-}
-
-void Session::execute(const vector<string> &args, const map<string, string> &vars)
-{
-    if (!m_active) {
-        SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
-    }
-    if (m_runOperation == OP_CMDLINE) {
-        SE_THROW_EXCEPTION(InvalidCall, "cmdline started, cannot start again");
-    } else if (m_runOperation != OP_NULL) {
-        string msg = StringPrintf("%s started, cannot start cmdline", runOpToString(m_runOperation).c_str());
-        SE_THROW_EXCEPTION(InvalidCall, msg);
-    }
-    //create ostream with a specified streambuf
-    m_cmdline.reset(new CmdlineWrapper(*this, args, vars));
-
-    if(!m_cmdline->parse()) {
-        m_cmdline.reset();
-        SE_THROW_EXCEPTION(DBusSyncException, "arguments parsing error");
-    }
-
-    m_runOperation = OP_CMDLINE;
-    g_main_loop_quit(m_server.getLoop());
-}
-
-inline void insertPair(std::map<string, string> &params,
-                       const string &key,
-                       const string &value)
-{
-    if(!value.empty()) {
-        params.insert(pair<string, string>(key, value));
-    }
-}
-
-string Session::askPassword(const string &passwordName,
-                             const string &descr,
-                             const ConfigPasswordKey &key)
-{
-    std::map<string, string> params;
-    insertPair(params, "description", descr);
-    insertPair(params, "user", key.user);
-    insertPair(params, "SyncML server", key.server);
-    insertPair(params, "domain", key.domain);
-    insertPair(params, "object", key.object);
-    insertPair(params, "protocol", key.protocol);
-    insertPair(params, "authtype", key.authtype);
-    insertPair(params, "port", key.port ? StringPrintf("%u",key.port) : "");
-    boost::shared_ptr<InfoReq> req = m_server.createInfoReq("password", params, this);
-    std::map<string, string> response;
-    if(req->wait(response) == InfoReq::ST_OK) {
-        std::map<string, string>::iterator it = response.find("password");
-        if (it == response.end()) {
-            SE_THROW_EXCEPTION_STATUS(StatusException, "user didn't provide password, abort", SyncMLStatus(sysync::LOCERR_USERABORT));
-        } else {
-            return it->second;
-        }
-    }
-
-    SE_THROW_EXCEPTION_STATUS(StatusException, "can't get the password from clients. The password request is '" + req->getStatusStr() + "'", STATUS_PASSWORD_TIMEOUT);
-    return "";
-}
-
-/*Implementation of Session.CheckPresence */
-void Session::checkPresence (string &status)
-{
-    vector<string> transport;
-    m_server.m_presence.checkPresence (m_configName, status, transport);
-}
-
-void Session::syncSuccessStart()
-{
-    // if listener, report 'sync started' to it
-    if(m_listener) {
-        m_listener->syncSuccessStart();
-    }
-}
-
-SessionListener* Session::addListener(SessionListener *listener)
-{
-    SessionListener *old = m_listener;
-    m_listener = listener;
-    return old;
+    SE_LOG_DEBUG(NULL, NULL, "session resource %s deconstructing", getPath());
 }
 
 SE_END_CXX

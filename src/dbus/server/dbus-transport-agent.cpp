@@ -18,13 +18,13 @@
  */
 
 #include "dbus-transport-agent.h"
-#include "connection.h"
+#include "connection-impl.h"
 
 SE_BEGIN_CXX
 
 DBusTransportAgent::DBusTransportAgent(GMainLoop *loop,
-                                       Session &session,
-                                       boost::weak_ptr<Connection> connection) :
+                                       SessionImpl &session,
+                                       boost::weak_ptr<ConnectionImpl> connection) :
     m_loop(loop),
     m_session(session),
     m_connection(connection),
@@ -36,7 +36,7 @@ DBusTransportAgent::DBusTransportAgent(GMainLoop *loop,
 
 DBusTransportAgent::~DBusTransportAgent()
 {
-    boost::shared_ptr<Connection> connection = m_connection.lock();
+    boost::shared_ptr<ConnectionImpl> connection = m_connection.lock();
     if (connection) {
         connection->shutdown();
     }
@@ -44,21 +44,21 @@ DBusTransportAgent::~DBusTransportAgent()
 
 void DBusTransportAgent::send(const char *data, size_t len)
 {
-    boost::shared_ptr<Connection> connection = m_connection.lock();
+    boost::shared_ptr<ConnectionImpl> connection = m_connection.lock();
 
     if (!connection) {
         SE_THROW_EXCEPTION(TransportException,
                            "D-Bus peer has disconnected");
     }
 
-    if (connection->m_state != Connection::PROCESSING) {
+    if (connection->m_state != ConnectionImpl::PROCESSING) {
         SE_THROW_EXCEPTION(TransportException,
                            "cannot send to our D-Bus peer");
     }
 
     // Change state in advance. If we fail while replying, then all
     // further resends will fail with the error above.
-    connection->m_state = Connection::WAITING;
+    connection->m_state = ConnectionImpl::WAITING;
     connection->m_incomingMsg = SharedBuffer();
 
     if (m_timeoutSeconds) {
@@ -69,25 +69,25 @@ void DBusTransportAgent::send(const char *data, size_t len)
     // TODO: turn D-Bus exceptions into transport exceptions
     StringMap meta;
     meta["URL"] = m_url;
-    connection->reply(GDBusCXX::makeDBusArray(len, reinterpret_cast<const uint8_t *>(data)),
-                      m_type, meta, false, connection->m_sessionID);
+    connection->emitReply(GDBusCXX::makeDBusArray(len, reinterpret_cast<const uint8_t *>(data)),
+                          m_type, meta, false, connection->m_sessionID);
 }
 
 void DBusTransportAgent::shutdown()
 {
-    boost::shared_ptr<Connection> connection = m_connection.lock();
+    boost::shared_ptr<ConnectionImpl> connection = m_connection.lock();
 
     if (!connection) {
         SE_THROW_EXCEPTION(TransportException,
                            "D-Bus peer has disconnected");
     }
 
-    if (connection->m_state != Connection::FAILED) {
+    if (connection->m_state != ConnectionImpl::FAILED) {
         // send final, empty message and wait for close
-        connection->m_state = Connection::FINAL;
-        connection->reply(GDBusCXX::DBusArray<uint8_t>(0, 0),
-                          "", StringMap(),
-                          true, connection->m_sessionID);
+        connection->m_state = ConnectionImpl::FINAL;
+        connection->emitReply(GDBusCXX::DBusArray<uint8_t>(0, 0),
+                              "", StringMap(),
+                              true, connection->m_sessionID);
     }
 }
 
@@ -101,7 +101,7 @@ gboolean DBusTransportAgent::timeoutCallback(gpointer transport)
     return false;
 }
 
-void DBusTransportAgent::doWait(boost::shared_ptr<Connection> &connection)
+void DBusTransportAgent::doWait(boost::shared_ptr<ConnectionImpl> &connection)
 {
     // let Connection wake us up when it has a reply or
     // when it closes down
@@ -119,7 +119,7 @@ void DBusTransportAgent::doWait(boost::shared_ptr<Connection> &connection)
 
 DBusTransportAgent::Status DBusTransportAgent::wait(bool noReply)
 {
-    boost::shared_ptr<Connection> connection = m_connection.lock();
+    boost::shared_ptr<ConnectionImpl> connection = m_connection.lock();
 
     if (!connection) {
         SE_THROW_EXCEPTION(TransportException,
@@ -127,12 +127,12 @@ DBusTransportAgent::Status DBusTransportAgent::wait(bool noReply)
     }
 
     switch (connection->m_state) {
-    case Connection::PROCESSING:
+    case ConnectionImpl::PROCESSING:
         m_incomingMsg = connection->m_incomingMsg;
         m_incomingMsgType = connection->m_incomingMsgType;
         return GOT_REPLY;
         break;
-    case Connection::FINAL:
+    case ConnectionImpl::FINAL:
         if (m_eventTriggered) {
             return TIME_OUT;
         }
@@ -149,7 +149,7 @@ DBusTransportAgent::Status DBusTransportAgent::wait(bool noReply)
             return FAILED;
         }
         break;
-    case Connection::WAITING:
+    case ConnectionImpl::WAITING:
         if (noReply) {
             // message is sent as far as we know, so return
             return INACTIVE;
@@ -163,7 +163,7 @@ DBusTransportAgent::Status DBusTransportAgent::wait(bool noReply)
         // tell caller to check again
         return ACTIVE;
         break;
-    case Connection::DONE:
+    case ConnectionImpl::DONE:
         if (!noReply) {
             SE_THROW_EXCEPTION(TransportException,
                                "internal error: transport has shut down, can no longer receive reply");

@@ -25,7 +25,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-class Session;
+class SessionImpl;
 
 /**
  * A running sync engine which keeps answering on D-Bus whenever
@@ -33,11 +33,11 @@ class Session;
  */
 class DBusSync : public DBusUserInterface
 {
-    Session &m_session;
+    SessionImpl &m_session;
 
 public:
     DBusSync(const std::string &config,
-             Session &session);
+             SessionImpl &session);
     ~DBusSync() {}
 
 protected:

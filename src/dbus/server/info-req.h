@@ -25,10 +25,11 @@
 #include "timer.h"
 #include "gdbus-cxx-bridge.h"
 
+#include <boost/signals2.hpp>
+
 SE_BEGIN_CXX
 
 class Server;
-class Session;
 
 /**
  * A wrapper for handling info request and response.
@@ -52,7 +53,7 @@ public:
     InfoReq(Server &server,
             const std::string &type,
             const InfoMap &parameters,
-            const Session *session,
+            const std::string &sessionPath,
             uint32_t timeout = 120);
 
     ~InfoReq();
@@ -65,14 +66,20 @@ public:
     Status check();
 
     /**
-     * wait the response until timeout, abort or suspend. It may be blocked.
-     * The response is returned though the parameter 'response' when the Status is
-     * 'ST_OK'. Otherwise, corresponding statuses are returned.
+     * Wait for response until timeout, abort or suspend. It may be
+     * blocked.  The response is returned though the parameter
+     * 'response' when the Status is 'ST_OK'. Otherwise, corresponding
+     * statuses are returned.
      * @param response the received response if gotten
      * @param interval the interval to check abort, suspend and timeout, in seconds
      * @return the current status
      */
     Status wait(InfoMap &response, uint32_t interval = 3);
+
+    /**
+     * Connect to this signal to be notified that a response has been recieved.
+     */
+    boost::signals2::signal<void (const InfoMap &)> m_onResponse;
 
     /**
      * get response when it is ready. If false, nothing will be set in response
@@ -105,7 +112,7 @@ private:
     friend class Server;
 
     /** set response from dbus clients */
-void setResponse(const GDBusCXX::Caller_t &caller, const std::string &state, const InfoMap &response);
+    void setResponse(const GDBusCXX::Caller_t &caller, const std::string &state, const InfoMap &response);
 
     /** send 'done' state if needed */
     void done();
@@ -120,7 +127,7 @@ void setResponse(const GDBusCXX::Caller_t &caller, const std::string &state, con
     Server &m_server;
 
     /** caller's session, might be NULL */
-    const Session *m_session;
+    const std::string m_sessionPath;
 
     /** unique id of this info request */
     std::string m_id;

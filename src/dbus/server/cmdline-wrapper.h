@@ -81,9 +81,9 @@ class CmdlineWrapper
      * This can check 'abort' and 'suspend' command from clients.
      */
     class DBusCmdline : public Cmdline {
-        Session &m_session;
+        SessionImpl &m_session;
     public:
-        DBusCmdline(Session &session,
+        DBusCmdline(SessionImpl &session,
                     const vector<string> &args,
                     ostream &out,
                     ostream &err)
@@ -108,7 +108,7 @@ public:
      * command line is output to this stream for it is
      * different from Logger::ERROR.
      */
-    CmdlineWrapper(Session &session,
+    CmdlineWrapper(SessionImpl &session,
                    const vector<string> &args,
                    const map<string, string> &vars)
         : m_cmdlineOutStream(&m_outStreamBuf),

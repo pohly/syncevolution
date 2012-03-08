@@ -27,8 +27,8 @@
 
 SE_BEGIN_CXX
 
-class Session;
-class Connection;
+class SessionImpl;
+class ConnectionImpl;
 
 /**
  * A proxy for a Connection instance. The Connection instance can go
@@ -41,8 +41,8 @@ class Connection;
 class DBusTransportAgent : public TransportAgent
 {
     GMainLoop *m_loop;
-    Session &m_session;
-    boost::weak_ptr<Connection> m_connection;
+    SessionImpl &m_session;
+    boost::weak_ptr<ConnectionImpl> m_connection;
 
     std::string m_url;
     std::string m_type;
@@ -63,13 +63,13 @@ class DBusTransportAgent : public TransportAgent
     SharedBuffer m_incomingMsg;
     std::string m_incomingMsgType;
 
-    void doWait(boost::shared_ptr<Connection> &connection);
+    void doWait(boost::shared_ptr<ConnectionImpl> &connection);
     static gboolean timeoutCallback(gpointer transport);
 
  public:
     DBusTransportAgent(GMainLoop *loop,
-                       Session &session,
-                       boost::weak_ptr<Connection> connection);
+                       SessionImpl &session,
+                       boost::weak_ptr<ConnectionImpl> connection);
     ~DBusTransportAgent();
 
     virtual void setURL(const std::string &url) { m_url = url; }

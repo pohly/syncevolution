@@ -34,7 +34,6 @@ SE_BEGIN_CXX
 class Server;
 class Session;
 
-
 /**
  * Manager to manage automatic sync.
  *
@@ -153,7 +152,8 @@ class AutoSyncManager : public SessionListener
 
     /**
      * a working queue that including tasks which are pending for doing sync.
-     * Tasks here are picked from m_peerMap and scheduled to do auto sync */
+     * Tasks here are picked from m_peerMap and scheduled to do auto sync
+     */
     std::list<AutoSyncTask> m_workQueue;
 
     /**
@@ -201,6 +201,21 @@ class AutoSyncManager : public SessionListener
      * Manager has the information needed to make the decision
      */
     bool taskLikelyToRun(const AutoSyncTask &syncTask);
+
+    /**
+     * Called when session resource is created and its helper is up and ready.
+     */
+    void startTaskCb(const boost::shared_ptr<Session> &resource);
+
+    /**
+     * Called when update does removing of a resource.
+     */
+    void updateCb();
+
+    /**
+     * Called when config is set during preparation.
+     */
+    void prepareCb();
 
  public:
     AutoSyncManager(Server &server)

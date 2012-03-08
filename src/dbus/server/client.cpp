@@ -19,9 +19,8 @@
  */
 
 #include "client.h"
-#include "session.h"
 #include "server.h"
-#include "resource.h"
+#include "session.h"
 
 SE_BEGIN_CXX
 

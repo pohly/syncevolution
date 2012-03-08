@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2011 Intel Corporation
+ * Copyright(C) 2012 Intel Corporation
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) version 3.
+ * version 2.1 of the License, or(at your option) version 3.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,30 +18,24 @@
  */
 
 #include "server.h"
-#include "connection.h"
 #include "client.h"
+#include "connection.h"
+#include "session-common.h"
+#include "dbus-proxy.h"
+#include "dbus-callbacks.h"
 
 #include <synthesis/san.h>
 #include <syncevo/TransportAgent.h>
 #include <syncevo/SyncContext.h>
 
+#include <boost/lexical_cast.hpp>
+#include <boost/bind.hpp>
+
+#include <memory>
+
 using namespace GDBusCXX;
 
 SE_BEGIN_CXX
-
-void Connection::failed(const std::string &reason)
-{
-    if (m_failure.empty()) {
-        m_failure = reason;
-        if (m_session) {
-            m_session->setStubConnectionError(reason);
-        }
-    }
-    if (m_state != FAILED) {
-        abort();
-    }
-    m_state = FAILED;
-}
 
 std::string Connection::buildDescription(const StringMap &peer)
 {
@@ -78,24 +72,11 @@ std::string Connection::buildDescription(const StringMap &peer)
     return buffer;
 }
 
-void Connection::wakeupSession()
-{
-    if (m_loop) {
-        g_main_loop_quit(m_loop);
-        m_loop = NULL;
-    }
-}
-
 void Connection::process(const Caller_t &caller,
-                         const GDBusCXX::DBusArray<uint8_t> &message,
-                         const std::string &message_type)
+                         const GDBusCXX::DBusArray<uint8_t> &msg,
+                         const std::string &msgType,
+                         const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s sends %lu bytes via connection %s, %s",
-                 caller.c_str(),
-                 (unsigned long)message.first,
-                 getPath(),
-                 message_type.c_str());
-
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
         throw runtime_error("unknown client");
@@ -107,240 +88,18 @@ void Connection::process(const Caller_t &caller,
         throw runtime_error("client does not own connection");
     }
 
-    // any kind of error from now on terminates the connection
-    try {
-        switch (m_state) {
-        case SETUP: {
-            std::string config;
-            std::string peerDeviceID;
-            bool serverMode = false;
-            bool serverAlerted = false;
-            // check message type, determine whether we act
-            // as client or server, choose config
-            if (message_type == "HTTP Config") {
-                // type used for testing, payload is config name
-                config.assign(reinterpret_cast<const char *>(message.second),
-                              message.first);
-            } else if (message_type == TransportAgent::m_contentTypeServerAlertedNotificationDS) {
-                serverAlerted = true;
-                sysync::SanPackage san;
-                if (san.PassSan(const_cast<uint8_t *>(message.second), message.first, 2) || san.GetHeader()) {
-                    // We are very tolerant regarding the content of the message.
-                    // If it doesn't parse, try to do something useful anyway.
-                    // only for SAN 1.2, for SAN 1.0/1.1 we can not be sure
-                    // whether it is a SAN package or a normal sync pacakge
-                    if (message_type == TransportAgent::m_contentTypeServerAlertedNotificationDS) {
-                        config = "default";
-                        SE_LOG_DEBUG(NULL, NULL, "SAN parsing failed, falling back to 'default' config");
-                    }
-                } else { //Server alerted notification case
-                    // Extract server ID and match it against a server
-                    // configuration.  Multiple different peers might use the
-                    // same serverID ("PC Suite"), so check properties of the
-                    // of our configs first before going back to the name itself.
-                    std::string serverID = san.fServerID;
-                    SyncConfig::ConfigList servers = SyncConfig::getConfigs();
-                    BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,
-                            servers) {
-                        SyncConfig conf(server.first);
-                        vector<string> urls = conf.getSyncURL();
-                        BOOST_FOREACH (const string &url, urls) {
-                            if (url == serverID) {
-                                config = server.first;
-                                break;
-                            }
-                        }
-                        if (!config.empty()) {
-                            break;
-                        }
-                    }
+    ProxyCallback0 callback(result);
 
-                    // for Bluetooth transports match against mac address.
-                    StringMap::const_iterator id = m_peer.find("id"),
-                        trans = m_peer.find("transport");
-                    if (trans != m_peer.end() && id != m_peer.end()) {
-                        if (trans->second == "org.openobex.obexd") {
-                            m_peerBtAddr = id->second.substr(0, id->second.find("+"));
-                            BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,
-                                    servers) {
-                                SyncConfig conf(server.first);
-                                vector<string> urls = conf.getSyncURL();
-                                BOOST_FOREACH (string &url, urls){
-                                    url = url.substr (0, url.find("+"));
-                                    SE_LOG_DEBUG (NULL, NULL, "matching against %s",url.c_str());
-                                    if (url.find ("obex-bt://") ==0 && url.substr(strlen("obex-bt://"), url.npos) == m_peerBtAddr) {
-                                        config = server.first;
-                                        break;
-                                    }
-                                }
-                                if (!config.empty()){
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (config.empty()) {
-                        BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,
-                                      servers) {
-                            if (server.first == serverID) {
-                                config = serverID;
-                                break;
-                            }
-                        }
-                    }
-
-                    // create a default configuration name if none matched
-                    if (config.empty()) {
-                        config = serverID+"_"+getCurrentTime();
-                        SE_LOG_DEBUG(NULL,
-                                     NULL,
-                                     "SAN Server ID '%s' unknown, falling back to automatically created '%s' config",
-                                     serverID.c_str(), config.c_str());
-                    }
-
-
-                    SE_LOG_DEBUG(NULL, NULL, "SAN sync with config %s", config.c_str());
-
-                    m_SANContent.reset (new SANContent ());
-                    // extract number of sources
-                    int numSources = san.fNSync;
-                    int syncType;
-                    uint32_t contentType;
-                    std::string serverURI;
-                    if (!numSources) {
-                        SE_LOG_DEBUG(NULL, NULL, "SAN message with no sources, using selected modes");
-                        // Synchronize all known sources with the default mode.
-                        if (san.GetNthSync(0, syncType, contentType, serverURI)) {
-                            SE_LOG_DEBUG(NULL, NULL, "SAN invalid header, using default modes");
-                        } else if (syncType < SYNC_FIRST || syncType > SYNC_LAST) {
-                            SE_LOG_DEBUG(NULL, NULL, "SAN invalid sync type %d, using default modes", syncType);
-                        } else {
-                            m_syncMode = PrettyPrintSyncMode(SyncMode(syncType), true);
-                            SE_LOG_DEBUG(NULL, NULL, "SAN sync mode for all configured sources: %s", m_syncMode.c_str());
-                        }
-                    } else {
-                        for (int sync = 1; sync <= numSources; sync++) {
-                            if (san.GetNthSync(sync, syncType, contentType, serverURI)) {
-                                SE_LOG_DEBUG(NULL, NULL, "SAN invalid sync entry #%d", sync);
-                            } else if (syncType < SYNC_FIRST || syncType > SYNC_LAST) {
-                                SE_LOG_DEBUG(NULL, NULL, "SAN invalid sync type %d for entry #%d, ignoring entry", syncType, sync);
-                            } else {
-                                std::string syncMode = PrettyPrintSyncMode(SyncMode(syncType), true);
-                                m_SANContent->m_syncType.push_back (syncMode);
-                                m_SANContent->m_serverURI.push_back (serverURI);
-                                m_SANContent->m_contentType.push_back (contentType);
-                            }
-                        }
-                    }
-                }
-                // TODO: use the session ID set by the server if non-null
-            } else if (// relaxed checking for XML: ignore stuff like "; CHARSET=UTF-8"
-                       message_type.substr(0, message_type.find(';')) == TransportAgent::m_contentTypeSyncML ||
-                       message_type == TransportAgent::m_contentTypeSyncWBXML) {
-                // run a new SyncML session as server
-                serverMode = true;
-                if (m_peer.find("config") == m_peer.end() &&
-                    !m_peer["config"].empty()) {
-                    SE_LOG_DEBUG(NULL, NULL, "ignoring pre-chosen config '%s'",
-                                 m_peer["config"].c_str());
-                }
-
-                // peek into the data to extract the locURI = device ID,
-                // then use it to find the configuration
-                SyncContext::SyncMLMessageInfo info;
-                info = SyncContext::analyzeSyncMLMessage(reinterpret_cast<const char *>(message.second),
-                                                         message.first,
-                                                         message_type);
-                if (info.m_deviceID.empty()) {
-                    // TODO: proper exception
-                    throw runtime_error("could not extract LocURI=deviceID from initial message");
-                }
-                BOOST_FOREACH(const SyncConfig::ConfigList::value_type &entry,
-                              SyncConfig::getConfigs()) {
-                    SyncConfig peer(entry.first);
-                    if (info.m_deviceID == peer.getRemoteDevID()) {
-                        config = entry.first;
-                        SE_LOG_INFO(NULL, NULL, "matched %s against config %s (%s)",
-                                    info.toString().c_str(),
-                                    entry.first.c_str(),
-                                    entry.second.c_str());
-                        // Stop searching. Other peer configs might have the same remoteDevID.
-                        // We go with the first one found, which because of the sort order
-                        // of getConfigs() ensures that "foo" is found before "foo.old".
-                        break;
-                    }
-                }
-                if (config.empty()) {
-                    // TODO: proper exception
-                    throw runtime_error(string("no configuration found for ") +
-                                        info.toString());
-                }
-
-                // abort previous session of this client
-                m_server.killSessions(info.m_deviceID);
-                peerDeviceID = info.m_deviceID;
-            } else {
-                throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
-            }
-
-            // run session as client or server
-            m_state = PROCESSING;
-            m_session = Session::createSession(m_server,
-                                               peerDeviceID,
-                                               config,
-                                               m_sessionID);
-            if (serverMode) {
-                m_session->initServer(SharedBuffer(reinterpret_cast<const char *>(message.second),
-                                                   message.first),
-                                      message_type);
-            }
-            m_session->setServerAlerted(serverAlerted);
-            m_session->setPriority(Session::PRI_CONNECTION);
-            m_session->setStubConnection(myself);
-            // this will be reset only when the connection shuts down okay
-            // or overwritten with the error given to us in
-            // Connection::close()
-            m_session->setStubConnectionError("closed prematurely");
-            m_server.enqueue(m_session);
-            break;
-        }
-        case PROCESSING:
-            throw std::runtime_error("protocol error: already processing a message");
-            break;
-        case WAITING:
-            m_incomingMsg = SharedBuffer(reinterpret_cast<const char *>(message.second),
-                                         message.first);
-            m_incomingMsgType = message_type;
-            m_state = PROCESSING;
-            // get out of DBusTransportAgent::wait()
-            wakeupSession();
-            break;
-        case FINAL:
-            wakeupSession();
-            throw std::runtime_error("protocol error: final reply sent, no further message processing possible");
-        case DONE:
-            throw std::runtime_error("protocol error: connection closed, no further message processing possible");
-            break;
-        case FAILED:
-            throw std::runtime_error(m_failure);
-            break;
-        default:
-            throw std::runtime_error("protocol error: unknown internal state");
-            break;
-        }
-    } catch (const std::exception &error) {
-        failed(error.what());
-        throw;
-    } catch (...) {
-        failed("unknown exception in Connection::process");
-        throw;
-    }
+    defaultConnectToBoth(callback, m_connectionProxy->m_process.getMethod());
+    m_connectionProxy->m_process.start(msg,
+                                       msgType,
+                                       m_peer,
+                                       m_mustAuthenticate,
+                                       callback);
 }
 
-void Connection::close(const Caller_t &caller,
-                       bool normal,
-                       const std::string &error)
+void Connection::close(const GDBusCXX::Caller_t &caller, bool normal, const std::string &error,
+                       const boost::shared_ptr<GDBusCXX::Result0> &result)
 {
     SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s closes connection %s %s%s%s",
                  caller.c_str(),
@@ -354,155 +113,168 @@ void Connection::close(const Caller_t &caller,
         throw runtime_error("unknown client");
     }
 
-    if (!normal ||
-        m_state != FINAL) {
-        std::string err = error.empty() ?
-            "connection closed unexpectedly" :
-            error;
-        if (m_session) {
-            m_session->setStubConnectionError(err);
-        }
-        failed(err);
-    } else {
-        m_state = DONE;
-        if (m_session) {
-            m_session->setStubConnectionError("");
-        }
+    // Does the client have to own this resource to close it?
+    // Probably. We also need the smart pointer below.
+    boost::shared_ptr<Connection> myself =
+        boost::static_pointer_cast<Connection, Resource>(client->findResource(this));
+    if (!myself) {
+        throw runtime_error("client does not own connection");
     }
 
-    // remove reference to us from client, will destruct *this*
-    // instance!
-    client->detach(this);
+    // If the close() call succeeds, then we remove ourselves from
+    // the client. boost::signals2 tracking ensures that
+    // Client::detach() will not be called with a stale Client or
+    // Connection pointer.
+    //
+    // static_cast is necessary because detach() is ambiguous.
+    ProxyCallback0 callback(result);
+
+    callback.m_success->connect(ProxyCallback0::SuccessSignalType::slot_type(static_cast< void (Client::*) (Resource *)>(&Client::detach),
+                                                                             client.get(),
+                                                                             myself.get()).track(client).track(myself));
+    defaultConnectToFailure(callback, m_connectionProxy->m_close.getMethod());
+    m_connectionProxy->m_close.start(normal,
+                                     error,
+                                     callback);
 }
 
-void Connection::abort()
+void Connection::replyCb(const GDBusCXX::DBusArray<uint8_t> &reply, const std::string &replyType,
+                         const StringMap &meta, bool final, const std::string &session)
 {
-    if (!m_abortSent) {
-        sendAbort();
-        m_abortSent = true;
-        m_state = FAILED;
-    }
+    emitReply(reply, replyType, meta, final, session);
+    SE_LOG_INFO(NULL, NULL, "Connection.Reply signal received: replyType=%s, final=%s, session=%s",
+                replyType.c_str(), final ? "T" : "F", session.c_str());
 }
 
-void Connection::shutdown()
+void Connection::shutdownCb()
 {
-    // trigger removal of this connection by removing all
-    // references to it
+    SE_LOG_INFO(NULL, NULL, "Connection.Shutdown signal received: detaching connection from server.");
     m_server.detach(this);
 }
 
+void Connection::killSessionsCb(const string &peerDeviceId)
+{
+    SE_LOG_INFO(NULL, NULL, "Connection.KillSessions signal received: peerDeviceId=%s.", peerDeviceId.c_str());
+    m_server.killSessions(peerDeviceId, boost::function<void()>(&NullCb));
+}
+
+void Connection::abortCb()
+{
+    SE_LOG_INFO(NULL, NULL, "Connection.Abort signal received");
+
+    if(!m_abortSent) {
+        emitAbort();
+        m_abortSent = true;
+    }
+}
+
+void Connection::init(const Callback_t &callback)
+{
+    SE_LOG_INFO(NULL, NULL, "Connection (%s) forking...", getPath());
+
+    m_forkExecParent->m_onConnect.connect(boost::bind(&Connection::onConnect, this, _1));
+    m_forkExecParent->m_onReady.connect(boost::bind(&Connection::onReady, this, callback));
+    m_forkExecParent->m_onQuit.connect(boost::bind(&Connection::onQuit, this, _1));
+    m_forkExecParent->m_onFailure.connect(boost::bind(&Connection::onFailure, this, _2));
+    m_forkExecParent->addEnvVar("SYNCEVO_START_CONNECTION", "TRUE");
+    m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
+    m_forkExecParent->start();
+}
+
+void Connection::onConnect(const GDBusCXX::DBusConnectionPtr &conn)
+{
+    m_helper_conn = conn;
+}
+
+void Connection::onReady(const Callback_t &callback)
+{
+    SE_LOG_INFO(NULL, NULL, "ConnectionProxy interface ending with: %s", m_sessionID.c_str());
+    m_connectionProxy.reset(new ConnectionProxy(m_helper_conn, m_sessionID));
+
+    /* Enable public dbus interface for Connection. */
+    activate();
+
+    // Activate signal watch on helper signals.
+    m_connectionProxy->m_reply.activate       (boost::bind(&Connection::replyCb,
+                                                           this, _1, _2, _3 ,_4, _5));
+    m_connectionProxy->m_abort.activate       (boost::bind(&Connection::abortCb, this));
+    m_connectionProxy->m_shutdown.activate    (boost::bind(&Connection::shutdownCb, this));
+    m_connectionProxy->m_killSessions.activate(boost::bind(&Connection::killSessionsCb, this, _1));
+
+    SE_LOG_INFO(NULL, NULL, "onConnect called in Connection (path: %s interface: %s)",
+                m_connectionProxy->getPath(), m_connectionProxy->getInterface());
+
+    boost::shared_ptr<Connection> me(this);
+    // if callback owner won't copy this shared pointer
+    // then connection resource will be destroyed.
+    callback(me);
+}
+
+void Connection::onQuit(int status)
+{
+    m_server.checkQueue(boost::function<void()>(&NullCb));
+    SE_LOG_INFO(NULL, NULL, "dbus-helper quit with status: %d", status);
+}
+
+void Connection::onFailure(const std::string &error)
+{
+    m_server.checkQueue(boost::function<void()>(&NullCb));
+    SE_LOG_INFO(NULL, NULL, "dbus-helper failed with error: %s", error.c_str());
+}
+
+void Connection::createConnection(const Callback_t &callback,
+                                  Server &server,
+                                  const std::string &session_num,
+                                  const StringMap &peer,
+                                  bool must_authenticate)
+{
+    std::auto_ptr<Connection> resource(new Connection(server,
+                                                                      session_num,
+                                                                      peer,
+                                                                      must_authenticate));
+
+    resource->init(callback);
+    // init did not throw any exception, so we guess that child was spawned successfully.
+    // thus we release the auto_ptr, so it will not delete the resource.
+    resource.release();
+}
+
 Connection::Connection(Server &server,
-                       const DBusConnectionPtr &conn,
                        const std::string &sessionID,
                        const StringMap &peer,
                        bool must_authenticate) :
-    DBusObjectHelper(conn,
-                     std::string("/org/syncevolution/Connection/") + sessionID,
-                     "org.syncevolution.Connection",
+    DBusObjectHelper(server.getConnection(),
+                     std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID,
+                     SessionCommon::CONNECTION_IFACE,
                      boost::bind(&Server::autoTermCallback, &server)),
-    m_server(server),
+    Resource(server, "Connection"),
+    m_description(buildDescription(peer)),
+    m_path(std::string(SessionCommon::CONNECTION_PATH) + "/" + sessionID),
     m_peer(peer),
-    m_mustAuthenticate(must_authenticate),
-    m_state(SETUP),
     m_sessionID(sessionID),
-    m_loop(NULL),
-    sendAbort(*this, "Abort"),
+    m_mustAuthenticate(must_authenticate),
+    emitAbort(*this, "Abort"),
     m_abortSent(false),
-    reply(*this, "Reply"),
-    m_description(buildDescription(peer))
+    emitReply(*this, "Reply"),
+    m_forkExecParent(SyncEvo::ForkExecParent::create("syncevo-dbus-helper"))
 {
+    m_priority = Resource::PRI_CONNECTION;
+    // FIXME: A Connection is always marked as running for now as we
+    // have no way of knowing the state of the session started by the
+    // Connection.
+    m_isRunning = true;
+
     add(this, &Connection::process, "Process");
     add(this, &Connection::close, "Close");
-    add(sendAbort);
-    add(reply);
+    add(emitAbort);
+    add(emitReply);
+
     m_server.autoTermRef();
 }
 
 Connection::~Connection()
 {
-    SE_LOG_DEBUG(NULL, NULL, "done with connection to '%s'%s%s%s",
-                 m_description.c_str(),
-                 m_state == DONE ? ", normal shutdown" : " unexpectedly",
-                 m_failure.empty() ? "" : ": ",
-                 m_failure.c_str());
-    try {
-        if (m_state != DONE) {
-            abort();
-        }
-        // DBusTransportAgent waiting? Wake it up.
-        wakeupSession();
-        m_session.use_count();
-        m_session.reset();
-    } catch (...) {
-        // log errors, but do not propagate them because we are
-        // destructing
-        Exception::handle();
-    }
     m_server.autoTermUnref();
-}
-
-void Connection::ready()
-{
-    //if configuration not yet created
-    std::string configName = m_session->getConfigName();
-    SyncConfig config (configName);
-    if (!config.exists() && m_SANContent) {
-        SE_LOG_DEBUG (NULL, NULL, "Configuration %s not exists for a runnable session in a SAN context, create it automatically", configName.c_str());
-        ReadOperations::Config_t from;
-        const std::string templateName = "SyncEvolution";
-        // TODO: support SAN from other well known servers
-        ReadOperations ops(templateName, m_server);
-        ops.getConfig(true , from);
-        if (!m_peerBtAddr.empty()){
-            from[""]["SyncURL"] = string ("obex-bt://") + m_peerBtAddr;
-        }
-        m_session->setConfig (false, false, from);
-    }
-    const SyncContext context (configName);
-    std::list<std::string> sources = context.getSyncSources();
-
-    if (m_SANContent && !m_SANContent->m_syncType.empty()) {
-        // check what the server wants us to synchronize
-        // and only synchronize that
-        m_syncMode = "disabled";
-        for (size_t sync=0; sync<m_SANContent->m_syncType.size(); sync++) {
-            std::string syncMode = m_SANContent->m_syncType[sync];
-            std::string serverURI = m_SANContent->m_serverURI[sync];
-            //uint32_t contentType = m_SANContent->m_contentType[sync];
-            bool found = false;
-            BOOST_FOREACH(const std::string &source, sources) {
-                boost::shared_ptr<const PersistentSyncSourceConfig> sourceConfig(context.getSyncSourceConfig(source));
-                // prefix match because the local
-                // configuration might contain
-                // additional parameters (like date
-                // range selection for events)
-                if (boost::starts_with(sourceConfig->getURINonEmpty(), serverURI)) {
-                    SE_LOG_DEBUG(NULL, NULL,
-                                 "SAN entry #%d = source %s with mode %s",
-                                 (int)sync, source.c_str(), syncMode.c_str());
-                    m_sourceModes[source] = syncMode;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                SE_LOG_DEBUG(NULL, NULL,
-                             "SAN entry #%d with mode %s ignored because Server URI %s is unknown",
-                             (int)sync, syncMode.c_str(), serverURI.c_str());
-            }
-        }
-        if (m_sourceModes.empty()) {
-            SE_LOG_DEBUG(NULL, NULL,
-                    "SAN message with no known entries, falling back to default");
-            m_syncMode = "";
-        }
-    }
-
-    if (m_SANContent) {
-        m_session->setRemoteInitiated(true);
-    }
-    // proceed with sync now that our session is ready
-    m_session->sync(m_syncMode, m_sourceModes);
 }
 
 SE_END_CXX
