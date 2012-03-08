@@ -228,6 +228,7 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
     return conn;
 }
 
+
 boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &address, DBusErrorCXX *err)
 {
     GDBusServer *server = NULL;
