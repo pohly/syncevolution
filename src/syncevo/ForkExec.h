@@ -92,6 +92,12 @@ class ForkExec : private boost::noncopyable {
     typedef boost::signals2::signal<void (SyncMLStatus, const std::string &)> OnFailure;
     OnFailure m_onFailure;
 
+    /**
+     * Called when child deems itself as being ready.
+     */
+    typedef boost::signals2::signal<void ()> OnReady;
+    OnReady m_onReady;
+
  protected:
     ForkExec();
 };
@@ -186,11 +192,16 @@ class ForkExecParent : public ForkExec
     bool m_sigTermSent;
 
     GSource *m_watchChild;
+
+    unsigned int m_filter_id;
+
     static void watchChildCallback(GPid pid,
                                    gint status,
                                    gpointer data) throw();
 
     void newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw();
+    bool connectionFilter(GDBusCXX::DBusConnectionPtr &conn,
+                          GDBusCXX::DBusMessagePtr &message);
 };
 
 /**
@@ -224,10 +235,16 @@ class ForkExecChild : public ForkExec
      */
     static bool wasForked();
 
+    /**
+     * Sends a ready message to parent.
+     */
+    void ready();
+
  private:
     ForkExecChild();
 
     static const char *getParentDBusAddress();
+    GDBusCXX::DBusConnectionPtr m_conn;
 };
 
 SE_END_CXX
