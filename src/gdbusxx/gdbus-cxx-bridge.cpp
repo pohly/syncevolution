@@ -33,6 +33,127 @@ namespace GDBusCXX {
 MethodHandler::MethodMap MethodHandler::m_methodMap;
 boost::function<void (void)> MethodHandler::m_callback;
 
+struct FilterData
+{
+    FilterData(const DBusConnectionPtr::FilterFunc &filter)
+      : m_filter(filter) {}
+    DBusConnectionPtr::FilterFunc m_filter;
+};
+
+void filter_data_free(gpointer user_data)
+{
+    FilterData* filter_data(static_cast<FilterData*>(user_data));
+
+    delete filter_data;
+}
+
+GDBusMessage* filter_cb(GDBusConnection *conn,
+                        GDBusMessage *message,
+                        gboolean /* incoming */,
+                        gpointer user_data)
+{
+    if (user_data != NULL) {
+        FilterData* filter_data(static_cast<FilterData*>(user_data));
+        DBusMessagePtr message_ptr(message, true);
+        DBusConnectionPtr connection_ptr(conn, true);
+
+        if (!filter_data->m_filter(connection_ptr, message_ptr)) {
+            g_object_unref (message);
+            return NULL;
+        }
+    }
+    return message;
+}
+
+unsigned int DBusConnectionPtr::add_filter(const DBusConnectionPtr::FilterFunc &filter)
+{
+    FilterData* filter_data(new FilterData(filter));
+
+    return g_dbus_connection_add_filter(get(),
+                                        filter_cb,
+                                        static_cast<void*>(filter_data),
+                                        filter_data_free);
+}
+
+void DBusConnectionPtr::remove_filter(unsigned int id)
+{
+    g_dbus_connection_remove_filter(get(), id);
+}
+
+void DBusConnectionPtr::send(const DBusMessagePtr &message)
+{
+    GError* error(0);
+
+    g_dbus_connection_send_message(get(),
+                                   message.get(),
+                                   G_DBUS_SEND_MESSAGE_FLAGS_NONE,
+                                   0,
+                                   &error);
+
+    if (error) {
+        DBusErrorCXX error_cxx(error);
+
+        error_cxx.throwFailure("Sending message");
+    }
+}
+
+// static
+DBusMessagePtr DBusMessagePtr::create_empty_signal()
+{
+    GDBusMessage *message(g_dbus_message_new());
+
+    g_dbus_message_set_message_type(message, G_DBUS_MESSAGE_TYPE_SIGNAL);
+
+    return DBusMessagePtr(message, false);
+}
+void DBusMessagePtr::set_path(const std::string &path)
+{
+    g_dbus_message_set_path(get(), path.c_str());
+}
+
+std::string DBusMessagePtr::get_path() const
+{
+    const char *const path(g_dbus_message_get_path(get()));
+
+    if (path) {
+        return std::string(path);
+    } else {
+        return std::string();
+    }
+}
+
+void DBusMessagePtr::set_interface(const std::string &iface)
+{
+    g_dbus_message_set_interface(get(), iface.c_str());
+}
+
+std::string DBusMessagePtr::get_interface() const
+{
+    const char *const iface(g_dbus_message_get_interface(get()));
+
+    if (iface) {
+        return std::string(iface);
+    } else {
+        return std::string();
+    }
+}
+
+void DBusMessagePtr::set_member(const std::string &member)
+{
+    g_dbus_message_set_member(get(), member.c_str());
+}
+
+std::string DBusMessagePtr::get_member() const
+{
+    const char *const member(g_dbus_message_get_member(get()));
+
+    if (member) {
+        return std::string(member);
+    } else {
+        return std::string();
+    }
+}
+
 DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           const char *name,
                                           bool unshared,
