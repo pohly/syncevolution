@@ -19,7 +19,7 @@
 
 #include "ForkExec.h"
 
-#if defined(HAVE_GLIB) && defined(DBUS_SERVICE)
+#if defined(HAVE_GLIB)
 
 SE_BEGIN_CXX
 
@@ -324,4 +324,4 @@ void ForkExecChild::ready()
 
 SE_END_CXX
 
-#endif // HAVE_GLIB && DBUS_SERVICE
+#endif // HAVE_GLIB
