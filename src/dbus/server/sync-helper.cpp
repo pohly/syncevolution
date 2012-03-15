@@ -124,7 +124,7 @@ int main(int argc, char **argv, char **envp)
         forkexec->m_onConnect.connect(boost::bind(onConnect, _1, boost::ref(dbusObjectHelper),
                                                   session_config, session_id, start_session));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
-        forkexec->connect();
+        forkexec->connect(true);
 
         // If we are not connected this means onFailure or niam was
         // invoked. In either case, bail.
