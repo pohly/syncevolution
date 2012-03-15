@@ -67,9 +67,10 @@ class Server : public GDBusCXX::DBusObjectHelper,
 
     /**
      * Watch all files mapped into our address space. When
-     * modifications are seen (as during a package upgrade), queue a
-     * high priority session. This prevents running other sessions,
-     * which might not be able to execute correctly. For example, a
+     * modifications are seen (as during a package upgrade), sets
+     * m_shutdownRequested. This prevents adding new sessions and
+     * prevents running already queued ones, because future sessions
+     * might not be able to execute correctly without a restart. For example, a
      * sync with libsynthesis from 1.1 does not work with
      * SyncEvolution XML files from 1.2. The dummy session then waits
      * for the changes to settle (see
