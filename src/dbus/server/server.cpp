@@ -41,8 +41,8 @@ SE_BEGIN_CXX
 
 namespace {
 
-void resultDoneCb(const boost::shared_ptr<GDBusCXX::DBusObjectHelper> &helper,
-                  const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result)
+static void resultDoneCb(const boost::shared_ptr<GDBusCXX::DBusObjectHelper> &helper,
+                         const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result)
 {
   result->done(helper->getPath());
 }
