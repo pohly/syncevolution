@@ -167,6 +167,11 @@ void Server::connect(const Caller_t &caller,
                      const std::string &session,
                      const boost::shared_ptr<GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result)
 {
+    if (m_shutdownRequested) {
+        // don't allow new sessions, we cannot activate them
+        SE_THROW("server shutting down");
+    }
+
     if (!session.empty()) {
         // reconnecting to old connection is not implemented yet
         throw std::runtime_error("not implemented");
@@ -199,11 +204,16 @@ void Server::startSessionWithFlags(const Caller_t &caller,
                                    const std::vector<std::string> &flags,
                                    const boost::shared_ptr<GDBusCXX::Result1<DBusObject_t> > &result)
 {
+    if (m_shutdownRequested) {
+        // don't allow new sessions, we cannot activate them
+        SE_THROW("server shutting down");
+    }
+
     boost::shared_ptr<Client> client = addClient(caller, watch);
     std::string new_session = getNextSession();
     SessionResource::createSessionResource(boost::bind(&Server::startSessionCb, this, client, _1, result),
                                            *this,
-                                           "is this a client or server session?",
+                                           "is this a client or server session?", // TODO: what the heck?!
                                            server,
                                            new_session,
                                            flags);
@@ -346,6 +356,11 @@ bool Server::shutdown()
 
 void Server::fileModified()
 {
+    SE_LOG_DEBUG(NULL, NULL, "file modified, %s shutdown: %s, %s",
+                 m_shutdownRequested ? "continuing" : "initiating",
+                 m_shutdownTimer ? "timer already active" : "timer not yet active",
+                 m_activeResources.empty() ? "setting timer" : "waiting for active resource to finish");
+
     if (m_activeResources.empty()) {
         m_shutdownTimer.activate(SessionCommon::SHUTDOWN_QUIESCENCE_SECONDS,
                                  boost::bind(&Server::shutdown, this));
@@ -437,6 +452,12 @@ void Server::detach(Resource *resource)
 
 void Server::addResource(const Resource_t &resource, const boost::function<void()> &callback)
 {
+    if (m_shutdownRequested) {
+        // don't allow new resources, we cannot activate them
+        // TODO: throwing this exception kills syncevo-dbus-server because
+        // this code gets called in a helper thread; need to fix that
+        // SE_THROW("server shutting down");
+    }
     m_waitingResources.insert(resource);
     checkQueue(callback);
 }
@@ -602,6 +623,8 @@ void Server::removeResource(const Resource_t& resource, const boost::function<vo
     }
     if (m_shutdownRequested) {
         callback();
+        // Don't allow any of the pending resources to run. When the
+        // last client disconnects the server shuts down.
         if (m_activeResources.empty()) {
             shutdown();
         }
