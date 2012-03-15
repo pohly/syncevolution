@@ -86,11 +86,6 @@ class Server : public GDBusCXX::DBusObjectHelper,
      */
     Timeout m_shutdownTimer;
 
-    /**
-     * Event source that regularly polls network manager
-     */
-    GLibEvent m_pollConnman;
-
     /** Define types for Resource containers. */
     typedef boost::shared_ptr<Resource> Resource_t;
     typedef boost::weak_ptr<Resource> WeakResource_t;
