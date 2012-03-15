@@ -159,8 +159,7 @@ void SessionResource::init(const Callback_t &callback)
 {
     SE_LOG_INFO(NULL, NULL, "SessionResource (%s) forking...", getPath());
 
-    m_forkExecParent->m_onReady.connect(boost::bind(&SessionResource::onSessionReady, this, callback));
-    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1));
+    m_forkExecParent->m_onConnect.connect(boost::bind(&SessionResource::onSessionConnect, this, _1, callback));
     m_forkExecParent->m_onQuit.connect(boost::bind(&SessionResource::onQuit, this, _1));
     m_forkExecParent->m_onFailure.connect(boost::bind(&SessionResource::onFailure, this, _2));
     m_forkExecParent->addEnvVar("SYNCEVO_SESSION_ID", m_sessionID);
@@ -371,15 +370,10 @@ void SessionResource::progressChangedCb(int32_t error, const SessionCommon::Sour
     emitProgress(error, sources);
 }
 
-void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn)
-{
-    m_helper_conn = conn;
-}
-
-void SessionResource::onSessionReady(const Callback_t &callback)
+void SessionResource::onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn, const Callback_t &callback)
 {
     SE_LOG_INFO(NULL, NULL, "SessionProxy interface end with: %s", m_sessionID.c_str());
-    m_sessionProxy.reset(new SessionProxy(m_helper_conn, m_sessionID));
+    m_sessionProxy.reset(new SessionProxy(conn, m_sessionID));
 
     /* Enable public dbus interface for Session. */
     activate();

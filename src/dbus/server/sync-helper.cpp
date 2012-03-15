@@ -132,11 +132,6 @@ int main(int argc, char **argv, char **envp)
             SE_LOG_DEBUG(NULL, NULL, "%s: Could not connect to parent. Terminating.",  argv[0]);
             return 1;
         }
-        try {
-            forkexec->ready();
-        } catch (const std::runtime_error &ex) {
-            SE_LOG_DEBUG(NULL, NULL, "Failed to send ready message: %s", ex.what());
-        }
 
         SE_LOG_DEBUG(NULL, NULL, "%s: Helper (pid %d) finished setup.", argv[0], getpid());
 

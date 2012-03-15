@@ -170,8 +170,6 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
     boost::scoped_ptr<SessionProxy> m_sessionProxy;
 
-    GDBusCXX::DBusConnectionPtr m_helper_conn;
-
     /**
      * True once done() is called.
      */
@@ -196,8 +194,7 @@ class SessionResource : public GDBusCXX::DBusObjectHelper,
     GMainLoop *getLoop() { return m_server.getLoop(); }
 
     // Child session handlers
-    void onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn);
-    void onSessionReady(const Callback_t &callback);
+    void onSessionConnect(const GDBusCXX::DBusConnectionPtr &conn, const Callback_t &callback);
     void onQuit(int status);
     void onFailure(const std::string &error);
 

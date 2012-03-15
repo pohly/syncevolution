@@ -100,7 +100,6 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
 
     boost::shared_ptr<SyncEvo::ForkExecParent> m_forkExecParent;
     boost::scoped_ptr<ConnectionProxy> m_connectionProxy;
-    GDBusCXX::DBusConnectionPtr m_helper_conn;
 
     /** Connection.Process */
     void process(const GDBusCXX::Caller_t &caller, const GDBusCXX::DBusArray<uint8_t> &msg,
@@ -135,8 +134,7 @@ class ConnectionResource : public GDBusCXX::DBusObjectHelper,
     void killSessionsCb(const std::string &peerDeviceId);
 
     // Child process handlers
-    void onConnect(const GDBusCXX::DBusConnectionPtr &conn);
-    void onReady(const Callback_t &callback);
+    void onConnect(const GDBusCXX::DBusConnectionPtr &conn, const Callback_t &callback);
     void onQuit(int status);
     void onFailure(const std::string &error);
 };
