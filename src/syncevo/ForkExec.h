@@ -217,11 +217,16 @@ class ForkExecChild : public ForkExec
     static boost::shared_ptr<ForkExecChild> create();
 
     /**
-     * initiates connection to parent, connect to ForkExec::m_onConnect
+     * Initiates connection to parent, connect to ForkExec::m_onConnect
      * before calling this function to be notified of success and
-     * ForkExec::m_onFailure for failures
+     * ForkExec::m_onFailure for failures. There is a possibility to create
+     * a delayed DBus connection, i.e. a connection that does not process
+     * messages. In this case connection will be undelayed right after
+     * onConnect signal call is finished.
+     *
+     * @param delayed Pass @c true to create a delayed DBus connection.
      */
-    void connect();
+    void connect(bool delayed = false);
 
     /**
      * true if the current process was created by ForkExecParent

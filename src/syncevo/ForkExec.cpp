@@ -250,7 +250,7 @@ boost::shared_ptr<ForkExecChild> ForkExecChild::create()
     return forkexec;
 }
 
-void ForkExecChild::connect()
+void ForkExecChild::connect(bool delayed /* = false */)
 {
     const char *address = getParentDBusAddress();
     if (!address) {
@@ -261,11 +261,13 @@ void ForkExecChild::connect()
                  address);
     GDBusCXX::DBusErrorCXX dbusError;
     GDBusCXX::DBusConnectionPtr conn = dbus_get_bus_connection(address,
-                                                               &dbusError);
+                                                               &dbusError,
+                                                               delayed);
     if (!conn) {
         dbusError.throwFailure("connecting to server");
     }
     m_onConnect(conn);
+    dbus_bus_connection_undelay(conn);
 }
 
 bool ForkExecChild::wasForked()
