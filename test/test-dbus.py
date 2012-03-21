@@ -405,6 +405,7 @@ class DBusUtil(Timeout):
         to copy the reference directory tree."""
         self.own_xdg = own_xdg
         env = copy.deepcopy(os.environ)
+        env["G_DBUS_DEBUG"] = os.environ.get("TEST_DBUS_GDBUS_DEBUG", "") # for example, "message", see http://developer.gnome.org/gio/unstable/ch03.html
         if own_xdg:
             shutil.rmtree(xdg_root, True)
             env["XDG_DATA_HOME"] = xdg_root + "/data"
