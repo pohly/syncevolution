@@ -772,7 +772,7 @@ class DBusUtil(Timeout):
             if os.access(sourcepath, os.F_OK):
                 shutil.copytree(sourcepath, destpath)
 
-    def checkSync(self, expectedError=0, expectedResult=0):
+    def checkSync(self, expectedError=0, expectedResult=0, reportOptional=False):
         # check recorded events in DBusUtil.events, first filter them
         statuses = []
         progresses = []
@@ -829,6 +829,9 @@ class DBusUtil(Timeout):
 
         # now check that report is sane
         reports = self.session.GetReports(0, 100, utf8_strings=True)
+        if reportOptional and len(reports) == 0:
+            # no report was written
+            return
         self.assertEqual(len(reports), 1)
         if expectedResult:
             self.assertEqual(int(reports[0]["status"]), expectedResult)
@@ -3207,9 +3210,10 @@ END:VCARD''')
         self.session.Abort()
         loop.run()
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
-        report = self.checkSync(20017, 20017) # aborted
-        self.assertFalse("error" in report) # ... but without error message
-        self.assertEqual(report["source-addressbook-status"], "0") # unknown status for source (aborted early)
+        report = self.checkSync(20017, 20017, True) # aborted, with or without report
+        if report:
+            self.assertFalse("error" in report) # ... but without error message
+            self.assertEqual(report["source-addressbook-status"], "0") # unknown status for source (aborted early)
 
     def run(self, result):
         self.runTest(result)
