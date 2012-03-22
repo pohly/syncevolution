@@ -504,6 +504,13 @@ class Exception : public std::runtime_error
     static SyncMLStatus handle(Logger *logger, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, logger, NULL, Logger::ERROR, flags); }
     static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, NULL, &explanation, Logger::ERROR, flags); }
     static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }
+
+    /**
+     * Tries to identify exception class based on explanation string created by
+     * handle(). If successful, that exception is throw with the same
+     * attributes as in the original exception. Otherwise parse() returns.
+     */
+    static void parse(const std::string &explanation);
 };
 
 /**
