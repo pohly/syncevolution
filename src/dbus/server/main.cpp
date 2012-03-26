@@ -25,9 +25,12 @@
 
 #include "server.h"
 #include "restart.h"
+#include "session-common.h"
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/SuspendFlags.h>
+#include <syncevo/LogRedirect.h>
+#include <syncevo/LogSyslog.h>
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
@@ -35,7 +38,8 @@ using namespace GDBusCXX;
 namespace {
     GMainLoop *loop = NULL;
     bool shutdownRequested = false;
-}
+    const char * const execName = "syncevo-dbus-server";
+    const char * const debugEnv = "SYNCEVOLUTION_DEBUG";
 
 void niam(int sig)
 {
@@ -44,7 +48,7 @@ void niam(int sig)
     g_main_loop_quit (loop);
 }
 
-static bool parseDuration(int &duration, const char* value)
+bool parseDuration(int &duration, const char* value)
 {
     if(value == NULL) {
         return false;
@@ -57,6 +61,18 @@ static bool parseDuration(int &duration, const char* value)
         return false;
     }
 }
+
+LoggerBase* getRedirectLogger()
+{
+    return new LogRedirect(true);
+}
+
+LoggerBase* getSyslogLogger()
+{
+    return new LoggerSyslog(execName);
+}
+
+} // anonymous namespace
 
 int main(int argc, char **argv, char **envp)
 {
@@ -84,27 +100,33 @@ int main(int argc, char **argv, char **envp)
         opt++;
     }
     try {
-        SyncContext::initMain("syncevo-dbus-server");
+        SyncContext::initMain(execName);
 
         loop = g_main_loop_new (NULL, FALSE);
 
         setvbuf(stderr, NULL, _IONBF, 0);
         setvbuf(stdout, NULL, _IONBF, 0);
 
-        LogRedirect redirect(true);
+        const char *debugVar(getenv(debugEnv));
+        const bool debugEnabled(debugVar && *debugVar);
+
+        boost::shared_ptr<LoggerBase> logger(debugEnabled ?
+                                             getRedirectLogger() :
+                                             getSyslogLogger());
 
         // make daemon less chatty - long term this should be a command line option
-        LoggerBase::instance().setLevel(getenv("SYNCEVOLUTION_DEBUG") ?
+        LoggerBase::instance().setLevel(debugEnabled ?
                                         LoggerBase::DEBUG :
                                         LoggerBase::INFO);
 
         SE_LOG_DEBUG(NULL, NULL, "syncevo-dbus-server: catch SIGINT/SIGTERM in our own shutdown function");
         signal(SIGTERM, niam);
         signal(SIGINT, niam);
+        boost::shared_ptr<SuspendFlags::Guard> guard = SuspendFlags::getSuspendFlags().activate();
 
         DBusErrorCXX err;
         DBusConnectionPtr conn = dbus_get_bus_connection("SESSION",
-                                                         "org.syncevolution",
+                                                         SessionCommon::SERVICE_NAME,
                                                          true,
                                                          &err);
         if (!conn) {
@@ -117,7 +139,7 @@ int main(int argc, char **argv, char **envp)
         server.activate();
 
         SE_LOG_INFO(NULL, NULL, "%s: ready to run",  argv[0]);
-        server.run(redirect);
+        server.run();
         SE_LOG_INFO(NULL, NULL, "%s: terminating",  argv[0]);
         return 0;
     } catch ( const std::exception &ex ) {

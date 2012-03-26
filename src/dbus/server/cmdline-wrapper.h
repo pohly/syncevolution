@@ -23,6 +23,8 @@
 #include <syncevo/Cmdline.h>
 
 #include "dbus-sync.h"
+#include "exceptions.h"
+#include "session-helper.h"
 
 SE_BEGIN_CXX
 
@@ -81,17 +83,17 @@ class CmdlineWrapper
      * This can check 'abort' and 'suspend' command from clients.
      */
     class DBusCmdline : public Cmdline {
-        Session &m_session;
+        SessionHelper &m_helper;
     public:
-        DBusCmdline(Session &session,
+        DBusCmdline(SessionHelper &helper,
                     const vector<string> &args,
                     ostream &out,
                     ostream &err)
-            :Cmdline(args, out, err), m_session(session)
+            :Cmdline(args, out, err), m_helper(helper)
         {}
 
         SyncContext* createSyncClient() {
-            return new DBusSync(m_server, m_session);
+            return new DBusSync(SessionCommon::SyncParams(), m_helper);
         }
     };
 
@@ -108,16 +110,16 @@ public:
      * command line is output to this stream for it is
      * different from Logger::ERROR.
      */
-    CmdlineWrapper(Session &session,
+    CmdlineWrapper(SessionHelper &helper,
                    const vector<string> &args,
                    const map<string, string> &vars)
         : m_cmdlineOutStream(&m_outStreamBuf),
-        m_cmdline(session, args, m_cmdlineOutStream, m_cmdlineOutStream),
+        m_cmdline(helper, args, m_cmdlineOutStream, m_cmdlineOutStream),
         m_envVars(vars)
     {}
 
     bool parse() { return m_cmdline.parse(); }
-    void run(LogRedirect &redirect)
+    void run()
     {
         //temporarily set environment variables and restore them after running
         list<boost::shared_ptr<ScopedEnvChange> > changes;
@@ -126,18 +128,9 @@ public:
         }
         // exceptions must be handled (= printed) before returning,
         // so that our client gets the output
-        try {
-            if (!m_cmdline.run()) {
-                SE_THROW_EXCEPTION(DBusSyncException, "command line execution failure");
-            }
-
-        } catch (...) {
-            redirect.flush();
-            throw;
+        if (!m_cmdline.run()) {
+            SE_THROW_EXCEPTION(DBusSyncException, "command line execution failure");
         }
-        // always forward all currently pending redirected output
-        // before closing the session
-        redirect.flush();
     }
 
     bool configWasModified() { return m_cmdline.configWasModified(); }
