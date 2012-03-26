@@ -882,7 +882,7 @@ struct MethodHandler
 
         // We are calling callback because we want to keep server alive as long
         // as possible. This callback is in fact delaying server's autotermination.
-        if (!m_callback.empty()) {
+        if (m_callback) {
             m_callback();
         }
 
@@ -4032,7 +4032,9 @@ struct VoidTraits : public TraitsBase<boost::function<void (const std::string &)
                 error_msg = error->message;
             }
         }
-        (data->m_callback)(error_msg);
+        if (data->m_callback) {
+            data->m_callback(error_msg);
+        }
         delete data;
         if (error != NULL) {
             g_error_free (error);
@@ -4069,7 +4071,9 @@ struct Ret1Traits : public TraitsBase<boost::function<void (const R1 &, const st
         }
 
         //unmarshal the return results and call user callback
-        (data->m_callback)(r, error_msg);
+        if (data->m_callback) {
+            data->m_callback(r, error_msg);
+        }
         delete data;
         if (error != NULL) {
             g_error_free (error);
@@ -4107,7 +4111,9 @@ struct Ret2Traits : public TraitsBase<boost::function<void (const R1 &, const R2
         }
 
         //unmarshal the return results and call user callback
-        (data->m_callback)(r1, r2, error_msg);
+        if (data->m_callback) {
+            data->m_callback(r1, r2, error_msg);
+        }
         delete data;
         if (error != NULL) {
             g_error_free (error);
@@ -4146,7 +4152,9 @@ struct Ret3Traits : public TraitsBase<boost::function<void (const R1 &, const R2
         }
 
         //unmarshal the return results and call user callback
-        (data->m_callback)(r1, r2, r3, error_msg);
+        if (data->m_callback) {
+            data->m_callback(r1, r2, r3, error_msg);
+        }
         delete data;
         if (error != NULL) {
             g_error_free (error);
