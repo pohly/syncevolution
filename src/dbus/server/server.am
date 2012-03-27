@@ -32,7 +32,7 @@ src_dbus_server_server_h_files = \
   src/dbus/server/cmdline-wrapper.h \
   src/dbus/server/resource.h \
   src/dbus/server/restart.h \
-  src/dbus/server/session-listener.h \
+  src/dbus/server/session-common.h \
   src/dbus/server/source-progress.h \
   src/dbus/server/source-status.h \
   src/dbus/server/timeout.h \
@@ -65,6 +65,7 @@ src_dbus_server_dbus_helper_h_files = \
 src_dbus_server_libsyncevodbushelper_la_SOURCES = \
   $(src_dbus_server_dbus_helper_h_files) \
   $(src_dbus_server_dbus_helper_cpp_files) \
+  src/dbus/server/session-common.h \
   src/dbus/server/sync-helper.cpp
 
 src_dbus_server_libsyncevodbushelper_la_LIBADD = $(DBUS_LIBS)
