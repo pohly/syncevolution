@@ -488,6 +488,8 @@ class EmitSignal0
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () ()
     {
         DBusMessagePtr msg(g_dbus_message_new_signal(m_object.getPath(),
@@ -555,6 +557,8 @@ class EmitSignal1
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1)
     {
         DBusMessagePtr msg(g_dbus_message_new_signal(m_object.getPath(),
@@ -600,6 +604,8 @@ class EmitSignal2
         m_object(object),
         m_signal(signal)
     {}
+
+    typedef void result_type;
 
     void operator () (A1 a1, A2 a2)
     {
@@ -647,6 +653,8 @@ class EmitSignal3
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2, A3 a3)
     {
         DBusMessagePtr msg(g_dbus_message_new_signal(m_object.getPath(),
@@ -692,6 +700,8 @@ class EmitSignal4
         m_object(object),
         m_signal(signal)
     {}
+
+    typedef void result_type;
 
     void operator () (A1 a1, A2 a2, A3 a3, A4 a4)
     {
@@ -740,6 +750,8 @@ class EmitSignal5
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2, A3 a3, A4 a4, A5 a5)
     {
         DBusMessagePtr msg(g_dbus_message_new_signal(m_object.getPath(),
@@ -787,6 +799,8 @@ class EmitSignal6
         m_object(object),
         m_signal(signal)
     {}
+
+    typedef void result_type;
 
     void operator () (A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6)
     {
