@@ -2441,7 +2441,7 @@ class TestSessionAPIsReal(unittest.TestCase, DBusUtil):
 
     def progressChanged(self, *args):
         # subclass specifies its own callback for ProgressChanged signals
-        percentage = args[0]
+        percentage = args[0][0]
         # make sure sync is really running
         if percentage > 20:
             if self.operation == "abort":
