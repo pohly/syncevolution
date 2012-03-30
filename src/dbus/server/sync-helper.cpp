@@ -76,6 +76,7 @@ int main(int argc, char **argv, char **envp)
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     boost::shared_ptr<SuspendFlags::Guard> guard = s.activate();
 
+    // Redirect both stdout and stderr.
     LogRedirect redirect(true);
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -84,8 +85,11 @@ int main(int argc, char **argv, char **envp)
         if (getenv("SYNCEVOLUTION_DEBUG")) {
             LoggerBase::instance().setLevel(Logger::DEBUG);
         }
-        // process name will be set to target config name once it is known
-        Logger::setProcessName("syncevo-dbus-helper");
+        // syncevo-dbus-helper produces the output which is of most
+        // interest to users, and therefore it is allowed to print
+        // [INFO/ERROR/DEBUG] without including a process name in
+        // the brackets, like the other processes do.
+        // Logger::setProcessName("syncevo-dbus-helper");
 
         boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
 
@@ -133,7 +137,7 @@ int main(int argc, char **argv, char **envp)
             raise(SIGTERM);
         }
 
-        SE_LOG_INFO(NULL, NULL, "terminating normally");
+        SE_LOG_DEBUG(NULL, NULL, "terminating normally");
         return 0;
     } catch ( const std::exception &ex ) {
         SE_LOG_ERROR(NULL, NULL, "%s", ex.what());

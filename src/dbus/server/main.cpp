@@ -110,6 +110,12 @@ int main(int argc, char **argv, char **envp)
                                         LoggerBase::DEBUG :
                                         LoggerBase::INFO);
 
+        // syncevo-dbus-server should hardly ever produce output that
+        // is relevant for end users, so include the somewhat cryptic
+        // process name for developers in this process, and not in
+        // syncevo-dbus-helper.
+        Logger::setProcessName("syncevo-dbus-server");
+
         SE_LOG_DEBUG(NULL, NULL, "syncevo-dbus-server: catch SIGINT/SIGTERM in our own shutdown function");
         signal(SIGTERM, niam);
         signal(SIGINT, niam);
@@ -129,14 +135,14 @@ int main(int argc, char **argv, char **envp)
         boost::scoped_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
         server->activate();
 
-        SE_LOG_INFO(NULL, NULL, "%s: ready to run",  argv[0]);
+        SE_LOG_INFO(NULL, NULL, "ready to run");
         server->run();
-        SE_LOG_INFO(NULL, NULL, "%s: cleaning up",  argv[0]);
+        SE_LOG_DEBUG(NULL, NULL, "cleaning up");
         server.reset();
         conn.reset();
         obj.reset();
         guard.reset();
-        SE_LOG_INFO(NULL, NULL, "%s: terminating",  argv[0]);
+        SE_LOG_INFO(NULL, NULL, "terminating");
         return 0;
     } catch ( const std::exception &ex ) {
         SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
