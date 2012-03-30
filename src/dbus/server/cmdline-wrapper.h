@@ -93,7 +93,9 @@ class CmdlineWrapper
         {}
 
         SyncContext* createSyncClient() {
-            return new DBusSync(SessionCommon::SyncParams(), m_helper);
+            SessionCommon::SyncParams params;
+            params.m_config = getConfigName();
+            return new DBusSync(params, m_helper);
         }
     };
 
