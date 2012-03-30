@@ -3271,6 +3271,17 @@ SyncMLStatus SyncContext::doSync()
         signalGuard = SuspendFlags::getSuspendFlags().activate();
     }
 
+    // delay the sync for debugging purposes
+    const char *delay = getenv("SYNCEVOLUTION_SYNC_DELAY");
+    if (delay) {
+        sleep(atoi(delay));
+    }
+
+    if (checkForSuspend() ||
+        checkForAbort()) {
+        return (SyncMLStatus)sysync::LOCERR_USERABORT;
+    }
+
     SyncMLStatus status = STATUS_OK;
     std::string s;
 
@@ -3300,6 +3311,11 @@ SyncMLStatus SyncContext::doSync()
             //by pass the exception if we will try again with legacy SANFormat
         }
 
+        if (checkForSuspend() ||
+            checkForAbort()) {
+            return (SyncMLStatus)sysync::LOCERR_USERABORT;
+        }
+
         if (! status) {
             if (sanFormat.empty()) {
                 SE_LOG_DEBUG (NULL, NULL, "Server Alerted Sync init with SANFormat %d failed, trying with legacy format", version);
@@ -3313,6 +3329,11 @@ SyncMLStatus SyncContext::doSync()
                 throwError ("Server Alerted Sync init failed");
             }
         }
+    }
+
+    if (checkForSuspend() ||
+        checkForAbort()) {
+        return (SyncMLStatus)sysync::LOCERR_USERABORT;
     }
 
     // re-init engine with all sources configured
