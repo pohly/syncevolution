@@ -124,7 +124,7 @@ int main(int argc, char **argv, char **envp)
             err.throwFailure("dbus_get_bus_connection()", " failed - server already running?");
         }
         // make this object the main owner of the connection
-        DBusObject obj(conn, "foo", "bar", true);
+        boost::scoped_ptr<DBusObject> obj(new DBusObject(conn, "foo", "bar", true));
 
         boost::scoped_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
         server->activate();
@@ -133,6 +133,8 @@ int main(int argc, char **argv, char **envp)
         server->run();
         SE_LOG_INFO(NULL, NULL, "%s: cleaning up",  argv[0]);
         server.reset();
+        conn.reset();
+        obj.reset();
         guard.reset();
         SE_LOG_INFO(NULL, NULL, "%s: terminating",  argv[0]);
         return 0;
