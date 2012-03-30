@@ -695,6 +695,13 @@ void Session::doneCb(bool success) throw()
                      m_setConfig ? "modified" : "not modified",
                      m_error);
         m_doneSignal((SyncMLStatus)m_error);
+
+        // now also kill helper
+        m_helper.reset();
+        if (m_forkExecParent) {
+            m_forkExecParent->stop(SIGTERM);
+        }
+
         m_server.removeSyncSession(this);
         m_server.dequeue(this);
     } catch (...) {
