@@ -30,6 +30,8 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+class LogRedirect;
+
 /**
  * Waits for requests via the internal D-Bus connection in run(), sent
  * by the Session class in syncevo-dbus-server. Then for each request
@@ -38,10 +40,12 @@ SE_BEGIN_CXX
  * traditional syncevo-dbus-server did.
  */
 class SessionHelper : public GDBusCXX::DBusObjectHelper,
+    private LoggerBase,
     private boost::noncopyable
 {
     GMainLoop *m_loop;
     GDBusCXX::DBusConnectionPtr m_conn;
+    LogRedirect &m_parentLogger;
     boost::function<bool ()> m_operation;
 
     /** valid during doSync() */
@@ -73,11 +77,28 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     /** SessionHelper.PasswordResponse */
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
 
+    // Logger implementation -> output via D-Bus emitLogOutput
+    virtual void messagev(Level level,
+                          const char *prefix,
+                          const char *file,
+                          int line,
+                          const char *function,
+                          const char *format,
+                          va_list args);
+    virtual bool isProcessSafe() const { return false; }
+
  public:
     SessionHelper(GMainLoop *loop,
-                  const GDBusCXX::DBusConnectionPtr &conn);
+                  const GDBusCXX::DBusConnectionPtr &conn,
+                  LogRedirect &parentLogger);
+    ~SessionHelper();
+
     void run();
     GMainLoop *getLoop() const { return m_loop; }
+
+    /** Server.LogOutput for the session D-Bus object */
+    GDBusCXX::EmitSignal2<std::string,
+        std::string> emitLogOutput;
 
     /** SyncContext::displaySyncProgress */
     GDBusCXX::EmitSignal4<sysync::TProgressEventEnum,
