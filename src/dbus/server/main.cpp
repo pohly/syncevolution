@@ -62,16 +62,6 @@ bool parseDuration(int &duration, const char* value)
     }
 }
 
-LoggerBase* getRedirectLogger()
-{
-    return new LogRedirect(true);
-}
-
-LoggerBase* getSyslogLogger()
-{
-    return new LoggerSyslog(execName);
-}
-
 } // anonymous namespace
 
 int main(int argc, char **argv, char **envp)
@@ -110,9 +100,10 @@ int main(int argc, char **argv, char **envp)
         const char *debugVar(getenv(debugEnv));
         const bool debugEnabled(debugVar && *debugVar);
 
+        // TODO: redirect output *and* log it via syslog?!
         boost::shared_ptr<LoggerBase> logger(debugEnabled ?
-                                             getRedirectLogger() :
-                                             getSyslogLogger());
+                                             static_cast<LoggerBase *>(new LogRedirect(true)) :
+                                             static_cast<LoggerBase *>(new LoggerSyslog(execName)));
 
         // make daemon less chatty - long term this should be a command line option
         LoggerBase::instance().setLevel(debugEnabled ?
