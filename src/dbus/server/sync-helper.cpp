@@ -43,9 +43,11 @@ namespace {
         failed = true;
     }
 
-    void onConnect(const DBusConnectionPtr &conn, boost::shared_ptr<SessionHelper> &helper)
+    void onConnect(const DBusConnectionPtr &conn,
+                   LogRedirect &parentLogger,
+                   boost::shared_ptr<SessionHelper> &helper)
     {
-        helper.reset(new SessionHelper(loop, conn));
+        helper.reset(new SessionHelper(loop, conn, parentLogger));
     }
 
     void onAbort()
@@ -95,7 +97,7 @@ int main(int argc, char **argv, char **envp)
 
         boost::shared_ptr<SessionHelper> helper;
         bool failed = false;
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, boost::ref(helper)));
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, boost::ref(redirect), boost::ref(helper)));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2, boost::ref(failed)));
         forkexec->connect();
 

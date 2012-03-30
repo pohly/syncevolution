@@ -69,6 +69,7 @@ public:
          /* m_setActive        (*this, "SetActive"), */
          /* m_statusChanged    (*this, "StatusChanged", false), */
          /* m_progressChanged  (*this, "ProgressChanged", false), */
+    m_logOutput(*this, "LogOutput", false),
     m_syncProgress(*this, "SyncProgress", false),
     m_sourceProgress(*this, "SourceProgress", false),
     m_waiting(*this, "Waiting", false),
@@ -94,6 +95,7 @@ public:
     /* GDBusCXX::DBusClientCall0                                    m_setActive; */
     /* GDBusCXX::SignalWatch3<std::string, uint32_t, */
     /*                        SessionCommon::SourceStatuses_t>      m_statusChanged; */
+    GDBusCXX::SignalWatch2<std::string, std::string> m_logOutput;
     GDBusCXX::SignalWatch4<sysync::TProgressEventEnum,
                            int32_t, int32_t, int32_t> m_syncProgress;
     GDBusCXX::SignalWatch6<sysync::TProgressEventEnum,
@@ -800,6 +802,20 @@ void Session::useHelper2(const SimpleResult &result, const boost::signals2::conn
         // Verify that helper is really ready. Might not be the
         // case when something internally failed in onConnect.
         if (m_helper) {
+            // Resend all output from helper via the server's own
+            // LogOutput signal, with the session's object path as
+            // first parameter.
+            //
+            // TODO: is there any output in syncevo-dbus-server which
+            // should be treated as output of the session? It would have
+            // to be sent via the LogOutput signal with the session's
+            // object path, instead of the server's. The log level check
+            // also might have to be done differently.
+            m_helper->m_logOutput.activate(boost::bind(boost::ref(m_server.logOutput),
+                                                       getPath(),
+                                                       _1,
+                                                       _2));
+
             result.done();
         } else {
             SE_THROW("internal error, helper not ready");

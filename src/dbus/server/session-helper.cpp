@@ -30,7 +30,8 @@
 SE_BEGIN_CXX
 
 SessionHelper::SessionHelper(GMainLoop *loop,
-                             const GDBusCXX::DBusConnectionPtr &conn) :
+                             const GDBusCXX::DBusConnectionPtr &conn,
+                             LogRedirect &parentLogger) :
     GDBusCXX::DBusObjectHelper(conn,
                                SessionCommon::HELPER_PATH,
                                SessionCommon::HELPER_IFACE,
@@ -38,6 +39,8 @@ SessionHelper::SessionHelper(GMainLoop *loop,
                                true), // direct connection, close it when done
     m_loop(loop),
     m_conn(conn),
+    m_parentLogger(parentLogger),
+    emitLogOutput(*this, "LogOutput"),
     emitSyncProgress(*this, "SyncProgress"),
     emitSourceProgress(*this, "SourceProgress"),
     emitWaiting(*this, "Waiting"),
@@ -53,6 +56,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(this, &SessionHelper::passwordResponse, "PasswordResponse");
     add(this, &SessionHelper::storeMessage, "StoreMessage");
     add(this, &SessionHelper::connectionState, "ConnectionState");
+    add(emitLogOutput);
     add(emitSyncProgress);
     add(emitSourceProgress);
     add(emitWaiting);
@@ -62,6 +66,42 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(emitMessage);
     add(emitShutdown);
     activate();
+    LoggerBase::pushLogger(this);
+}
+
+SessionHelper::~SessionHelper()
+{
+    LoggerBase::popLogger();
+}
+
+void SessionHelper::messagev(Level level,
+                             const char *prefix,
+                             const char *file,
+                             int line,
+                             const char *function,
+                             const char *format,
+                             va_list args)
+{
+    static bool dbg = getenv("SYNCEVOLUTION_DEBUG") != NULL;
+
+    if (dbg) {
+        // let parent LogRedirect handle the output *in addition* to
+        // logging via D-Bus
+        va_list argsCopy;
+        va_copy(argsCopy, args);
+        m_parentLogger.messagev(level, prefix, file, line, function, format, argsCopy);
+        va_end(argsCopy);
+    } else {
+        // Only flush parent logger, to capture output sent to
+        // stdout/stderr by some library and send it via D-Bus
+        // (recursively!)  before printing out own, new output.
+        m_parentLogger.flush();
+    }
+
+    // send to parent
+    string log = StringPrintfV(format, args);
+    string strLevel = Logger::levelToStr(level);
+    emitLogOutput(strLevel, log);
 }
 
 void SessionHelper::run()
