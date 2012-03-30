@@ -70,7 +70,7 @@ namespace SessionCommon
             "DONE",
             "FAILED"
         };
-        return state >= SETUP && state < FAILED ?
+        return state >= SETUP && state <= FAILED ?
             strings[state] :
             "???";
     }
