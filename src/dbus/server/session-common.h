@@ -85,6 +85,12 @@ namespace SessionCommon
      */
     struct SyncParams
     {
+        SyncParams() :
+           m_serverMode(false),
+           m_serverAlerted(false),
+           m_remoteInitiated(false)
+        {}
+
         std::string m_config;
         std::string m_mode;
         SourceModes_t m_sourceModes;
