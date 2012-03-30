@@ -135,11 +135,14 @@ int main(int argc, char **argv, char **envp)
         // make this object the main owner of the connection
         DBusObject obj(conn, "foo", "bar", true);
 
-        SyncEvo::Server server(loop, shutdownRequested, restart, conn, duration);
-        server.activate();
+        boost::scoped_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
+        server->activate();
 
         SE_LOG_INFO(NULL, NULL, "%s: ready to run",  argv[0]);
-        server.run();
+        server->run();
+        SE_LOG_INFO(NULL, NULL, "%s: cleaning up",  argv[0]);
+        server.reset();
+        guard.reset();
         SE_LOG_INFO(NULL, NULL, "%s: terminating",  argv[0]);
         return 0;
     } catch ( const std::exception &ex ) {
