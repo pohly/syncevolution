@@ -61,6 +61,8 @@ src_syncevo_sources = \
   src/syncevo/util.cpp \
   src/syncevo/util.h \
   \
+  src/syncevo/Timespec.h \
+  \
   src/syncevo/lcs.h \
   src/syncevo/lcs.cpp \
   \
