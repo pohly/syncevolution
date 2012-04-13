@@ -767,6 +767,15 @@ void Session::useHelperAsync(const SimpleResult &result)
             m_forkExecParent->m_onConnect.connect(bind(&Session::onConnect, this, _1));
             m_forkExecParent->m_onQuit.connect(boost::bind(&Session::onQuit, this, _1));
             m_forkExecParent->m_onFailure.connect(boost::bind(&Session::onFailure, this, _1, _2));
+
+            if (!getenv("SYNCEVOLUTION_DEBUG")) {
+                // Any output from the helper is unexpected and will be
+                // logged as error. The helper initializes stderr and
+                // stdout redirection once it runs, so anything that
+                // reaches us must have been problems during early process
+                // startup or final shutdown.
+                m_forkExecParent->m_onOutput.connect(bind(&Session::onOutput, this, _1, _2));
+            }
         }
 
         // Now also connect result with the right events. Will be
@@ -890,6 +899,16 @@ void Session::onFailure(SyncMLStatus status, const std::string &explanation) thr
     } catch (...) {
         Exception::handle();
     }
+}
+
+void Session::onOutput(const char *buffer, size_t length)
+{
+    // treat null-bytes inside the buffer like line breaks
+    size_t off = 0;
+    do {
+        SE_LOG_ERROR(NULL, "session-helper", "%s", buffer + off);
+        off += strlen(buffer + off) + 1;
+    } while (off < length);
 }
 
 void Session::activateSession()

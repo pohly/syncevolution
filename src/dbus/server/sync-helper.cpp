@@ -78,7 +78,11 @@ int main(int argc, char **argv, char **envp)
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     boost::shared_ptr<SuspendFlags::Guard> guard = s.activate();
 
-    // Redirect both stdout and stderr.
+    // Redirect both stdout and stderr. The only code
+    // writing to it should be third-party libraries
+    // which are unaware of the SyncEvolution logging system.
+    // Redirecting is useful to get such output into our
+    // sync logfile, once we have one.
     LogRedirect redirect(true);
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);

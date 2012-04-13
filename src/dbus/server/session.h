@@ -113,6 +113,8 @@ class Session : public GDBusCXX::DBusObjectHelper,
     void expectChildTerm(int result) throw ();
     /** log failure */
     void onFailure(SyncMLStatus status, const std::string &explanation) throw ();
+    /** log error output from helper */
+    void onOutput(const char *buffer, size_t length);
 
     bool m_serverMode;
     bool m_serverAlerted;
