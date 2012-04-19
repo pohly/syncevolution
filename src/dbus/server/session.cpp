@@ -235,7 +235,7 @@ void Session::setNamedConfig(const std::string &configName,
         syncConfig->prepareConfigForWrite();
         syncConfig->copy(*from, NULL);
 
-        syncConfig->preFlush(*syncConfig);
+        syncConfig->preFlush(syncConfig->getUserInterfaceNonNull());
         syncConfig->flush();
         m_setConfig = true;
     }
@@ -764,7 +764,9 @@ void Session::run(LogRedirect &redirect)
                 break;
             case OP_CMDLINE:
                 try {
-                    m_cmdline->run(redirect);
+                    if (!m_cmdline->run(redirect)) {
+                        m_error = STATUS_FATAL;
+                    }
                 } catch (...) {
                     SyncMLStatus status = Exception::handle();
                     if (!m_error) {

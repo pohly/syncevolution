@@ -126,9 +126,10 @@ extern int ConfigVersions[CONFIG_LEVEL_MAX][CONFIG_VERSION_MAX];
 class SyncSourceConfig;
 typedef SyncSourceConfig PersistentSyncSourceConfig;
 class ConfigTree;
-class ConfigUserInterface;
+class UserInterface;
 class SyncSourceNodes;
 class ConstSyncSourceNodes;
+struct ConfigPasswordKey;
 
 /** name of the per-source admin data property */
 extern const char *const SourceAdminDataName;
@@ -290,7 +291,7 @@ class ConfigProperty {
      * @param sourceName the source name used for source config properties
      * @param sourceConfigNode the config node for the source
      */
-    virtual void checkPassword(ConfigUserInterface &ui,
+    virtual void checkPassword(UserInterface &ui,
                                const std::string &serverName,
                                FilterConfigNode &globalConfigNode,
                                const std::string &sourceName = std::string(),
@@ -301,7 +302,7 @@ class ConfigProperty {
      * It firstly check password and then invoke ui's savePassword
      * function to save the password if necessary
      */
-    virtual void savePassword(ConfigUserInterface &ui,
+    virtual void savePassword(UserInterface &ui,
                               const std::string &serverName,
                               FilterConfigNode &globalConfigNode,
                               const std::string &sourceName = std::string(),
@@ -670,68 +671,6 @@ class SecondsConfigProperty : public UIntConfigProperty
     static bool parseDuration(const std::string &value, std::string &error, unsigned int &seconds);
 };
 
-/**
- * This struct wraps keys for storing passwords
- * in configuration system. Some fields might be empty
- * for some passwords. Each field might have different 
- * meaning for each password. Fields using depends on
- * what user actually wants.
- */
-struct ConfigPasswordKey {
- public:
-    ConfigPasswordKey() : port(0) {}
-
-    /** the user for the password */
-    std::string user;
-    /** the server for the password */
-    std::string server;
-    /** the domain name */
-    std::string domain;
-    /** the remote object */
-    std::string object;
-    /** the network protocol */
-    std::string protocol;
-    /** the authentication type */
-    std::string authtype;
-    /** the network port */
-    unsigned int port;
-};
-
-/**
- * This interface has to be provided by the user of the config
- * to let the config code interact with the user.
- */
-class ConfigUserInterface {
- public:
-    virtual ~ConfigUserInterface() {}
-
-    /**
-     * A helper function which interactively asks the user for
-     * a certain password. May throw errors.
-     *
-     * @param passwordName the name of the password in the config file, such as 'proxyPassword'
-     * @param descr        A simple string explaining what the password is needed for,
-     *                     e.g. "SyncML server". This string alone has to be enough
-     *                     for the user to know what the password is for, i.e. the
-     *                     string has to be unique.
-     * @param key          the key used to retrieve password. Using this instead of ConfigNode is
-     *                     to make user interface independent on Configuration Tree
-     * @return entered password
-     */
-    virtual std::string askPassword(const std::string &passwordName, const std::string &descr, const ConfigPasswordKey &key) = 0;
-
-    /**
-     * A helper function which is used for user interface to save
-     * a certain password. Currently possibly syncml server. May
-     * throw errors.
-     * @param passwordName the name of the password in the config file, such as 'proxyPassword'
-     * @param password     password to be saved
-     * @param key          the key used to store password
-     * @return true if ui saves the password and false if not
-     */
-    virtual bool savePassword(const std::string &passwordName, const std::string &password, const ConfigPasswordKey &key) = 0;
-};
-
 class PasswordConfigProperty : public ConfigProperty {
  public:
     PasswordConfigProperty(const std::string &name, const std::string &comment, const std::string &def = std::string(""),const std::string &descr = std::string("")) :
@@ -744,7 +683,7 @@ class PasswordConfigProperty : public ConfigProperty {
     /**
      * Check the password and cache the result.
      */
-    virtual void checkPassword(ConfigUserInterface &ui,
+    virtual void checkPassword(UserInterface &ui,
                                const std::string &serverName,
                                FilterConfigNode &globalConfigNode,
                                const std::string &sourceName = "",
@@ -755,7 +694,7 @@ class PasswordConfigProperty : public ConfigProperty {
      * It firstly check password and then invoke ui's savePassword
      * function to save the password if necessary
      */
-    virtual void savePassword(ConfigUserInterface &ui,
+    virtual void savePassword(UserInterface &ui,
                               const std::string &serverName,
                               FilterConfigNode &globalConfigNode,
                               const std::string &sourceName = "",
@@ -795,7 +734,7 @@ class ProxyPasswordConfigProperty : public PasswordConfigProperty {
      * re-implement this function for it is necessary to do a check 
      * before retrieving proxy password
      */
-    virtual void checkPassword(ConfigUserInterface &ui,
+    virtual void checkPassword(UserInterface &ui,
                                const std::string &serverName,
                                FilterConfigNode &globalConfigNode,
                                const std::string &sourceName,
@@ -981,6 +920,8 @@ class SyncConfig {
      * Can be copied around, but not flushed.
      */
     SyncConfig();
+
+    virtual ~SyncConfig() {}
 
     /**
      * determines whether the need to migrate a config causes a
@@ -1212,7 +1153,7 @@ class SyncConfig {
      * useful when user interface wants to do preparation jobs, such
      * as savePassword and others.
      */
-    virtual void preFlush(ConfigUserInterface &ui); 
+    virtual void preFlush(UserInterface &ui); 
 
     void flush();
 
@@ -1900,10 +1841,10 @@ class SyncSourceConfig {
     /** same as SyncConfig::checkPassword() but with
      * an extra argument globalConfigNode for source config property
      * may need global config node to check password */
-    virtual void checkPassword(ConfigUserInterface &ui, const std::string &serverName, FilterConfigNode& globalConfigNode);
+    virtual void checkPassword(UserInterface &ui, const std::string &serverName, FilterConfigNode& globalConfigNode);
 
     /** same as SyncConfig::savePassword() */
-    virtual void savePassword(ConfigUserInterface &ui, const std::string &serverName, FilterConfigNode& globalConfigNode);
+    virtual void savePassword(UserInterface &ui, const std::string &serverName, FilterConfigNode& globalConfigNode);
 
     /** selects the backend database to use */
     virtual InitStateString getDatabaseID() const;

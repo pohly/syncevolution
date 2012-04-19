@@ -71,18 +71,6 @@ using namespace std;
 #include <synthesis/SDK_util.h>
 #include <synthesis/san.h>
 
-#ifdef USE_KDE_KWALLET
-#include <QtCore/QCoreApplication>
-#include <QtCore/QString>
-#include <QtCore/QLatin1String>
-#include <QtCore/QDebug>
-#include <QtDBus/QDBusConnection>
-
-#include <KApplication>
-#include <KAboutData>
-#include <KCmdLineArgs>
-#endif
-
 #include "test.h"
 
 #include <syncevo/declarations.h>
@@ -131,14 +119,8 @@ void SyncContext::initLocalSync(const string &config)
     m_localPeerContext.insert(0, "@");
 }
 
-void SyncContext::setOutput(ostream *out)
-{
-    m_out = out ? out : &std::cout;
-}
-
 void SyncContext::init()
 {
-    m_out = &std::cout;
     m_doLogging = false;
     m_quiet = false;
     m_dryrun = false;
@@ -1221,7 +1203,6 @@ public:
             m_logdir.previousLogdirs(dirs);
         }
 
-        ostream &out = m_client.getOutput();
         BOOST_FOREACH(SyncSource *source, *this) {
             if ((!excludeSource.empty() && excludeSource != source->getName()) ||
                 (newSuffix == "after" && m_prepared.find(source->getName()) == m_prepared.end())) {
@@ -1230,7 +1211,7 @@ public:
 
             // dump only if not done before or changed
             if (m_intro != intro) {
-                m_client.getOutput() << intro;
+                SE_LOG_SHOW(NULL, NULL, "%s", intro.c_str());
                 m_intro = intro;
             }
 
@@ -1257,7 +1238,7 @@ public:
                 oldDir = databaseName(*source, oldSuffix, oldSession);
             }
             string newDir = databaseName(*source, newSuffix);
-            out << "*** " << source->getDisplayName() << " ***\n" << flush;
+            SE_LOG_SHOW(NULL, NULL, "*** %s ***", source->getDisplayName().c_str());
             string cmd = string("env CLIENT_TEST_COMPARISON_FAILED=10 " + config + " synccompare '" ) +
                 oldDir + "' '" + newDir + "'";
             int ret = Execute(cmd, EXECUTE_NO_STDERR);
@@ -1265,16 +1246,16 @@ public:
                     WIFEXITED(ret) ? WEXITSTATUS(ret) :
                     -1) {
             case 0:
-                out << "no changes\n";
+                SE_LOG_SHOW(NULL, NULL, "no changes");
                 break;
             case 10:
                 break;
             default:
-                out << "Comparison was impossible.\n";
+                SE_LOG_SHOW(NULL, NULL, "Comparison was impossible.");
                 break;
             }
         }
-        out << "\n";
+        SE_LOG_SHOW(NULL, NULL, "\n");
         return true;
     }
 
@@ -1353,29 +1334,27 @@ public:
                 m_reportTodo = false;
 
                 string logfile = m_logdir.getLogfile();
-                ostream &out = m_client.getOutput();
-                out << flush;
-                out << "\n";
                 if (status == STATUS_OK) {
-                    out << "Synchronization successful.\n";
+                    SE_LOG_SHOW(NULL, NULL, "\nSynchronization successful.");
                 } else if (logfile.size()) {
-                    out << "Synchronization failed, see "
-                        << logfile
-                        << " for details.\n";
+                    SE_LOG_SHOW(NULL, NULL, "\nSynchronization failed, see %s for details.",
+                                logfile.c_str());
                 } else {
-                    out << "Synchronization failed.\n";
+                    SE_LOG_SHOW(NULL, NULL, "\nSynchronization failed.");
                 }
 
                 // pretty-print report
                 if (m_logLevel > LOGGING_QUIET) {
-                    out << "\nChanges applied during synchronization:\n";
+                    SE_LOG_SHOW(NULL, NULL, "\nChanges applied during synchronization:");
                 }
                 if (m_logLevel > LOGGING_QUIET && report) {
+                    ostringstream out;
                     out << *report;
                     std::string slowSync = report->slowSyncExplanation(m_client.getPeer());
                     if (!slowSync.empty()) {
                         out << endl << slowSync;
                     }
+                    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
                 }
 
                 // compare databases?
@@ -1453,23 +1432,22 @@ void unref(SourceList *sourceList)
     delete sourceList;
 }
 
-string SyncContext::askPassword(const string &passwordName, const string &descr, const ConfigPasswordKey &key)
+UserInterface &SyncContext::getUserInterfaceNonNull()
 {
-    char buffer[256];
-
-    printf("Enter password for %s: ",
-           descr.c_str());
-    fflush(stdout);
-    if (fgets(buffer, sizeof(buffer), stdin) &&
-        strcmp(buffer, "\n")) {
-        size_t len = strlen(buffer);
-        if (len && buffer[len - 1] == '\n') {
-            buffer[len - 1] = 0;
-        }
-        return buffer;
+    if (m_userInterface) {
+        return *m_userInterface;
     } else {
-        throwError(string("could not read password for ") + descr);
-        return "";
+        static class DummyUserInterface : public UserInterface
+        {
+        public:
+            virtual std::string askPassword(const std::string &passwordName, const std::string &descr, const ConfigPasswordKey &key) { return ""; }
+
+            virtual bool savePassword(const std::string &passwordName, const std::string &password, const ConfigPasswordKey &key) { return false; }
+
+            virtual void readStdin(std::string &content) { content.clear(); }
+        } dummy;
+
+        return dummy;
     }
 }
 
@@ -1491,14 +1469,6 @@ const std::vector<SyncSource *> *SyncContext::getSources() const
     return m_sourceListPtr ?
         m_sourceListPtr->getSourceSet() :
         NULL;
-}
-
-
-void SyncContext::readStdin(string &content)
-{
-    if (!ReadFile(cin, content)) {
-        throwError("stdin", errno);
-    }
 }
 
 string SyncContext::getUsedSyncURL() {
@@ -2835,52 +2805,9 @@ void SyncContext::initMain(const char *appname)
     g_log_set_default_handler(Logger::glogFunc, NULL);
 #endif
 
-#ifdef USE_KDE_KWALLET
-    //QCoreApplication *app;
-    int argc = 1;
-    static char *argv[] = { const_cast<char *>(appname), NULL };
-    KAboutData aboutData(// The program name used internally.
-                         "syncevolution",
-                         // The message catalog name
-                         // If null, program name is used instead.
-                         0,
-                         // A displayable program name string.
-                         ki18n("SyncEvolution"),
-                         // The program version string.
-                         "1.0",
-                         // Short description of what the app does.
-                         ki18n("Lets Akonadi synchronize with a SyncML Peer"),
-                         // The license this code is released under
-                         KAboutData::License_GPL,
-                         // Copyright Statement
-                         ki18n("(c) 2010-12"),
-                         // Optional text shown in the About box.
-                         // Can contain any information desired.
-                         ki18n(""),
-                         // The program homepage string.
-                         "http://www.syncevolution.org/",
-                         // The bug report email address
-                         "syncevolution@syncevolution.org");
-
-    KCmdLineArgs::init(argc, argv, &aboutData);
-    if (!kapp) {
-        // Don't allow KApplication to mess with SIGINT/SIGTERM.
-        // Restore current behavior after construction.
-        struct sigaction oldsigint, oldsigterm;
-        sigaction(SIGINT, NULL, &oldsigint);
-        sigaction(SIGTERM, NULL, &oldsigterm);
-
-        // Explicitly disable GUI mode in the KApplication.  Otherwise
-        // the whole binary will fail to run when there is no X11
-        // display.
-        new KApplication(false);
-        //To stop KApplication from spawning it's own DBus Service ... Will have to patch KApplication about this
-        QDBusConnection::sessionBus().unregisterService("org.syncevolution.syncevolution-"+QString::number(getpid()));
-
-        sigaction(SIGINT, &oldsigint, NULL);
-        sigaction(SIGTERM, &oldsigterm, NULL);
-    }
-#endif
+    // invoke optional init parts, for example KDE KApplication init
+    // in KDE backend
+    GetInitMainSignal()(appname);
 
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
@@ -2912,6 +2839,12 @@ void SyncContext::initMain(const char *appname)
             SE_LOG_ERROR(NULL, NULL, "SYNCEVOLUTION_GNUTLS_DEBUG debugging not possible, log functions not found");
         }
     }
+}
+
+SyncContext::InitMainSignal &SyncContext::GetInitMainSignal()
+{
+    static InitMainSignal initMainSignal;
+    return initMainSignal;
 }
 
 static bool IsStableRelease =
@@ -3029,12 +2962,16 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
              */
             ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
             BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(*this, m_server, *getProperties());
+                SE_LOG_DEBUG(NULL, NULL, "checking sync password %s", prop->getMainName().c_str());
+                prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties());
             }
             BOOST_FOREACH(SyncSource *source, sourceList) {
                 ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
                 BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                    prop->checkPassword(*this, m_server, *getProperties(),
+                    SE_LOG_DEBUG(NULL, NULL, "checking source %s password %s",
+                                 source->getName().c_str(),
+                                 prop->getMainName().c_str());
+                    prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
                                         source->getName(), source->getProperties());
                 }
             }
@@ -3938,7 +3875,7 @@ void SyncContext::status()
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(*this, m_server, *getProperties(),
+            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
                                 source->getName(), source->getProperties());
         }
     }
@@ -3974,10 +3911,9 @@ void SyncContext::status()
             }
         }
     } else {
-        ostream &out = getOutput();
-        out << "Previous log directory not found.\n";
+        SE_LOG_SHOW(NULL, NULL, "Previous log directory not found.");
         if (getLogDir().empty()) {
-            out << "Enable the 'logdir' option and synchronize to use this feature.\n";
+            SE_LOG_SHOW(NULL, NULL, "Enable the 'logdir' option and synchronize to use this feature.");
         }
     }
 }
@@ -3991,7 +3927,7 @@ void SyncContext::checkStatus(SyncReport &report)
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(*this, m_server, *getProperties(),
+            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
                                 source->getName(), source->getProperties());
         }
     }
@@ -4083,7 +4019,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(*this, m_server, *getProperties(),
+            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
                                 source->getName(), source->getProperties());
         }
     }
@@ -4154,14 +4090,19 @@ string SyncContext::readSessionInfo(const string &dir, SyncReport &report)
  * With that setup and a fake SyncContext it is possible to simulate
  * sessions and test the resulting logdirs.
  */
-class LogDirTest : public CppUnit::TestFixture, private SyncContext
+class LogDirTest : public CppUnit::TestFixture, private SyncContext, private LoggerBase
 {
 public:
     LogDirTest() :
         SyncContext("nosuchconfig@nosuchcontext"),
         m_maxLogDirs(10)
     {
-        setOutput(&m_out);
+        // suppress output by redirecting into m_out
+        pushLogger(this);
+    }
+
+    ~LogDirTest() {
+        popLogger();
     }
 
     void setUp() {
@@ -4265,6 +4206,23 @@ private:
         ofstream out(name.c_str());
         out << data;
     }
+
+    /** capture output produced while test ran */
+    void messagev(Level level,
+                  const char *prefix,
+                  const char *file,
+                  int line,
+                  const char *function,
+                  const char *format,
+                  va_list args)
+    {
+        std::string str = StringPrintfV(format, args);
+        m_out << '[' << levelToStr(level) << ']' << str;
+        if (!boost::ends_with(str, "\n")) {
+            m_out << std::endl;
+        }
+    }
+    virtual bool isProcessSafe() const { return false; }
 
     CPPUNIT_TEST_SUITE(LogDirTest);
     CPPUNIT_TEST(testQuickCompare);

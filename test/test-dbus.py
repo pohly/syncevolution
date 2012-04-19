@@ -27,6 +27,7 @@ import shutil
 import copy
 import heapq
 import string
+import difflib
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -419,7 +420,8 @@ class DBusUtil(Timeout):
 
         # always print all debug output directly (no output redirection),
         # and increase log level
-        env["SYNCEVOLUTION_DEBUG"] = "1"
+        if self.getTestProperty("debug", True):
+            env["SYNCEVOLUTION_DEBUG"] = "1"
 
         # can be set by a test to run additional tests on the content
         # of the D-Bus log
@@ -830,6 +832,39 @@ class DBusUtil(Timeout):
             self.assertEqual(int(reports[0]["status"]), 200)
             self.assertFalse("error" in reports[0])
         return reports[0]
+
+    def assertEqualDiff(self, expected, res):
+        '''Like assertEqual(), but raises an error which contains a
+        diff of the two parameters. Useful when they are long strings
+        (will be split at newlines automatically) or lists (compared
+        as-is). Very similar to Python's 2.7 unittest, but also works
+        for older Python releases and allows comparing strings against lists.'''
+        def splitlines(str):
+            '''split any object which looks like a string == has splitlines'''
+            if 'splitlines' in dir(str):
+                return str.splitlines(True)
+            else:
+                return str
+        expected = splitlines(expected)
+        res = splitlines(res)
+        if expected != res:
+            diff = ''.join(difflib.Differ().compare(expected, res))
+            self.fail('differences between expected and actual text\n\n' + diff)
+
+    def assertRegexpMatchesCustom(self, text, regex, msg=None):
+        if isinstance(regex, str):
+            regex = re.compile(regex)
+        if not regex.search(text):
+            if msg != None:
+                self.fail(msg)
+            else:
+                self.fail('text does not match regex\n\nText:\n%s\n\nRegex:\n%s' % \
+                              (text, regex.pattern))
+
+
+    # reimplement Python 2.7 assertions only in older Python
+    if True or not 'assertRegexpMatches' in dir(self):
+        assertRegexpMatches = assertRegexpMatchesCustom
 
 class TestDBusServer(unittest.TestCase, DBusUtil):
     """Tests for the read-only Server API."""
@@ -3080,14 +3115,20 @@ class TestLocalSync(unittest.TestCase, DBusUtil):
 
     def setUp(self):
         self.setUpServer()
+
+    def setUpConfigs(self, childPassword=None):
         # create file<->file configs
         self.setUpSession("target-config@client")
+        addressbook = { "sync": "two-way",
+                        "backend": "file",
+                        "databaseFormat": "text/vcard",
+                        "database": "file://" + xdg_root + "/client" }
+        if childPassword:
+            addressbook["databaseUser"] = "foo-user"
+            addressbook["databasePassword"] = childPassword
         self.session.SetConfig(False, False,
                                {"" : { "loglevel": "4" },
-                                "source/addressbook": { "sync": "two-way",
-                                                        "backend": "file",
-                                                        "databaseFormat": "text/vcard",
-                                                        "database": "file://" + xdg_root + "/client" } })
+                                "source/addressbook": addressbook })
         self.session.Detach()
         self.setUpSession("server")
         self.session.SetConfig(False, False,
@@ -3104,6 +3145,7 @@ class TestLocalSync(unittest.TestCase, DBusUtil):
     @timeout(100)
     def testSync(self):
         """TestLocalSync.testSync - run a simple slow sync between local dirs"""
+        self.setUpConfigs()
         os.makedirs(xdg_root + "/server")
         output = open(xdg_root + "/server/0", "w")
         output.write('''BEGIN:VCARD
@@ -3120,10 +3162,50 @@ END:VCARD''')
         input = open(xdg_root + "/server/0", "r")
         self.assertTrue("FN:John Doe" in input.read())
 
+    @timeout(100)
+    def testPasswordRequest(self):
+        """TestLocalSync.testPassswordRequest - check that password request child->parent->us works"""
+        self.setUpConfigs(childPassword="-")
+        self.setUpListeners(self.sessionpath)
+        self.lastState = "unknown"
+        def infoRequest(id, session, state, handler, type, params):
+            if state == "request":
+                self.assertEqual(self.lastState, "unknown")
+                self.lastState = "request"
+                self.server.InfoResponse(id, "working", {}, utf8_strings=True)
+            elif state == "waiting":
+                self.assertEqual(self.lastState, "request")
+                self.lastState = "waiting"
+                self.server.InfoResponse(id, "response", {"password" : "123456"}, utf8_strings=True)
+            elif state == "done":
+                self.assertEqual(self.lastState, "waiting")
+                self.lastState = "done"
+            else:
+                self.fail("state should not be '" + state + "'")
+
+        signal = bus.add_signal_receiver(infoRequest,
+                                         'InfoRequest',
+                                         'org.syncevolution.Server',
+                                         self.server.bus_name,
+                                         None,
+                                         byte_arrays=True,
+                                         utf8_strings=True)
+
+        try:
+            self.session.Sync("slow", {})
+            loop.run()
+        finally:
+            signal.remove()
+
+        self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+        self.assertEqual(self.lastState, "done")
+        self.checkSync()
+
     @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY=5")
     @timeout(100)
     def testConcurrency(self):
         """TestLocalSync.testConcurrency - D-Bus server must remain responsive while sync runs"""
+        self.setUpConfigs()
         self.setUpListeners(self.sessionpath)
         self.session.Sync("slow", {})
         time.sleep(2)
@@ -3342,6 +3424,417 @@ class TestBluetooth(unittest.TestCase, DBusUtil):
         self.failIf(string.find(config['']["fingerPrint"], bt_fingerprint) < 0)
         # real hardware information
         self.failUnlessEqual(config['']["hardwareName"], bt_fingerprint)
+
+def createFiles(root, content, append = False):
+    if not append:
+        shutil.rmtree(root, True)
+
+    entries = content.split("\n")
+    outname = ''
+    outfile = None
+    for entry in entries:
+        if not entry:
+            continue
+        parts = entry.split(":")
+        newname = parts[0]
+        line = parts[1]
+        if newname != outname:
+            fullpath = root + "/" + newname
+            try:
+                os.makedirs(fullpath[0:fullpath.rindex("/")])
+            except:
+                pass
+            mode = "w"
+            if append:
+                mode = "a"
+            outfile = open(fullpath, mode)
+            outname = newname
+        outfile.write(line + "\n")
+    outfile.close()
+
+isPropRegEx = re.compile(r'^([a-zA-Z]+) = ')
+def isPropAssignment (line):
+    m = isPropRegEx.search(line)
+    if not m:
+        return False
+    # exclude some false positives
+    if m.group(1) in ('KCalExtended', 'mkcal', 'QtContacts'):
+        return False
+    return True
+
+def scanFiles(root, peer = '', onlyProps = True, directory = ''):
+    newroot = root + '/' + directory
+    out = ''
+
+    for entry in sorted(os.listdir(newroot)):
+        fullEntry = newroot + "/" + entry
+        if os.path.isdir(fullEntry):
+            if not (entry.endswith("/peers") and peer and entry != peer):
+                if directory:
+                    newdir = directory + '/' + entry
+                else:
+                    newdir = entry
+                out += scanFiles(root, peer, onlyProps, newdir)
+        else:
+            infile = open (fullEntry)
+            for line in infile:
+                line = line.rstrip("\r\n")
+                if (line):
+                    takeIt = False
+                    if (line.startswith("# ")):
+                        takeIt = isPropAssignment(line[2:])
+                    else:
+                        takeIt = True
+                    if (not onlyProps or takeIt):
+                        if (directory):
+                            out += directory + "/"
+                        out += entry + ':' + line + "\n"
+    return out
+
+def sortConfig(config):
+    lines = config.splitlines()
+    linenr = -1
+
+    unsorted = []
+    for line in lines:
+        linenr += 1
+        if not line:
+            continue
+        parts = line.split(":", 1)
+        element = parts[0], linenr, parts[1]
+        unsorted.append(element)
+
+    lines = sorted(unsorted)
+    unsorted = []
+    newconfig = ""
+    for line in lines:
+        newconfig += line[0] + ":" + line[2] + "\n"
+
+    return newconfig
+
+def lastLine(string):
+    return string.splitlines(True)[-1]
+
+def stripTime(string):
+    matches = re.match("\[(\w+)\s+\d\d:\d\d:\d\d\] (.*)$", string, re.DOTALL)
+    if matches != None:
+        return "[" + matches.group(1) + "] " + matches.group(2)
+    return string
+
+class TestCmdline(unittest.TestCase, DBusUtil):
+    """Tests cmdline by Session::Execute()."""
+
+    def setUp(self):
+        self.setUpServer()
+        # All tests run with their own XDG root hierarchy.
+        # Here are the config files.
+        self.configdir = xdg_root + "/config/syncevolution"
+
+    def run(self, result):
+        self.runTest(result)
+
+    def runCmdline(self, args, env=None, expectSuccess=True, preserveOutputOrder=False):
+        '''Run the 'syncevolution' command line (from PATH) with the
+        given arguments (list or tuple of strings). Uses the current
+        environment unless one is set explicitly. Unless told
+        otherwise, the result of the command is checked for
+        success. Usually stdout and stderr are captured separately,
+        in which case relative order of messages from different
+        streams cannot be tested. When that is relevant, set preserveOutputOrder=True
+        and look only at the stdout.
+
+        Returns tuple with stdout, stderr and result code.'''
+        a = [ 'syncevolution' ]
+        a.extend(args)
+        # Explicitly pass an environment. Otherwise subprocess.Popen()
+        # from Python 2.6 uses not os.environ (which would be okay)
+        # but rather the environment passed to a previous call to
+        # subprocess.Popen() (which will fail if the previous test ran
+        # with an environment which had SYNCEVOLUTION_DEBUG set).
+        if env == None:
+            env=os.environ
+        if preserveOutputOrder:
+            s = subprocess.Popen(a, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 env=env)
+        else:
+            s = subprocess.Popen(a, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 env=env)
+        out, err = s.communicate()
+        if expectSuccess and s.returncode != 0:
+            result = 'syncevolution command failed.\nOutput:\n%s' % out
+            if not preserveOutputOrder:
+                result += '\nSeparate stderr:\n%s' % err
+            self.fail(result)
+        return (out, err, s.returncode)
+
+    cachedSSLServerCertificates = None
+    def getSSLServerCertificates(self):
+        '''Default SSLServerCertificates path as compiled into the SyncEvolution
+        binaries. Determined once by asking for a template.'''
+        if TestCmdline.cachedSSLServerCertificates == None:
+            out, err, code = self.runCmdline(['--template', 'default',
+                                              '--print-config'])
+            self.assertEqual(err, '')
+            m = re.search(r'^# SSLServerCertificates = (.*)\n', out, re.MULTILINE)
+            self.assertTrue(m)
+            TestCmdline.cachedSSLServerCertificates = m.group(1)
+        return TestCmdline.cachedSSLServerCertificates
+
+    def ScheduleWorldConfig(self, peerMinVersion = 1, peerCurVersion = 1, contextMinVersion = 1, contextCurVersion = 1):
+        return '''peers/scheduleworld/.internal.ini:peerMinVersion = {0}
+peers/scheduleworld/.internal.ini:peerCurVersion = {1}
+peers/scheduleworld/.internal.ini:# HashCode = 0
+peers/scheduleworld/.internal.ini:# ConfigDate = 
+peers/scheduleworld/.internal.ini:# lastNonce = 
+peers/scheduleworld/.internal.ini:# deviceData = 
+peers/scheduleworld/.internal.ini:# webDAVCredentialsOkay = 0
+peers/scheduleworld/config.ini:syncURL = http://sync.scheduleworld.com/funambol/ds
+peers/scheduleworld/config.ini:# username = 
+peers/scheduleworld/config.ini:# password = 
+.internal.ini:contextMinVersion = {2}
+.internal.ini:contextCurVersion = {3}
+config.ini:# logdir = 
+peers/scheduleworld/config.ini:# loglevel = 0
+peers/scheduleworld/config.ini:# printChanges = 1
+peers/scheduleworld/config.ini:# dumpData = 1
+config.ini:# maxlogdirs = 10
+peers/scheduleworld/config.ini:# autoSync = 0
+peers/scheduleworld/config.ini:# autoSyncInterval = 30M
+peers/scheduleworld/config.ini:# autoSyncDelay = 5M
+peers/scheduleworld/config.ini:# preventSlowSync = 1
+peers/scheduleworld/config.ini:# useProxy = 0
+peers/scheduleworld/config.ini:# proxyHost = 
+peers/scheduleworld/config.ini:# proxyUsername = 
+peers/scheduleworld/config.ini:# proxyPassword = 
+peers/scheduleworld/config.ini:# clientAuthType = md5
+peers/scheduleworld/config.ini:# RetryDuration = 5M
+peers/scheduleworld/config.ini:# RetryInterval = 2M
+peers/scheduleworld/config.ini:# remoteIdentifier = 
+peers/scheduleworld/config.ini:# PeerIsClient = 0
+peers/scheduleworld/config.ini:# SyncMLVersion = 
+peers/scheduleworld/config.ini:PeerName = ScheduleWorld
+config.ini:deviceId = fixed-devid
+peers/scheduleworld/config.ini:# remoteDeviceId = 
+peers/scheduleworld/config.ini:# enableWBXML = 1
+peers/scheduleworld/config.ini:# maxMsgSize = 150000
+peers/scheduleworld/config.ini:# maxObjSize = 4000000
+peers/scheduleworld/config.ini:# SSLServerCertificates = {4}
+peers/scheduleworld/config.ini:# SSLVerifyServer = 1
+peers/scheduleworld/config.ini:# SSLVerifyHost = 1
+peers/scheduleworld/config.ini:WebURL = http://www.scheduleworld.com
+peers/scheduleworld/config.ini:IconURI = image://themedimage/icons/services/scheduleworld
+peers/scheduleworld/config.ini:# ConsumerReady = 0
+peers/scheduleworld/config.ini:# peerType = 
+peers/scheduleworld/sources/addressbook/.internal.ini:# adminData = 
+peers/scheduleworld/sources/addressbook/.internal.ini:# synthesisID = 0
+peers/scheduleworld/sources/addressbook/config.ini:sync = two-way
+peers/scheduleworld/sources/addressbook/config.ini:uri = card3
+peers/scheduleworld/sources/addressbook/config.ini:syncFormat = text/vcard
+peers/scheduleworld/sources/addressbook/config.ini:# forceSyncFormat = 0
+peers/scheduleworld/sources/calendar/.internal.ini:# adminData = 
+peers/scheduleworld/sources/calendar/.internal.ini:# synthesisID = 0
+peers/scheduleworld/sources/calendar/config.ini:sync = two-way
+peers/scheduleworld/sources/calendar/config.ini:uri = cal2
+sources/calendar/config.ini:backend = calendar
+peers/scheduleworld/sources/calendar/config.ini:# syncFormat = 
+peers/scheduleworld/sources/calendar/config.ini:# forceSyncFormat = 0
+sources/calendar/config.ini:# database = 
+sources/calendar/config.ini:# databaseFormat = 
+sources/calendar/config.ini:# databaseUser = 
+sources/calendar/config.ini:# databasePassword = 
+peers/scheduleworld/sources/memo/.internal.ini:# adminData = 
+peers/scheduleworld/sources/memo/.internal.ini:# synthesisID = 0
+peers/scheduleworld/sources/memo/config.ini:sync = two-way
+peers/scheduleworld/sources/memo/config.ini:uri = note
+sources/memo/config.ini:backend = memo
+peers/scheduleworld/sources/memo/config.ini:# syncFormat = 
+peers/scheduleworld/sources/memo/config.ini:# forceSyncFormat = 0
+sources/memo/config.ini:# database = 
+sources/memo/config.ini:# databaseFormat = 
+sources/memo/config.ini:# databaseUser = 
+sources/memo/config.ini:# databasePassword = 
+peers/scheduleworld/sources/todo/.internal.ini:# adminData = 
+peers/scheduleworld/sources/todo/.internal.ini:# synthesisID = 0
+peers/scheduleworld/sources/todo/config.ini:sync = two-way
+peers/scheduleworld/sources/todo/config.ini:uri = task2
+sources/todo/config.ini:backend = todo
+peers/scheduleworld/sources/todo/config.ini:# syncFormat = 
+peers/scheduleworld/sources/todo/config.ini:# forceSyncFormat = 0
+sources/addressbook/config.ini:backend = addressbook
+sources/addressbook/config.ini:# database = 
+sources/addressbook/config.ini:# databaseFormat = 
+sources/addressbook/config.ini:# databaseUser = 
+sources/addressbook/config.ini:# databasePassword = 
+sources/todo/config.ini:# database = 
+sources/todo/config.ini:# databaseFormat = 
+sources/todo/config.ini:# databaseUser = 
+sources/todo/config.ini:# databasePassword = '''.format(
+           peerMinVersion, peerCurVersion,
+           contextMinVersion, contextCurVersion,
+           self.getSSLServerCertificates())
+
+    def replaceLineInConfig(self, config, begin, to):
+        index = config.find(begin)
+        self.assertNotEqual(index, -1)
+        newline = config.find("\n", index + len(begin))
+        self.assertNotEqual(newline, -1)
+        return config[:index] + to + config[newline:]
+
+    def removeRandomUUID(self, config):
+        return self.replaceLineInConfig(config,
+                                        "deviceId = syncevolution-",
+                                        "deviceId = fixed-devid")
+
+    def removeSSLCertsPaths(self, config):
+        return self.replaceLineInConfig(config,
+                                        "SSLServerCertificates = ",
+                                        "SSLServerCertificates = ")
+
+    @property('debug', False)
+    def testFramework(self):
+        """TestCmdline.testFramework - tests whether utility functions work"""
+        content = "baz:line\n" \
+                  "caz/subdir:booh\n" \
+                  "caz/subdir2/sub:# comment\n" \
+                  "caz/subdir2/sub:# foo = bar\n" \
+                  "caz/subdir2/sub:# empty = \n" \
+                  "caz/subdir2/sub:# another comment\n" \
+                  "foo:bar1\n" \
+                  "foo:\n" \
+                  "foo: \n" \
+                  "foo:bar2\n"
+
+        filtered = "baz:line\n" \
+                   "caz/subdir:booh\n" \
+                   "caz/subdir2/sub:# foo = bar\n" \
+                   "caz/subdir2/sub:# empty = \n" \
+                   "foo:bar1\n" \
+                   "foo: \n" \
+                   "foo:bar2\n"
+
+        createFiles(self.configdir, content)
+        res = scanFiles(self.configdir)
+        self.assertEqualDiff(filtered, res)
+        randomUUID = "deviceId = syncevolution-blabla\n"
+        fixedUUID = "deviceId = fixed-devid\n"
+        res = self.removeRandomUUID(randomUUID)
+        self.assertEqual(fixedUUID, res)
+
+        SSLCertPaths = "peers/scheduleworld/config.ini:# SSLServerCertificates = /etc/ssl/certs/ca-certificates.crt:/etc/pki/tls/certs/ca-bundle.crt:/usr/share/ssl/certs/ca-bundle.crt\n"
+        clearSSLCertpaths = "peers/scheduleworld/config.ini:# SSLServerCertificates = \n"
+        res = self.removeSSLCertsPaths(SSLCertPaths)
+        self.assertEqual(clearSSLCertpaths, res)
+
+        unsorted = "f:g\n" \
+                   "f:j\n" \
+                   "a:b\n" \
+                   "f:a\n" \
+                   "a/b:a\n"
+        expected = "a:b\n" \
+                   "a/b:a\n" \
+                   "f:g\n" \
+                   "f:j\n" \
+                   "f:a\n"
+        res = sortConfig(unsorted)
+        self.assertEqualDiff(expected, res)
+
+        # test DBusUtil.assertEqualDiff()
+        try:
+            self.assertEqualDiff('foo\nbar\n', 'foo\nxxx\nbar\n')
+        except AssertionError, ex:
+            expected = '''differences between expected and actual text
+
+  foo
++ xxx
+  bar
+'''
+            self.assertTrue(str(ex).endswith(expected), 'actual exception differs\n' + str(ex))
+        else:
+            self.fail('''DBusUtil.assertEqualDiff() did not detect diff''')
+
+        self.assertEqualDiff('foo\nbar', [ 'foo\n', 'bar' ])
+        self.assertEqualDiff([ 'foo\n', 'bar' ], 'foo\nbar')
+        self.assertEqualDiff([ 'foo\n', 'bar' ], [ 'foo\n', 'bar' ])
+
+        # test our own regex match
+        self.assertRegexpMatchesCustom('foo\nbar\nend', 'bar')
+        self.assertRegexpMatchesCustom('foo\nbar\nend', 'b.r')
+        self.assertRegexpMatchesCustom('foo\nbar\nend', re.compile('^b.r$', re.MULTILINE))
+        try:
+            self.assertRegexpMatchesCustom('foo\nbar\nend', 'xxx')
+        except AssertionError, ex:
+            expected = '''text does not match regex\n\nText:\nfoo\nbar\nend\n\nRegex:\nxxx'''
+            self.assertTrue(str(ex).endswith(expected), 'actual exception differs\n' + str(ex))
+        else:
+            self.fail('''DBusUtil.assertRegexpMatchesCustom() did not fail''')
+        self.assertRegexpMatches('foo\nbar\nend', 'bar')
+
+        lines = "a\nb\nc\n"
+        lastline = "c\n"
+        res = lastLine(lines)
+        self.assertEqual(lastline, res)
+
+        message = "[ERROR 12:34:56] msg\n"
+        stripped = "[ERROR] msg\n"
+        res = stripTime(message)
+        self.assertEqual(stripped, res)
+
+        # Run command without talking to server, separate streams.
+        out, err, code = self.runCmdline(['--foo-bar'], expectSuccess=False)
+        self.assertEqual(err, '[ERROR] --foo-bar: unknown parameter\n')
+        self.assertRegexpMatches(out, '^List databases:\n')
+        self.assertEqual(1, code)
+
+        # Run command without talking to server, joined streams.
+        out, err, code = self.runCmdline(['--foo-bar'], expectSuccess=False, preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertRegexpMatches(out, r'^List databases:\n(.*\n)*\[ERROR\] --foo-bar: unknown parameter\n$')
+        self.assertEqual(1, code)
+
+    def doSetupScheduleWorld(self, shared):
+        root = self.configdir + "/default"
+        peer = ""
+
+        if shared:
+            peer = root + "/peers/scheduleworld"
+        else:
+            peer = root
+
+        shutil.rmtree(peer, True)
+        out, err, code = self.runCmdline(['--configure',
+                                          '--sync-property', 'proxyHost = proxy',
+                                          'scheduleworld', 'addressbook'])
+        self.assertEqual(out, '')
+        self.assertEqual(err, '')
+        res = sortConfig(scanFiles(root))
+        res = self.removeRandomUUID(res)
+        expected = self.ScheduleWorldConfig()
+        expected = sortConfig(expected)
+        expected = expected.replace("# proxyHost = ",
+                                    "proxyHost = proxy",
+                                    1)
+        expected = expected.replace("sync = two-way",
+                                    "sync = disabled")
+        expected = expected.replace("addressbook/config.ini:sync = disabled",
+                                    "addressbook/config.ini:sync = two-way",
+                                    1)
+        self.assertEqualDiff(expected, res)
+
+        shutil.rmtree(peer, True)
+        out, err, code = self.runCmdline(['--configure',
+                                          '--sync-property', 'deviceId = fixed-devid',
+                                          'scheduleworld'])
+        self.assertEqual(out, '')
+        self.assertEqual(err, '')
+        res = sortConfig(scanFiles(root))
+        expected = self.ScheduleWorldConfig()
+        expected = sortConfig(expected)
+        self.assertEqualDiff(expected, res)
+
+    @property('debug', False)
+    def testSetupScheduleWorld(self):
+        """TestCmdline.testSetupScheduleWorld - configure ScheduleWorld"""
+        self.doSetupScheduleWorld(False)
 
 if __name__ == '__main__':
     unittest.main()

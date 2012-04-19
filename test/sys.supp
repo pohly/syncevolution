@@ -1,3 +1,40 @@
+# ==23596== Conditional jump or move depends on uninitialised value(s)
+# ==23596==    at 0x9A404E7: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A41CB1: __log_put (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A42F2D: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A43D9F: __log_put_record (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9986B1B: __ham_add_el (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x997E1FD: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x99F5548: __dbc_iput (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x99F314F: __db_put (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A04EBA: __db_put_pp (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x103CC953: do_create (e-book-backend-file.c:915)
+# ==23596==    by 0x103CCBFC: e_book_backend_file_create_contacts (e-book-backend-file.c:988)
+# ==23596==    by 0x4E4AC31: e_book_backend_sync_create_contacts (e-book-backend-sync.c:85)
+# ==23596==    by 0x4E4D3D7: book_backend_create_contacts (e-book-backend-sync.c:493)
+# ==23596==    by 0x4E4ED2A: e_book_backend_create_contacts (e-book-backend.c:465)
+# ==23596==    by 0x4E513D3: operation_thread (e-data-book.c:157)
+# ==23596==    by 0x83E9D07: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==23596==    by 0x83E77E5: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==23596==    by 0x8678B4F: start_thread (pthread_create.c:304)
+# ==23596==    by 0x896690C: clone (clone.S:112)
+# ==23596==  Uninitialised value was created by a stack allocation
+# ==23596==    at 0x994DB80: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596== 
+{
+   libdb-5 cond from stack
+   Memcheck:Cond
+   obj:*/libdb-5.1.so
+   fun:__log_put
+   obj:*/libdb-5.1.so
+   fun:__log_put_record
+   fun:__ham_add_el
+   obj:*/libdb-5.1.so
+   fun:__dbc_iput
+   fun:__db_put
+   fun:__db_put_pp
+}
+
 # ==7846== Invalid read of size 8
 # ==7846==    at 0x4015B24: (within /lib/ld-2.6.1.so)
 # ==7846==    by 0x400A8F7: (within /lib/ld-2.6.1.so)
@@ -734,8 +771,10 @@
 # ==7816==    by 0x5344EB: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:344)
 # ==7816==    by 0x515CE3: main (main.cpp:117)
 # ==7816== 
+#
+# Different backtrace starting with the move of GNOME keyring support into a backend.
 {
-   gcrypt + GNOME keyring
+   gcrypt + GNOME keyring + modules
    Memcheck:Leak
    fun:malloc
    fun:g_malloc
@@ -743,7 +782,7 @@
    ...
    obj:*libgnome-keyring.so*
    ...
-   fun:*DBusUserInterface*Password*
+   fun:*GNOME*Password*
 }
 
 # ==10804== 60 (16 direct, 44 indirect) bytes in 1 blocks are definitely lost in loss record 1,121 of 2,014
@@ -893,8 +932,7 @@
    KApplication + malloc
    Memcheck:Leak
    ...
-   fun:*KApplication*
-   fun:*SyncContext*initMain*
+   fun:*KDEInitMain*
 }
 {
    Qt + malloc
@@ -1150,4 +1188,26 @@
    obj:*
    fun:open_verify
    fun:open_path
+}
+
+# ==17052== Jump to the invalid address stated on the next line
+# ==17052==    at 0x4CE: ???
+# ==17052==    by 0x4005557: open_verify (dl-load.c:1821)
+# ==17052==    by 0x4007913: _dl_map_object (dl-load.c:2368)
+# ==17052==    by 0x400CF61: openaux (dl-deps.c:65)
+# ==17052==    by 0x400D925: _dl_catch_error (dl-error.c:178)
+# ==17052==    by 0x400C02B: _dl_map_object_deps (dl-deps.c:247)
+# ==17052==    by 0x40032B6: dl_main (rtld.c:1815)
+# ==17052==    by 0x4014B2D: _dl_sysdep_start (dl-sysdep.c:244)
+# ==17052==    by 0x4001422: _dl_start (rtld.c:342)
+# ==17052==    by 0x4000AF7: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
+# ==17052==  Address 0x4ce is not stack'd, malloc'd or (recently) free'd
+# ==17052== 
+{
+   segfault caused by valgrind + libdl, II
+   Memcheck:Jump
+   obj:*
+   fun:open_verify
+   fun:_dl_map_object
+   fun:openaux
 }

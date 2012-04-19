@@ -595,20 +595,12 @@ void SyncConfig::migrate(const std::string &config)
         SE_THROW("internal error, migrating config root not implemented");
     } else {
         // migrate using the higher-level logic in the Cmdline class
-        ostringstream out, err;
-        Cmdline migrate(out, err,
-                        m_peer.c_str(),
+        Cmdline migrate(m_peer.c_str(),
                         "--migrate",
                         config.c_str(),
                         NULL);
         bool res = migrate.parse() && migrate.run();
         if (!res) {
-            if (!err.str().empty()) {
-                SE_LOG_ERROR(NULL, NULL, "%s", err.str().c_str());
-            }
-            if (!out.str().empty()) {
-                SE_LOG_INFO(NULL, NULL, "%s", out.str().c_str());
-            }
             SE_THROW(StringPrintf("migration of config '%s' failed", config.c_str()));
         }
 
@@ -901,7 +893,7 @@ list<string> SyncConfig::getPeers() const
     return res;
 }
 
-void SyncConfig::preFlush(ConfigUserInterface &ui)
+void SyncConfig::preFlush(UserInterface &ui)
 {
     /* Iterator over all sync global and source properties 
      * one by one and check whether they need to save password */
@@ -1642,7 +1634,7 @@ void SyncConfig::setSyncUsername(const string &value, bool temporarily) { syncPr
 InitStateString SyncConfig::getSyncPassword() const {
     return syncPropPassword.getCachedProperty(*getNode(syncPropPassword), m_cachedPassword);
 }
-void PasswordConfigProperty::checkPassword(ConfigUserInterface &ui,
+void PasswordConfigProperty::checkPassword(UserInterface &ui,
                                            const string &serverName,
                                            FilterConfigNode &globalConfigNode,
                                            const string &sourceName,
@@ -1684,7 +1676,7 @@ void PasswordConfigProperty::checkPassword(ConfigUserInterface &ui,
         }
     }
 }
-void PasswordConfigProperty::savePassword(ConfigUserInterface &ui,
+void PasswordConfigProperty::savePassword(UserInterface &ui,
                                           const string &serverName,
                                           FilterConfigNode &globalConfigNode,
                                           const string &sourceName,
@@ -1758,7 +1750,7 @@ ConfigPasswordKey PasswordConfigProperty::getPasswordKey(const string &descr,
     key.user   = syncPropUsername.getProperty(globalConfigNode);
     return key;
 }
-void ProxyPasswordConfigProperty::checkPassword(ConfigUserInterface &ui,
+void ProxyPasswordConfigProperty::checkPassword(UserInterface &ui,
                                            const string &serverName,
                                            FilterConfigNode &globalConfigNode,
                                            const string &sourceName,
@@ -2479,12 +2471,12 @@ void SyncSourceConfig::setUser(const string &value, bool temporarily) { sourcePr
 InitStateString SyncSourceConfig::getPassword() const {
     return sourcePropPassword.getCachedProperty(*getNode(sourcePropPassword), m_cachedPassword);
 }
-void SyncSourceConfig::checkPassword(ConfigUserInterface &ui, 
+void SyncSourceConfig::checkPassword(UserInterface &ui, 
                                      const string &serverName, 
                                      FilterConfigNode& globalConfigNode) {
     sourcePropPassword.checkPassword(ui, serverName, globalConfigNode, m_name, getNode(sourcePropPassword));
 }
-void SyncSourceConfig::savePassword(ConfigUserInterface &ui, 
+void SyncSourceConfig::savePassword(UserInterface &ui, 
                                     const string &serverName, 
                                     FilterConfigNode& globalConfigNode) {
     sourcePropPassword.savePassword(ui, serverName, globalConfigNode, m_name, getNode(sourcePropPassword));

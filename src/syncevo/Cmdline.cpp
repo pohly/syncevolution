@@ -58,19 +58,15 @@ SE_BEGIN_CXX
 // synopsis and options char strings
 #include "CmdlineHelp.c"
 
-Cmdline::Cmdline(int argc, const char * const * argv, ostream &out, ostream &err) :
+Cmdline::Cmdline(int argc, const char * const * argv) :
     m_argc(argc),
     m_argv(argv),
-    m_out(out),
-    m_err(err),
     m_validSyncProps(SyncConfig::getRegistry()),
     m_validSourceProps(SyncSourceConfig::getRegistry())
 {}
 
-Cmdline::Cmdline(const vector<string> &args, ostream &out, ostream &err) :
+Cmdline::Cmdline(const vector<string> &args) :
     m_args(args),
-    m_out(out),
-    m_err(err),
     m_validSyncProps(SyncConfig::getRegistry()),
     m_validSourceProps(SyncSourceConfig::getRegistry())
 {
@@ -82,9 +78,7 @@ Cmdline::Cmdline(const vector<string> &args, ostream &out, ostream &err) :
     m_argv = m_argvArray.get();
 }
 
-Cmdline::Cmdline(ostream &out, ostream &err, const char *arg, ...) :
-    m_out(out),
-    m_err(err),
+Cmdline::Cmdline(const char *arg, ...) :
     m_validSyncProps(SyncConfig::getRegistry()),
     m_validSourceProps(SyncSourceConfig::getRegistry())
 {
@@ -184,7 +178,7 @@ bool Cmdline::parse(vector<string> &parsed)
                   boost::iequals(m_argv[opt], "-l")) {
             opt++;
             if (opt >= m_argc) {
-                usage(true, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
+                usage(false, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
                 return false;
             }
             parsed.push_back(m_argv[opt]);
@@ -226,17 +220,17 @@ bool Cmdline::parse(vector<string> &parsed)
             operations.push_back(m_argv[opt]);
             opt++;
             if (opt >= m_argc) {
-                usage(true, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
+                usage(false, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
                 return false;
             }
             m_restore = m_argv[opt];
             if (m_restore.empty()) {
-                usage(true, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
+                usage(false, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
                 return false;
             }
             //if can't convert it successfully, it's an invalid path
             if (!relToAbs(m_restore)) {
-                usage(true, string("parameter '") + m_restore + "' for " + cmdOpt(m_argv[opt - 1]) + " must be log directory");
+                usage(false, string("parameter '") + m_restore + "' for " + cmdOpt(m_argv[opt - 1]) + " must be log directory");
                 return false;
             }
             parsed.push_back(m_restore);
@@ -254,7 +248,7 @@ bool Cmdline::parse(vector<string> &parsed)
             m_accessItems = true;
             opt++;
             if (opt >= m_argc || !m_argv[opt][0]) {
-                usage(true, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
+                usage(false, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
                 return false;
             }
             m_itemPath = m_argv[opt];
@@ -273,7 +267,7 @@ bool Cmdline::parse(vector<string> &parsed)
         } else if (boost::iequals(m_argv[opt], "--delimiter")) {
             opt++;
             if (opt >= m_argc) {
-                usage(true, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
+                usage(false, string("missing parameter for ") + cmdOpt(m_argv[opt - 1]));
                 return false;
             }
             m_delimiter = m_argv[opt];
@@ -382,7 +376,7 @@ bool Cmdline::parseBool(int opt, const char *longName, const char *shortName,
               boost::iequals(param, "no")) {
             value = false;
         } else {
-            usage(true, string("parameter in '") + m_argv[opt] + "' must be 1/t/true/yes or 0/f/false/no");
+            usage(false, string("parameter in '") + m_argv[opt] + "' must be 1/t/true/yes or 0/f/false/no");
             ok = false;
         }
         // was our option
@@ -511,7 +505,7 @@ void Cmdline::finishCopy(const boost::shared_ptr<SyncConfig> &from,
                          const boost::shared_ptr<SyncContext> &to)
 {
     // give a change to do something before flushing configs to files
-    to->preFlush(*to);
+    to->preFlush(to->getUserInterfaceNonNull());
 
     // done, now write it
     m_configModified = true;
@@ -644,11 +638,11 @@ bool Cmdline::run() {
     if (m_usage) {
         usage(true);
     } else if (m_version) {
-        printf("SyncEvolution %s%s\n",
-               VERSION,
-               SyncContext::isStableRelease() ? "" : " (pre-release)");
-        printf("%s", EDSAbiWrapperInfo());
-        printf("%s", SyncSource::backendsInfo().c_str());
+        SE_LOG_SHOW(NULL, NULL, "SyncEvolution %s%s\n%s%s",
+                    VERSION,
+                    SyncContext::isStableRelease() ? "" : " (pre-release)",
+                    EDSAbiWrapperInfo(),
+                    SyncSource::backendsInfo().c_str());
     } else if (m_printServers || boost::trim_copy(m_server) == "?") {
         dumpConfigs("Configured servers:",
                     SyncConfig::getConfigs());
@@ -713,9 +707,9 @@ bool Cmdline::run() {
             auto_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
             if (source.get() != NULL) {
                 listSources(*source, header);
-                m_out << "\n";
+                SE_LOG_SHOW(NULL, NULL, "\n");
             } else {
-                m_out << header << "\n   cannot list databases" << std::endl;
+                SE_LOG_SHOW(NULL, NULL, "%s:\n   cannot list databases", header.c_str());
             }
         } else {
             // list for all backends
@@ -724,10 +718,19 @@ bool Cmdline::run() {
                     if (!alias.empty() && source->m_enabled) {
                         SourceType type(*alias.begin());
                         nodes->getProperties()->setProperty("backend", type.m_backend);
-                        auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
-                        if (source.get() != NULL) {
-                            listSources(*source, boost::join(alias, " = "));
-                            m_out << "\n";
+                        std::string header = boost::join(alias, " = ");
+                        try {
+                            auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
+                            if (!source.get()) {
+                                // silently skip backends like the "file" backend which do not support
+                                // listing databases and return NULL unless configured properly
+                            } else {
+                                listSources(*source, header);
+                                SE_LOG_SHOW(NULL, NULL, "\n");
+                            }
+                        } catch (...) {
+                            SE_LOG_ERROR(NULL, NULL, "%s:\nlisting databases failed", header.c_str());
+                            Exception::handle();
                         }
                     }
                 }
@@ -740,12 +743,12 @@ bool Cmdline::run() {
 
         if (m_template.empty()) {
             if (m_server.empty()) {
-                m_err << "ERROR: --print-config requires either a --template or a server name." << endl;
+                usage(false, "--print-config requires either a --template or a server name.");
                 return false;
             }
             config.reset(new SyncConfig(m_server));
             if (!config->exists()) {
-                m_err << "ERROR: server '" << m_server << "' has not been configured yet." << endl;
+                SE_LOG_ERROR(NULL, NULL, "Server '%s' has not been configured yet.", m_server.c_str());
                 return false;
             }
 
@@ -760,7 +763,7 @@ bool Cmdline::run() {
                                           peer, context);
             config = SyncConfig::createPeerTemplate(peer);
             if (!config.get()) {
-                m_err << "ERROR: no configuration template for '" << m_template << "' available." << endl;
+                SE_LOG_ERROR(NULL, NULL, "No configuration template for '%s' available.", m_template.c_str());
                 return false;
             }
 
@@ -796,7 +799,7 @@ bool Cmdline::run() {
         BOOST_FOREACH(const string &name, sources) {
             if (m_sources.empty() ||
                 m_sources.find(name) != m_sources.end()) {
-                m_out << endl << "[" << name << "]" << endl;
+                SE_LOG_SHOW(NULL, NULL, "[%s]", name.c_str());
                 SyncSourceNodes nodes = config->getSyncSourceNodes(name);
                 boost::shared_ptr<FilterConfigNode> sourceProps = nodes.getProperties();
                 sourceProps->setFilter(sourceFilters.createSourceFilter(name));
@@ -811,13 +814,14 @@ bool Cmdline::run() {
         if (m_dryrun) {
             SyncContext::throwError("--dry-run not supported for configuration changes");
         }
-        if (m_keyring) {
-#if (!defined USE_GNOME_KEYRING) and (!defined USE_KDE_KWALLET)
-            m_err << "Error: this syncevolution binary was compiled without support for storing "
-                     "passwords in a keyring or wallet. Either store passwords in your configuration "
-                     "files or enter them interactively on each program run." << endl;
+        if (m_keyring &&
+            GetLoadPasswordSignal().empty()) {
+            SE_LOG_ERROR(NULL, NULL,
+                         "This syncevolution binary was compiled without support for storing "
+                         "passwords in a keyring or wallet, or the backends for that functionality are not usable. "
+                         "Either store passwords in your configuration "
+                         "files or enter them interactively on each program run.");
             return false;
-#endif
         }
 
         // name of renamed config ("foo.old") after migration
@@ -856,7 +860,7 @@ bool Cmdline::run() {
         string origPeer;
         if (m_migrate) {
             if (!m_sources.empty()) {
-                m_err << "ERROR: cannot migrate individual sources" << endl;
+                SE_LOG_ERROR(NULL, NULL, "cannot migrate individual sources");
                 return false;
             }
 
@@ -867,7 +871,7 @@ bool Cmdline::run() {
                 oldContext = "";
                 from.reset(new SyncConfig(peer));
                 if (!from->exists()) {
-                    m_err << "ERROR: server '" << m_server << "' has not been configured yet." << endl;
+                    SE_LOG_ERROR(NULL, NULL, "Server '%s' has not been configured yet.", m_server.c_str());
                     return false;
                 }
             }
@@ -944,7 +948,7 @@ bool Cmdline::run() {
                     if (SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(configTemplate,
                                                                                         SyncConfig::NormalizeFlags(SyncConfig::NORMALIZE_SHORTHAND|SyncConfig::NORMALIZE_IS_NEW)),
                                                       peer, context)) {
-                        m_err << "ERROR: template " << configTemplate << " must not specify a context." << endl;
+                        SE_LOG_ERROR(NULL, NULL, "Template %s must not specify a context.", configTemplate.c_str());
                         return false;
                     }
                     string tmp;
@@ -974,18 +978,21 @@ bool Cmdline::run() {
                     }
                 }
                 if (!from.get()) {
-                    m_err << "ERROR: no configuration template for '" << configTemplate << "' available.";
+                    SE_LOG_ERROR(NULL, NULL, "No configuration template for '%s' available.", configTemplate.c_str());
                     if (m_template.empty()) {
-                        m_err <<
-                            " Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: " << boost::join(missing, ", ");
+                        SE_LOG_INFO(NULL, NULL,
+                                    "Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: %s",
+                                    boost::join(missing, ", ").c_str());
                     } else if (missing.empty()) {
-                        m_err << " All relevant properties seem to be set, omit the --template parameter to proceed.";
+                        SE_LOG_INFO(NULL, NULL, "All relevant properties seem to be set, omit the --template parameter to proceed.");
                     }
-                    m_err << endl;
+                    SE_LOG_INFO(NULL, NULL, "\n");
                     SyncConfig::DeviceList devices;
                     devices.push_back(SyncConfig::DeviceDescription("", "", SyncConfig::MATCH_ALL));
                     dumpConfigTemplates("Available configuration templates (clients and servers):",
-                                        SyncConfig::getPeerTemplates(devices));
+                                        SyncConfig::getPeerTemplates(devices),
+                                        false,
+                                        Logger::INFO);
                     return false;
                 }
             }
@@ -1182,7 +1189,7 @@ bool Cmdline::run() {
         // extra sanity check
         if (!m_sources.empty() ||
             m_props.hasProperties()) {
-            usage(true, "too many parameters for --remove");
+            usage(false, "too many parameters for --remove");
             return false;
         } else {
             boost::shared_ptr<SyncConfig> config;
@@ -1198,7 +1205,6 @@ bool Cmdline::run() {
         // need access to specific source
         boost::shared_ptr<SyncContext> context;
         context.reset(createSyncClient());
-        context->setOutput(&m_out);
 
         // operating on exactly one source (can be optional)
         string sourceName;
@@ -1252,13 +1258,13 @@ bool Cmdline::run() {
         {
             ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
             BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(*context, m_server, *context->getProperties());
+                prop->checkPassword(context->getUserInterfaceNonNull(), m_server, *context->getProperties());
             }
         }
         {
             ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
             BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(*context, m_server, *context->getProperties(),
+                prop->checkPassword(context->getUserInterfaceNonNull(), m_server, *context->getProperties(),
                                     source->getName(), sourceNodes.getProperties());
             }
         }
@@ -1280,11 +1286,11 @@ bool Cmdline::run() {
                 string description;
                 if (logging) {
                     description = logging->getDescription(luid);
-                    if (!description.empty()) {
-                        description.insert(0, ": ");
-                    }
                 }
-                m_out << CmdlineLUID::fromLUID(luid) << description << std::endl;
+                SE_LOG_SHOW(NULL, NULL, "%s%s%s",
+                            CmdlineLUID::fromLUID(luid).c_str(),
+                            description.empty() ? "" : ": ",
+                            description.c_str());
             }
         } else if (m_deleteItems) {
             if (!ops.m_deleteItem) {
@@ -1342,7 +1348,7 @@ bool Cmdline::run() {
                     string content;
                     string luid;
                     if (m_itemPath == "-") {
-                        context->readStdin(content);
+                        context->getUserInterfaceNonNull().readStdin(content);
                     } else if (!ReadFile(m_itemPath, content)) {
                         SyncContext::throwError(m_itemPath, errno);
                     }
@@ -1354,9 +1360,8 @@ bool Cmdline::run() {
                                 luid = *m_luids.begin();
                             }
                         }
-                        m_out << "#0: "
-                              << insertItem(raw, luid, content).getEncoded()
-                              << endl;
+                        SE_LOG_SHOW(NULL, NULL, "#0: %s",
+                                    insertItem(raw, luid, content).getEncoded().c_str());
                     } else {
                         typedef boost::split_iterator<string::iterator> string_split_iterator;
                         int count = 0;
@@ -1381,7 +1386,6 @@ bool Cmdline::run() {
                                  boost::make_split_iterator(content, finder);
                              it != string_split_iterator();
                              ++it) {
-                            m_out << "#" << count << ": ";
                             string luid;
                             if (m_update) {
                                 if (luidit == m_luids.end()) {
@@ -1391,10 +1395,11 @@ bool Cmdline::run() {
                                 luid = *luidit;
                                 ++luidit;
                             }
-                            m_out << insertItem(raw,
-                                                luid,
-                                                string(it->begin(), it->end())).getEncoded()
-                                  << endl;
+                            SE_LOG_SHOW(NULL, NULL, "#%d: %s",
+                                        count,
+                                        insertItem(raw,
+                                                   luid,
+                                                   string(it->begin(), it->end())).getEncoded().c_str());
                             count++;
                         }
                     }
@@ -1404,11 +1409,13 @@ bool Cmdline::run() {
                     BOOST_FOREACH(const string &entry, dir) {
                         string content;
                         string path = m_itemPath + "/" + entry;
-                        m_out << count << ": " << entry << ": ";
                         if (!ReadFile(path, content)) {
                             SyncContext::throwError(path, errno);
                         }
-                        m_out << insertItem(raw, "", content).getEncoded() << endl;
+                        SE_LOG_SHOW(NULL, NULL, "#%d: %s: %s",
+                                    count,
+                                    entry.c_str(),
+                                    insertItem(raw, "", content).getEncoded().c_str());
                     }
                 }
                 char *token = NULL;
@@ -1424,7 +1431,8 @@ bool Cmdline::run() {
                 ostream *out = NULL;
                 cxxptr<ofstream> outFile;
                 if (m_itemPath == "-") {
-                    out = &m_out;
+                    // not actually used, falls back to SE_LOG_SHOW()
+                    out = &std::cout;
                 } else if(!isDir(m_itemPath)) {
                     outFile.set(new ofstream(m_itemPath.c_str()));
                     out = outFile;
@@ -1434,41 +1442,44 @@ bool Cmdline::run() {
                 }
                 bool haveItem = false;     // have written one item
                 bool haveNewline = false;  // that item had a newline at the end
-                try {
-                    BOOST_FOREACH(const string &luid, m_luids) {
-                        string item;
-                        raw->readItemRaw(luid, item);
-                        if (!out) {
-                            // write into directory
-                            string fullPath = m_itemPath + "/" + luid;
-                            ofstream file((m_itemPath + "/" + luid).c_str());
-                            file << item;
-                            file.close();
-                            if (file.bad()) {
-                                SyncContext::throwError(fullPath, errno);
-                            }
-                        } else {
-                            if (haveItem) {
-                                if (m_delimiter.size() > 1 &&
-                                    haveNewline &&
-                                    m_delimiter[0] == '\n') {
-                                    // already wrote initial newline, skip it
-                                    *out << m_delimiter.substr(1);
-                                } else {
-                                    *out << m_delimiter;
-                                }
-                            }
-                            *out << item;
-                            haveNewline = !item.empty() && item[item.size() - 1] == '\n';
-                            haveItem = true;
+                BOOST_FOREACH(const string &luid, m_luids) {
+                    string item;
+                    raw->readItemRaw(luid, item);
+                    if (!out) {
+                        // write into directory
+                        string fullPath = m_itemPath + "/" + luid;
+                        ofstream file((m_itemPath + "/" + luid).c_str());
+                        file << item;
+                        file.close();
+                        if (file.bad()) {
+                            SyncContext::throwError(fullPath, errno);
                         }
+                    } else {
+                        std::string delimiter;
+                        if (haveItem) {
+                            if (m_delimiter.size() > 1 &&
+                                haveNewline &&
+                                m_delimiter[0] == '\n') {
+                                // already wrote initial newline, skip it
+                                delimiter = m_delimiter.substr(1);
+                            } else {
+                                delimiter = m_delimiter;
+                            }
+                        }
+                        if (out == &std::cout) {
+                            // special case, use logging infrastructure
+                            SE_LOG_SHOW(NULL, NULL, "%s%s",
+                                        delimiter.c_str(),
+                                        item.c_str());
+                            // always prints newline
+                            haveNewline = true;
+                        } else {
+                            // write to file
+                            *out << item;
+                            haveNewline = boost::ends_with(item, "\n");
+                        }
+                        haveItem = true;
                     }
-                } catch (...) {
-                    // ensure that we start following output on new line
-                    if (m_itemPath == "-" && haveItem && !haveNewline) {
-                        m_out << endl;
-                    }
-                    throw;
                 }
                 if (outFile) {
                     outFile->close();
@@ -1491,7 +1502,6 @@ bool Cmdline::run() {
         context->setQuiet(m_quiet);
         context->setDryRun(m_dryrun);
         context->setConfigFilter(true, "", m_props.createSyncFilter(m_server));
-        context->setOutput(&m_out);
         if (m_sources.empty()) {
             // Special semantic of 'no source selected': apply
             // filter (if any exists) only to sources which are
@@ -1557,13 +1567,15 @@ bool Cmdline::run() {
                 if (first) {
                     first = false;
                 } else if(!m_quiet) {
-                    m_out << endl;
+                    SE_LOG_SHOW(NULL, NULL, "\n");
                 }
-                m_out << dir << endl;
+                SE_LOG_SHOW(NULL, NULL, "%s", dir.c_str());
                 if (!m_quiet) {
                     SyncReport report;
                     context->readSessionInfo(dir, report);
-                    m_out << report;
+                    ostringstream out;
+                    out << report;
+                    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
                 }
             }
         } else if (!m_restore.empty()) {
@@ -1649,7 +1661,7 @@ bool Cmdline::parseProp(PropertyType propertyType,
     std::string args = cmdOpt(opt, param);
 
     if (!param) {
-        usage(true, string("missing parameter for ") + args);
+        usage(false, string("missing parameter for ") + args);
         return false;
     }
 
@@ -1664,7 +1676,7 @@ bool Cmdline::parseProp(PropertyType propertyType,
     } else {
         const char *equal = strchr(param, '=');
         if (!equal) {
-            usage(true, string("the '=<value>' part is missing in: ") + args);
+            usage(false, string("the '=<value>' part is missing in: ") + args);
             return false;
         }
         propstr.assign(param, equal - param);
@@ -1693,7 +1705,7 @@ bool Cmdline::parseProp(PropertyType propertyType,
 
             if (isSyncProp) {
                 if (isSourceProp) {
-                    usage(true, StringPrintf("property '%s' in %s could be both a sync and a source property, use --sync-property or --source-property to disambiguate it", propname, args.c_str()));
+                    usage(false, StringPrintf("property '%s' in %s could be both a sync and a source property, use --sync-property or --source-property to disambiguate it", propname, args.c_str()));
                     return false;
                 } else {
                     validProps = &m_validSyncProps;
@@ -1702,11 +1714,16 @@ bool Cmdline::parseProp(PropertyType propertyType,
                        boost::iequals(spec.m_property, "type")) {
                 validProps = &m_validSourceProps;
             } else {
-                usage(true, StringPrintf("unrecognized property '%s' in %s", propname, args.c_str()));
+                if (propname) {
+                    usage(false, StringPrintf("unrecognized property '%s' in %s", propname, args.c_str()));
+                } else {
+                    usage(false, StringPrintf("unrecognized property in %s", args.c_str()));
+                }
                 return false;
             }
         } else {
-            usage(true, StringPrintf("a property name must be given in '%s'", args.c_str()));
+            usage(false, StringPrintf("a property name must be given in %s", args.c_str()));
+            return false;
         }
     }
 
@@ -1728,13 +1745,13 @@ bool Cmdline::parseProp(PropertyType propertyType,
                 // replaced it
                 prop = validProps->find("backend");
                 if (!prop) {
-                    m_err << "ERROR: backend: no such property" << endl;
+                    SE_LOG_ERROR(NULL, NULL, "backend: no such property");
                     return false;
                 }
                 SourceType sourceType(paramstr);
                 string error;
                 if (!prop->checkValue(sourceType.m_backend, error)) {
-                    m_err << "ERROR: " << args << ": " << error << endl;
+                    SE_LOG_ERROR(NULL, NULL, "%s: %s", args.c_str(), error.c_str());
                     return false;
                 }
                 ContextProps &props = m_props[spec.m_config];
@@ -1744,19 +1761,21 @@ bool Cmdline::parseProp(PropertyType propertyType,
                 props.m_sourceProps[spec.m_source]["forceSyncFormat"] = sourceType.m_forceFormat ? "1" : "0";
                 return true;
             } else if (!prop) {
-                m_err << "ERROR: " << args << ": no such property" << endl;
+                SE_LOG_ERROR(NULL, NULL, "%s: no such property", args.c_str());
                 return false;
             } else {
                 string error;
                 if (!prop->checkValue(paramstr, error)) {
-                    m_err << "ERROR: " << args << ": " << error << endl;
+                    SE_LOG_ERROR(NULL, NULL, "%s: %s", args.c_str(), error.c_str());
                     return false;
                 } else {
                     ContextProps &props = m_props[spec.m_config];
                     if (validProps == &m_validSyncProps) {
                         // complain if sync property includes source prefix
                         if (!spec.m_source.empty()) {
-                            m_err << "ERROR: " << args << ": source name '" << spec.m_source << "' not allowed in sync property" << endl;
+                            SE_LOG_ERROR(NULL, NULL, "%s: source name '%s' not allowed in sync property",
+                                         args.c_str(),
+                                         spec.m_source.c_str());
                             return false;
                         }
                         props.m_syncProps[spec.m_property] = paramstr;
@@ -1776,27 +1795,31 @@ bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
 {
     const ConfigProperty *prop = validProps.find(propName);
     if (!prop && boost::iequals(propName, "type")) {
-        m_out << opt << endl;
-        m_out << "   <backend>[:<format>[:<version][!]]" << endl;
-        m_out << "   legacy property, replaced by 'backend', 'databaseFormat'," << endl;
-        m_out << "   'syncFormat', 'forceSyncFormat'" << endl;
+        SE_LOG_SHOW(NULL, NULL,
+                    "%s\n"
+                    "   <backend>[:<format>[:<version][!]]\n"
+                    "   legacy property, replaced by 'backend', 'databaseFormat',\n"
+                    "   'syncFormat', 'forceSyncFormat'",
+                    opt.c_str());
         return true;
     } else if (!prop) {
-        m_err << "ERROR: "<< opt << ": no such property" << endl;
+        SE_LOG_ERROR(NULL, NULL, "%s: no such property", opt.c_str());
         return false;
     } else {
-        m_out << opt << endl;
+        ostringstream out;
+        out << opt << endl;
         string comment = prop->getComment();
 
         if (comment != "") {
             list<string> commentLines;
             ConfigProperty::splitComment(comment, commentLines);
             BOOST_FOREACH(const string &line, commentLines) {
-                m_out << "   " << line << endl;
+                out << "   " << line << endl;
             }
         } else {
-            m_out << "   no documentation available" << endl;
+            out << "   no documentation available" << endl;
         }
+        SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
         return true;
     }
 }
@@ -1809,15 +1832,16 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
     // that way related properties preceed their comment.
     string comment;
     bool needComma = false;
+    ostringstream out;
     BOOST_FOREACH(const ConfigProperty *prop, validProps) {
         if (!prop->isHidden()) {
             string newComment = prop->getComment();
 
             if (newComment != "") {
                 if (!comment.empty()) {
-                    m_out << endl;
-                    dumpComment(m_out, "   ", comment);
-                    m_out << endl;
+                    out << endl;
+                    dumpComment(out, "   ", comment);
+                    out << endl;
                     needComma = false;
                 }
                 comment = newComment;
@@ -1828,9 +1852,9 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
             }
             ConfigProperty::Sharing sharing = prop->getSharing();
             if (needComma) {
-                m_out << ", ";
+                out << ", ";
             }
-            m_out << boost::join(prop->getNames(), " = ")
+            out << boost::join(prop->getNames(), " = ")
                   << " (" << def << ", "
                   << ConfigProperty::sharing2str(sharing)
                   << (prop->isObligatory() ? ", required" : "")
@@ -1838,8 +1862,9 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
             needComma = true;
         }
     }
-    m_out << endl;
-    dumpComment(m_out, "   ", comment);
+    out << endl;
+    dumpComment(out, "   ", comment);
+    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
     return true;
 }
 
@@ -1883,51 +1908,63 @@ void Cmdline::checkForPeerProps()
 
 void Cmdline::listSources(SyncSource &syncSource, const string &header)
 {
-    m_out << header << ":\n";
-    SyncSource::Databases databases = syncSource.getDatabases();
+    ostringstream out;
+    out << header << ":\n";
 
-    BOOST_FOREACH(const SyncSource::Database &database, databases) {
-        m_out << "   " << database.m_name << " (" << database.m_uri << ")";
-        if (database.m_isDefault) {
-            m_out << " <default>";
+    if (syncSource.isInactive()) {
+        out << "not enabled during compilation or not usable in the current environment\n";
+    } else {
+        SyncSource::Databases databases = syncSource.getDatabases();
+
+        BOOST_FOREACH(const SyncSource::Database &database, databases) {
+            out << "   " << database.m_name << " (" << database.m_uri << ")";
+            if (database.m_isDefault) {
+                out << " <default>";
+            }
+            out << endl;
         }
-        m_out << endl;
     }
+    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpConfigs(const string &preamble,
                                        const SyncConfig::ConfigList &servers)
 {
-    m_out << preamble << endl;
+    ostringstream out;
+    out << preamble << endl;
     BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,servers) {
-        m_out << "   "  << server.first << " = " << server.second <<endl; 
+        out << "   "  << server.first << " = " << server.second <<endl;
     }
     if (!servers.size()) {
-        m_out << "   none" << endl;
+        out << "   none" << endl;
     }
+    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpConfigTemplates(const string &preamble,
-                                       const SyncConfig::TemplateList &templates,
-                                       bool printRank)
+                                  const SyncConfig::TemplateList &templates,
+                                  bool printRank,
+                                  Logger::Level level)
 {
-    m_out << preamble << endl;
-    m_out << "   "  << "template name" << " = " << "template description";
+    ostringstream out;
+    out << preamble << endl;
+    out << "   "  << "template name" << " = " << "template description";
     if (printRank) {
-        m_out << "    " << "matching score in percent (100% = exact match)";
+        out << "    " << "matching score in percent (100% = exact match)";
     }
-    m_out << endl;
+    out << endl;
 
     BOOST_FOREACH(const SyncConfig::TemplateList::value_type server,templates) {
-        m_out << "   "  << server->m_templateId << " = " << server->m_description;
+        out << "   "  << server->m_templateId << " = " << server->m_description;
         if (printRank){
-            m_out << "    " << server->m_rank *20 << "%";
+            out << "    " << server->m_rank *20 << "%";
         }
-        m_out << endl;
+        out << endl;
     }
     if (!templates.size()) {
-        m_out << "   none" << endl;
+        out << "   none" << endl;
     }
+    SE_LOG(level, NULL, NULL, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpProperties(const ConfigNode &configuredProps,
@@ -1935,6 +1972,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
                              int flags)
 {
     list<string> perPeer, perContext, global;
+    ostringstream out;
 
     BOOST_FOREACH(const ConfigProperty *prop, allProps) {
         if (prop->isHidden() ||
@@ -1945,15 +1983,15 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
         if (!m_quiet) {
             string comment = prop->getComment();
             if (!comment.empty()) {
-                m_out << endl;
-                dumpComment(m_out, "# ", comment);
+                out << endl;
+                dumpComment(out, "# ", comment);
             }
         }
         InitStateString value = prop->getProperty(configuredProps);
         if (!value.wasSet()) {
-            m_out << "# ";
+            out << "# ";
         }
-        m_out << prop->getMainName() << " = " << value.get() << endl;
+        out << prop->getMainName() << " = " << value.get() << endl;
 
         list<string> *type = NULL;
         switch (prop->getSharing()) {
@@ -1976,18 +2014,20 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
         if (!perPeer.empty() ||
             !perContext.empty() ||
             !global.empty()) {
-            m_out << endl;
+            out << endl;
         }
         if (!perPeer.empty()) {
-            m_out << "# per-peer (unshared) properties: " << boost::join(perPeer, ", ") << endl;
+            out << "# per-peer (unshared) properties: " << boost::join(perPeer, ", ") << endl;
         }
         if (!perContext.empty()) {
-            m_out << "# shared by peers in same context: " << boost::join(perContext, ", ") << endl;
+            out << "# shared by peers in same context: " << boost::join(perContext, ", ") << endl;
         }
         if (!global.empty()) {
-            m_out << "# global properties: " << boost::join(global, ", ") << endl;
+            out << "# global properties: " << boost::join(global, ", ") << endl;
         }
     }
+
+    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpComment(ostream &stream,
@@ -2003,28 +2043,26 @@ void Cmdline::dumpComment(ostream &stream,
 
 void Cmdline::usage(bool full, const string &error, const string &param)
 {
-    ostream &out(error.empty() ? m_out : m_err);
-
-    out << synopsis;
+    SE_LOG_SHOW(NULL, NULL, "%s", synopsis);
     if (full) {
-        out << endl <<
-            "Options:" << endl <<
-            options;
+        SE_LOG_SHOW(NULL, NULL, "\nOptions:\n%s", options);
     }
 
     if (error != "") {
-        out << endl << "ERROR: " << error << endl;
+        SE_LOG_SHOW(NULL, NULL, "\n");
+        SE_LOG_ERROR(NULL, NULL, "%s", error.c_str());
     }
     if (param != "") {
-        out << "INFO: use '" << param << (param[param.size() - 1] == '=' ? "" : " ") <<
-            "?' to get a list of valid parameters" << endl;
+        SE_LOG_INFO(NULL, NULL, "use '%s%s?' to get a list of valid parameters",
+                    param.c_str(),
+                    boost::ends_with(param, "=") ? "" : " ");
     }
 }
 
 bool Cmdline::needConfigName()
 {
     if (m_server.empty()) {
-        usage(false, "no configuration name specified");
+        usage(false, "No configuration name specified.");
         return false;
     } else {
         return true;
@@ -2086,21 +2124,6 @@ static string diffStrings(const string &lhs, const string &rhs)
                                         CPPUNIT_SOURCELINE() );         \
         } \
     } while ( false )
-
-// returns last line, including trailing line break, empty if input is empty
-static string lastLine(const string &buffer)
-{
-    if (buffer.size() < 2) {
-        return buffer;
-    }
-
-    size_t line = buffer.rfind("\n", buffer.size() - 2);
-    if (line == buffer.npos) {
-        return buffer;
-    }
-
-    return buffer.substr(line + 1);
-}
 
 // true if <word> =
 static bool isPropAssignment(const string &buffer) {
@@ -2821,8 +2844,7 @@ protected:
         TestCmdline failure("--template", NULL);
 
         CPPUNIT_ASSERT(!failure.m_cmdline->parse());
-        CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-        CPPUNIT_ASSERT_EQUAL(string("ERROR: missing parameter for '--template'\n"), lastLine(failure.m_err.str()));
+        CPPUNIT_ASSERT_NO_THROW(failure.expectUsageError("[ERROR] missing parameter for '--template'\n"));
 
         TestCmdline help("--template", "? ", NULL);
         help.doit();
@@ -2914,9 +2936,7 @@ protected:
             TestCmdline failure("--print-config", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: --print-config requires either a --template or a server name.\n"),
-                                 lastLine(failure.m_err.str()));
+            CPPUNIT_ASSERT_NO_THROW(failure.expectUsageError("[ERROR] --print-config requires either a --template or a server name.\n"));
         }
 
         {
@@ -2924,8 +2944,8 @@ protected:
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(!failure.m_cmdline->run());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: server 'foo' has not been configured yet.\n"),
-                                 lastLine(failure.m_err.str()));
+            CPPUNIT_ASSERT_EQUAL(string("[ERROR] Server 'foo' has not been configured yet.\n"),
+                                 failure.m_err.str());
         }
 
         {
@@ -2933,8 +2953,8 @@ protected:
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(!failure.m_cmdline->run());
             CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'foo' available.\n"),
-                                 lastLine(failure.m_err.str()));
+            CPPUNIT_ASSERT_EQUAL(string("[ERROR] No configuration template for 'foo' available.\n"),
+                                 failure.m_err.str());
         }
 
         {
@@ -3205,13 +3225,12 @@ protected:
     void testSync() {
         TestCmdline failure("--sync", NULL);
         CPPUNIT_ASSERT(!failure.m_cmdline->parse());
-        CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-        CPPUNIT_ASSERT_EQUAL(string("ERROR: missing parameter for '--sync'\n"), lastLine(failure.m_err.str()));
+        CPPUNIT_ASSERT_NO_THROW(failure.expectUsageError("[ERROR] missing parameter for '--sync'\n"));
 
         TestCmdline failure2("--sync", "foo", NULL);
         CPPUNIT_ASSERT(!failure2.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure2.m_out.str());
-        CPPUNIT_ASSERT_EQUAL(string("ERROR: '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n"), lastLine(failure2.m_err.str()));
+        CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n", failure2.m_err.str());
 
         TestCmdline help("--sync", " ?", NULL);
         help.doit();
@@ -3252,7 +3271,7 @@ protected:
         TestCmdline filter("--sync", "refresh-from-server", NULL);
         CPPUNIT_ASSERT(filter.m_cmdline->parse());
         CPPUNIT_ASSERT(!filter.m_cmdline->run());
-        CPPUNIT_ASSERT_EQUAL_DIFF("", filter.m_out.str());
+        CPPUNIT_ASSERT_NO_THROW(filter.expectUsageError("[ERROR] No configuration name specified.\n"));
         CPPUNIT_ASSERT_EQUAL_DIFF("sync = refresh-from-server",
                                   string(filter.m_cmdline->m_props[""].m_sourceProps[""]));
         CPPUNIT_ASSERT_EQUAL_DIFF("",                                  string(filter.m_cmdline->m_props[""].m_syncProps));
@@ -3260,11 +3279,24 @@ protected:
         TestCmdline filter2("--source-property", "sync=refresh", NULL);
         CPPUNIT_ASSERT(filter2.m_cmdline->parse());
         CPPUNIT_ASSERT(!filter2.m_cmdline->run());
-        CPPUNIT_ASSERT_EQUAL_DIFF("", filter2.m_out.str());
+        CPPUNIT_ASSERT_NO_THROW(filter2.expectUsageError("[ERROR] No configuration name specified.\n"));
         CPPUNIT_ASSERT_EQUAL_DIFF("sync = refresh",
                                   string(filter2.m_cmdline->m_props[""].m_sourceProps[""]));
         CPPUNIT_ASSERT_EQUAL_DIFF("",
                                   string(filter2.m_cmdline->m_props[""].m_syncProps));
+
+        TestCmdline filter3("--source-property", "xyz=1", NULL);
+        CPPUNIT_ASSERT(!filter3.m_cmdline->parse());
+        CPPUNIT_ASSERT_EQUAL(string(""), filter3.m_out.str());
+        CPPUNIT_ASSERT_EQUAL(string("[ERROR] '--source-property xyz=1': no such property\n"), filter3.m_err.str());
+
+        TestCmdline filter4("xyz=1", NULL);
+        CPPUNIT_ASSERT(!filter4.m_cmdline->parse());
+        CPPUNIT_ASSERT_NO_THROW(filter4.expectUsageError("[ERROR] unrecognized property in 'xyz=1'\n"));
+
+        TestCmdline filter5("=1", NULL);
+        CPPUNIT_ASSERT(!filter5.m_cmdline->parse());
+        CPPUNIT_ASSERT_NO_THROW(filter5.expectUsageError("[ERROR] a property name must be given in '=1'\n"));
     }
 
     void testWebDAV() {
@@ -3310,9 +3342,17 @@ protected:
                                 NULL);
             CPPUNIT_ASSERT(cmdline.m_cmdline->parse());
             CPPUNIT_ASSERT(!cmdline.m_cmdline->run());
-            CPPUNIT_ASSERT(boost::starts_with(cmdline.m_out.str(), "Available configuration templates (clients and servers):\n"));
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'yahooxyz' available.\n"),
-                                 lastLine(cmdline.m_err.str()));
+            static const char error[] = "[ERROR] No configuration template for 'yahooxyz' available.\n"
+                "[INFO] \n"
+                "[INFO] Available configuration templates (clients and servers):\n";
+            std::string out = cmdline.m_out.str();
+            std::string err = cmdline.m_err.str();
+            std::string all = cmdline.m_all.str();
+            CPPUNIT_ASSERT(boost::starts_with(err, error));
+            CPPUNIT_ASSERT(boost::ends_with(err, "\n"));
+            CPPUNIT_ASSERT(!boost::ends_with(err, "\n\n"));
+            CPPUNIT_ASSERT_EQUAL(string(""), out);
+            CPPUNIT_ASSERT_EQUAL(all, err);
         }
         {
             TestCmdline cmdline("--configure",
@@ -3320,9 +3360,18 @@ protected:
                                 NULL);
             CPPUNIT_ASSERT(cmdline.m_cmdline->parse());
             CPPUNIT_ASSERT(!cmdline.m_cmdline->run());
-            CPPUNIT_ASSERT(boost::starts_with(cmdline.m_out.str(), "Available configuration templates (clients and servers):\n"));
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'foobar' available. Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: syncURL\n"),
-                                 lastLine(cmdline.m_err.str()));
+            static const char error[] = "[ERROR] No configuration template for 'foobar' available.\n"
+                "[INFO] Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: syncURL\n"
+                "[INFO] \n"
+                "[INFO] Available configuration templates (clients and servers):\n";
+            std::string out = cmdline.m_out.str();
+            std::string err = cmdline.m_err.str();
+            std::string all = cmdline.m_all.str();
+            CPPUNIT_ASSERT(boost::starts_with(err, error));
+            CPPUNIT_ASSERT(boost::ends_with(err, "\n"));
+            CPPUNIT_ASSERT(!boost::ends_with(err, "\n\n"));
+            CPPUNIT_ASSERT_EQUAL(string(""), out);
+            CPPUNIT_ASSERT_EQUAL(err, all);
         }
 #endif
     }
@@ -3547,9 +3596,18 @@ protected:
             TestCmdline failure("--configure", "foo", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            CPPUNIT_ASSERT(boost::starts_with(failure.m_out.str(), "Available configuration templates (clients and servers):\n"));
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'foo@default' available. Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: syncURL\n"),
-                                 lastLine(failure.m_err.str()));
+            static const char error[] = "[ERROR] No configuration template for 'foo@default' available.\n"
+                "[INFO] Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: syncURL\n"
+                "[INFO] \n"
+                "[INFO] Available configuration templates (clients and servers):\n";
+            std::string out = failure.m_out.str();
+            std::string err = failure.m_err.str();
+            std::string all = failure.m_all.str();
+            CPPUNIT_ASSERT(boost::starts_with(err, error));
+            CPPUNIT_ASSERT(boost::ends_with(err, "\n"));
+            CPPUNIT_ASSERT(!boost::ends_with(err, "\n\n"));
+            CPPUNIT_ASSERT_EQUAL(string(""), out);
+            CPPUNIT_ASSERT_EQUAL(all, err);
         }
 
         rm_r(m_testDir);
@@ -3560,9 +3618,19 @@ protected:
             TestCmdline failure("--configure", "syncURL=http://foo.com", "--template", "foo", "bar", NULL);
             CPPUNIT_ASSERT(failure.m_cmdline->parse());
             CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            CPPUNIT_ASSERT(boost::starts_with(failure.m_out.str(), "Available configuration templates (clients and servers):\n"));
-            CPPUNIT_ASSERT_EQUAL(string("ERROR: no configuration template for 'foo' available. All relevant properties seem to be set, omit the --template parameter to proceed.\n"),
-                                 lastLine(failure.m_err.str()));
+
+            static const char error[] = "[ERROR] No configuration template for 'foo' available.\n"
+                "[INFO] All relevant properties seem to be set, omit the --template parameter to proceed.\n"
+                "[INFO] \n"
+                "[INFO] Available configuration templates (clients and servers):\n";
+            std::string out = failure.m_out.str();
+            std::string err = failure.m_err.str();
+            std::string all = failure.m_all.str();
+            CPPUNIT_ASSERT(boost::starts_with(err, error));
+            CPPUNIT_ASSERT(boost::ends_with(err, "\n"));
+            CPPUNIT_ASSERT(!boost::ends_with(err, "\n\n"));
+            CPPUNIT_ASSERT_EQUAL(string(""), out);
+            CPPUNIT_ASSERT_EQUAL(all, err);
         }
 
         string fooconfig =
@@ -4606,9 +4674,7 @@ protected:
             // check error message for missing config name
             TestCmdline cmdline((const char *)NULL);
             cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("ERROR: no configuration name specified\n",
-                                      lastLine(cmdline.m_err.str()));
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
+            CPPUNIT_ASSERT_NO_THROW(cmdline.expectUsageError("[ERROR] No configuration name specified.\n"));
         }
 
         {
@@ -4616,9 +4682,7 @@ protected:
             TestCmdline cmdline("--run",
                                 NULL);
             cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("ERROR: no configuration name specified\n",
-                                      lastLine(cmdline.m_err.str()));
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
+            CPPUNIT_ASSERT_NO_THROW(cmdline.expectUsageError("[ERROR] No configuration name specified.\n"));
         }
     }
 
@@ -4630,8 +4694,10 @@ private:
      * vararg constructor with NULL termination,
      * out and error stream into stringstream members
      */
-    class TestCmdline {
+    class TestCmdline : private LoggerBase {
         void init() {
+            pushLogger(this);
+
             m_argv.reset(new const char *[m_argvstr.size() + 1]);
             m_argv[0] = "client-test";
             for (size_t index = 0;
@@ -4640,8 +4706,7 @@ private:
                 m_argv[index + 1] = m_argvstr[index].c_str();
             }
 
-            m_cmdline.set(new Cmdline(m_argvstr.size() + 1, m_argv.get(), m_out, m_err), "cmdline");
-            
+            m_cmdline.set(new Cmdline(m_argvstr.size() + 1, m_argv.get()), "cmdline");
         }
 
     public:
@@ -4664,8 +4729,14 @@ private:
             init();
         }
 
+        ~TestCmdline() {
+            popLogger();
+        }
+
         void doit(bool expectSuccess = true) {
             bool success = false;
+            m_out.str("");
+            m_err.str("");
             // emulates syncevolution.cpp exception handling
             try {
                 success = m_cmdline->parse() &&
@@ -4683,12 +4754,61 @@ private:
             CPPUNIT_ASSERT_MESSAGE(m_out.str(), success == expectSuccess);
         }
 
+        /** verify that Cmdline::usage() produced a short usage info followed by a specific error message */
+        void expectUsageError(const std::string &error)
+        {
+            // expect short usage info as normal output
+            std::string out = m_out.str();
+            std::string err = m_err.str();
+            std::string all = m_all.str();
+            CPPUNIT_ASSERT(boost::starts_with(out, "List databases:\n"));
+            CPPUNIT_ASSERT(out.find("\nOptions:\n") == std::string::npos);
+            CPPUNIT_ASSERT(boost::ends_with(out,
+                                            "Remove item(s):\n"
+                                            "  syncevolution --delete-items [--] <config> <source> (<luid> ... | '*')\n\n"));
+            // exact error message
+            CPPUNIT_ASSERT_EQUAL(error, err);
+
+            // also check order
+            CPPUNIT_ASSERT_EQUAL_DIFF(out + err, all);
+        }
+
+        // separate streams for normal messages and error messages
         ostringstream m_out, m_err;
+        // combined stream with all messages
+        ostringstream m_all;
+
         cxxptr<Cmdline> m_cmdline;
 
     private:
         vector<string> m_argvstr;
         boost::scoped_array<const char *> m_argv;
+
+        /** capture output produced while test ran */
+        void messagev(Level level,
+                      const char *prefix,
+                      const char *file,
+                      int line,
+                      const char *function,
+                      const char *format,
+                      va_list args)
+        {
+            if (level <= INFO) {
+                ostringstream &out = level != SHOW ? m_err : m_out;
+                std::string str = StringPrintfV(format, args);
+                if (level != SHOW) {
+                    out << "[" << levelToStr(level) << "] ";
+                    m_all << "[" << levelToStr(level) << "] ";
+                }
+                out << str;
+                m_all << str;
+                if (!boost::ends_with(str, "\n")) {
+                    out << std::endl;
+                    m_all << std::endl;
+                }
+            }
+        }
+        virtual bool isProcessSafe() const { return false; }
     };
 
     string DefaultConfig() {

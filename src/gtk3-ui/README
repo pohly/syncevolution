@@ -1,0 +1,8 @@
+SyncEvolution Graphical User Interface for Moblin
+
+ * Running
+ 
+ Syncevolution D-Bus service must be either running or installed
+ properly (so DBus autostart works). the client itself must be installed
+ so glade ui file and rc style file get found.  
+ 
