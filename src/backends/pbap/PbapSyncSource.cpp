@@ -186,7 +186,7 @@ void PbapSession::shutdown(void)
     GDBusCXX::DBusClientCall0 removeSession(m_client, "RemoveSession");
 
     // always clear pointer, even if method call fails
-    std::string path = m_session->getPath();
+    GDBusCXX::DBusObject_t path(m_session->getPath());
     m_session.reset();
     SE_LOG_DEBUG(NULL, NULL, "removed session: %s", path.c_str());
 
