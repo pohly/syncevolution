@@ -119,7 +119,7 @@ void vcardParse(const std::string &content, std::size_t begin, std::size_t end, 
         size_t i = line.find(':');
         if(i != std::string::npos) {
             std::size_t j = line.find(';');
-            j = (j == std::string::npos)? i : j;
+            j = (j == std::string::npos)? i : std::min(i, j);
             std::string key = line.substr(0, j);
             std::string value = line.substr(i + 1);
             dst[key] = value;
@@ -158,7 +158,7 @@ void PbapSession::pullAll(Content &dst)
         VcardMap vcard;
         vcardParse(content, pos, endPos, vcard);
 
-        VcardMap::const_iterator it = vcard.find("FN");
+        VcardMap::const_iterator it = vcard.find("N");
         if(it != vcard.end() && !it->second.empty()) {
             const std::string &fn = it->second;
 
