@@ -197,6 +197,8 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
 class DBusServerCXX : private boost::noncopyable
 {
  public:
+    ~DBusServerCXX();
+
     /**
      * Called for each new connection. Callback must store the DBusConnectionPtr,
      * otherwise it will be unref'ed after the callback returns.
@@ -875,6 +877,23 @@ struct MethodHandler
             return;
         }
 
+        // http://developer.gnome.org/gio/stable/GDBusConnection.html#GDBusInterfaceMethodCallFunc
+        // does not say so explicitly, but it seems that 'invocation' was created for us.
+        // If we don't unref it, it leaks (visible in refdbg).
+        //
+        // The documentation for the class itself says that 'the normal way to obtain a
+        // GDBusMethodInvocation object is to receive it as an argument to the
+        // handle_method_call()' - note the word 'obtain', which seems to imply ownership.
+        // This is consistent with the transfer of ownership to calls like
+        // g_dbus_method_invocation_return_dbus_error(), which take over ownership
+        // of the invocation instance.
+        //
+        // Because we work with messages directly for the reply from now on, we
+        // unref 'invocation' immediately after referencing the underlying message.
+        GDBusMessagePtr msg(g_dbus_method_invocation_get_message(invocation), true);
+        g_object_unref(invocation);
+        invocation = NULL;
+
         // We are calling callback because we want to keep server alive as long
         // as possible. This callback is in fact delaying server's autotermination.
         if (!m_callback.empty()) {
@@ -884,8 +903,8 @@ struct MethodHandler
         MethodFunction methodFunc = it->second.first;
         void *methodData          = reinterpret_cast<void*>(it->second.second->m_func_ptr);
         GDBusMessage *reply;
-        reply = (methodFunc)(g_dbus_method_invocation_get_connection(invocation),
-                             g_dbus_method_invocation_get_message(invocation),
+        reply = (methodFunc)(connection,
+                             msg.get(),
                              methodData);
 
         if (!reply) {
@@ -895,7 +914,7 @@ struct MethodHandler
         }
 
         GError *error = NULL;
-        g_dbus_connection_send_message(g_dbus_method_invocation_get_connection(invocation),
+        g_dbus_connection_send_message(connection,
                                        reply,
                                        G_DBUS_SEND_MESSAGE_FLAGS_NONE,
                                        NULL,
@@ -1078,6 +1097,7 @@ class DBusObjectHelper : public DBusObject
             g_ptr_array_add(m_signals, NULL);
         }
         GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
+        ifInfo->ref_count = 1;
         ifInfo->name      = g_strdup(getInterface());
         ifInfo->methods   = (GDBusMethodInfo **)g_ptr_array_free(m_methods, FALSE);
         ifInfo->signals   = (GDBusSignalInfo **)g_ptr_array_free(m_signals, FALSE);
@@ -1089,13 +1109,17 @@ class DBusObjectHelper : public DBusObject
         ifVTable.get_property = NULL;
         ifVTable.set_property = NULL;
 
-        if ((m_connId = g_dbus_connection_register_object(getConnection(),
-                                                          getPath(),
-                                                          ifInfo,
-                                                          &ifVTable,
-                                                          this,
-                                                          NULL,
-                                                          NULL)) == 0) {
+        m_connId = g_dbus_connection_register_object(getConnection(),
+                                                     getPath(),
+                                                     ifInfo,
+                                                     &ifVTable,
+                                                     this,
+                                                     NULL,
+                                                     NULL);
+        // This will free the struct if register_object didn't take a ref,
+        // as in case of an error.
+        g_dbus_interface_info_unref(ifInfo);
+        if (m_connId == 0) {
             throw std::runtime_error(std::string("g_dbus_connection_register_object() failed for ") +
                                      getPath() + " " + getInterface());
         }
