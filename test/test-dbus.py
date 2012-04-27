@@ -381,7 +381,7 @@ class DBusUtil(Timeout):
         else:
             return default
 
-    def runTest(self, result, own_xdg=True, own_home=False, serverArgs=[] ):
+    def runTest(self, result, own_xdg=True, serverArgs=[], own_home=False):
         """Starts the D-Bus server and dbus-monitor before the test
         itself. After the test run, the output of these two commands
         are added to the test's failure, if any. Otherwise the output
