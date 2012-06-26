@@ -172,16 +172,17 @@ public:
             CppUnit::CompilerOutputter formatter(&m_failures, output);
             formatter.printFailureReport();
             failure = output.str();
-            m_failed = true;
+            bool failed = true;
             BOOST_FOREACH (const std::string &re, m_allowedFailures) {
                 if (pcrecpp::RE(re).FullMatch(m_currentTest)) {
                     result = "*** failure ignored ***";
-                    m_failed = false;
+                    failed = false;
                     break;
                 }
             }
-            if (m_failed) {
+            if (failed) {
                 result = "*** failed ***";
+                m_failed = true;
             }
         } else {
             result = "okay";
