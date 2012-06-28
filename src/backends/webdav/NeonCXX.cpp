@@ -666,6 +666,13 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                                      operation.c_str(),
                                      duration,
                                      m_attempt);
+                        // Inform the user, because this will take a
+                        // while and we don't want to give the
+                        // impression of being stuck.
+                        SE_LOG_INFO(NULL, NULL, "operation temporarily (?) failed, going to retry in %.1lfs before giving up in %.1lfs: %s",
+                                    duration,
+                                    (m_deadline - now).duration(),
+                                    descr.c_str());
                         Sleep(duration);
                     } else {
                         SE_LOG_DEBUG(NULL, NULL, "retry %s immediately (due already), attempt #%d",
