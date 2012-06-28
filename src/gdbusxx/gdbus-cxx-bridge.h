@@ -1211,8 +1211,8 @@ struct VariantTypeUInt64  { static const GVariantType* getVariantType() { return
 struct VariantTypeDouble  { static const GVariantType* getVariantType() { return G_VARIANT_TYPE_DOUBLE;  } };
 
 #define GDBUS_CXX_QUOTE(x) #x
-#define GDBUS_CXX_LINE GDBUS_CXX_QUOTE(__LINE__)
-#define GDBUS_CXX_SOURCE_INFO __FILE__ ":" GDBUS_CXX_LINE
+#define GDBUS_CXX_LINE(l) GDBUS_CXX_QUOTE(l)
+#define GDBUS_CXX_SOURCE_INFO __FILE__ ":" GDBUS_CXX_LINE(__LINE__)
 
 template<class host, class VariantTraits> struct basic_marshal : public dbus_traits_base
 {
