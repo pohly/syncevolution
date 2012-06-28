@@ -646,6 +646,30 @@ public:
     }
 };
 
+void Cmdline::checkSyncPasswords(SyncContext &context)
+{
+    ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
+    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        prop->checkPassword(context.getUserInterfaceNonNull(),
+                            context.getConfigName(),
+                            *context.getProperties());
+    }
+}
+
+void Cmdline::checkSourcePasswords(SyncContext &context,
+                                   const std::string &sourceName,
+                                   SyncSourceNodes &nodes)
+{
+    ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
+    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        prop->checkPassword(context.getUserInterfaceNonNull(),
+                            context.getConfigName(),
+                            *context.getProperties(),
+                            sourceName,
+                            nodes.getProperties());
+    }
+}
+
 bool Cmdline::run() {
     // --dry-run is only supported by some operations.
     // Be very strict about it and make sure it is off in all
@@ -686,8 +710,9 @@ bool Cmdline::run() {
         boost::shared_ptr<SyncSourceNodes> nodes;
         std::string header;
         boost::shared_ptr<SyncContext> context;
-        FilterConfigNode::ConfigFilter sourceFilter = m_props.createSourceFilter(m_server, "");
-        FilterConfigNode::ConfigFilter::const_iterator backend = sourceFilter.find("backend");
+        FilterConfigNode::ConfigFilter sourceFilter;
+        std::string sourceName;
+        FilterConfigNode::ConfigFilter::const_iterator backend;
 
         if (!m_server.empty()) {
             // list for specific backend chosen via config
@@ -695,18 +720,23 @@ bool Cmdline::run() {
                 SE_THROW(StringPrintf("must specify exactly one source after the config name '%s'",
                                       m_server.c_str()));
             }
-            context.reset(new SyncContext(m_server));
+            sourceName = *m_sources.begin();
+            sourceFilter = m_props.createSourceFilter(m_server, sourceName);
+            backend = sourceFilter.find("backend");
+            context.reset(createSyncClient());
             if (!context->exists()) {
                 SE_THROW(StringPrintf("config '%s' does not exist", m_server.c_str()));
             }
-            nodes.reset(new SyncSourceNodes(context->getSyncSourceNodesNoTracking(*m_sources.begin())));
-            header = StringPrintf("%s/%s", m_server.c_str(), m_sources.begin()->c_str());
+            nodes.reset(new SyncSourceNodes(context->getSyncSourceNodesNoTracking(sourceName)));
+            header = StringPrintf("%s/%s", m_server.c_str(), sourceName.c_str());
             if (!nodes->dataConfigExists()) {
                 SE_THROW(StringPrintf("%s does not exist",
                                       header.c_str()));
             }
         } else {
-            context.reset(new SyncContext);
+            sourceFilter = m_props.createSourceFilter(m_server, "");
+            backend = sourceFilter.find("backend");
+            context.reset(createSyncClient());
             boost::shared_ptr<FilterConfigNode> sharedNode(new VolatileConfigNode());
             boost::shared_ptr<FilterConfigNode> configNode(new VolatileConfigNode());
             boost::shared_ptr<FilterConfigNode> hiddenNode(new VolatileConfigNode());
@@ -726,6 +756,11 @@ bool Cmdline::run() {
             // list for specific backend
             auto_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
             if (source.get() != NULL) {
+                if (!m_server.empty() && nodes) {
+                    // ensure that we have passwords for this config
+                    checkSyncPasswords(*context);
+                    checkSourcePasswords(*context, sourceName, *nodes);
+                }
                 listSources(*source, header);
                 SE_LOG_SHOW(NULL, NULL, "\n");
             } else {
@@ -1278,22 +1313,8 @@ bool Cmdline::run() {
         sysync::TSyError err;
 #define CHECK_ERROR(_op) if (err) { SE_THROW_EXCEPTION_STATUS(StatusException, string(source->getName()) + ": " + (_op), SyncMLStatus(err)); }
 
-        // acquire passwords before doing anything (interactive password
-        // access not supported for the command line)
-        {
-            ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
-            BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(context->getUserInterfaceNonNull(), m_server, *context->getProperties());
-            }
-        }
-        {
-            ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-            BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(context->getUserInterfaceNonNull(), m_server, *context->getProperties(),
-                                    source->getName(), sourceNodes.getProperties());
-            }
-        }
-
+        checkSyncPasswords(*context);
+        checkSourcePasswords(*context, source->getName(), sourceNodes);
         source->open();
         const SyncSource::Operations &ops = source->getOperations();
         if (m_printItems) {

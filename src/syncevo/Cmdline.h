@@ -327,6 +327,11 @@ protected:
      * @return encoded luid of inserted item
      */
     CmdlineLUID insertItem(SyncSourceRaw *source, const std::string &luid, const std::string &data);
+
+    static void checkSyncPasswords(SyncContext &context);
+    static void checkSourcePasswords(SyncContext &context,
+                                     const std::string &sourceName,
+                                     SyncSourceNodes &nodes);
 };
 
 
