@@ -231,6 +231,8 @@ class ForkExecParent : public ForkExec
                                 gpointer data) throw ();
 
     void checkCompletion() throw ();
+
+    static void forked(gpointer me) throw();
 };
 
 /**

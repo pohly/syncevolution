@@ -18,6 +18,7 @@
  */
 
 #include "ForkExec.h"
+#include <syncevo/LogRedirect.h>
 
 #if defined(HAVE_GLIB)
 
@@ -118,9 +119,28 @@ ForkExecParent::~ForkExecParent()
  * Child setup function, called insided forked process before exec().
  * only async-signal-safe functions allowed according to http://developer.gnome.org/glib/2.30/glib-Spawning-Processes.html#GSpawnChildSetupFunc
  */
-static void setStdoutToStderr(gpointer /* user_data */) throw()
+void ForkExecParent::forked(gpointer data) throw()
 {
-    dup2(STDERR_FILENO, STDOUT_FILENO);
+    ForkExecParent *me = static_cast<ForkExecParent *>(data);
+
+    // When debugging, undo the LogRedirect output redirection that
+    // we inherited from the parent process. That ensures that
+    // any output is printed directly, instead of going through
+    // the parent's output processing in LogRedirect.
+    if (getenv("SYNCEVOLUTION_DEBUG")) {
+        int index = LoggerBase::numLoggers();
+        LogRedirect *redirect = NULL;
+        while (--index >= 0 &&
+               !(redirect = dynamic_cast<LogRedirect *>(LoggerBase::loggerAt(index)))) {
+        }
+        if (redirect) {
+            redirect->reset();
+        }
+    }
+
+    if (me->m_mergedStdoutStderr) {
+        dup2(STDERR_FILENO, STDOUT_FILENO);
+    }
 }
 
 void ForkExecParent::start()
@@ -193,9 +213,8 @@ void ForkExecParent::start()
                                   static_cast<gchar **>(m_argv.get()),
                                   static_cast<gchar **>(m_env.get()),
                                   flags,
-                                  // child setup function: redirect stdout to stderr
-                                  m_mergedStdoutStderr ? setStdoutToStderr : NULL,
-                                  NULL, // child setup user data
+                                  // child setup function: redirect stdout to stderr, undo LogRedirect
+                                  forked, this,
                                   &m_childPid,
                                   NULL, // set stdin to /dev/null
                                   (m_mergedStdoutStderr || m_onStdout.empty()) ? NULL : &out,
