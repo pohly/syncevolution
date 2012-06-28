@@ -171,7 +171,7 @@ private:
     void sessionChangedCb(const DBusObject_t &object, bool active);
 
     /** callback of 'Server.LogOutput' */
-    void logOutputCb(const DBusObject_t &object, const string &level, const string &log);
+    void logOutputCb(const DBusObject_t &object, const string &level, const string &log, const string &procname);
 
     /** callback of 'Server.InfoRequest' */
     void infoReqCb(const string &,
@@ -235,7 +235,7 @@ private:
     // listen to dbus server signal 'SessionChanged'
     SignalWatch2<DBusObject_t, bool> m_sessionChanged;
     // listen to dbus server signal 'LogOutput'
-    SignalWatch3<DBusObject_t, string, string> m_logOutput;
+    SignalWatch4<DBusObject_t, string, string, string> m_logOutput;
     // listen to dbus server signal 'InfoRequest'
     SignalWatch6<string, 
                  DBusObject_t,
@@ -286,7 +286,7 @@ public:
     void setRunSync(bool runSync) { m_runSync = runSync; }
 
     /** pass through logoutput and print them if m_output is true */
-    void logOutput(Logger::Level level, const string &log);
+    void logOutput(Logger::Level level, const string &log, const string &procname);
 
     /** set whether to print output */
     void setOutput(bool output) { m_output = output; }
@@ -546,7 +546,7 @@ RemoteDBusServer::RemoteDBusServer() :
         attachSync();
         if(m_attached) {
             m_sessionChanged.activate(boost::bind(&RemoteDBusServer::sessionChangedCb, this, _1, _2));
-            m_logOutput.activate(boost::bind(&RemoteDBusServer::logOutputCb, this, _1, _2, _3));
+            m_logOutput.activate(boost::bind(&RemoteDBusServer::logOutputCb, this, _1, _2, _3, _4));
             m_infoReq.activate(boost::bind(&RemoteDBusServer::infoReqCb, this, _1, _2, _3, _4, _5, _6));
         }
     }
@@ -612,12 +612,13 @@ void RemoteDBusServer::versionCb(const StringMap &versions,
 
 void RemoteDBusServer::logOutputCb(const DBusObject_t &object,
                                    const string &level,
-                                   const string &log)
+                                   const string &log,
+                                   const string &procname)
 {
     if (m_session && 
         (boost::equals(object, getPath()) ||
          boost::equals(object, m_session->getPath()))) {
-        m_session->logOutput(Logger::strToLevel(level.c_str()), log);
+        m_session->logOutput(Logger::strToLevel(level.c_str()), log, procname);
     }
 }
 
@@ -960,9 +961,10 @@ void RemoteSession::interruptAsync(const char *operation)
     suspend.start(interruptCb);
 }
 
-void RemoteSession::logOutput(Logger::Level level, const string &log)
+void RemoteSession::logOutput(Logger::Level level, const string &log, const string &procname)
 {
     if(m_output) {
+        ProcNameGuard guard(procname);
         SE_LOG(level, NULL, NULL, "%s", log.c_str());
     }
 }

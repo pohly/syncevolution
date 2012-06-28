@@ -872,6 +872,11 @@
       <arg type="s" name="output">
         <doc:doc><doc:summary>the output string to be broadcast</doc:summary></doc:doc>
       </arg>
+      <arg type="s" name="procname">
+        <doc:doc><doc:summary>A short tag identifying which process
+        produced the output. Should be shown to the user. Empty for
+        main process in a sync.</doc:summary></doc:doc>
+      </arg>
     </signal>
 
   </interface>

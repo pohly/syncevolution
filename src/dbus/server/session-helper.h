@@ -107,8 +107,8 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     boost::shared_ptr<ForkExecChild> getForkExecChild() { return m_forkexec; }
 
     /** Server.LogOutput for the session D-Bus object */
-    GDBusCXX::EmitSignal2<std::string,
-        std::string, true> emitLogOutput;
+    GDBusCXX::EmitSignal3<std::string,
+        std::string, std::string, true> emitLogOutput;
 
     /** SyncContext::displaySyncProgress */
     GDBusCXX::EmitSignal4<sysync::TProgressEventEnum,

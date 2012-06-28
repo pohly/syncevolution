@@ -874,7 +874,7 @@ void Server::messagev(Level level,
     // for general server output, the object path field is dbus server
     // the object path can't be empty for object paths prevent using empty string.
     string strLevel = Logger::levelToStr(level);
-    logOutput(getPath(), strLevel, log);
+    logOutput(getPath(), strLevel, log, getProcessName());
 }
 
 SE_END_CXX

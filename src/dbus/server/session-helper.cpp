@@ -115,7 +115,7 @@ void SessionHelper::messagev(Level level,
     // send to parent
     string log = StringPrintfV(format, args);
     string strLevel = Logger::levelToStr(level);
-    emitLogOutput(strLevel, log);
+    emitLogOutput(strLevel, log, getProcessName());
 }
 
 void SessionHelper::run()

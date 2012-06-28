@@ -1352,7 +1352,11 @@ public:
 
                 // pretty-print report
                 if (m_logLevel > LOGGING_QUIET) {
-                    SE_LOG_SHOW(NULL, NULL, "\nChanges applied during synchronization:");
+                    std::string procname = Logger::getProcessName();
+                    SE_LOG_SHOW(NULL, NULL, "\nChanges applied during synchronization%s%s%s:",
+                                procname.empty() ? "" : " (",
+                                procname.c_str(),
+                                procname.empty() ? "" : ")");
                 }
                 if (m_logLevel > LOGGING_QUIET && report) {
                     ostringstream out;

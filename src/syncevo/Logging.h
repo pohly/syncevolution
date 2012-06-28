@@ -191,6 +191,33 @@ class Logger
 };
 
 /**
+ * Changes the process name temporarily.
+ */
+class ProcNameGuard {
+    std::string m_oldProcName;
+    bool m_modified;
+
+ public:
+    ProcNameGuard(const std::string &procname) :
+        m_oldProcName(Logger::getProcessName())
+    {
+        if (m_oldProcName != procname) {
+            Logger::setProcessName(procname);
+            m_modified = true;
+        } else {
+            m_modified = false;
+        }
+    }
+
+    ~ProcNameGuard()
+    {
+        if (m_modified) {
+            Logger::setProcessName(m_oldProcName);
+        }
+    }
+};
+
+/**
  * Global logging, implemented as a singleton with one instance per
  * process.
  *

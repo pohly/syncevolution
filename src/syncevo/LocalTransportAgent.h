@@ -120,12 +120,13 @@ class LocalTransportAgent : public TransportAgent
      * provides access to the forked process' D-Bus API
      * - start sync (returns child's first message)
      * - send server reply (returns child's next message or empty when done)
+     * - emits output via signal
      *
      * Only non-NULL when child is running and connected.
      */
     boost::shared_ptr<LocalTransportChild> m_child;
 
-
+    void logChildOutput(const std::string &level, const std::string &message);
     void onChildConnect(const GDBusCXX::DBusConnectionPtr &conn);
     void onFailure(const std::string &error);
     void onChildQuit(int status);

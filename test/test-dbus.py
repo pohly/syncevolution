@@ -3620,7 +3620,7 @@ END:VCARD''')
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
         self.assertEqual(self.lastState, "done")
         self.checkSync(expectedError=20017, expectedResult=20017)
-        self.assertSyncStatus('server', 20017, "error code from SyncEvolution aborted on behalf of user (local, status 20017): failure in local sync child: User did not provide the 'addressbook backend' password.")
+        self.assertSyncStatus('server', 20017, "error code from SyncEvolution aborted on behalf of user (local, status 20017): User did not provide the 'addressbook backend' password.")
 
     @timeout(200)
     def testPasswordRequestTimeout(self):
@@ -3639,7 +3639,7 @@ END:VCARD''')
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
         self.assertEqual(self.lastState, "request")
         self.checkSync(expectedError=22003, expectedResult=22003)
-        self.assertSyncStatus('server', 22003, "error code from SyncEvolution password request timed out (local, status 22003): failure in local sync child: Could not get the 'addressbook backend' password from user.")
+        self.assertSyncStatus('server', 22003, "error code from SyncEvolution password request timed out (local, status 22003): Could not get the 'addressbook backend' password from user.")
         end = time.time()
         self.assertTrue(abs(120 + (usingValgrind() and 20 or 0) -
                             (end - start)) <
@@ -3725,7 +3725,7 @@ END:VCARD''')
 
         # Sync should have failed with an explanation that it was
         # because of the password.
-        self.assertSyncStatus('server', 22003, "error code from SyncEvolution password request timed out (local, status 22003): failure in local sync child: Could not get the 'addressbook backend' password from user.")
+        self.assertSyncStatus('server', 22003, "error code from SyncEvolution password request timed out (local, status 22003): Could not get the 'addressbook backend' password from user.")
 
     @timeout(200)
     @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY=10") # allow killing syncevo-dbus-server in middle of sync
@@ -6669,7 +6669,8 @@ END:VCARD''')
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting first time sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting first time sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
@@ -6692,7 +6693,7 @@ Comparison was impossible.
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -6762,7 +6763,8 @@ no changes
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
@@ -6782,7 +6784,7 @@ no changes
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -6842,7 +6844,8 @@ END:VCARD''')
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
@@ -6874,7 +6877,7 @@ END:VCARD                                END:VCARD
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -6937,7 +6940,8 @@ no changes
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
@@ -6969,7 +6973,7 @@ END:VCARD                              <
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -7046,7 +7050,8 @@ END:VCARD''')
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting first time sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting first time sync, two-way (peer is server)
 [INFO @client] @client/calendar: starting first time sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
@@ -7083,7 +7088,7 @@ Comparison was impossible.
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -7161,7 +7166,8 @@ no changes
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] @client/calendar: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
@@ -7195,7 +7201,7 @@ no changes
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -7267,7 +7273,8 @@ END:VCARD''')
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] @client/calendar: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
@@ -7313,7 +7320,7 @@ no changes
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -7388,7 +7395,8 @@ no changes
         self.assertEqual(err, None)
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
-        self.assertEqualDiff('''[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
+        self.assertEqualDiff('''[INFO @client] target side of local sync ready
+[INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] @client/calendar: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
@@ -7434,7 +7442,7 @@ no changes
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
@@ -7509,6 +7517,7 @@ no changes
         self.assertEqual(0, code)
         out = self.stripSyncTime(out)
         self.assertEqualDiff('''[INFO] @default/calendar: inactive
+[INFO @client] target side of local sync ready
 [INFO @client] @client/calendar: inactive
 [INFO @client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO @client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
@@ -7530,7 +7539,7 @@ no changes
 
 Synchronization successful.
 
-Changes applied during synchronization:
+Changes applied during synchronization (@client):
 +---------------|-----------------------|-----------------------|-CON-+
 |               |        @client        |       @default        | FLI |
 |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |

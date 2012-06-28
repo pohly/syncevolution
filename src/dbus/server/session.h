@@ -62,6 +62,7 @@ class InfoReq;
  * for simple sessions).
  */
 class Session : public GDBusCXX::DBusObjectHelper,
+                public LoggerBase,
                 public Resource,
                 private ReadOperations,
                 private boost::noncopyable
@@ -339,6 +340,30 @@ private:
     void storeMessage(const GDBusCXX::DBusArray<uint8_t> &message,
                       const std::string &type);
     void connectionState(const std::string &error);
+
+    /**
+     * Sends all messages via D-Bus, as if they came from the session
+     * helper. To be activated only temporarily while executing code
+     * in the server which is related to the session.
+     */
+    virtual void messagev(Level level,
+                          const char *prefix,
+                          const char *file,
+                          int line,
+                          const char *function,
+                          const char *format,
+                          va_list args);
+    virtual bool isProcessSafe() const { return false; }
+
+    class LoggingGuard {
+    public:
+        LoggingGuard(Session *session) {
+            LoggerBase::pushLogger(session);
+        }
+        ~LoggingGuard() {
+            LoggerBase::popLogger();
+        }
+    };
 
 public:
     enum {

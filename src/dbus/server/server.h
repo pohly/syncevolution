@@ -328,8 +328,9 @@ class Server : public GDBusCXX::DBusObjectHelper,
                           const std::map<string, string> &> infoRequest;
 
     /** Server.LogOutput */
-    GDBusCXX::EmitSignal3<const GDBusCXX::DBusObject_t &,
-                          string,
+    GDBusCXX::EmitSignal4<const GDBusCXX::DBusObject_t &,
+                          const std::string &,
+                          const std::string &,
                           const std::string &> logOutput;
 
  private:
