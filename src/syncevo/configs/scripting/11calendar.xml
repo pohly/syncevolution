@@ -255,3 +255,13 @@
         DESCRIPTION = SUBSTR(DESCRIPTION, lensummary + 1, lendescr - lensummary - 1);
     }
     ]]></macro>
+
+    <macro name="CALENDAR_BEFOREWRITE_SCRIPT"><![CDATA[
+      // set UTC time of generation for iCalendar 2.0 DTSTAMP
+      DGENERATED = NOW();
+      // ensure that there is a DMODIFIED = LAST-MODIFIED property,
+      // not all storages add it
+      if (!DMODIFIED) {
+         DMODIFIED = DGENERATED;
+      }
+    ]]></macro>

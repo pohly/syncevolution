@@ -661,7 +661,8 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
          * to info.m_afterReadScript and info.m_beforeWriteScript.
          */
         info.m_afterReadScript = "$VCALENDAR10_AFTERREAD_SCRIPT;\n";
-        info.m_beforeWriteScript = "$VCALENDAR10_BEFOREWRITE_SCRIPT;\n";
+        info.m_beforeWriteScript = "$VCALENDAR10_BEFOREWRITE_SCRIPT;\n"
+            "$CALENDAR_BEFOREWRITE_SCRIPT;\n";
     } else if (type == "text/calendar" ||
                boost::starts_with(type, "text/calendar+")) {
         info.m_native = "iCalendar20";
@@ -670,6 +671,7 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
         info.m_datatypes =
             "        <use datatype='vCalendar10' mode='rw'/>\n"
             "        <use datatype='iCalendar20' mode='rw' preferred='yes'/>\n";
+        info.m_beforeWriteScript = "$CALENDAR_BEFOREWRITE_SCRIPT;\n";
     } else if (type == "text/plain") {
         info.m_fieldlist = "Note";
         info.m_profile = "\"Note\", 2";
