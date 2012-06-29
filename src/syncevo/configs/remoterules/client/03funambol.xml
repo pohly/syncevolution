@@ -1,0 +1,7 @@
+      <remoterule name="Funambol">
+          <manufacturer>Funambol</manufacturer>
+          <model>DS Server*</model>
+          <rulescript><![CDATA[
+             stripUID = TRUE;
+          ]]></rulescript>
+      </remoterule>

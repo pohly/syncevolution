@@ -2357,7 +2357,8 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         "      delayedabort = FALSE;\n"
         "      INTEGER alarmTimeToUTC;\n"
         "      alarmTimeToUTC = FALSE;\n"
-        "      // for VCALENDAR_COMPARE_SCRIPT: don't use UID by default\n"
+        "      INTEGER stripUID;\n"
+        "      stripUID = FALSE;\n"
         "    ]]></sessioninitscript>\n";
 
     ostringstream clientorserver;

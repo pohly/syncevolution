@@ -4,6 +4,13 @@
       STRING MATCHES[];
       STRING CAT,CN,EM;
       INTEGER i;
+      // Remove UID/RECURRENCE-ID from servers which do not support
+      // the semantic properly (for example, Funambol supports
+      // UID but drops RECURRENCE-ID, causing conflicts).
+      if (SESSIONVAR("stripUID")) {
+          UID = UNASSIGNED;
+          ORIGSTART = UNASSIGNED;
+      }
       // make sure we have all trailing and leading spaces eliminated
       DESCRIPTION=NORMALIZED(DESCRIPTION);
       SUMMARY=NORMALIZED(SUMMARY);
