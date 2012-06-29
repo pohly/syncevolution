@@ -1227,6 +1227,8 @@ std::string WebDAVSource::databaseRevision()
         return "";
     }
 
+    contactServer();
+
     Timespec deadline = createDeadline();
     Neon::Session::PropfindPropCallback_t callback =
         boost::bind(&WebDAVSource::openPropCallback,
