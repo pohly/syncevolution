@@ -274,21 +274,17 @@ const std::string *WebDAVSource::setResourceName(const std::string &item, std::s
     }
 
     // first check if the item already contains the right UID
-    std::string uid = extractUID(item);
+    size_t start, end;
+    std::string uid = extractUID(item, &start, &end);
     if (uid == olduid) {
         return &item;
     }
 
     // insert or overwrite
     buffer = item;
-    size_t start = buffer.find(UID);
-    if (start != buffer.npos) {
-        start += UID.size();
-        size_t end = buffer.find("\n", start);
-        if (end != buffer.npos) {
-            // overwrite
-            buffer.replace(start, end, olduid);
-        }
+    if (start != std::string::npos) {
+        // overwrite
+        buffer.replace(start, end - start, olduid);
     } else {
         // insert
         start = buffer.find("\nEND:" + getContent());
@@ -302,18 +298,52 @@ const std::string *WebDAVSource::setResourceName(const std::string &item, std::s
 
 
 
-std::string WebDAVSource::extractUID(const std::string &item)
+std::string WebDAVSource::extractUID(const std::string &item, size_t *startp, size_t *endp)
 {
     std::string luid;
+    if (startp) {
+        *startp = std::string::npos;
+    }
+    if (endp) {
+        *endp = std::string::npos;
+    }
     // find UID, use that plus ".vcf" as resource name (expected by Yahoo Contacts)
     size_t start = item.find(UID);
     if (start != item.npos) {
         start += UID.size();
         size_t end = item.find("\n", start);
         if (end != item.npos) {
+            if (startp) {
+                *startp = start;
+            }
             luid = item.substr(start, end - start);
             if (boost::ends_with(luid, "\r")) {
                 luid.resize(luid.size() - 1);
+            }
+            // keep checking for more lines because of folding
+            while (end + 1 < item.size() &&
+                   item[end + 1] == ' ') {
+                start = end + 1;
+                end = item.find("\n", start);
+                if (end == item.npos) {
+                    // incomplete, abort
+                    luid = "";
+                    if (startp) {
+                        *startp = std::string::npos;
+                    }
+                    break;
+                }
+                luid += item.substr(start, end - start);
+                if (boost::ends_with(luid, "\r")) {
+                    luid.resize(luid.size() - 1);
+                }
+            }
+            // success, return all information
+            if (endp) {
+                // don't include \r or \n
+                *endp = item[end - 1] == '\r' ?
+                    end - 1 :
+                    end;
             }
         }
     }

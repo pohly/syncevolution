@@ -195,8 +195,15 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     /**
      * Get UID property value from vCard 3.0 or iCalendar 2.0 text
      * items.
+     * @retval startp   offset of first character of UID value (i.e., directly after colon),
+     *                  npos if no UID was found
+     * @retval endp     offset of first line break character (\r or \n) after UID value,
+     *                  npos if no UID was found
+     * @return UID value without line breaks and folding characters removed
      */
-    static std::string extractUID(const std::string &item);
+    static std::string extractUID(const std::string &item,
+                                  size_t *startp = NULL,
+                                  size_t *endp = NULL);
 
     /**
      * .vcf for VCARD and .ics for everything else.
