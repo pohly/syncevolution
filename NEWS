@@ -51,6 +51,28 @@ Details:
   -> syncevolution chain the LAST-MODIFIED was not added by Radicale, which caused
   problems for change tracking in an EDS-based SyncEvolution.
 
+* Google Calendar: updated URL redirect handling
+
+  Google Calendar sometimes returns redirect requests to human-readable
+  web sites (an "unavailable" page, a login form). This is of course
+  bogus when the client is an automated CalDAV client.
+
+  The "unavailable.html" case was already handled. Made it a bit more
+  flexible to also catch possible variations of it (additional
+  parameters, https instead of http).
+
+  Added the https://accounts.google.com/ServiceLogin case. Not sure
+  whether retrying will help in that case, but there's not much else
+  that SyncEvolution can do.
+
+* CalDAV + VJOURNAL: handle UID conflicts
+
+  When asked to insert a VJOURNAL which already existed (= same UID),
+  CalDAV servers respond with a 412 "Precondition failed" error. This
+  needs to be detected and translated into an "item needs to be merged"
+  result so that the engine can load the existing item, merge the data,
+  and then write back.
+
 * WebDAV: --status for WebDAV source aborted
 
   The command line --status operation did not complete when applied to a
