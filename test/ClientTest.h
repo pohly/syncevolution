@@ -627,6 +627,7 @@ public:
     virtual void testSimpleInsert();
     virtual void testLocalDeleteAll();
     virtual void testComplexInsert();
+    virtual void testInsertTwice();
     virtual void testLocalUpdate();
     void doChanges(bool restart);
     virtual void testChanges();

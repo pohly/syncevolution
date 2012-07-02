@@ -1095,6 +1095,42 @@ void LocalTests::testComplexInsert() {
     CT_ASSERT_NO_THROW(testIterateTwice());
 }
 
+// insert the same item (identified by UID) twice => either
+// ITEM_NEEDS_MERGE, ITEM_REPLACED or ITEM_MERGED are acceptable
+void LocalTests::testInsertTwice() {
+    CT_ASSERT(config.m_createSourceA);
+    CT_ASSERT(!config.m_insertItem.empty());
+    CT_ASSERT(config.m_insertItem.find("\nUID:") != std::string::npos);
+    CT_ASSERT_NO_THROW(deleteAll(createSourceA));
+
+    // create source
+    TestingSyncSourcePtr source;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
+
+    // mangle data once
+    std::string data = config.m_mangleItem(config.m_insertItem, false);
+
+    // insert new item
+    SyncSourceRaw::InsertItemResult first;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), first = source->insertItemRaw("", data));
+    CT_ASSERT_EQUAL(ITEM_OKAY, first.m_state);
+
+    // and again
+    SyncSourceRaw::InsertItemResult second;
+    SOURCE_ASSERT_NO_FAILURE(source.get(), second = source->insertItemRaw("", data));
+    CLIENT_TEST_LOG("item %s",
+                    second.m_state == ITEM_NEEDS_MERGE ? "needs to be merged" :
+                    second.m_state == ITEM_REPLACED ? "was replaced" :
+                    second.m_state == ITEM_MERGED ? "was merged" :
+                    second.m_state == ITEM_OKAY ? "was added, which is broken!" :
+                    "unknown result ?!");
+    CT_ASSERT(second.m_state == ITEM_NEEDS_MERGE || second.m_state == ITEM_REPLACED || second.m_state == ITEM_MERGED);
+    CT_ASSERT_EQUAL(first.m_luid, second.m_luid);
+    if (second.m_state == ITEM_REPLACED || second.m_state == ITEM_MERGED) {
+        CT_ASSERT(first.m_revision != second.m_revision);
+    }
+}
+
 // clean database, insert item, update it
 void LocalTests::testLocalUpdate() {
     // check additional requirements
