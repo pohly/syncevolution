@@ -4237,17 +4237,20 @@ void SyncTests::testExtensions() {
     accessClientB->doSync(__FILE__, __LINE__, "update", SyncOptions(SYNC_TWO_WAY));
     doSync(__FILE__, __LINE__, "patch", SyncOptions(SYNC_TWO_WAY));
 
-    // compare data in source A against reference data *without* telling synccompare
-    // to ignore known data loss for the server
-    ScopedEnvChange env("CLIENT_TEST_SERVER", "");
-    ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT");
-    ScopedEnvChange envProps("CLIENT_TEST_STRIP_PROPERTIES", "(PHOTO|FN)");
     bool equal = true;
     for (it = sources.begin(); it != sources.end(); ++it) {
         string refDir = getCurrentTest() + "." + it->second->config.m_sourceName + ".ref.dat";
         simplifyFilename(refDir);
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
+        // Compare data in source A against reference data *without*
+        // telling synccompare to ignore known data loss for the
+        // server. CLIENT_TEST_SERVER is relevant for finding the
+        // right source config and thus setting it must come after the
+        // createSourceB() call.
+        ScopedEnvChange env("CLIENT_TEST_SERVER", "");
+        ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT");
+        ScopedEnvChange envProps("CLIENT_TEST_STRIP_PROPERTIES", "(PHOTO|FN)");
         if (!it->second->compareDatabases(refDir.c_str(), *source, false)) {
             equal = false;
         }
