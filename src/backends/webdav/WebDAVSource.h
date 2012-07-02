@@ -193,6 +193,12 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     virtual const std::string *setResourceName(const std::string &item, std::string &buffer, const std::string &luid);
 
     /**
+     * Find one item by its UID property value and return the corresponding
+     * resource name relative to the current collection (aka luid).
+     */
+    std::string findByUID(const std::string &uid, const Timespec &deadline);
+
+    /**
      * Get UID property value from vCard 3.0 or iCalendar 2.0 text
      * items.
      * @retval startp   offset of first character of UID value (i.e., directly after colon),
@@ -242,7 +248,7 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     int checkItem(RevisionMap_t &revisions,
                   const std::string &href,
                   const std::string &etag,
-                  std::string &data);
+                  std::string *data);
 
     void backupData(const boost::function<Operations::BackupData_t> &op,
                     const Operations::ConstBackupInfo &oldBackup,

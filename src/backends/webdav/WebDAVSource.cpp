@@ -1332,7 +1332,7 @@ void WebDAVSource::listAllItems(RevisionMap_t &revisions)
             Neon::XMLParser parser;
             parser.initReportParser(boost::bind(&WebDAVSource::checkItem, this,
                                                 boost::ref(revisions),
-                                                _1, _2, boost::ref(data)));
+                                                _1, _2, &data));
             parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
                                boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
             Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
@@ -1343,6 +1343,83 @@ void WebDAVSource::listAllItems(RevisionMap_t &revisions)
             }
         }
     }
+}
+
+std::string WebDAVSource::findByUID(const std::string &uid,
+                                    const Timespec &deadline)
+{
+    RevisionMap_t revisions;
+    std::string query;
+    if (getContent() == "VCARD") {
+        // use CardDAV
+        query =
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
+            "<C:addressbook-query xmlns:D=\"DAV:\"\n"
+            "xmlns:C=\"urn:ietf:params:xml:ns:carddav:addressbook\">\n"
+            "<D:prop>\n"
+            "<D:getetag/>\n"
+            "</D:prop>\n"
+            "<C:filter>\n"
+            "<C:comp-filter name=\"" + getContent() + "\">\n"
+            "<C:prop-filter name=\"UID\">\n"
+            "<C:text-match>" + uid + "</C:text-match>\n"
+            "</C:prop-filter>\n"
+            "</C:comp-filter>\n"
+            "</C:filter>\n"
+            "</C:addressbook-query>\n";
+    } else {
+        // use CalDAV
+        query =
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
+            "<C:calendar-query xmlns:D=\"DAV:\"\n"
+            "xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n"
+            "<D:prop>\n"
+            "<D:getetag/>\n"
+            "</D:prop>\n"
+            "<C:filter>\n"
+            "<C:comp-filter name=\"VCALENDAR\">\n"
+            "<C:comp-filter name=\"" + getContent() + "\">\n"
+            "<C:prop-filter name=\"UID\">\n"
+            // Collation from RFC 4791, not supported yet by all servers.
+            // Apple Calendar Server did not like CDATA.
+            // TODO: escape special characters.
+            "<C:text-match" /* collation=\"i;octet\" */ ">" /* <[CDATA[ */ + uid + /* ]]> */ "</C:text-match>\n"
+            "</C:prop-filter>\n"
+            "</C:comp-filter>\n"
+            "</C:comp-filter>\n"
+            "</C:filter>\n"
+            "</C:calendar-query>\n";
+    }
+    getSession()->startOperation("REPORT 'UID lookup'", deadline);
+    while (true) {
+        Neon::XMLParser parser;
+        parser.initReportParser(boost::bind(&WebDAVSource::checkItem, this,
+                                            boost::ref(revisions),
+                                            _1, _2, (std::string *)0));
+        Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
+        report.addHeader("Depth", "1");
+        report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
+        if (report.run()) {
+            break;
+        }
+    }
+
+    switch (revisions.size()) {
+    case 0:
+        SE_THROW_EXCEPTION_STATUS(TransportStatusException,
+                                  "object not found",
+                                  SyncMLStatus(404));
+        break;
+    case 1:
+        return revisions.begin()->first;
+        break;
+    default:
+        // should not happen
+        SE_THROW(StringPrintf("UID %s not unique?!", uid.c_str()));
+    }
+
+    // not reached
+    return "";
 }
 
 void WebDAVSource::listAllItemsCallback(const Neon::URI &uri,
@@ -1387,7 +1464,7 @@ void WebDAVSource::listAllItemsCallback(const Neon::URI &uri,
 int WebDAVSource::checkItem(RevisionMap_t &revisions,
                             const std::string &href,
                             const std::string &etag,
-                            std::string &data)
+                            std::string *data)
 {
     // Ignore responses with no data: this is not perfect (should better
     // try to figure out why there is no data), but better than
@@ -1395,20 +1472,23 @@ int WebDAVSource::checkItem(RevisionMap_t &revisions,
     //
     // One situation is the response for the collection itself,
     // which comes with a 404 status and no data with Google Calendar.
-    if (data.empty()) {
+    if (data && data->empty()) {
         return 0;
     }
 
     // No need to parse, user content cannot start at start of line in
     // iCalendar 2.0.
-    if (data.find("\nBEGIN:" + getContent()) != data.npos) {
+    if (!data ||
+        data->find("\nBEGIN:" + getContent()) != data->npos) {
         std::string davLUID = path2luid(Neon::URI::parse(href).m_path);
         std::string rev = ETag2Rev(etag);
         revisions[davLUID] = rev;
     }
 
     // reset data for next item
-    data.clear();
+    if (data) {
+        data->clear();
+    }
     return 0;
 }
 
@@ -1503,7 +1583,8 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
             req.addHeader("If-None-Match", "*");
         }
         req.addHeader("Content-Type", contentType().c_str());
-        if (!req.run()) {
+        static const std::set<int> expected = boost::assign::list_of(412);
+        if (!req.run(&expected)) {
             goto retry;
         }
         SE_LOG_DEBUG(NULL, NULL, "add item status: %s",
@@ -1516,6 +1597,16 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
         case 201:
             // created
             break;
+        case 412: {
+            // "Precondition Failed": our only precondition is the one about
+            // If-None-Match, which means that there must be an existing item
+            // with the same UID. Go find it, so that we can report back the
+            // right luid.
+            std::string uid = extractUID(item);
+            std::string luid = findByUID(uid, deadline);
+            return InsertItemResult(luid, "", ITEM_NEEDS_MERGE);
+            break;
+        }
         default:
             SE_THROW_EXCEPTION_STATUS(TransportStatusException,
                                       std::string("unexpected status for insert: ") +

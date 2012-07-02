@@ -440,6 +440,9 @@ void LocalTests::addTests() {
             ADD_TEST(LocalTests, testSimpleInsert);
             ADD_TEST(LocalTests, testLocalDeleteAll);
             ADD_TEST(LocalTests, testComplexInsert);
+            if (config.m_insertItem.find("\nUID:") != std::string::npos) {
+                ADD_TEST(LocalTests, testInsertTwice);
+            }
 
             if (!config.m_updateItem.empty()) {
                 ADD_TEST(LocalTests, testLocalUpdate);
