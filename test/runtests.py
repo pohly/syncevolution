@@ -1274,9 +1274,6 @@ test = SyncEvolutionTest("davfile",
                          # server cannot detect pairs based on UID/RECURRENCE-ID
                          "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
                          "CLIENT_TEST_SKIP="
-                         # testConversion fails because X-EVOLUTION-UI-SLOT is never enabled
-                         # (depends on DevInf from peer, but test runs before parsing that).
-                         "Client::Sync::.*carddav.*::testConversion"
                          ,
                          testPrefix=syncevoPrefix)
 context.add(test)
@@ -1300,9 +1297,6 @@ test = SyncEvolutionTest("edsdav",
                          # server supports multiple cycles inside the same session
                          "CLIENT_TEST_PEER_CAN_RESTART=1 "
                          "CLIENT_TEST_SKIP="
-                         # testConversion fails because X-EVOLUTION-UI-SLOT is never enabled
-                         # (depends on DevInf from peer, but test runs before parsing that).
-                         "Client::Sync::.*carddav.*::testConversion"
                          ,
                          testPrefix=syncevoPrefix)
 context.add(test)

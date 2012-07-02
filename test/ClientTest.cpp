@@ -4146,6 +4146,17 @@ bool SyncTests::doConversionCallback(bool *success,
             }
         }
         out.close();
+
+        // The test used peer-specific test cases, but the actual
+        // result does not depend on the peer because we haven't
+        // received the peer's DevInf at the point where we
+        // import/export the test cases (=> don't apply peer-specific
+        // synccompare workarounds).
+        //
+        // Due to the lack of DevInf, properties and parameters which
+        // need to be enabled via DevInf get lost (= filter them out).
+        ScopedEnvChange env("CLIENT_TEST_SERVER", "");
+        ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT");
         CT_ASSERT(config->m_compare(client, testcases, converted));
     }
 
