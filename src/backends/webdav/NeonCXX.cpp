@@ -545,8 +545,10 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     if ((error == NE_ERROR || error == NE_OK) &&
         (code >= 300 && code <= 399)) {
         // special case Google: detect redirect to temporary error page
-        // and retry
-        if (location == "http://www.google.com/googlecalendar/unavailable.html") {
+        // and retry; same for redirect to login page
+        if (boost::starts_with(location, "http://www.google.com/googlecalendar/unavailable.html") ||
+            boost::starts_with(location, "https://www.google.com/googlecalendar/unavailable.html") ||
+            boost::starts_with(location, "https://accounts.google.com/ServiceLogin")) {
             retry = true;
         } else {
             SE_THROW_EXCEPTION_2(RedirectException,
