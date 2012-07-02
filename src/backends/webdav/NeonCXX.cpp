@@ -514,7 +514,8 @@ void Session::flush()
     }
 }
 
-bool Session::checkError(int error, int code, const ne_status *status, const string &location)
+bool Session::checkError(int error, int code, const ne_status *status, const string &location,
+                         const std::set<int> *expectedCodes)
 {
     flush();
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
@@ -561,6 +562,12 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     switch (error) {
     case NE_OK:
         // request itself completed, but might still have resulted in bad status
+        if (expectedCodes &&
+            expectedCodes->find(code) != expectedCodes->end()) {
+            // return to caller immediately as if we had succeeded,
+            // without throwing an exception and without retrying
+            return true;
+        }
         if (code &&
             (code < 200 || code >= 300)) {
             if (status) {
@@ -868,7 +875,7 @@ static int ne_accept_2xx(void *userdata, ne_request *req, const ne_status *st)
 }
 #endif
 
-bool Request::run()
+bool Request::run(const std::set<int> *expectedCodes)
 {
     int error;
 
@@ -881,7 +888,7 @@ bool Request::run()
         error = ne_xml_dispatch_request(m_req, m_parser->get());
     }
 
-    return checkError(error);
+    return checkError(error, expectedCodes);
 }
 
 int Request::addResultData(void *userdata, const char *buf, size_t len)
@@ -891,9 +898,10 @@ int Request::addResultData(void *userdata, const char *buf, size_t len)
     return 0;
 }
 
-bool Request::checkError(int error)
+bool Request::checkError(int error, const std::set<int> *expectedCodes)
 {
-    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"));
+    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"),
+                                expectedCodes);
 }
 
 }
