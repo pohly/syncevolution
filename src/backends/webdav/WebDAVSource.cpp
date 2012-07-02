@@ -13,6 +13,8 @@
 
 #include <syncevo/LogRedirect.h>
 
+#include <boost/assign.hpp>
+
 #include <stdio.h>
 #include <errno.h>
 
@@ -1697,19 +1699,9 @@ void WebDAVSource::removeItem(const string &uid)
         // TODO: match exactly the expected revision, aka ETag,
         // or implement locking.
         // req.addHeader("If-Match", etag);
-        try {
-            if (req->run()) {
-                break;
-            }
-        } catch (const TransportStatusException &ex) {
-            if (ex.syncMLStatus() == 412) {
-                // Radicale reports 412 'Precondition Failed'. Hmm, okay.
-                // Let's map it to the expected 404.
-                SE_THROW_EXCEPTION_STATUS(TransportStatusException,
-	                                  "object not found (was 412 'Precondition Failed')",
-	                                  SyncMLStatus(404));
-            }
-            throw;
+        static const std::set<int> expected = boost::assign::list_of(412);
+        if (req->run(&expected)) {
+            break;
         }
     }
     SE_LOG_DEBUG(NULL, NULL, "remove item status: %s",
@@ -1720,6 +1712,13 @@ void WebDAVSource::removeItem(const string &uid)
         break;
     case 200:
         // reported by Radicale, also okay
+        break;
+    case 412:
+        // Radicale reports 412 'Precondition Failed'. Hmm, okay.
+        // Let's map it to the expected 404.
+        SE_THROW_EXCEPTION_STATUS(TransportStatusException,
+                                  "object not found (was 412 'Precondition Failed')",
+                                  SyncMLStatus(404));
         break;
     default:
         SE_THROW_EXCEPTION_STATUS(TransportStatusException,
