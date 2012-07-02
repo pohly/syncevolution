@@ -1049,13 +1049,26 @@ void LocalTests::testReadItem404() {
     CT_ASSERT_EQUAL(STATUS_NOT_FOUND, status);
 }
 
-// insert one contact without clearing the source first
-void LocalTests::testSimpleInsert() {
+void LocalTests::doInsert(bool withUID)
+{
     // check requirements
     CT_ASSERT(!config.m_insertItem.empty());
     CT_ASSERT(!config.m_createSourceA.empty());
 
-    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem));
+    std::string item = config.m_insertItem;
+    if (!withUID) {
+        CT_ASSERT_NO_THROW(stripProperty(item, "UID"));
+    }
+    CT_ASSERT_NO_THROW(insert(createSourceA, item));
+}
+
+// insert one contact without clearing the source first
+void LocalTests::testSimpleInsert() {
+    // Insert the item without the UID. There is no guarantee that the
+    // item wasn't already inserted before (database not cleaned by
+    // test) and some backends (CalDAV) will catch an attempt to
+    // add the same item twice.
+    doInsert(false);
 }
 
 // delete all items
@@ -1065,7 +1078,9 @@ void LocalTests::testLocalDeleteAll() {
     CT_ASSERT(config.m_createSourceA);
 
     // make sure there is something to delete, then delete again
-    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem));
+    std::string item = config.m_insertItem;
+    CT_ASSERT_NO_THROW(stripProperty(item, "UID"));
+    CT_ASSERT_NO_THROW(insert(createSourceA, item));
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
 }
 
@@ -1073,7 +1088,7 @@ void LocalTests::testLocalDeleteAll() {
 void LocalTests::testComplexInsert() {
     CT_ASSERT(config.m_createSourceA);
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
     CT_ASSERT_NO_THROW(testIterateTwice());
 }
 
@@ -1085,7 +1100,7 @@ void LocalTests::testLocalUpdate() {
 
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
 
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
     CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
 }
 
@@ -1103,7 +1118,7 @@ void LocalTests::doChanges(bool restart) {
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
 
     CLIENT_TEST_LOG("insert item via source A");
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
 
     CLIENT_TEST_LOG("clean changes in sync source B by creating and closing it");
     TestingSyncSourcePtr source;
@@ -1176,7 +1191,7 @@ void LocalTests::doChanges(bool restart) {
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("insert another item via source A");
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
     CLIENT_TEST_LOG("check for new item via source B");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
@@ -1222,7 +1237,7 @@ void LocalTests::doChanges(bool restart) {
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create and update an item in source A");
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
     CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, but not both");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
@@ -1236,9 +1251,9 @@ void LocalTests::doChanges(bool restart) {
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create, delete and recreate an item in source A");
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
-    CT_ASSERT_NO_THROW(testSimpleInsert());
+    CT_ASSERT_NO_THROW(doInsert());
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, even if\n "
                     "(as for calendar with UID) the same LUID gets reused");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
@@ -1311,7 +1326,7 @@ void LocalTests::testLinkedSources()
 
         // insert one item
         CLIENT_TEST_LOG("inserting into %s", main->getSourceName().c_str());
-        CT_ASSERT_NO_THROW(main->testSimpleInsert());
+        CT_ASSERT_NO_THROW(main->doInsert());
         BOOST_FOREACH (LocalTests *test, m_linkedSources) {
             if (test == main) {
                 continue;
@@ -3067,7 +3082,7 @@ void SyncTests::testRefreshFromClientSemantic() {
 void SyncTests::testRefreshStatus() {
     source_it it;
 
-    CT_ASSERT_NO_THROW(allSourcesInsert());
+    CT_ASSERT_NO_THROW(allSourcesInsert(false));
     CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
@@ -3159,7 +3174,7 @@ void SyncTests::doRestartSync(SyncMode mode)
         boost::bind(boost::function<void ()>(
                                              boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
                                                                     (boost::lambda::bind(log, "inserting one item"),
-                                                                     boost::lambda::bind(&SyncTests::allSourcesInsert, this)))
+                                                                     boost::lambda::bind(&SyncTests::allSourcesInsert, this, true)))
                                              ));
 
     SyncOptions::Callback_t setup =
@@ -5844,10 +5859,10 @@ void SyncTests::postSync(int res, const std::string &logname)
     client.postSync(res, logname);
 }
 
-void SyncTests::allSourcesInsert()
+void SyncTests::allSourcesInsert(bool withUID)
 {
     BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
-        CT_ASSERT_NO_THROW(source_pair.second->testSimpleInsert());
+        CT_ASSERT_NO_THROW(source_pair.second->doInsert(withUID));
     }
 }
 
