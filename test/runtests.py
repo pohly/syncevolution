@@ -1022,6 +1022,10 @@ evolutiontest = SyncEvolutionTest("evolution", compile,
                                   "Client::Source SyncEvolution",
                                   [],
                                   "CLIENT_TEST_FAILURES="
+                                  # testReadItem404 works with some Akonadi versions (Ubuntu Lucid),
+                                  # but not all (Debian Testing). The other tests always fail,
+                                  # the code needs to be fixed.
+                                  "Client::Source::kde_.*::testReadItem404,"
                                   "Client::Source::kde_.*::testDelete404,"
                                   "Client::Source::kde_.*::testImport.*,"
                                   "Client::Source::kde_.*::testRemoveProperties,"
