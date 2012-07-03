@@ -14,8 +14,8 @@ src/dbus/interfaces/syncevo-dbus-api-doc.xml: src/dbus/interfaces/syncevo-server
 	done; \
 	echo '</reference>' >>$@
 
-src/dbus/interfaces/syncevo-dbus-api-doc.html: src/dbus/interfaces/syncevo-dbus-api-doc.xml
-	$(AM_V_GEN)$(XSLT) -o $@ http://docbook.sourceforge.net/release/xsl/current/html/docbook.xsl $<
+src/dbus/interfaces/syncevo-dbus-api-doc.html: src/dbus/interfaces/syncevo-dbus-api-doc.xml build/xsl/html/docbook.xsl
+	$(AM_V_GEN)$(XSLT) -o $@ $(top_srcdir)/build/xsl/html/docbook.xsl $<
 
 doc_DATA += src/dbus/interfaces/syncevo-dbus-api-doc.html
 
