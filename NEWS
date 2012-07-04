@@ -1,4 +1,4 @@
-SyncEvolution 1.2.99.1 -> 1.2.99.2, 30.06.2012
+SyncEvolution 1.2.99.1 -> 1.2.99.2, 04.07.2012
 ==============================================
 
 Next step towards SyncEvolution 1.3. It adds a workaround for
@@ -50,6 +50,9 @@ Details:
   In the text/plain -> syncevolution -> text/calendar -> Radicale -> EDS
   -> syncevolution chain the LAST-MODIFIED was not added by Radicale, which caused
   problems for change tracking in an EDS-based SyncEvolution.
+
+  Also necessary when importing from a phone using vCalendar without
+  DTSTAMP directly into CalDAV.
 
 * Google Calendar: updated URL redirect handling
 
