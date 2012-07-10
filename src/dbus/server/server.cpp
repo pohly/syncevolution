@@ -854,7 +854,9 @@ void Server::messagev(Level level,
                       int line,
                       const char *function,
                       const char *format,
-                      va_list args)
+                      va_list args,
+                      const std::string &dbusPath,
+                      const std::string &procname)
 {
     // iterating over args in messagev() is destructive, must make a copy first
     va_list argsCopy;
@@ -867,7 +869,7 @@ void Server::messagev(Level level,
     // for general server output, the object path field is dbus server
     // the object path can't be empty for object paths prevent using empty string.
     string strLevel = Logger::levelToStr(level);
-    logOutput(getPath(), strLevel, log, getProcessName());
+    logOutput(dbusPath, strLevel, log, procname);
 }
 
 SE_END_CXX

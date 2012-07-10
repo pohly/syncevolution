@@ -816,8 +816,9 @@ void Session::messagev(Level level,
     // log with session path and empty process name,
     // just like the syncevo-dbus-helper does
     string strLevel = Logger::levelToStr(level);
-    string log = StringPrintfV(format, args);
-    m_server.logOutput(getPath(), strLevel, log, "");
+    m_server.messagev(level, NULL, NULL, 0, NULL,
+                      format, args,
+                      getPath(), "");
 }
 
 void Session::useHelper2(const SimpleResult &result, const boost::signals2::connection &c)

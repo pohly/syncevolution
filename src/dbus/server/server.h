@@ -624,7 +624,21 @@ public:
                           int line,
                           const char *function,
                           const char *format,
-                          va_list args);
+                          va_list args) {
+        messagev(level, prefix, file, line,
+                 function, format, args,
+                 getPath(),
+                 getProcessName());
+    }
+    void messagev(Level level,
+                  const char *prefix,
+                  const char *file,
+                  int line,
+                  const char *function,
+                  const char *format,
+                  va_list args,
+                  const std::string &dbusPath,
+                  const std::string &procname);
 
     virtual bool isProcessSafe() const { return false; }
 };
