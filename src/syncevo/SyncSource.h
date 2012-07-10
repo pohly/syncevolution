@@ -367,6 +367,8 @@ struct ClientTestConfig {
      * setting this to false disables tests which depend
      * on the source's support for linked item semantic
      * (testLinkedItemsInsertParentTwice, testLinkedItemsInsertChildTwice)
+     *
+     * Matches SynthesisInfo::m_globalIDs.
      */
     Bool m_sourceKnowsItemSemantic;
 
@@ -1421,6 +1423,8 @@ class SyncSourceBase : public Logger {
          * created). If both sides in a sync support this, then the
          * engine can rely on these properties to find matching items
          * during a slow sync.
+         *
+         * Matches ClientTestConfig::m_sourceKnowsItemSemantic.
          */
         Bool m_globalIDs;
     };

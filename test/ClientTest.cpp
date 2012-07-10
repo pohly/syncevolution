@@ -1124,8 +1124,13 @@ void LocalTests::testInsertTwice() {
                     second.m_state == ITEM_MERGED ? "was merged" :
                     second.m_state == ITEM_OKAY ? "was added, which is broken!" :
                     "unknown result ?!");
-    CT_ASSERT(second.m_state == ITEM_NEEDS_MERGE || second.m_state == ITEM_REPLACED || second.m_state == ITEM_MERGED);
-    CT_ASSERT_EQUAL(first.m_luid, second.m_luid);
+    if (config.m_sourceKnowsItemSemantic) {
+        CT_ASSERT(second.m_state == ITEM_NEEDS_MERGE || second.m_state == ITEM_REPLACED || second.m_state == ITEM_MERGED);
+        CT_ASSERT_EQUAL(first.m_luid, second.m_luid);
+    } else {
+        CT_ASSERT(second.m_state == ITEM_OKAY);
+        CT_ASSERT(first.m_luid != second.m_luid);
+    }
     if (second.m_state == ITEM_REPLACED || second.m_state == ITEM_MERGED) {
         CT_ASSERT(first.m_revision != second.m_revision);
     }

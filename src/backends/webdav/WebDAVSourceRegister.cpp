@@ -255,6 +255,10 @@ public:
         if (m_type == "caldav") {
             config.m_supportsReccurenceEXDates = true;
         }
+        config.m_sourceKnowsItemSemantic =
+            m_type == "caldav" ||
+            m_type == "caldavjournal" ||
+            m_type == "caldavtodo";
         config.m_createSourceA = boost::bind(&WebDAVTest::createSource, this, _2, _4);
         config.m_createSourceB = boost::bind(&WebDAVTest::createSource, this, _2, _4);
         ConfigProps::const_iterator it = m_props.find(m_type + "/testcases");
