@@ -185,7 +185,7 @@ extern "C" void EDSAbiWrapperInit()
 # ifdef HAVE_EDS
     edshandle =
     findSymbols("libedataserver-1.2.so", 7, 16,
-                FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                FIND_SYMBOLS_NEED_ALL, NULL,
                 &EDSAbiWrapperSingleton.e_source_get_type, "e_source_get_type",
                 &EDSAbiWrapperSingleton.e_source_get_uri, "e_source_get_uri",
                 &EDSAbiWrapperSingleton.e_source_group_get_type, "e_source_group_get_type",
@@ -201,7 +201,7 @@ extern "C" void EDSAbiWrapperInit()
         libebookMaxVersion = 13;
     ebookhandle =
     findSymbols("libebook-1.2.so", libebookMinVersion, libebookMaxVersion,
-                FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                FIND_SYMBOLS_NEED_ALL, NULL,
                 &EDSAbiWrapperSingleton.e_book_add_contact, "e_book_add_contact",
                 &EDSAbiWrapperSingleton.e_book_authenticate_user, "e_book_authenticate_user",
                 &EDSAbiWrapperSingleton.e_book_commit_contact, "e_book_commit_contact",
@@ -242,7 +242,7 @@ extern "C" void EDSAbiWrapperInit()
         libecalMaxVersion = 11;
     ecalhandle =
     findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
-                FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                FIND_SYMBOLS_NEED_ALL, NULL,
                 &EDSAbiWrapperSingleton.e_cal_add_timezone, "e_cal_add_timezone",
                 &EDSAbiWrapperSingleton.e_cal_component_get_icalcomponent, "e_cal_component_get_icalcomponent",
                 &EDSAbiWrapperSingleton.e_cal_component_get_last_modified, "e_cal_component_get_last_modified",
