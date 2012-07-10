@@ -1188,6 +1188,16 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                                     XMLConfigFragments &fragments)
 {
     TrackingSyncSource::getSynthesisInfo(info, fragments);
+
+    // only CalDAV enforces unique UID
+    std::string content = getContent();
+    if (content == "VEVENT" || content == "VTODO" || content == "VJOURNAL") {
+        info.m_globalIDs = true;
+    }
+    if (content == "VEVENT") {
+        info.m_backendRule = "HAVE-SYNCEVOLUTION-EXDATE-DETACHED";
+    }
+
     // TODO: instead of identifying the peer based on the
     // session URI, use some information gathered about
     // it during open()
