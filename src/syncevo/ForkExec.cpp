@@ -356,7 +356,7 @@ void ForkExecParent::checkCompletion() throw ()
                 if (WIFEXITED(m_status)) {
                     error += StringPrintf(" with return code %d", WEXITSTATUS(m_status));
                 } else if (WIFSIGNALED(m_status)) {
-                    error += StringPrintf(" because of signal %d\n", WTERMSIG(m_status));
+                    error += StringPrintf(" because of signal %d", WTERMSIG(m_status));
                 } else {
                     error += " for unknown reasons";
                 }
