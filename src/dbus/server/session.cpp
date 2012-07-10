@@ -675,7 +675,8 @@ void Session::doneCb(bool success) throw()
         m_status = SESSION_DONE;
         m_syncStatus = SYNC_DONE;
         if (!success && !m_error) {
-            m_error = STATUS_FATAL;
+            // some kind of local, internal problem
+            m_error = STATUS_FATAL + sysync::LOCAL_STATUS_CODE;
         }
 
         fireStatus(true);
@@ -907,8 +908,19 @@ void Session::onQuit(int status) throw ()
             // wait for that reply. If the helper died without sending
             // it, then D-Bus will generate a "connection lost" error
             // for our pending method call.
+            //
+            // Except that libdbus does not deliver that error
+            // reliably. As a workaround, schedule closing the
+            // session as an idle callback, after that potential
+            // future method return call was handled. The assumption
+            // is that it is pending - it must be, because with the
+            // helper gone, IO with it must be ready. Just to be sure
+            // a small delay is used.
         }
-        doneCb();
+        m_server.addTimeout(boost::bind(&Session::doneCb,
+                                        m_me,
+                                        false),
+                            0.1 /* seconds */);
     } catch (...) {
         Exception::handle();
     }
