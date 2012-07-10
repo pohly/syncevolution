@@ -562,12 +562,10 @@ void Server::removeSyncSession(Session *session)
     }
 }
 
-static bool quitLoop(GMainLoop *loop)
+static void quitLoop(GMainLoop *loop)
 {
     SE_LOG_DEBUG(NULL, NULL, "stopping server's event loop");
     g_main_loop_quit(loop);
-    // don't call me again
-    return false;
 }
 
 void Server::checkQueue()
@@ -601,12 +599,10 @@ void Server::checkQueue()
     }
 }
 
-bool Server::sessionExpired(const boost::shared_ptr<Session> &session)
+void Server::sessionExpired(const boost::shared_ptr<Session> &session)
 {
     SE_LOG_DEBUG(NULL, NULL, "session %s expired",
                  session->getSessionID().c_str());
-    // don't call me again
-    return false;
 }
 
 void Server::delaySessionDestruction(const boost::shared_ptr<Session> &session)
@@ -691,17 +687,14 @@ void Server::passwordResponse(const InfoReq::InfoMap &response,
 }
 
 
-bool Server::callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<bool ()> &callback)
+bool Server::callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<void ()> &callback)
 {
-    if (!callback()) {
-        m_timeouts.remove(timeout);
-        return false;
-    } else {
-        return true;
-    }
+    callback();
+    m_timeouts.remove(timeout);
+    return false;
 }
 
-void Server::addTimeout(const boost::function<bool ()> &callback,
+void Server::addTimeout(const boost::function<void ()> &callback,
                         int seconds)
 {
     boost::shared_ptr<Timeout> timeout(new Timeout);
