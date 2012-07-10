@@ -257,6 +257,120 @@ DBusServerCXX::~DBusServerCXX()
     g_dbus_server_stop(m_server.get());
 }
 
+void DBusWatch::nameOwnerChanged(GDBusConnection *connection,
+                                 const gchar *sender_name,
+                                 const gchar *object_path,
+                                 const gchar *interface_name,
+                                 const gchar *signal_name,
+                                 GVariant *parameters,
+                                 gpointer user_data)
+{
+    DBusWatch *watch = static_cast<DBusWatch *>(user_data);
+    if (!watch->m_called) {
+        gchar *name = NULL, *oldOwner = NULL, *newOwner = NULL;
+        g_variant_get(parameters, "(sss)", &name, &oldOwner, &newOwner);
+        bool matches = name && watch->m_peer == name &&
+            newOwner && !*newOwner;
+        g_free(name);
+        g_free(oldOwner);
+        g_free(newOwner);
+        if (matches) {
+            watch->disconnected();
+        }
+    }
+}
+
+void DBusWatch::disconnected()
+{
+    if (!m_called) {
+        m_called = true;
+        if (m_callback) {
+            m_callback();
+        }
+    }
+}
+
+DBusWatch::DBusWatch(const DBusConnectionPtr &conn,
+                     const boost::function<void (void)> &callback) :
+    m_conn(conn),
+    m_callback(callback),
+    m_called(false),
+    m_watchID(0)
+{
+}
+
+void DBusWatch::setCallback(const boost::function<void (void)> &callback)
+{
+    m_callback = callback;
+    if (m_called && m_callback) {
+        m_callback();
+    }
+}
+
+void DBusWatch::activate(const char *peer)
+{
+    if (!peer) {
+        throw std::runtime_error("DBusWatch::activate(): no peer");
+    }
+    m_peer = peer;
+
+    // Install watch first ...
+    m_watchID = g_dbus_connection_signal_subscribe(m_conn.get(),
+                                                   NULL, // TODO org.freedesktop.DBus?
+                                                   "org.freedesktop.DBus",
+                                                   "NameOwnerChanged",
+                                                   "/org/freedesktop/DBus",
+                                                   NULL,
+                                                   G_DBUS_SIGNAL_FLAGS_NONE,
+                                                   nameOwnerChanged,
+                                                   this,
+                                                   NULL);
+    if (!m_watchID) {
+        throw std::runtime_error("g_dbus_connection_signal_subscribe(): NameLost failed");
+    }
+
+    // ... then check that the peer really exists,
+    // otherwise we'll never notice the disconnect.
+    // If it disconnects while we are doing this,
+    // then disconnect() will be called twice,
+    // but it handles that.
+    GError *error = NULL;
+
+    GVariant *result = g_dbus_connection_call_sync(m_conn.get(),
+                                                   "org.freedesktop.DBus",
+                                                   "/org/freedesktop/DBus",
+                                                   "org.freedesktop.DBus",
+                                                   "NameHasOwner",
+                                                   g_variant_new("(s)", peer),
+                                                   G_VARIANT_TYPE("(b)"),
+                                                   G_DBUS_CALL_FLAGS_NONE,
+                                                   -1, // default timeout
+                                                   NULL,
+                                                   &error);
+
+    if (result != NULL) {
+        bool actual_result = false;
+
+        g_variant_get(result, "(b)", &actual_result);
+        if (!actual_result) {
+            disconnected();
+        }
+    } else {
+        std::string error_message(error->message);
+        g_error_free(error);
+        std::string err_msg("g_dbus_connection_call_sync(): NameHasOwner - ");
+        throw std::runtime_error(err_msg + error_message);
+    }
+}
+
+DBusWatch::~DBusWatch()
+{
+    if (m_watchID) {
+        g_dbus_connection_signal_unsubscribe(m_conn.get(), m_watchID);
+        m_watchID = 0;
+    }
+}
+
 void getWatch(GDBusConnection *conn, GDBusMessage *msg,
               GVariantIter &iter, boost::shared_ptr<Watch> &value)
 {
