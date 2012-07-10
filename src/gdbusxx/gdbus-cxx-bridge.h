@@ -1963,20 +1963,37 @@ class DBusWatch : public Watch
     boost::function<void (void)> m_callback;
     bool m_called;
     guint m_watchID;
+    std::string m_peer;
 
-    static void disconnect(GDBusConnection *connection,
-                           const gchar *sender_name,
-                           const gchar *object_path,
-                           const gchar *interface_name,
-                           const gchar *signal_name,
-                           GVariant *parameters,
-                           gpointer user_data)
+    static void nameOwnerChanged(GDBusConnection *connection,
+                                 const gchar *sender_name,
+                                 const gchar *object_path,
+                                 const gchar *interface_name,
+                                 const gchar *signal_name,
+                                 GVariant *parameters,
+                                 gpointer user_data)
     {
         DBusWatch *watch = static_cast<DBusWatch *>(user_data);
         if (!watch->m_called) {
-            watch->m_called = true;
-            if (watch->m_callback) {
-                watch->m_callback();
+            gchar *name = NULL, *oldOwner = NULL, *newOwner = NULL;
+            g_variant_get(parameters, "(sss)", &name, &oldOwner, &newOwner);
+            bool matches = name && watch->m_peer == name &&
+                newOwner && !*newOwner;
+            g_free(name);
+            g_free(oldOwner);
+            g_free(newOwner);
+            if (matches) {
+                watch->disconnected();
+            }
+        }
+    }
+
+    void disconnected()
+    {
+        if (!m_called) {
+            m_called = true;
+            if (m_callback) {
+                m_callback();
             }
         }
     }
@@ -2004,16 +2021,17 @@ class DBusWatch : public Watch
         if (!peer) {
             throw std::runtime_error("DBusWatch::activate(): no peer");
         }
+        m_peer = peer;
 
         // Install watch first ...
         m_watchID = g_dbus_connection_signal_subscribe(m_conn.get(),
-                                                       peer,
+                                                       NULL, // TODO org.freedesktop.DBus?
                                                        "org.freedesktop.DBus",
-                                                       "NameLost",
-                                                       "/org/freesktop/DBus",
+                                                       "NameOwnerChanged",
+                                                       "/org/freedesktop/DBus",
                                                        NULL,
                                                        G_DBUS_SIGNAL_FLAGS_NONE,
-                                                       disconnect,
+                                                   nameOwnerChanged,
                                                        this,
                                                        NULL);
         if (!m_watchID) {
@@ -2044,7 +2062,7 @@ class DBusWatch : public Watch
 
             g_variant_get(result, "(b)", &actual_result);
             if (!actual_result) {
-                disconnect(m_conn.get(), NULL, NULL, NULL, NULL, NULL, this);
+                disconnected();
             }
         } else {
             std::string error_message(error->message);
