@@ -538,7 +538,8 @@ public:
     };
 
     GDBusCXX::EmitSignal2<std::string,
-                          std::string> m_logOutput;
+                          std::string,
+                          true /* ignore transmission failures */> m_logOutput;
 };
 
 class LocalTransportAgentChild : public TransportAgent, private LoggerBase
@@ -629,6 +630,15 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
         if (m_ret) {
             SE_THROW("local transport child encountered a problem, terminating");
         }
+    }
+
+    static void onParentQuit()
+    {
+        // Never free this state blocker. We can only abort and
+        // quit from now on.
+        static boost::shared_ptr<SuspendFlags::StateBlocker> abortGuard;
+        SE_LOG_ERROR(NULL, NULL, "sync parent quit unexpectedly");
+        abortGuard = SuspendFlags::getSuspendFlags().abort();
     }
 
     void onConnect(const GDBusCXX::DBusConnectionPtr &conn)
@@ -833,6 +843,17 @@ public:
 
         m_forkexec->m_onConnect.connect(boost::bind(&LocalTransportAgentChild::onConnect, this, _1));
         m_forkexec->m_onFailure.connect(boost::bind(&LocalTransportAgentChild::onFailure, this, _1, _2));
+        // When parent quits, we need to abort whatever we do and shut
+        // down. There's no way how we can complete our work without it.
+        //
+        // Note that another way how this process can detect the
+        // death of the parent is when it currently is waiting for
+        // completion of a method call to the parent, like a request
+        // for a password. However, that does not cover failures
+        // like the parent not asking us to sync in the first place
+        // and also does not work with libdbus (https://bugs.freedesktop.org/show_bug.cgi?id=49728).
+        m_forkexec->m_onQuit.connect(onParentQuit);
+
         m_forkexec->connect();
     }
 
