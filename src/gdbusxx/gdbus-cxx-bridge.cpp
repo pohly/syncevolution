@@ -257,4 +257,12 @@ DBusServerCXX::~DBusServerCXX()
     g_dbus_server_stop(m_server.get());
 }
 
+void getWatch(GDBusConnection *conn, GDBusMessage *msg,
+              GVariantIter &iter, boost::shared_ptr<Watch> &value)
+{
+    std::auto_ptr<DBusWatch> watch(new DBusWatch(conn));
+    watch->activate(g_dbus_message_get_sender(msg));
+    value.reset(watch.release());
 }
+
+} // namespace GDBusCXX

@@ -2063,6 +2063,9 @@ class DBusWatch : public Watch
     }
 };
 
+void getWatch(GDBusConnection *conn, GDBusMessage *msg,
+              GVariantIter &iter, boost::shared_ptr<Watch> &value);
+
 /**
  * pseudo-parameter: not part of D-Bus signature,
  * but rather extracted from message attributes
@@ -2074,13 +2077,7 @@ template <> struct dbus_traits< boost::shared_ptr<Watch> >  : public dbus_traits
     static std::string getReply() { return ""; }
 
     static void get(GDBusConnection *conn, GDBusMessage *msg,
-                    GVariantIter &iter, boost::shared_ptr<Watch> &value)
-    {
-        boost::shared_ptr<DBusWatch> watch(new DBusWatch(conn));
-        watch->activate(g_dbus_message_get_sender(msg));
-        value = watch;
-    }
-
+                    GVariantIter &iter, boost::shared_ptr<Watch> &value) { getWatch(conn, msg, iter, value); }
     static void append(GVariantBuilder &builder, const boost::shared_ptr<Watch> &value) {}
 
     typedef boost::shared_ptr<Watch> host_type;
