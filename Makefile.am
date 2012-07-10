@@ -197,9 +197,24 @@ endif
 PLATFORM_FILES_evolution = platformgnome syncecal syncebook
 PLATFORM_FILES_kde = platformkde syncakonadi
 
+# Additional parameters for syncevolution-kde/evolution.deb.
 # Fake conflicts/replaces works around a bug in CheckInstall,
 # which creates empty, invalid entries for those unless
-# something is given.
+# something is given. For Evolution we hard-code dependencies
+# (because with EDS compatibility turned on, several
+# alternatives will work at runtime) and conflict with
+# EDS 3.6, because that breaks the API and does not work for us
+# at the moment.
+SYNCEVOLUTION_kde_DEB_ARGS = \
+	--conflicts=syncevolution-foobar \
+        --replaces=syncevolution-foobar
+SYNCEVOLUTION_evolution_DEB_ARGS = \
+	--conflicts="'evolution-data-server (>= 3.6), libebook-1.2-14 (>= 3.6), libecal-1.2.12 (>= 3.6)'" \
+	--replaces=syncevolution-foobar
+SYNCEVOLUTION_evolution_DEB_REQUIRES = \
+	, libebook-1.2-5 | libebook-1.2-6 | libebook-1.2-7 | libebook-1.2-8 | libebook-1.2-9 | libebook-1.2-10 | libebook-1.2-11 | libebook-1.2-12 \
+	, libecal-1.2-3 | libecal-1.2-4 | libecal-1.2-5 | libecal-1.2-6 | libecal-1.2-7 | libecal-1.2-8 | libecal-1.2-9 | libecal-1.2-10 | libecal-1.2-11
+
 syncevolution-%-deb: checkinstall/dist/$(distdir) checkinstall/dist/debian/control
 	(echo "SyncEvolution - meta package for $*" && cat $(srcdir)/description) >checkinstall/description-pak
 	tmpdir=`mktemp -d $$HOME/syncevolution.XXXXXXXXXX` && \
@@ -212,11 +227,10 @@ syncevolution-%-deb: checkinstall/dist/$(distdir) checkinstall/dist/debian/contr
                 --nodoc \
 		--pkgversion=$(PLATFORM_DEB_VERSION) \
 		--pkgrelease=$(PLATFORM_DEB_RELEASE) \
+		$(SYNCEVOLUTION_$*_DEB_ARGS) \
 		--pkgname=syncevolution-$* \
 		--pkgarch=all \
-                --requires="'$(shell set -x; cd checkinstall/dist; LD_LIBRARY_PATH=$(distdir)/usr/lib:$(distdir)/usr/lib/syncevolution dpkg-shlibdeps -L$(srcdir)/src/shlibs.local --ignore-missing-info -O $$(for i in $(patsubst %,$(distdir)/usr/lib/syncevolution/backends/%.so,$(PLATFORM_FILES_$*)); do if file $$i | grep ELF >/dev/null; then echo $$i; fi; done) | sed $(REQUIRES_SED_KDE) -e 's/[^=]*=//'), $(PKGNAME) (= $(VERSION_deb)-$(RELEASE))'" \
-                --conflicts=syncevolution-foobar \
-                --replaces=syncevolution-foobar \
+                --requires="'$(shell set -x; cd checkinstall/dist; LD_LIBRARY_PATH=$(distdir)/usr/lib:$(distdir)/usr/lib/syncevolution dpkg-shlibdeps -L$(srcdir)/src/shlibs.local --ignore-missing-info -O $$(for i in $(patsubst %,$(distdir)/usr/lib/syncevolution/backends/%.so,$(PLATFORM_FILES_$*)); do if file $$i | grep ELF >/dev/null; then echo $$i; fi; done) | sed $(REQUIRES_SED_KDE) -e 's/[^=]*=//'), $(PKGNAME) (= $(VERSION_deb)-$(RELEASE))$(SYNCEVOLUTION_$*_DEB_REQUIRES)'" \
 		--maintainer="'Patrick Ohly <patrick.ohly@gmx.de>'" \
 		--pkgsource='http://syncevolution.org' \
 		--pkggroup='$*' \
