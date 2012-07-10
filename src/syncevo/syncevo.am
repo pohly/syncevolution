@@ -60,6 +60,7 @@ src_syncevo_sources = \
   \
   src/syncevo/util.cpp \
   src/syncevo/util.h \
+  src/syncevo/BoostHelper.h \
   \
   src/syncevo/Timespec.h \
   \
@@ -152,6 +153,7 @@ src_syncevo_libsyncevolution_include_HEADERS = \
   src/syncevo/SyncConfig.h \
   src/syncevo/SyncSource.h \
   src/syncevo/util.h \
+  src/syncevo/BoostHelper.h \
   src/syncevo/SuspendFlags.h \
   src/syncevo/SyncContext.h \
   src/syncevo/Timespec.h \
