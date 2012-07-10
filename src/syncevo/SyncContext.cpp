@@ -3298,6 +3298,7 @@ SyncMLStatus SyncContext::doSync()
     }
 
     // delay the sync for debugging purposes
+    SE_LOG_DEBUG(NULL, NULL, "ready to sync");
     const char *delay = getenv("SYNCEVOLUTION_SYNC_DELAY");
     if (delay) {
         Sleep(atoi(delay));

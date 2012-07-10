@@ -618,7 +618,8 @@ class DBusUtil(Timeout):
     def getChildren(self):
         '''Find all children of the current process (ppid = out pid,
         in our process group, or in process group of known
-        children). Return mapping from pid to name.'''
+        children). Return mapping from pid to (name, cmdline),
+        where cmdline has spaces between parameters.'''
 
         # Any of the known children might have its own process group.
         # syncevo-dbus-server definitely does (we create it like that);
@@ -639,6 +640,7 @@ class DBusUtil(Timeout):
                 m = statre.search(stat)
                 if m:
                     procs[pid] = m.groupdict()
+                    procs[pid]['cmdline'] = open('/proc/%d/cmdline' % pid, 'r').read().replace('\0', ' ')
                     for i in ('ppid', 'pgid'):
                         procs[pid][i] = int(procs[pid][i])
             except:
@@ -658,7 +660,7 @@ class DBusUtil(Timeout):
                 isChild(procs[pid]['ppid'])
         for pid, info in procs.iteritems():
             if isChild(pid):
-                children[pid] = info['name']
+                children[pid] = (info['name'], info['cmdline'])
         # Exclude dbus-monitor and forked test-dbus.py, they are handled separately.
         if self.pmonitor:
             del children[self.pmonitor.pid]
@@ -672,8 +674,8 @@ class DBusUtil(Timeout):
         children = self.getChildren()
         # First pass with SIGTERM?
         if delay:
-            for pid, name in children.iteritems():
-                logging.printf("sending SIGTERM to %d %s", pid, name)
+            for pid, (name, cmdline) in children.iteritems():
+                logging.printf("sending SIGTERM to %d %s = %s", pid, name, cmdline)
                 TryKill(pid, signal.SIGTERM)
         start = time.time()
         logging.printf("starting to wait for process termination at %s", time.asctime(time.localtime(start)))
@@ -1013,7 +1015,7 @@ status: idle, 0, {}
                 lines.append(event[0])
         return '\n'.join(lines)
 
-    def assertSyncStatus(self, config, status, error):
+    def getSyncStatus(self, config):
         cache = self.own_xdg and os.path.join(xdg_root, 'cache', 'syncevolution') or \
             os.path.join(os.environ['HOME'], '.cache', 'syncevolution')
         entries = [x for x in os.listdir(cache) if x.startswith(config + '-')]
@@ -1022,11 +1024,16 @@ status: idle, 0, {}
         config = ConfigParser.ConfigParser()
         content = '[fake]\n' + open(os.path.join(cache, entries[0], 'status.ini')).read()
         config.readfp(io.BytesIO(content))
-        self.assertEqual(status, config.getint('fake', 'status'))
-        if error == None:
-            self.assertFalse(config.has_option('fake', 'error'))
-        else:
-            self.assertEqual(error, config.get('fake', 'error'))
+        status = config.getint('fake', 'status')
+        error = None
+        if config.has_option('fake', 'error'):
+            error = config.get('fake', 'error')
+        return (status, error)
+
+    def assertSyncStatus(self, config, status, error):
+        realStatus, realError = self.getSyncStatus(config)
+        self.assertEqual(status, realStatus)
+        self.assertEqual(error, realError)
 
     def doCheckSync(self, expectedError=0, expectedResult=0, reportOptional=False, numReports=1):
         # check recorded events in DBusUtil.events, first filter them
@@ -3649,20 +3656,35 @@ END:VCARD''')
     # Killing the syncevo-dbus-helper before it even starts (SYNCEVOLUTION_LOCAL_CHILD_DELAY=5)
     # is possible, but leads to ugly valgrind warnings about "possibly lost" memory because
     # SIGTERM really kills the process right away. Better wait until syncing really has started
-    # in the helper (SYNCEVOLUTION_SYNC_DELAY=5). The test is more realistic that way, too.
-    @property("ENV", usingValgrind() and "SYNCEVOLUTION_SYNC_DELAY=55" or "SYNCEVOLUTION_SYNC_DELAY=5")
+    # in the helper (SYNCEVOLUTION_SYNC_DELAY). The test is more realistic that way, too.
+    # The delay itself can be aborted, which is why this test will complete fairly quickly
+    # despite that delay.
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=1000")
     @timeout(100)
     def testConcurrency(self):
         """TestLocalSync.testConcurrency - D-Bus server must remain responsive while sync runs"""
         self.setUpConfigs()
         self.setUpListeners(self.sessionpath)
         self.session.Sync("slow", {})
-        time.sleep(usingValgrind() and 30 or 3)
-        status, error, sources = self.session.GetStatus(utf8_strings=True)
-        self.assertEqual(status, "running")
-        self.assertEqual(error, 0)
-        self.session.Abort()
-        loop.run()
+
+        self.aborted = False
+        def output(path, level, text, procname):
+            if self.running and not self.aborted and text == 'ready to sync':
+                logging.printf('aborting sync')
+                self.session.Abort()
+                self.aborted = True
+
+        receiver = bus.add_signal_receiver(output,
+                                           'LogOutput',
+                                           'org.syncevolution.Server',
+                                           self.server.bus_name,
+                                           byte_arrays=True,
+                                           utf8_strings=True)
+        try:
+            loop.run()
+        finally:
+            receiver.remove()
+        self.assertTrue(self.aborted)
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
         report = self.checkSync(20017, 20017, reportOptional=True) # aborted, with or without report
         if report:
@@ -3671,7 +3693,140 @@ END:VCARD''')
 
     @timeout(200)
     def testParentFailure(self):
-        """TestLocalSync.testParentFailure - check that child detects when parent dies"""
+        """TestLocalSync.testParentFailure - check that server and local sync helper detect when D-Bus helper dies"""
+        self.setUpConfigs(childPassword="-")
+        self.setUpListeners(self.sessionpath)
+        self.lastState = "unknown"
+        def infoRequest(id, session, state, handler, type, params):
+            if state == "request":
+                self.assertEqual(self.lastState, "unknown")
+                self.lastState = "request"
+                # kill syncevo-dbus-helper
+                for pid, (name, cmdline) in self.getChildren().iteritems():
+                    if 'syncevo-dbus-helper' in cmdline:
+                        logging.printf('killing syncevo-dbus-helper with pid %d', pid)
+                        os.kill(pid, signal.SIGKILL)
+                        break
+        dbusSignal = bus.add_signal_receiver(infoRequest,
+                                             'InfoRequest',
+                                             'org.syncevolution.Server',
+                                             self.server.bus_name,
+                                             None,
+                                             byte_arrays=True,
+                                             utf8_strings=True)
+
+        try:
+            self.session.Sync("slow", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            self.checkSync(expectedError=10500, expectedResult=22002)
+        finally:
+            dbusSignal.remove()
+
+        # kill syncevo-dbus-server (and not the wrapper, because that would
+        # also kill the process group)
+        pid = self.serverPid()
+        logging.printf('killing syncevo-dbus-server with pid %d', pid)
+        os.kill(pid, signal.SIGKILL)
+
+        # Give syncevo-local-sync some time to shut down.
+        time.sleep(usingValgrind() and 60 or 10)
+
+        # Remove syncevo-dbus-server zombie process(es).
+        DBusUtil.pserver.wait()
+        DBusUtil.pserver = None
+        try:
+            while True:
+                res = os.waitpid(-1, os.WNOHANG)
+                if res[0]:
+                    logging.printf('got status %d for pid %d', res[1], res[0])
+                else:
+                    break
+        except OSError, ex:
+            if ex.errno != errno.ECHILD:
+                raise ex
+
+        # Now no processes should be left in the process group
+        # of the syncevo-dbus-server.
+        self.assertEqual({}, self.getChildren())
+
+        # check status reports
+        self.assertSyncStatus('server', 22002, 'synchronization process died prematurely')
+        # Local sync helper cannot tell for sure what happened.
+        # A generic error is okay. If the ForkExecChild::m_onQuit signal is
+        # triggered first, it'll report the "aborted" error.
+        if self.getSyncStatus('target_+config@client')[0] == 10500:
+            self.assertSyncStatus('target_+config@client', 10500, 'retrieving password failed: The connection is closed')
+        else:
+            self.assertSyncStatus('target_+config@client', 20017, 'sync parent quit unexpectedly')
+
+    @timeout(200)
+    def testChildFailure(self):
+        """TestLocalSync.testChildFailure - check that server and D-Bus sync helper detect when local sync helper dies"""
+        self.setUpConfigs(childPassword="-")
+        self.setUpListeners(self.sessionpath)
+        self.lastState = "unknown"
+        def infoRequest(id, session, state, handler, type, params):
+            if state == "request":
+                self.assertEqual(self.lastState, "unknown")
+                self.lastState = "request"
+                # kill syncevo-dbus-helper
+                for pid, (name, cmdline) in self.getChildren().iteritems():
+                    if 'syncevo-local-sync' in cmdline:
+                        logging.printf('killing syncevo-local-sync with pid %d', pid)
+                        os.kill(pid, signal.SIGKILL)
+                        break
+        dbusSignal = bus.add_signal_receiver(infoRequest,
+                                             'InfoRequest',
+                                             'org.syncevolution.Server',
+                                             self.server.bus_name,
+                                             None,
+                                             byte_arrays=True,
+                                             utf8_strings=True)
+
+        try:
+            self.session.Sync("slow", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            # TODO: this shouldn't be 20043 'external transport failure'
+            self.checkSync(expectedError=20043, expectedResult=20043)
+        finally:
+            dbusSignal.remove()
+
+        # kill syncevo-dbus-server (and not the wrapper, because that would
+        # also kill the process group)
+        pid = self.serverPid()
+        logging.printf('killing syncevo-dbus-server with pid %d', pid)
+        os.kill(pid, signal.SIGKILL)
+
+        # Give syncevo-local-sync some time to shut down.
+        time.sleep(usingValgrind() and 60 or 10)
+
+        # Remove syncevo-dbus-server zombie process(es).
+        DBusUtil.pserver.wait()
+        DBusUtil.pserver = None
+        try:
+            while True:
+                res = os.waitpid(-1, os.WNOHANG)
+                if res[0]:
+                    logging.printf('got status %d for pid %d', res[1], res[0])
+                else:
+                    break
+        except OSError, ex:
+            if ex.errno != errno.ECHILD:
+                raise ex
+
+        # Now no processes should be left in the process group
+        # of the syncevo-dbus-server.
+        self.assertEqual({}, self.getChildren())
+
+        # check status reports
+        self.assertSyncStatus('server', 20043, 'child process quit because of signal 9')
+        self.assertSyncStatus('target_+config@client', 22002, 'synchronization process died prematurely')
+
+    @timeout(200)
+    def testServerFailure(self):
+        """TestLocalSync.testServerFailure - check that D-Bus helper detects when server dies"""
         self.setUpConfigs(childPassword="-")
         self.setUpListeners(self.sessionpath)
         self.lastState = "unknown"
@@ -4289,7 +4444,10 @@ class TestCmdline(DBusUtil, unittest.TestCase):
         Returns tuple with stdout, stderr and result code. DBusUtil.events
         contains the status and progress events seen while the command line
         ran. self.session is the proxy for that session.'''
+        s = self.startCmdline(args, env, preserveOutputOrder)
+        return self.finishCmdline(s, expectSuccess, sessionFlags)
 
+    def startCmdline(self, args, env=None, preserveOutputOrder=False):
         # Watch all future events, ignore old ones.
         while loop.get_context().iteration(False):
             pass
@@ -4312,6 +4470,9 @@ class TestCmdline(DBusUtil, unittest.TestCase):
         else:
             s = subprocess.Popen(a, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  env=cmdline_env)
+        return s
+
+    def finishCmdline(self, s, expectSuccess=True, sessionFlags=['no-sync'], preserveOutputOrder=False):
         out, err = s.communicate()
         doFail = False
         if expectSuccess and s.returncode != 0:
@@ -6645,7 +6806,193 @@ END:VCARD
                                          sessionFlags=[],
                                          expectSuccess=True)
 
-        
+
+    @property("debug", False)
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=60")
+    @timeout(200)
+    def testSyncFailure1(self):
+        """TestCmdline.testSyncFailure1 - check that cmdline notices when sync fails prematurely before it even starts"""
+        self.setUpLocalSyncConfigs()
+        self.session.Detach()
+
+        # We must kill the process before the sync starts, to achieve
+        # the expected output and sync result. The
+        # SYNCEVOLUTION_LOCAL_CHILD_DELAY2 should give us that chance.
+        self.killed = False
+        def output(path, level, text, procname):
+            if self.running and not self.killed and procname == '' and text == 'ready to sync':
+                # kill syncevo-local-sync
+                for pid, (name, cmdline) in self.getChildren().iteritems():
+                    if 'syncevo-dbus-helper' in cmdline:
+                        logging.printf('killing syncevo-dbus-helper with pid %d', pid)
+                        os.kill(pid, signal.SIGKILL)
+                        loop.quit()
+                        self.killed = True
+                        break
+
+        receiver = bus.add_signal_receiver(output,
+                                           'LogOutput',
+                                           'org.syncevolution.Server',
+                                           self.server.bus_name,
+                                           byte_arrays=True,
+                                           utf8_strings=True)
+        try:
+            s = self.startCmdline(["--sync", "slow", "server"], preserveOutputOrder=True)
+            loop.run()
+        finally:
+            receiver.remove()
+        self.assertTrue(self.killed)
+
+        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=[], preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(1, code)
+        out = self.stripSyncTime(out)
+        # The error message is not particularly informative, but the error should
+        # not occur, so let it be... Also, the "connection is closed" error only
+        # occurs when using GIO D-Bus.
+        out = out.replace('''[ERROR] The connection is closed
+''', '')
+        self.assertEqualDiff(out, '''[ERROR syncevo-dbus-server] child process quit because of signal 9
+''')
+
+    @property("debug", False)
+    @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY2=60")
+    @timeout(200)
+    def testSyncFailure2(self):
+        """TestCmdline.testSyncFailure2 - check that cmdline notices when sync fails prematurely in the middle"""
+        self.setUpLocalSyncConfigs()
+        self.session.Detach()
+
+        # We must kill the process before the sync starts, to achieve
+        # the expected output and sync result. The
+        # SYNCEVOLUTION_LOCAL_CHILD_DELAY2 should give us that chance.
+        self.killed = False
+        def output(path, level, text, procname):
+            if self.running and not self.killed and procname == '@client':
+                # kill syncevo-local-sync
+                for pid, (name, cmdline) in self.getChildren().iteritems():
+                    if 'syncevo-local-sync' in cmdline:
+                        logging.printf('killing syncevo-local-sync with pid %d', pid)
+                        os.kill(pid, signal.SIGKILL)
+                        loop.quit()
+                        self.killed = True
+                        break
+
+        receiver = bus.add_signal_receiver(output,
+                                           'LogOutput',
+                                           'org.syncevolution.Server',
+                                           self.server.bus_name,
+                                           byte_arrays=True, 
+                                           utf8_strings=True)
+        try:
+            s = self.startCmdline(["--sync", "slow", "server"], preserveOutputOrder=True)
+            loop.run()
+        finally:
+            receiver.remove()
+        self.assertTrue(self.killed)
+
+        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=[], preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(1, code)
+        out = self.stripSyncTime(out)
+        out = re.sub(r'giving up after \d+ retries and \d+:\d+min',
+                     'giving up after x retries and y:zzmin',
+                     out)
+        out = re.sub(r'Synchronization failed, see .*temp-test-dbus/cache/syncevolution/server.*/syncevolution-log.html for details.',
+                     'Synchronization failed, see syncevolution-log.html for details.',
+                     out)
+        # Two possible outcomes:
+        # 1. death of child is noticed first.
+        # 2. loss of D-Bus connection is noticed first.
+        if out.startswith('[ERROR] child process quit because of signal 9'):
+            self.assertEqualDiff(out, '''[ERROR] child process quit because of signal 9
+[ERROR] local transport failed: child process quit because of signal 9
+[INFO] Transport giving up after x retries and y:zzmin
+[ERROR] transport problem: transport failed, retry period exceeded
+[INFO] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
+
+Synchronization failed, see syncevolution-log.html for details.
+
+Changes applied during synchronization:
++---------------|-----------------------|-----------------------|-CON-+
+|               |       @default        |        @client        | FLI |
+|        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
++---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+|   addressbook |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |
++---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+| start xxx, duration a:bcmin |
+|          external transport failure (local, status 20043)           |
++---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+First ERROR encountered: child process quit because of signal 9
+
+''')
+        else:
+            self.assertEqualDiff(out, '''[ERROR] sending message to child failed: The connection is closed
+[INFO] Transport giving up after x retries and y:zzmin
+[ERROR] transport problem: transport failed, retry period exceeded
+[INFO] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
+
+Synchronization failed, see syncevolution-log.html for details.
+
+Changes applied during synchronization:
++---------------|-----------------------|-----------------------|-CON-+
+|               |       @default        |        @client        | FLI |
+|        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
++---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+|   addressbook |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |
++---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+| start xxx, duration a:bcmin |
+|          external transport failure (local, status 20043)           |
++---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+First ERROR encountered: sending message to child failed: The connection is closed
+
+''')
+
+    @property("debug", False)
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=60")
+    @timeout(200)
+    def testSyncFailure3(self):
+        """TestCmdline.testSyncFailure3 - check that cmdline notices when server dies"""
+        self.setUpLocalSyncConfigs()
+        self.session.Detach()
+
+        # We must kill the process before the sync starts, to achieve
+        # the expected output and sync result. The
+        # SYNCEVOLUTION_LOCAL_CHILD_DELAY2 should give us that chance.
+        self.killed = False
+        pid = self.serverPid()
+        def output(path, level, text, procname):
+            if self.running and not self.killed and text == 'ready to sync':
+                # kill syncevo-dbus-server (and not the wrapper, because that would
+                # also kill the process group)
+                logging.printf('killing syncevo-dbus-server with pid %d', pid)
+                os.kill(pid, signal.SIGKILL)
+                self.killed = True
+                loop.quit()
+
+        receiver = bus.add_signal_receiver(output,
+                                           'LogOutput',
+                                           'org.syncevolution.Server',
+                                           self.server.bus_name,
+                                           byte_arrays=True,
+                                           utf8_strings=True)
+        try:
+            s = self.startCmdline(["--sync", "slow", "server"], preserveOutputOrder=True)
+            loop.run()
+        finally:
+            receiver.remove()
+        self.assertTrue(self.killed)
+
+        # Remove syncevo-dbus-server zombie process(es).
+        DBusUtil.pserver.wait()
+        DBusUtil.pserver = None
+
+        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=None)
+        self.assertEqual(err, None)
+        self.assertEqual(1, code)
+        out = self.stripSyncTime(out)
+        self.assertEqualDiff(out, '''[ERROR] Background sync daemon has gone.
+''')
 
     @property("debug", False)
     @timeout(200)

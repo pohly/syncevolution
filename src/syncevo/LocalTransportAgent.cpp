@@ -687,6 +687,10 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
         setMsgToParent(reply, "sync() was called");
         Logger::setProcessName(clientContext);
         SE_LOG_DEBUG(NULL, NULL, "Sync() called, starting the sync");
+        const char *delay = getenv("SYNCEVOLUTION_LOCAL_CHILD_DELAY2");
+        if (delay) {
+            Sleep(atoi(delay));
+        }
 
         // initialize sync context
         m_client.reset(new SyncContext(std::string("target-config") + clientContext,
