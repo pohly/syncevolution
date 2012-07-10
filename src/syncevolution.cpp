@@ -711,7 +711,8 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         resetReplies();
         m_session->executeAsync(args);
 
-        while(!done()) {
+
+        while(m_result && !done()) {
             g_main_loop_run(m_loop);
         }
 
@@ -728,7 +729,7 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(SuspendFlagsChanged, m_session.get(), _1).track(m_session));
 
         //wait until status is 'done'
-        while(!m_session->statusDone()) {
+        while(m_result && !m_session->statusDone()) {
             g_main_loop_run(m_loop);
         }
 
