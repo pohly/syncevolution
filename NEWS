@@ -98,7 +98,7 @@ Details:
   Now SyncEvolution's WebDAV backend will print a message like this
   before going to sleep until it is time to retry:
 
-  [INFO @googlecalendar] operation temporarily (?) failed, going to retry in 5.0s before giving up in 1
+  [INFO @googlecalendar] operation temporarily (?) failed, going to retry in 5.0s before giving up in 18.4s: PROPFIND: Neon error code 1: 401 Unauthorized
 
   The uncertainty comes from several factors. In this example, the 401
   might indicate a permanent problem (wrong credentials), or it could be
@@ -109,7 +109,7 @@ Details:
   past. Otherwise it gives up immediately.
 
   Another dubious example are name server lookup errors. They can be
-  ermanent (wrong host name) or temporary (name server
+  permanent (wrong host name) or temporary (name server
   down). SyncEvolution errs on the side of retrying, to avoid
   interrupting an operation which still has a chance to continue.
 
@@ -424,7 +424,7 @@ Details:
   ^C[INFO] Asking to suspend...
   [INFO] Press CTRL-C again quickly (within 2s) to stop immediately (can cause problems in the future!)
   ^C[INFO] Aborting immediately ...
-  [ERROR] error code from SyncEvolution aborted on behalf of user (local, status 20017): aborting as requested by u
+  [ERROR] error code from SyncEvolution aborted on behalf of user (local, status 20017): aborting as requested by user
 
   It would be good to make the CTRL-C handling code aware that it can
   abort immediately instead of doing the intermediate "asking to suspend"
