@@ -59,8 +59,10 @@ static SyncSource *createSource(const SyncSourceParams &params)
             if (enabled) {
                 boost::shared_ptr<Neon::Settings> settings;
                 if (sourceType.m_backend == "CalDAV") {
-                    boost::shared_ptr<SubSyncSource> sub(new CalDAVSource(params, settings));
-                    return new MapSyncSource(params, sub);
+                    if (EDSAbiHaveIcal) {
+                        boost::shared_ptr<SubSyncSource> sub(new CalDAVSource(params, settings));
+                        return new MapSyncSource(params, sub);
+                    }
                 } else {
                     return new CalDAVVxxSource(sourceType.m_backend == "CalDAVTodo" ? "VTODO" : "VJOURNAL",
                                                params, settings);

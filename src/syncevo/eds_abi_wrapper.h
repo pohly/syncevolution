@@ -90,6 +90,7 @@ extern "C" {
 
 /** libebook, libecal, libedataserver available (currently checks for e_book_new/e_cal_new/e_source_group_peek_sources) */
 extern int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
+extern int EDSAbiHaveIcal;
 
 /** libbluetooth available (checks sdp_connect()) */
 extern int SyncEvoHaveLibbluetooth;
