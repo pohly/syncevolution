@@ -28,6 +28,7 @@
 
 #include <syncevo/ForkExec.h>
 #include <syncevo/SyncContext.h>
+#include <syncevo/BoostHelper.h>
 
 #include <memory>
 
@@ -408,7 +409,7 @@ void Session::sync2(const std::string &mode, const SessionCommon::SourceModes_t 
     // the error is recorded before ending the session. Premature
     // exits by the helper are handled by D-Bus, which then will abort
     // the pending method call.
-    m_helper->m_sync.start(params, boost::bind(&Session::dbusResultCb, this, "sync()", _1, _2));
+    m_helper->m_sync.start(params, boost::bind(&Session::dbusResultCb, m_me, "sync()", _1, _2));
 }
 
 void Session::abort()
@@ -1193,7 +1194,7 @@ void Session::restore2(const string &dir, bool before, const std::vector<std::st
 
     // helper is ready, tell it what to do
     m_helper->m_restore.start(m_configName, dir, before, sources,
-                              boost::bind(&Session::dbusResultCb, this, "restore()", _1, _2));
+                              boost::bind(&Session::dbusResultCb, m_me, "restore()", _1, _2));
 }
 
 void Session::execute(const vector<string> &args, const map<string, string> &vars)
@@ -1224,7 +1225,7 @@ void Session::execute2(const vector<string> &args, const map<string, string> &va
 
     // helper is ready, tell it what to do
     m_helper->m_execute.start(args, vars,
-                              boost::bind(&Session::dbusResultCb, this, "execute()", _1, _2));
+                              boost::bind(&Session::dbusResultCb, m_me, "execute()", _1, _2));
 }
 
 /*Implementation of Session.CheckPresence */
