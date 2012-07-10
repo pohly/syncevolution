@@ -4686,8 +4686,11 @@ void SyncTests::testAddBothSides()
     std::string updateItem = sources[0].second->config.m_updateItem;
 
     if (addBothSidesNoMergeLines) {
+        // VEVENT
         boost::replace_all(updateItem, "LOCATION:big meeting room", "LOCATION:my office");
         boost::replace_all(updateItem, "DESCRIPTION:nice to see you", "DESCRIPTION:let's talk<<REVISION>>");
+        // VJOURNAL
+        boost::replace_all(updateItem, "DESCRIPTION:Summary\\nBody text", "DESCRIPTION:Summary Modified\\nBody text");
     }
 
     CT_ASSERT_NO_THROW(sources[0].second->insert(sources[0].second->createSourceA,
