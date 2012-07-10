@@ -1540,7 +1540,7 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainl
 
     if (m_localSync) {
         string peer = url.substr(strlen("local://"));
-        boost::shared_ptr<LocalTransportAgent> agent(new LocalTransportAgent(this, peer, gmainloop));
+        boost::shared_ptr<LocalTransportAgent> agent(LocalTransportAgent::create(this, peer, gmainloop));
         InitializeTransport(agent, timeout);
         agent->start();
         return agent;

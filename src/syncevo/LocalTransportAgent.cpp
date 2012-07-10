@@ -27,6 +27,7 @@
 #include <syncevo/DBusTraits.h>
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/LogRedirect.h>
+#include <syncevo/BoostHelper.h>
 
 #include <synthesis/syerror.h>
 
@@ -58,6 +59,15 @@ LocalTransportAgent::LocalTransportAgent(SyncContext *server,
            GMainLoopCXX(static_cast<GMainLoop *>(loop)) /* increase reference */ :
            GMainLoopCXX(g_main_loop_new(NULL, false), false) /* use reference handed to us by _new */)
 {
+}
+
+boost::shared_ptr<LocalTransportAgent> LocalTransportAgent::create(SyncContext *server,
+                                                                   const std::string &clientContext,
+                                                                   void *loop)
+{
+    boost::shared_ptr<LocalTransportAgent> self(new LocalTransportAgent(server, clientContext, loop));
+    self->m_self = self;
+    return self;
 }
 
 LocalTransportAgent::~LocalTransportAgent()
@@ -198,7 +208,7 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
                                           m_server->getSyncPassword()),
                                m_server->getConfigProps(),
                                sources,
-                               boost::bind(&LocalTransportAgent::storeReplyMsg, this, _1, _2, _3));
+                               boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3));
 }
 
 void LocalTransportAgent::onFailure(const std::string &error)

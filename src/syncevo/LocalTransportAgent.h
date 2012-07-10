@@ -62,6 +62,12 @@ class LocalTransportChild;
  */
 class LocalTransportAgent : public TransportAgent
 {
+ private:
+    LocalTransportAgent(SyncContext *server,
+                        const std::string &clientContext,
+                        void *loop = NULL);
+    boost::weak_ptr<LocalTransportAgent> m_self;
+
  public:
     /**
      * @param server          the server side of the sync;
@@ -71,9 +77,9 @@ class LocalTransportAgent : public TransportAgent
      * @param loop            optional glib loop to use when waiting for IO;
      *                        transport will *not* increase the reference count
      */
-    LocalTransportAgent(SyncContext *server,
-                        const std::string &clientContext,
-                        void *loop = NULL);
+    static boost::shared_ptr<LocalTransportAgent> create(SyncContext *server,
+                                                         const std::string &clientContext,
+                                                         void *loop = NULL);
     ~LocalTransportAgent();
 
     /**
