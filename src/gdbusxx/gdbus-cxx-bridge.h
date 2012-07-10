@@ -1957,7 +1957,7 @@ static GDBusMessage *handleException(GDBusMessage *msg)
 /**
  * Check presence of a certain D-Bus client.
  */
-class DBusWatch : public Watch
+class Watch : private boost::noncopyable
 {
     DBusConnectionPtr m_conn;
     boost::function<void (void)> m_callback;
@@ -1971,114 +1971,27 @@ class DBusWatch : public Watch
                                  const gchar *interface_name,
                                  const gchar *signal_name,
                                  GVariant *parameters,
-                                 gpointer user_data)
-    {
-        DBusWatch *watch = static_cast<DBusWatch *>(user_data);
-        if (!watch->m_called) {
-            gchar *name = NULL, *oldOwner = NULL, *newOwner = NULL;
-            g_variant_get(parameters, "(sss)", &name, &oldOwner, &newOwner);
-            bool matches = name && watch->m_peer == name &&
-                newOwner && !*newOwner;
-            g_free(name);
-            g_free(oldOwner);
-            g_free(newOwner);
-            if (matches) {
-                watch->disconnected();
-            }
-        }
-    }
+                                 gpointer user_data);
 
-    void disconnected()
-    {
-        if (!m_called) {
-            m_called = true;
-            if (m_callback) {
-                m_callback();
-            }
-        }
-    }
+    void disconnected();
 
  public:
-    DBusWatch(const DBusConnectionPtr &conn,
-              const boost::function<void (void)> &callback = boost::function<void (void)>()) :
-        m_conn(conn),
-        m_callback(callback),
-        m_called(false),
-        m_watchID(0)
-    {
-    }
+    Watch(const DBusConnectionPtr &conn,
+          const boost::function<void (void)> &callback = boost::function<void (void)>());
+    ~Watch();
 
-    virtual void setCallback(const boost::function<void (void)> &callback)
-    {
-        m_callback = callback;
-        if (m_called && m_callback) {
-            m_callback();
-        }
-    }
+    /**
+     * Changes the callback triggered by this Watch.  If the watch has
+     * already fired, the callback is invoked immediately.
+     */
+    void setCallback(const boost::function<void (void)> &callback);
 
-    void activate(const char *peer)
-    {
-        if (!peer) {
-            throw std::runtime_error("DBusWatch::activate(): no peer");
-        }
-        m_peer = peer;
-
-        // Install watch first ...
-        m_watchID = g_dbus_connection_signal_subscribe(m_conn.get(),
-                                                       NULL, // TODO org.freedesktop.DBus?
-                                                       "org.freedesktop.DBus",
-                                                       "NameOwnerChanged",
-                                                       "/org/freedesktop/DBus",
-                                                       NULL,
-                                                       G_DBUS_SIGNAL_FLAGS_NONE,
-                                                   nameOwnerChanged,
-                                                       this,
-                                                       NULL);
-        if (!m_watchID) {
-            throw std::runtime_error("g_dbus_connection_signal_subscribe(): NameLost failed");
-        }
-
-        // ... then check that the peer really exists,
-        // otherwise we'll never notice the disconnect.
-        // If it disconnects while we are doing this,
-        // then disconnect() will be called twice,
-        // but it handles that.
-        GError *error = NULL;
-
-        GVariant *result = g_dbus_connection_call_sync(m_conn.get(),
-                                                       "org.freedesktop.DBus",
-                                                       "/org/freedesktop/DBus",
-                                                       "org.freedesktop.DBus",
-                                                       "NameHasOwner",
-                                                       g_variant_new("(s)", peer),
-                                                       G_VARIANT_TYPE("(b)"),
-                                                       G_DBUS_CALL_FLAGS_NONE,
-                                                       -1, // default timeout
-                                                       NULL,
-                                                       &error);
-
-        if (result != NULL) {
-            bool actual_result = false;
-
-            g_variant_get(result, "(b)", &actual_result);
-            if (!actual_result) {
-                disconnected();
-            }
-        } else {
-            std::string error_message(error->message);
-            g_error_free(error);
-            std::string err_msg("g_dbus_connection_call_sync(): NameHasOwner - ");
-            throw std::runtime_error(err_msg + error_message);
-        }
-    }
-
-    ~DBusWatch()
-    {
-        if (m_watchID) {
-            g_dbus_connection_signal_unsubscribe(m_conn.get(), m_watchID);
-            m_watchID = 0;
-        }
-    }
+    /**
+     * Starts watching for disconnect of that peer
+     * and also checks whether it is currently
+     * still around.
+     */
+    void activate(const char *peer);
 };
 
 void getWatch(GDBusConnection *conn, GDBusMessage *msg,
@@ -2138,7 +2051,7 @@ class DBusResult : virtual public Result
 
     virtual Watch *createWatch(const boost::function<void (void)> &callback)
     {
-        std::auto_ptr<DBusWatch> watch(new DBusWatch(m_conn, callback));
+        std::auto_ptr<Watch> watch(new Watch(m_conn, callback));
         watch->activate(g_dbus_message_get_sender(m_msg.get()));
         return watch.release();
     }

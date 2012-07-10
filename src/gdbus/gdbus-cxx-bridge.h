@@ -1743,7 +1743,7 @@ static DBusMessage *handleException(DBusMessage *msg)
 /**
  * Check presence of a certain D-Bus client.
  */
-class DBusWatch : public Watch
+class Watch : private boost::noncopyable
 {
     DBusConnectionPtr m_conn;
     boost::function<void (void)> m_callback;
@@ -1753,7 +1753,7 @@ class DBusWatch : public Watch
     static void disconnect(DBusConnection *connection,
                            void *user_data)
     {
-        DBusWatch *watch = static_cast<DBusWatch *>(user_data);
+        Watch *watch = static_cast<Watch *>(user_data);
         if (!watch->m_called) {
             watch->m_called = true;
             if (watch->m_callback) {
@@ -1763,7 +1763,7 @@ class DBusWatch : public Watch
     }
 
  public:
-    DBusWatch(const DBusConnectionPtr &conn,
+    Watch(const DBusConnectionPtr &conn,
               const boost::function<void (void)> &callback = boost::function<void (void)>()) :
         m_conn(conn),
         m_callback(callback),
@@ -1783,7 +1783,7 @@ class DBusWatch : public Watch
     void activate(const char *peer)
     {
         if (!peer) {
-            throw std::runtime_error("DBusWatch::activate(): no peer");
+            throw std::runtime_error("Watch::activate(): no peer");
         }
 
         // Install watch first ...
@@ -1812,7 +1812,7 @@ class DBusWatch : public Watch
         }
     }
 
-    ~DBusWatch()
+    ~Watch()
     {
         if (m_watchID) {
             if (!b_dbus_remove_watch(m_conn.get(), m_watchID)) {
@@ -1837,7 +1837,7 @@ template <> struct dbus_traits< boost::shared_ptr<Watch> >  : public dbus_traits
     static void get(DBusConnection *conn, DBusMessage *msg,
                     DBusMessageIter &iter, boost::shared_ptr<Watch> &value)
     {
-        boost::shared_ptr<DBusWatch> watch(new DBusWatch(conn));
+        boost::shared_ptr<Watch> watch(new Watch(conn));
         watch->activate(dbus_message_get_sender(msg));
         value = watch;
     }
@@ -1877,7 +1877,7 @@ class DBusResult : virtual public Result
 
     virtual Watch *createWatch(const boost::function<void (void)> &callback)
     {
-        std::auto_ptr<DBusWatch> watch(new DBusWatch(m_conn, callback));
+        std::auto_ptr<Watch> watch(new Watch(m_conn, callback));
         watch->activate(dbus_message_get_sender(m_msg.get()));
         return watch.release();
     }
