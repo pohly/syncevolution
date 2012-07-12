@@ -280,21 +280,33 @@ void AutoSyncManager::schedule(const std::string &reason)
             Timeout *timeout = NULL;
             switch (urlinfo.first) {
             case AutoSyncTask::NEEDS_HTTP:
+                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: %s uses HTTP",
+                             configName.c_str(),
+                             urlinfo.second.c_str());
                 starttime = &m_httpStartTime;
                 signal = &m_server.getPresenceStatus().m_httpPresenceSignal;
                 timeout = &task->m_httpTimeout;
                 break;
             case AutoSyncTask::NEEDS_BT:
+                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: %s uses Bluetooth",
+                             configName.c_str(),
+                             urlinfo.second.c_str());
                 starttime = &m_btStartTime;
                 signal = &m_server.getPresenceStatus().m_btPresenceSignal;
                 timeout = &task->m_btTimeout;
                 break;
             case AutoSyncTask::NEEDS_OTHER:
+                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: %s uses some unknown transport",
+                             configName.c_str(),
+                             urlinfo.second.c_str());
                 break;
             }
             if (!starttime || // some other transport, assumed to be online, use it
                 (*starttime && // present
                  (task->m_delay <= 0 || *starttime + task->m_delay > now))) { // present long enough
+                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: ready to run via %s",
+                             configName.c_str(),
+                             urlinfo.second.c_str());
                 readyURL = urlinfo.second;
                 break;
             }
@@ -303,11 +315,15 @@ void AutoSyncManager::schedule(const std::string &reason)
                 signal->connect(PresenceStatus::PresenceSignal_t::slot_type(&AutoSyncManager::schedule,
                                                                             this,
                                                                             "presence change").track(m_me));
+                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: transport for %s not present",
+                             configName.c_str(),
+                             urlinfo.second.c_str());
             } else {
                 // check again after waiting the requested amount of time
                 int seconds = (*starttime + task->m_delay - now).seconds() + 1;
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: presence delay expires in %ds",
+                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: presence delay of transport for %s expires in %ds",
                              configName.c_str(),
+                             urlinfo.second.c_str(),
                              seconds);
                 timeout->runOnce(seconds,
                                  boost::bind(&AutoSyncManager::schedule,
@@ -357,7 +373,7 @@ void AutoSyncManager::schedule(const std::string &reason)
 
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "auto sync: nothing to do");
+    SE_LOG_DEBUG(NULL, NULL, "auto sync: nothing to do now");
 }
 
 void AutoSyncManager::connectIdle()
