@@ -34,6 +34,7 @@ NetworkManagerClient::NetworkManagerClient(Server &server) :
                      "org.freedesktop.NetworkManager",
                      "org.freedesktop.NetworkManager",
                      true),
+    m_available(false),
     m_server(server),
     m_stateChanged(*this, "StateChanged"),
     m_properties(*this)
@@ -98,6 +99,8 @@ void NetworkManagerClient::NetworkManagerProperties::getCallback(
             "Error in calling Get of Interface "
             "org.freedesktop.DBus.Properties : %s", error.c_str());
     } else {
+        // Now, and only now, do we know that NetworkManager is running.
+        m_manager.m_available = true;
         m_manager.stateChanged(boost::get<uint32_t>(prop));
     }
 }
