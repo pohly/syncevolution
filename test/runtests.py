@@ -885,7 +885,7 @@ class ActiveSyncDCheckout(GitCheckout):
         """checkout activesyncd"""
         GitCheckout.__init__(self,
                              name, context.workdir, options.shell,
-                             "git://git.infradead.org/activesyncd.git",
+                             "git://git.gnome.org/evolution-activesync",
                              revision)
 
 class SyncEvolutionBuild(AutotoolsBuild):
