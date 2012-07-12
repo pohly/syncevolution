@@ -711,7 +711,7 @@ elif test "$SYNTHESISSRC" != "none" && test -d $srcdir/src/synthesis; then
 elif test "$enable_shared" = "no"; then
     # link against engine
     PKG_CHECK_MODULES([SYNTHESIS], [synthesis >= 3.4])
-    SYNTHESIS_ENGINE="$SYNTHESIS_LIBS -lsynthesis"
+    SYNTHESIS_ENGINE="$SYNTHESIS_LIBS -lsynthesis -lsmltk"
 else
     # link against SDK alone, except in client-test
     #PKG_CHECK_MODULES(SYNTHESIS, "synthesis-sdk")
@@ -732,7 +732,7 @@ if test $SYNTHESIS_SRC != "no-synthesis-source"; then
     # to trigger building the synthesis library
     SYNTHESIS_SUBDIR=$PWD/src/build-synthesis
     SYNTHESIS_CFLAGS="-I$SYNTHESIS_SUBDIR/src"
-    SYNTHESIS_LIBS="$SYNTHESIS_SUBDIR/src/libsynthesissdk.la"
+    SYNTHESIS_LIBS="$SYNTHESIS_SUBDIR/src/libsynthesissdk.la $SYNTHESIS_SUBDIR/src/libsmltk.la"
 
     if test "x$enable_core" = "xno" && test "x$enable_gui" != "xno"; then
        # SYNTHESIS_SUBDIR is ignored, at least build headers for GUI
@@ -741,14 +741,14 @@ if test $SYNTHESIS_SRC != "no-synthesis-source"; then
 
     if test "$enable_shared" = "no"; then
         # link against the engines that were enabled
-        case $SYNCML_ENGINES in both|client|server) SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la";; esac
+        case $SYNCML_ENGINES in both|client|server) SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la $SYNTHESIS_SUBDIR/src/libsmltk.la";; esac
         AC_DEFINE(ENABLE_SYNCML_LINKED, 1, [SyncML engines are linked directly])
     else
         # It would be nice if we could avoid linking against libsynthesis.la here.
         # This doesn't work at the moment because sysync::SySyncDebugPuts()
         # is called directly by the libsynthesissdk instead of going through
         # the normal C function pointer lookup.
-        SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la"
+        SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la $SYNTHESIS_SUBDIR/src/libsmltk.la"
     fi
     SYNTHESIS_DEP=$SYNTHESIS_LIBS
 
@@ -996,8 +996,11 @@ fi
 # that a backend can alternatively use its own top-level configure
 # with PKG_CHECK_MODULES(SYNCEVOLUTION, "syncevolution") to set them.
 # need absolute path, use pwd instead of relative $srcdir
+#
+# When adding something here, remember to also update syncevolution.pc.in.
+# -lrt is for clock_gettime() in the Timespec.h inline functions.
 SYNCEVOLUTION_CFLAGS=-I`cd $srcdir && pwd`/src
-SYNCEVOLUTION_LIBS=`pwd`/src/syncevo/libsyncevolution.la
+SYNCEVOLUTION_LIBS="src/syncevo/libsyncevolution.la -lrt"
 AC_SUBST(SYNCEVOLUTION_CFLAGS)
 AC_SUBST(SYNCEVOLUTION_LIBS)
 

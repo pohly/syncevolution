@@ -309,6 +309,43 @@ toplevel_so_check:
 	done
 endif
 
+# Check that no executable or shared object depends on symbols in
+# libraries that it does not link against. Unnecessarily linking
+# against libs is okay, that can be caught and fixed by
+# -Wl,--as-needed. Depends on dpkg-shlibdeps, skipped if that is
+# not available.
+all_local_installchecks += toplevel_link_check
+toplevel_link_check:
+	set -x; cd $(DESTDIR) && \
+	mkdir debian && \
+	touch debian/control && \
+        trap "rm -rf debian" EXIT && \
+	files=$$(find $(DESTDIR)/$(prefix) $(DESTDIR)/$(libdir) $(DESTDIR)/$(bindir) $(DESTDIR)/$(libexecdir) -type f -perm /u+x | sort -u) && \
+	files=$$(for i in $$files; do if file $$i | grep ELF >/dev/null; then echo $$i; fi; done) && \
+	if ! dpkg-shlibdeps --version; then \
+	    echo "dpkg-shlibdeps not found, skipping link check"; \
+	elif LD_LIBRARY_PATH=usr/lib:usr/lib/syncevolution dpkg-shlibdeps \
+             --ignore-missing-info -O $$files \
+	     2>&1 >/dev/null | \
+             grep -v $(LINK_CHECK_ALLOWED) | \
+             grep -e "symbol .* found in none of the libraries" \
+                  -e "contains an unresolvable reference to symbol" \
+        ; then \
+	    echo "linking must be fixed"; false; \
+        else \
+	    echo "linking is okay"; \
+	fi
+
+# Some exceptions for the link check above (= symbol may be used without linking).
+LINK_CHECK_ALLOWED = -e xxxxxxxx
+# SySync_ConsolePrintf is expected by libsmltk and has to be provided by caller.
+LINK_CHECK_ALLOWED += -e 'SySync_ConsolePrintf.*libsmltk.so'
+if NEON_COMPATIBILITY
+# libneon is intentionally not linked against, to choose between
+# GNUTLS and OpenSSL at runtime.
+LINK_CHECK_ALLOWED += -e 'symbol ne_.*syncdav.so'
+endif
+
 # Be strict about running 'syncevolution' only when not doing
 # cross-compilation: in that case, if running 'syncevolution' fails,
 # abort the build process. Otherwise proceed with the fallback below,

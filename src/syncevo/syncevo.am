@@ -4,7 +4,7 @@ include $(top_srcdir)/src/syncevo/configs/configs.am
 # the Funambol C++ client library
 src_syncevo_cxxflags = @SYNCEVOLUTION_CXXFLAGS@
 src_syncevo_cppflags = @BACKEND_CPPFLAGS@ @GLIB_CFLAGS@ -I$(top_srcdir)/test -I$(gdbus_dir) $(DBUS_CFLAGS) -I$(top_builddir)/src/syncevo -I$(top_srcdir)/src -DSYNCEVO_LIBEXEC=\"$(libexecdir)\" -DSYNCEVO_BACKEND=\"$(BACKENDS_SEARCH_DIRECTORY)\"
-src_syncevo_ldadd = @SYNCEVOLUTION_LDADD@
+src_syncevo_ldadd = @SYNCEVOLUTION_LDADD@ 
 
 # needed in all cases
 src_syncevo_ldadd += $(gdbus_build_dir)/libgdbussyncevo.la
@@ -198,7 +198,11 @@ src_syncevo_libsyncevolution_la_LIBADD = \
   $(TRANSPORT_LIBS) \
   @LIBS@ \
   $(src_syncevo_ldadd) \
+  $(DBUS_LIBS) \
   $(NSS_LIBS)
+if ENABLE_MODULES
+src_syncevo_libsyncevolution_la_LIBADD += -ldl
+endif
 src_syncevo_libsyncevolution_la_CXXFLAGS = \
   $(PCRECPP_CFLAGS) \
   $(TRANSPORT_CFLAGS) \
@@ -210,6 +214,7 @@ src_syncevo_libsyncevolution_la_CFLAGS = \
   $(SYNCEVO_WFLAGS)
 src_syncevo_libsyncevolution_la_CPPFLAGS = \
   $(src_syncevo_cppflags) \
+  $(DBUS_CFLAGS) \
   -DDATA_DIR=\""$(pkgdatadir)"\" \
   -DXML_CONFIG_DIR=\""$(datadir)/syncevolution/xml"\" \
   -DTEMPLATE_DIR=\""$(datadir)/syncevolution/templates"\" \
