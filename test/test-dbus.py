@@ -909,6 +909,15 @@ class DBusUtil(Timeout):
                                 byte_arrays=True, 
                                 utf8_strings=True)
 
+    def collectEvents(self, until='\nstatus: done'):
+        '''Normally collection of events stops when any of the 'quit events' are encounted.
+        Cmdline tests are different, they stop when the command line tool returns. At that
+        time the quit event may or may not have been seen.
+        This method continues collecting events until the 'until' string is in the
+        pretty-printed events.'''
+        while not until in self.prettyPrintEvents():
+            loop.get_context().iteration(True)
+
     def setUpLocalSyncConfigs(self, childPassword=None, enableCalendar=False):
         # create file<->file configs
         self.setUpSession("target-config@client")
@@ -7092,10 +7101,12 @@ Data modified @default during synchronization:
 no changes
 
 ''', out)
+
         # Only 'addressbook' ever active. When done (= progress 100%),
         # a lot of information seems to be missing (= -1) or dubious
         # (1 out of 0 items sent?!). This information comes straight
         # from libsynthesis; use it as it is for now.
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(slow, running, 0\)\}
@@ -7174,6 +7185,7 @@ Data modified @default during synchronization:
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
@@ -7276,6 +7288,7 @@ Data modified @default during synchronization:
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
@@ -7372,6 +7385,7 @@ Data modified @default during synchronization:
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
@@ -7499,6 +7513,7 @@ no changes
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(slow, running, 0\), calendar: \(slow, running, 0\)\}
@@ -7603,6 +7618,7 @@ no changes
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(two-way, running, 0\)\}
@@ -7731,6 +7747,7 @@ no changes
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(two-way, running, 0\)\}
@@ -7853,6 +7870,7 @@ no changes
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(two-way, running, 0\)\}
@@ -7929,6 +7947,7 @@ Data modified @default during synchronization:
 no changes
 
 ''', out)
+        self.collectEvents()
         self.assertRegexpMatches(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(none, idle, 0\)\}
