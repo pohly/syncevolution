@@ -4691,6 +4691,8 @@ void SyncTests::testAddBothSides()
         boost::replace_all(updateItem, "DESCRIPTION:nice to see you", "DESCRIPTION:let's talk<<REVISION>>");
         // VJOURNAL
         boost::replace_all(updateItem, "DESCRIPTION:Summary\\nBody text", "DESCRIPTION:Summary Modified\\nBody text");
+        // VTODO
+        boost::replace_all(updateItem, "DESCRIPTION:to be done", "DESCRIPTION:to be done<<REVISION>>");
     }
 
     CT_ASSERT_NO_THROW(sources[0].second->insert(sources[0].second->createSourceA,
