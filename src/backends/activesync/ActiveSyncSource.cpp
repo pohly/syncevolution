@@ -95,7 +95,6 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
         SE_LOG_DEBUG(this, NULL, "sync key %s, starting incremental sync", lastToken.c_str());
     }
 
-    GErrorCXX gerror;
     gboolean moreAvailable = TRUE;
 
     m_currentSyncKey = m_startSyncKey;
@@ -107,6 +106,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
          moreAvailable;
          firstIteration = false) {
         gchar *buffer = NULL;
+        GErrorCXX gerror;
         EASItemsCXX created, updated;
         EASIdsCXX deleted;
         bool wasSlowSync = m_currentSyncKey.empty();
@@ -124,7 +124,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
                 gerror.m_gerror->domain == EAS_TYPE_CONNECTION_ERROR &&
                 gerror.m_gerror->code == EAS_CONNECTION_SYNC_ERROR_INVALIDSYNCKEY && */
                 gerror.m_gerror->message &&
-                !strcmp(gerror.m_gerror->message, "Sync error: Invalid synchronization key") &&
+                strstr(gerror.m_gerror->message, "Sync error: Invalid synchronization key") &&
                 firstIteration) {
                 // fall back to slow sync
                 slowSync = true;
