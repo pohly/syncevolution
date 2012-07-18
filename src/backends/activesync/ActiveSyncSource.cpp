@@ -31,6 +31,8 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <boost/algorithm/string.hpp>
+
 /* #include <eas-connection-errors.h> */
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -381,6 +383,41 @@ void ActiveSyncSource::readItem(const std::string &luid, std::string &item)
     } else {
         item = it->second;
     }
+}
+
+void ActiveSyncSource::getSynthesisInfo(SynthesisInfo &info,
+                                        XMLConfigFragments &fragments)
+{
+    TestingSyncSource::getSynthesisInfo(info, fragments);
+
+    /**
+     * Disable reading of existing item by engine before updating
+     * it by pretending to do the merging ourselves. This works
+     * as long as the local side is able to store all data that
+     * activesyncd gives to us and updates on the ActiveSync
+     * server.
+     *
+     * Probably some Exchange-specific extensions currently get
+     * lost because activesyncd does not know how to represent
+     * them as vCard and does not tell the ActiveSync server that
+     * it cannot handle them.
+     */
+    boost::replace_first(info.m_datastoreOptions,
+                         "<updateallfields>true</updateallfields>",
+                         "");
+
+    /**
+     * no ActiveSync specific rules yet, use condensed format as
+     * if we were storing locally, with all extensions enabled
+     */
+    info.m_backendRule = "LOCALSTORAGE";
+
+    /**
+     * access to data must be done early so that a slow sync can be
+     * enforced when the ActiveSync sync key turns out to be
+     * invalid
+     */
+    info.m_earlyStartDataRead = true;
 }
 
 SE_END_CXX
