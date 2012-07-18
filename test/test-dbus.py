@@ -1039,10 +1039,20 @@ status: idle, 0, {}
             error = config.get('fake', 'error')
         return (status, error)
 
+    def isSet(self, data):
+        return isinstance(data, type([])) or \
+            isinstance(data, type(()))
+
     def assertSyncStatus(self, config, status, error):
         realStatus, realError = self.getSyncStatus(config)
-        self.assertEqual(status, realStatus)
-        self.assertEqual(error, realError)
+        if self.isSet(status):
+            self.assertTrue(realStatus in status)
+        else:
+            self.assertEqual(status, realStatus)
+        if self.isSet(error):
+            self.assertTrue(realError in error)
+        else:
+            self.assertEqual(error, realError)
 
     def doCheckSync(self, expectedError=0, expectedResult=0, reportOptional=False, numReports=1):
         # check recorded events in DBusUtil.events, first filter them
@@ -1415,8 +1425,12 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         self.session.SetConfig(False, False, config)
         self.session.Detach()
 
-        # should shut down after the 10 second idle period
-        time.sleep(16)
+        # should shut down after the 10 second idle period,
+        # may take longer when using valgrind
+        if usingValgrind():
+            time.sleep(30)
+        else:
+            time.sleep(16)
         self.assertFalse(self.isServerRunning())
 
 
@@ -3764,10 +3778,10 @@ END:VCARD''')
         # Local sync helper cannot tell for sure what happened.
         # A generic error is okay. If the ForkExecChild::m_onQuit signal is
         # triggered first, it'll report the "aborted" error.
-        if self.getSyncStatus('target_+config@client')[0] == 10500:
-            self.assertSyncStatus('target_+config@client', 10500, 'retrieving password failed: The connection is closed')
-        else:
-            self.assertSyncStatus('target_+config@client', 20017, 'sync parent quit unexpectedly')
+        status, error = self.getSyncStatus('target_+config@client')
+        self.assertTrue(status in (10500, 20017))
+        self.assertTrue(error in ('retrieving password failed: The connection is closed',
+                                  'sync parent quit unexpectedly'))
 
     @timeout(200)
     def testChildFailure(self):
@@ -3830,7 +3844,9 @@ END:VCARD''')
         self.assertEqual({}, self.getChildren())
 
         # check status reports
-        self.assertSyncStatus('server', 20043, 'child process quit because of signal 9')
+        status, error = self.getSyncStatus('server')
+        self.assertSyncStatus('server', 20043, ('child process quit because of signal 9',
+                                                'sending message to child failed: The connection is closed'))
         self.assertSyncStatus('target_+config@client', 22002, 'synchronization process died prematurely')
 
     @timeout(200)
@@ -3974,10 +3990,14 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
             time.sleep(5)
             i = i + 1
         self.assertTrue(self.isServerRunning())
-        time.sleep(10)
+        if usingValgrind():
+            # valgrind shutdown takes time
+            time.sleep(20)
+        else:
+            time.sleep(10)
         self.assertFalse(self.isServerRunning())
 
-    @timeout(30)
+    @timeout(100)
     def testSession(self):
         """TestFileNotify.testSession - create session, shut down directly after closing it"""
         self.assertTrue(self.isServerRunning())
@@ -3989,12 +4009,12 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         # should shut down almost immediately,
         # except when using valgrind
         if usingValgrind():
-            time.sleep(10)
+            time.sleep(20)
         else:
             time.sleep(1)
         self.assertFalse(self.isServerRunning())
 
-    @timeout(30)
+    @timeout(100)
     def testSession2(self):
         """TestFileNotify.testSession2 - create session, shut down after quiesence period after closing it"""
         self.assertTrue(self.isServerRunning())
@@ -4005,12 +4025,12 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         time.sleep(8)
         self.assertTrue(self.isServerRunning())
         if usingValgrind():
-            time.sleep(10)
+            time.sleep(20)
         else:
             time.sleep(4)
         self.assertFalse(self.isServerRunning())
 
-    @timeout(30)
+    @timeout(100)
     def testSession3(self):
         """TestFileNotify.testSession3 - shut down after quiesence period without activating a pending session request"""
         self.assertTrue(self.isServerRunning())
@@ -6915,9 +6935,9 @@ END:VCARD
         # 2. loss of D-Bus connection is noticed first.
         # Also, the "connection is closed" error only
         # occurs occasionally.
-        out = out.replace('''[ERROR] sending message to child failed: The connection is closed
-''', '')
         if out.startswith('[ERROR] child process quit because of signal 9'):
+            out = out.replace('''[ERROR] sending message to child failed: The connection is closed
+-''', '')
             self.assertEqualDiff(out, '''[ERROR] child process quit because of signal 9
 [ERROR] local transport failed: child process quit because of signal 9
 [INFO] Transport giving up after x retries and y:zzmin
