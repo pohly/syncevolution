@@ -61,7 +61,12 @@ MAINTAINERCLEANFILES += Makefile.in config.h.in config.guess config.sub configur
 
 TEST_README_FILES = $(wildcard $(top_srcdir)/test/README.*)
 
+# files and file patterns which are not meant to be packaged.
 DEV_FILE_PATTERN = $(1)$(2)/include $(1)$(2)/lib/*.so $(1)$(2)/lib/*.a $(1)$(2)/lib/*.la $(1)$(2)/lib/*/*.la $(1)$(2)/lib/pkgconfig
+
+# Exclude syncactivesync.so from bundle package because that needs to
+# be packaged separately.
+DEV_FILE_PATTERN += $(1)$(2)/lib/syncevolution/backends/syncactivesync.so
 
 # binary distribution as .tar.gz
 if COND_DBUS
