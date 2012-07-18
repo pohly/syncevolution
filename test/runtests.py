@@ -891,7 +891,17 @@ class ActiveSyncDCheckout(GitCheckout):
 class SyncEvolutionBuild(AutotoolsBuild):
     def execute(self):
         AutotoolsBuild.execute(self)
-        context.runCommand("%s %s src/client-test CXXFLAGS=-O0" % (self.runner, context.make))
+        # LDFLAGS=-no-install is needed to ensure that the resulting
+        # client-test is a normal, usable executable. Otherwise we
+        # can have the following situation:
+        # - A wrapper script is created on the reference platform.
+        # - It is never executed there, which means that it won't
+        #   produce the final .libs/lt-client-test executable
+        #   (done on demand by libtool wrapper).
+        # - The wrapper script is invokved for the first time
+        #   on some other platform, it tries to link, but fails
+        #   because libs are different.
+        context.runCommand("%s %s src/client-test CXXFLAGS='-O0 -g' LDFLAGS=-no-install" % (self.runner, context.make))
 
 class NopAction(Action):
     def __init__(self, name):
