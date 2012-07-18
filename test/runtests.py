@@ -1146,12 +1146,21 @@ test.alarmSeconds = 2400
 context.add(test)
 
 class ActiveSyncTest(SyncEvolutionTest):
-    def __init__(self, name):
+    def __init__(self, name, sources = [ "eas_event", "eas_contact", "eds_event", "eds_contact" ]):
+        tests = []
+        if "eds_event" in sources:
+            tests.append("Client::Sync::eds_event")
+        if "eds_contact" in sources:
+            tests.append("Client::Sync::eds_contact")
+        if "eas_event" in sources:
+            tests.append("Client::Source::eas_event")
+        if "eas_contact" in sources:
+            tests.append("Client::Source::eas_contact")
         SyncEvolutionTest.__init__(self, name,
                                    compile,
                                    "", options.shell,
-                                   "Client::Sync::eds_event Client::Sync::eds_contact Client::Source::eas_event Client::Source::eas_contact",
-                                   [ "eas_event", "eas_contact", "eds_event", "eds_contact" ],
+                                   tests,
+                                   sources,
                                    "CLIENT_TEST_NUM_ITEMS=10 "
                                    "CLIENT_TEST_MODE=server " # for Client::Sync
                                    "EAS_SOUP_LOGGER=1 "
@@ -1191,6 +1200,9 @@ class ActiveSyncTest(SyncEvolutionTest):
                 raise Exception("activesyncd did not return")
 
 test = ActiveSyncTest("exchange")
+context.add(test)
+
+test = ActiveSyncTest("googleeas", ["eds_contact", "eas_contact"])
 context.add(test)
 
 syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +

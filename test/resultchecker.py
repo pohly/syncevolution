@@ -210,6 +210,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                      'yahoo',
                      'davical',
                      'googlecalendar',
+                     'googleeas',
                      'apple',
                      'egroupware-dav',
                      'oracle',
