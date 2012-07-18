@@ -126,7 +126,6 @@ SYNCEVOLUTION_TEST_SUITE_REGISTRATION(ActiveSyncsTest);
 
 #endif // ENABLE_UNIT_TESTS
 
-#ifdef ENABLE_INTEGRATION_TESTS
 namespace {
 #if 0
 }
@@ -297,7 +296,6 @@ public:
 } ActiveSyncMemoTest;
 
 } // anonymous namespace
-#endif // ENABLE_INTEGRATION_TESTS
 
 #endif // ENABLE_ACTIVESYNC
 
