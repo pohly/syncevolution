@@ -662,6 +662,11 @@ sub NormalizeItem {
         s/^(FN|X-EVOLUTION-FILE-AS|CATEGORIES)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
+    if ($googleeas) {
+        # temporarily ignore modified properties
+        s/^(BDAY)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
     # treat X-MOZILLA-HTML=FALSE as if the property didn't exist
     s/^X-MOZILLA-HTML:FALSE\r?\n?//gm;
 
