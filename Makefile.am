@@ -215,7 +215,7 @@ SYNCEVOLUTION_evolution_DEB_ARGS = \
 	--conflicts="'evolution-data-server (>= 3.6), libebook-1.2-14 (>= 3.6), libecal-1.2.12 (>= 3.6)'" \
 	--replaces=syncevolution-foobar
 SYNCEVOLUTION_evolution_DEB_REQUIRES = \
-	, libebook-1.2-5 | libebook-1.2-6 | libebook-1.2-7 | libebook-1.2-8 | libebook-1.2-9 | libebook-1.2-10 | libebook-1.2-11 | libebook-1.2-12 \
+	, libebook-1.2-5 | libebook-1.2-6 | libebook-1.2-7 | libebook-1.2-8 | libebook-1.2-9 | libebook-1.2-10 | libebook-1.2-11 | libebook-1.2-12 | libebook-1.2-13 \
 	, libecal-1.2-3 | libecal-1.2-4 | libecal-1.2-5 | libecal-1.2-6 | libecal-1.2-7 | libecal-1.2-8 | libecal-1.2-9 | libecal-1.2-10 | libecal-1.2-11
 
 syncevolution-%-deb: checkinstall/dist/$(distdir) checkinstall/dist/debian/control
