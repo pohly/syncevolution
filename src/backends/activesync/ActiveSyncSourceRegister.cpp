@@ -188,26 +188,24 @@ static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t
                                           const std::string &clientID,
                                           int source, bool isSourceA)
 {
-    TestingSyncSource *res = create(client, clientID, source, isSourceA);
+    std::auto_ptr<TestingSyncSource> res(create(client, clientID, source, isSourceA));
 
     // Mangle username: if the base username in the config is account
     // "foo", then source B uses "foo_B", because otherwise it'll end
     // up sharing change tracking with source A.
     if (!isSourceA) {
-        ActiveSyncSource *eassource = static_cast<ActiveSyncSource *>(res);
+        ActiveSyncSource *eassource = static_cast<ActiveSyncSource *>(res.get());
         std::string account = eassource->getSyncConfig().getSyncUsername();
         account += "_B";
         eassource->getSyncConfig().setSyncUsername(account, true);
     }
 
-    if (boost::ends_with(res->getDatabaseID(), "_1")) {
-        // only default database currently supported,
-        // use that instead of first named database
-        res->setDatabaseID("");
-        return res;
+    if (res->getDatabaseID().empty()) {
+        return res.release();
     } else {
         // sorry, no database
-        delete res;
+        SE_LOG_ERROR(NULL, NULL, "cannot create EAS source for database %s, check config",
+                     res->getDatabaseID().c_str());
         return NULL;
     }
 }
