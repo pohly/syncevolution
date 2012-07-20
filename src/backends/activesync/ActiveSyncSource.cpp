@@ -63,6 +63,10 @@ void ActiveSyncSource::open()
 {
     // extract account ID and throw error if missing
     std::string username = m_context->getSyncUsername();
+    SE_LOG_DEBUG(NULL, NULL,
+                 "using eas sync account %s from config %s",
+                 username.c_str(),
+                 m_context->getConfigName().c_str());
 
     m_account = username.c_str();
     m_folder = getDatabaseID();
