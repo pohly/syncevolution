@@ -6828,6 +6828,14 @@ void ClientTest::getTestData(const char *type, Config &config)
         config.m_uniqueProperties = "";
         config.m_sizeProperty = "NOTE";
         config.m_testcases = "testcases/eds_contact.vcf";
+
+        if (server == "exchange" ||
+            server == "googleeas") {
+            // X-MOZILLA-HTML not supported by ActiveSync.
+            boost::replace_first(config.m_updateItem, "X-MOZILLA-HTML:TRUE", "X-MOZILLA-HTML:FALSE");
+            boost::replace_first(config.m_complexUpdateItem, "X-MOZILLA-HTML:TRUE", "X-MOZILLA-HTML:FALSE");
+            boost::replace_first(config.m_mergeItem2, "X-MOZILLA-HTML:TRUE", "X-MOZILLA-HTML:FALSE");
+        }
     } else if (!strcmp(type, "eds_event") && !noutc) {
         config.m_sourceName = "eds_event";
         config.m_sourceNameServerTemplate = "calendar";
