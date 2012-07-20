@@ -252,6 +252,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             if (flags & EXECUTE_NO_STDOUT) {
                 fullcmd += " >/dev/null";
             }
+            SE_LOG_DEBUG(NULL, NULL, "running command via system(): %s", cmd.c_str());
             ret = system(fullcmd.c_str());
         } else {
             // Need to catch at least one of stdout or stderr. A
@@ -259,6 +260,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             // are read after system() returns. But we want true
             // streaming of the output, so use fork()/exec() plus
             // reliable output redirection.
+            SE_LOG_DEBUG(NULL, NULL, "running command via fork/exec with output redirection: %s", cmd.c_str());
             LogRedirect io(flags);
             pid_t child = fork();
             switch (child) {
