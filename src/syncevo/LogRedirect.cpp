@@ -600,10 +600,11 @@ void LogRedirect::flush() throw()
 {
     process();
     if (!m_stdoutData.empty()) {
+        std::string buffer;
+        std::swap(buffer, m_stdoutData);
         LoggerBase::instance().message(Logger::SHOW, NULL,
                                        NULL, 0, NULL,
-                                       "%s", m_stdoutData.c_str());
-        m_stdoutData.clear();
+                                       "%s", buffer.c_str());
     }
 }
 
