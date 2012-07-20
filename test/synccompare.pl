@@ -664,7 +664,7 @@ sub NormalizeItem {
 
     if ($googleeas) {
         # temporarily ignore modified properties
-        s/^(BDAY)(;[^:;\n]*)*:.*\r?\n?//gm;
+        s/^(BDAY|X-ANNIVERSARY)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
     # treat X-MOZILLA-HTML=FALSE as if the property didn't exist
