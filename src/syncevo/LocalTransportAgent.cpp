@@ -838,7 +838,7 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
 public:
     LocalTransportAgentChild() :
         m_ret(0),
-        m_parentLogger(new LogRedirect(false)),
+        m_parentLogger(new LogRedirect(true)), // redirect all output via D-Bus
         m_forkexec(SyncEvo::ForkExecChild::create()),
         m_reportSent(false),
         m_status(INACTIVE)
@@ -1077,15 +1077,16 @@ int LocalTransportMain(int argc, char **argv)
 
     SyncContext::initMain("syncevo-local-sync");
 
-    // Out stderr is either connected to the original stderr (when
+    // Our stderr is either connected to the original stderr (when
     // SYNCEVOLUTION_DEBUG is set) or the local sync's parent
     // LogRedirect. However, that stderr is not normally used.
-    // Instead we install our own LogRedirect (to get output like the
-    // one from libneon into the child log) in
-    // LocalTransportAgentChild and send all logging output
-    // to the local sync parent via D-Bus, to be forwarded to the
-    // user as part of the normal message stream of the
-    // sync session.
+    // Instead we install our own LogRedirect for both stdout (for
+    // Execute() and synccompare, which then knows that it needs to
+    // capture the output) and stderr (to get output like the one from
+    // libneon into the child log) in LocalTransportAgentChild and
+    // send all logging output to the local sync parent via D-Bus, to
+    // be forwarded to the user as part of the normal message stream
+    // of the sync session.
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
 
