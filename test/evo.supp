@@ -4897,3 +4897,30 @@
    ...
    fun:g_network_monitor_*
 }
+
+# ==10187== 2,060 bytes in 37 blocks are definitely lost in loss record 3,772 of 3,810
+# ==10187==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==10187==    by 0x85ACDE0: g_malloc (gmem.c:159)
+# ==10187==    by 0x85C282B: g_strdup (gstrfuncs.c:356)
+# ==10187==    by 0x7C87D94: g_dbus_object_proxy_set_property (gdbusobjectproxy.c:118)
+# ==10187==    by 0x83239CB: g_object_constructor (gobject.c:1352)
+# ==10187==    by 0x8324E40: g_object_newv (gobject.c:1713)
+# ==10187==    by 0x832562F: g_object_new_valist (gobject.c:1830)
+# ==10187==    by 0x8325963: g_object_new (gobject.c:1545)
+# ==10187==    by 0x7C890D2: add_interfaces (gdbusobjectmanagerclient.c:1445)
+# ==10187==    by 0x7C89483: process_get_all_result (gdbusobjectmanagerclient.c:1628)
+# ==10187==    by 0x7C89DA5: initable_init (gdbusobjectmanagerclient.c:1384)
+# ==10187==    by 0x7C0D7CE: g_initable_new_valist (ginitable.c:228)
+# ==10187==    by 0x7C0D8B8: g_initable_new (ginitable.c:148)
+# ==10187==    by 0x6C8B3F1: e_dbus_object_manager_client_new_for_bus_sync (e-dbus-source.c:3821)
+# ==10187==    by 0x6C73D92: source_registry_object_manager_thread (e-source-registry.c:723)
+# ==10187==    by 0x85C9DF4: g_thread_proxy (gthread.c:801)
+# ==10187==    by 0x95E8B4F: start_thread (pthread_create.c:304)
+# ==10187==    by 0xA0756DC: clone (clone.S:112)
+# ==10187== 
+{
+   object_path GDBus Object Proxy https://bugzilla.gnome.org/show_bug.cgi?id=680505
+   Memcheck:Leak
+   ...
+   fun:g_dbus_object_proxy_set_property
+}
