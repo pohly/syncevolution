@@ -222,6 +222,7 @@ struct GErrorCXX {
 };
 
 template<class T> void NoopDestructor(T *) {}
+template<class T> void GObjectDestructor(T *ptr) { g_object_unref(ptr); }
 template<class T> void GFreeDestructor(T *ptr) { g_free(static_cast<void *>(ptr)); }
 
 /**
