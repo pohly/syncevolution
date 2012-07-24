@@ -4857,3 +4857,43 @@
    fun:*MakeMethodEntry*make*
 }
 
+# ==10148== 3,912 (512 direct, 3,400 indirect) bytes in 1 blocks are definitely lost in loss record 4,885 of 4,958
+# ==10148==    at 0x4C28CCE: realloc (vg_replace_malloc.c:632)
+# ==10148==    by 0x9E45E7E: g_realloc (gmem.c:224)
+# ==10148==    by 0x9E156A9: g_ptr_array_maybe_expand (garray.c:1093)
+# ==10148==    by 0x9E16802: g_ptr_array_add (garray.c:1350)
+# ==10148==    by 0x98ED18B: read_netlink_messages (gnetworkmonitornetlink.c:237)
+# ==10148==    by 0x98ED3FA: g_network_monitor_netlink_initable_init (gnetworkmonitornetlink.c:143)
+# ==10148==    by 0x98B07CE: g_initable_new_valist (ginitable.c:228)
+# ==10148==    by 0x98B08B8: g_initable_new (ginitable.c:148)
+# ==10148==    by 0x98B34BF: _g_io_module_get_default (giomodule.c:742)
+# ==10148==    by 0x52DE554: backend_constructed (e-backend.c:138)
+# ==10148==    by 0x9BBE2B2: g_object_newv (gobject.c:1741)
+# ==10148==    by 0x9BBE62F: g_object_new_valist (gobject.c:1830)
+# ==10148==    by 0x9BBE963: g_object_new (gobject.c:1545)
+# ==10148==    by 0x4E4150A: book_backend_factory_new_backend (e-book-backend-factory.c:61)
+# ==10148==    by 0x52DEC0B: e_backend_factory_new_backend (e-backend-factory.c:109)
+# ==10148==    by 0x52E144F: e_data_factory_ref_backend (e-data-factory.c:249)
+# ==10148==    by 0x4E54E68: data_book_factory_ref_backend (e-data-book-factory.c:109)
+# ==10148==    by 0x4E5520E: impl_BookFactory_get_book (e-data-book-factory.c:339)
+# ==10148==    by 0x5527A96: e_gdbus_marshallers_BOOLEAN__OBJECT_STRING (e-gdbus-marshallers.c:246)
+# ==10148==    by 0x9BB7723: g_closure_invoke (gclosure.c:777)
+# ==10148==    by 0x9BC87AF: signal_emit_unlocked_R (gsignal.c:3547)
+# ==10148==    by 0x9BD034A: g_signal_emit_valist (gsignal.c:3306)
+# ==10148==    by 0x9BD08C1: g_signal_emit (gsignal.c:3352)
+# ==10148==    by 0x5536A52: e_gdbus_stub_handle_method_call (e-gdbus-templates.c:687)
+# ==10148==    by 0x4E5BA9C: handle_method_call (e-gdbus-book-factory.c:145)
+# ==10148==    by 0x9911914: call_in_idle_cb (gdbusconnection.c:4687)
+# ==10148==    by 0x9E40204: g_main_context_dispatch (gmain.c:2539)
+# ==10148==    by 0x9E40537: g_main_context_iterate.isra.23 (gmain.c:3146)
+# ==10148==    by 0x9E40931: g_main_loop_run (gmain.c:3340)
+# ==10148==    by 0x52E1AD2: dbus_server_run_server (e-dbus-server.c:222)
+# ==10148== 
+{
+   GIO networkmonitor https://bugzilla.gnome.org/show_bug.cgi?id=676265
+   Memcheck:Leak
+   ...
+   fun:read_netlink_messages
+   ...
+   fun:g_network_monitor_*
+}
