@@ -172,20 +172,20 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
     GErrorCXX gerror;
     if (!update) {
         const char *uid = NULL;
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         // UID only needs to be freed in ECalClient API
         PlainGStr uidOwner;
 #endif
 
         if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
             !e_cal_client_create_object_sync(m_calendar, subcomp, (gchar **)&uid, NULL, gerror)
 #else
             !e_cal_create_object(m_calendar, subcomp, (gchar **)&uid, gerror)
 #endif
             ) {
             if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                 gerror->domain == E_CAL_CLIENT_ERROR &&
                 gerror->code == E_CAL_CLIENT_ERROR_OBJECT_ID_ALREADY_EXISTS
 #else
@@ -205,7 +205,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
                 throwError("storing new memo item", gerror);
             }
         }
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         else {
             uidOwner = PlainGStr((gchar *)uid);
         }
@@ -224,7 +224,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
         }
 
         if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
             !e_cal_client_modify_object_sync(m_calendar, subcomp, CALOBJ_MOD_ALL, 
                                              NULL, gerror)
 #else

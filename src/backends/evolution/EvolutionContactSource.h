@@ -34,7 +34,7 @@
 
 #include <syncevo/declarations.h>
 
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
 SE_GOBJECT_TYPE(EBookClient)
 SE_GOBJECT_TYPE(EBookClientView)
 #endif
@@ -91,7 +91,7 @@ class EvolutionContactSource : public EvolutionSyncSource,
     std::string getRevision(const std::string &uid);
 
     /** valid after open(): the address book that this source references */
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
     EBookClientCXX m_addressbook;
 #else
     eptr<EBook, GObject> m_addressbook;

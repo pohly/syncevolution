@@ -102,7 +102,7 @@ EvolutionCalendarSource::EvolutionCalendarSource(EvolutionCalendarSourceType typ
                                 ", ",
                                 m_operations);
         m_typeName = "calendar";
-#ifndef USE_ECAL_CLIENT
+#ifndef USE_EDS_CLIENT
         m_newSystem = e_cal_new_system_calendar;
 #endif
         break;
@@ -111,7 +111,7 @@ EvolutionCalendarSource::EvolutionCalendarSource(EvolutionCalendarSourceType typ
                                 ", ",
                                 m_operations);
         m_typeName = "task list";
-#ifndef USE_ECAL_CLIENT
+#ifndef USE_EDS_CLIENT
         m_newSystem = e_cal_new_system_tasks;
 #endif
         break;
@@ -120,7 +120,7 @@ EvolutionCalendarSource::EvolutionCalendarSource(EvolutionCalendarSourceType typ
                                 ", ",
                                 m_operations);
         m_typeName = "memo list";
-#ifndef USE_ECAL_CLIENT
+#ifndef USE_EDS_CLIENT
         // This is not available in older Evolution versions.
         // A configure check could detect that, but as this isn't
         // important the functionality is simply disabled.
@@ -135,17 +135,19 @@ EvolutionCalendarSource::EvolutionCalendarSource(EvolutionCalendarSourceType typ
 
 SyncSource::Databases EvolutionCalendarSource::getDatabases()
 {
-    ESourceList *tmp = NULL;
     GErrorCXX gerror;
     Databases result;
 
-    if (
-#ifdef USE_ECAL_CLIENT
-        !e_cal_client_get_sources(&tmp, sourceType(), gerror)
+#ifdef USE_EDS_CLIENT
+    getDatabasesFromRegistry(result,
+                             sourceExtension(),
+                             m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? e_source_registry_ref_default_calendar :
+                             m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? e_source_registry_ref_default_task_list :
+                             m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? e_source_registry_ref_default_memo_list :
+                             NULL);
 #else
-        !e_cal_get_sources(&tmp, sourceType(), gerror)
-#endif
-        ) {
+    ESourceList *tmp = NULL;
+    if (!e_cal_get_sources(&tmp, sourceType(), gerror)) {
         // ignore unspecific errors (like on Maemo with no support for memos)
         // and continue with empty list (perhaps defaults work)
         if (!gerror) {
@@ -155,7 +157,6 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
         }
     }
     ESourceListCXX sources(tmp, false);
-
     bool first = true;
     for (GSList *g = sources ? e_source_list_peek_groups (sources) : NULL;
          g;
@@ -170,16 +171,6 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
             first = false;
         }
     }
-
-#ifdef USE_ECAL_CLIENT
-    if (result.empty()) {
-        ECalClientCXX calendar = ECalClientCXX::steal(e_cal_client_new_system(sourceType(), NULL));
-        if (calendar) {
-          const char *uri = e_client_get_uri (E_CLIENT ((ECalClient*)calendar));
-          result.push_back(Database("<<system>>", uri ? uri : "<<unknown uri>>"));
-        }
-    }
-#else
     if (result.empty() && m_newSystem) {
         eptr<ECal, GObject> calendar(m_newSystem());
         if (calendar.get()) {
@@ -193,36 +184,14 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
     return result;
 }
 
-#ifdef USE_ECAL_CLIENT
-static void
-handle_error_cb (EClient */*client*/, const gchar *error_msg, gpointer user_data)
+#ifdef USE_EDS_CLIENT
+static EClient *newECalClient(ESource *source,
+                              ECalClientSourceType ecalSourceType,
+                              GError **gerror)
 {
-    EvolutionCalendarSource *that = static_cast<EvolutionCalendarSource *>(user_data);
-    SE_LOG_ERROR(that, NULL, "%s", error_msg);
+    return E_CLIENT(e_cal_client_new(source, ecalSourceType, gerror));
 }
-
-static gboolean
-handle_authentication_cb (EClient */*client*/, ECredentials *credentials, gpointer user_data)
-{
-    EvolutionCalendarSource *that = static_cast<EvolutionCalendarSource *>(user_data);
-    std::string passwd = that->getPassword();
-    std::string prompt = e_credentials_peek(credentials, E_CREDENTIALS_KEY_PROMPT_TEXT);
-    std::string key = e_credentials_peek(credentials, E_CREDENTIALS_KEY_PROMPT_KEY);
-
-    SE_LOG_DEBUG(that, NULL, "authentication requested, prompt \"%s\", key \"%s\" => %s",
-                 prompt.c_str(), key.c_str(),
-                 !passwd.empty() ? "returning configured password" : "no password configured");
-
-    if (!passwd.empty()) {
-        e_credentials_set (credentials, E_CREDENTIALS_KEY_PASSWORD, passwd.c_str());
-        return true;
-    } else {
-        return false;
-    }
-}
-
 #else
-
 char *EvolutionCalendarSource::authenticate(const char *prompt,
                                             const char *key)
 {
@@ -233,29 +202,13 @@ char *EvolutionCalendarSource::authenticate(const char *prompt,
                  !passwd.empty() ? "returning configured password" : "no password configured");
     return !passwd.empty() ? strdup(passwd.c_str()) : NULL;
 }
-
 #endif
+
+
 
 void EvolutionCalendarSource::open()
 {
-    ESourceList *tmp;
-    GErrorCXX gerror;
-    bool onlyIfExists = false; // always try to create address book, because even if there is
-                               // a source there's no guarantee that the actual database was
-                               // created already; the original logic below for only setting
-                               // this when explicitly requesting a new database
-                               // therefore failed in some cases
-
-#ifdef USE_ECAL_CLIENT
-    if (!e_cal_client_get_sources (&tmp, sourceType(), gerror)) {
-        throwError("unable to access backend databases", gerror);
-    }
-    ESourceListCXX sources(tmp, false);
-
-    string id = getDatabaseID();    
-    ESource *source = findSource(sources, id);
-    bool created = false;
-
+#ifdef USE_EDS_CLIENT
     // Open twice. This solves an issue where Evolution's CalDAV
     // backend only updates its local cache *after* a sync (= while
     // closing the calendar?), instead of doing it *before* a sync (in
@@ -265,45 +218,25 @@ void EvolutionCalendarSource::open()
     // be others with similar problems and for local storage it is
     // a reasonably cheap operation (so no harm there).
     for (int retries = 0; retries < 2; retries++) {
-        if (!source) {
-            // might have been special "<<system>>" or "<<default>>", try that and
-            // creating address book from file:// URI before giving up
-            if ((id.empty() || id == "<<system>>")) {
-                m_calendar = ECalClientCXX::steal(e_cal_client_new_system(sourceType(), gerror));
-            } else if (!id.compare(0, 7, "file://")) {
-                m_calendar = ECalClientCXX::steal(e_cal_client_new_from_uri(id.c_str(), sourceType(), gerror));
-            } else {
-                throwError(string("not found: '") + id + "'");
-            }
-            created = true;
-        } else {
-            m_calendar = ECalClientCXX::steal(e_cal_client_new(source, sourceType(), gerror));
-        }
-
-        if (gerror) {
-            throwError("create calendar", gerror);
-        }
-
-        // Listen for errors
-        g_signal_connect (m_calendar, "backend-error", G_CALLBACK (handle_error_cb), this); 
-
-        // Handle authentication requests from the backend
-        g_signal_connect (m_calendar, "authenticate", G_CALLBACK (handle_authentication_cb), this);
-    
-        if (!e_client_open_sync(E_CLIENT ((ECalClient*)m_calendar), onlyIfExists, NULL, gerror)) {
-            if (created) {
-                // opening newly created address books often failed, perhaps that also applies to calendars - try again
-                gerror.clear();
-                sleep(5);
-                if (!e_client_open_sync(E_CLIENT ((ECalClient*)m_calendar), onlyIfExists, NULL, gerror)) {
-                    throwError(string("opening ") + m_typeName , gerror);
-                }
-            } else {
-                throwError(string("opening ") + m_typeName , gerror);
-            }
-        }
+        m_calendar.reset(E_CAL_CLIENT(openESource(sourceExtension(),
+                                                  m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? e_source_registry_ref_builtin_calendar :
+                                                  m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? e_source_registry_ref_builtin_task_list :
+                                                  m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? e_source_registry_ref_builtin_memo_list :
+                                                  NULL,
+                                                  boost::bind(newECalClient,
+                                                              _1,
+                                                              sourceType(),
+                                                              _2)).get()));
     }
 #else
+    GErrorCXX gerror;
+    bool onlyIfExists = false; // always try to create address book, because even if there is
+                               // a source there's no guarantee that the actual database was
+                               // created already; the original logic below for only setting
+                               // this when explicitly requesting a new database
+                               // therefore failed in some cases
+
+    ESourceList *tmp;
     if (!e_cal_get_sources(&tmp, sourceType(), gerror)) {
         throwError("unable to access backend databases", gerror);
     }
@@ -371,7 +304,7 @@ bool EvolutionCalendarSource::isEmpty()
     return revisions.empty();
 }
 
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
 class ECalClientViewSyncHandler {
   public:
     ECalClientViewSyncHandler(ECalClientView *view, void (*processList)(const GSList *list, void *user_data), void *user_data): 
@@ -453,7 +386,7 @@ static void list_revisions(const GSList *objects, void *user_data)
 void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 {
     GErrorCXX gerror;
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
     ECalClientView *view;
 
     if (!e_cal_client_get_view_sync (m_calendar, "#t", &view, NULL, gerror)) {
@@ -509,7 +442,7 @@ void EvolutionCalendarSource::readItem(const string &luid, std::string &item, bo
     item = retrieveItemAsString(id);
 }
 
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
 icaltimezone *
 my_tzlookup(const gchar *tzid,
             gconstpointer ecalclient,
@@ -584,7 +517,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
     // fix up TZIDs
     if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         !e_cal_client_check_timezones(icomp,
                                       NULL,
                                       my_tzlookup,
@@ -618,7 +551,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             SE_LOG_DEBUG(this, NULL, "skipping VTIMEZONE without TZID");
         } else {
             gboolean success =
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                 e_cal_client_add_timezone_sync(m_calendar, zone, NULL, gerror)
 #else
                 e_cal_add_timezone(m_calendar, zone, gerror)
@@ -697,14 +630,14 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // creating new objects works for normal events and detached occurrences alike
                 if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                     e_cal_client_create_object_sync(m_calendar, subcomp, (gchar **)&uid, 
                                                     NULL, gerror)
 #else
                     e_cal_create_object(m_calendar, subcomp, (gchar **)&uid, gerror)
 #endif
                     ) {
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                     PlainGStr owner((gchar *)uid);
 #endif
                     // Evolution workaround: don't rely on uid being set if we already had
@@ -722,7 +655,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // the parent exists and we must update it.
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
                     if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
                                                          CALOBJ_MOD_THIS, NULL,
                                                          gerror)
@@ -797,7 +730,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // Parent is gone, too, and needs to be recreated.
                 const char *uid = NULL;
                 if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                     !e_cal_client_create_object_sync(m_calendar, subcomp, (char **)&uid, 
                                                      NULL, gerror)
 #else
@@ -806,7 +739,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     ) {
                     throwError(string("creating updated item ") + luid, gerror);
                 }
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                 PlainGStr owner((gchar *)uid);
 #endif
 
@@ -814,7 +747,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // the parent exists and we must update it.
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
                     if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
                                                          CALOBJ_MOD_THIS, NULL,
                                                          gerror)
@@ -830,7 +763,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             } else {
                 // no children, updating is simple
                 if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                     !e_cal_client_modify_object_sync(m_calendar, subcomp,
                                                      CALOBJ_MOD_ALL, NULL,
                                                      gerror)
@@ -846,7 +779,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         } else {
             // child event
             if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                 !e_cal_client_modify_object_sync(m_calendar, subcomp,
                                                  CALOBJ_MOD_THIS, NULL,
                                                  gerror)
@@ -890,7 +823,7 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
     // removes all events with that UID, including children
     GErrorCXX gerror;
     if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         !e_cal_client_remove_object_sync(m_calendar,
                                          uid.c_str(), NULL, CALOBJ_MOD_ALL,
                                          NULL, gerror)
@@ -937,7 +870,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                 char *uid;
 
                 if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                     !e_cal_client_create_object_sync(m_calendar, *icalcomp, &uid, 
                                                      NULL, gerror)
 #else
@@ -946,13 +879,13 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                     ) {
                     throwError(string("recreating first item ") + luid, gerror);
                 }
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                 PlainGStr owner((gchar *)uid);
 #endif
                 first = false;
             } else {
                 if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
                     !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
                                                      CALOBJ_MOD_THIS, NULL,
                                                      gerror)
@@ -972,7 +905,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
         // therefore we have to check for existence first
         eptr<icalcomponent> item(retrieveItem(id));
         gboolean success = !item ? false :
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
             // TODO: is this necessary?
             e_cal_client_remove_object_sync(m_calendar,
                                             id.m_uid.c_str(),
@@ -1027,7 +960,7 @@ icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
     icalcomponent *comp = NULL;
 
     if (
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         !e_cal_client_get_object_sync(m_calendar,
                                       id.m_uid.c_str(),
                                       !id.m_rid.empty() ? id.m_rid.c_str() : NULL,
@@ -1073,7 +1006,7 @@ string EvolutionCalendarSource::retrieveItemAsString(const ItemID &id)
     eptr<icalcomponent> comp(retrieveItem(id));
     eptr<char> icalstr;
 
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
     icalstr = e_cal_client_get_component_as_string(m_calendar, comp);
 #else
     icalstr = e_cal_get_component_as_string(m_calendar, comp);
@@ -1096,7 +1029,7 @@ string EvolutionCalendarSource::retrieveItemAsString(const ItemID &id)
         }
 
         // now try again
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         icalstr = e_cal_client_get_component_as_string(m_calendar, comp);
 #else
         icalstr = e_cal_get_component_as_string(m_calendar, comp);

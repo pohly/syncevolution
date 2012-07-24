@@ -52,23 +52,26 @@
 
 #ifdef HAVE_EDS
 #include <glib-object.h>
+#if defined(USE_EDS_CLIENT)
+#include <libedataserver/libedataserver.h>
+#else
 #include <libedataserver/eds-version.h>
 #include <libedataserver/e-source.h>
 #include <libedataserver/e-source-list.h>
+#endif
 #ifdef ENABLE_EBOOK
-#ifdef USE_EBOOK_CLIENT
-#include <libebook/e-book-client.h>
+#ifdef USE_EDS_CLIENT
+#include <libebook/libebook.h>
 #else
 #include <libebook/e-book.h>
-#endif
 #include <libebook/e-vcard.h>
 #include <libebook/e-book-query.h>
 #endif
+#endif
 #ifdef ENABLE_ECAL
 # define HANDLE_LIBICAL_MEMORY 1
-#ifdef USE_ECAL_CLIENT
-#include <libecal/e-cal-client.h>
-#include <libecal/e-cal-check-timezones.h>
+#ifdef USE_EDS_CLIENT
+#include <libecal/libecal.h>
 #else
 #include <libecal/e-cal.h>
 #endif

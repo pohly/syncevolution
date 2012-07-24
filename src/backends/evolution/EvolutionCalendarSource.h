@@ -31,7 +31,7 @@
 
 #include <syncevo/declarations.h>
 
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
 SE_GOBJECT_TYPE(ECalClient)
 SE_GOBJECT_TYPE(ECalClientView)
 #endif
@@ -50,7 +50,7 @@ typedef enum {
 
 inline bool IsCalObjNotFound(const GError *gerror) {
     return gerror &&
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
         gerror->domain == E_CAL_CLIENT_ERROR &&
         gerror->code == E_CAL_CLIENT_ERROR_OBJECT_NOT_FOUND
 #else
@@ -156,7 +156,7 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
 
   protected:
     /** valid after open(): the calendar that this source references */
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
     ECalClientCXX m_calendar;
 #else
     eptr<ECal, GObject> m_calendar;
@@ -166,9 +166,16 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
     EvolutionCalendarSourceType m_type;         /**< use events, tasks or memos? */
 
     // Convenience function for source type casting
-#ifdef USE_ECAL_CLIENT
+#ifdef USE_EDS_CLIENT
     ECalClientSourceType sourceType() const {
         return (ECalClientSourceType)m_type;
+    }
+    const char *sourceExtension() const {
+        return
+            m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? E_SOURCE_EXTENSION_CALENDAR :
+            m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? E_SOURCE_EXTENSION_TASK_LIST :
+            m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? E_SOURCE_EXTENSION_MEMO_LIST :
+            "";
     }
 #else
     ECalSourceType sourceType() const {
@@ -194,7 +201,7 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
             ICAL_VTODO_COMPONENT;
     }
 
-#ifndef USE_ECAL_CLIENT
+#ifndef USE_EDS_CLIENT
     /** ECalAuthFunc which calls the authenticate() methods */
     static char *eCalAuthFunc(ECal *ecal,
                               const char *prompt,

@@ -27,8 +27,15 @@
 #include <syncevo/declarations.h>
 #include <syncevo/GLibSupport.h>
 
-#ifdef HAVE_EDS
+#if defined(HAVE_EDS)
+# if defined(USE_EDS_CLIENT)
+typedef SyncEvo::GListCXX<ESource, GList, SyncEvo::GObjectDestructor> ESourceListCXX;
+SE_GOBJECT_TYPE(ESourceRegistry)
+SE_GOBJECT_TYPE(ESource)
+SE_GOBJECT_TYPE(EClient)
+# else
 SE_GOBJECT_TYPE(ESourceList)
+#endif
 #endif
 
 SE_BEGIN_CXX
@@ -61,14 +68,24 @@ class EvolutionSyncSource : public TrackingSyncSource
 
   protected:
 #ifdef HAVE_EDS
+#ifdef USE_EDS_CLIENT
+    void getDatabasesFromRegistry(SyncSource::Databases &result,
+                                  const char *extension,
+                                  ESource *(*getDef)(ESourceRegistry *));
+    EClientCXX openESource(const char *extension,
+                           ESource *(*refBuiltin)(ESourceRegistry *),
+                           const boost::function<EClient *(ESource *, GError **gerror)> &newClient);
+    ESourceRegistryCXX getSourceRegistry();
+#endif
     /**
      * searches the list for a source with the given uri or name
      *
      * @param list      a list previously obtained from Gnome
      * @param id        a string identifying the data source: either its name or uri
-     * @return   pointer to source or NULL if not found
+     * @return   pointer to source (caller owns reference) or NULL if not found
      */
-    ESource *findSource( ESourceList *list, const string &id );
+    ESource *findSource(const ESourceListCXX &list,
+                        const string &id);
 #endif
 
  public:

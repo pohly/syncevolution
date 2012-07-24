@@ -52,7 +52,7 @@ SE_BEGIN_CXX
 
 inline bool IsContactNotFound(const GError *gerror) {
     return gerror &&
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
         gerror->domain == E_BOOK_CLIENT_ERROR &&
         gerror->code == E_BOOK_CLIENT_ERROR_CONTACT_NOT_FOUND
 #else
@@ -76,20 +76,28 @@ EvolutionContactSource::EvolutionContactSource(const SyncSourceParams &params,
                             m_operations);
 }
 
+#ifdef USE_EDS_CLIENT
+static EClient *newEBookClient(ESource *source,
+                               GError **gerror)
+{
+    return E_CLIENT(e_book_client_new(source, gerror));
+}
+#endif
+
 EvolutionSyncSource::Databases EvolutionContactSource::getDatabases()
 {
-    ESourceList *sources = NULL;
-
-#ifdef USE_EBOOK_CLIENT
-    if (!e_book_client_get_sources(&sources, NULL)) {
+    Databases result;
+#ifdef USE_EDS_CLIENT
+    getDatabasesFromRegistry(result,
+                             E_SOURCE_EXTENSION_ADDRESS_BOOK,
+                             e_source_registry_ref_default_address_book);
 #else
+    ESourceList *sources = NULL;
     if (!e_book_get_addressbooks(&sources, NULL)) {
-#endif
         SyncContext::throwError("unable to access address books");
     }
 
     Databases secondary;
-    Databases result;
     for (GSList *g = e_source_list_peek_groups (sources); g; g = g->next) {
         ESourceGroup *group = E_SOURCE_GROUP (g->data);
         for (GSList *s = e_source_group_peek_sources (group); s; s = s->next) {
@@ -126,22 +134,6 @@ EvolutionSyncSource::Databases EvolutionContactSource::getDatabases()
 
     // No results? Try system address book (workaround for embedded Evolution Dataserver).
     if (!result.size()) {
-#ifdef USE_EBOOK_CLIENT
-        EBookClientCXX book;
-        const char *name;
-
-        name = "<<system>>";
-        book = EBookClientCXX::steal(e_book_client_new_system (NULL));
-        if (!book) {
-            name = "<<default>>";
-            book = EBookClientCXX::steal(e_book_client_new_default (NULL));
-        }
-
-        if (book) {
-            const char *uri = e_client_get_uri (E_CLIENT ((EBookClient*)book));
-            result.push_back(Database(name, uri, true));
-        }
-#else
         eptr<EBook, GObject> book;
         GErrorCXX gerror;
         const char *name;
@@ -158,42 +150,22 @@ EvolutionSyncSource::Databases EvolutionContactSource::getDatabases()
             const char *uri = e_book_get_uri (book);
             result.push_back(Database(name, uri, true));
         }
-#endif
     } else {
         //  the first DB found is the default
         result[0].m_isDefault = true;
     }
-    
+#endif
+
     return result;
 }
 
-#ifdef USE_EBOOK_CLIENT
-static void
-handle_error_cb (EClient */*client*/, const gchar *error_msg, gpointer user_data)
-{
-    EvolutionContactSource *that = static_cast<EvolutionContactSource *>(user_data);
-    SE_LOG_ERROR(that, NULL, "%s", error_msg);
-}
-
-static gboolean
-handle_authentication_cb (EClient */*client*/, ECredentials *credentials, gpointer user_data)
-{
-    EvolutionContactSource *that = static_cast<EvolutionContactSource *>(user_data);
-    std::string user = that->getUser();
-    std::string passwd = that->getPassword();
-
-    if (!user.empty() || !passwd.empty()) {
-        e_credentials_set (credentials, E_CREDENTIALS_KEY_USERNAME, user.c_str());
-        e_credentials_set (credentials, E_CREDENTIALS_KEY_PASSWORD, passwd.c_str());
-        return true;
-    } else {
-        return false;
-    }
-}
-#endif
-
 void EvolutionContactSource::open()
 {
+#ifdef USE_EDS_CLIENT
+    m_addressbook.reset(E_BOOK_CLIENT(openESource(E_SOURCE_EXTENSION_ADDRESS_BOOK,
+                                                  e_source_registry_ref_builtin_address_book,
+                                                  newEBookClient).get()));
+#else
     GErrorCXX gerror;
     bool created = false;
     bool onlyIfExists = false; // always try to create address book, because even if there is
@@ -201,61 +173,6 @@ void EvolutionContactSource::open()
                                // created already; the original logic below for only setting
                                // this when explicitly requesting a new address book
                                // therefore failed in some cases
-#ifdef USE_EBOOK_CLIENT
-    ESourceList *tmp;
-    if (!e_book_client_get_sources(&tmp, gerror)) {
-        throwError("unable to access address books", gerror);
-    }
-    ESourceListCXX sources(tmp, false);
-
-    string id = getDatabaseID();
-    ESource *source = findSource(sources, id);
-    if (!source) {
-        // might have been special "<<system>>" or "<<default>>", try that and
-        // creating address book from file:// URI before giving up
-        if (id.empty() || id == "<<system>>") {
-            m_addressbook = EBookClientCXX::steal(e_book_client_new_system (gerror));
-        } else if (id.empty() || id == "<<default>>") {
-            m_addressbook = EBookClientCXX::steal(e_book_client_new_default (gerror));
-        } else if (boost::starts_with(id, "file://")) {
-            m_addressbook = EBookClientCXX::steal(e_book_client_new_from_uri(id.c_str(), gerror));
-        } else {
-            throwError(string(getName()) + ": no such address book: '" + id + "'");
-        }
-        created = true;
-    } else {
-        m_addressbook = EBookClientCXX::steal(e_book_client_new( source, gerror ));
-    }
-
-    if (gerror) {
-        throwError("create addressbook", gerror);
-    }
-
-    // Listen for errors
-    g_signal_connect (m_addressbook, "backend-error", G_CALLBACK (handle_error_cb), this); 
-
-    // Handle authentication requests from the backend
-    g_signal_connect (m_addressbook, "authenticate", G_CALLBACK (handle_authentication_cb), this);
- 
-    // Open the address book
-    if (!e_client_open_sync( E_CLIENT ((EBookClient*)m_addressbook), onlyIfExists, NULL, gerror) ) {
-        if (created) {
-            // opening newly created address books often fails, try again once more
-            gerror.clear();
-            sleep(5);
-            if (!e_client_open_sync( E_CLIENT ((EBookClient*)m_addressbook), onlyIfExists, NULL, gerror)) {
-                throwError("opening address book", gerror);
-            }
-        } else {
-            throwError("opening address book", gerror);
-        }
-    }
-
-    g_signal_connect_after(m_addressbook,
-                           "backend-died",
-                           G_CALLBACK(SyncContext::fatalError),
-                           (void *)"Evolution Data Server has died unexpectedly, contacts no longer available.");
-#else
     ESourceList *tmp;
     if (!e_book_get_addressbooks(&tmp, gerror)) {
         throwError("unable to access address books", gerror);
@@ -339,7 +256,7 @@ bool EvolutionContactSource::isEmpty()
     return revisions.empty();
 }
 
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
 class EBookClientViewSyncHandler {
     public:
         EBookClientViewSyncHandler(EBookClientView *view, 
@@ -432,7 +349,7 @@ static void list_revisions(const GSList *contacts, void *user_data)
 
 void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
 {
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
     GErrorCXX gerror;
     EBookClientView *view;
 
@@ -500,7 +417,7 @@ string EvolutionContactSource::getRevision(const string &luid)
     EContact *contact;
     GErrorCXX gerror;
     if (
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
         !e_book_client_get_contact_sync(m_addressbook,
                                         luid.c_str(),
                                         &contact,
@@ -534,7 +451,7 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
     EContact *contact;
     GErrorCXX gerror;
     if (
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
         !e_book_client_get_contact_sync(m_addressbook,
                                         luid.c_str(),
                                         &contact,
@@ -593,7 +510,7 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
                       NULL :
                       const_cast<char *>(uid.c_str()));
         GErrorCXX gerror;
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
         if (uid.empty()) {
             gchar* newuid;
             if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid, NULL, gerror)) {
@@ -637,7 +554,7 @@ void EvolutionContactSource::removeItem(const string &uid)
 {
     GErrorCXX gerror;
     if (
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
         !e_book_client_remove_contact_by_uid_sync(m_addressbook, uid.c_str(), NULL, gerror)
 #else
         !e_book_remove_contact(m_addressbook, uid.c_str(), gerror)
@@ -658,7 +575,7 @@ std::string EvolutionContactSource::getDescription(const string &luid)
         EContact *contact;
         GErrorCXX gerror;
         if (
-#ifdef USE_EBOOK_CLIENT
+#ifdef USE_EDS_CLIENT
             !e_book_client_get_contact_sync(m_addressbook,
                                             luid.c_str(),
                                             &contact,
