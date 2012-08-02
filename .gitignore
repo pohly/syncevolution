@@ -10,6 +10,7 @@ Makefile
 Makefile.in
 
 # top level
+/INSTALL
 /autom4te.cache
 /aclocal.m4
 /compile
