@@ -6776,6 +6776,13 @@ END:VCARD
         self.assertNoErrors(err)
         self.assertEqualDiff(john + "\n" + joan, out)
 
+        # export all into file
+        exportfile = xdg_root + "/export.vcf"
+        out, err, code = self.runCmdline(["--export", exportfile,
+                                          "foo", "bar"])
+        self.assertNoErrors(err)
+        self.assertEqualDiff(john + "\n" + joan, open(exportfile).read())
+
         # export one
         out, err, code = self.runCmdline(["--export", "-",
                                           "backend=file",
@@ -6790,6 +6797,13 @@ END:VCARD
                                           "foo", "bar", "1"])
         self.assertNoErrors(err)
         self.assertEqualDiff(john, out)
+
+        # export one into file
+        exportfile = xdg_root + "/export.vcf"
+        out, err, code = self.runCmdline(["--export", exportfile,
+                                          "foo", "bar", "1"])
+        self.assertNoErrors(err)
+        self.assertEqualDiff(john, open(exportfile).read())
 
         # Copied from C++ test:
         # TODO: check configuration of just the source as @foo bar

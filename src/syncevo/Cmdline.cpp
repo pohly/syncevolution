@@ -1521,7 +1521,7 @@ bool Cmdline::run() {
                             haveNewline = true;
                         } else {
                             // write to file
-                            *out << item;
+                            *out << delimiter << item;
                             haveNewline = boost::ends_with(item, "\n");
                         }
                         haveItem = true;
