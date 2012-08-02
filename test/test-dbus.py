@@ -6879,10 +6879,11 @@ END:VCARD
         # The error message is not particularly informative, but the error should
         # not occur, so let it be... Also, the "connection is closed" error only
         # occurs occasionally.
-        out = out.replace('''[ERROR] The connection is closed
-''', '')
-        self.assertEqualDiff(out, '''[ERROR syncevo-dbus-server] child process quit because of signal 9
-''')
+        self.assertNotEqual(out, '')
+        self.assertTrue('''[ERROR] The connection is closed
+''' in out or
+                        '''[ERROR syncevo-dbus-server] child process quit because of signal 9
+''' in out)
 
     @property("debug", False)
     @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY2=60")
@@ -6937,7 +6938,7 @@ END:VCARD
         # occurs occasionally.
         if out.startswith('[ERROR] child process quit because of signal 9'):
             out = out.replace('''[ERROR] sending message to child failed: The connection is closed
--''', '')
+''', '')
             self.assertEqualDiff(out, '''[ERROR] child process quit because of signal 9
 [ERROR] local transport failed: child process quit because of signal 9
 [INFO] Transport giving up after x retries and y:zzmin
