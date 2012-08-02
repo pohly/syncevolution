@@ -2518,8 +2518,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         Timeout.removeTimeout(timeout_handler)
         self.assertEqual(self.lastState, "done")
 
-    @timeout(60)
-    def testAutoSyncNetworkFailure(self):
+    def doAutoSyncNetworkFailure(self):
         """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
         self.setupConfig()
         # enable auto-sync
@@ -2529,7 +2528,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         # or any other D-Bus test.
         config[""]["syncURL"] = "http://no-such-domain.foobar"
         config[""]["autoSync"] = "1"
-        config[""]["autoSyncDelay"] = "0"
+        config[""]["autoSyncDelay"] = "1"
         config[""]["autoSyncInterval"] = "10s"
         config[""]["password"] = "foobar"
         self.session.SetConfig(True, False, config, utf8_strings=True)
@@ -2598,6 +2597,17 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
 
         # done as part of post-processing in runTest()
         self.runTestDBusCheck = checkDBusLog
+
+    @timeout(60)
+    def testAutoSyncNetworkFailure(self):
+        """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
+        self.doAutoSyncNetworkFailure()
+
+    @timeout(60)
+    @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=session")
+    def testAutoSyncNoNetworkManager(self):
+        """TestSessionAPIsDummy.testAutoSyncNoNetworkManager - test that auto-sync is triggered despite having neither NetworkManager nor Connman, fails due to (temporary?!) network error here"""
+        self.doAutoSyncNetworkFailure()
 
     @timeout(60)
     def doAutoSyncLocalConfigError(self, notifyLevel):
