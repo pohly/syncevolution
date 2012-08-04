@@ -14,15 +14,7 @@ sh ./gen-autotools.sh
 libtoolize -c
 glib-gettextize --force --copy
 intltoolize --force --copy --automake
-if [ -n "$SBOX_PRELOAD" ]; then
-  # I broke fakeroot in my Fremantle SDK when I installed the Harmattan SDK,
-  # since the upgraded fakeroot in Scratchbox is apparently not all that
-  # backwards compatible. Since I don't want to uninstall the Harmattan SDK
-  # and reinstall the Fremantle SDK, I seem to need this hack.
-  aclocal-1.9 -I m4 -I m4-repo -I /targets/links/arch_tools/share/aclocal
-else
-  aclocal-1.9 -I m4 -I m4-repo
-fi
+aclocal-1.9 -I m4 -I m4-repo
 autoheader
 automake-1.9 -a -c -Wno-portability
 autoconf
