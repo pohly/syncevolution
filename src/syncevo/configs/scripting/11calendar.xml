@@ -4,6 +4,13 @@
       STRING MATCHES[];
       STRING CAT,CN,EM;
       INTEGER i;
+      // Remove UID/RECURRENCE-ID from servers which do not support
+      // the semantic properly (for example, Funambol supports
+      // UID but drops RECURRENCE-ID, causing conflicts).
+      if (SESSIONVAR("stripUID")) {
+          UID = UNASSIGNED;
+          ORIGSTART = UNASSIGNED;
+      }
       // make sure we have all trailing and leading spaces eliminated
       DESCRIPTION=NORMALIZED(DESCRIPTION);
       SUMMARY=NORMALIZED(SUMMARY);
@@ -24,6 +31,9 @@
           // - convert start to user zone (or floating) so it represents midnight
           DTSTART = CONVERTTOUSERZONE(DTSTART);
           MAKEALLDAY(DTSTART,DTEND,i);
+          if (RR_END != EMPTY) {
+             RR_END = DATEONLY(CONVERTTOUSERZONE(RR_END));
+          }
         }
         else {
           // iCalendar 2.0 - only if DTSTART is a date-only value this really is an allday
@@ -52,14 +62,15 @@
             i=i+1;
           }
         }
-        // If vcalendar1.0, rrule is not secondly, minutely, or hourly, we strip time information
-        // and only reserve date information
-        if (ITEMDATATYPE()=="vCalendar10" && RR_FREQ!="h" && RR_FREQ!="m" && RR_FREQ!="s") {
+        // vCalendar1.0 has no VALUE=DATE EXDATEs, so convert back to that if
+        // the event is all-day.
+        if (ITEMDATATYPE()=="vCalendar10" && ISDATEONLY(DTSTART)) {
           timestamp exdate;
           i = 0;
           while (i<SIZE(EXDATES)) {
             exdate = EXDATES[i];
             if (!ISDATEONLY(exdate)) {
+              exdate = CONVERTTOUSERZONE(exdate);
               EXDATES[i] = DATEONLY(exdate);
             }
             i=i+1;
@@ -209,8 +220,8 @@
     ]]></macro>
 
     <!-- Uses the UID/RECURRENCE-ID fields as the only criteria for
-         comparing calendar data if the VCALENDAR_COMPARE_UID session
-         variable is true, else does a normal comparison of the
+         comparing calendar data if the parameter $1 (see GLOBALIDS in <initscript>)
+         is true, else does a normal comparison of the
          fields. That comparison is based on the datatype definition
          and ignores UID because it is not trusted to be
          preserved and/or implemented by peers.
@@ -220,7 +231,7 @@
     -->
     <macro name="VCALENDAR_COMPARE_SCRIPT"><![CDATA[
     INTEGER RES;
-    if (COMPARISONMODE() != "age" && SESSIONVAR("VCALENDAR_COMPARE_UID") ) {
+    if (COMPARISONMODE() != "age" && SYNCMODESUPPORTED("1122583000")) {
         if (TARGET.UID == REFERENCE.UID &&
             TARGET.ORIGSTART == REFERENCE.ORIGSTART) {
             RES = 0;
@@ -231,4 +242,33 @@
         RES = COMPAREFIELDS();
     }
     return RES;
+    ]]></macro>
+
+    <!-- invoked when reading plain text memo from storage or receiving from peer -->
+    <macro name="MEMO_INCOMING_SCRIPT"><![CDATA[
+    ISEVENT = 2;
+    ]]></macro>
+
+    <!-- invoked before writing plain text memo into storage or sending to peer -->
+    <macro name="MEMO_OUTGOING_SCRIPT"><![CDATA[
+    // remove SUMMARY from start of DESCRIPTION before writing,
+    // because that will concatenate them again
+    integer lensummary, lendescr;
+    lensummary = LENGTH(SUMMARY);
+    lendescr = LENGTH(DESCRIPTION);
+    if (lendescr > lensummary &&
+        SUBSTR(DESCRIPTION, 0, lensummary) == SUMMARY &&
+        SUBSTR(DESCRIPTION, lensummary, 1) == "\n") {
+        DESCRIPTION = SUBSTR(DESCRIPTION, lensummary + 1, lendescr - lensummary - 1);
+    }
+    ]]></macro>
+
+    <macro name="CALENDAR_BEFOREWRITE_SCRIPT"><![CDATA[
+      // set UTC time of generation for iCalendar 2.0 DTSTAMP
+      DGENERATED = NOW();
+      // ensure that there is a DMODIFIED = LAST-MODIFIED property,
+      // not all storages add it
+      if (!DMODIFIED) {
+         DMODIFIED = DGENERATED;
+      }
     ]]></macro>

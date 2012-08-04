@@ -1,0 +1,15 @@
+dist_noinst_SCRIPTS += build/gen-git-version.sh \
+	build/source2html.py
+
+EXTRA_DIST += \
+	build/export-foreign-git.sh \
+	build/export-gdbus.sh \
+	build/export-synthesis-xml.sh \
+	build/gen-backends-am.sh \
+	build/gen-backends.sh \
+	build/gen-changelog.pl \
+	build/gen-linguas.sh \
+	build/import-foreign-git.sh \
+	build/import-gdbus.sh \
+	build/import-synthesis-xml.sh \
+	build/update-copyrights.sh

@@ -23,7 +23,7 @@
 SE_BEGIN_CXX
 
 FilterConfigNode *
-MultiplexConfigNode::getNode(const string &property,
+MultiplexConfigNode::getNode(const std::string &property,
                              const ConfigProperty **found) const
 {
     BOOST_FOREACH(const ConfigProperty *prop, m_registry) {
@@ -49,8 +49,8 @@ MultiplexConfigNode::getNode(const string &property,
     return NULL;
 }
 
-void MultiplexConfigNode::addFilter(const string &property,
-                                    const string &value)
+void MultiplexConfigNode::addFilter(const std::string &property,
+                                    const InitStateString &value)
 {
     FilterConfigNode::addFilter(property, value);
     for (int i = 0; i < 2; i++) {
@@ -85,25 +85,24 @@ void MultiplexConfigNode::flush()
     }
 }
 
-string MultiplexConfigNode::readProperty(const string &property) const
+InitStateString MultiplexConfigNode::readProperty(const std::string &property) const
 {
     FilterConfigNode *node = getNode(property);
     if (node) {
         return node->readProperty(property);
     } else {
-        return "";
+        return InitStateString();
     }
 }
 
-void MultiplexConfigNode::setProperty(const string &property,
-                                      const string &value,
-                                      const string &comment,
-                                      const string *defValue)
+void MultiplexConfigNode::writeProperty(const std::string &property,
+                                        const InitStateString &value,
+                                        const std::string &comment)
 {
     const ConfigProperty *prop;
     FilterConfigNode *node = getNode(property, &prop);
     if (node) {
-        node->setProperty(property, value, comment, defValue);
+        node->writeProperty(property, value, comment);
     } else {
         SE_THROW(property + ": not supported by configuration multiplexer");
     }
@@ -120,7 +119,7 @@ void MultiplexConfigNode::readProperties(PropsType &props) const
     }
 }
 
-void MultiplexConfigNode::removeProperty(const string &property)
+void MultiplexConfigNode::removeProperty(const std::string &property)
 {
 #if 1
     SE_THROW(property + ": removing via configuration multiplexer not supported");

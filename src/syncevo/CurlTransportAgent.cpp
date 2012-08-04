@@ -18,7 +18,7 @@
  */
 
 #include <syncevo/CurlTransportAgent.h>
-#include <syncevo/SyncContext.h>
+#include <syncevo/SuspendFlags.h>
 
 #ifdef ENABLE_LIBCURL
 
@@ -135,7 +135,17 @@ void CurlTransportAgent::setSSL(const std::string &cacerts,
     CURLcode code = CURLE_OK;
 
     if (!m_cacerts.empty()) {
-        code = curl_easy_setopt(m_easyHandle, CURLOPT_CAINFO, m_cacerts.c_str());
+        if (isDir(m_cacerts)) {
+            // libcurl + OpenSSL does not work with a directory set in CURLOPT_CAINFO.
+            // Must set the directory name as CURLOPT_CAPATH.
+            //
+            // Hopefully libcurl NSS also finds the directory name
+            // here ("NSS-powered libcurl provides the option only for
+            // backward compatibility. ").
+            code = curl_easy_setopt(m_easyHandle, CURLOPT_CAPATH, m_cacerts.c_str());
+        } else {
+            code = curl_easy_setopt(m_easyHandle, CURLOPT_CAINFO, m_cacerts.c_str());
+        }
     }
     if (!code) {
         code = curl_easy_setopt(m_easyHandle, CURLOPT_SSL_VERIFYPEER, (long)verifyServer);
@@ -281,9 +291,10 @@ void CurlTransportAgent::checkCurl(CURLcode code, bool exception)
 int CurlTransportAgent::progressCallback(void* transport, double, double, double, double)
 {
     CurlTransportAgent *agent = static_cast<CurlTransportAgent *> (transport);
-    const SuspendFlags &s_flags = SyncContext::getSuspendFlags();
-    //abort transfer
-    if (s_flags.state == SuspendFlags::CLIENT_ABORT){
+    SuspendFlags &flags = SuspendFlags::getSuspendFlags();
+    // check signals and abort transfer?
+    flags.printSignals();
+    if (flags.getState() == SuspendFlags::ABORT) {
         agent->setAborting (true);
         return -1;
     }

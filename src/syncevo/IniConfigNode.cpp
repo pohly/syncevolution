@@ -27,6 +27,7 @@
 #include <boost/foreach.hpp>
 
 #include <syncevo/declarations.h>
+using namespace std;
 SE_BEGIN_CXX
 
 IniBaseConfigNode::IniBaseConfigNode(const boost::shared_ptr<DataBlob> &data) :
@@ -56,7 +57,7 @@ IniFileConfigNode::IniFileConfigNode(const boost::shared_ptr<DataBlob> &data) :
     read();
 }
 
-IniFileConfigNode::IniFileConfigNode(const string &path, const string &fileName, bool readonly) :
+IniFileConfigNode::IniFileConfigNode(const std::string &path, const std::string &fileName, bool readonly) :
     IniBaseConfigNode(boost::shared_ptr<DataBlob>(new FileDataBlob(path, fileName, readonly)))
 {
     read();
@@ -176,17 +177,18 @@ static bool getValue(const string &line,
         !strcasecmp(curProp.c_str(), property.c_str());
 }
 
-string IniFileConfigNode::readProperty(const string &property) const {
+InitStateString IniFileConfigNode::readProperty(const string &property) const
+{
     string value;
 
     BOOST_FOREACH(const string &line, m_lines) {
         bool isComment;
 
         if (getValue(line, property, value, isComment, false)) {
-            return value;
+            return InitStateString(value, true);
         }
     }
-    return "";
+    return InitStateString();
 }
 
 void IniFileConfigNode::readProperties(ConfigProps &props) const {
@@ -199,7 +201,7 @@ void IniFileConfigNode::readProperties(ConfigProps &props) const {
             // don't care about the result: only the first instance
             // of the property counts, so it doesn't matter when
             // inserting it again later fails
-            props.insert(pair<string, string>(property, value));
+            props.insert(ConfigProps::value_type(property, InitStateString(value, true)));
         }
     }
 }
@@ -221,16 +223,14 @@ void IniFileConfigNode::removeProperty(const string &property)
     }
 }
 
-void IniFileConfigNode::setProperty(const string &property,
-                                 const string &newvalue,
-                                 const string &comment,
-                                 const string *defValue) {
+void IniFileConfigNode::writeProperty(const string &property,
+                                      const InitStateString &newvalue,
+                                      const string &comment) {
     string newstr;
     string oldvalue;
     bool isDefault = false;
 
-    if (defValue &&
-        *defValue == newvalue) {
+    if (!newvalue.wasSet()) {
         newstr += "# ";
         isDefault = true;
     }
@@ -307,7 +307,7 @@ void IniHashConfigNode::toFile(std::ostream &file)
 void IniHashConfigNode::readProperties(ConfigProps &props) const
 {
     BOOST_FOREACH(const StringPair &prop, m_props) {
-        props.insert(prop);
+        props.insert(ConfigProps::value_type(prop.first, InitStateString(prop.second, true)));
     }
 }
 
@@ -320,13 +320,13 @@ void IniHashConfigNode::writeProperties(const ConfigProps &props)
 }
 
 
-string IniHashConfigNode::readProperty(const string &property) const
+InitStateString IniHashConfigNode::readProperty(const string &property) const
 {
     std::map<std::string, std::string>::const_iterator it = m_props.find(property);
     if (it != m_props.end()) {
-        return it->second;
+        return InitStateString(it->second, true);
     } else {
-        return "";
+        return InitStateString();
     }
 }
 
@@ -346,23 +346,19 @@ void IniHashConfigNode::clear()
     }
 }
 
-void IniHashConfigNode::setProperty(const string &property,
-                                    const string &newvalue,
-                                    const string &comment,
-                                    const string *defValue)
+void IniHashConfigNode::writeProperty(const string &property,
+                                      const InitStateString &newvalue,
+                                      const string &comment)
 {
-    /** we don't support property comments here. Also, we ignore comment*/
-    if (defValue &&
-        *defValue == newvalue) {
+    // we only store explicitly set properties
+    if (!newvalue.wasSet()) {
         removeProperty(property);
         return;
     }
     map<string, string>::iterator it = m_props.find(property);
     if(it != m_props.end()) {
-        string oldvalue = it->second;
-        if(oldvalue != newvalue) {
-            m_props.erase(it);
-            m_props.insert(StringPair(property, newvalue));
+        if (it->second != newvalue) {
+            it->second = newvalue;
             m_modified = true;
         }
     } else {

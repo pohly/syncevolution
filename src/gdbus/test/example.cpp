@@ -176,7 +176,7 @@ class DBusTest : public Test, private Test2
     DBusObjectHelper m_secondary;
 
 public:
-    DBusTest(DBusConnection *conn) :
+    DBusTest(const DBusConnectionPtr conn) :
         m_object(conn, "/test", "org.example.Test"),
         // same path!
         m_secondary(conn, m_object.getPath(), "org.example.Secondary"),
@@ -244,8 +244,8 @@ using namespace GDBusCXX;
 
 int main(int argc, char *argv[])
 {
-    DBusConnection *conn;
-    DBusError err;
+    DBusConnectionPtr conn;
+    DBusErrorCXX err;
     struct sigaction sa;
 
     memset(&sa, 0, sizeof(sa));
@@ -259,10 +259,8 @@ int main(int argc, char *argv[])
 
     main_loop = g_main_loop_new(NULL, FALSE);
 
-    dbus_error_init(&err);
-
-    conn = b_dbus_setup_bus(DBUS_BUS_SESSION, "org.example", false, &err);
-    if (conn == NULL) {
+    conn = dbus_get_bus_connection("SESSION", "org.example", false, &err);
+    if (!conn) {
         if (dbus_error_is_set(&err) == TRUE) {
             fprintf(stderr, "%s\n", err.message);
             dbus_error_free(&err);
@@ -281,8 +279,6 @@ int main(int argc, char *argv[])
     g_main_loop_run(main_loop);
 
     test.reset();
-
-    b_dbus_cleanup_connection(conn);
 
     g_main_loop_unref(main_loop);
 

@@ -56,8 +56,10 @@ using namespace GDBusCXX;
 
 #include <syncevo/Cmdline.h>
 #include <syncevo/SyncContext.h>
+#include <syncevo/SuspendFlags.h>
 #include <syncevo/LogRedirect.h>
-#include "CmdlineSyncClient.h"
+#include <syncevo/LocalTransportAgent.h>
+#include <syncevo/CmdlineSyncClient.h>
 
 #include <dlfcn.h>
 #include <signal.h>
@@ -91,24 +93,6 @@ extern "C" EContact *e_contact_new_from_vcard(const char *vcard)
 }
 #endif
 
-/**
- * This is a class derived from Cmdline. The purpose
- * is to implement the factory method 'createSyncClient' to create
- * new implemented 'CmdlineSyncClient' objects.
- */
-class KeyringSyncCmdline : public Cmdline {
- public:
-    KeyringSyncCmdline(int argc, const char * const * argv, ostream &out, ostream &err):
-        Cmdline(argc, argv, out, err) 
-    {}
-    /**
-     * create a user implemented sync client.
-     */
-    SyncContext* createSyncClient() {
-        return new CmdlineSyncClient(m_server, true, m_keyring);
-    }
-};
-
 #ifdef DBUS_SERVICE
 class RemoteSession;
 typedef map<string, StringMap> Config_t;
@@ -122,10 +106,6 @@ class RemoteDBusServer : public DBusRemoteObject
 public:
     RemoteDBusServer();
 
-    virtual const char *getDestination() const {return "org.syncevolution";}
-    virtual const char *getPath() const {return "/org/syncevolution/Server";}
-    virtual const char *getInterface() const {return "org.syncevolution.Server";}
-    virtual DBusConnection *getConnection() const {return m_conn.get();}
     GMainLoop *getLoop() { return m_loop; }
 
     /** 
@@ -157,7 +137,7 @@ public:
      * To implement the feature of '--status' without a server.
      * get and print all running sessions in the dbus server
      */
-    bool runningSessions();
+    void runningSessions();
 
     /** whether the dbus call(s) has/have completed */
     bool done() { return m_replyTotal == m_replyCounter; }
@@ -187,14 +167,11 @@ private:
      */
     void versionCb(const StringMap &versions, const string &error);
 
-    /** callback of 'Server.GetSessions' */
-    void getSessionsCb(const vector<string> &sessions, const string &error);
-
     /** callback of 'Server.SessionChanged' */
     void sessionChangedCb(const DBusObject_t &object, bool active);
 
     /** callback of 'Server.LogOutput' */
-    void logOutputCb(const DBusObject_t &object, const string &level, const string &log);
+    void logOutputCb(const DBusObject_t &object, const string &level, const string &log, const string &procname);
 
     /** callback of 'Server.InfoRequest' */
     void infoReqCb(const string &,
@@ -209,6 +186,22 @@ private:
 
     /** callback of calling 'Server.StartSession' */
     void startSessionCb(const DBusObject_t &session, const string &error);
+
+    /**
+     * receives org.freedesktop.DBus.NameOwnerChanged signals,
+     * watches for changes of org.syncevolution.server
+     */
+    void nameOwnerChangedCB(const std::string &name,
+                            const std::string &oldOwner,
+                            const std::string &newOwner)
+    {
+        if (name == "org.syncevolution") {
+            SE_LOG_ERROR(NULL, NULL, "The SyncEvolution D-Bus service died unexpectedly. A running sync might still be able to complete normally, but the command line cannot report progress anymore and has to quit.");
+            m_result = false;
+            g_main_loop_quit(m_loop);
+        }
+    }
+
 
     /** update active session vector according to 'SessionChanged' signal */
     void updateSessions(const string &session, bool active);
@@ -238,8 +231,6 @@ private:
 
     // the main loop
     GMainLoop *m_loop;
-    // connection
-    DBusConnectionPtr m_conn;
     // whether client can attach to the daemon. 
     // It is also used to indicate whether daemon is ready to use.
     bool m_attached;
@@ -253,18 +244,14 @@ private:
     boost::shared_ptr<RemoteSession> m_session;
     // active sessions after listening to 'SessionChanged' signals
     vector<string> m_activeSessions;
-    // all sessions in dbus server
-    vector<boost::shared_ptr<RemoteSession> >  m_sessions;
     // the number of total dbus calls  
     unsigned int m_replyTotal;
     // the number of returned dbus calls 
     unsigned int m_replyCounter;
-    // sessions which are running
-    vector<boost::weak_ptr<RemoteSession> > m_runSessions;
     // listen to dbus server signal 'SessionChanged'
     SignalWatch2<DBusObject_t, bool> m_sessionChanged;
     // listen to dbus server signal 'LogOutput'
-    SignalWatch3<DBusObject_t, string, string> m_logOutput;
+    SignalWatch4<DBusObject_t, string, string, string> m_logOutput;
     // listen to dbus server signal 'InfoRequest'
     SignalWatch6<string, 
                  DBusObject_t,
@@ -285,10 +272,6 @@ class RemoteSession : public DBusRemoteObject
 {
 public:
     RemoteSession(RemoteDBusServer &server, const std::string &path);
-    virtual const char *getDestination() const {return "org.syncevolution";}
-    virtual const char *getPath() const {return m_path.c_str();}
-    virtual const char *getInterface() const {return "org.syncevolution.Session";}
-    virtual DBusConnection *getConnection() const {return m_server.getConnection();}
     RemoteDBusServer &getServer() { return m_server; }
 
     /**
@@ -298,28 +281,13 @@ public:
     void executeAsync(const vector<string> &args);
 
     /**
-     * call 'GetStatus' method of 'Session' in dbus server
+     * call 'Suspend' or 'Abort' method of 'Session' in dbus server
      * without waiting for return
      */
-    void getStatusAsync();
+    void interruptAsync(const char *operation);
 
-    /**
-     * call 'Suspend' method of 'Session' in dbus server
-     * without waiting for return
-     */
-    void suspendAsync();
-
-    /**
-     * call 'Abort' method of 'Session' in dbus server
-     * without waiting for return
-     */
-    void abortAsync();
-
-    /**
-     * call 'GetConfig' method of 'Session' in dbus server
-     * without waiting for return
-     */
-    void getConfigAsync();
+    /** copy config name from server's config */
+    void setConfigName(const Config_t &config);
 
     /** get config name of this session */
     string configName() { return m_configName; }
@@ -333,11 +301,8 @@ public:
     /** set the flag to indicate the session is running sync */
     void setRunSync(bool runSync) { m_runSync = runSync; }
 
-    /** monitor status of the sesion until it is done */
-    void monitorSync();
-
     /** pass through logoutput and print them if m_output is true */
-    void logOutput(Logger::Level level, const string &log);
+    void logOutput(Logger::Level level, const string &log, const string &procname);
 
     /** set whether to print output */
     void setOutput(bool output) { m_output = output; }
@@ -397,15 +362,6 @@ private:
     /** callback of calling 'Session.Execute' */
     void executeCb(const string &error);
 
-    /** callback of 'Session.GetStatus' */
-    void getStatusCb(const string &status,
-                     uint32_t errorCode,
-                     const SourceStatuses_t &sourceStatus,
-                     const string &error);
-
-    /** callback of 'Session.GetConfig' */
-    void getConfigCb(const Config_t &config, const string &error);
-
     /** callback of 'Session.StatusChanged' */
     void statusChangedCb(const string &status,
                          uint32_t errorCode,
@@ -427,9 +383,6 @@ private:
 
     /* whether to log output */
     bool m_output;
-
-    /** object path */
-    string m_path;
 
     /** config name of the session */
     string m_configName;
@@ -460,16 +413,19 @@ static void getEnvVars(map<string, string> &vars);
 extern "C"
 int main( int argc, char **argv )
 {
+    if (boost::ends_with(argv[0], "syncevo-local-sync")) {
+        return LocalTransportMain(argc, argv);
+    }
+
     // Intercept stderr and route it through our logging.
     // stdout is printed normally. Deconstructing it when
     // leaving main() does one final processing of pending
     // output.
     LogRedirect redirect(false);
-
-    SyncContext::initMain("syncevolution");
-
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
+
+    SyncContext::initMain("syncevolution");
 
     // Expand PATH to cover the directory we were started from?
     // This might be needed to find normalize_vcard.
@@ -492,13 +448,7 @@ int main( int argc, char **argv )
             LoggerBase::instance().setLevel(Logger::DEBUG);
         }
 
-        /*
-         * don't log errors to cerr: LogRedirect cannot distinguish
-         * between our valid error messages and noise from other
-         * libs, therefore it would get suppressed (logged at
-         * level DEVELOPER, while output is at most INFO)
-         */
-        KeyringSyncCmdline cmdline(argc, argv, std::cout, std::cout);
+        SyncEvo::KeyringSyncCmdline cmdline(argc, argv);
         vector<string> parsedArgs;
         if(!cmdline.parse(parsedArgs)) {
             return 1;
@@ -529,7 +479,8 @@ int main( int argc, char **argv )
 #ifdef DBUS_SERVICE
             // '--status' and no server name, try to get running sessions 
             RemoteDBusServer server;
-            if(server.checkStarted() && server.runningSessions()) {
+            if(server.checkStarted()) {
+                server.runningSessions();
                 return 0;
             }
             return 1;
@@ -591,23 +542,27 @@ int main( int argc, char **argv )
 
 #ifdef DBUS_SERVICE
 /********************** RemoteDBusServer implementation **************************/
-RemoteDBusServer::RemoteDBusServer()
-    :m_attached(false), m_result(true),
-     m_replyTotal(0), m_replyCounter(0),
-     m_sessionChanged(*this,"SessionChanged"),
-     m_logOutput(*this, "LogOutput"),
-     m_infoReq(*this, "InfoRequest")
+RemoteDBusServer::RemoteDBusServer() :
+    DBusRemoteObject(dbus_get_bus_connection("SESSION", NULL, true, NULL),
+                     "/org/syncevolution/Server",
+                     "org.syncevolution.Server",
+                     "org.syncevolution",
+                     true),
+    m_attached(false), m_result(true),
+    m_replyTotal(0), m_replyCounter(0),
+    m_sessionChanged(*this,"SessionChanged"),
+    m_logOutput(*this, "LogOutput"),
+    m_infoReq(*this, "InfoRequest")
 {
     m_loop = g_main_loop_new (NULL, FALSE);
-    m_conn = b_dbus_setup_bus(DBUS_BUS_SESSION, NULL, true, NULL);
 
-    if(m_conn) {
+    if (getConnection()) {
         //check whether we can attach to the daemon
         //also set up the daemon watch when attaching to server
         attachSync();
         if(m_attached) {
             m_sessionChanged.activate(boost::bind(&RemoteDBusServer::sessionChangedCb, this, _1, _2));
-            m_logOutput.activate(boost::bind(&RemoteDBusServer::logOutputCb, this, _1, _2, _3));
+            m_logOutput.activate(boost::bind(&RemoteDBusServer::logOutputCb, this, _1, _2, _3, _4));
             m_infoReq.activate(boost::bind(&RemoteDBusServer::infoReqCb, this, _1, _2, _3, _4, _5, _6));
         }
     }
@@ -628,7 +583,7 @@ void RemoteDBusServer::attachSync()
 {
     resetReplies();
     DBusClientCall1<boost::shared_ptr<Watch> > attach(*this, "Attach");
-    attach(boost::bind(&RemoteDBusServer::attachCb, this, _1, _2));
+    attach.start(boost::bind(&RemoteDBusServer::attachCb, this, _1, _2));
     while(!done()) {
         g_main_loop_run(m_loop);
     }
@@ -646,7 +601,7 @@ void RemoteDBusServer::attachCb(const boost::shared_ptr<Watch> &watch, const str
 
         // do a version check now before calling replyInc()
         DBusClientCall1< StringMap > getVersions(*this, "GetVersions");
-        getVersions(boost::bind(&RemoteDBusServer::versionCb, this, _1, _2));
+        getVersions.start(boost::bind(&RemoteDBusServer::versionCb, this, _1, _2));
     } else {
         // done with attach phase, skip version check
         replyInc();
@@ -673,12 +628,13 @@ void RemoteDBusServer::versionCb(const StringMap &versions,
 
 void RemoteDBusServer::logOutputCb(const DBusObject_t &object,
                                    const string &level,
-                                   const string &log)
+                                   const string &log,
+                                   const string &procname)
 {
     if (m_session && 
         (boost::equals(object, getPath()) ||
          boost::equals(object, m_session->getPath()))) {
-        m_session->logOutput(Logger::strToLevel(level.c_str()), log);
+        m_session->logOutput(Logger::strToLevel(level.c_str()), log, procname);
     }
 }
 
@@ -701,7 +657,7 @@ void RemoteDBusServer::infoResponse(const string &id,
 {
     //call Server.InfoResponse
     DBusClientCall0 call(*this, "InfoResponse");
-    call(id, state, resp, boost::bind(&RemoteDBusServer::infoResponseCb, this, _1));
+    call.start(id, state, resp, boost::bind(&RemoteDBusServer::infoResponseCb, this, _1));
 }
 
 void RemoteDBusServer::infoResponseCb(const string &error)
@@ -728,27 +684,13 @@ void RemoteDBusServer::daemonGone()
     exit(1);
 }
 
-/**
- * Don't hang onto a shared_ptr here!
- *
- * RemoteSessions contain a reference to the
- * RemoteDBusServer which created them. Once that
- * server destructs, all sessions must have been
- * deleted earlier, otherwise they'll call a destructed
- * object.
- */
-boost::weak_ptr<RemoteSession> RemoteDBusServer::g_session;
-void RemoteDBusServer::handleSignal(int sig)
+static void SuspendFlagsChanged(RemoteSession *session,
+                                SuspendFlags &flags)
 {
-    SyncContext::handleSignal(sig);
-    boost::shared_ptr<RemoteSession> session = g_session.lock();
-    if (session) {
-        const SuspendFlags &flags = SyncContext::getSuspendFlags(); 
-        if(flags.state == SuspendFlags::CLIENT_SUSPEND) {
-            session->suspendAsync();
-        } else if(flags.state == SuspendFlags::CLIENT_ABORT) {
-            session->abortAsync();
-        }
+    if (flags.getState() == SuspendFlags::SUSPEND) {
+        session->interruptAsync("Suspend");
+    } else if(flags.getState() == SuspendFlags::ABORT) {
+        session->interruptAsync("Abort");
     }
 }
 
@@ -765,7 +707,7 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
     if (!runSync) {
         flags.push_back("no-sync");
     }
-    startSession(peer, flags, boost::bind(&RemoteDBusServer::startSessionCb, this, _1, _2));
+    startSession.start(peer, flags, boost::bind(&RemoteDBusServer::startSessionCb, this, _1, _2));
 
     // wait until 'StartSession' returns
     resetReplies();
@@ -776,6 +718,25 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
     if(m_session) {
         m_session->setRunSync(true);
 
+        // If the syncevo-dbus-server dies while we wait for some
+        // output from it, then we used to hang forever. Worse, if it
+        // happened while signal handling was active, then the command
+        // line tool couldn't even be killed with CTRL-C.
+        // To detect this case, we watch name owner changes for org.syncevolution.server.
+        // If it changes from now on, we know that our m_session became
+        // invalid. If it already changed, then the next calls for that
+        // session will fail.
+#if 0
+        GDBusCXX::DBusRemoteObject daemon(getConnection(),
+                                          "/org/freedesktop/DBus",
+                                          "org.freedesktop.DBus",
+                                          "");
+        GDBusCXX::SignalWatch3<std::string, std::string, std::string> nameOwnerChanged(daemon,
+                                                                                       "NameOwnerChanged");
+        nameOwnerChanged.activate(boost::bind(&RemoteDBusServer::nameOwnerChangedCB, this,
+                                              _1, _2, _3));
+#endif
+
         //if session is not active, just wait
         while(!isActive()) {
             g_main_loop_run(m_loop);
@@ -785,7 +746,8 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         resetReplies();
         m_session->executeAsync(args);
 
-        while(!done()) {
+
+        while(m_result && !done()) {
             g_main_loop_run(m_loop);
         }
 
@@ -794,42 +756,18 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
             return m_result;
         }
 
-        //g_session is used to pass 'abort' or 'suspend' commands
-        //make sure session is ready to run
-        g_session = m_session;
-
-        //set up signal handlers to send 'suspend' or 'abort' to dbus server
-        //only do this once session is executing and can suspend and abort
-        struct sigaction new_action, old_action;
-        struct sigaction old_term_action;
-
-        if(runSync) {
-            memset(&new_action, 0, sizeof(new_action));
-            new_action.sa_handler = handleSignal;
-            sigemptyset(&new_action.sa_mask);
-            sigaction(SIGINT, NULL, &old_action);
-            if (old_action.sa_handler == SIG_DFL) {
-                sigaction(SIGINT, &new_action, NULL);
-            }
-
-            sigaction(SIGTERM, NULL, &old_term_action);
-            if (old_term_action.sa_handler == SIG_DFL) {
-                sigaction(SIGTERM, &new_action, NULL);
-            }   
-        }
+        // Acticate signal handling in all cases.
+        // We let SuspendFlags catch them and then
+        // react in the normal event loop.
+        SuspendFlags &flags(SuspendFlags::getSuspendFlags());
+        boost::shared_ptr<SuspendFlags::Guard> signalGuard = flags.activate();
+        flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(SuspendFlagsChanged, m_session.get(), _1).track(m_session));
 
         //wait until status is 'done'
-        while(!m_session->statusDone()) {
+        while(m_result && !m_session->statusDone()) {
             g_main_loop_run(m_loop);
         }
 
-        if(runSync) {
-            sigaction (SIGINT, &old_action, NULL);
-            sigaction (SIGTERM, &old_term_action, NULL);
-        }
-
-        //reset session
-        g_session.reset();
         //restore logging level
         // LoggerBase::instance().setLevel(level);
         m_session->setRunSync(false);
@@ -866,86 +804,40 @@ bool RemoteDBusServer::isActive()
     return false;
 }
 
-void RemoteDBusServer::getRunningSessions()
-{
-    //get all sessions
-    DBusClientCall1<vector<string> > sessions(*this, "GetSessions");
-    sessions(boost::bind(&RemoteDBusServer::getSessionsCb, this, _1, _2));
-    resetReplies();
-    while(!done()) {
-        g_main_loop_run(m_loop);
-    }
-
-    // get status of each session
-    resetReplies(m_sessions.size());
-    BOOST_FOREACH(boost::shared_ptr<RemoteSession> &session, m_sessions) {
-        session->getStatusAsync();
-    }
-
-    // waiting for all sessions 'GetStatus'
-    while(!done()) {
-        g_main_loop_run(m_loop);
-    }
-
-    // collect running sessions
-    BOOST_FOREACH(boost::shared_ptr<RemoteSession> &session, m_sessions) {
-        if(boost::istarts_with(session->status(), "running")) {
-            m_runSessions.push_back(boost::weak_ptr<RemoteSession>(session));
-        }
-    }
-}
-
-bool RemoteDBusServer::runningSessions()
+void RemoteDBusServer::runningSessions()
 {
     //the basic working flow is:
     //1) get all sessions
     //2) check each session and collect running sessions
     //3) get config name of running sessions and print them
-    getRunningSessions();
+    vector<DBusObject_t> sessions = DBusClientCall1< vector<DBusObject_t> >(*this, "GetSessions")();
 
-    if(m_runSessions.empty()) {
+    if (sessions.empty()) {
         SE_LOG_SHOW(NULL, NULL, "Background sync daemon is idle.");
     } else {
         SE_LOG_SHOW(NULL, NULL, "Running session(s): ");
 
-        resetReplies(m_runSessions.size());
-        BOOST_FOREACH(boost::weak_ptr<RemoteSession> &session, m_runSessions) {
-            boost::shared_ptr<RemoteSession> lock = session.lock();
-            if(lock) {
-                lock->getConfigAsync();
+        // create local objects for sessions
+        BOOST_FOREACH(const DBusObject_t &path, sessions) {
+            RemoteSession session(*this, path);
+
+            // Get status. Slight race condition here, session might
+            // disappear before we can ask. In that case we fail by
+            // showing the exception string instead of showing some
+            // more comprehensible error message. Unlikely, so don't
+            // bother...
+            boost::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
+                DBusClientCall3<string, uint32_t, RemoteSession::SourceStatuses_t>(session, "GetStatus")();
+            std::string syncStatus = boost::get<0>(status);
+            if (boost::istarts_with(syncStatus, "running")) {
+                Config_t config = DBusClientCall1<Config_t>(session, "GetConfig")(false);
+                session.setConfigName(config);
+
+                if (!session.configName().empty()) {
+                    SE_LOG_SHOW(NULL, NULL, "   %s (%s)", session.configName().c_str(), session.getPath());
+                }
             }
         }
-
-        //wait for 'GetConfig' returns
-        while(!done()) {
-            g_main_loop_run(m_loop);
-        }
-
-        // print all running sessions
-        BOOST_FOREACH(boost::weak_ptr<RemoteSession> &session, m_runSessions) {
-            boost::shared_ptr<RemoteSession> lock = session.lock();
-            if(!lock->configName().empty()) {
-                SE_LOG_SHOW(NULL, NULL, "   %s (%s)", lock->configName().c_str(), lock->getPath());
-            }
-        }
-    }
-    return m_result;
-}
-
-void RemoteDBusServer::getSessionsCb(const vector<string> &sessions, const string &error)
-{
-    replyInc();
-    if(!error.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "getting session failed: %s", error.c_str());
-        m_result = false;
-        g_main_loop_quit(m_loop);
-        return;
-    }
-
-    //create local objects for sessions
-    BOOST_FOREACH(const DBusObject_t &value, sessions) {
-        boost::shared_ptr<RemoteSession> session(new RemoteSession(*this, value));
-        m_sessions.push_back(session);
     }
 }
 
@@ -979,62 +871,61 @@ bool RemoteDBusServer::monitor(const string &peer)
 {
     //the basic working flow is:
     //1) get all sessions
-    //2) check each session and collect running sessions
+    //2) check each session and collect running sessions or
     //3) peak one session with the given peer and monitor it
-    getRunningSessions();
-    if(peer.empty()) {
-        //peak the first running sessions
-        BOOST_FOREACH(boost::weak_ptr<RemoteSession> &session, m_runSessions) {
-            boost::shared_ptr<RemoteSession> lock = session.lock();
-            if(lock) {
-                m_session = lock;
-                resetReplies();
-                m_session->getConfigAsync();
-                while(!done()) {
-                    g_main_loop_run(m_loop);
-                }
-                m_session->monitorSync();
-                return m_result;
-            }
-        }
-        //if no running session
+    vector<DBusObject_t> sessions = DBusClientCall1< vector<DBusObject_t> >(*this, "GetSessions")();
+
+    if (sessions.empty()) {
         SE_LOG_SHOW(NULL, NULL, "Background sync daemon is idle, no session available to be be monitored.");
     } else {
+        // cheating: client and server might normalize the peer name differently...
         string peerNorm = SyncConfig::normalizeConfigString(peer);
 
-        // get config names of running sessions
-        resetReplies(m_runSessions.size());
-        BOOST_FOREACH(boost::weak_ptr<RemoteSession> &session, m_runSessions) {
-            boost::shared_ptr<RemoteSession> lock = session.lock();
-            lock->getConfigAsync();
-        }
-        //wait for 'GetConfig' returns
-        while(!done()) {
-            g_main_loop_run(m_loop);
-        }
+        // create local objects for sessions
+        BOOST_FOREACH(const DBusObject_t &path, sessions) {
+            boost::shared_ptr<RemoteSession> session(new RemoteSession(*this, path));
 
-        //find a session with the given name
-        vector<boost::shared_ptr<RemoteSession> >::iterator it = m_sessions.begin();
-        while(it != m_sessions.end()) {
-            string tempNorm = (*it)->configName();
-            if (peerNorm == tempNorm) {
-                m_session = *it;
-                //monitor the session status
-                m_session->monitorSync();
-                return m_result;
+            boost::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
+                DBusClientCall3<string, uint32_t, RemoteSession::SourceStatuses_t>(*session, "GetStatus")();
+            std::string syncStatus = boost::get<0>(status);
+            if (boost::istarts_with(syncStatus, "running")) {
+                Config_t config = DBusClientCall1<Config_t>(*session, "GetConfig")(false);
+                session->setConfigName(config);
+
+                if (peer.empty() ||
+                    peerNorm == session->configName()) {
+                    SE_LOG(Logger::SHOW, NULL, NULL, "Monitoring '%s' (%s)\n",
+                           session->configName().c_str(),
+                           session->getPath());
+                    // set DBusServer::m_session so that RemoteSession::logOutput gets called
+                    // and enable printing that output
+                    m_session = session;
+                    session->setOutput(true);
+
+                    // now wait for session to complete
+                    while (!session->statusDone()) {
+                        g_main_loop_run(getLoop());
+                    }
+
+                    SE_LOG(Logger::SHOW, NULL, NULL, "Monitoring done");
+                    return true;
+                }
             }
-            it++;
         }
         SE_LOG_SHOW(NULL, NULL, "'%s' is not running.", peer.c_str());
     }
-    return m_result;
+    return false;
 }
 
 
 /********************** RemoteSession implementation **************************/
 RemoteSession::RemoteSession(RemoteDBusServer &server,
-        const string &path)
-    :m_server(server), m_output(false), m_path(path), m_runSync(false),
+                             const string &path) :
+    DBusRemoteObject(server.getConnection(),
+                     path,
+                     "org.syncevolution.Session",
+                     "org.syncevolution"),
+    m_server(server), m_output(false), m_runSync(false),
     m_statusChanged(*this, "StatusChanged")
 {
     m_statusChanged.activate(boost::bind(&RemoteSession::statusChangedCb, this, _1, _2, _3));
@@ -1047,7 +938,7 @@ void RemoteSession::executeAsync(const vector<string> &args)
     map<string, string> vars;
     getEnvVars(vars);
     DBusClientCall0 call(*this, "Execute");
-    call(args, vars, boost::bind(&RemoteSession::executeCb, this, _1));
+    call.start(args, vars, boost::bind(&RemoteSession::executeCb, this, _1));
 }
 
 void RemoteSession::executeCb(const string &error)
@@ -1080,39 +971,8 @@ void RemoteSession::statusChangedCb(const string &status,
     }
 }
 
-void RemoteSession::getStatusAsync()
+void RemoteSession::setConfigName(const Config_t &config)
 {
-    DBusClientCall3<string, uint32_t, SourceStatuses_t> call(*this, "GetStatus");
-    call(boost::bind(&RemoteSession::getStatusCb, this, _1, _2, _3, _4));
-}
-
-void RemoteSession::getStatusCb(const string &status,
-        uint32_t errorCode,
-        const SourceStatuses_t &sourceStatus,
-        const string &error)
-{
-    m_server.replyInc();
-    if(!error.empty()) {
-        //ignore the error
-        return;
-    }
-    m_status = status;
-}
-
-void RemoteSession::getConfigAsync()
-{
-    DBusClientCall1<Config_t> call(*this, "GetConfig");
-    call(false, boost::bind(&RemoteSession::getConfigCb, this, _1, _2));
-}
-
-void RemoteSession::getConfigCb(const Config_t &config, const string &error)
-{
-    m_server.replyInc();
-    if(!error.empty()) {
-        //ignore the error
-        return;
-    }
-    // set config name
     Config_t::const_iterator it = config.find("");
     if(it != config.end()) {
         StringMap global = it->second;
@@ -1123,57 +983,26 @@ void RemoteSession::getConfigCb(const Config_t &config, const string &error)
     }
 }
 
-void RemoteSession::suspendAsync()
+static void interruptCb(const std::string &error)
 {
-    DBusClientCall0 suspend(*this, "Suspend");
-    suspend(boost::bind(&RemoteSession::suspendCb, this, _1));
-}
-
-void RemoteSession::suspendCb(const string &error)
-{
-    //avoid logging messages in handleSignal
-    SyncContext::printSignals();
-    if(!error.empty()) {
-        m_server.setResult(false);
+    if (!error.empty()) {
+        SE_LOG_DEBUG(NULL, NULL, "interruptAsync() error from remote: %s", error.c_str());
     }
 }
 
-void RemoteSession::abortCb(const string &error)
+void RemoteSession::interruptAsync(const char *operation)
 {
-    //avoid logging messages in handleSignal
-    SyncContext::printSignals();
-    if(!error.empty()) {
-        m_server.setResult(false);
-    }
+    // call Suspend() without checking result
+    DBusClientCall0 suspend(*this, operation);
+    suspend.start(interruptCb);
 }
 
-void RemoteSession::abortAsync()
-{
-    DBusClientCall0 abort(*this, "Abort");
-    abort(boost::bind(&RemoteSession::abortCb, this, _1));
-}
-
-void RemoteSession::logOutput(Logger::Level level, const string &log)
+void RemoteSession::logOutput(Logger::Level level, const string &log, const string &procname)
 {
     if(m_output) {
+        ProcNameGuard guard(procname);
         SE_LOG(level, NULL, NULL, "%s", log.c_str());
     }
-}
-
-void RemoteSession::monitorSync()
-{
-    m_output = true;
-    // Logger::Level level = LoggerBase::instance().getLevel();
-    // LoggerBase::instance().setLevel(Logger::DEBUG);
-    SE_LOG(Logger::SHOW, NULL, NULL, "Monitoring '%s' (%s)\n", m_configName.c_str(), getPath());
-
-    while(!statusDone()) {
-        g_main_loop_run(m_server.getLoop());
-    }
-
-    SE_LOG(Logger::SHOW, NULL, NULL, "Monitoring done");
-    // LoggerBase::instance().setLevel(level);
-    m_output = false;
 }
 
 void RemoteSession::infoReq(const string &id,

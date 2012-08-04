@@ -44,9 +44,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
             sourceType.m_format == "text/x-vcalendar") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionCalendarSource(E_CAL_SOURCE_TYPE_TODO, params) :
+                enabled ? new EvolutionCalendarSource(EVOLUTION_CAL_SOURCE_TYPE_TASKS, params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
         }
     }
 
@@ -57,13 +57,13 @@ static SyncSource *createSource(const SyncSourceParams &params)
 #ifdef ENABLE_ECAL
                 enabled ? new EvolutionMemoSource(params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
         } else if (sourceType.m_format == "text/calendar") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionCalendarSource(E_CAL_SOURCE_TYPE_JOURNAL, params) :
+                enabled ? new EvolutionCalendarSource(EVOLUTION_CAL_SOURCE_TYPE_MEMOS, params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
         } else {
             return NULL;
         }
@@ -77,9 +77,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
             sourceType.m_format == "text/x-vcalendar") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionCalendarSource(E_CAL_SOURCE_TYPE_EVENT, params) :
+                enabled ? new EvolutionCalendarSource(EVOLUTION_CAL_SOURCE_TYPE_EVENTS, params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
         } else {
             return NULL;
         }

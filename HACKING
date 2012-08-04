@@ -7,14 +7,23 @@ SyncEvolution source packages and will be used automatically.
 The section _`Checking out the source` explains how to work
 with sources obtained via the git repositories.
 
-Also needed are the Evolution and Boost (>= 1.35) development
-files. For HTTP, either Curl or libsoup can be used.
+Also needed are the Evolution (can be disabled), Boost (>= 1.35) and
+pcre development files. For HTTP, either Curl or libsoup can be used.
+For compiling libsynthesis, sqlite, expat, libz are needed.
 
-On Debian based systems the required packages can be installed with
+On Debian based systems, the required packages can be installed with
    apt-get install evolution-data-server-dev \
+                   libglib2.0-dev \
                    libecal1.2-dev libebook1.2-dev \
                    libsoup2.4-dev \
+                   libpcre3-dev \
+                   libexpat-dev \
+                   libz-dev \
                    libboost-dev
+
+If gio (part of libglib) is not available in version 2.26 or higher,
+then libdbus can be used as fallback (not needed otherwise):
+   apt-get install libdbus-glib-1-dev
 
 libboost-dev >= 1.34, available as libboost1.35-dev backport for Debian Etch.
 
@@ -30,17 +39,11 @@ Optional (enables direct sync with phones):
 Optional (only used for SHA-256 when glib is not already a dependency):
    apt-get install libnss3-dev
 
-For compiling libsynthesis:
-   apt-get install libpcre3-dev libsqlite3-dev libexpat-dev libz-dev
-
-This was copied from the libsynthesis README.
-
 The test framework also requires CPPUnit:
    apt-get install libcppunit-dev
 
 For the GUI and its D-Bus based service backend:
-   apt-get install libdbus-glib-1-dev \
-                   xsltproc \
+   apt-get install xsltproc \
                    libglib2.0-dev \
                    libgtk2.0-dev libglade2-dev \
                    libgnome-keyring-dev \
@@ -100,8 +103,8 @@ in the Synthesis code base, then please work directly with
 the upstream branch.
 
 For doing development work the recommended configure line is:
-   configure CFLAGS="-g -Wall -Werror -Wno-unknown-pragmas" \
-             CXXFLAGS="-g -Wall -Werror -Wno-unknown-pragmas" \
+   configure --with-synthesis-src=<path to libsynthesis source> \
+             --enable-warnings=fatal \
              --enable-unit-tests \
              --enable-libcurl \
              --disable-shared \
@@ -156,11 +159,13 @@ It understands several environment variables, among them:
 
 For unattended testing:
 - CLIENT_TEST_FAILURES = comma separated list of tests which are allowed
-  to fail without affecting the return code of the test runner
+  to fail without affecting the return code of the test runner; each list
+  entry is a regex which must match a complete test name
 - CLIENT_TEST_SKIP = comma separated list of tests or test groups which
   are not to be executed at all; for this to work the test or test group
   has to be passed through test.h's version of ADD_TEST or FilterTest,
-  which is the case for most tests but not all
+  which is the case for most tests but not all; as in CLIENT_TEST_FAILURES,
+  each entry is a regex
 - CLIENT_TEST_LOG = name of server log file, will be copied and reset
   after each sync
 - CLIENT_TEST_ALARM = number of seconds a single test is allowed to run
@@ -361,30 +366,3 @@ crash scenarios the final error messages may get lost. To debug such
 cases, disable redirection by setting the environment variable
 SYNCEVOLUTION_DEBUG (value doesn't matter) and capture the output
 normally.
-
-Testing Buteo
----------
-
-SyncEvolution enables Buteo testing based client-test. Configure with
---enable-integration-tests and --enable-buteo-tests and then run
-"src/client-test" to test Buteo with the above described environment
-variables. The only difference is that you have to set a new one
-"CLIENT_TEST_BUTEO=1". Buteo testing supports testing two kinds of
-data: qt_contact and kcal_event.
-
-Here are step-by-step instructions to get started with Buteo testing,
-also using ScheduleWorld as example:
-- CLIENT_TEST_SERVER=scheduleworld \
-  CLIENT_TEST_EVOLUTION_PREFIX=file:///tmp/testing/ \
-  ./client-test -h
-  => creates ~/.config/syncevolution/scheduleworld_[12]/ configs
-     which use data bases under /tmp/testing, then
-     prints all available tests
-- create Buteo sync profile file ~/.sync/profiles/sync/scheduleworld.xml 
-  and edit and enter account data for ScheduleWorld. 
-- chmod -R 666 /etc/sync
-  => change the access mode of the directory /etc/sync
-- CLIENT_TEST_SERVER=scheduleworld \
-  CLIENT_TEST_EVOLUTION_PREFIX=file:///tmp/testing/ \
-  ./client-test Client::Sync::qt_contact
-  => runs all tests for qt_contact

@@ -110,6 +110,7 @@ void CalDAVSource::listAllSubItems(SubRevisionMap_t &revisions)
                                             boost::ref(revisions),
                                             _1, _2, boost::ref(data)));
         m_cache.clear();
+        m_cache.m_initialized = false;
         parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
                            boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
         Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
@@ -180,6 +181,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
     // build list of new or updated entries,
     // copy others to cache
     m_cache.clear();
+    m_cache.m_initialized = false;
     std::list<std::string> mustRead;
     BOOST_FOREACH(const StringPair &item, items) {
         SubRevisionMap_t::iterator it = revisions.find(item.first);
@@ -188,6 +190,24 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
             // read current information below
             SE_LOG_DEBUG(NULL, NULL, "updateAllSubItems(): read new or modified item %s", item.first.c_str());
             mustRead.push_back(item.first);
+            // The server told us that the item exists. We still need
+            // to deal with the situation that the server might fail
+            // to deliver the item data when we ask for it below.
+            //
+            // There are two reasons when this can happen: either an
+            // item was removed in the meantime or the server is
+            // confused.  The latter started to happen reliably with
+            // the Google Calendar server sometime in January/February
+            // 2012.
+            //
+            // In both cases, let's assume that the item is really gone
+            // (and not just unreadable due to that other Google Calendar
+            // bug, see loadItem()+REPORT workaround), and therefore let's
+            // remove the entry from the revisions.
+            if (it != revisions.end()) {
+                revisions.erase(it);
+            }
+            m_cache.erase(item.first);
         } else {
             // copy still relevant information
             SE_LOG_DEBUG(NULL, NULL, "updateAllSubItems(): unmodified item %s", it->first.c_str());
@@ -202,9 +222,15 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
     // retrieved items. This is partly intentional: Google is known to
     // have problems with providing all of its data via GET or the
     // multiget REPORT below. It returns a 404 error for items that a
-    // calendar-query includes (see loadItem()).  Such items are
-    // ignored it and thus will be silently skipped. This is not
+    // calendar-query includes (see loadItem()). Such items are
+    // ignored and thus will be silently skipped. This is not
     // perfect, but better than failing the sync.
+    //
+    // Unfortunately there are other servers (Radicale, I'm looking at
+    // you) which simply return neither data nor errors for the
+    // requested hrefs. To handle that we try the multiget first,
+    // record retrieved or failed responses, then follow up with
+    // individual requests for anything that wasn't mentioned.
     if (!mustRead.empty()) {
         std::stringstream buffer;
         buffer << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -214,17 +240,19 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
             "   <D:getetag/>\n"
             "   <C:calendar-data/>\n"
             "</D:prop>\n";
-        BOOST_FOREACH(const std::string &href, mustRead) {
-            buffer << "<D:href>" << luid2path(href) << "</D:href>\n";
+        BOOST_FOREACH(const std::string &luid, mustRead) {
+            buffer << "<D:href>" << luid2path(luid) << "</D:href>\n";
         }
         buffer << "</C:calendar-multiget>";
         std::string query = buffer.str();
+        std::set<std::string> results; // LUIDs of all hrefs returned by report
         getSession()->startOperation("updateAllSubItems REPORT 'multiget new/updated items'", deadline);
         while (true) {
             string data;
             Neon::XMLParser parser;
-            parser.initReportParser(boost::bind(&CalDAVSource::appendItem, this,
+            parser.initReportParser(boost::bind(&CalDAVSource::appendMultigetResult, this,
                                                 boost::ref(revisions),
+                                                boost::ref(results),
                                                 _1, _2, boost::ref(data)));
             parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
                                boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
@@ -236,7 +264,41 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
                 break;
             }
         }
+        // Workaround for Radicale 0.6.4: it simply returns nothing (no error, no data).
+        // Fall back to GET of items with no response.
+        BOOST_FOREACH(const std::string &luid, mustRead) {
+            if (results.find(luid) == results.end()) {
+                getSession()->startOperation(StringPrintf("GET item %s not returned by 'multiget new/updated items'", luid.c_str()),
+                                             deadline);
+                std::string path = luid2path(luid);
+                std::string data;
+                std::string etag;
+                while (true) {
+                    data.clear();
+                    Neon::Request req(*getSession(), "GET", path,
+                                      "", data);
+                    req.addHeader("Accept", contentType());
+                    if (req.run()) {
+                        etag = getETag(req);
+                        break;
+                    }
+                }
+                appendItem(revisions, path, etag, data);
+            }
+        }
     }
+}
+
+int CalDAVSource::appendMultigetResult(SubRevisionMap_t &revisions,
+                                       std::set<std::string> &luids,
+                                       const std::string &href,
+                                       const std::string &etag,
+                                       std::string &data)
+{
+    // record which items were seen in the response...
+    luids.insert(path2luid(href));
+    // and store information about them
+    return appendItem(revisions, href, etag, data);
 }
 
 int CalDAVSource::appendItem(SubRevisionMap_t &revisions,
@@ -276,6 +338,17 @@ int CalDAVSource::appendItem(SubRevisionMap_t &revisions,
         entry.m_subids.insert(subid);
     }
     entry.m_uid = uid;
+
+    // Ignore items which contain no VEVENT. Happens with Google Calendar
+    // after using it for a while. Deleting them via DELETE doesn't seem
+    // to have an effect either, so all we really can do is ignore them.
+    if (entry.m_subids.empty()) {
+        SE_LOG_DEBUG(NULL, NULL, "ignoring broken item %s (is empty)", davLUID.c_str());
+        revisions.erase(davLUID);
+        m_cache.erase(davLUID);
+        data.clear();
+        return 0;
+    }
 
     if (!m_cache.m_initialized) {
         boost::shared_ptr<Event> event(new Event);
@@ -890,7 +963,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                                 if (ex2.syncMLStatus() == 409 &&
                                     strstr(ex2.what(), "Can't delete a recurring event")) {
                                     SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: try again in a second");
-                                    sleep(1);
+                                    Sleep(1);
                                 } else {
                                     throw;
                                 }
@@ -951,6 +1024,42 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
         event.m_etag = res.m_revision;
         return event.m_etag;
     }
+}
+
+void CalDAVSource::removeMergedItem(const std::string &davLUID)
+{
+    EventCache::iterator it = m_cache.find(davLUID);
+    if (it == m_cache.end()) {
+        // gone already, no need to do anything
+        SE_LOG_DEBUG(this, NULL, "%s: ignoring request to delete non-existent item",
+                     davLUID.c_str());
+        return;
+    }
+    // use item as it is, load only if it is not going to be removed entirely
+    Event &event = *it->second;
+
+    // remove entire merged item, nothing will be left after removal
+    try {
+        removeItem(event.m_DAVluid);
+    } catch (const TransportStatusException &ex) {
+        if (ex.syncMLStatus() == 409 &&
+            strstr(ex.what(), "Can't delete a recurring event")) {
+            // Google CalDAV:
+            // HTTP/1.1 409 Can't delete a recurring event except on its organizer's calendar
+            //
+            // Workaround: use the workarounds from removeSubItem()
+            std::set<std::string> subids = event.m_subids;
+            for (std::set<std::string>::reverse_iterator it = subids.rbegin();
+                 it != subids.rend();
+                 ++it) {
+                removeSubItem(davLUID, *it);
+            }
+        } else {
+            throw;
+        }
+    }
+
+    m_cache.erase(davLUID);
 }
 
 void CalDAVSource::flushItem(const string &davLUID)
@@ -1028,6 +1137,20 @@ CalDAVSource::Event &CalDAVSource::loadItem(const std::string &davLUID)
     return loadItem(event);
 }
 
+int CalDAVSource::storeItem(const std::string &wantedLuid,
+                            std::string &item,
+                            std::string &data,
+                            const std::string &href)
+{
+    std::string luid = path2luid(Neon::URI::parse(href).m_path);
+    if (luid == wantedLuid) {
+        SE_LOG_DEBUG(NULL, NULL, "got item %s via REPORT fallback", luid.c_str());
+        item = data;
+    }
+    data.clear();
+    return 0;
+}
+
 CalDAVSource::Event &CalDAVSource::loadItem(Event &event)
 {
     if (!event.m_calendar) {
@@ -1093,10 +1216,15 @@ CalDAVSource::Event &CalDAVSource::loadItem(Event &event)
                 getSession()->startOperation("REPORT 'single item'", deadline);
                 while (true) {
                     Neon::XMLParser parser;
-                    parser.initReportParser();
-                    item = "";
+                    std::string data;
+                    parser.initReportParser(boost::bind(&CalDAVSource::storeItem,
+                                                        this,
+                                                        boost::ref(event.m_DAVluid),
+                                                        boost::ref(item),
+                                                        boost::ref(data),
+                                                        _1));
                     parser.pushHandler(boost::bind(Neon::XMLParser::accept, "urn:ietf:params:xml:ns:caldav", "calendar-data", _2, _3),
-                                       boost::bind(Neon::XMLParser::append, boost::ref(item), _2, _3));
+                                       boost::bind(Neon::XMLParser::append, boost::ref(data), _2, _3));
                     Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
                     report.addHeader("Depth", "1");
                     report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
@@ -1338,10 +1466,17 @@ int CalDAVSource::backupItem(ItemCache &cache,
                              const std::string &etag,
                              std::string &data)
 {
-    Event::unescapeRecurrenceID(data);
-    std::string luid = path2luid(Neon::URI::parse(href).m_path);
-    std::string rev = ETag2Rev(etag);
-    cache.backupItem(data, luid, rev);
+    // detect and ignore empty items, like we do in appendItem()
+    eptr<icalcomponent> calendar(icalcomponent_new_from_string((char *)data.c_str()), // cast is a hack for broken definition in old libical
+                                 "iCalendar 2.0");
+    if (icalcomponent_get_first_component(calendar, ICAL_VEVENT_COMPONENT)) {
+        Event::unescapeRecurrenceID(data);
+        std::string luid = path2luid(Neon::URI::parse(href).m_path);
+        std::string rev = ETag2Rev(etag);
+        cache.backupItem(data, luid, rev);
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "ignoring broken item %s during backup (is empty)", href.c_str());
+    }
 
     // reset data for next item
     data.clear();

@@ -36,6 +36,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/lambda/lambda.hpp>
 
 #include <ctype.h>
 #include <errno.h>
@@ -43,6 +44,10 @@
 
 #include <fstream>
 #include <iostream>
+
+#ifdef ENABLE_UNIT_TESTS
+#include "test.h"
+#endif
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -104,17 +109,28 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
     getSynthesisInfo(info, fragments);
 
     xmlstream <<
-        "      <plugin_module>SyncEvolution</plugin_module>\n"
+        "      <plugin_module>SyncEvolution</plugin_module>\n";
+    if (info.m_earlyStartDataRead) {
+        xmlstream <<
+            "      <plugin_earlystartdataread>yes</plugin_earlystartdataread>\n";
+    }
+    if (info.m_readOnly) {
+         xmlstream <<
+             "      <!-- if this is set to 'yes', SyncML clients can only read\n"
+             "           from the database, but make no modifications -->\n"
+             "      <readonly>yes</readonly>\n";
+    }
+    xmlstream <<
         "      <plugin_datastoreadmin>" <<
         (serverModeEnabled() ? "yes" : "no") <<
         "</plugin_datastoreadmin>\n"
         "      <fromremoteonlysupport> yes </fromremoteonlysupport>\n"
-        "\n"
-        "      <!-- General datastore settings for all DB types -->\n"
-        "\n"
-        "      <!-- if this is set to 'yes', SyncML clients can only read\n"
-        "           from the database, but make no modifications -->\n"
-        "      <readonly>no</readonly>\n"
+        "      <canrestart>yes</canrestart>\n";
+    if (info.m_globalIDs) {
+        xmlstream << 
+            "      <syncmode>1122583000</syncmode>";
+    }
+    xmlstream <<
         "\n"
         "      <!-- conflict strategy: Newer item wins\n"
         "           You can set 'server-wins' or 'client-wins' as well\n"
@@ -248,7 +264,25 @@ RegisterSyncSource::RegisterSyncSource(const string &shortDescr,
     registry.push_back(this);
 }
 
-SyncSource *const RegisterSyncSource::InactiveSource = (SyncSource *)1;
+class InactiveSyncSource : public SyncSource
+{
+public:
+    InactiveSyncSource(const SyncSourceParams &params) : SyncSource(params) {}
+
+    virtual bool isInactive() const { return true; }
+    virtual void enableServerMode() {}
+    virtual bool serverModeEnabled() const { return false; }
+    virtual void getSynthesisInfo(SyncEvo::SyncSourceBase::SynthesisInfo&, SyncEvo::XMLConfigFragments&) { throwError("inactive"); }
+    virtual Databases getDatabases() { throwError("inactive"); return Databases(); }
+    virtual void open() { throwError("inactive"); }
+    virtual void close() { throwError("inactive"); }
+    virtual std::string getPeerMimeType() const { return ""; }
+};
+
+SyncSource *RegisterSyncSource::InactiveSource(const SyncSourceParams &params)
+{
+    return new InactiveSyncSource(params);
+}
 
 TestRegistry &SyncSource::getTestRegistry()
 {
@@ -335,6 +369,17 @@ string SyncSource::backendsDebug() {
     return scannedModules.debug.str();
 }
 
+void SyncSource::requestAnotherSync()
+{
+    // At the moment the per-source request to restart cannot be
+    // stored; instead only a per-session request is set. That's okay
+    // for now because restarting is limited to sessions with only
+    // one source active (intentional simplification).
+    SE_LOG_DEBUG(this, NULL, "requesting another sync");
+    SyncContext::requestAnotherSync();
+}
+
+
 SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error, SyncConfig *config)
 {
     SourceType sourceType = getSourceType(params.m_nodes);
@@ -349,15 +394,19 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
     }
 
     const SourceRegistry &registry(getSourceRegistry());
+    auto_ptr<SyncSource> source;
     BOOST_FOREACH(const RegisterSyncSource *sourceInfos, registry) {
-        SyncSource *source = sourceInfos->m_create(params);
-        if (source) {
-            if (source == RegisterSyncSource::InactiveSource) {
-                SyncContext::throwError(params.getDisplayName() + ": access to " + sourceInfos->m_shortDescr +
-                                        " not enabled");
+        auto_ptr<SyncSource> nextSource(sourceInfos->m_create(params));
+        if (nextSource.get()) {
+            if (source.get()) {
+                SyncContext::throwError(params.getDisplayName() + ": backend " + sourceType.m_backend +
+                                        " is ambiguous, avoid the alias and pick a specific backend instead directly");
             }
-            return source;
+            source = nextSource;
         }
+    }
+    if (source.get()) {
+        return source.release();
     }
 
     if (error) {
@@ -368,13 +417,14 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
             backends += ") ";
         }
         string problem =
-            StringPrintf("%s: backend '%s' not supported %sor not correctly configured (databaseFormat '%s', syncFormat '%s')",
+            StringPrintf("%s%sbackend not supported %sor not correctly configured (backend=%s databaseFormat=%s syncFormat=%s)",
                          params.m_name.c_str(),
-                         sourceType.m_backend.c_str(),
+                         params.m_name.empty() ? "" : ": ",
                          backends.c_str(),
+                         sourceType.m_backend.c_str(),
                          sourceType.m_localFormat.c_str(),
                          sourceType.m_format.c_str());
-        SyncContext::throwError(problem);
+        SyncContext::throwError(SyncMLStatus(sysync::LOCERR_CFGPARSE), problem);
     }
 
     return NULL;
@@ -471,6 +521,8 @@ SyncSource::Databases VirtualSyncSource::getDatabases()
 void SyncSourceSession::init(SyncSource::Operations &ops)
 {
     ops.m_startDataRead = boost::bind(&SyncSourceSession::startDataRead, this, _1, _2);
+    ops.m_endDataRead = boost::lambda::constant(sysync::LOCERR_OK);
+    ops.m_startDataWrite = boost::lambda::constant(sysync::LOCERR_OK);
     ops.m_endDataWrite = boost::bind(&SyncSourceSession::endDataWrite, this, _1, _2);
 }
 
@@ -504,10 +556,26 @@ bool SyncSourceChanges::addItem(const string &luid, State state)
     return res.second;
 }
 
+bool SyncSourceChanges::reset()
+{
+    bool removed = false;
+    for (int i = 0; i < MAX; i++) {
+        if (!m_items[i].empty()) {
+            m_items[i].clear();
+            removed = true;
+        }
+    }
+    m_first = true;
+    return removed;
+}
+
 sysync::TSyError SyncSourceChanges::iterate(sysync::ItemID aID,
                                             sysync::sInt32 *aStatus,
                                             bool aFirst)
 {
+    aID->item = NULL;
+    aID->parent = NULL;
+
     if (m_first || aFirst) {
         m_it = m_items[ANY].begin();
         m_first = false;
@@ -552,6 +620,11 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
     // default remote rule (local-storage.xml): suppresses empty properties
     info.m_backendRule = "LOCALSTORAGE";
 
+    // We store entire items locally and thus have to make sure that
+    // they are complete by having the engine merge incoming and local
+    // data.
+    info.m_datastoreOptions += "      <updateallfields>true</updateallfields>\n";
+
     if (type == "text/x-vcard") {
         info.m_native = "vCard21";
         info.m_fieldlist = "contacts";
@@ -588,14 +661,17 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
          * to info.m_afterReadScript and info.m_beforeWriteScript.
          */
         info.m_afterReadScript = "$VCALENDAR10_AFTERREAD_SCRIPT;\n";
-        info.m_beforeWriteScript = "$VCALENDAR10_BEFOREWRITE_SCRIPT;\n";
-    } else if (type == "text/calendar") {
+        info.m_beforeWriteScript = "$VCALENDAR10_BEFOREWRITE_SCRIPT;\n"
+            "$CALENDAR_BEFOREWRITE_SCRIPT;\n";
+    } else if (type == "text/calendar" ||
+               boost::starts_with(type, "text/calendar+")) {
         info.m_native = "iCalendar20";
         info.m_fieldlist = "calendar";
         info.m_profile = "\"vCalendar\", 2";
         info.m_datatypes =
             "        <use datatype='vCalendar10' mode='rw'/>\n"
             "        <use datatype='iCalendar20' mode='rw' preferred='yes'/>\n";
+        info.m_beforeWriteScript = "$CALENDAR_BEFOREWRITE_SCRIPT;\n";
     } else if (type == "text/plain") {
         info.m_fieldlist = "Note";
         info.m_profile = "\"Note\", 2";
@@ -644,6 +720,11 @@ std::string SyncSourceBase::getDataTypeSupport(const std::string &type,
             datatypes +=
                 "        <use datatype='vcalendar10' mode='rw'/>\n";
         }
+    } else if (type == "text/calendar+plain") {
+        datatypes =
+            "        <use datatype='icalendar20' mode='rw' preferred='yes'/>\n"
+            "        <use datatype='journaltext10' mode='rw'/>\n"
+            "        <use datatype='journaltext11' mode='rw'/>\n";
     } else if (type == "text/plain:1.0" || type == "text/plain") {
         // note10 are the same as note11, so ignore force format
         datatypes =
@@ -829,6 +910,8 @@ void ItemCache::finalize(BackupReport &report)
 void SyncSourceRevisions::initRevisions()
 {
     if (!m_revisionsSet) {
+        // might still be filled with garbage from previous run
+        m_revisions.clear();
         listAllItems(m_revisions);
         m_revisionsSet = true;
     }
@@ -962,6 +1045,17 @@ void SyncSourceRevisions::restoreData(const SyncSource::Operations::ConstBackupI
 
 void SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mode)
 {
+    // erase content which might have been set in a previous call
+    reset();
+    if (!m_firstCycle) {
+        // detectChanges() must have been called before;
+        // don't trust our cached revisions in that case (not updated during sync!)
+        // TODO: keep the revision map up-to-date as part of a sync and reuse it
+        m_revisionsSet = false;
+    } else {
+        m_firstCycle = false;
+    }
+
     if (mode == CHANGES_NONE) {
         // shortcut because nothing changed: just copy our known item list
         ConfigProps props;
@@ -1077,16 +1171,18 @@ void SyncSourceRevisions::deleteRevision(ConfigNode &trackingNode,
 
 void SyncSourceRevisions::sleepSinceModification()
 {
-    time_t current = time(NULL);
-    while (current - m_modTimeStamp < m_revisionAccuracySeconds) {
-        sleep(m_revisionAccuracySeconds - (current - m_modTimeStamp));
-        current = time(NULL);
+    Timespec current = Timespec::monotonic();
+    // Don't let this get interrupted by user abort.
+    // It is needed for correct change tracking.
+    while ((current - m_modTimeStamp).duration() < m_revisionAccuracySeconds) {
+        Sleep(m_revisionAccuracySeconds - (current - m_modTimeStamp).duration());
+        current = Timespec::monotonic();
     }
 }
 
 void SyncSourceRevisions::databaseModified()
 {
-    m_modTimeStamp = time(NULL);
+    m_modTimeStamp = Timespec::monotonic();
 }
 
 void SyncSourceRevisions::init(SyncSourceRaw *raw,
@@ -1096,9 +1192,9 @@ void SyncSourceRevisions::init(SyncSourceRaw *raw,
 {
     m_raw = raw;
     m_del = del;
-    m_modTimeStamp = 0;
     m_revisionAccuracySeconds = granularity;
     m_revisionsSet = false;
+    m_firstCycle = false;
     if (raw) {
         ops.m_backupData = boost::bind(&SyncSourceRevisions::backupData,
                                        this, _1, _2, _3);
@@ -1107,8 +1203,8 @@ void SyncSourceRevisions::init(SyncSourceRaw *raw,
         ops.m_restoreData = boost::bind(&SyncSourceRevisions::restoreData,
                                         this, _1, _2, _3);
     }
-    ops.m_endSession.push_back(boost::bind(&SyncSourceRevisions::sleepSinceModification,
-                                           this));
+    ops.m_endDataWrite.getPostSignal().connect(boost::bind(&SyncSourceRevisions::sleepSinceModification,
+                                                           this));
 }
 
 std::string SyncSourceLogging::getDescription(sysync::KeyH aItemKey)
@@ -1141,46 +1237,31 @@ std::string SyncSourceLogging::getDescription(const string &luid)
     return "";
 }
 
-sysync::TSyError SyncSourceLogging::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID, const boost::function<SyncSource::Operations::InsertItemAsKey_t> &parent)
+void SyncSourceLogging::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID)
 {
     std::string description = getDescription(aItemKey);
     SE_LOG_INFO(this, NULL,
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "adding",
                 !description.empty() ? description.c_str() : "???");
-    if (parent) {
-        return parent(aItemKey, newID);
-    } else {
-        return sysync::LOCERR_NOTIMP;
-    }
 }
 
-sysync::TSyError SyncSourceLogging::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID, const boost::function<SyncSource::Operations::UpdateItemAsKey_t> &parent)
+void SyncSourceLogging::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
     std::string description = getDescription(aItemKey);
     SE_LOG_INFO(this, NULL,
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "updating",
                 !description.empty() ? description.c_str() : aID ? aID->item : "???");
-    if (parent) {
-        return parent(aItemKey, aID, newID);
-    } else {
-        return sysync::LOCERR_NOTIMP;
-    }
 }
 
-sysync::TSyError SyncSourceLogging::deleteItem(sysync::cItemID aID, const boost::function<SyncSource::Operations::DeleteItem_t> &parent)
+void SyncSourceLogging::deleteItem(sysync::cItemID aID)
 {
     std::string description = getDescription(aID->item);
     SE_LOG_INFO(this, NULL,
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "deleting",
                 !description.empty() ? description.c_str() : aID->item);
-    if (parent) {
-        return parent(aID);
-    } else {
-        return sysync::LOCERR_NOTIMP;
-    }
 }
 
 void SyncSourceLogging::init(const std::list<std::string> &fields,
@@ -1190,12 +1271,12 @@ void SyncSourceLogging::init(const std::list<std::string> &fields,
     m_fields = fields;
     m_sep = sep;
 
-    ops.m_insertItemAsKey = boost::bind(&SyncSourceLogging::insertItemAsKey,
-                                        this, _1, _2, ops.m_insertItemAsKey);
-    ops.m_updateItemAsKey = boost::bind(&SyncSourceLogging::updateItemAsKey,
-                                        this, _1, _2, _3, ops.m_updateItemAsKey);
-    ops.m_deleteItem = boost::bind(&SyncSourceLogging::deleteItem,
-                                   this, _1, ops.m_deleteItem);
+    ops.m_insertItemAsKey.getPreSignal().connect(boost::bind(&SyncSourceLogging::insertItemAsKey,
+                                                             this, _2, _3));
+    ops.m_updateItemAsKey.getPreSignal().connect(boost::bind(&SyncSourceLogging::updateItemAsKey,
+                                                             this, _2, _3, _4));
+    ops.m_deleteItem.getPreSignal().connect(boost::bind(&SyncSourceLogging::deleteItem,
+                                                        this, _2));
 }
 
 sysync::TSyError SyncSourceAdmin::loadAdminData(const char *aLocDB,
@@ -1261,7 +1342,7 @@ sysync::TSyError SyncSourceAdmin::updateMapItem(sysync::cMapID mID)
     string key, value;
     mapid2entry(mID, key, value);
 
-    StringMap::iterator it = m_mapping.find(key);
+    ConfigProps::iterator it = m_mapping.find(key);
     if (it == m_mapping.end()) {
         // error, does not exist
         return sysync::DB_Forbidden;
@@ -1279,7 +1360,7 @@ sysync::TSyError SyncSourceAdmin::deleteMapItem(sysync::cMapID mID)
     string key, value;
     mapid2entry(mID, key, value);
 
-    StringMap::iterator it = m_mapping.find(key);
+    ConfigProps::iterator it = m_mapping.find(key);
     if (it == m_mapping.end()) {
         // error, does not exist
         return sysync::DB_Forbidden;
@@ -1369,8 +1450,7 @@ void SyncSourceAdmin::init(SyncSource::Operations &ops,
                                       this, _1);
     ops.m_deleteMapItem = boost::bind(&SyncSourceAdmin::deleteMapItem,
                                       this, _1);
-    ops.m_endSession.push_back(boost::bind(&SyncSourceAdmin::flush,
-                                           this));
+    ops.m_endDataWrite.getPostSignal().connect(boost::bind(&SyncSourceAdmin::flush, this));
 }
 
 void SyncSourceAdmin::init(SyncSource::Operations &ops,
@@ -1395,6 +1475,44 @@ void SyncSourceBlob::init(SyncSource::Operations &ops,
     ops.m_deleteBlob = boost::bind(&SyncSourceBlob::deleteBlob, this,
                                    _1, _2);
 }
+
+void TestingSyncSource::removeAllItems()
+{
+    // remove longest luids first:
+    // for luid=UID[+RECURRENCE-ID] that will
+    // remove children from a merged event first,
+    // which is better supported by certain servers
+    Items_t items = getAllItems();
+    for (Items_t::reverse_iterator it = items.rbegin();
+         it != items.rend();
+         ++it) {
+        deleteItem(*it);
+    }
+}
+
+
+
+#ifdef ENABLE_UNIT_TESTS
+
+class SyncSourceTest : public CppUnit::TestFixture {
+    CPPUNIT_TEST_SUITE(SyncSourceTest);
+    CPPUNIT_TEST(backendsAvailable);
+    CPPUNIT_TEST_SUITE_END();
+
+    void backendsAvailable()
+    {
+        //We expect backendsInfo() to be empty if !ENABLE_MODULES
+        //Otherwise, there should be at least some backends.
+#ifdef ENABLE_MODULES
+        CPPUNIT_ASSERT( !SyncSource::backendsInfo().empty() );
+#endif
+    }
+};
+
+SYNCEVOLUTION_TEST_SUITE_REGISTRATION(SyncSourceTest);
+
+#endif // ENABLE_UNIT_TESTS
+
 
 SE_END_CXX
 

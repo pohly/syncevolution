@@ -26,9 +26,9 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/function.hpp>
+#include <boost/utility/value_init.hpp>
 
 #include <stdarg.h>
-#include <time.h>
 
 #include <vector>
 #include <sstream>
@@ -37,11 +37,12 @@
 #include <exception>
 #include <list>
 
+#include <syncevo/Timespec.h>    // definitions used to be included in util.h,
+                                 // include it to avoid changing code using the time things
 #include <syncevo/Logging.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
-using namespace std;
 
 class Logger;
 
@@ -58,43 +59,43 @@ public:
 };
 
 /** shorthand, primarily useful for BOOST_FOREACH macro */
-typedef pair<string, string> StringPair;
-typedef map<string, string> StringMap;
+typedef std::pair<std::string, std::string> StringPair;
+typedef std::map<std::string, std::string> StringMap;
 
 /**
  * remove multiple slashes in a row and dots directly after a slash if not followed by filename,
  * remove trailing /
  */
-string normalizePath(const string &path);
+std::string normalizePath(const std::string &path);
 
 /**
  * Returns last component of path. Trailing slash is ignored.
  * Empty if path is empty.
  */
-string getBasename(const string &path);
+std::string getBasename(const std::string &path);
 
 /**
  * Returns path without the last component. Empty if nothing left.
  */
-string getDirname(const string &path);
+std::string getDirname(const std::string &path);
 
 /**
  * Splits path into directory and file part. Trailing slashes
  * are stripped first.
  */
-void splitPath(const string &path, string &dir, string &file);
+void splitPath(const std::string &path, std::string &dir, std::string &file);
 
 /**
  * convert relative path to canonicalized absolute path
  * @param path will be turned into absolute path if possible, otherwise left unchanged
  * @return true if conversion is successful, false otherwise(errno will be set)
  */
-bool relToAbs(string &path);
+bool relToAbs(std::string &path);
 
 /** ensure that m_path is writable, otherwise throw error */
-void mkdir_p(const string &path);
+void mkdir_p(const std::string &path);
 
-inline bool rm_r_all(const string &path, bool isDir) { return true; }
+inline bool rm_r_all(const std::string &path, bool isDir) { return true; }
 
 /**
  * remove a complete directory hierarchy; invoking on non-existant directory is okay
@@ -103,7 +104,7 @@ inline bool rm_r_all(const string &path, bool isDir) { return true; }
  *                 to be deleted (return true in that case); called with full path
  *                 to entry and true if known to be a directory
  */
-void rm_r(const string &path, boost::function<bool (const string &,
+void rm_r(const std::string &path, boost::function<bool (const std::string &,
                                                     bool)> filter = rm_r_all);
 
 /**
@@ -120,10 +121,10 @@ void rm_r(const string &path, boost::function<bool (const string &,
  * @param from     source directory or file
  * @param to       target directory or file (must have same type as from)
  */
-void cp_r(const string &from, const string &to);
+void cp_r(const std::string &from, const std::string &to);
 
 /** true if the path refers to a directory */
-bool isDir(const string &path);
+bool isDir(const std::string &path);
 
 /**
  * try to read a file into the given string, throw exception if fails
@@ -132,8 +133,8 @@ bool isDir(const string &path);
  * @retval content     filled with file content
  * @return true if file could be read
  */
-bool ReadFile(const string &filename, string &content);
-bool ReadFile(istream &in, string &content);
+bool ReadFile(const std::string &filename, std::string &content);
+bool ReadFile(std::istream &in, std::string &content);
 
 enum ExecuteFlags {
     EXECUTE_NO_STDERR = 1<<0,       /**< suppress stderr of command */
@@ -224,20 +225,20 @@ class StringEscape
     /**
      * escape string according to current settings
      */
-    string escape(const string &str) const;
+    std::string escape(const std::string &str) const;
 
     /** escape string with the given settings */
-    static string escape(const string &str, char escapeChar, Mode mode);
+    static std::string escape(const std::string &str, char escapeChar, Mode mode);
 
     /**
      * unescape string, with escape character as currently set
      */
-    string unescape(const string &str) const { return unescape(str, m_escapeChar); }
+    std::string unescape(const std::string &str) const { return unescape(str, m_escapeChar); }
 
     /**
      * unescape string, with escape character as given
      */
-    static string unescape(const string &str, char escapeChar);
+    static std::string unescape(const std::string &str, char escapeChar);
 };
 
 /**
@@ -251,7 +252,7 @@ class StringEscape
  * Instantiating this class will generate a new unique UUID, available afterwards
  * in the base string class.
  */
-class UUID : public string {
+class UUID : public std::string {
  public:
     UUID();
 };
@@ -272,10 +273,10 @@ inline const char *NullPtrCheck(const char *ptr, const char *def = "(null)")
  */
 class ReadDir {
  public:
-    ReadDir(const string &path, bool throwError = true);
+    ReadDir(const std::string &path, bool throwError = true);
 
-    typedef vector<string>::const_iterator const_iterator;
-    typedef vector<string>::iterator iterator;
+    typedef std::vector<std::string>::const_iterator const_iterator;
+    typedef std::vector<std::string>::iterator iterator;
     iterator begin() { return m_entries.begin(); }
     iterator end() { return m_entries.end(); }
     const_iterator begin() const { return m_entries.begin(); }
@@ -285,11 +286,11 @@ class ReadDir {
      * check whether directory contains entry, returns full path
      * @param caseInsensitive    ignore case, pick first entry which matches randomly
      */
-    string find(const string &entry, bool caseSensitive);
+    std::string find(const std::string &entry, bool caseSensitive);
 
  private:
-    string m_path;
-    vector<string> m_entries;
+    std::string m_path;
+    std::vector<std::string> m_entries;
 };
 
 /**
@@ -333,68 +334,112 @@ char *Strncpy(char *dest, const char *src, size_t n);
 
 /**
  * sleep() with sub-second resolution. Might be interrupted by signals
- * before the time has elapsed.
+ * or SuspendFlags abort/suspend requests before the time has elapsed.
+ *
+ * @return seconds not elapsed yet, 0 if not interrupted
  */
-void Sleep(double seconds);
+double Sleep(double seconds);
+
+/**
+ * Acts like the underlying type. In addition ensures that plain types
+ * are not left uninitialized.
+ */
+template<class T> class Init {
+ public:
+    Init(const T &val) : m_value(val) {}
+    Init() : m_value(boost::value_initialized<T>()) {}
+    Init(const Init &other) : m_value(other.m_value) {}
+    Init & operator = (const T &val) { m_value = val; return *this; }
+    operator const T & () const { return m_value; }
+    operator T & () { return m_value; }
+ private:
+    T m_value;
+};
 
 
 /**
- * Sub-second time stamps. Thin wrapper around timespec
- * and clock_gettime() (for monotonic time). Comparisons
- * assume normalized values (tv_nsec >= 0, < 1e9). Addition
- * and substraction produce normalized values, as long
- * as the result is positive. Substracting a - b where a < b
- * leads to an undefined result.
+ * Version of InitState for scalar values (can't derive from them):
+ * acts like the underlying type. In addition ensures that plain types
+ * are not left uninitialized and tracks whether a value was every
+ * assigned explicitly.
  */
-class Timespec : public timespec
-{
+template<class T> class InitState {
  public:
-    Timespec() { tv_sec = 0; tv_nsec = 0; }
-    Timespec(time_t sec, long nsec) { tv_sec = sec; tv_nsec = nsec; }
+    typedef T value_type;
 
-    bool operator < (const Timespec &other) const {
-        return tv_sec < other.tv_sec ||
-            (tv_sec == other.tv_sec && tv_nsec < other.tv_nsec);
-    }
-    bool operator > (const Timespec &other) const {
-        return tv_sec > other.tv_sec ||
-            (tv_sec == other.tv_sec && tv_nsec > other.tv_nsec);
-    }
-    bool operator <= (const Timespec &other) const { return !(*this > other); }
-    bool operator >= (const Timespec &other) const { return !(*this < other); }
+    InitState(const T &val, bool wasSet) : m_value(val), m_wasSet(wasSet) {}
+    InitState() : m_value(boost::value_initialized<T>()), m_wasSet(false) {}
+    InitState(const InitState &other) : m_value(other.m_value), m_wasSet(other.m_wasSet) {}
+    InitState & operator = (const T &val) { m_value = val; m_wasSet = true; return *this; }
+    operator const T & () const { return m_value; }
+    operator T & () { return m_value; }
+    const T & get() const { return m_value; }
+    T & get() { return m_value; }
+    bool wasSet() const { return m_wasSet; }
+ private:
+    T m_value;
+    bool m_wasSet;
+};
 
-    operator bool () const { return tv_sec || tv_nsec; }
+/** version of InitState for classes */
+template<class T> class InitStateClass : public T {
+ public:
+    typedef T value_type;
 
-    Timespec operator + (int seconds) const { return Timespec(tv_sec + seconds, tv_nsec); }
-    Timespec operator - (int seconds) const { return Timespec(tv_sec - seconds, tv_nsec); }
-    Timespec operator + (unsigned seconds) const { return Timespec(tv_sec + seconds, tv_nsec); }
-    Timespec operator - (unsigned seconds) const { return Timespec(tv_sec - seconds, tv_nsec); }
-    Timespec operator + (const Timespec &other) const;
-    Timespec operator - (const Timespec &other) const;
+    InitStateClass(const T &val, bool wasSet) : T(val), m_wasSet(wasSet) {}
+    InitStateClass() : m_wasSet(false) {}
+    InitStateClass(const char *val) : T(val), m_wasSet(false) {}
+    InitStateClass(const InitStateClass &other) : T(other), m_wasSet(other.m_wasSet) {}
+    InitStateClass & operator = (const T &val) { T::operator = (val); m_wasSet = true; return *this; }
+    const T & get() const { return *this; }
+    T & get() { return *this; }
+    bool wasSet() const { return m_wasSet; }
+ private:
+    bool m_wasSet;
+};
 
-    operator timeval () const { timeval res; res.tv_sec = tv_sec; res.tv_usec = tv_nsec / 1000; return res; }
-
-    time_t seconds() const { return tv_sec; }
-    long nsecs() const { return tv_nsec; }
-    double duration() const { return (double)tv_sec + ((double)tv_nsec) / 1e9;  }
-
-    static Timespec monotonic() { Timespec res; clock_gettime(CLOCK_MONOTONIC, &res); return res; }
-    static Timespec system() { Timespec res; clock_gettime(CLOCK_REALTIME, &res); return res; }
+/**
+ * a nop destructor which doesn't do anything, for boost::shared_ptr
+ */
+struct NopDestructor
+{
+    template <class T> void operator () (T *) {}
 };
 
 /**
  * Acts like a boolean, but in addition, can also tell whether the
- * value was explicitly set. Defaults to false.
+ * value was explicitly set. Defaults to false for both.
  */
-class Bool { 
+typedef InitState<bool> Bool;
+
+/**
+ * Acts like a string, but in addition, can also tell whether the
+ * value was explicitly set.
+ */
+typedef InitStateClass<std::string> InitStateString;
+
+/**
+ * Version of InitState where the value can true, false, or a string.
+ * Recognizes 0/1/false/true/no/yes case-insensitively as special
+ * booleans, everything else is considered a string.
+ */
+class InitStateTri : public InitStateString
+{
  public:
- Bool(bool val = false) : m_value(val), m_wasSet(false) {}
-    operator bool () const { return m_value; }
-    Bool & operator = (bool val) { m_value = val; m_wasSet = true; return *this; }
-    bool wasSet() const { return m_wasSet; }
- private:
-    bool m_value;
-    bool m_wasSet;
+    InitStateTri(const std::string &val, bool wasSet) : InitStateString(val, wasSet) {}
+    InitStateTri() {}
+    InitStateTri(const char *val) : InitStateString(val, false) {}
+    InitStateTri(const InitStateTri &other) : InitStateString(other) {}
+    InitStateTri(const InitStateString &other) : InitStateString(other) {}
+
+    enum Value {
+        VALUE_TRUE,
+        VALUE_FALSE,
+        VALUE_STRING
+    };
+
+    // quick check for true/false, use get() for string case
+    Value getValue() const;
 };
 
 enum HandleExceptionFlags {
@@ -404,7 +449,12 @@ enum HandleExceptionFlags {
      * a 404 status error is possible and must not be logged as ERROR
      */
     HANDLE_EXCEPTION_404_IS_OKAY = 1 << 0,
-    HANDLE_EXCEPTION_MAX = 1 << 1
+    HANDLE_EXCEPTION_FATAL = 1 << 1,
+    /**
+     * don't log exception as ERROR
+     */
+    HANDLE_EXCEPTION_NO_ERROR = 1 << 2,
+    HANDLE_EXCEPTION_MAX = 1 << 3,
 };
 
 /**
@@ -444,7 +494,21 @@ class Exception : public std::runtime_error
     static SyncMLStatus handle(SyncMLStatus *status = NULL, Logger *logger = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
     static SyncMLStatus handle(Logger *logger, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, logger, NULL, Logger::ERROR, flags); }
     static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, NULL, &explanation, Logger::ERROR, flags); }
+    static void handle(HandleExceptionFlags flags) { handle(NULL, NULL, NULL, Logger::ERROR, flags); }
     static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }
+
+    /**
+     * Tries to identify exception class based on explanation string created by
+     * handle(). If successful, that exception is throw with the same
+     * attributes as in the original exception. Otherwise parse() returns.
+     */
+    static void tryRethrow(const std::string &explanation);
+
+    /**
+     * Same as tryRethrow() for strings with a 'org.syncevolution.xxxx:' prefix,
+     * as passed as D-Bus error strings.
+     */
+    static void tryRethrowDBus(const std::string &error);
 };
 
 /**
@@ -493,10 +557,14 @@ class TransportStatusException : public StatusException
  */
 std::string SubstEnvironment(const std::string &str);
 
-inline string getHome() {
-    const char *homestr = getenv("HOME");
-    return homestr ? homestr : ".";
+/** getenv() with default value */
+inline const char *getEnv(const char *var, const char *def)
+{
+    const char *res = getenv(var);
+    return res ? res : def;
 }
+
+inline std::string getHome() { return getEnv("HOME", "."); }
 
 /**
  * Parse a separator splitted set of strings src, the separator itself is
@@ -522,16 +590,25 @@ struct Flag {
 std::string Flags2String(int flags, const Flag *descr, const std::string &sep = ", ");
 
 /**
+ * Returns the path to the data directory. This is generally
+ * /usr/share/syncevolution/ but can be overridden by setting the
+ * SYNCEVOLUTION_DATA_DIR environment variable.
+ *
+ * @retval dataDir the path to the data directory
+ */
+std::string SyncEvolutionDataDir();
+
+/**
  * Temporarily set env variable, restore old value on destruction.
  * Useful for unit tests which depend on the environment.
  */
 class ScopedEnvChange
 {
  public:
-    ScopedEnvChange(const string &var, const string &value);
+    ScopedEnvChange(const std::string &var, const std::string &value);
     ~ScopedEnvChange();
  private:
-    string m_var, m_oldval;
+    std::string m_var, m_oldval;
     bool m_oldvalset;
 };
 

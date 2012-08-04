@@ -44,6 +44,7 @@
 
 
 #include <syncevo/declarations.h>
+using namespace std;
 SE_BEGIN_CXX
 
 LogRedirect *LogRedirect::m_redirect;
@@ -71,6 +72,7 @@ void LogRedirect::init()
     m_buffer = NULL;
     m_len = 0;
     m_out = NULL;
+    m_err = NULL;
     m_streams = false;
     m_stderr.m_original =
         m_stderr.m_read =
@@ -91,6 +93,13 @@ void LogRedirect::init()
             ++it;
         }
     }
+
+    // CONSOLEPRINTF in libsynthesis.
+    m_knownErrors.insert("SYSYNC   Rejected with error:");
+    // libneon 'Request ends, status 207 class 2xx, error line:'
+    m_knownErrors.insert("xx, error line:\n");
+    // some internal Qt warning (?)
+    m_knownErrors.insert("Qt: Session management error: None of the authentication protocols specified are supported");
 }
 
 LogRedirect::LogRedirect(bool both, const char *filename) throw()
@@ -115,6 +124,12 @@ LogRedirect::LogRedirect(bool both, const char *filename) throw()
                 perror(filename);
             }
         }
+        // Separate FILE, will write into same file as normal output
+        // if a filename was given (for testing), otherwise to original
+        // stderr.
+        m_err = fdopen(dup((filename && m_out) ?
+                           fileno(m_out) :
+                           m_stderr.m_copy), "w");
     }
     LoggerBase::pushLogger(this);
     m_redirect = this;
@@ -164,6 +179,9 @@ LogRedirect::~LogRedirect() throw()
     if (m_out) {
         fclose(m_out);
     }
+    if (m_err) {
+        fclose(m_err);
+    }
     if (m_buffer) {
         free(m_buffer);
     }
@@ -210,7 +228,11 @@ void LogRedirect::messagev(Level level,
 {
     // check for other output first
     process();
-    LoggerStdout::messagev(m_out ? m_out : stdout,
+    // Choose output channel: SHOW goes to original stdout,
+    // everything else to stderr.
+    LoggerStdout::messagev(level == SHOW ?
+                           (m_out ? m_out : stdout) :
+                           (m_err ? m_err : stderr),
                            level, getLevel(),
                            prefix,
                            file, line, function,
@@ -578,10 +600,11 @@ void LogRedirect::flush() throw()
 {
     process();
     if (!m_stdoutData.empty()) {
+        std::string buffer;
+        std::swap(buffer, m_stdoutData);
         LoggerBase::instance().message(Logger::SHOW, NULL,
                                        NULL, 0, NULL,
-                                       "%s", m_stdoutData.c_str());
-        m_stdoutData.clear();
+                                       "%s", buffer.c_str());
     }
 }
 
@@ -705,6 +728,11 @@ public:
         // check that intercept all glib message and don't print anything to stdout
         int orig_stdout = -1;
         try {
+            // need to restore the current state below; would be nice
+            // to query it instead of assuming that Logger::glogFunc
+            // is the current log handler
+            g_log_set_default_handler(g_log_default_handler, NULL);
+
             orig_stdout = dup(STDOUT_FILENO);
             dup2(new_stdout, STDOUT_FILENO);
 
@@ -743,9 +771,11 @@ public:
             CPPUNIT_ASSERT(dev.find("normal message stderr") != dev.npos);
             CPPUNIT_ASSERT(debug.find("test warning") != debug.npos);
         } catch(...) {
+            g_log_set_default_handler(Logger::glogFunc, NULL);
             dup2(orig_stdout, STDOUT_FILENO);
             throw;
         }
+        g_log_set_default_handler(Logger::glogFunc, NULL);
         dup2(orig_stdout, STDOUT_FILENO);
 
         lseek(new_stdout, 0, SEEK_SET);

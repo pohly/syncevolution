@@ -31,7 +31,43 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-/** alert Codes used at the synchronization initialization */
+/**
+ * only the codes which are valid for a server alerted sync (SAN) message
+ */
+enum SANSyncMode {
+    SA_SLOW = 201,
+    SA_FIRST = SA_SLOW,
+    SA_TWO_WAY = 206,
+    SA_ONE_WAY_FROM_CLIENT = 207,
+    SA_REFRESH_FROM_CLIENT = 208,
+    SA_ONE_WAY_FROM_SERVER = 209,
+    SA_REFRESH_FROM_SERVER = 210,
+    SA_LAST = SA_REFRESH_FROM_SERVER,
+
+    SA_INVALID = 255
+};
+
+/**
+ * unambiguous sync modes:
+ * - data direction is independent of client/server role
+ * - no server alerted variants
+ */
+enum SimpleSyncMode {
+    SIMPLE_SYNC_NONE,
+    SIMPLE_SYNC_TWO_WAY = 200,
+    SIMPLE_SYNC_SLOW = 201,
+
+    SIMPLE_SYNC_RESTORE_FROM_BACKUP = 211,
+
+    SIMPLE_SYNC_ONE_WAY_FROM_LOCAL = 212,
+    SIMPLE_SYNC_REFRESH_FROM_LOCAL = 213,
+    SIMPLE_SYNC_ONE_WAY_FROM_REMOTE = 214,
+    SIMPLE_SYNC_REFRESH_FROM_REMOTE = 215,
+
+    SIMPLE_SYNC_INVALID = 255
+};
+
+/** all kinds of sync modes */
 enum SyncMode {
     /** unset or disabled */
     SYNC_NONE,
@@ -44,7 +80,7 @@ enum SyncMode {
     SYNC_ONE_WAY_FROM_SERVER = 204,
     SYNC_REFRESH_FROM_SERVER = 205,
 
-    /** used by Server Alerted Sync **/
+    // used by Server Alerted Sync, same as SA_ in SANSyncMode
     SA_SYNC_TWO_WAY = 206,
     SA_SYNC_ONE_WAY_FROM_CLIENT = 207,
     SA_SYNC_REFRESH_FROM_CLIENT = 208,
@@ -54,10 +90,28 @@ enum SyncMode {
     // used by restore backend with backup data, a pseudo mode
     SYNC_RESTORE_FROM_BACKUP = 211,
 
+    // modes which always transfer in the same direction,
+    // regardless which side acts as client or server
+    SYNC_ONE_WAY_FROM_LOCAL = 212,
+    SYNC_REFRESH_FROM_LOCAL = 213,
+    SYNC_ONE_WAY_FROM_REMOTE = 214,
+    SYNC_REFRESH_FROM_REMOTE = 215,
+
     SYNC_LAST = 220,
     /** error situation (in contrast to SYNC_NONE) */
     SYNC_INVALID = 255
 };
+
+/**
+ * maps to normal SYNC_ variants (no SA_*) and unambiguous direction
+ * (LOCAL/REMOTE instead of CLIENT/SERVER)
+ */
+SimpleSyncMode SimplifySyncMode(SyncMode mode, bool peerIsClient);
+
+/**
+ * maps to the server alerted variants
+ */
+SANSyncMode AlertSyncMode(SyncMode mode, bool peerIsClient);
 
 /* According to OMNA WSP Content Type Numbers*/
 enum ContentType {
@@ -116,14 +170,78 @@ enum SyncMLStatus {
     STATUS_NOT_FOUND = 404,
     /** command not allowed */
     STATUS_COMMAND_NOT_ALLOWED = 405,
+
+    STATUS_OPTIONAL_FEATURE_NOT_SUPPORTED = 406,
+    STATUS_AUTHORIZATION_REQUIRED = 407,
+
+    /**
+     * "If the specified remote procedure call no longer exists on
+     * the recipient, then the (410) Gone exception condition is
+     * created by the command."
+     */
+    STATUS_COMMAND_GONE = 410,
+
+    /**
+     * "If the Put command did not include the size of the data item
+     * to be transferred (i.e., in the Meta element type), then the
+     * (411) Size required exception condition is created by the
+     * command.
+     */
+    STATUS_SIZE_REQUIRED = 411,
+
+    /**
+     * "If the Alert command didn’t include all the correct parameters
+     * in the Item element type, then the (412) Incomplete command
+     * exception condition is created by the command."
+     */
+    STATUS_INCOMPLETE_COMMAND = 412,
+
+    /**
+     * "If the requested data item is too large to be transferred at
+     * this time, then the (413) Request entity too large exception
+     * condition is created by the command.
+     */
+    STATUS_REQUEST_ENTITY_TOO_LARGE = 413,
+
+    STATUS_UNSUPPORTED_MEDIA_TYPE_OR_FORMAT = 415,
+
+    /**
+     * "If the Size specified in the Meta element type was too large
+     * for the recipient (e.g., the recipient does not have sufficient
+     * input buffer for the data), then the (416) Requested size too
+     * big exception condition is created by the command."
+     */
+    STATUS_REQUESTED_SIZE_TOO_BIG = 416,
+
+    STATUS_RETRY_LATER = 417,
+
     /** object exists already */
     STATUS_ALREADY_EXISTS = 418,
-    /** command failed / fatal DB error */
-    STATUS_FATAL = 500,
-    /** general DB error */
-    STATUS_DATASTORE_FAILURE = 510,
+
     /** database / memory full error */
     STATUS_FULL = 420,
+
+    STATUS_UNKNOWN_SEARCH_GRAMMAR = 421,
+    STATUS_BAD_CGI_OR_FILTER_QUERY = 422,
+
+    /**
+     * "In a two-way synchronization, if the OMA DS client specifies a
+     * "Soft Delete" for an item that has already been "Hard Deleted"
+     * on the OMA DS server, then a (423) Soft-delete conflict MUST be
+     * returned in the Status command."
+     */
+    STATUS_SOFT_DELETE_CONFLICT = 423,
+
+    STATUS_PARTIAL_ITEM_NOT_ACCEPTED = 426,
+    STATUS_ITEM_NOT_EMPTY = 427,
+    STATUS_MOVE_FAILED = 428,
+
+    /** command failed / fatal DB error */
+    STATUS_FATAL = 500,
+    /** in Synthesis StartDataRead: slow sync forced by backend */
+    STATUS_SLOW_SYNC_508 = 508,
+    /** general DB error */
+    STATUS_DATASTORE_FAILURE = 510,
 
     /* sysync error codes also used by SyncEvolution */
 
@@ -209,6 +327,7 @@ class SyncSourceReport {
             m_resume = false;
         m_mode = SYNC_NONE;
         m_status = STATUS_OK;
+        m_restarts = 0;
     }
 
     enum ItemLocation {
@@ -274,6 +393,14 @@ class SyncSourceReport {
     void recordFinalSyncMode(SyncMode mode) { m_mode = mode; }
     SyncMode getFinalSyncMode() const { return m_mode; }
 
+    void recordRestart() { m_restarts++; }
+    void setRestarts(int restarts) { m_restarts = restarts; }
+    /**
+     * number of times that the sync session was restarted
+     * involving the source, usually zero
+     */
+    int getRestarts() const { return m_restarts; }
+
     void recordFirstSync(bool isFirstSync) { m_first = isFirstSync; }
     bool isFirstSync() const { return m_first; }
 
@@ -298,6 +425,7 @@ class SyncSourceReport {
     int m_stat[ITEM_LOCATION_MAX + 1][ITEM_STATE_MAX + 1][ITEM_RESULT_MAX + 1];
 
     SyncMode m_mode;
+    int m_restarts;
     bool m_first;
     bool m_resume;
     SyncMLStatus m_status;
@@ -318,6 +446,12 @@ class SyncReport : public std::map<std::string, SyncSourceReport> {
         m_localName("LOCAL"),
         m_remoteName("REMOTE")
         {}
+
+    /** construct from text dump */
+    SyncReport(const std::string &dump);
+
+    /** convert to text dump */
+    std::string toString() const;
 
     void setLocalName(const std::string &name) { m_localName = name; }
     void setRemoteName(const std::string &name) { m_remoteName = name; }

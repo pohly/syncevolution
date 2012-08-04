@@ -34,11 +34,15 @@
 #include "debug.h"
 
 static dbus_int32_t connection_slot = -1;
+static dbus_int32_t server_slot = -1;
 
 typedef struct {
 	DBusConnection *connection;
 	GMainContext *context;
 	GSource *queue;
+        BDBusWatchFunction disconnect;
+        void *disconnect_data;
+        BDBusDestroyFunction disconnect_destroy;
 	gboolean unshared;
 } ConnectionData;
 
@@ -129,29 +133,27 @@ static gboolean dispatch_watch(GIOChannel *source,
 
 static void finalize_watch(gpointer memory)
 {
-	WatchData *watch_data = memory;
-
-	DBG("watch data %p", watch_data);
-
-	if (watch_data->watch)
-		dbus_watch_set_data(watch_data->watch, NULL, NULL);
-
-	g_free(watch_data);
+	DBG("watch data %p", memory);
 }
 
 static void free_watch(void *memory)
 {
-	WatchData *watch_data = memory;
+	DBG("watch data %p", memory);
 
-	DBG("watch data %p", watch_data);
-
-	if (watch_data->source == NULL)
+	if (memory == NULL)
 		return;
 
-	watches = g_slist_remove(watches, watch_data);
+	watches = g_slist_remove(watches, memory);
 
-	g_source_destroy(watch_data->source);
-	g_source_unref(watch_data->source);
+	WatchData *watch_data = (WatchData*)memory;
+	GSource* source = watch_data->source;
+
+	if (source != NULL) {
+		g_source_destroy(source);
+		watch_data->source = NULL;
+	}
+
+	g_free(watch_data);
 }
 
 static dbus_bool_t add_watch(DBusWatch *watch, void *user_data)
@@ -210,17 +212,21 @@ static void remove_watch(DBusWatch *watch, void *user_data)
 {
 	WatchData *watch_data = dbus_watch_get_data(watch);
 
-	DBG("watch %p connection data %p", watch, user_data);
-
-	dbus_watch_set_data(watch, NULL, NULL);
+	DBG("watch %p watch data %p connection data %p", watch, watch_data, user_data);
 
 	if (watch_data == NULL)
 		return;
 
 	watches = g_slist_remove(watches, watch_data);
 
-	g_source_destroy(watch_data->source);
-	g_source_unref(watch_data->source);
+	if (watch_data->source != NULL) {
+		g_source_destroy(watch_data->source);
+		// g_source_unref(watch_data->source);
+		watch_data->source = NULL;
+	}
+
+        // this will call free_watch() and deallocate watch_data
+	dbus_watch_set_data(watch, NULL, NULL);
 }
 
 static void watch_toggled(DBusWatch *watch, void *user_data)
@@ -356,9 +362,23 @@ static void free_connection(void *memory)
 
 	//b_dbus_unregister_all_objects(data->connection);
 
+        if (data->queue)
+            g_source_destroy(data->queue);
+
+        // At the point when free_connection gets called,
+        // the last unref already happened and the connection
+        // is gone; trying to close it here is too later.
+        // ConnectionData holds *no* reference on data->connection,
+        // so don't unref either. If it did, the connection would
+        // never get freed.
+#if 0
 	if (data->unshared)
 		dbus_connection_close(data->connection);
 	dbus_connection_unref(data->connection);
+#endif
+
+        if (data->disconnect_destroy)
+            data->disconnect_destroy (data->disconnect_data);
 
 	g_main_context_unref(data->context);
 
@@ -418,6 +438,45 @@ void b_dbus_setup_connection(DBusConnection *connection,
 
 	dbus_connection_set_wakeup_main_function(connection,
 						wakeup_context, data, NULL);
+}
+
+/**
+ * b_dbus_server_connection:
+ * @server: a #DBusServer
+ *
+ * Setup server with main context
+ *
+ * Sets the watch and timeout functions of a #DBusServer
+ * to integrate the connection with the GLib main loop.
+ */
+void b_dbus_setup_server(DBusServer *server)
+{
+	ConnectionData *data;
+
+	if (dbus_server_allocate_data_slot(&server_slot) == FALSE)
+		return;
+
+	DBG("server slot %d", server_slot);
+
+	data = dbus_server_get_data(server, server_slot);
+	if (data != NULL)
+		return;
+
+	data = setup_connection(NULL, TRUE, g_main_context_default());
+	if (data == NULL)
+		return;
+
+	if (dbus_server_set_data(server, server_slot,
+                                 data, free_connection) == FALSE) {
+		g_free(data);
+		return;
+	}
+
+	dbus_server_set_watch_functions(server, add_watch,
+                                        remove_watch, watch_toggled, data, NULL);
+
+	dbus_server_set_timeout_functions(server, add_timeout,
+                                          remove_timeout, timeout_toggled, data, NULL);
 }
 
 /**
@@ -568,13 +627,19 @@ gboolean b_dbus_request_name(DBusConnection *connection, const char *name,
 }
 
 static DBusHandlerResult disconnect_filter(DBusConnection *connection,
-					DBusMessage *message, void *data)
+					DBusMessage *message, void *user_data)
 {
+        ConnectionData *data = user_data;
+
 	if (dbus_message_is_signal(message,
 			DBUS_INTERFACE_LOCAL, "Disconnected") == FALSE)
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 	DBG("disconnected");
+
+        if (data->disconnect)
+            data->disconnect (connection,
+                              data->disconnect_data);
 
 	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -595,11 +660,26 @@ gboolean b_dbus_set_disconnect_function(DBusConnection *connection,
 				BDBusWatchFunction function,
 				void *user_data, BDBusDestroyFunction destroy)
 {
+        ConnectionData *data = dbus_connection_get_data(connection, connection_slot);
+        if (!data)
+            return FALSE;
+
+        if (data->disconnect_destroy)
+            data->disconnect_destroy (data->disconnect_data);
+        data->disconnect_destroy = NULL;
+        data->disconnect = NULL;
+        data->disconnect_data = NULL;
+
 	dbus_connection_set_exit_on_disconnect(connection, FALSE);
 
 	if (dbus_connection_add_filter(connection,
-				disconnect_filter, NULL, NULL) == FALSE)
+				disconnect_filter, data, NULL) == FALSE)
 		return FALSE;
 
+        data = dbus_connection_get_data(connection, connection_slot);
+
+        data->disconnect = function;
+        data->disconnect_data = user_data;
+        data->disconnect_destroy = destroy;
 	return TRUE;
 }

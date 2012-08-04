@@ -27,13 +27,12 @@
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
-using namespace std;
 
-/** a case-insensitive string to string mapping */
-class ConfigProps : public map<string, string, Nocase<string> > {
+/** a case-insensitive string to InitStateString mapping */
+class ConfigProps : public std::map<std::string, InitStateString, Nocase<std::string> > {
  public:
     /** format as <key> = <value> lines */
-    operator string () const;
+    operator std::string () const;
 
     /**
      * Add all entries from the second set of properties,
@@ -43,9 +42,9 @@ class ConfigProps : public map<string, string, Nocase<string> > {
     void add(const ConfigProps &other);
 
     /**
-     * Return value in map or the given default.
+     * Return value in map or the given default, marked as unset.
      */
-    string get(const string &key, const string &def = "") const;
+    InitStateString get(const std::string &key, const std::string &def = "") const;
 };
 
 /**
@@ -53,7 +52,7 @@ class ConfigProps : public map<string, string, Nocase<string> > {
  *
  * Source and property names are case-insensitive.
  */
-class SourceProps : public map<string, ConfigProps, Nocase<string> >
+class SourceProps : public std::map<std::string, ConfigProps, Nocase<std::string> >
 {
  public:
     /**
@@ -83,11 +82,16 @@ struct ContextProps
  *
  * Index is case-insensitive.
  */
-class FullProps : public map<string, ContextProps, Nocase<string> >
+class FullProps : public std::map<std::string, ContextProps, Nocase<std::string> >
 {
  public:
+    enum PropCheckMode {
+        CHECK_ALL,
+        IGNORE_GLOBAL_PROPS
+    };
+
     /** any of the contained ConfigProps has entries */
-    bool hasProperties() const;
+    bool hasProperties(PropCheckMode mode) const;
 
     /**
      * Combines sync properties into one filter, giving "config"
@@ -125,9 +129,9 @@ class FullProps : public map<string, ContextProps, Nocase<string> >
      *                        listed explicitly,
      *                        key "" as fallback for unknown sources
      */
-    void createFilters(const string &context,
-                       const string &config,
-                       const set<string> *sources,
+    void createFilters(const std::string &context,
+                       const std::string &config,
+                       const std::set<std::string> *sources,
                        ConfigProps &syncFilter,
                        SourceProps &sourceFilters);
 };

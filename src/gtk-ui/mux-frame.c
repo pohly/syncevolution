@@ -47,15 +47,38 @@ mux_frame_finalize (GObject *object)
 }
 
 static void
+label_changed_cb (MuxFrame *frame)
+{
+    char *font = NULL;
+    GtkFrame *gtk_frame = GTK_FRAME (frame);
+    GtkWidget *label = gtk_frame_get_label_widget (gtk_frame);
+
+    if (!label)
+        return;
+
+    /* ensure font is correct */
+    gtk_widget_style_get (GTK_WIDGET (frame),
+                          "title-font", &font,
+                          NULL);
+    if (font) {
+        PangoFontDescription *desc;
+        desc = pango_font_description_from_string (font);
+        gtk_widget_modify_font (label, desc);
+        pango_font_description_free (desc);
+        g_free (font);
+    }
+
+    gtk_misc_set_alignment (GTK_MISC (label), 0.0, 1.0);
+}
+
+static void
 mux_frame_update_style (MuxFrame *frame)
 {
     GdkColor *border_color, *bullet_color;
-    char *font = NULL;
 
     gtk_widget_style_get (GTK_WIDGET (frame),
                           "border-color", &border_color, 
                           "bullet-color", &bullet_color,
-                          "title-font", &font,
                           NULL);
 
     if (border_color) {
@@ -71,40 +94,9 @@ mux_frame_update_style (MuxFrame *frame)
         frame->bullet_color = mux_frame_default_bullet_color;
     }
 
-    if (font) {
-        if (GTK_FRAME (frame)->label_widget) {
-            PangoFontDescription *desc;
-            desc = pango_font_description_from_string (font);
-            gtk_widget_modify_font (GTK_FRAME (frame)->label_widget, desc);
-            pango_font_description_free (desc);
-        }
-        g_free (font);
-    }
+    label_changed_cb (frame);
 }
 
-static void
-label_changed_cb (MuxFrame *frame)
-{
-    char *font = NULL;
-    GtkFrame *gtk_frame = GTK_FRAME (frame);
-
-    if (!gtk_frame->label_widget)
-        return;
-
-    /* ensure font is correct */
-    gtk_widget_style_get (GTK_WIDGET (frame),
-                          "title-font", &font,
-                          NULL);
-    if (font) {
-        PangoFontDescription *desc;
-        desc = pango_font_description_from_string (font);
-        gtk_widget_modify_font (gtk_frame->label_widget, desc);
-        pango_font_description_free (desc);
-        g_free (font);
-    }
-    
-    gtk_misc_set_alignment (GTK_MISC (gtk_frame->label_widget), 0.0, 1.0);
-}
 static void
 rounded_rectangle (cairo_t * cr,
                    double x, double y, double w, double h,
@@ -172,7 +164,7 @@ mux_frame_paint (GtkWidget *widget, GdkRectangle *area)
     cairo_paint (cairo);
 
     /* draw bullet before title */
-    if (GTK_FRAME (frame)->label_widget) {
+    if (gtk_frame_get_label_widget (GTK_FRAME (frame))) {
         gdk_cairo_set_source_color (cairo, &frame->bullet_color);
 
         rounded_rectangle (cairo,
@@ -197,7 +189,7 @@ mux_frame_expose(GtkWidget *widget,
                  GdkEventExpose *event)
 {
     GtkWidgetClass *grand_parent;
-    if (GTK_WIDGET_DRAWABLE (widget)) {
+    if (gtk_widget_is_drawable (widget)) {
         mux_frame_paint (widget, &event->area);
 
         grand_parent = GTK_WIDGET_CLASS (g_type_class_peek_parent (mux_frame_parent_class));
@@ -210,18 +202,18 @@ static void
 mux_frame_size_request (GtkWidget *widget,
                         GtkRequisition *requisition)
 {
-    GtkFrame *frame = GTK_FRAME (widget);
-    GtkBin *bin = GTK_BIN (widget);
+    GtkWidget *label = gtk_frame_get_label_widget (GTK_FRAME (widget));
+    GtkWidget *child = gtk_bin_get_child (GTK_BIN (widget));
     GtkRequisition child_req;
     GtkRequisition title_req;
 
     child_req.width = child_req.height = 0;
-    if (bin->child)
-        gtk_widget_size_request (bin->child, &child_req);
+    if (child)
+        gtk_widget_size_request (child, &child_req);
 
     title_req.width = title_req.height = 0;
-    if (frame->label_widget) {
-        gtk_widget_size_request (frame->label_widget, &title_req);
+    if (label) {
+        gtk_widget_size_request (label, &title_req);
         /* add room for bullet */
         title_req.height = title_req.height * mux_frame_bullet_size_factor +  
                            2 * MUX_FRAME_BULLET_PADDING;

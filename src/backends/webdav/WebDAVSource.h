@@ -54,6 +54,17 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
      */
     void contactServer();
 
+    /**
+     * Scan server based on username/password/syncURL. Callback is
+     * passed name and URL of each collection (in this order), may
+     * return false to stop scanning gracefully or throw errors to
+     * abort.
+     *
+     * @return true if scanning completed, false if callback requested stop
+     */
+    bool findCollections(const boost::function<bool (const std::string &,
+                                                     const Neon::URI &)> &callback);
+
     /** store resource URL permanently after successful sync */
     void storeServerInfos();
 
@@ -142,9 +153,26 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     virtual std::string homeSetProp() const = 0;
 
     /**
+     * well-known URL, including full path (/.well-known/caldav),
+     * empty if none
+     */
+    virtual std::string wellKnownURL() const = 0;
+
+    /**
      * HTTP content type for PUT
      */
     virtual std::string contentType() const = 0;
+
+    /**
+     * VEVENT, VTODO, VJOURNAL, VCARD
+     */
+    virtual std::string getContent() const = 0;
+
+    /**
+     * true if a collection might contain items with different content
+     * types
+     */
+    virtual bool getContentMixed() const = 0;
 
     /**
      * create new resource name (only last component, not full path)
@@ -157,12 +185,36 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
      * @retval luid   new resource name, not URL encoded
      * @return item data to be sent
      */
-    virtual const std::string *createResourceName(const std::string &item, std::string &buffer, std::string &luid) { luid = UUID(); return &item; }
+    virtual const std::string *createResourceName(const std::string &item, std::string &buffer, std::string &luid);
 
     /**
      * optionally modify item content to match the luid of the item we are going to update
      */
-    virtual const std::string *setResourceName(const std::string &item, std::string &buffer, const std::string &luid) { return &item; }
+    virtual const std::string *setResourceName(const std::string &item, std::string &buffer, const std::string &luid);
+
+    /**
+     * Find one item by its UID property value and return the corresponding
+     * resource name relative to the current collection (aka luid).
+     */
+    std::string findByUID(const std::string &uid, const Timespec &deadline);
+
+    /**
+     * Get UID property value from vCard 3.0 or iCalendar 2.0 text
+     * items.
+     * @retval startp   offset of first character of UID value (i.e., directly after colon),
+     *                  npos if no UID was found
+     * @retval endp     offset of first line break character (\r or \n) after UID value,
+     *                  npos if no UID was found
+     * @return UID value without line breaks and folding characters removed
+     */
+    static std::string extractUID(const std::string &item,
+                                  size_t *startp = NULL,
+                                  size_t *endp = NULL);
+
+    /**
+     * .vcf for VCARD and .ics for everything else.
+     */
+    virtual std::string getSuffix() const;
 
  private:
     /** settings to be used, never NULL, may be the same as m_contextSettings */
@@ -180,6 +232,8 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
 
     /** extract value from first <DAV:href>value</DAV:href>, empty string if not inside propval */
     std::string extractHREF(const std::string &propval);
+    /** extract all <DAV:href>value</DAV:href> values from a set, empty if none */
+    std::list<std::string> extractHREFs(const std::string &propval);
 
     void openPropCallback(const Neon::URI &uri,
                           const ne_propname *prop,
@@ -190,6 +244,11 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
                               const ne_prop_result_set *results,
                               RevisionMap_t &revisions,
                               bool &failed);
+
+    int checkItem(RevisionMap_t &revisions,
+                  const std::string &href,
+                  const std::string &etag,
+                  std::string *data);
 
     void backupData(const boost::function<Operations::BackupData_t> &op,
                     const Operations::ConstBackupInfo &oldBackup,
@@ -207,6 +266,15 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
         op(oldBackup, dryrun, report);
     }
 
+    /**
+     * return true if the resource with the given properties is one
+     * of those collections which is guaranteed to not contain
+     * other, unrelated collections (a CalDAV collection must not
+     * contain a CardDAV collection, for example)
+     */
+    bool ignoreCollection(const StringMap &props) const;
+
+ protected:
     /**
      * Extracts ETag from response header, empty if not found.
      */

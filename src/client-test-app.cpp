@@ -27,13 +27,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include <signal.h>
-#ifdef HAVE_VALGRIND_VALGRIND_H
-# include <valgrind/valgrind.h>
-#endif
-#ifdef HAVE_EXECINFO_H
-# include <execinfo.h>
-#endif
 
 #include "CmdlineSyncClient.h"
 #include <syncevo/SyncSource.h>
@@ -43,10 +36,6 @@
 #include <boost/bind.hpp>
 
 #include <syncevo/declarations.h>
-
-#ifdef ENABLE_BUTEO_TESTS
-#include "client-test-buteo.h"
-#endif
 
 SE_BEGIN_CXX
 
@@ -135,6 +124,8 @@ public:
     {
     }
 
+    virtual std::string getClientID() const { return m_clientID; }
+
     /**
      * code depends on other global constructors to run first, execute it after constructor but before
      * any other methods
@@ -145,6 +136,16 @@ public:
 	    return;
         } else {
             m_initialized = true;
+        }
+
+        // allow each backend test to create more backend tests
+        size_t count = 0;
+        while (count != m_configs.size()) {
+            count = m_configs.size();
+            BOOST_FOREACH (const RegisterSyncSourceTest *test,
+                           TestRegistry(m_configs)) {
+                test->init();
+            }
         }
 
         const char *server = getenv("CLIENT_TEST_SERVER");
@@ -178,12 +179,15 @@ public:
             boost::split(sources, sourcelist, boost::is_any_of(","));
         } else {
             BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
-                sources.insert(test->m_configName);
+                if (!test->m_configName.empty()) {
+                    sources.insert(test->m_configName);
+                }
             }
         }
 
         BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
-            if (sources.find(test->m_configName) != sources.end()) {
+            if (sources.find(test->m_configName) != sources.end() &&
+                !test->m_configName.empty()) {
                 m_syncSource2Config.push_back(test->m_configName);
             }
         }
@@ -222,6 +226,10 @@ public:
             config->setDevID(m_clientID == "1" ? "sc-api-nat" : "sc-pim-ppc");
         }
         BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
+            if (test->m_configName.empty()) {
+                continue;
+            }
+
             ClientTest::Config testconfig;
             getSourceConfig(test, testconfig);
             CPPUNIT_ASSERT(!testconfig.m_type.empty());
@@ -239,11 +247,22 @@ public:
                 }
             }
 
-            // always set these properties: they might have changed since the last run
-            string database = getDatabaseName(test->m_configName);
-            sc->setDatabaseID(database);
-            sc->setUser(m_evoUser);
-            sc->setPassword(m_evoPassword);
+            // Set these properties if not set yet: that means the env
+            // variables are used when creating the config initially,
+            // but then no longer can be used to change the config.
+            // This prevents accidentally running a test with default
+            // values, for example for the database.
+            if (!sc->getDatabaseID().wasSet()) {
+                string database = getDatabaseName(test->m_configName);
+                sc->setDatabaseID(database);
+            }
+            if (!sc->getUser().wasSet() && !m_evoUser.empty()) {
+                sc->setUser(m_evoUser);
+            }
+            if (!sc->getPassword().wasSet() && !m_evoPassword.empty()) {
+                sc->setPassword(m_evoPassword);
+            }
+            // Always set this one, to ensure the config matches the test.
             sc->setBackend(SourceType(testconfig.m_type).m_backend);
         }
         config->flush();
@@ -294,6 +313,7 @@ public:
         config.m_createSourceA = createSource;
         config.m_createSourceB = createSource;
         config.m_sourceName = test->m_configName.c_str();
+        config.m_linkedSources = test->m_linkedSources;
 
         test->updateConfig(config);
     }
@@ -307,49 +327,32 @@ public:
         return false;
     }
 
-#ifdef ENABLE_BUTEO_TESTS
-    virtual void setup() {
-        QtContactsSwitcher::prepare(*this);
-    }
-#endif
-
     virtual SyncMLStatus doSync(const int *sources,
                                 const std::string &logbase,
                                 const SyncOptions &options)
     {
         init();
 
-        // check whether using buteo to do sync
-        const char *buteo = getenv("CLIENT_TEST_BUTEO");
-        bool useButeo = false;
-        if (buteo && 
-                (boost::equals(buteo, "1") || boost::iequals(buteo, "t"))) {
-            useButeo = true;
-        }
+        // Let "Client_Sync_Current" symlink point to a new, empty
+        // directory logbase + ".server". Can be used by SyncEvolution
+        // server as per-test logdir.
+        std::string current = logbase + ".server";
+        rm_r(current);
+        mkdir_p(current);
+        rm_r("Client_Sync_Current");
+        symlink(current.c_str(), "Client_Sync_Current");
 
         string server = getenv("CLIENT_TEST_SERVER") ? getenv("CLIENT_TEST_SERVER") : "funambol";
         server += "_";
         server += m_clientID;
         
 
-        if (useButeo) {
-#ifdef ENABLE_BUTEO_TESTS
-            ButeoTest buteo(*this, server, logbase, options);
-            buteo.prepareSources(sources, m_syncSource2Config);
-            SyncReport report;
-            SyncMLStatus status = buteo.doSync(&report);
-            options.m_checkReport.check(status, report);
-            return status;
-#else
-            throw runtime_error("This client-test was built without enabling buteo testing.");
-#endif
-        }
         class ClientTest : public CmdlineSyncClient {
         public:
             ClientTest(const string &server,
                        const string &logbase,
                        const SyncOptions &options) :
-                CmdlineSyncClient(server, false, true),
+                CmdlineSyncClient(server, false),
                 m_logbase(logbase),
                 m_options(options),
                 m_started(false)
@@ -417,10 +420,10 @@ public:
         // configure active sources with the desired sync mode,
         // disable the rest
         FilterConfigNode::ConfigFilter filter;
-        filter["sync"] = "none";
+        filter["sync"] = InitStateString("none", true);
         client.setConfigFilter(false, "", filter);
         filter["sync"] =
-            PrettyPrintSyncMode(options.m_syncMode);
+            InitStateString(PrettyPrintSyncMode(options.m_syncMode), true);
         for(int i = 0; sources[i] >= 0; i++) {
             std::string &name = m_syncSource2Config[sources[i]];
             client.setConfigFilter(false, name, filter);
@@ -461,7 +464,7 @@ private:
     }
 
     /** called by test frame work */
-    static TestingSyncSource *createSource(ClientTest &client, int source, bool isSourceA) {
+    static TestingSyncSource *createSource(ClientTest &client, const std::string &clientID, int source, bool isSourceA) {
         TestEvolution &evClient((TestEvolution &)client);
         string name = evClient.m_localSource2Config[source];
 
@@ -480,15 +483,57 @@ private:
             config += "-";
             config += server;
         }
+        std::string tracking =
+            string("_") + m_clientID +
+            "_" + (isSourceA ? "A" : "B");
+        SE_LOG_DEBUG(NULL, NULL, "instantiating testing source %s in config %s, with tracking name %s",
+                     name.c_str(),
+                     config.c_str(),
+                     tracking.c_str());
         boost::shared_ptr<SyncConfig> context(new SyncConfig(config));
-        SyncSourceNodes nodes = context->getSyncSourceNodes(name,
-                                                            string("_") + m_clientID +
-                                                            "_" + (isSourceA ? "A" : "B"));
+        SyncSourceNodes nodes = context->getSyncSourceNodes(name, tracking);
 
-        // always set this property: the name might have changes since last test run
-        nodes.getProperties()->setProperty("evolutionsource", database.c_str());
-        nodes.getProperties()->setProperty("evolutionuser", m_evoUser.c_str());
-        nodes.getProperties()->setProperty("evolutionpassword", m_evoPassword.c_str());
+        // The user of client-test must have configured the source
+        // @<CLIENT_TEST_SERVER>_<m_clientID>/<name> when doing
+        // Client::Sync testing.  Our testing source must use the same
+        // properties, but different change tracking.
+        std::string peerName = server ? (std::string(server) + "_" + m_clientID) : "@default";
+        boost::shared_ptr<SyncConfig> peer(new SyncConfig(peerName));
+        SyncSourceNodes peerNodes = peer->getSyncSourceNodes(name);
+        SE_LOG_DEBUG(NULL, NULL, "overriding testing source %s properties with the ones from config %s = %s",
+                     name.c_str(),
+                     peerName.c_str(),
+                     peer->getRootPath().c_str());
+        BOOST_FOREACH(const ConfigProperty *prop, SyncSourceConfig::getRegistry()) {
+            if (prop->isHidden()) {
+                continue;
+            }
+            boost::shared_ptr<FilterConfigNode> node = peerNodes.getNode(*prop);
+            InitStateString value = prop->getProperty(*node);
+            SE_LOG_DEBUG(NULL, NULL, "   %s = %s (%s)",
+                         prop->getMainName().c_str(),
+                         value.c_str(),
+                         value.wasSet() ? "set" : "default");
+            node = nodes.getNode(*prop);
+            node->setProperty(prop->getMainName(), value);
+        }
+        context->flush();
+
+        // Same as in init() above: set values if still empty, but don't
+        // overwrite anything.
+        boost::shared_ptr<FilterConfigNode> props = nodes.getProperties();
+        std::string value;
+        if (!props->getProperty("database", value)) {
+            props->setProperty("database", database);
+        }
+        if (!props->getProperty("databaseUser", value) &&
+            !m_evoUser.empty()) {
+            props->setProperty("databaseUser", m_evoUser);
+        }
+        if (!props->getProperty("databasePassword", value) &&
+            !m_evoPassword.empty()) {
+            props->setProperty("databasePassword", m_evoPassword);
+        }
 
         SyncSourceParams params(name,
                                 nodes,
@@ -543,47 +588,10 @@ private:
     }
 };
 
-static void handler(int sig)
-{
-    void *buffer[100];
-    int size;
-    
-    fprintf(stderr, "\ncaught signal %d\n", sig);
-    fflush(stderr);
-#ifdef HAVE_EXECINFO_H
-    size = backtrace(buffer, sizeof(buffer)/sizeof(buffer[0]));
-    backtrace_symbols_fd(buffer, size, 2);
-#endif
-#ifdef HAVE_VALGRIND_VALGRIND_H
-    VALGRIND_PRINTF_BACKTRACE("\ncaught signal %d\n", sig);
-#endif
-    /* system("objdump -l -C -d client-test >&2"); */
-    struct sigaction act;
-    memset(&act, 0, sizeof(act));
-    act.sa_handler = SIG_DFL;
-    sigaction(SIGABRT, &act, NULL);
-    abort();
-}
-
 static class RegisterTestEvolution {
 public:
     RegisterTestEvolution() :
         testClient("1") {
-        struct sigaction act;
-
-        memset(&act, 0, sizeof(act));
-        act.sa_handler = handler;
-        sigaction(SIGABRT, &act, NULL);
-        sigaction(SIGSEGV, &act, NULL);
-        sigaction(SIGILL, &act, NULL);
-
-#if defined(HAVE_GLIB)
-        // this is required when using glib directly or indirectly
-        g_type_init();
-        g_thread_init(NULL);
-        g_set_prgname("client-test");
-#endif
-        EDSAbiWrapperInit();
         testClient.registerTests();
     }
 
