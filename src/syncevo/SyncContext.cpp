@@ -2813,7 +2813,9 @@ void SyncContext::initEngine(bool logXML)
     }
 }
 
-extern "C" int (*SySync_ConsolePrintf)(FILE *stream, const char *format, ...);
+extern "C" { // without curly braces, g++ 4.2 thinks the variable is extern
+    int (*SySync_ConsolePrintf)(FILE *stream, const char *format, ...);
+}
 
 static int nopPrintf(FILE *stream, const char *format, ...) { return 0; }
 

@@ -856,7 +856,7 @@ public:
         // for a password. However, that does not cover failures
         // like the parent not asking us to sync in the first place
         // and also does not work with libdbus (https://bugs.freedesktop.org/show_bug.cgi?id=49728).
-        m_forkexec->m_onQuit.connect(onParentQuit);
+        m_forkexec->m_onQuit.connect(&onParentQuit);
 
         m_forkexec->connect();
     }
