@@ -29,6 +29,12 @@ DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 LDFLAGS = -Wl,--as-needed
 export LDFLAGS
 
+# For some reason, the Scratchbox cross-compiler doesn't
+# seem to honor rpaths. Compensate by adding rpath-link.
+LDFLAGS += \
+	-Wl,-rpath-link=src/build-synthesis/src/.libs \
+	-Wl,-rpath-link=src/gdbus/.libs
+
 # some optified -dev packages may forget the symlink
 PKG_CONFIG_PATH=/opt/maemo/usr/lib/pkgconfig
 export PKG_CONFIG_PATH
@@ -46,7 +52,7 @@ CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-static \
 #	CONFIGURE_FLAGS += --enable-maemo --enable-shared
 #endif
 
-configure: gen-autotools.sh configure-pre.in configure-post.in
+configure: configure.ac
 	./autogen-maemo.sh
 
 libsynthesis/configure: libsynthesis/configure.in
