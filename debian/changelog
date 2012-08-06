@@ -1,3 +1,18 @@
+syncevolution (1:1.2.99.3-1) unstable; urgency=low
+
+  * SyncEvolution 1.2.99.3 for Maemo Fremantle.
+  * Updated packaging for new SyncEvolution build system.
+    Build-Depend on automake 1.10, libtool, libboost1.42-dev,
+    and libcppunit-dev.
+  * Although I've tried to use the newest tools available in the
+    Fremantle repositories, they're still a bit old for the
+    SyncEvolution build system, and I had to patch the build
+    system a fair bit for it to work.
+  * Also patched the code itself to work with the fairly old
+    compiler (gcc 4.2).
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Sun, 05 Aug 2012 16:52:01 +0200
+
 syncevolution (1:1.2.2-1) unstable; urgency=low
 
   * SyncEvolution 1.2.2 for Maemo.
