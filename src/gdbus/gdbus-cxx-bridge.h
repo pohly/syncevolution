@@ -1772,7 +1772,7 @@ class Watch : private boost::noncopyable
     {
     }
 
-    virtual void setCallback(const boost::function<void (void)> &callback)
+    void setCallback(const boost::function<void (void)> &callback)
     {
         m_callback = callback;
         if (m_called && m_callback) {
