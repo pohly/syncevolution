@@ -1,3 +1,41 @@
+SyncEvolution 1.2.99.3 -> 1.2.99.4, 07.08.2012
+==============================================
+
+Another release candidate for SyncEvolution 1.3. Lesson learned:
+declaring a snapshot as "final" is a good way of luring the hidden bugs
+into the light. Of course, then another snapshot is needed...
+
+Details:
+
+* D-Bus server: fix support for autoSyncDelay > 0
+
+  Auto syncing was not getting triggered when using an autoSyncDelay > 0;
+  by default it is 5 minutes. Thanks to Vladimir Elisseev for reporting
+  this problem.
+
+* command line: fixed --export <file name>
+
+  When exporting items into a file, the delimiter between items
+  was missing.
+
+* config: improved 'maxlogdirs' documentation
+
+  The old explanation made it sound like nothing would get deleted by
+  default ("If set, ..."). That's not correct, by default only 10
+  sessions are kept.
+  Also explain the behavior of deleting intermediate sessions first.
+
+* developers: fixed D-Bus interface XML
+
+  Reverted to Qt 4.x compatible annotations and changed "templateName"
+  to "getTemplate" to make it more obvious what the parameter does.
+  Only relevant for the out-of-tree Qt UI.
+
+  Fixed accidental removal of the "template" parameter in
+  Session.GetNamedConfig(). Was not used in practice, but has to be
+  correct in case that someone wants to use it.
+
+
 SyncEvolution 1.2.99.2 -> 1.2.99.3, 24.07.2012
 ==============================================
 
