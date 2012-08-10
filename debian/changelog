@@ -1,6 +1,23 @@
 syncevolution (1:1.2.99.3-1) unstable; urgency=low
 
   * SyncEvolution 1.2.99.3 for Maemo Fremantle.
+  * Fixes to Maemo calendar backend.
+    - Updated to use SyncEvolution's new support for
+      automatically detecting whether to sync notes
+      in text/calendar or in text/plain format.
+      (Previously, the default was to always sync as
+      text/plain, which would lose any metadata.)
+    - Return ITEM_REPLACED instead of ITEM_MERGED if
+      the calendar-backend detects conflicts.
+    - Implemented SyncSourceLogging::getDescription(),
+      to make it easier for users to find out which
+      entry is the problem if something goes wrong.
+    - In listAllItems(), read entries from database
+      one by one, instead of loading everything into RAM
+      all at once. This may be a little slower, but it would
+      also reduce resident memory requirements for large
+      calendars. Since RAM is a precious resource on the
+      N900, this is hopefully a net win.
   * Updated packaging for new SyncEvolution build system.
     Build-Depend on automake 1.10, libtool, libboost1.42-dev,
     and libcppunit-dev.
@@ -8,10 +25,10 @@ syncevolution (1:1.2.99.3-1) unstable; urgency=low
     Fremantle repositories, they're still a bit old for the
     SyncEvolution build system, and I had to patch the build
     system a fair bit for it to work.
-  * Also patched the code itself to work with the fairly old
-    compiler (gcc 4.2).
+  * Also patched the SyncEvolution code itself to work with
+    the fairly old compiler (gcc 4.2).
 
- -- Ove Kaaven <ovek@arcticnet.no>  Sun, 05 Aug 2012 16:52:01 +0200
+ -- Ove Kaaven <ovek@arcticnet.no>  Fri, 10 Aug 2012 02:07:24 +0200
 
 syncevolution (1:1.2.2-1) unstable; urgency=low
 
