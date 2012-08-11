@@ -445,7 +445,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         newUID = m_data->getItemID(incidence).getLUID();
     } else {
         KCalCore::Incidence::Ptr incidence = incidences[0];
-        updated = ITEM_MERGED;
+        updated = uid.empty() ? ITEM_REPLACED : ITEM_OKAY;
         newUID = oldUID;
         KCalCore::Incidence::Ptr original = m_data->findIncidence(oldUID);
         if (!original) {
