@@ -51,7 +51,7 @@ CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-static \
 configure: configure.ac
 	./autogen-maemo.sh
 
-libsynthesis/configure: libsynthesis/configure.in
+libsynthesis/configure: libsynthesis/configure.in configure
 	cd libsynthesis && ./autogen-maemo.sh
 
 config.status: configure libsynthesis/configure
