@@ -54,10 +54,10 @@ CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-static \
 #endif
 
 configure: configure.ac
-	./autogen-maemo.sh
+	./autogen.sh
 
 libsynthesis/configure: libsynthesis/configure.in
-	cd libsynthesis && ./autogen-maemo.sh
+	cd libsynthesis && ./autogen.sh
 
 config.status: configure libsynthesis/configure
 	dh_testdir
