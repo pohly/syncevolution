@@ -232,6 +232,21 @@ void KCalExtendedSource::open()
             throwError("no default Notebook");
         }
         m_data->m_notebookUID = defaultNotebook->uid();
+#ifdef ENABLE_MAEMO
+    } else if (boost::starts_with(databaseID, "uid:")) {
+        // if databaseID has a "uid:" prefix, open existing notebook with given ID in default storage
+        m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
+        if (!m_data->m_storage->open()) {
+            throwError("failed to open storage");
+        }
+        QString uid = databaseID.c_str() + strlen("uid:");
+        mKCal::Notebook::Ptr notebook = m_data->m_storage->notebook(uid);
+
+        if ( !notebook ) {
+            throwError(string("no such notebook with UID \"") + uid.toStdString() + string("\" in default storage"));
+        }
+        m_data->m_notebookUID = notebook->uid();
+#endif
     } else {
         // use databaseID as notebook name to search for an existing notebook
         // if found use it, otherwise:
@@ -317,7 +332,11 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
     for ( it = notebookList.begin(); it != notebookList.end(); ++it ) {
         bool isDefault = (*it)->isDefault();
         result.push_back(Database( (*it)->name().toStdString(), 
+#ifdef ENABLE_MAEMO
+                                   "uid:" + (*it)->uid().toStdString(), 
+#else
                                    (m_data->m_storage).staticCast<mKCal::SqliteStorage>()->databaseName().toStdString(), 
+#endif
                                    isDefault));
     }
     m_data->m_storage->close();
