@@ -48,10 +48,6 @@ CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-static \
  --disable-libsoup --enable-libcurl --disable-ecal --enable-ebook --enable-maemocal \
  --disable-bluetooth --enable-dav --with-synthesis-src=libsynthesis
 
-#ifneq (,$(findstring maemo,$(DEB_BUILD_OPTIONS)))
-#	CONFIGURE_FLAGS += --enable-maemo --enable-shared
-#endif
-
 configure: configure.ac
 	./autogen-maemo.sh
 
@@ -78,7 +74,7 @@ build-arch: build-arch-stamp
 build-arch-stamp:  config.status
 
 	# Add here commands to compile the arch part of the package.
-	#$(MAKE) 
+	$(MAKE) 
 	touch $@
 
 build-indep: build-indep-stamp
@@ -129,37 +125,27 @@ install-arch:
 	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
 
 	dh_install -s
+
 # Must not depend on anything. This is to be called by
-# binary-arch/binary-indep
-# in another 'make' thread.
+# binary-arch/binary-indep in another 'make' thread.
 binary-common:
 	dh_testdir
 	dh_testroot
 	dh_installchangelogs ChangeLog
 	dh_installdocs
 	dh_installexamples
-#	dh_installmenu
-#	dh_installdebconf	
-#	dh_installlogrotate	
-#	dh_installemacsen
-#	dh_installpam
-#	dh_installmime
-#	dh_python
-#	dh_installinit
-#	dh_installcron
-#	dh_installinfo
 	dh_installman
 	dh_link
 	dh_strip
 	dh_compress 
 	dh_fixperms
-#	dh_perl
 	dh_makeshlibs
 	dh_installdeb
 	dh_shlibdeps --exclude=syncebook --exclude=syncecal
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb
+
 # Build architecture independant packages using the common target.
 binary-indep: build-indep install-indep
 	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
