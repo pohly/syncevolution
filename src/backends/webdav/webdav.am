@@ -18,7 +18,7 @@ CLEANFILES += src/backends/webdav/syncevo-webdav-lookup
 
 src/backends/webdav/syncevo-webdav-lookup: $(srcdir)/src/backends/webdav/syncevo-webdav-lookup.sh
 	$(AM_V_GEN)rm -f $@ ; \
-	ln -s $< $@
+	cd src/backends/webdav && ln -s $(notdir $<) $(notdir $@)
 
 src_backends_webdav_src = \
   src/backends/webdav/CalDAVSource.h \
