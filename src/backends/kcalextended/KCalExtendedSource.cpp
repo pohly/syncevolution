@@ -285,7 +285,7 @@ void KCalExtendedSource::open()
     // we are not currently using partial loading because there were
     // issues with it (BMC #6061); the load() calls elsewhere in this
     // file are commented out
-    if (!m_data->m_storage->load()) {
+    if (!m_data->m_storage->loadNotebookIncidences(m_data->m_notebookUID)) {
         throwError("failed to load calendar");
     }
 }
