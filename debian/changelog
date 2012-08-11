@@ -1,34 +1,14 @@
-syncevolution (1:1.2.99.3-1) unstable; urgency=low
+syncevolution (1:1.2.99.3-1) UNRELEASED; urgency=low
 
-  * SyncEvolution 1.2.99.3 for Maemo Fremantle.
-  * Fixes to Maemo calendar backend.
-    - Updated to use SyncEvolution's new support for
-      automatically detecting whether to sync notes
-      in text/calendar or in text/plain format.
-      (Previously, the default was to always sync as
-      text/plain, which would lose any metadata.)
-    - Return ITEM_REPLACED instead of ITEM_MERGED if
-      the calendar-backend detects conflicts.
-    - Implemented SyncSourceLogging::getDescription(),
-      to make it easier for users to find out which
-      entry is the problem if something goes wrong.
-    - In listAllItems(), read entries from database
-      one by one, instead of loading everything into RAM
-      all at once. This may be a little slower, but it would
-      also reduce resident memory requirements for large
-      calendars. Since RAM is a precious resource on the
-      N900, this is hopefully a net win.
-  * Updated packaging for new SyncEvolution build system.
-    Build-Depend on automake 1.10, libtool, libboost1.42-dev,
-    and libcppunit-dev.
-  * Although I've tried to use the newest tools available in the
-    Fremantle repositories, they're still a bit old for the
-    SyncEvolution build system, and I had to patch the build
-    system a fair bit for it to work.
-  * Also patched the SyncEvolution code itself to work with
-    the fairly old compiler (gcc 4.2).
+  * SyncEvolution 1.2.99.3 for Harmattan.
+  * Patches and updates from Fremantle merged into Harmattan tree:
+    - Build-Depend on automake 1.10, libtool, libboost1.42-dev,
+      and libcppunit-dev.
+    - Patches to new build system to work with older tools.
+    - Patches to work with gcc 4.2.
+    - Fixes to Maemo calendar backend.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Fri, 10 Aug 2012 02:07:24 +0200
+ -- Ove Kaaven <ovek@arcticnet.no>  Sat, 11 Aug 2012 10:08:23 +0200
 
 syncevolution (1:1.2.2-1) unstable; urgency=low
 
