@@ -25,6 +25,7 @@
 #include <syncevo/SynthesisEngine.h>
 #include <syncevo/Logging.h>
 #include <syncevo/LogRedirect.h>
+#include <syncevo/SuspendFlags.h>
 
 #include <synthesis/syerror.h>
 
@@ -33,6 +34,10 @@
 #include <boost/algorithm/string/join.hpp>
 #include <fstream>
 #include <iostream>
+
+#include "gdbus-cxx-bridge.h"
+
+#include <pcrecpp.h>
 
 #include <errno.h>
 #include <unistd.h>
@@ -45,8 +50,14 @@
 #include <stdlib.h>
 #include <math.h>
 
-#if USE_SHA256 == 1
+#ifdef HAVE_GLIB
 # include <glib.h>
+#endif
+
+#if USE_SHA256 == 1
+# ifndef HAVE_GLIB
+#  error need glib.h
+# endif
 #elif USE_SHA256 == 2
 # include <nss/sechash.h>
 # include <nss/hasht.h>
@@ -241,6 +252,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             if (flags & EXECUTE_NO_STDOUT) {
                 fullcmd += " >/dev/null";
             }
+            SE_LOG_DEBUG(NULL, NULL, "running command via system(): %s", cmd.c_str());
             ret = system(fullcmd.c_str());
         } else {
             // Need to catch at least one of stdout or stderr. A
@@ -248,6 +260,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             // are read after system() returns. But we want true
             // streaming of the output, so use fork()/exec() plus
             // reliable output redirection.
+            SE_LOG_DEBUG(NULL, NULL, "running command via fork/exec with output redirection: %s", cmd.c_str());
             LogRedirect io(flags);
             pid_t child = fork();
             switch (child) {
@@ -311,6 +324,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
 
 UUID::UUID()
 {
+#ifdef USE_SRAND
     static class InitSRand {
     public:
         InitSRand() {
@@ -321,17 +335,32 @@ UUID::UUID()
             }
             srand(seed);
         }
-    } initSRand;
+        int operator () () { return rand(); }
+    } myrand;
+#else
+    static class InitSRand {
+        unsigned int m_seed;
+    public:
+        InitSRand() {
+            ifstream seedsource("/dev/urandom");
+            if (!seedsource.get((char *)&m_seed, sizeof(m_seed))) {
+                m_seed = time(NULL);
+            }
+        }
+        int operator () () { return rand_r(&m_seed); }
+    } myrand;
+#endif
+
 
     char buffer[16 * 4 + 5];
     sprintf(buffer, "%08x-%04x-%04x-%02x%02x-%08x%04x",
-            rand() & 0xFFFFFFFF,
-            rand() & 0xFFFF,
-            (rand() & 0x0FFF) | 0x4000 /* RFC 4122 time_hi_and_version */,
-            (rand() & 0xBF) | 0x80 /* clock_seq_hi_and_reserved */,
-            rand() & 0xFF,
-            rand() & 0xFFFFFFFF,
-            rand() & 0xFFFF
+            myrand() & 0xFFFFFFFF,
+            myrand() & 0xFFFF,
+            (myrand() & 0x0FFF) | 0x4000 /* RFC 4122 time_hi_and_version */,
+            (myrand() & 0xBF) | 0x80 /* clock_seq_hi_and_reserved */,
+            myrand() & 0xFF,
+            myrand() & 0xFFFFFFFF,
+            myrand() & 0xFFFF
             );
     this->assign(buffer);
 }
@@ -428,7 +457,7 @@ unsigned long Hash(const std::string &str)
 std::string SHA_256(const std::string &data)
 {
 #if USE_SHA256 == 1
-    GString hash(g_compute_checksum_for_data(G_CHECKSUM_SHA256, (guchar *)data.c_str(), data.size()),
+    GStringPtr hash(g_compute_checksum_for_data(G_CHECKSUM_SHA256, (guchar *)data.c_str(), data.size()),
                  "g_compute_checksum_for_data() failed");
     return std::string(hash.get());
 #elif USE_SHA256 == 2
@@ -722,14 +751,70 @@ char *Strncpy(char *dest, const char *src, size_t n)
     return dest;
 }
 
-void Sleep(double seconds)
+static gboolean SleepTimeout(gpointer triggered)
 {
-    timeval delay;
-    delay.tv_sec = floor(seconds);
-    delay.tv_usec = (seconds - (double)delay.tv_sec) * 1e6;
-    select(0, NULL, NULL, NULL, &delay);
+    *static_cast<bool *>(triggered) = true;
+    return false;
 }
 
+double Sleep(double seconds)
+{
+    Timespec start = Timespec::monotonic();
+    SuspendFlags &s = SuspendFlags::getSuspendFlags();
+    if (s.getState() == SuspendFlags::NORMAL) {
+#ifdef HAVE_GLIB
+        bool triggered = false;
+        GLibEvent timeout(g_timeout_add(seconds * 1000,
+                                        SleepTimeout,
+                                        &triggered),
+                          "glib timeout");
+        while (!triggered) {
+            if (s.getState() != SuspendFlags::NORMAL) {
+                break;
+            }
+            g_main_context_iteration(NULL, true);
+        }
+        // done
+        return 0;
+#else
+        // Only works when abort or suspend requests are delivered via signal.
+        // Not the case when used inside helper processes; but those have
+        // and depend on glib.
+        timeval delay;
+        delay.tv_sec = floor(seconds);
+        delay.tv_usec = (seconds - (double)delay.tv_sec) * 1e6;
+        if (select(0, NULL, NULL, NULL, &delay) != -1) {
+            // done
+            return 0;
+        }
+#endif
+    }
+
+    // not done normally, calculate remaining time
+    Timespec end = Timespec::monotonic();
+    double left = (end - start).duration() - seconds;
+    return std::max((double)0, left);
+}
+
+InitStateTri::Value InitStateTri::getValue() const
+{
+    const std::string &val = get();
+    if (val == "1" ||
+        boost::iequals(val, "true") ||
+        boost::iequals(val, "yes")) {
+        return VALUE_TRUE;
+    } else if (val == "0" ||
+               boost::iequals(val, "false") ||
+               boost::iequals(val, "no")) {
+        return VALUE_FALSE;
+    } else {
+        return VALUE_STRING;
+    }
+}
+
+const char * const TRANSPORT_PROBLEM = "transport problem: ";
+const char * const SYNTHESIS_PROBLEM = "error code from Synthesis engine ";
+const char * const SYNCEVOLUTION_PROBLEM = "error code from SyncEvolution ";
 
 SyncMLStatus Exception::handle(SyncMLStatus *status,
                                Logger *logger,
@@ -747,17 +832,19 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     } catch (const TransportException &ex) {
         SE_LOG_DEBUG(logger, NULL, "TransportException thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
-        error = ex.what();
+        error = std::string(TRANSPORT_PROBLEM) + ex.what();
         new_status = SyncMLStatus(sysync::LOCERR_TRANSPFAIL);
     } catch (const BadSynthesisResult &ex) {
         new_status = SyncMLStatus(ex.result());
-        error = StringPrintf("error code from Synthesis engine %s",
+        error = StringPrintf("%s%s",
+                             SYNTHESIS_PROBLEM,
                              Status2String(new_status).c_str());
     } catch (const StatusException &ex) {
         new_status = ex.syncMLStatus();
         SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
-        error = StringPrintf("error code from SyncEvolution %s: %s",
+        error = StringPrintf("%s%s: %s",
+                             SYNCEVOLUTION_PROBLEM,
                              Status2String(new_status).c_str(), ex.what());
         if (new_status == STATUS_NOT_FOUND &&
             (flags & HANDLE_EXCEPTION_404_IS_OKAY)) {
@@ -772,7 +859,17 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     } catch (...) {
         error = "unknown error";
     }
+    if (flags & HANDLE_EXCEPTION_FATAL) {
+        level = Logger::ERROR;
+    }
+    if (flags & HANDLE_EXCEPTION_NO_ERROR) {
+        level = Logger::DEBUG;
+    }
     SE_LOG(level, logger, NULL, "%s", error.c_str());
+    if (flags & HANDLE_EXCEPTION_FATAL) {
+        // Something unexpected went wrong, can only shut down.
+        ::abort();
+    }
 
     if (explanation) {
         *explanation = error;
@@ -782,6 +879,41 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
         *status = new_status;
     }
     return status ? *status : new_status;
+}
+
+void Exception::tryRethrow(const std::string &explanation)
+{
+    static const std::string statusre = ".* \\((?:local|remote), status (\\d+)\\)";
+    int status;
+
+    if (boost::starts_with(explanation, TRANSPORT_PROBLEM)) {
+        SE_THROW_EXCEPTION(TransportException, explanation.substr(strlen(TRANSPORT_PROBLEM)));
+    } else if (boost::starts_with(explanation, SYNTHESIS_PROBLEM)) {
+        static const pcrecpp::RE re(statusre);
+        if (re.FullMatch(explanation.substr(strlen(SYNTHESIS_PROBLEM)), &status)) {
+            SE_THROW_EXCEPTION_1(BadSynthesisResult, "Synthesis engine failure", (sysync::TSyErrorEnum)status);
+        }
+    } else if (boost::starts_with(explanation, SYNCEVOLUTION_PROBLEM)) {
+        static const pcrecpp::RE re(statusre + ": (.*)",
+                                    pcrecpp::RE_Options().set_dotall(true));
+        std::string details;
+        if (re.FullMatch(explanation.substr(strlen(SYNCEVOLUTION_PROBLEM)), &status, &details)) {
+            SE_THROW_EXCEPTION_STATUS(StatusException, details, (SyncMLStatus)status);
+        }
+    }
+}
+
+void Exception::tryRethrowDBus(const std::string &error)
+{
+    static const pcrecpp::RE re("(org\\.syncevolution(?:\\.\\w+)+): (.*)",
+                                pcrecpp::RE_Options().set_dotall(true));
+    std::string exName, explanation;
+    if (re.FullMatch(error, &exName, &explanation)) {
+        // found SyncEvolution exception explanation, parse it
+        tryRethrow(explanation);
+        // explanation not parsed, fall back to D-Bus exception
+        throw GDBusCXX::dbus_error(exName, explanation);
+    }
 }
 
 std::string SubstEnvironment(const std::string &str)
@@ -865,6 +997,16 @@ std::string Flags2String(int flags, const Flag *descr, const std::string &sep)
         ++descr;
     }
     return boost::join(tmp, ", ");
+}
+
+std::string SyncEvolutionDataDir()
+{
+    std::string dataDir(DATA_DIR);
+    const char *envvar = getenv("SYNCEVOLUTION_DATA_DIR");
+    if (envvar) {
+        dataDir = envvar;
+    }
+    return dataDir;
 }
 
 ScopedEnvChange::ScopedEnvChange(const string &var, const string &value) :

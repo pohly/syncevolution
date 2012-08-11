@@ -61,6 +61,8 @@ use strict;
 binmode(STDOUT, ":utf8");
 
 use Algorithm::Diff;
+use MIME::Base64;
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 # ignore differences caused by specific servers or local backends?
 my $server = $ENV{CLIENT_TEST_SERVER};
@@ -82,11 +84,15 @@ my $full_timezones = $ENV{CLIENT_TEST_FULL_TIMEZONES}; # do not simplify VTIMEZO
 my $exchange = $server =~ /exchange/; # Exchange via ActiveSync
 my $egroupware = $server =~ /egroupware/;
 my $funambol = $server =~ /funambol/;
-my $google = $server =~ /google/;
+my $googlesyncml = $server eq "google";
+my $googlecaldav = $server eq "googlecalendar";
+my $googleeas = $server eq "googleeas";
 my $google_valarm = $ENV{CLIENT_TEST_GOOGLE_VALARM};
 my $yahoo = $server =~ /yahoo/;
 my $davical = $server =~ /davical/;
 my $apple = $server =~ /apple/;
+my $oracle = $server =~ /oracle/;
+my $radicale = $server =~ /radicale/;
 my $evolution = $client =~ /evolution/;
 my $addressbook = $client =~ /addressbook/;
 
@@ -144,6 +150,12 @@ sub NormalizeTrigger {
     $value .= ($minutes . "M") if $minutes;
     $value .= ($seconds . "S") if $seconds;
     return $value;
+}
+
+# decode base64 string, return size and hash
+sub describeBase64 {
+    my $data = decode_base64($1);
+    return sprintf("%d b64 characters = %d bytes, %s md5sum", length($1), length($data), md5_hex($data));
 }
 
 # called for one VCALENDAR (with single VEVENT/VTODO/VJOURNAL) or VCARD,
@@ -239,6 +251,9 @@ sub NormalizeItem {
             while (s/^PHOTO(.*?): (\S+)[\t ]+(\S+)/PHOTO$1: $2$3/mg) {}
         }
     }
+    # Don't show base64 encoded PHOTO data (makes diff very long). Instead
+    # decode and show size + hash.
+    s/^PHOTO;ENCODING=B: (.*)$/"PHOTO: " . describeBase64($1)/mge;
     # special case for the inlining of the local test case PHOTO
     s!^PHOTO;;VALUE=uri:file://testcases/local.png$!PHOTO;;VALUE=uri:<local.png>!m;
     s!^PHOTO;ENCODING=B: iVBORw0KGgoAAAANSUh.*UQOVkeH/aKBSLM04QlMqAAFNBTl\+CjN9AAAAAElFTkSuQmCC$!PHOTO;;VALUE=uri:<local.png>!m;
@@ -296,6 +311,20 @@ sub NormalizeItem {
         while (s/^(\w+)([^:\n]*);$strip=\d+/$1$2/mg) {}
     }
 
+    # strip redundant VTIMEZONE definitions (happen to be
+    # added by Google CalDAV server when storing an all-day event
+    # which doesn't need any time zone definition)
+    # http://code.google.com/p/google-caldav-issues/issues/detail?id=63
+    while (m/(BEGIN:VTIMEZONE.*?TZID:([^\n]*)\n.*?END:VTIMEZONE\n)/gs) {
+        my $def = $1;
+        my $tzid = $2;
+        # used as parameter?
+        if (! m/;TZID="?\Q$tzid\E"?/) {
+            # no, remove definition
+            s!\Q$def\E!!s;
+        }
+    }
+
     if (!$full_timezones) {
         # Strip trailing digits from TZID. They are appended by
         # Evolution and SyncEvolution to distinguish VTIMEZONE
@@ -336,7 +365,7 @@ sub NormalizeItem {
     #                                      >    LY                                 
     s/^(\w+)([^:\n]*);X-EVOLUTION-ENDDATE=[0-9TZ]*/$1$2/mg;
 
-    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$google || $mobical || $memotoo || $yahoo || $davical) {
+    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$googlesyncml || $googleeas || $mobical || $memotoo) {
       # does not preserve X-EVOLUTION-UI-SLOT=
       s/^(\w+)([^:\n]*);X-EVOLUTION-UI-SLOT=\d+/$1$2/mg;
     }
@@ -362,16 +391,21 @@ sub NormalizeItem {
       s/^(TEL.*);TYPE=PREF/$1/mg;
     }
 
-   if($google) {
-      # ignore the PHOTO encoding data 
-      s/^PHOTO(.*?): .*\n/^PHOTO$1: [...]\n/mg; 
+   if($googlesyncml || $googleeas) {
+      # ignore the PHOTO encoding data
+      s/^PHOTO(.*?): .*\n/PHOTO$1: [...]\n/mg;
+   }
+
+   if($googlesyncml) {
       # FN propertiey is not correct 
       s/^FN:.*\n/FN$1: [...]\n/mg;
       # Not support car type in telephone
       s!^TEL\;TYPE=CAR(.*)\n!TEL$1\n!mg;
       # some properties are lost
       s/^(X-EVOLUTION-FILE-AS|NICKNAME|BDAY|CATEGORIES|CALURI|FBURL|ROLE|URL|X-AIM|X-EVOLUTION-UI-SLOT|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-MOZILLA-HTML|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
+   }
 
+   if ($googlecaldav) {
       #several properties are not preserved by Google in icalendar2.0 format
       s/^(SEQUENCE|X-EVOLUTION-ALARM-UID)(;[^:;\n]*)*:.*\r?\n?//gm;
 
@@ -388,12 +422,21 @@ sub NormalizeItem {
         s/^(ORGANIZER[^:]*);SCHEDULE-STATUS=5.3/$1/gm;
         # seems to require a fixed number of recurrences; hmm, okay...
         s/^RRULE:COUNT=400;FREQ=DAILY/RRULE:FREQ=DAILY/gm;
-
-        # X- properties are stored, but not X- parameters
-        s/^(\w+)([^:\n]*);X-EVOLUTION-UI-SLOT=\d+/$1$2/mg;
     }
 
-    if ($google || $yahoo) {
+    if ($oracle) {
+        # remove extensions added by server
+        s/^(X-S1CS-RECURRENCE-COUNT)(;[^:;\n]*)*:.*\r?\n?//gm;
+        # ignore loss of LANGUAGE=xxx property in ATTENDEE
+        s/^ATTENDEE([^\n:]*);LANGUAGE=([^\n;:]*)/ATTENDEE$1/mg;
+    }
+
+    if ($radicale) {
+        # remove extensions added by server
+        s/^(X-RADICALE-NAME)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($googlecaldav || $yahoo) {
       # default status is CONFIRMED
       s/^STATUS:CONFIRMED\r?\n?//gm;
     }
@@ -614,6 +657,16 @@ sub NormalizeItem {
         s/^DESCRIPTION:Reminder\n//m;
     }
 
+    if ($googleeas) {
+        # unsupported properties
+        s/^(FN|X-EVOLUTION-FILE-AS|CATEGORIES)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($googleeas) {
+        # temporarily ignore modified properties
+        s/^(BDAY|X-ANNIVERSARY)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
     # treat X-MOZILLA-HTML=FALSE as if the property didn't exist
     s/^X-MOZILLA-HTML:FALSE\r?\n?//gm;
 
@@ -730,7 +783,7 @@ if($#ARGV > 1) {
       # Both "files" are really directories of individual files.
       # Don't include files in the comparison which are known
       # to be identical because the refer to the same inode.
-      # - build map from inode to filename
+      # - build map from inode to filename(s) (each inode might be used more than once!)
       my %files1;
       my %files2;
       my @content1;
@@ -742,7 +795,10 @@ if($#ARGV > 1) {
       foreach $entry (grep { -f "$file1/$_" } readdir($dh)) {
           $fullname = "$file1/$entry";
           $inode = (stat($fullname))[1];
-          $files1{$inode} = $entry;
+          if (!$files1{$inode}) {
+              $files1{$inode} = [];
+          }
+          push(@{$files1{$inode}}, $entry);
       }
       closedir($dh);
       # - remove common files, read others
@@ -750,18 +806,21 @@ if($#ARGV > 1) {
       foreach $entry (grep { -f "$file2/$_" } readdir($dh)) {
           $fullname = "$file2/$entry";
           $inode = (stat($fullname))[1];
-          if ($files1{$inode}) {
-              delete $files1{$inode};
+          if (@{$files1{$inode}}) {
+              # randomly match against the last file
+              pop @{$files1{$inode}};
           } else {
               open(IN, "<:utf8", "$fullname") || die "$fullname: $!";
               push @content2, <IN>;
           }
       }
       # - read remaining entries from first dir
-      foreach $entry (values %files1) {
-          $fullname = "$file1/$entry";
-          open(IN, "<:utf8", "$fullname") || die "$fullname: $!";
-          push @content1, <IN>;
+      foreach my $array (values %files1) {
+          foreach $entry (@{$array}) {
+              $fullname = "$file1/$entry";
+              open(IN, "<:utf8", "$fullname") || die "$fullname: $!";
+              push @content1, <IN>;
+          }
       }
       my $content1 = join("", @content1);
       my $content2 = join("", @content2); 

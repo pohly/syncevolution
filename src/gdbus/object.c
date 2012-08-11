@@ -112,8 +112,9 @@ static void add_arguments(GString *xml, const char *direction,
 		return;
 
 	do {
-		g_string_append_printf(xml, "\t\t\t<arg type=\"%s\"",
-				dbus_signature_iter_get_signature(&iter));
+		char *sig = dbus_signature_iter_get_signature(&iter);
+		g_string_append_printf(xml, "\t\t\t<arg type=\"%s\"", sig);
+		dbus_free (sig);
 
 		if (direction != NULL)
 			g_string_append_printf(xml, " direction=\"%s\"/>\n",
@@ -606,6 +607,7 @@ static DBusHandlerResult handle_message(DBusConnection *connection,
 	for (method = interface->methods;
 				method->name && method->function; method++) {
 		DBusMessage *reply;
+                BDBusMethodFlags flags = method->flags;
 
 		if (dbus_message_is_method_call(message,
 				interface->name, method->name) == FALSE)
@@ -618,20 +620,25 @@ static DBusHandlerResult handle_message(DBusConnection *connection,
 		if(interface->callback) {
 			interface->callback(interface->user_data);
 		}
+
+                /* method->function() might disconnect the interface,
+                   in which case the "method" pointer itself becomes
+                   invalid - don't use it below */
 		reply = method->function(connection,
 						message,
-						(method->flags & 
+						(flags & 
 						 G_DBUS_METHOD_FLAG_METHOD_DATA) ?
 						method->method_data :
 						interface->user_data);
+                method = NULL;
 
-		if (method->flags & G_DBUS_METHOD_FLAG_NOREPLY) {
+		if (flags & G_DBUS_METHOD_FLAG_NOREPLY) {
 			if (reply != NULL)
 				dbus_message_unref(reply);
 			return DBUS_HANDLER_RESULT_HANDLED;
 		}
 
-		if (method->flags & G_DBUS_METHOD_FLAG_ASYNC) {
+		if (flags & G_DBUS_METHOD_FLAG_ASYNC) {
 			if (reply == NULL)
 				return DBUS_HANDLER_RESULT_HANDLED;
 		}
@@ -669,6 +676,7 @@ static void handle_unregister(DBusConnection *connection, void *user_data)
 	g_slist_free(data->interfaces);
 
 	g_free(data->introspect);
+        g_static_mutex_free(&data->mutex);
 	g_free(data);
 }
 
@@ -1239,7 +1247,7 @@ gboolean b_dbus_send_error(DBusConnection *connection, DBusMessage *message,
 
 	va_start(args, format);
 
-	error = b_dbus_create_error(message, name, format, args);
+	error = b_dbus_create_error_valist(message, name, format, args);
 
 	va_end(args);
 

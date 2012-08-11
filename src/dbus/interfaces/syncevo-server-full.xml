@@ -96,6 +96,13 @@
                   "evolutionuser", "evolutionpassword"; semantic is unchanged
                 </doc:definition>
               </doc:item>
+
+              <doc:item><doc:term>NamedConfig</doc:term>
+                <doc:definition>Session.Get/SetNamedConfig()
+                  are implemented
+                </doc:definition>
+              </doc:item>
+
             </doc:list>
           </doc:para>
         </doc:description>
@@ -118,11 +125,11 @@
       <arg type="a{ss}" name="info" direction="out">
         <doc:doc><doc:summary>
             "version" - main SyncEvolution release name (usually a number,
-sometimes also a beta or alpha suffix),
+            sometimes also a beta or alpha suffix),
             "system" - some plain text information about system libraries,
             "backends" - available backend libraries
         </doc:summary></doc:doc>
-        <annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QStringMap"/>
+        <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QStringMap"/>
       </arg>
     </method>  
 
@@ -184,7 +191,7 @@ sometimes also a beta or alpha suffix),
       </doc:doc>
       <arg type="s" name="notifications" direction="in">
         <doc:doc><doc:summary>
-            describes the notifications which are to be ensabled; currently
+            describes the notifications which are to be enabled; currently
             ignored by server, pass empty string
         </doc:summary></doc:doc>
       </arg>
@@ -227,7 +234,7 @@ sometimes also a beta or alpha suffix),
         and thus can be used to find all templates refering to the same device.
         </doc:para>
       </doc:description></doc:doc>
-      <arg type="b" name="tmplate" direction="in">
+      <arg type="b" name="templateName" direction="in">
         <doc:doc><doc:summary>
           if TRUE, will return template names, otherwise will return 
           configured servers
@@ -251,8 +258,10 @@ sometimes also a beta or alpha suffix),
         and values matching those in the SyncEvolution server 
         configuration files.</doc:para>
 
-        <doc:para>In addition, some special keys for read-only
-        values are added:
+        <doc:para>In addition, some special keys for read-only values
+        are added. These entries may be set when reading a config or
+        template and can be sent when writing it, but will not
+        actually be stored.
         <doc:list>
           <doc:item>
             <doc:term>configName</doc:term>
@@ -279,7 +288,7 @@ sometimes also a beta or alpha suffix),
           <doc:item>
             <doc:term>deviceName</doc:term>
             <doc:definition>device template: the device name that the template is for
-            (copied verbatim from that device)</doc:definition>
+            (copied verbatim from that device, typically chosen by the user of the device)</doc:definition>
           </doc:item>
           <doc:item>
             <doc:term>templateName</doc:term>
@@ -287,6 +296,14 @@ sometimes also a beta or alpha suffix),
             the templates works for, like "Nokia S40"; meant to be
             shown to users; optional, fall back to first entry in
             fingerPrint if not set</doc:definition>
+          </doc:item>
+          <doc:item>
+            <doc:term>hardwareName</doc:term>
+            <doc:definition>device template: "vendor[ model]" string extracted
+            from a device database, unset if neither vendor nor model are known. The
+            deviceName above is probably a better way to present the device to the user,
+            because if a user has multiple identical devices, he hopefully chose
+            unique names for them.</doc:definition>
           </doc:item>
           <doc:item>
             <doc:term>fingerPrint</doc:term>
@@ -314,7 +331,7 @@ sometimes also a beta or alpha suffix),
       <arg type="s" name="server" direction="in">
         <doc:doc><doc:summary>server name</doc:summary></doc:doc>
       </arg>
-      <arg type="b" name="tmplate" direction="in">
+      <arg type="b" name="templateName" direction="in">
         <doc:doc><doc:summary>
           if TRUE, will return a matching template configuration, otherwise
           will return a matching server configuration
@@ -325,7 +342,7 @@ sometimes also a beta or alpha suffix),
           server (or template) configuration
         </doc:summary></doc:doc>
       </arg>
-      <annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QStringMultiMap"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QStringMultiMap"/>
     </method>
 
     <method name="CheckPresence">
@@ -394,7 +411,7 @@ sometimes also a beta or alpha suffix),
                 its pair-value won't be included in the dictionary.
         </doc:description></doc:doc>
       </arg>
-      <annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QArrayOfStringMap"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QArrayOfStringMap"/>
     </method>
 
     <method name="GetDatabases">
@@ -422,12 +439,12 @@ sometimes also a beta or alpha suffix),
             each entry contains in this order:
             an optional name that can be shown to the user
             (already localized or chosen by the user, empty if unavailable),
-            a unique value for the "evolutionSource" property,
+            a unique value for the "database" (previously, "evolutionSource") property,
             a boolean which is true at most once for the default source
           </doc:description>
         </doc:doc>
       </arg>
-      <annotation name="com.trolltech.QtDBus.QtTypeName.Out0" value="QArrayOfDatabases"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QArrayOfDatabases"/>
     </method>
 
     <method name="CheckSource">
@@ -475,10 +492,13 @@ sometimes also a beta or alpha suffix),
           <doc:item><doc:term>no-sync</doc:term>
             <doc:definition>session will not be used for running a synchronization</doc:definition>
           </doc:item>
+          <doc:item><doc:term>all-configs</doc:term>
+            <doc:definition>session will provide read/write access to all configurations, via Get/SetNamedConfig()</doc:definition>
+          </doc:item>
         </doc:list>
       </doc:description></doc:doc>
       <arg type="s" name="config" direction="in">
-        <doc:doc><doc:summary>name of configuration to be created or used in session</doc:summary></doc:doc>
+        <doc:doc><doc:summary>name of configuration to be created or used in session; typically this will be empty when used in combination with 'all-configs' and Get/SetNamedConfig()</doc:summary></doc:doc>
       </arg>
       <arg type="as" name="flags" direction="in">
         <doc:doc><doc:summary>optional flags</doc:summary></doc:doc>
@@ -565,7 +585,7 @@ sometimes also a beta or alpha suffix),
             version of the transport entity.
           </doc:summary>
         </doc:doc>
-        <annotation name="com.trolltech.QtDBus.QtTypeName.In0" value="QStringMap"/>
+        <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QStringMap"/>
       </arg>
       <arg type="b" name="must_authenticate" direction="in">
         <doc:doc>
@@ -804,7 +824,7 @@ sometimes also a beta or alpha suffix),
           </doc:summary>
         </doc:doc>
       </arg>
-      <annotation name="com.trolltech.QtDBus.QtTypeName.In5" value="QStringMap"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In5" value="QStringMap"/>
     </signal>
 
     <method name="InfoResponse">
@@ -833,7 +853,7 @@ sometimes also a beta or alpha suffix),
           </doc:summary>
         </doc:doc>
       </arg>
-      <annotation name="com.trolltech.QtDBus.QtTypeName.In2" value="QStringMap"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In2" value="QStringMap"/>
     </method>
 
     <signal name="LogOutput">
@@ -851,6 +871,11 @@ sometimes also a beta or alpha suffix),
       </arg>
       <arg type="s" name="output">
         <doc:doc><doc:summary>the output string to be broadcast</doc:summary></doc:doc>
+      </arg>
+      <arg type="s" name="procname">
+        <doc:doc><doc:summary>A short tag identifying which process
+        produced the output. Should be shown to the user. Empty for
+        main process in a sync.</doc:summary></doc:doc>
       </arg>
     </signal>
 

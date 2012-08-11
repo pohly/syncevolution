@@ -21,6 +21,7 @@
 #include <syncevo/Logging.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/SmartPtr.h>
+#include <syncevo/SuspendFlags.h>
 
 #include <sstream>
 
@@ -48,11 +49,11 @@ std::string features()
     return boost::join(res, ", ");
 }
 
-URI URI::parse(const std::string &url)
+URI URI::parse(const std::string &url, bool collection)
 {
     ne_uri uri;
     int error = ne_uri_parse(url.c_str(), &uri);
-    URI res = fromNeon(uri);
+    URI res = fromNeon(uri, collection);
     if (!res.m_port) {
         res.m_port = ne_uri_defaultport(res.m_scheme.c_str());
     }
@@ -66,14 +67,14 @@ URI URI::parse(const std::string &url)
     return res;
 }
 
-URI URI::fromNeon(const ne_uri &uri)
+URI URI::fromNeon(const ne_uri &uri, bool collection)
 {
     URI res;
 
     if (uri.scheme) { res.m_scheme = uri.scheme; }
     if (uri.host) { res.m_host = uri.host; }
     if (uri.userinfo) { res.m_userinfo = uri.userinfo; }
-    if (uri.path) { res.m_path = normalizePath(uri.path, false); }
+    if (uri.path) { res.m_path = normalizePath(uri.path, collection); }
     if (uri.query) { res.m_query = uri.query; }
     if (uri.fragment) { res.m_fragment = uri.fragment; }
     res.m_port = uri.port;
@@ -139,24 +140,32 @@ std::string URI::normalizePath(const std::string &path, bool collection)
     std::string res;
     res.reserve(path.size() * 150 / 100);
 
+    // always start with one leading slash
+    res = "/";
+
     typedef boost::split_iterator<string::const_iterator> string_split_iterator;
     string_split_iterator it =
         boost::make_split_iterator(path, boost::first_finder("/", boost::is_iequal()));
     while (!it.eof()) {
-        std::string split(it->begin(), it->end());
-        // Let's have an exception here for "%u", since we use that to replace the
-        // actual username into the path. It's safe to ignore "%u" because it
-        // couldn't be in a valid URI anyway.
-        // TODO: we should find a neat way to remove the awareness of "%u" from
-        // NeonCXX.
-        std::string normalizedSplit = split;
-        if (split != "%u") {
-            normalizedSplit = escape(unescape(split));
-        }
-        res += normalizedSplit;
-        ++it;
-        if (!it.eof()) {
-            res += '/';
+        if (it->begin() == it->end()) {
+            // avoid adding empty path components
+            ++it;
+        } else {
+            std::string split(it->begin(), it->end());
+            // Let's have an exception here for "%u", since we use that to replace the
+            // actual username into the path. It's safe to ignore "%u" because it
+            // couldn't be in a valid URI anyway.
+            // TODO: we should find a neat way to remove the awareness of "%u" from
+            // NeonCXX.
+            std::string normalizedSplit = split;
+            if (split != "%u") {
+                normalizedSplit = escape(unescape(split));
+            }
+            res += normalizedSplit;
+            ++it;
+            if (!it.eof()) {
+                res += '/';
+            }
         }
     }
     if (collection && !boost::ends_with(res, "/")) {
@@ -481,6 +490,9 @@ void Session::startOperation(const string &operation, const Timespec &deadline)
                                          (deadline - Timespec::monotonic()).duration()).c_str() :
                  "no deadline");
 
+    // now is a good time to check for user abort
+    SuspendFlags::getSuspendFlags().checkForNormal();
+
     // remember current operation attributes
     m_operation = operation;
     m_deadline = deadline;
@@ -502,9 +514,11 @@ void Session::flush()
     }
 }
 
-bool Session::checkError(int error, int code, const ne_status *status, const string &location)
+bool Session::checkError(int error, int code, const ne_status *status, const string &location,
+                         const std::set<int> *expectedCodes)
 {
     flush();
+    SuspendFlags &s = SuspendFlags::getSuspendFlags();
 
     // unset operation, set it again only if the same operation is going to be retried
     string operation = m_operation;
@@ -531,8 +545,10 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     if ((error == NE_ERROR || error == NE_OK) &&
         (code >= 300 && code <= 399)) {
         // special case Google: detect redirect to temporary error page
-        // and retry
-        if (location == "http://www.google.com/googlecalendar/unavailable.html") {
+        // and retry; same for redirect to login page
+        if (boost::starts_with(location, "http://www.google.com/googlecalendar/unavailable.html") ||
+            boost::starts_with(location, "https://www.google.com/googlecalendar/unavailable.html") ||
+            boost::starts_with(location, "https://accounts.google.com/ServiceLogin")) {
             retry = true;
         } else {
             SE_THROW_EXCEPTION_2(RedirectException,
@@ -548,6 +564,12 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     switch (error) {
     case NE_OK:
         // request itself completed, but might still have resulted in bad status
+        if (expectedCodes &&
+            expectedCodes->find(code) != expectedCodes->end()) {
+            // return to caller immediately as if we had succeeded,
+            // without throwing an exception and without retrying
+            return true;
+        }
         if (code &&
             (code < 200 || code >= 300)) {
             if (status) {
@@ -653,6 +675,13 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                                      operation.c_str(),
                                      duration,
                                      m_attempt);
+                        // Inform the user, because this will take a
+                        // while and we don't want to give the
+                        // impression of being stuck.
+                        SE_LOG_INFO(NULL, NULL, "operation temporarily (?) failed, going to retry in %.1lfs before giving up in %.1lfs: %s",
+                                    duration,
+                                    (m_deadline - now).duration(),
+                                    descr.c_str());
                         Sleep(duration);
                     } else {
                         SE_LOG_DEBUG(NULL, NULL, "retry %s immediately (due already), attempt #%d",
@@ -665,9 +694,11 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                                  m_attempt);
                 }
 
-                // try same operation again
-                m_operation = operation;
-                return false;
+                // try same operation again?
+                if (s.getState() == SuspendFlags::NORMAL) {
+                    m_operation = operation;
+                    return false;
+                }
             } else {
                 SE_LOG_DEBUG(NULL, NULL, "retry %s would exceed deadline, bailing out",
                              m_operation.c_str());
@@ -846,7 +877,7 @@ static int ne_accept_2xx(void *userdata, ne_request *req, const ne_status *st)
 }
 #endif
 
-bool Request::run()
+bool Request::run(const std::set<int> *expectedCodes)
 {
     int error;
 
@@ -859,7 +890,7 @@ bool Request::run()
         error = ne_xml_dispatch_request(m_req, m_parser->get());
     }
 
-    return checkError(error);
+    return checkError(error, expectedCodes);
 }
 
 int Request::addResultData(void *userdata, const char *buf, size_t len)
@@ -869,9 +900,10 @@ int Request::addResultData(void *userdata, const char *buf, size_t len)
     return 0;
 }
 
-bool Request::checkError(int error)
+bool Request::checkError(int error, const std::set<int> *expectedCodes)
 {
-    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"));
+    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"),
+                                expectedCodes);
 }
 
 }

@@ -19,6 +19,9 @@
 #include <string>
 #include <list>
 
+// TODO: remove this again
+using namespace std;
+
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 
@@ -138,10 +141,13 @@ struct URI {
      * Split URL into parts. Throws TransportAgentException on
      * invalid url.  Port will be set to default for scheme if not set
      * in URL. Path is normalized.
+     *
+     * @param collection    set to true if the normalized path is for
+     *                      a collection and shall have a trailing sl
      */
-    static URI parse(const std::string &url);
+    static URI parse(const std::string &url, bool collection=false);
 
-    static URI fromNeon(const ne_uri &other);
+    static URI fromNeon(const ne_uri &other, bool collection=false);
 
     /**
      * produce new URI from current path and new one (may be absolute
@@ -161,7 +167,9 @@ struct URI {
     /**
      * Removes differences caused by escaping different characters.
      * Appends slash if path is a collection (or meant to be one) and
-     * doesn't have a trailing slash.
+     * doesn't have a trailing slash. Removes double slashes.
+     *
+     * @param path   an absolute path (leading slash)
      */
     static std::string normalizePath(const std::string &path, bool collection);
 
@@ -301,12 +309,16 @@ class Session {
      * @param code       HTTP status code
      * @param status     optional ne_status pointer, non-NULL for all requests
      * @param location   optional "Location" header value
+     * @param expectedCodes   set of codes which are normal and must not result
+     *                        in retrying or an exception (returns true, as if the
+     *                        operation succeeded)
      *
      * @return true for success, false if retry needed (only if deadline not empty);
      *         errors reported via exceptions
      */ 
     bool checkError(int error, int code = 0, const ne_status *status = NULL,
-                    const string &location = "");
+                    const string &location = "",
+                    const std::set<int> *expectedCodes = NULL);
 
     ne_session *getSession() const { return m_session; }
 
@@ -464,7 +476,9 @@ class XMLParser
     std::string m_href, m_etag;
 
     int doResponseEnd(const ResponseEndCB_t &responseEnd) {
-        responseEnd(m_href, m_etag);
+        if (responseEnd) {
+            responseEnd(m_href, m_etag);
+        }
         // clean up for next response
         m_href.clear();
         m_etag.clear();
@@ -518,7 +532,7 @@ class Request
      *
      * @return result of Session::checkError()
      */
-    bool run();
+    bool run(const std::set<int> *expectedCodes = NULL);
 
     std::string getResponseHeader(const std::string &name) {
         const char *value = ne_get_response_header(m_req, name.c_str());
@@ -542,7 +556,7 @@ class Request
     static int addResultData(void *userdata, const char *buf, size_t len);
 
     /** throw error if error code *or* current status indicates failure */
-    bool checkError(int error);
+    bool checkError(int error, const std::set<int> *expectedCodes = NULL);
 };
 
 /** thrown for 301 HTTP status */

@@ -23,11 +23,13 @@
 #include <syncevo/ConfigFilter.h>
 #include <syncevo/SyncConfig.h>
 
+using namespace std;
+
 SE_BEGIN_CXX
 
 void ConfigProps::add(const ConfigProps &other)
 {
-    BOOST_FOREACH(const StringPair &entry, other) {
+    BOOST_FOREACH(const ConfigProps::value_type &entry, other) {
         std::pair<iterator, bool> res = insert(entry);
         if (!res.second) {
             res.first->second = entry.second;
@@ -35,14 +37,24 @@ void ConfigProps::add(const ConfigProps &other)
     }
 }
 
-string ConfigProps::get(const string &key, const string &def) const
+InitStateString ConfigProps::get(const string &key, const string &def) const
 {
     const_iterator it = find(key);
     if (it == end()) {
-        return def;
+        return InitStateString(def, false);
     } else {
         return it->second;
     }
+}
+
+ConfigProps::operator string () const
+{
+    vector<string> res;
+    BOOST_FOREACH(const StringPair &filter, *this) {
+        res.push_back(filter.first + " = " + filter.second);
+    }
+    sort(res.begin(), res.end());
+    return boost::join(res, "\n");
 }
 
 ConfigProps SourceProps::createSourceFilter(const std::string &source) const
@@ -120,11 +132,22 @@ ConfigProps FullProps::createSourceFilter(const std::string &config,
     return filter;
 }
 
-bool FullProps::hasProperties() const
+bool FullProps::hasProperties(PropCheckMode mode) const
 {
     BOOST_FOREACH(const value_type &context, *this) {
-        if (!context.second.m_syncProps.empty()) {
+        if (mode == CHECK_ALL &&
+            !context.second.m_syncProps.empty()) {
             return true;
+        }
+        if (mode == IGNORE_GLOBAL_PROPS) {
+            const ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
+            BOOST_FOREACH(const StringPair &entry, context.second.m_syncProps) {
+                const ConfigProperty *prop = registry.find(entry.first);
+                if (!prop ||
+                    prop->getSharing() != ConfigProperty::GLOBAL_SHARING) {
+                    return true;
+                }
+            }
         }
         BOOST_FOREACH(const SourceProps::value_type &source, context.second.m_sourceProps) {
             if (!source.second.empty()) {
@@ -199,7 +222,5 @@ void FullProps::createFilters(const string &context,
         }
     }
 }
-
-
 
 SE_END_CXX

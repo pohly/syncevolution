@@ -220,6 +220,8 @@ void b_dbus_setup_connection(DBusConnection *connection,
 						GMainContext *context);
 void b_dbus_cleanup_connection(DBusConnection *connection);
 
+void b_dbus_setup_server(DBusServer *server);
+
 DBusConnection *b_dbus_setup_bus(DBusBusType type, const char *name,
 							gboolean unshared,
 							DBusError *error);
@@ -283,8 +285,9 @@ guint b_dbus_add_disconnect_watch(DBusConnection *connection,
 				const char *name, BDBusWatchFunction function,
 				void *user_data, BDBusDestroyFunction destroy);
 guint b_dbus_add_signal_watch(DBusConnection *connection,
-				const char *rule, BDBusSignalFunction function,
-				void *user_data, BDBusDestroyFunction destroy);
+                              const char *rule, BDBusSignalFunction function,
+                              void *user_data, BDBusDestroyFunction destroy,
+                              gboolean is_bus_conn);
 gboolean b_dbus_remove_watch(DBusConnection *connection, guint tag);
 void b_dbus_remove_all_watches(DBusConnection *connection);
 

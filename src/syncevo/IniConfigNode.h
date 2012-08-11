@@ -28,7 +28,6 @@
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
-using namespace std;
 
 /**
  * A base class for .ini style data blobs.
@@ -53,7 +52,7 @@ class IniBaseConfigNode: public ConfigNode {
   public:
     virtual void flush();
     virtual void reload() = 0;
-    virtual string getName() const { return m_data->getName(); }
+    virtual std::string getName() const { return m_data->getName(); }
     virtual bool exists() const { return m_data->exists(); }
     virtual bool isReadOnly() const { return true; }
 };
@@ -73,7 +72,7 @@ class IniBaseConfigNode: public ConfigNode {
  *
  */
 class IniFileConfigNode : public IniBaseConfigNode {
-    list<string> m_lines;
+    std::list<std::string> m_lines;
 
     void read();
 
@@ -82,18 +81,17 @@ class IniFileConfigNode : public IniBaseConfigNode {
 
  public:
     IniFileConfigNode(const boost::shared_ptr<DataBlob> &data);
-    IniFileConfigNode(const string &path, const string &fileName, bool readonly);
+    IniFileConfigNode(const std::string &path, const std::string &fileName, bool readonly);
 
     /* keep underlying methods visible; our own setProperty() would hide them */
     using ConfigNode::setProperty;
 
-    virtual string readProperty(const string &property) const;
-    virtual void setProperty(const string &property,
-                             const string &value,
-                             const string &comment = "",
-                             const string *defValue = NULL);
+    virtual InitStateString readProperty(const std::string &property) const;
+    virtual void writeProperty(const std::string &property,
+                               const InitStateString &value,
+                               const std::string &comment = "");
     virtual void readProperties(ConfigProps &props) const;
-    virtual void removeProperty(const string &property);
+    virtual void removeProperty(const std::string &property);
     virtual void clear();
     virtual void reload() { clear(); read(); }
 };
@@ -101,10 +99,11 @@ class IniFileConfigNode : public IniBaseConfigNode {
 /**
  * The main difference from FileConfigNode is to store pair of 'property-value'
  * in a map to avoid O(n^2) string comparison
- * Here comments for property default value are discarded.
+ * Here comments for property default value are discarded and unset
+ * properties are not stored.
  */
 class IniHashConfigNode: public IniBaseConfigNode {
-    map<std::string, std::string> m_props;
+    std::map<std::string, std::string> m_props;
     /**
      * Map used to store pairs
      */
@@ -116,15 +115,14 @@ class IniHashConfigNode: public IniBaseConfigNode {
 
  public:
     IniHashConfigNode(const boost::shared_ptr<DataBlob> &data);
-    IniHashConfigNode(const string &path, const string &fileName, bool readonly);
-    virtual string readProperty(const string &property) const;
-    virtual void setProperty(const string &property,
-                             const string &value,
-                             const string &comment = "",
-                             const string *defValue = NULL);
+    IniHashConfigNode(const std::string &path, const std::string &fileName, bool readonly);
+    virtual InitStateString readProperty(const std::string &property) const;
+    virtual void writeProperty(const std::string &property,
+                               const InitStateString &value,
+                               const std::string &comment = "");
     virtual void readProperties(ConfigProps &props) const;
     virtual void writeProperties(const ConfigProps &props);
-    virtual void removeProperty(const string &property);
+    virtual void removeProperty(const std::string &property);
     virtual void clear();
     virtual void reload() { clear(); read(); }
 };

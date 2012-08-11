@@ -19,7 +19,7 @@
  */
 
 #ifndef INCL_EVOLUTION_SMART_POINTER
-# define INCL_EVOLUTION_SMART_POINTER
+#define INCL_EVOLUTION_SMART_POINTER
 
 #ifdef HAVE_CONFIG_H
 # include "config.h"
@@ -34,7 +34,6 @@
 #include <stdexcept>
 #include <string>
 #include <memory>
-using namespace std;
 
 #include <boost/scoped_array.hpp>
 #include <boost/shared_ptr.hpp>
@@ -88,10 +87,6 @@ class UnrefGLibEvent {
 class UnrefGString {
  public:
     static void unref(gchar *ptr) { g_free(ptr); }
-};
-class UnrefGMainLoop {
- public:
-    static void unref(GMainLoop *ptr) { g_main_loop_unref(ptr); }
 };
 #endif // HAVE_GLIB
 
@@ -215,10 +210,10 @@ template <class T> class arrayptr : public eptr<T, T, ArrayUnref<T> > {
 };
 
 #ifdef HAVE_GLIB
-/** eptr for glib event handle */
+/** eptr for glib event handle - not reference counted, owned by at most one instance */
 typedef SmartPtr<guint, guint, UnrefGLibEvent> GLibEvent;
-typedef SmartPtr<gchar *, gchar *, UnrefGString> GString;
-typedef SmartPtr<GMainLoop *, GMainLoop *, UnrefGMainLoop> GMainLoopPtr;
+typedef SmartPtr<gchar *, gchar *, UnrefGString> GStringPtr;
+// for GMainLoop see GLibSupport.h
 #endif
 
 SE_END_CXX

@@ -33,7 +33,6 @@
 #endif
 
 #include "e-cal-check-timezones.h"
-#include <libecal/e-cal.h>
 #include <string.h>
 #include <ctype.h>
 

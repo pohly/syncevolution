@@ -71,6 +71,9 @@ bool MapSyncSource::serverModeEnabled() const
 
 void MapSyncSource::detectChanges(SyncSourceRevisions::ChangeMode mode)
 {
+    // erase content which might have been set in a previous call
+    reset();
+
     // read old list from node (matches endSync() code)
     m_revisions.clear();
     ConfigProps props;
@@ -350,5 +353,14 @@ std::pair<std::string, std::string> MapSyncSource::splitLUID(const std::string &
 }
 
 StringEscape MapSyncSource::m_escape('%', "/");
+
+void MapSyncSource::removeAllItems()
+{
+    BOOST_FOREACH(const SubRevisionMap_t::value_type &entry,
+                  m_revisions) {
+        m_sub->removeMergedItem(entry.first);
+    }
+    m_revisions.clear();
+}
 
 SE_END_CXX

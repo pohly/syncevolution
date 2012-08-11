@@ -25,14 +25,15 @@
 #include <syncevo/SyncConfig.h>
 #include <syncevo/SyncML.h>
 #include <syncevo/SynthesisEngine.h>
+#include <syncevo/UserInterface.h>
 
 #include <string>
 #include <set>
 #include <map>
 #include <stdint.h>
-using namespace std;
 
 #include <boost/smart_ptr.hpp>
+#include <boost/signals2.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -40,32 +41,6 @@ SE_BEGIN_CXX
 class TransportAgent;
 class SourceList;
 class SyncSource;
-
-struct SuspendFlags
-{
-    /** SIGINT twice within this amount of seconds aborts the sync */
-    static const time_t ABORT_INTERVAL = 2; 
-    enum CLIENT_STATE
-    {
-        CLIENT_NORMAL,
-        CLIENT_SUSPEND,
-        CLIENT_ABORT,
-        CLIENT_ILLEGAL
-    }state;
-    time_t last_suspend;
-
-    /**
-     * Simple string to print in SyncContext::printSignals().
-     * Set by SyncContext::handleSignal() when updating the
-     * global state. There's a slight race condition: if
-     * messages are set more quickly than they are printed,
-     * only the last message is printed.
-     */
-    const char *message;
-
-SuspendFlags():state(CLIENT_NORMAL),last_suspend(0),message(NULL)
-    {}
-};
 
 /**
  * This is the main class inside SyncEvolution which
@@ -77,7 +52,7 @@ SuspendFlags():state(CLIENT_NORMAL),last_suspend(0),message(NULL)
  * implementation of those uses stdin/out.
  *
  */
-class SyncContext : public SyncConfig, public ConfigUserInterface {
+class SyncContext : public SyncConfig {
     /**
      * the string used to request a config,
      * *not* the normalized config name itself;
@@ -103,10 +78,7 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     FullProps m_configFilters;
     
     boost::shared_ptr<TransportAgent> m_agent;
-    /**
-     * flags for suspend and abort
-     */
-    static SuspendFlags s_flags;
+    boost::shared_ptr<UserInterface> m_userInterface;
 
     /**
      * a pointer to the active SourceList instance for this context if one exists;
@@ -180,6 +152,13 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     static void initMain(const char *appname);
 
     /**
+     * A signal invoked as part of initMain().
+     * Backends can connect to it to extend initMain().
+     */
+    typedef boost::signals2::signal<void (const char *appname)> InitMainSignal;
+    static InitMainSignal &GetInitMainSignal();
+
+    /**
      * true if binary was compiled as stable release
      * (see gen-autotools.sh)
      */
@@ -223,14 +202,7 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
                 const boost::shared_ptr<TransportAgent> &agent,
                 bool doLogging = false);
 
-    ~SyncContext();
-
-    /**
-     * Output channel to be used by this context. NULL means "use std::cout", the default.
-     * Owned by caller, must remain valid as long as SyncContext exists.
-     */
-    void setOutput(ostream *out);
-    ostream &getOutput() const { return *m_out; }
+    virtual ~SyncContext();
 
     bool getQuiet() { return m_quiet; }
     void setQuiet(bool quiet) { m_quiet = quiet; }
@@ -243,6 +215,19 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     bool isServerAlerted() const { return m_serverAlerted; }
     void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
 
+    boost::shared_ptr<UserInterface> getUserInterface() { return m_userInterface; }
+    void setUserInterface(const boost::shared_ptr<UserInterface> &userInterface) { m_userInterface = userInterface; }
+
+    /** use config UI owned by caller, without reference counting */
+    void setUserInterface(UserInterface *userInterface) { m_userInterface = boost::shared_ptr<UserInterface>(userInterface, NopDestructor()); }
+
+    /**
+     * In contrast to getUserInterface(), this call here never returns NULL.
+     * If no UserInterface is currently set, then it returns
+     * a reference to a dummy instance which doesn't do anything.
+     */
+    UserInterface &getUserInterfaceNonNull();
+
     /**
      * Running operations typically checks that a config really exists
      * on disk. Setting false disables the check.
@@ -252,8 +237,10 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
 
     /**
      * throws error if config is needed and not available
+     *
+     * @param operation   a noun describing what is to be done next ("proceed with %s", operation)
      */
-    void checkConfig() const;
+    void checkConfig(const std::string &operation) const;
 
     /**
      * Sets configuration filters. Currently only used in local sync
@@ -265,9 +252,6 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     /** only for server: device ID of peer */
     void setSyncDeviceID(const std::string &deviceID) { m_syncDeviceID = deviceID; }
     std::string getSyncDeviceID() const { return m_syncDeviceID; }
-
-    /** read-only access to suspend and abort state */
-    static const SuspendFlags &getSuspendFlags() { return s_flags; }
 
     /*
      * Use sendSAN as the first step is sync() if this is a server alerted sync.
@@ -347,13 +331,6 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
      * sync session, identified by absolute path to the log dir.
      */
     void restore(const string &dirname, RestoreDatabase database);
-
-    /**
-     * Sleep the sync session in interval seconds, blocks until the interval
-     * is expired or a user suspend/abort request is signaled (CTRL+C)
-     * returns time left to sleep if the method is interrupted by CTRL+C.
-     */
-    virtual int sleep (int interval);
 
     /**
      * fills vector with absolute path to information about previous
@@ -486,43 +463,25 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
      */
     SharedSession getSession() { return m_session; }
 
-    /**
-     * sync() installs signal handlers for SIGINT and SIGTERM if no
-     * handler was installed already. SIGINT will try to suspend.
-     * Sending the signal again quickly (typically done by pressing
-     * CTRL-C twice) will abort. SIGTERM will abort the running sync
-     * immediately.
-     *
-     * If a handler was installed already, the caller is responsible
-     * for calling this function if this kind of SIGINT/SIGTERM
-     * handling is desired.
-     */
-    static void handleSignal(int signal);
-
-    /**
-     * Once a signal was received, all future calls to sync() will
-     * react to it unless this function is called first.
-     */
-    static void resetSignals() { s_flags = SuspendFlags(); }
-
-    /**
-     * handleSignals() is called in a signal handler,
-     * which can only call reentrant functions. Our
-     * logging code is not reentrant and thus has
-     * to be called outside of the signal handler.
-     */
-    static void printSignals();
-
     bool getRemoteInitiated() {return m_remoteInitiated;}
     void setRemoteInitiated(bool remote) {m_remoteInitiated = remote;}
 
     /**
-     * Read from stdin until end of stream.
+     * If called while a sync session runs,
+     * the engine will finish the session and then
+     * immediately try to run another one with
+     * the same sources.
      *
-     * Default implementation reads from real stdin,
-     * D-Bus server implementation must ask client.
+     * Does nothing when called at the wrong time.
+     * There's no guarantee either that restarting is
+     * possible.
      */
-    virtual void readStdin(string &content);
+    static void requestAnotherSync();
+
+    /**
+     * access to current set of sync sources, NULL if not instantiated yet
+     */
+    const std::vector<SyncSource *> *getSources() const;
 
   protected:
     /** exchange active Synthesis engine */
@@ -645,32 +604,6 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     virtual void getConfigXML(string &xml, string &configname);
 
     /**
-     * A helper function which interactively asks the user for
-     * a certain password. May throw errors.
-     *
-     * The default implementation uses stdin/stdout to communicate
-     * with the user.
-     *
-     * @param passwordName the name of the password in the config file
-     * @param descr        A simple string explaining what the password is needed for,
-     *                     e.g. "SyncML server". Has to be unique and understandable
-     *                     by the user.
-     * @param key          the key used to retrieve password
-     * @return entered password
-     */
-    virtual string askPassword(const string &passwordName, const string &descr, const ConfigPasswordKey &key);
-
-    /**
-     * A helper function which is used for user interface to save
-     * a certain password with a specific mechanism. 
-     * Currently possibly syncml server. May throw errors.
-     * The default implementation do nothing.
-     */
-    virtual bool savePassword(const string &passwordName, const string &password, const ConfigPasswordKey &key) { 
-        return false; 
-    }
-
-    /**
      * Callback for derived classes: called after initializing the
      * client, but before doing anything with its configuration.
      * Can be used to override the client configuration.
@@ -759,10 +692,7 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
      *
      * @return true if user wants to abort
      */
-    virtual bool checkForAbort() {
-        printSignals();
-        return (s_flags.state == SuspendFlags::CLIENT_ABORT);
-    }
+    virtual bool checkForAbort();
 
     /**
      * Called to find out whether user wants to suspend sync.
@@ -770,10 +700,7 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
      * Same as checkForAbort(), but the session is finished
      * gracefully so that it can be resumed.
      */
-    virtual bool checkForSuspend() {
-        printSignals();
-        return (s_flags.state == SuspendFlags::CLIENT_SUSPEND);
-    }
+    virtual bool checkForSuspend();
 
  private:
     /** initialize members as part of constructors */
@@ -797,7 +724,7 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     void initLocalSync(const string &config);
 
     /**
-     * called by SynthesDBPlugin in SyncEvolution_StartDataRead()
+     * called via pre-signal of m_startDataRead
      */
     void startSourceAccess(SyncSource *source);
 
@@ -842,9 +769,6 @@ class SyncContext : public SyncConfig, public ConfigUserInterface {
     //a flag indicating whether it is the first time to start source access.
     //It can be used to report infomation about a sync is successfully started.
     bool m_firstSourceAccess;
-
-    // output stream to be used by this context, never NULL (uses cout as fallback)
-    ostream *m_out;
 
 public:
     /**

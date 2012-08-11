@@ -24,6 +24,7 @@ import logging.config
 
 import twisted.web
 import twisted.python.log
+import twisted.web.error
 from twisted.web import server, resource, http
 from twisted.internet import ssl, reactor
 from OpenSSL import SSL
@@ -118,11 +119,14 @@ class SyncMLSession:
         self.sessionid = None
         self.request = None
         self.conpath = None
+        self.abort_match = None
+        self.reply_match = None
         self.connection = None
 
     def destruct(self, code, message=""):
         '''Tell both HTTP client and D-Bus server that we are shutting down,
         then remove the session'''
+        logger.debug("destructing connection %s with code %s message %s", self.conpath, code, message)
         if self.request:
             self.request.setResponseCode(code, message)
             self.request.finish()
@@ -137,17 +141,32 @@ class SyncMLSession:
                 else:
                     raise
             self.connection = None
+        if self.abort_match:
+            Context.bus.remove_signal_receiver(self.abort_match)
+        if self.reply_match:
+            Context.bus.remove_signal_receiver(self.reply_match)
         if self in SyncMLSession.sessions:
             SyncMLSession.sessions.remove(self)
+            logger.debug("removed SyncML session %s", self)
 
-    def abort(self):
+    def abort(self, **keywords):
         '''D-Bus server requests to close connection, so cancel everything'''
-        logger.debug("connection %s went down", self.conpath)
-        self.destruct(http.INTERNAL_SERVER_ERROR, "lost connection to SyncEvolution")
+        conpath = keywords['conpath']
+        logger.debug("connection %s went down, active connection %s", conpath, self.conpath)
+        if conpath == self.conpath:
+            self.destruct(http.INTERNAL_SERVER_ERROR, "lost connection to SyncEvolution")
+        else:
+            logger.debug("ignore shutdown of obsolete connection")
 
-    def reply(self, data, type, meta, final, session):
+    def reply(self, data, type, meta, final, session, **keywords):
         '''sent reply to HTTP client and/or close down normally'''
-        logger.debug("reply session %s final %s data len %d %s", session, final, len(data), meta)
+        conpath = keywords['conpath']
+        logger.debug("reply session %s connection %s (active %s) final %s data len %d %s",
+                     session, conpath, self.conpath, final, len(data), meta)
+        if conpath != self.conpath:
+            logger.debug("ignore reply via obsolete connection")
+            return
+        self.logMessage("outgoing", self.request, data, type)
         # When the D-Bus server sends an empty array, Python binding
         # puts the four chars in 'None' into the data array?!
         if data and len(data) > 0 and data != 'None':
@@ -182,6 +201,9 @@ class SyncMLSession:
 
     def start(self, request, config, url):
         '''start a new session based on the incoming message'''
+        data = request.content.read()
+        type = request.getHeader('content-type')
+        self.logMessage("incoming", request, data, type)
         logger.debug("requesting new session")
         self.object = Context.getDBusServer()
         self.request = request
@@ -194,33 +216,45 @@ class SyncMLSession:
                                             'URL': url},
                                            True,
                                            '')
+        logger.debug("started new connection %s" % self.conpath)
         self.connection = dbus.Interface(Context.bus.get_object('org.syncevolution',
                                                                 self.conpath),
                                          'org.syncevolution.Connection')
 
+        if self.abort_match:
+            Context.bus.remove_signal_receiver(self.abort_match)
+        if self.reply_match:
+            Context.bus.remove_signal_receiver(self.reply_match)
+
+        self.abort_match = \
         Context.bus.add_signal_receiver(self.abort,
                                         'Abort',
                                         'org.syncevolution.Connection',
                                         'org.syncevolution',
                                         self.conpath,
+                                        path_keyword='conpath',
                                         utf8_strings=True,
                                         byte_arrays=True)
+        self.reply_match = \
         Context.bus.add_signal_receiver(self.reply,
                                         'Reply',
                                         'org.syncevolution.Connection',
                                         'org.syncevolution',
                                         self.conpath,
+                                        path_keyword='conpath',
                                         utf8_strings=True,
                                         byte_arrays=True)
 
         # feed new data into SyncEvolution and wait for reply
         request.content.seek(0, 0)
-        self.connection.Process(request.content.read(),
-                                request.getHeader('content-type'))
+        self.connection.Process(data, type)
         SyncMLSession.sessions.append(self)
+        logger.debug("added new SyncML session %s", self)
 
     def process(self, request, data):
         '''process next message by client in running session'''
+        type = request.getHeader('content-type')
+        self.logMessage("incoming", request, data, type)
         if self.request:
             # message resend?! Ignore old request.
             logger.debug("message resend?!")
@@ -230,8 +264,13 @@ class SyncMLSession:
         deferred.addCallback(self.done)
         deferred.addErrback(self.done)
         self.request = request
-        self.connection.Process(data,
-                                request.getHeader('content-type'))
+        self.connection.Process(data, type)
+
+    def logMessage(self, direction, request, data, type):
+        if 'plain' in type or "+xml" in type:
+            logger.debug("processing %s message of type %s and length %d:\n%s" % (direction, type, len(data), data))
+        else:
+            logger.debug("processing %s message of type %s and length %d, binary data" % (direction, type, len(data)))
 
 class SyncMLPost(resource.Resource):
     isLeaf = True
@@ -288,11 +327,10 @@ class SyncMLPost(resource.Resource):
                 if session.sessionid == sessionid:
                     session.process(request, data)
                     return server.NOT_DONE_YET
+            # fallback when session not found
             logger.error("unknown session %s => 404 error", sessionid)
-            request.setResponseCode(http.NOT_FOUND)
-            request.write("<html><body><h1>session not found</h1></body></html>")
-            request.finish()
-
+            page = twisted.web.error.NoResource(message="The session %s was not found" % sessionid)
+            return page.render(request)
 
 class TwistedLogging(object):
     "same as Twisted's PythonLoggingObserver, except that it uses loglevels debug and error"
@@ -335,7 +373,7 @@ evo2python = {
 }
 
 def logSyncEvoOutput(path, level, output):
-    loggerCore.log(evo2python.get(level, logging.ERROR), "%s", output)
+    loggerCore.log(evo2python.get(level, logging.ERROR), "%s: %s", path, output)
 
 usage =  """usage: %prog [options] http://localhost:<port>/<path>
 
@@ -506,6 +544,7 @@ syncevo-http-server itself is installed""")
         os.environ["PATH"] = ":".join((os.path.join(path, "libexec/"),
                                        os.path.join(path, "bin"),
                                        os.environ.get("PATH", "")))
+        os.environ["SYNCEVOLUTION_DATA_DIR"] = os.path.join(path, "share/syncevolution")
         os.environ["SYNCEVOLUTION_XML_CONFIG_DIR"] = os.path.join(path, "share/syncevolution/xml")
         os.environ["SYNCEVOLUTION_TEMPLATE_DIR"] = os.path.join(path, "share/syncevolution/templates")
         # try whether it can be started

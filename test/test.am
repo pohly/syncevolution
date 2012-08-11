@@ -1,0 +1,54 @@
+dist_noinst_DATA += \
+  test/abort-redirect.cpp \
+  test/ClientTest.h \
+  test/ClientTestAssert.h \
+  test/ClientTest.cpp \
+  test/client-test-main.cpp \
+  test/test.h \
+  test/test.cpp
+
+dist_noinst_SCRIPTS += \
+  test/Algorithm/Diff.pm \
+  test/syncevo-http-server.py \
+  test/syncevo-phone-config.py \
+  test/synccompare.pl \
+  test/log2html.py \
+  test/run_src_client_test.sh
+
+dist_noinst_DATA += \
+  test/COPYING \
+  test/Algorithm/Artistic \
+  test/Algorithm/COPYING \
+  test/Algorithm/README \
+  test/testcases/eds_event.ics \
+  test/testcases/eds_event.ics.local \
+  test/testcases/eds_task.ics \
+  test/testcases/vcal10.ics \
+  test/testcases/eds_contact.vcf \
+  test/testcases/eds_contact.vcf \
+  test/testcases/eds_memo.ics \
+  test/testcases/google_event.ics \
+  test/testcases/yahoo_contact.vcf \
+  test/testcases/lcs/file1.txt \
+  test/testcases/lcs/file2.txt \
+  test/testcases/local.png \
+  test/testcases/templates/clients/phone/nokia/S40/7210c.ini \
+  test/testcases/templates/clients/SyncEvolution.ini \
+  test/syncevo-http-server-logging.conf \
+  $(wildcard test/testcases/*.patch)
+
+# generic D-Bus client/server tests
+if COND_DBUS
+noinst_PROGRAMS += test/dbus-client-server
+test_dbus_client_server_SOURCES = test/dbus-client-server.cpp
+test_dbus_client_server_CPPFLAGS = -I$(gdbus_dir) -I$(top_srcdir)/src
+test_dbus_client_server_CXXFLAGS = $(CPPUNIT_CXXFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(BACKEND_CPPFLAGS) $(DBUS_CFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS)
+test_dbus_client_server_LDFLAGS = $(CPPUNIT_LDFLAGS)
+test_dbus_client_server_LDADD = $(gdbus_build_dir)/libgdbussyncevo.la src/syncevo/libsyncevolution.la $(DBUS_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS)
+test_dbus_client_server_DEPENDENCIES = $(gdbus_build_dir)/libgdbussyncevo.la src/syncevo/libsyncevolution.la
+
+if ENABLE_UNIT_TESTS
+test_dbus_client_server_SOURCES += test/test.cpp
+endif
+
+endif

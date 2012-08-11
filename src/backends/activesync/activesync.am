@@ -1,0 +1,33 @@
+dist_noinst_DATA += \
+  src/backends/activesync/configure-sub.in \
+  src/backends/activesync/README
+
+src_backends_activesync_lib = src/backends/activesync/syncactivesync.la
+MOSTLYCLEANFILES += $(src_backends_activesync_lib)
+if ENABLE_MODULES
+src_backends_activesync_backenddir = $(BACKENDS_DIRECTORY)
+src_backends_activesync_backend_LTLIBRARIES = $(src_backends_activesync_lib)
+else
+noinst_LTLIBRARIES += $(src_backends_activesync_lib)
+endif
+
+src_backends_activesync_src = \
+  src/backends/activesync/ActiveSyncSource.h \
+  src/backends/activesync/ActiveSyncSource.cpp \
+  src/backends/activesync/ActiveSyncCalendarSource.h \
+  src/backends/activesync/ActiveSyncCalendarSource.cpp
+
+src_backends_activesync_syncactivesync_la_SOURCES = $(src_backends_activesync_src)
+src_backends_activesync_syncactivesync_la_LIBADD = $(EASCLIENT_LIBS) $(SYNCEVOLUTION_LIBS) $(LIBICAL_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS)
+src_backends_activesync_syncactivesync_la_LDFLAGS = -no-undefined -module -avoid-version
+src_backends_activesync_syncactivesync_la_CPPFLAGS = $(SYNCEVOLUTION_CFLAGS) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
+src_backends_activesync_syncactivesync_la_CXXFLAGS = $(EASCLIENT_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(LIBICAL_CFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS)
+src_backends_activesync_syncactivesync_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS) $(EASCLIENT_DEPENDENCIES)
+
+# activated by EASCLIENT_DEPENDENCIES: usually empty, unless --with-activesyncd-src is used
+$(src_backends_activesync_src) src/backends/activesync/ActiveSyncSourceRegister.cpp: $(EASCLIENT_DEPENDENCIES)
+$(EASCLIENT_DEPENDENCIES): $(LIBEASCLIENT_LA_DEPENDENCIES)
+	cd src/backends/activesync/activesyncd/build && $(MAKE)
+	for i in libeasaccount/src libeasclient eas-daemon/libeas libeastest/src eas-daemon/src; do \
+		(cd src/backends/activesync/activesyncd/build/$$i && $(MAKE) DESTDIR= install) || exit 1; \
+	done

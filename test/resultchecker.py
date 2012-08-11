@@ -21,6 +21,7 @@
 import sys,os,glob,datetime,popen2
 import re
 import fnmatch
+import cgi
 
 """ 
 resultcheck.py: tranverse the test result directory, generate an XML
@@ -209,7 +210,11 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                      'yahoo',
                      'davical',
                      'googlecalendar',
+                     'googleeas',
                      'apple',
+                     'egroupware-dav',
+                     'oracle',
+                     'exchange',
                      'dbus']
     sourceServersRun = 0
     haveSource = False
@@ -261,14 +266,22 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 # The order of the tests matters, so don't use a hash and start with
                 # a source which has only the common tests enabled. Additional tests
                 # then get added at the end.
+                clientSync = re.compile(r' +Client::Sync::(.*?)::(?:(Suspend|Resend|Retry)::)?([^:]+)')
                 for source in ('file_task', 'file_event', 'file_contact', 'eds_contact', 'eds_event'):
                     os.chdir (srcdir)
-                    fout,fin=popen2.popen2(shellprefix + " env LD_LIBRARY_PATH=build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR="+backenddir +" CLIENT_TEST_SOURCES="+source+" ./client-test -h")
+                    cmd = shellprefix + " env LD_LIBRARY_PATH=build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR="+backenddir +" CLIENT_TEST_PEER_CAN_RESTART=1 CLIENT_TEST_RETRY=t CLIENT_TEST_RESEND=t CLIENT_TEST_SUSPEND=t CLIENT_TEST_SOURCES="+source+" ./client-test -h"
+                    fout,fin=popen2.popen2(cmd)
                     os.chdir(oldpath)
                     for line in fout:
-                        l = line.partition('Client::Sync::'+source+'::')[2].rpartition('\n')[0]
-                        if l != '' and l not in templates:
-                            templates.append(l)
+                        m = clientSync.match(line)
+                        if m:
+                            if m.group(2):
+                                # special sub-grouping
+                                test = m.group(2) + '__' + m.group(3)
+                            else:
+                                test = m.group(3)
+                            if test and test not in templates:
+                                templates.append(test)
                 indent +=space
                 indents.append(indent)
                 result.write(indent+'<sync>\n')
@@ -316,13 +329,15 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
 
                 # first build list of all tests, assuming that they pass
                 dbustests = {}
-                test_start = re.compile(r'''^Test(?P<cl>.*)\.test(?P<func>[^ ]*)''')
+                test_start = re.compile(r'''^Test(?P<cl>.*)\.test(?P<func>[^ ]*).*ok(?:ay)?$''')
                 # FAIL/ERROR + description of test (old Python)
                 test_fail = re.compile(r'''(?P<type>FAIL|ERROR): Test(?P<cl>.*)\.test(?P<func>[^ ]*)''')
                 # FAIL/ERROR + function name of test (Python 2.7)
                 test_fail_27 = re.compile(r'''(?P<type>FAIL|ERROR): test(?P<func>[^ ]*) \(.*\.(?:Test(?P<cl>.*))\)''')
+                name = None
                 logfile = None
-                sepcount = 0
+                htmlfile = None
+                linetype = None
                 for line in open(rserver + "/output.txt"):
                     m = test_start.search(line)
                     if m:
@@ -331,29 +346,67 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                         m = test_fail.search(line) or test_fail_27.search(line)
                         is_okay = False
                     if m:
-                        # create log file
+                        # create new (?!) log file
                         cl = m.group("cl")
                         func = m.group("func")
-                        name = rserver + "/" + cl + "_" + func + ".log"
-                        logfile = open(name, "w")
-                        if not dbustests.get(cl):
-                            dbustests[cl] = {}
-                        if is_okay:
-                            # okay: write a single line with the full test description
-                            dbustests[cl][func] = "okay"
-                            logfile.write(line)
-                            logfile = None
-                        else:
-                            # failed: start writing lines into separate log file
-                            dbustests[cl][func] = m.group("type")
-                            sepcount = 0
+                        newname = rserver + "/" + cl + "_" + func + ".log"
+                        if newname != name:
+                            name = newname
+                            logfile = open(name, "w")
+                            if htmlfile:
+                                htmlfile.write('</pre></body')
+                                htmlfile.close()
+                                htmlfile = None
+                            htmlfile = open(name + ".html", "w")
+                            htmlfile.write('''<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+   <meta http-equiv="content-type" content="text/html; charset=None">
+   <style type="text/css">
+td.linenos { background-color: #f0f0f0; padding-right: 10px; }
+span.lineno { background-color: #f0f0f0; padding: 0 5px 0 5px; }
+pre { line-height: 125%; }
+body .hll { background-color: #ffffcc }
+body  { background: #f8f8f8; }
+span.INFO { background: #c0c0c0 }
+span.ERROR { background: #e0c0c0 }
+span.hl { color: #c02020 }
+   </style>
+</head>
+<body>
+<pre>''')
+                            if not dbustests.get(cl):
+                                dbustests[cl] = {}
+                            if is_okay:
+                                # okay: write a single line with the full test description
+                                dbustests[cl][func] = "okay"
+                                logfile.write(line)
+                                logfile = None
+                                htmlfile.write('<span class="OKAY">%s</span></pre></body>' % cgi.escape(line))
+                                htmlfile.close()
+                                htmlfile = None
+                            else:
+                                # failed: start writing lines into separate log file
+                                dbustests[cl][func] = m.group("type")
+                                linetype = "ERROR"
+                                htmlfile.write('<a href="#dbus-traffic">D-Bus traffic</a> <a href="#stdout">output</a>\n\n')
+
                     if logfile:
                         logfile.write(line)
-                        if line.startswith("-----------------------------------"):
-                            sepcount = sepcount + 1
-                            if sepcount >= 2:
-                                # end of failure output for this test
-                                logfile = None
+                        if line == 'D-Bus traffic:\n':
+                            linetype = "DBUS"
+                            htmlfile.write('<h3 id="dbus-traffic">D-Bus traffic:</h3>')
+                        elif line == 'server output:\n':
+                            linetype = "OUT"
+                            htmlfile.write('<h3 id="stdout">server output:</h3>')
+                        else:
+                            htmlfile.write('<span class="%s">%s</span>' % (linetype, cgi.escape(line)))
+
+                if htmlfile:
+                    htmlfile.write('</pre></body')
+                    htmlfile.close()
+                    htmlfile = None
+
                 # now write XML
                 indent +=space
                 indents.append(indent)
@@ -375,15 +428,19 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 indent = indents[-1]
             else:
                 for log in logs:
-                    if os.path.basename(log) in ['____compare.log',
-                                                 'syncevo.log', # D-Bus server output
-                                                 'dbus.log', # dbus-monitor output
-                                                 ]:
+                    logname = os.path.basename(log)
+                    if logname in ['____compare.log',
+                                   'syncevo.log', # D-Bus server output
+                                   'dbus.log', # dbus-monitor output
+                                   ]:
                         continue
                     # <path>/Client_Sync_eds_contact_testItems.log
                     # <path>/SyncEvo_CmdlineTest_testConfigure.log
                     # <path>/N7SyncEvo11CmdlineTestE_testConfigure.log - C++ name mangling?
-                    m = re.match(r'.*/(Client_Source_|Client_Sync_|N7SyncEvo\d+|[^_]*_)(.*)_([^_]*)\.log', log)
+                    m = re.match(r'^(Client_Source_|Client_Sync_|N7SyncEvo\d+|[^_]*_)(.*)_([^_]*)\.log', logname)
+                    if not m or logname.endswith('.server.log'):
+                        print "skipping", logname
+                        continue
                     # Client_Sync_, Client_Source_, SyncEvo_, ...
                     prefix = m.group(1)
                     # eds_contact, CmdlineTest, ...
@@ -392,11 +449,27 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                     casename = m.group(3)
                     # special case grouping of some tests: include group inside casename instead of
                     # format, example:
-                    # <path>/Client_Source_apple_caldav_LinkedItems_1_testLinkedItemsParent
-                    m = re.match(r'(.*)_(LinkedItems_\d+)', format)
+                    # <path>/Client_Source_apple_caldav_LinkedItemsDefault_testLinkedItemsParent
+                    m = re.match(r'(.*)_(LinkedItems\w+|Suspend|Resend|Retry)', format)
                     if m:
                         format = m.group(1)
                         casename = m.group(2) + '::' + casename
+                        if '.' in casename:
+                            # Ignore sub logs.
+                            print "skipping", logname
+                            continue
+                    # Another special case: suspend/resend/retry uses an intermediate grouping
+                    # which we can ignore because the name is repeated in the test case name.
+                    # m = re.match(r'(.*)_(Suspend|Resend|Retry)', format)
+                    # if m:
+                    #     format = m.group(1)
+                    #     # Case name *not* extended, in contrast to the
+                    #     # LinkedItems case above.
+                    #     if '.' in casename:
+                    #         # Ignore sub logs.
+                    #         print "skipping", logname
+                    #         continue
+                    print "analyzing log %s: prefix %s, subset %s, testcase %s" % (logname, prefix, format, casename)
                     if(format not in logdic):
                         logdic[format]=[]
                     logdic[format].append((casename, log))
@@ -416,9 +489,6 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                     indents.append(indent)
                     # must avoid :: in XML
                     tag = casename.replace('::', '__')
-                    # special case LinkedItems_1::testLinkedItems...: shorten it
-                    # if tag.startswith('LinkedItems_'):
-                    #    tag = tag.split('_', 1)[1]
                     result.write(indent+'<'+tag+'>')
                     match=format+'::'+casename
                     matchOk=match+": okay \*\*\*"

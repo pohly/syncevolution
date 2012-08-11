@@ -1,3 +1,811 @@
+SyncEvolution 1.2.99.2 -> 1.2.99.3, 24.07.2012
+==============================================
+
+Final release candidate for SyncEvolution 1.3 - fingers crossed,
+knock on wood, etc.
+
+ActiveSync is now available in binaries from syncevolution.org and
+becomes the recommended way of synchronizing contacts with Google. EDS
+3.5.x and later are supported when compiling from source;
+syncevolution.org binaries continue to support only EDS up to 3.4.
+
+
+Details:
+
+* EDS: added support for EDS 3.5.x
+
+  When compiled against EDS 3.5.x or later, SyncEvolution now uses
+  the backend code originally written for the EClient API introduced
+  in EDS 3.2. That code was changed so that it works with the new
+  include file rules and ESourceRegistry in EDS 3.5.x. Support
+  for using the EClient API with EDS 3.4 was removed because maintaining
+  three different flavors of the EDS backend code would be too much
+  work and not gain much (just the possibility to test the EDSClient
+  code with 3.4).
+
+  At the moment, this is a compile time choice made automatically
+  by configure. syncevolution.org binaries are compiled against
+  an older EDS and thus do not work with EDS 3.5.x or later.
+
+  EDS 3.5.x handles authentication itself, using a standard system
+  prompt if necessary. SyncEvolution can no longer provide the password,
+  and thus the "databaseUser/Password" options have no effect when using
+  EDS 3.5.x.
+
+* ActiveSync: updated to work with latest activesyncd and Google, package binaries
+
+  Syncing Google contacts was added to the nightly testing. Syncing
+  contacts and events with Exchange 2012 was already working. Setup
+  instructions and known issues are described here:
+  https://syncevolution.org/wiki/google-contacts-activesync
+
+* local sync: don't drop data comparison output on target side
+
+  synccompare on the target side of a local sync was invoked with its
+  output being redirected via an unreliable socket to the local sync
+  parent. When the output was large, some of it might have been lost.
+
+* local sync: fixed crash
+
+  When processing stdout from syncevo-local-child in
+  syncevo-dbus-helper, the LogRedirect class was invoked recursively and
+  tried to print the same stdout data repeatedly until the
+  syncevo-dbus-helper crashed due to the infinite recurssion.
+
+* local sync: fixed helper process shutdown in case of parent failure
+
+  The helper process only detected that the parent failed when
+  it tried to log something while the parent had already shut down
+  the D-Bus connection. Even that did not work reliably and differed
+  between D-Bus libdbus and GIO.
+
+  Added several test cases and fixes for "process died prematurely"
+  error scenarios.
+
+* Mobical (aka Everdroid): stopped testing memo syncing
+
+  Memos used to work, but now only trigger an unspecific 400 error
+  on the server side.
+
+* autotools: ensure that link lines are complete
+
+  As mentioned by Tino Keitel on the mailing list, some libs and
+  executables were only implicitly linked against libraries that they
+  called directly. This happened to work by chance because these libraries
+  ended up in the running executable anyway, due to indirect loading.
+  Now there is a "make installcheck" test for this kind of defect
+  and the makefiles were updated to avoid it.
+
+  One exception is libsmltk, which depends on the caller providing
+  SySync logging support.
+
+* D-Bus server: fixed HTTP presence for recent libdbus
+
+  Testing with libdbus 1.6.0 on Debian Testing failed because the lib
+  changed some behavior: instead of looking up the owner of a certain
+  bus name immediately, it now does that when invoking a
+  method. Therefore the check for "have connection" in SyncEvolution
+  was too simplistic and missed the fact that both were not usable,
+  causing the server to assume that HTTP was down while in reality it
+  should have assumed it to be up. This prevented auto-syncing and
+  manually clicking "Sync" in the GTK UI.
+
+* syncevolution.org: declare dependencies on libical and EDS
+
+  Let the bundle .deb depend on libical if the lib was enabled during
+  compilation (for example, for CalDAV). This ensures that it gets
+  installed on systems which otherwise don't have it.
+
+  "syncevolution-evolution" is compatible (and depends on) EDS up to
+  and including 3.4. The package now declares that dependency and
+  conflicts with more recent EDS, because even if the older EDS libs
+  are still installed they won't work when the rest of EDS was
+  updated.
+
+* CalDAV + syncevolution.org: fixed segfault without libical+libecal
+
+  When libical and libecal were not installed, trying to use the CalDAV
+  backend for VEVENTs segfaulted because it depends on libical and did
+  not check properly for it. Only affected syncevolution.org binaries.
+
+
+SyncEvolution 1.2.99.1 -> 1.2.99.2, 04.07.2012
+==============================================
+
+Next step towards SyncEvolution 1.3. It adds a workaround for
+Funambol's OneMedia and fixes an old bug which became more severe in
+1.2.99.1. Also has some usability improvements for
+CalDAV/CardDAV. Hopefully it will not take long to stabilize the code,
+so test it now while it is still hot :-)
+
+
+Details:
+
+* Funambol: ignore UID
+
+  Funambol's OneMedia sends UID, but not RECURRENCE-ID. That becomes a
+  problem when multiple events of the same event series are added to a
+  backend which follows the iCalendar 2.0 standard (CalDAV, EDS, KDE),
+  because these events all look like the master event, and there can be
+  only one of those.
+
+  SyncEvolution now strips the UID from all events coming from any
+  Funambol server (regardless of the version). If a future Funambol
+  server release adds support for both UID and RECURRENCE-ID, then
+  SyncEvolution will have to be updated to take advantage of the
+  improved server. Because the RECURRENCE-ID is also getting
+  stripped (despite not being set at the moment), SyncEvolution should
+  continue to work as it does now even if the server changes.
+
+  It would have been nice to limit this workaround to affected Funambol
+  server versions, but an inquiry on the Funambol mailing list didn't
+  get a reply, therefore SyncEvolution is playing it safe and assumes
+  that all future Funambol releases will have the same problem.
+
+* WebDAV: fixed data corruption issue when uploading item with long UID
+
+  In some cases data with a very long UID wasn't handled correctly,
+  causing the out-going data to be malformed and probably causing a
+  rejection by the server. The root cause is incorrect string handling.
+  In releases before 1.2.99.1, only the --import operation of contacts
+  into CardDAV were affected. In 1.2.99.1, the same code also got used
+  for calendar items and then could also affect syncing.
+
+* engine: add DTSTAMP+LAST-MODIFIED before writing calendar items
+
+  When writing calendar items into a backend storage as iCalendar 2.0 or
+  vCalendar 1.0, they should have DTSTAMP and LAST-MODIFIED values. DTSTAMP
+  is expected by some CalDAV servers (like Apple). LAST-MODIFIED is usually
+  added by the storage, but not always.
+
+  In the text/plain -> syncevolution -> text/calendar -> Radicale -> EDS
+  -> syncevolution chain the LAST-MODIFIED was not added by Radicale, which caused
+  problems for change tracking in an EDS-based SyncEvolution.
+
+  Also necessary when importing from a phone using vCalendar without
+  DTSTAMP directly into CalDAV.
+
+* Google Calendar: updated URL redirect handling
+
+  Google Calendar sometimes returns redirect requests to human-readable
+  web sites (an "unavailable" page, a login form). This is of course
+  bogus when the client is an automated CalDAV client.
+
+  The "unavailable.html" case was already handled. Made it a bit more
+  flexible to also catch possible variations of it (additional
+  parameters, https instead of http).
+
+  Added the https://accounts.google.com/ServiceLogin case. Not sure
+  whether retrying will help in that case, but there's not much else
+  that SyncEvolution can do.
+
+* CalDAV + VJOURNAL: handle UID conflicts
+
+  When asked to insert a VJOURNAL which already existed (= same UID),
+  CalDAV servers respond with a 412 "Precondition failed" error. This
+  needs to be detected and translated into an "item needs to be merged"
+  result so that the engine can load the existing item, merge the data,
+  and then write back.
+
+* WebDAV: --status for WebDAV source aborted
+
+  The command line --status operation did not complete when applied to a
+  CalDAV/CardDAV source. Instead it aborted because the operation took a
+  code path where the backend was not fully initialized.
+
+* CalDAV/CardDAV sync: improved target side output
+
+  Added a "target side of local sync ready" INFO message to introduce
+  the output which has the target context in the [INFO] tag. The sync report
+  from the target side now has the target context embedded in brackets
+  after the "Changes applied during synchronization" header, to avoid
+  ambiguities.
+
+  Sometimes the backend has to resend requests because of temporary
+  issues. If the problem turned out to be permanent, there was a long
+  period of time, retryDuration=5 minutes to be precice, in which no
+  visible progress happened.
+
+  Now SyncEvolution's WebDAV backend will print a message like this
+  before going to sleep until it is time to retry:
+
+  [INFO @googlecalendar] operation temporarily (?) failed, going to retry in 5.0s before giving up in 18.4s: PROPFIND: Neon error code 1: 401 Unauthorized
+
+  The uncertainty comes from several factors. In this example, the 401
+  might indicate a permanent problem (wrong credentials), or it could be
+  Google reporting a temporary authorization problem which is (probably)
+  meant to slow down the client while it asks the user to re-enter the
+  password. SyncEvolution only asks for passwords once, so it tries
+  again with the same password if it was successful with it in the
+  past. Otherwise it gives up immediately.
+
+  Another dubious example are name server lookup errors. They can be
+  permanent (wrong host name) or temporary (name server
+  down). SyncEvolution errs on the side of retrying, to avoid
+  interrupting an operation which still has a chance to continue.
+
+  Output from the target side of a local sync was passed through stderr
+  redirection as chunks of text to the frontends. This had several
+  drawbacks:
+  - forwarding only happened when the local sync parent was processing
+    the output redirection, which (due to limitations of the implementation)
+    only happens when it needs to print something itself
+  - debug messages were not forwarded
+  - message boundaries might have been lost
+
+  In particular the new INFO messages are relevant while the sync runs
+  and need to be shown immediately.
+
+* command line: fixed password + property lookup during --print-databases
+
+  --print-databases for an existing configuration did not look up
+  passwords stored in a keyring, causing the operation to fail for
+  backends like CalDAV/CardDAV where credentials are required.
+
+  Overriding source properties in that case also only worked when using
+  the unqualified property name ("databasePassword=foo") but not when
+  using the source name as prefix ("calendar/databasePassword=foo").
+
+* Developers:
+
+  Implementing the improved local sync output required extending the
+  D-Bus API. The Server.LogOutput signal now has an additional
+  "process name" parameter. Normally it is empty. For messages
+  originating from the target side, it carries that extra target
+  context string.
+
+  This D-Bus API change is backward compatible. Older clients can still
+  subscribe to and decode the LogOutput messages, they'll simply ignore
+  the extra parameter. Newer clients expecting that extra parameter
+  won't work with an older D-Bus daemon: they'll fail to decode the
+  D-Bus message.
+
+
+SyncEvolution 1.2.2 -> 1.2.99.1, 22.06.2012
+===========================================
+
+First pre-release of SyncEvolution 1.3. Contains bug fixes that were
+not backported to 1.2.x, so upgrading is recommended. For example,
+SyncEvolution 1.3 is required for Evolution 3.4, otherwise photos are
+not exported properly. Further workarounds for recent changes in
+Google CalDAV were added.
+
+Major new features are KDE/Akonadi support in the syncevolution.org
+binaries and ActiveSync support (only in the source code). The D-Bus
+server and local sync were rewritten considerably, to make the code
+cleaner and more robust. The CalDAV backend now also supports tasks
+and memos.
+
+
+Details:
+
+* phone sync: delete<->delete conflict + phone calendar+todo sync (BMC #23744)
+
+  When deleting an item on phone and locally, the next sync failed with
+  ERROR messages about "object not found". This has several reasons:
+  - libsynthesis super data store attempts to read items
+    which may or may not exist (triggers ERROR message)
+  - it checks for 404 but Evolution backends only return a generic
+    database error (causes sync to fail)
+
+* phone sync: get phone vendor and model from Device ID profile (BMC #736)
+
+  In the past we have relied on the user-modifiable device name to be
+  the fingerprint for matching a phone to a template which is unreliable.
+
+  This release changes this in the cases where the phone supports the
+  Device ID profile (DIP). If support for DIP is detected, then we
+  extract the vendor and product ids and attempt to associate them
+  with a product and vendor name by using a newly added lookup table.
+
+  This lookup table has to be maintained manually and depends on
+  contributions by users to cover more devices. See
+  http://blixtra.org/blog/2011/09/22/syncevolution-needs-you-or-at-least-your-bluetooth-phones/
+
+* vCalendar 1.0: fixed recurring all-day event support
+
+  vCalendar 1.0 cannot represent all-day events. The workarounds for
+  mapping iCalendar 2.0 all-day events into vCalendar 1.0 was
+  incomplete, leading to effects like shifting EXDATEs and end
+  times.
+
+* GTK-UI: accept service config with a username again (BMC#23106)
+
+  Suppressing configs with empty username had undesired side effects:
+  modifying configs for direct syncing with a device incorrectly
+  triggered the same error message, without any means of entering
+  a username. The faulty check was removed without replacement.
+
+* GTK-UI: added GTK 3 version of UI
+
+  When GTK 3 is found during compilation, a GTK 3 version of the
+  UI is built. The source code of both is different to avoid
+  excessive use of ifdefs. At the moment, both versions offer
+  the same features. In the long run, the GTK 3 version will
+  replace the GTK 2 version.
+
+* command line: added refresh/one-way-from-local/remote (BMC #23537)
+
+  The -from-client/server sync modes are confusing because the direction
+  of the data exchange depends on which side acts as SyncML server or
+  client.
+
+  This release introduces new modes which use -from-local/remote
+  instead. The statistics and messages also use these variants
+  now. The old modes are still understood, but are declared as "not
+  recommended" in the documentation.
+
+* command line: config and source names are optional (BMC #23783)
+
+  The need to add "foo" and "bar" pseudo config and source names to the
+  command line even when all parameters for the operation where
+  explicitly specified on the command line was confusing.
+
+  Now it is possible to invoke item operations without the config and
+  source name. Names which refer to non-existent configs are still
+  accepted, as in previous releases. Typos are handled better by
+  producing a detailed error report which includes (as applicable):
+  - config doesn't exist
+  - source doesn't exist or not selected
+  - backend property not set
+
+  Because luids used to be positional arguments after <config> and
+  <source>, a new --luids keyword is necessary to indicate that the
+  ensuing parameters are luids and not <config> and <source>.
+
+* command line: introduced --print-databases, supported for CalDAV/CardDAV
+
+  Listing databases is now a dedicated operation, instead of being done
+  whenever syncevolution was invoked without parameters.
+
+  Advantages:
+  - can be combined with property assignments for backends
+    which do not work without that additional information, for example
+    CalDAV/CardDAV:
+    syncevolution --print-databases \
+                  backend=[caldav|carddav] \
+                  syncURL=... \
+                  username=... \
+                  password=...
+  - can be done for configured sources
+
+* command line: use both stdout and stderr
+
+  Traditionally, the "syncevolution" command line tool mixed its
+  INFO/ERROR/DEBUG messages into the normal stdout. This has the major
+  drawback that error messages get lost during operations like
+     syncevolution --export - @default addressbook | grep "John Doe"
+
+  Now anything which not the expected result of the operation is
+  always sent to stderr. Obviously this includes ERROR messages. INFO
+  and DEBUG are harder to decide. Because they usually convey meta
+  information about the running operation, they are also sent to
+  stderr. The output of running a sync goes to both stdout (summary)
+  and stderr (progress).
+
+* command line: allow setting empty properties
+
+  Due to the way how properties were handled internally, it wasn't
+  possible to explicitly set a property to its default value. Instead
+  the property was unset. For example, explicitly setting database= was
+  not possible.
+
+  This is necessary for client-test and ActiveSync, because client-test
+  needs to know that the testing is expected to run with the default
+  databases (something which normally is avoided by overwriting empty
+  database properties).
+
+  Now the "is set" state is tracked explicitly in the config storage and
+  command line property APIs. Unsetting a property via the command line
+  could be implemented with an explicit command line option, but is not
+  supported at the moment.
+
+* command line + local sync: fixed erroneous "Comparison impossible" output.
+
+  "Comparison impossible" was incorrectly printed after a successful
+  comparison on the target side of local sync.
+
+* synccompare: shorter data dump of PHOTO
+
+  A full comparison of the base64 PHOTO data can be very long.
+  Now some key characteristics of the PHOTO data (number of
+  characters in base64 encoding, number of bytes in decoded
+  data, md5sum of decoded data) are printed instead.
+
+  That way, unintended changes of the data (different encoding,
+  different content) should still be found while testing and
+  added/removed photos are nicely visible in synccompare diffs.
+
+* synccompare: fixed output for byte-identical duplicates
+
+  If database dumps contained byte-identical duplicates, they
+  were treated as a single item on the left side of a comparison.
+  This caused erroneous "added" entries on the right side.
+
+* secure password storage: usage of GNOME Keyring vs. KDE KWallet configurable
+
+  Automatically detecting KDE users is not possible at the
+  moment. Instead KDE users have to manually set the new "keyring"
+  global config property to "KDE" (case insensitive) if the
+  SyncEvolution installation supports both, because GNOME Keyring is the
+  default to avoid surprises for traditional users. If only KWallet
+  support is enabled, then this is not necessary.
+
+  "GNOME" and "true/false/1/0/yes/no" can also be set. This has the
+  advantage that keyring usage can be enabled permanently for the
+  command line in --daemon=no mode; normally keyrings are not used in
+  that mode because accessing them can bring up UI dialogs.
+
+  It also becomes possible to disable keyring usage in syncevo-dbus-server,
+  something which couldn't be done before.
+
+  The --keyring command line option is still supported, as an alias for
+  "[--sync-property] keyring=<value>". The default value for --keyring
+  is true, to match the traditional behavior. In contrast to other sync
+  properties, setting "keyring" does not require an explicit --run
+  parameter. Again this is done to mirror traditional usage.
+
+* Evolution: always create databases (PTCOM-113)
+
+  Always try to create address book or calendar database, because even
+  if there is a source there's no guarantee that the actual database
+  was created already; the original logic for only setting this when
+  explicitly requesting a new database therefore failed in some cases.
+
+  This problem affected users who had never created anything locally
+  and wanted to use SyncEvolution to migrate their data. Now that
+  works without having to create dummy entries first.
+
+* Evolution contacts: changed default sync format to vCard 3.0
+
+  vCard 3.0 is the better default because it has saner encoding
+  rules and defines more properties, thus avoiding the need for
+  non-standard extensions. However, Mobical has problems with
+  the new default. See upgrade instructions below.
+
+* D-Bus server: made notification verbosity configurable with "notifyLevel"
+
+  The new "notifyLevel" per-peer configuration option allows users to
+  control how many desktop notifications the D-Bus server produces while
+  executing an automatic sync:
+
+  0 - suppress all notifications
+  1 - show only errors
+  2 - show information about changes and errors (in practice currently the same as level 3)
+  3 - show all notifications, including starting a sync (default)
+
+* CalDAV: updated Google workarounds
+
+  Google started sending empty items (VCALENDAR with no VEVENT inside)
+  which cannot be removed. SyncEvolution 1.3 ignores such items.
+
+  The workaround for a 404 from Google Calendar for a GET (sending a
+  REPORT request matching the item's UID) was broken: first, processing
+  the result ended up calling the unset responseEnd boost function
+  pointer, which caused the request to fail. Second, getting multiple
+  items wasn't handled (data from all items concatenated together was
+  used).
+
+  That can happen in the somewhat unlike case that some items have a UID
+  which is a complete superset of the requested UID - not realistic in
+  real life, but happens during testing.
+
+* WebDAV: bridge with SyncML
+
+  Now a peer accessed via SyncML can read/write data stored in a
+  CalDAV/CardDAV server directly. This can be used to connect a device
+  which only supports SyncML to a CalDAV/CardDAV server, or sync data
+  between a SyncML server and a CalDAV/CardDAV server. See "CalDAV and
+  CardDAV" in the README for details.
+
+* WebDAV: improved --configure
+
+  Added INFO output about checking sources. This helps with WebDAV when
+  the server cannot be contacted (dead, misconfigured) because otherwise
+  there would be no indication at all why the --configure operation
+  seems to hang.
+
+  Here is some example output, including aborting:
+  $ syncevolution --configure --template webdav \
+                  syncURL=http://192.168.1.100:9000/ \
+                  username=foo password=bar retryDuration=2s \
+                  target-config@webdav-temp
+  [INFO] creating configuration target-config@webdav-temp
+  [INFO] addressbook: looking for databases...
+  [INFO] addressbook: no database to synchronize
+  [INFO] calendar: looking for databases...
+  [INFO] calendar: no database to synchronize
+  [INFO] memo: looking for databases...
+  [INFO] memo: no database to synchronize
+  [INFO] todo: looking for databases...
+  [INFO] todo: no database to synchronize
+
+  It timed out fairly quickly here because of the retryDuration=2s. That
+  also gets placed in the resulting config, which is probably not desired.
+
+  Aborting the operation is now supported:
+
+  $ syncevolution --configure \
+                  --template webdav \
+                  syncURL=http://192.168.1.100:9000/ \
+                  username=foo password=bar \
+                  target-config@webdav-temp
+  [INFO] creating configuration target-config@webdav-temp
+  [INFO] addressbook: looking for databases...
+  ^C[INFO] Asking to suspend...
+  [INFO] Press CTRL-C again quickly (within 2s) to stop immediately (can cause problems in the future!)
+  ^C[INFO] Aborting immediately ...
+  [ERROR] error code from SyncEvolution aborted on behalf of user (local, status 20017): aborting as requested by user
+
+  It would be good to make the CTRL-C handling code aware that it can
+  abort immediately instead of doing the intermediate "asking to suspend"
+  step, which only makes sense for sync sessions.
+
+* WebDAV: support tasks and memos (BMC #24893)
+
+  The new backend property values "CalDAVTodo" and "CalDAVJournal"
+  select tasks resp. memos stored in a CalDAV collection. "CalDAV"
+  continues to select events.
+
+  Events, tasks and journals can be mixed in the same resource (=
+  URL). However, this is less efficient than storing them separately.
+
+  A good CalDAV server allows filtering items by type, and SyncEvolution
+  uses that. However, it was found that Radicale 0.7 ignores this
+  filtering, which could have led to data loss (SyncEvolution asks for
+  all VTODOs in preparation for a "delete all items" operation in a
+  "CalDAVTodo" source, gets also VJOURNALs, then deletes them).
+
+  Therefore SyncEvolution plays it safe and downloads the VTODO and
+  VJOURNAL data to double-check that it is working on the right items.
+  This causes additional traffic for well-behaving servers; currently
+  it cannot be turned off.
+
+  Tasks are exchanged as vCalendar 1.0 or iCalendar 2.0 VJOURNAL.
+  Memos are exchanged as VTODO or plain text. The logic for storing
+  incoming plain text is slightly different compared to the way how
+  the EDS memo backend did it: instead of copying the first line
+  from the text into the summary, it is now moved. In other words,
+  the first line gets stripped. The change is primarily technically
+  motivated; both approaches have pros and cons.
+
+* WebDAV: improved Radicale support
+
+  Radicale > 0.7 will return status 200 for delete requests;
+  is now treated like 204 by SyncEvolution. 412 'Preconditiona Failed'
+  when asking to delete an already removed item is treated like
+  the more common 404 'not found'. Same with 410 'gone' instead
+  of 404 when trying to read a non-existent item.
+
+* file backend: more flexible sync support for memos
+
+  The databaseFormat=text/calendar for memos did not support
+  synchronizing as plain text. When using the new
+  databaseFormat=text/calendar+plain, vCalendar/iCalendar/plain text
+  are all valid sync formats; the storage is iCalendar 2.0
+  VJOURNAL in all cases.
+
+* WebDAV: avoid potential crash during database detection
+
+  When a server responds to a PROPFIND for a path with results for some
+  other path, then SyncEvolution crashed during the search for the
+  default calendar or address book because of a bug in the code which
+  was meant to handle that kind of response. Apparently Yahoo Calendar
+  did that. Now seen again in combination with Radicale 0.6.4.
+
+  In general, the code was made more robust to cope with bugs in
+  Radicale 0.6.4. Later Radicale versions fixed these issues and also
+  worked with SyncEvolution 1.2.2 without client-side workarounds.
+
+* WebDAV: better path normalization
+
+  "syncURL" and "database" properties had to end in a trailing slash,
+  otherwise items were not found (404 errors). Now the necessary slash
+  is added automatically.
+
+* Funambol: avoid slow syncs in refresh from server
+
+  libsynthesis has traditionally implemented "refresh-from-server" as
+  "delete local data" plus "slow" sync. This is more compatible, because
+  some servers (like Google) do not support "refresh-from-server".
+
+  But it has the downside that the server cannot know that the client
+  won't send any data, and Funambol's OneMedia now only allows one slow
+  sync before blocking the next one for a certain period of time. This is
+  done to prevent excessive resource usage by badly behaving clients.
+
+  To accomodate both kinds of servers, the new "enableRefreshSync"
+  sync property can be set set to explicitly allow the usage of
+  the "refresh-from-server" sync mode. It's off by default. The Funambol
+  template has it turned on, existing configs must be updated manually
+  (see upgrading comments below).
+
+* Curl transport: support SSLServerCertificates=<path>
+
+  When the setting refers to a directory, then CURLOPT_CAINFO doesn't
+  work (must be a file). Check this and use CURLOPT_CAPATH instead.
+
+  Caveat: there are some comments in the API documentation about "NSS
+  enabled libcurl" which supports a directory in
+  CURLOPT_CAINFO. Hopefully providing an explicit path in CURLOPT_CAPATH
+  also works in that configuration.
+
+* code cleanup + rewrite: syncing done in separate process
+
+  syncevo-dbus-server now runs syncing in a separate process. Local
+  sync also uses a second helper process. This makes the D-Bus server
+  more responsive via D-Bus (no more blocking operations) and
+  minimizes the effect of bugs in code involved with syncing
+  (backends, system libraries, etc.).
+
+  In the long term this restructuring will also allow more advanced
+  features, like monitoring local or remote storage for changes.
+
+* SyncEvolution <-> SyncEvolution sync: multiple cycles per session
+
+  SyncML only allows one send/receive cycle per session. There are cases
+  (for example, client side merges data that a dumber server failed to
+  match correctly) where client and server are still out of sync at
+  the end of a cycle. When SyncEvolution syncs with another SyncEvolution
+  instance (locally or remotely), both sides detect that the peer
+  can continue syncing in the same session and start over automatically
+  when needed. Previously the user had to start another sync session manually.
+
+  To the user this is shown as "number of cycles" in a sync session
+  in the sync report. "Restart" is the process of entering a new cycle.
+
+  The cycles are also visible in the command line output as multiple
+  INFO lines:
+
+    [INFO] eds_contact: starting first time sync from client (peer is server)
+    [INFO] creating complete data backup of source eds_contact before sync (enabled with dumpData and needed for prin
+    Local data changes to be applied during synchronization:
+    *** eds_contact ***
+    no changes
+
+    [INFO] eds_contact: sent 1/1
+    [INFO] eds_contact: started
+    [INFO] eds_contact: first time sync done successfully
+    [INFO] eds_contact: starting normal sync from client (peer is server)         <===
+    [INFO] eds_contact: started                                                   <===
+    [INFO] eds_contact: normal sync done successfully                             <===
+    [INFO] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
+
+    Synchronization successful.
+
+    Changes applied during synchronization:
+    +---------------|-----------------------|-----------------------|-CON-+
+    |               |         LOCAL         |        REMOTE         | FLI |
+    |        Source | NEW | MOD | DEL | ERR | NEW | MOD | DEL | ERR | CTS |
+    +---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+    |   eds_contact |  0  |  0  |  0  |  0  |  1  |  0  |  0  |  0  |  0  |
+    |   refresh-from-local, 2 cycles, 0 KB sent by client, 0 KB received  |
+                            ^^^^^^^^
+    |   item(s) in database backup: 1 before sync, 1 after it             |
+    +---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+    |          start Tue Feb  7 17:07:49 2012, duration 0:03min           |
+    |               synchronization completed successfully                |
+    +---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
+
+* SyncEvolution <-> SyncEvolution sync: negotiate UID support via SyncCap (BMC #22783)
+
+  The semantic of UID/RECURRENCE-ID in calendar data is now tracked
+  per data store involved in a sync. If full iCalendar 2.0 semantic
+  (= IDs are globally unique) is guaranteed, then pairs are found
+  based on these IDs. Otherwise pairs must be found by looking at
+  item attributes.
+
+  Previously a hack was used to detect this kind of support (any kind
+  of SyncEvolution instance was assumed to support it, although some
+  backends do not).
+
+* syncevolution.org packages: fixed D-Bus server autostart in .deb and .rpm packages
+
+  syncevo-dbus-server wasn't started automatically as part of a user
+  session because /etc/xdg/autostart/syncevo-dbus-server.desktop wasn't
+  included in the packages. This broke auto syncing after a session
+  restart (required manually starting SyncEvolution).
+
+* syncevolution.org packages: support KDE
+
+  The traditional "syncevolution-evolution" package was
+  replaced with "syncevolution-bundle". A meta "syncevolution-evolution"
+  package depends on it, to support seamless updates for users who have
+  "syncevolution-evolution" installed.
+
+  Binary dependencies of the main .deb are ignored for backends
+  because loading them is optional. The new "syncevolution-kde"
+  package has the right dependencies for KDE/Akonadi, while
+  "syncevolution-evolution" mostly just lists standard libs
+  if the "EDS compatibility" mode is used, where libebook/libecal
+  are loaded dynamically.
+
+  Platform specific code (GNOME keyring, KDE wallet) was moved into
+  loadable, optional modules, to allow installation of the SyncEvolution
+  bundle without forcing the installation of unused system components.
+
+* D-Bus: use GIO D-Bus instead of libdbus if available
+
+  When compiling from source, the more modern GIO D-Bus is used instead
+  of libdbus if available and recent enough (>= 2.30). syncevolution.org
+  binaries still use libdbus, to stay compatible with older Linux
+  distros.
+
+* several minor bug fixes
+
+  syncevo-dbus-server now runs under valgrind in the nightly testing,
+  plus several more test scenarios were added. This helped to find
+  and fix various minor memory handling issues.
+
+* developers: backend API changes
+
+  beginSync/endSync() (aka m_startDataRead/m_endDataWrite) may now be
+  called multiple times per SyncSource instance life cycle. SyncSources
+  derived from TrackingSyncSource should work without changes. Use the
+  Client::Source::*::testChangesMultiCycles test to check whether your
+  backend supports this correctly.
+
+  Reading and deleting must throw a 404 status exception when an item
+  is not found. The Client::Source::*::*404 tests cover this.
+
+  The special semantic of the former RegisterSyncSource::InactiveSource
+  (invalid pointer of value 1) caused bugs, like using it in
+  --print-databases (=> segfault) or not being able to store the result
+  of a createSource() directly in a smart pointer (=> potential leak in
+  SyncSource::createSource()).
+
+  Obviously a bad idea to start with. Replaced with a
+  RegisterSyncSource::InactiveSource() method which creates a real,
+  inactive SyncSource instance which can and must be deleted by the
+  caller.
+
+  This is a SyncSource API change for backend developers.  Instead of
+  RegisterSyncSource::InactiveSource, return
+  RegisterSyncSource::InactiveSource(). Comparisons against
+  RegisterSyncSource::InactiveSource needs to be replaced with a call
+  to the new SyncSource::isInactive().
+
+  Long-running backend calls are encouraged to check for events on the
+  main glib context (either in a loop or with
+  g_main_context_iteration(NULL)) and abort when
+  SuspendFlags::getSuspendFlags().getState() returns
+  SuspendFlags::ABORT.
+
+* packagers:
+
+  libgdbussyncevo is now installed as a normal library in /usr/lib,
+  even though SyncEvolution is the only user.
+
+  pcrecpp is now a new hard dependency.
+
+
+Upgrading from release 1.2.x:
+
+The sync format of existing configurations for Mobical (aka Everdroid)
+must be updated manually, because the server has encoding problems when
+using vCard 3.0 (now the default for Evolution contacts):
+   syncevolution --configure \
+                 syncFormat=text/x-vcard \
+                 mobical addressbook
+
+The Funambol template explicitly enables usage of the
+"refresh-from-server" sync mode to avoid getting throttled with 417
+'retry later' errors. The same must be added to existing configs
+manually:
+   syncevolution --configure \
+                 enableRefreshSync=TRUE \
+                 funambol
+
+Upgrading from releases before 1.2:
+
+Old configurations can still be read. But writing, as it happens
+during a sync, must migrate the configuration first. Releases >= 1.2
+automatically migrates configurations. The old configurations
+will still be available (see "syncevolution --print-configs") but must
+be renamed manually to use them again under their original names with
+older SyncEvolution releases.
+
+
 SyncEvolution 1.2.1 -> 1.2.2, 13.01.2012
 ========================================
 

@@ -23,8 +23,9 @@
     <!-- TODO: Add more checkings to avoid generate un-welformed html files -->
     <xsl:strip-space elements="*"/>
     <xsl:param name="cmp_result_file" select="''"/> <!-- comparsion result file, necessary -->
+    <xsl:param name="url" select="''"/> <!-- root URL, at least pass . for relative URLs -->
 	<xsl:output method="html" indent="yes" encoding="UTF-8"/>
-    
+
     <!-- comparison result strings -->
     <xsl:variable name="equal" select="'equal'"/> 
     <xsl:variable name="equal-in-semantics" select="'equal-in-semantics'"/>
@@ -34,7 +35,7 @@
     <xsl:variable name="invalid-value" select="'invalid-value'"/>
 
     <!-- log file suffix name -->
-    <xsl:variable name="log-file-suffix" select="'.log'"/>
+    <xsl:variable name="log-file-suffix" select="'.log.html'"/>
 	
     <xsl:template match="/">
         <xsl:choose>
@@ -57,7 +58,8 @@
     <xsl:template name="generate-html-body">
         <xsl:param name="cmp_result_tree"/>
         <body>
-            <xsl:variable name="log-dir-uri" select="nightly-test/log-info/uri"/>
+            <!-- xsl:variable name="log-dir-uri" select="nightly-test/log-info/uri"/ -->
+            <xsl:variable name="log-dir-uri" select="$url"/>
             <xsl:call-template name="generate-source-info">
                 <xsl:with-param name="sourceinfo" select="nightly-test/source-info"/>
             </xsl:call-template>
@@ -632,9 +634,14 @@
             <xsl:for-each select="$list-of-unit-cases">
                 <!--xsl:sort select="name(.)" type="text"/ -->
                 <xsl:variable name="unit" select="."/>
+                <xsl:variable name="escapedunit">
+                  <xsl:call-template name="stringescape">
+                    <xsl:with-param name="string" select="name($unit)"/>
+                  </xsl:call-template>
+                </xsl:variable>
                 <tr>
                     <td width="300">
-                        <xsl:value-of select="name(.)"/>
+                        <xsl:value-of select="$escapedunit"/>
                     </td>
                     <xsl:for-each select="$type-list">
                         <xsl:variable name="type" select="."/>
@@ -662,7 +669,7 @@
                                             <xsl:with-param name="string" select="name($type)"/>
                                         </xsl:call-template>
                                     </xsl:variable>
-                                    <a href="{concat($log-path,string(@prefix),$escapedtype,'_',name($unit),$log-file-suffix)}">
+                                    <a href="{concat($log-path,string(@prefix),$escapedtype,'_',$escapedunit,$log-file-suffix)}">
                                         <xsl:value-of select="$status"/>
                                     </a>
                                 </xsl:otherwise>

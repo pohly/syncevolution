@@ -52,15 +52,31 @@
 
 #ifdef HAVE_EDS
 #include <glib-object.h>
+#if defined(USE_EDS_CLIENT)
+#include <libedataserver/libedataserver.h>
+#else
+#ifdef HAVE_LIBEDATASERVER_EDS_VERSION_H
+#include <libedataserver/eds-version.h>
+#endif
 #include <libedataserver/e-source.h>
 #include <libedataserver/e-source-list.h>
+#endif
 #ifdef ENABLE_EBOOK
+#ifdef USE_EDS_CLIENT
+#include <libebook/libebook.h>
+#else
 #include <libebook/e-book.h>
 #include <libebook/e-vcard.h>
+#include <libebook/e-book-query.h>
+#endif
 #endif
 #ifdef ENABLE_ECAL
 # define HANDLE_LIBICAL_MEMORY 1
+#ifdef USE_EDS_CLIENT
+#include <libecal/libecal.h>
+#else
 #include <libecal/e-cal.h>
+#endif
 #endif
 #endif
 #ifdef ENABLE_BLUETOOTH
@@ -79,6 +95,7 @@ extern "C" {
 
 /** libebook, libecal, libedataserver available (currently checks for e_book_new/e_cal_new/e_source_group_peek_sources) */
 extern int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
+extern int EDSAbiHaveIcal;
 
 /** libbluetooth available (checks sdp_connect()) */
 extern int SyncEvoHaveLibbluetooth;
@@ -127,6 +144,7 @@ struct EDSAbiWrapper {
     GQuark (*e_book_error_quark) (void);
     gboolean (*e_book_remove_contact) (EBook *book, const char *id, GError **error);
     char* (*e_vcard_to_string) (EVCard *evc, EVCardFormat format);
+    gboolean (*e_contact_inline_local_photos) (EContact *contact, GError **error);
 # endif /* ENABLE_EBOOK */
 
 # ifdef ENABLE_ECAL
@@ -302,6 +320,7 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define e_book_query_unref EDSAbiWrapperSingleton.e_book_query_unref
 #   define e_book_remove_contact EDSAbiWrapperSingleton.e_book_remove_contact
 #   define e_vcard_to_string EDSAbiWrapperSingleton.e_vcard_to_string
+#   define e_contact_inline_local_photos EDSAbiWrapperSingleton.e_contact_inline_local_photos
 #  endif /* ENABLE_EBOOK */
 
 #  ifdef ENABLE_ECAL

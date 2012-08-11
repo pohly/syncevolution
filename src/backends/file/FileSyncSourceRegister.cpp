@@ -34,7 +34,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
 #ifndef ENABLE_FILE
     // tell SyncEvolution if the user wanted to use a disabled sync source,
     // otherwise let it continue searching
-    return isMe ? RegisterSyncSource::InactiveSource : NULL;
+    return isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
 #else
     // Also recognize one of the standard types?
     // Not in the FileSyncSource!
@@ -121,6 +121,8 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
+        // tell testInsertTwice that we won't detect duplicates
+        config.m_sourceKnowsItemSemantic = false;
         config.m_type = "file:text/vcard:3.0";
     }
 } VCard30Test;
@@ -153,6 +155,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
+        config.m_sourceKnowsItemSemantic = false;
         config.m_type = "file:text/calendar:2.0";
     }
 } ITodo20Test;
@@ -163,6 +166,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
+        config.m_sourceKnowsItemSemantic = false;
         config.m_type = "virtual:text/x-vcalendar";
         config.m_subConfigs = "file_event,file_task";
     }

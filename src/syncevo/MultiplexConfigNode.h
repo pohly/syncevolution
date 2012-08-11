@@ -39,7 +39,7 @@ class MultiplexConfigNode : public FilterConfigNode
     bool m_havePeerNodes;
     int m_hiddenLower, m_hiddenUpper;
 
-    FilterConfigNode *getNode(const string &property,
+    FilterConfigNode *getNode(const std::string &property,
                               const ConfigProperty **prop = NULL) const;
 
  public:
@@ -76,17 +76,16 @@ class MultiplexConfigNode : public FilterConfigNode
         m_nodes[hidden][sharing].reset(new FilterConfigNode(node));
     }
 
-    virtual void addFilter(const string &property,
-                           const string &value);
+    virtual void addFilter(const std::string &property,
+                           const InitStateString &value);
     virtual void setFilter(const ConfigFilter &filter);
 
-    virtual string getName() const { return m_name; }
+    virtual std::string getName() const { return m_name; }
     virtual void flush();
-    virtual string readProperty(const string &property) const;
-    virtual void setProperty(const string &property,
-                             const string &value,
-                             const string &comment = string(""),
-                             const string *defValue = NULL);
+    virtual InitStateString readProperty(const std::string &property) const;
+    virtual void writeProperty(const std::string &property,
+                               const InitStateString &value,
+                               const std::string &comment = std::string(""));
     virtual void readProperties(PropsType &props) const;
 
     /*
@@ -94,7 +93,7 @@ class MultiplexConfigNode : public FilterConfigNode
      * not certain what should be deleted: only properties which are
      * not shared?!
      */
-    virtual void removeProperty(const string &property);
+    virtual void removeProperty(const std::string &property);
     virtual void clear();
 
     /**

@@ -35,3 +35,30 @@
       ]]></comparescript>
     </datatype>
 
+    <datatype name="journaltext10" basetype="text">
+      <use profile="JournalText"/>
+      <typestring>text/plain</typestring>
+      <versionstring>1.0</versionstring>
+
+      <incomingscript><![CDATA[
+        $MEMO_INCOMING_SCRIPT
+      ]]></incomingscript>
+
+      <outgoingscript><![CDATA[
+        $MEMO_OUTGOING_SCRIPT
+      ]]></outgoingscript>
+    </datatype>
+
+    <datatype name="journaltext11" basetype="text">
+      <use profile="JournalText"/>
+      <typestring>text/plain</typestring>
+      <versionstring>1.1</versionstring>
+
+      <incomingscript><![CDATA[
+        ISEVENT = 2;
+      ]]></incomingscript>
+
+      <outgoingscript><![CDATA[
+        $MEMO_OUTGOING_SCRIPT
+      ]]></outgoingscript>
+    </datatype>

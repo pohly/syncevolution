@@ -442,15 +442,7 @@ TSyError SyncEvolution_LoadAdminData( CContext aContext, cAppCharP aLocDB,
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = DB_Forbidden;
-    try {
-        if (source->getOperations().m_loadAdminData) {
-            res = source->getOperations().m_loadAdminData(aLocDB, aRemDB, adminData);
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_loadAdminData(*source, aLocDB, aRemDB, adminData);
     SE_LOG_DEBUG(source, NULL, "LoadAdminData '%s' '%s', '%s' res=%d",
                  aLocDB, aRemDB, *adminData ? *adminData : "", res);
     return res;
@@ -465,15 +457,7 @@ TSyError SyncEvolution_SaveAdminData( CContext aContext, cAppCharP adminData )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = DB_Forbidden;
-    try {
-        if (source->getOperations().m_saveAdminData) {
-            res = source->getOperations().m_saveAdminData(adminData);
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_saveAdminData(*source, adminData);
     SE_LOG_DEBUG(source, NULL, "SaveAdminData '%s' res=%d", adminData, res);
     return res;
 } /* SaveAdminData */
@@ -489,6 +473,12 @@ bool SyncEvolution_ReadNextMapItem( CContext aContext, MapID mID, bool aFirst )
     }
     bool res = false;
     try {
+        // always reset mID, just in case that caller expects it or
+        // operation doesn't do it correctly
+        mID->localID = NULL;
+        mID->remoteID = NULL;
+        mID->ident = 0;
+        mID->flags = 0;
         if (source->getOperations().m_readNextMapItem) {
             res = source->getOperations().m_readNextMapItem(mID, aFirst);
         }
@@ -515,15 +505,7 @@ TSyError SyncEvolution_InsertMapItem( CContext aContext, cMapID mID )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = DB_Forbidden;
-    try {
-        if (source->getOperations().m_insertMapItem) {
-            res = source->getOperations().m_insertMapItem(mID);
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_insertMapItem(*source, mID);
     SE_LOG_DEBUG(source, NULL, "InsertMapItem '%s' + %x = '%s' + %x res=%d", 
                  NullPtrCheck(mID->localID), mID->ident,
                  NullPtrCheck(mID->remoteID), mID->flags,
@@ -540,15 +522,7 @@ TSyError SyncEvolution_UpdateMapItem( CContext aContext, cMapID mID )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = DB_Forbidden;
-    try {
-        if (source->getOperations().m_updateMapItem) {
-            res = source->getOperations().m_updateMapItem(mID);
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_updateMapItem(*source, mID);
     SE_LOG_DEBUG(source, NULL, "UpdateMapItem '%s' + %x = '%s' + %x, res=%d", 
                  mID->localID, mID->ident,
                  mID->remoteID, mID->flags,
@@ -566,15 +540,7 @@ TSyError SyncEvolution_DeleteMapItem( CContext aContext, cMapID mID )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = DB_Forbidden;
-    try {
-        if (source->getOperations().m_deleteMapItem) {
-            res = source->getOperations().m_deleteMapItem(mID);
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_deleteMapItem(*source, mID);
     SE_LOG_DEBUG(source, NULL, "DeleteMapItem '%s' + %x = '%s' + %x res=%d",
                  mID->localID, mID->ident,
                  mID->remoteID, mID->flags,
@@ -649,23 +615,7 @@ TSyError SyncEvolution_StartDataRead( CContext aContext, cAppCharP   lastToken,
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    try {
-        BOOST_FOREACH(const SyncSource::Operations::CallbackFunctor_t &callback,
-                      source->getOperations().m_startAccess) {
-            callback();
-        }
-        if (source->getOperations().m_startDataRead) {
-            res = source->getOperations().m_startDataRead(lastToken, resumeToken);
-        }
-        BOOST_FOREACH(const SyncSource::Operations::CallbackFunctor_t &callback,
-                      source->getOperations().m_startSession) {
-            callback();
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_startDataRead(*source, lastToken, resumeToken);
     SE_LOG_DEBUG(source, NULL, "StartDataRead last='%s' resume='%s' res=%d",
                  lastToken, resumeToken, res);
     return res;
@@ -681,17 +631,9 @@ TSyError SyncEvolution_ReadNextItemAsKey( CContext aContext, ItemID aID, KeyH aI
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
     *aStatus = 0;
     memset(aID, 0, sizeof(*aID));
-    if (source->getOperations().m_readNextItem) {
-        try {
-            res = source->getOperations().m_readNextItem(aID, aStatus, aFirst);
-        } catch (...) {
-            res = source->handleException();
-        }
-    }
-
+    TSyError res = source->getOperations().m_readNextItem(*source, aID, aStatus, aFirst);
     SE_LOG_DEBUG(source, NULL, "ReadNextItemAsKey aStatus=%d aID=(%s,%s) res=%d",
                  *aStatus, aID->item, aID->parent, res);
     return res;
@@ -704,15 +646,7 @@ TSyError SyncEvolution_ReadItemAsKey( CContext aContext, cItemID aID, KeyH aItem
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    if (source->getOperations().m_readItemAsKey) {
-        try {
-            res = source->getOperations().m_readItemAsKey(aID, aItemKey);
-        } catch (...) {
-            res = source->handleException();
-        }
-    }
-
+    TSyError res = source->getOperations().m_readItemAsKey(*source, aID, aItemKey);
     SE_LOG_DEBUG(source, NULL, "ReadItemAsKey aID=(%s,%s) res=%d",
                  aID->item, aID->parent, res);
     return res;
@@ -732,7 +666,8 @@ sysync::TSyError SyncEvolution_ReadBlob(CContext aContext, cItemID  aID,  cAppCh
   TSyError res;
   if (source->getOperations().m_readBlob) {
       try {
-	    size_t blksize, totsize;
+            size_t blksize = aBlkSize ? static_cast<size_t>(*aBlkSize) : 0,
+                totsize = aTotSize ? static_cast<size_t>(*aTotSize) : 0;
 	    /* Another conversion between memSize and size_t to make s390 happy */
             res = source->getOperations().m_readBlob(aID, aBlobID, (void **)aBlkPtr,
 						     aBlkSize ? &blksize : NULL,
@@ -753,7 +688,9 @@ sysync::TSyError SyncEvolution_ReadBlob(CContext aContext, cItemID  aID,  cAppCh
   }
 
   SE_LOG_DEBUG(source, NULL, "ReadBlob aID=(%s,%s) aBlobID=(%s) aBlkPtr=%p aBlkSize=%lu aTotSize=%lu aFirst=%s aLast=%s res=%d",
-               aID->item,aID->parent, aBlobID, aBlkPtr, (unsigned long)*aBlkSize, (unsigned long)*aTotSize,
+               aID->item,aID->parent, aBlobID, aBlkPtr,
+               aBlkSize ? (unsigned long)*aBlkSize : 0,
+               aTotSize ? (unsigned long)*aTotSize : 0,
                aFirst? "true" : "false", *aLast ? "true" : "false", res);
   return res;
 } /* ReadBlob */
@@ -766,15 +703,7 @@ TSyError SyncEvolution_EndDataRead( CContext aContext )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    if (source->getOperations().m_endDataRead) {
-        try {
-            res = source->getOperations().m_endDataRead();
-        } catch (...) {
-            res = source->handleException();
-        }
-    }
-
+    TSyError res = source->getOperations().m_endDataRead(*source);
     SE_LOG_DEBUG(source, NULL, "EndDataRead res=%d", res);
     return res;
 }
@@ -802,15 +731,7 @@ TSyError SyncEvolution_InsertItemAsKey( CContext aContext, KeyH aItemKey, ItemID
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    if (source->getOperations().m_insertItemAsKey) {
-        try {
-            res = source->getOperations().m_insertItemAsKey(aItemKey, newID);
-        } catch (...) {
-            res = source->handleException();
-        }
-    }
-
+    TSyError res = source->getOperations().m_insertItemAsKey(*source, aItemKey, newID);
     SE_LOG_DEBUG(source, NULL, "InsertItemAsKey res=%d\n", res);
     return res;
 }
@@ -824,16 +745,7 @@ TSyError SyncEvolution_UpdateItemAsKey( CContext aContext, KeyH aItemKey, cItemI
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    if (source->getOperations().m_updateItemAsKey) {
-        try {
-            res = source->getOperations().m_updateItemAsKey(aItemKey, aID, updID);
-        } catch (...) {
-            res = source->handleException();
-        }
-    }
-
-  
+    TSyError res = source->getOperations().m_updateItemAsKey(*source, aItemKey, aID, updID);
     SE_LOG_DEBUG(source, NULL, "aID=(%s,%s) res=%d",
                  aID->item,aID->parent, res);
     return res;
@@ -862,15 +774,7 @@ TSyError SyncEvolution_DeleteItem( CContext aContext, cItemID aID )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    if (source->getOperations().m_deleteItem) {
-        try {
-            res = source->getOperations().m_deleteItem (aID);
-        } catch (...) {
-            res = source->handleException(HANDLE_EXCEPTION_404_IS_OKAY);
-        }
-    }
-
+    TSyError res = source->getOperations().m_deleteItem(*source, aID);
     SE_LOG_DEBUG(source, NULL, "DeleteItem aID=(%s,%s) res=%d",
                  aID->item, aID->parent, res);
     return res;
@@ -941,17 +845,7 @@ TSyError SyncEvolution_DeleteBlob( CContext aContext, cItemID aID, cAppCharP aBl
         return LOCERR_WRONGUSAGE;
     }
 
-    TSyError res;
-    if (source->getOperations().m_deleteBlob) {
-        try {
-            res = source->getOperations().m_deleteBlob(aID, aBlobID);
-        } catch (...) {
-            res = source->handleException();
-        }
-    } else {
-        res = LOCERR_NOTIMP;
-    }
-
+    TSyError res = source->getOperations().m_deleteBlob(*source, aID, aBlobID);
     SE_LOG_DEBUG(source, NULL, "DeleteBlob aID=(%s,%s) aBlobID=(%s) res=%d",
                  aID->item,aID->parent, aBlobID, res);
     return res;
@@ -964,19 +858,7 @@ TSyError SyncEvolution_EndDataWrite( CContext aContext, bool success, appCharP *
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    TSyError res = LOCERR_OK;
-    try {
-        BOOST_FOREACH(const SyncSource::Operations::CallbackFunctor_t &callback,
-                      source->getOperations().m_endSession) {
-            callback();
-        }
-        if (source->getOperations().m_endDataWrite) {
-            res = source->getOperations().m_endDataWrite(success, newToken);
-        }
-    } catch (...) {
-        res = source->handleException();
-    }
-
+    TSyError res = source->getOperations().m_endDataWrite(*source, success, newToken);
     SE_LOG_DEBUG(source, NULL, "EndDataWrite %s '%s' res=%d", 
                  success ? "COMMIT":"ROLLBACK", *newToken, res);
     return res;

@@ -1,3 +1,40 @@
+# ==23596== Conditional jump or move depends on uninitialised value(s)
+# ==23596==    at 0x9A404E7: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A41CB1: __log_put (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A42F2D: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A43D9F: __log_put_record (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9986B1B: __ham_add_el (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x997E1FD: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x99F5548: __dbc_iput (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x99F314F: __db_put (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x9A04EBA: __db_put_pp (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596==    by 0x103CC953: do_create (e-book-backend-file.c:915)
+# ==23596==    by 0x103CCBFC: e_book_backend_file_create_contacts (e-book-backend-file.c:988)
+# ==23596==    by 0x4E4AC31: e_book_backend_sync_create_contacts (e-book-backend-sync.c:85)
+# ==23596==    by 0x4E4D3D7: book_backend_create_contacts (e-book-backend-sync.c:493)
+# ==23596==    by 0x4E4ED2A: e_book_backend_create_contacts (e-book-backend.c:465)
+# ==23596==    by 0x4E513D3: operation_thread (e-data-book.c:157)
+# ==23596==    by 0x83E9D07: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==23596==    by 0x83E77E5: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==23596==    by 0x8678B4F: start_thread (pthread_create.c:304)
+# ==23596==    by 0x896690C: clone (clone.S:112)
+# ==23596==  Uninitialised value was created by a stack allocation
+# ==23596==    at 0x994DB80: ??? (in /usr/lib/x86_64-linux-gnu/libdb-5.1.so)
+# ==23596== 
+{
+   libdb-5 cond from stack
+   Memcheck:Cond
+   obj:*/libdb-5.1.so
+   fun:__log_put
+   obj:*/libdb-5.1.so
+   fun:__log_put_record
+   fun:__ham_add_el
+   obj:*/libdb-5.1.so
+   fun:__dbc_iput
+   fun:__db_put
+   fun:__db_put_pp
+}
+
 # ==7846== Invalid read of size 8
 # ==7846==    at 0x4015B24: (within /lib/ld-2.6.1.so)
 # ==7846==    by 0x400A8F7: (within /lib/ld-2.6.1.so)
@@ -63,6 +100,47 @@
    obj:*
    obj:*
    fun:getpwnam_r
+}
+
+# ==19822== 300 (60 direct, 240 indirect) bytes in 1 blocks are definitely lost in loss record 649 of 788
+# ==19822==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==19822==    by 0xA43599C: nss_parse_service_list (nsswitch.c:626)
+# ==19822==    by 0xA436171: __nss_database_lookup (nsswitch.c:167)
+# ==19822==    by 0x17C8C1EF: ???
+# ==19822==    by 0x17C8CD94: ???
+# ==19822==    by 0xA3F5ADC: getpwuid_r@@GLIBC_2.2.5 (getXXbyYY_r.c:256)
+# ==19822==    by 0x95742E7: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x95775FE: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x957788A: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9577916: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9577AD8: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9577BA5: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9552188: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9551260: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x955178D: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9552C09: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956C188: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956CE62: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956D8D2: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956C481: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x95573BB: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956E5E9: dbus_watch_handle (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x6139EE: dispatch_watch (mainloop.c:126)
+# ==19822==    by 0x92980CE: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==19822==    by 0x92988C7: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==19822==    by 0x9298E01: g_main_loop_run (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==19822==    by 0x7B849B: SyncEvo::LocalTransportAgent::wait(bool) (LocalTransportAgent.cpp:333)
+# ==19822==    by 0x73A153: SyncEvo::SyncContext::doSync() (SyncContext.cpp:3689)
+# ==19822==    by 0x741334: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3003)
+# ==19822==    by 0x5F3C68: SyncEvo::SessionHelper::doSync(SyncEvo::SessionCommon::SyncParams const&, boost::shared_ptr<GDBusCXX::Result0> const&) (session-helper.cpp:96)
+# ==19822== 
+{
+   nss_parse_service_list
+   Memcheck:Leak
+   fun:malloc
+   fun:nss_parse_service_list
+   ...
+   fun:getpwuid_r*
 }
 
 # ==7948== 292 (52 direct, 240 indirect) bytes in 1 blocks are definitely lost in loss record 7 of 53
@@ -405,6 +483,49 @@
    fun:getpwnam_r*
 }
 
+# ==24097== 348 (60 direct, 288 indirect) bytes in 1 blocks are definitely lost in loss record 1,582 of 1,743
+# ==24097==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==24097==    by 0x8F2E3FC: nss_parse_service_list (nsswitch.c:626)
+# ==24097==    by 0x8F2EBD1: __nss_database_lookup (nsswitch.c:167)
+# ==24097==    by 0xEBF88D8: ???
+# ==24097==    by 0x8EEC0A1: internal_getgrouplist (initgroups.c:101)
+# ==24097==    by 0x8EEC383: getgrouplist (initgroups.c:153)
+# ==24097==    by 0x8070442: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x80735FE: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x807388A: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8073916: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8073AD8: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8073BA5: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x804E188: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x804D260: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x804D78D: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x804EC09: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8068188: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8068E62: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x80696E8: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x806858C: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x80534D4: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x80535F1: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x80539FF: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8053BB1: dbus_connection_send_with_reply (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x72AD43: GDBusCXX::DBusClientCall<boost::function<void ()(std::string const&, GDBusCXX::DBusArray<unsigned char> const&, std::string const&)> >::send(GDBusCXX::DBusMessagePtr&, boost::function<void ()(std::string const&, GDBusCXX::DBusArray<unsigned char> const&, std::string const&)> const&) (gdbus-cxx-bridge.h:3933)
+# ==24097==    by 0x723ED0: SyncEvo::LocalTransportAgent::onChildConnect(GDBusCXX::DBusConnectionPtr const&) (gdbus-cxx-bridge.h:4040)
+# ==24097==    by 0x7400DA: boost::signals2::detail::signal1_impl<void, GDBusCXX::DBusConnectionPtr const&, boost::signals2::optional_last_value<void>, int, std::less<int>, boost::function<void ()(GDBusCXX::DBusConnectionPtr const&)>, boost::function<void ()(boost::signals2::connection const&, GDBusCXX::DBusConnectionPtr const&)>, boost::signals2::mutex>::operator()(GDBusCXX::DBusConnectionPtr const&) (function_template.hpp:1013)
+# ==24097==    by 0x73ADDC: SyncEvo::ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr&) (signal_template.hpp:692)
+# ==24097==    by 0x5B8E42: GDBusCXX::DBusServerCXX::newConnection(DBusServer*, DBusConnection*, void*) (function_template.hpp:1013)
+# ==24097==    by 0x806469A: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097== 
+{
+   nss_parse_service_list + grouplist
+   Memcheck:Leak
+   fun:malloc
+   fun:nss_parse_service_list
+   fun:__nss_database_lookup
+   obj:*
+   ...
+   fun:getgrouplist
+}
+
 # ==19927== 1,018,472 (864,248 direct, 154,224 indirect) bytes in 32,959 blocks are definitely lost in loss record 35 of 38
 # ==19927==    at 0x4C223DC: calloc (vg_replace_malloc.c:397)
 # ==19927==    by 0x64EBE12: g_malloc0 (in /usr/lib/libglib-2.0.so.0.1600.6)
@@ -625,4 +746,643 @@
    fun:asn1_der_coding
    ...
    fun:gnutls_certificate_set_x509_trust_file
+}
+
+# ==25419== 21 bytes in 1 blocks are definitely lost in loss record 157 of 649
+# ==25419==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==25419==    by 0xA182881: strdup (strdup.c:43)
+# ==25419==    by 0x132A2D5A: p11_kit_registered_module_to_name (in /usr/lib/x86_64-linux-gnu/libp11-kit.so.0.0.0)
+# ==25419==    by 0xE815504: gnutls_pkcs11_init (in /usr/lib/x86_64-linux-gnu/libgnutls.so.26.21.9)
+# ==25419==    by 0xE7FEFF1: gnutls_global_init (in /usr/lib/x86_64-linux-gnu/libgnutls.so.26.21.9)
+# ==25419==    by 0x594C66A: ne_sock_init (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==25419==    by 0x581D48: SyncEvo::Neon::Session::Session(boost::shared_ptr<SyncEvo::Neon::Settings> const&) (NeonCXX.cpp:202)
+# ==25419==    by 0x5825E3: SyncEvo::Neon::Session::create(boost::shared_ptr<SyncEvo::Neon::Settings> const&) (NeonCXX.cpp:279)
+# ==25419==    by 0x5728CF: SyncEvo::WebDAVSource::contactServer() (WebDAVSource.cpp:340)
+# ==25419==    by 0x565B50: SyncEvo::WebDAVSource::beginSync(std::string const&, std::string const&) (WebDAVSource.h:81)
+# ==25419==    by 0x5BED1A: SyncEvo::SyncSourceSession::startDataRead(char const*, char const*) (SyncSource.cpp:498)
+# ==25419==    by 0x5D3E29: SyncEvolution_StartDataRead (function_template.hpp:760)
+# ==25419==    by 0x717BDC: sysync::TPluginApiDS::apiReadSyncSet(bool) (pluginapids.cpp:1063)
+# ==25419==    by 0x73DF44: sysync::TCustomImplDS::makeSyncSetLoaded(bool) (customimplds.cpp:3373)
+# ==25419==    by 0x78B106: sysync::TStdLogicDS::dsBeforeStateChange(sysync::TLocalEngineDSState, sysync::TLocalEngineDSState) (stdlogicds.cpp:1520)
+# ==25419==    by 0x7525D7: sysync::TLocalEngineDS::changeState(sysync::TLocalEngineDSState, bool) (localengineds.cpp:4182)
+# ==25419==    by 0x753B36: sysync::TLocalEngineDS::engInitDSForClientSync() (localengineds.cpp:3586)
+# ==25419==    by 0x79237B: sysync::TSyncAgent::NextMessage(bool&) (syncagent.cpp:1186)
+# ==25419==    by 0x794CF2: sysync::TSyncAgent::ClientGeneratingStep(unsigned short&, sysync::TEngineProgressType*) (syncagent.cpp:3422)
+# ==25419==    by 0x79505C: sysync::TSyncAgent::ClientSessionStep(unsigned short&, sysync::TEngineProgressType*) (syncagent.cpp:3316)
+# ==25419==    by 0x7953E4: sysync::TSyncAgent::SessionStep(unsigned short&, sysync::TEngineProgressType*) (syncagent.cpp:2927)
+# ==25419==    by 0x65ACBE: SyncEvo::SharedEngine::SessionStep(boost::shared_ptr<sysync::SessionType> const&, unsigned short&, sysync::TEngineProgressType*) (SynthesisEngine.cpp:96)
+# ==25419==    by 0x5DDE30: SyncEvo::SyncContext::doSync() (SyncContext.cpp:3549)
+# ==25419==    by 0x5E67C9: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3016)
+# ==25419==    by 0x59FDA2: SyncEvo::LocalTransportAgentChild::run() (LocalTransportAgent.cpp:784)
+# ==25419==    by 0x598833: SyncEvo::LocalTransportMain(int, char**) (LocalTransportAgent.cpp:973)
+# ==25419==    by 0xA121EAC: (below main) (libc-start.c:228)
+# ==25419== 
+{
+   p11-kit + gnutls + libneon
+   Memcheck:Leak
+   ...
+   fun:p11_kit_registered_module_to_name
+   ...
+   fun:ne_sock_init
+}
+
+# ==7816== 24 bytes in 1 blocks are definitely lost in loss record 603 of 1,569
+# ==7816==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==7816==    by 0x7B6AC42: g_malloc (in /lib/libglib-2.0.so.0.2800.8)
+# ==7816==    by 0xBBB992C: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==7816==    by 0xBBBA888: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==7816==    by 0xBBBABCE: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==7816==    by 0xBC03A09: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==7816==    by 0x6F8864A: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.1.1)
+# ==7816==    by 0x6F7D24B: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.1.1)
+# ==7816==    by 0x6F7D4F1: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.1.1)
+# ==7816==    by 0x6F7C6EE: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.1.1)
+# ==7816==    by 0x576EFE: SyncEvo::DBusUserInterface::savePassword(std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&) (dbus-user-interface.cpp:206)
+# ==7816==    by 0x693130: SyncEvo::PasswordConfigProperty::savePassword(SyncEvo::ConfigUserInterface&, std::string const&, SyncEvo::FilterConfigNode&, std::string const&, boost::shared_ptr<SyncEvo::FilterConfigNode> const&) const (SyncConfig.cpp:1711)
+# ==7816==    by 0x6A730E: SyncEvo::SyncConfig::preFlush(SyncEvo::ConfigUserInterface&) (SyncConfig.cpp:912)
+# ==7816==    by 0x54A689: SyncEvo::Session::setNamedConfig(std::string const&, bool, bool, std::map<std::string, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > >, std::less<std::string>, std::allocator<std::pair<std::string const, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > > > > const&) (session.cpp:238)
+# ==7816==    by 0x55B48D: GDBusCXX::MakeMethodEntry<boost::function<void ()(bool, bool, std::map<std::string, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > >, std::less<std::string>, std::allocator<std::pair<std::string const, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > > > > const&)> >::methodFunction(DBusConnection*, DBusMessage*, void*) (function_template.hpp:1013)
+# ==7816==    by 0x5866F0: handle_message (object.c:622)
+# ==7816==    by 0x7E2C3C0: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==7816==    by 0x7E1E2BF: dbus_connection_dispatch (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==7816==    by 0x588354: queue_dispatch (mainloop.c:91)
+# ==7816==    by 0x7B63EDC: g_main_context_dispatch (in /lib/libglib-2.0.so.0.2800.8)
+# ==7816==    by 0x7B646B7: ??? (in /lib/libglib-2.0.so.0.2800.8)
+# ==7816==    by 0x7B64CF9: g_main_loop_run (in /lib/libglib-2.0.so.0.2800.8)
+# ==7816==    by 0x5344EB: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:344)
+# ==7816==    by 0x515CE3: main (main.cpp:117)
+# ==7816== 
+#
+# Different backtrace starting with the move of GNOME keyring support into a backend.
+{
+   gcrypt + GNOME keyring + modules
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   obj:*libgcrypt.so*
+   ...
+   obj:*libgnome-keyring.so*
+   ...
+   fun:*GNOME*Password*
+}
+
+# ==10804== 60 (16 direct, 44 indirect) bytes in 1 blocks are definitely lost in loss record 1,121 of 2,014
+# ==10804==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==10804==    by 0x7FABC02: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FC0976: g_slice_alloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7F9045F: g_error_copy (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x76700B1: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x761465E: g_initable_new_valist (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x7614748: g_initable_new (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x766EB1E: g_dbus_connection_new_for_address_sync (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x597E08: GDBusCXX::dbus_get_bus_connection(char const*, char const*, bool, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:58)
+# ==10804==    by 0x583CB8: SyncEvo::ConnmanClient::ConnmanClient(SyncEvo::Server&) (connman-client.cpp:30)
+# ==10804==    by 0x541730: SyncEvo::Server::Server(_GMainLoop*, bool&, boost::shared_ptr<SyncEvo::Restart>&, GDBusCXX::DBusConnectionPtr const&, int) (server.cpp:239)
+# ==10804==    by 0x52141B: main (main.cpp:113)
+# ==10804== 
+{
+   failed g_dbus_connection_new_for_address_sync
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_slice_alloc
+   fun:g_error_copy
+   obj:*libgio*
+   fun:g_initable_new_valist
+   fun:g_initable_new
+   fun:g_dbus_connection_new_for_address_sync
+}
+
+# ==10804== 363 (120 direct, 243 indirect) bytes in 3 blocks are definitely lost in loss record 1,844 of 2,014
+# ==10804==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==10804==    by 0x7FABC02: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FC0976: g_slice_alloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FDEEC9: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FDF02C: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FDC825: g_variant_builder_end (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7672049: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x76736ED: g_dbus_message_new_from_blob (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x767F01D: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x7625D86: g_simple_async_result_complete (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x7625E98: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x7FA50CE: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FA58C7: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x7FA5E01: g_main_loop_run (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x767CDC5: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==10804==    by 0x7FCA7E5: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==10804==    by 0x5076B3F: start_thread (pthread_create.c:304)
+# ==10804==    by 0x8AC636C: clone (clone.S:112)
+# ==10804== 
+{
+   GIO thread leak
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   ...
+   obj:*libgio*
+   obj:*libglib*
+   fun:start_thread
+}
+
+# ==24097== 596 (192 direct, 404 indirect) bytes in 1 blocks are definitely lost in loss record 1,605 of 1,743
+# ==24097==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==24097==    by 0x8064763: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8065097: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8065453: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x8063881: dbus_server_listen (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==24097==    by 0x5B8AEE: GDBusCXX::DBusServerCXX::listen(std::string const&, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:73)
+# ==24097==    by 0x73991F: SyncEvo::ForkExecParent::start() (ForkExec.cpp:81)
+# ==24097==    by 0x725B33: SyncEvo::LocalTransportAgent::start() (LocalTransportAgent.cpp:143)
+# ==24097==    by 0x6B79CD: SyncEvo::SyncContext::createTransportAgent(void*) (SyncContext.cpp:1517)
+# ==24097==    by 0x5A4165: SyncEvo::DBusSync::createTransportAgent() (dbus-sync.cpp:94)
+# ==24097==    by 0x6B116C: SyncEvo::SyncContext::doSync() (SyncContext.cpp:3373)
+# ==24097==    by 0x6B6CD4: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:2957)
+# ==24097==    by 0x57A2BF: SyncEvo::Session::run(SyncEvo::LogRedirect&) (session.cpp:743)
+# ==24097==    by 0x563497: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:362)
+# ==24097==    by 0x53EF2D: main (main.cpp:119)
+# ==24097== 
+{
+   dbus_server_list
+   Memcheck:Leak
+   ...
+   fun:dbus_server_listen
+   fun:*DBusServerCXX*listen*
+}
+
+# ==3390== 64 bytes in 2 blocks are possibly lost in loss record 1,748 of 3,335
+# ==3390==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==3390==    by 0x7478C69: g_malloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==3390==    by 0x85113A: setup_connection (mainloop.c:331)
+# ==3390==    by 0x8517E6: b_dbus_setup_server (mainloop.c:463)
+# ==3390==    by 0x8503C3: GDBusCXX::DBusServerCXX::listen(std::string const&, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:83)
+# ==3390==    by 0x843AFF: SyncEvo::ForkExecParent::start() (ForkExec.cpp:81)
+# ==3390==    by 0x82F3F3: SyncEvo::LocalTransportAgent::start() (LocalTransportAgent.cpp:143)
+# ==3390==    by 0x7C0FDD: SyncEvo::SyncContext::createTransportAgent(void*) (SyncContext.cpp:1529)
+# ==3390==    by 0x524B5E: SyncEvo::TestEvolution::doSync(int const*, std::string const&, SyncEvo::SyncOptions const&)::ClientTest::createTransportAgent() (SyncContext.h:645)
+# ==3390==    by 0x7BA77C: SyncEvo::SyncContext::doSync() (SyncContext.cpp:3423)
+# ==3390==    by 0x7C02E4: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3007)
+# ==3390==    by 0x52FB91: SyncEvo::TestEvolution::doSync(int const*, std::string const&, SyncEvo::SyncOptions const&) (client-test-app.cpp:431)
+# ==3390==    by 0x564D67: SyncEvo::SyncTests::doSync(SyncEvo::SyncOptions const&) (ClientTest.cpp:4997)
+# ==3390==    by 0x69A0E0: SyncEvo::SyncTests::doSync(char const*, SyncEvo::SyncOptions const&) (ClientTest.h:837)
+# ==3390==    by 0x55443A: SyncEvo::SyncTests::refreshClient(SyncEvo::SyncOptions) (ClientTest.h:842)
+# ==3390==    by 0x542922: SyncEvo::SyncTests::testItems() (ClientTest.cpp:3379)
+# ==3390==    by 0x6789749: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x677CC83: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x6785CC6: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x6790423: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::string const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x67894E7: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x6790049: CppUnit::TestResult::runTest(CppUnit::Test*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x6792472: CppUnit::TestRunner::run(CppUnit::TestResult&, std::string const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x6794FDA: CppUnit::TextTestRunner::run(std::string, bool, bool, bool) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==3390==    by 0x5200DD: main (client-test-main.cpp:290)
+# ==3390== 
+#
+# Probably a valid leak, but how to fix it in the (soon obsolete) code wasn't obvious.
+# Very generic rule to also catch some other, similar leaks.
+{
+   b_dbus_setup_server
+   Memcheck:Leak
+   ...
+   fun:b_dbus_setup_server
+}
+
+# ==19740== 72 bytes in 1 blocks are possibly lost in loss record 1,226 of 1,985
+# ==19740==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==19740==    by 0x9906590: g_malloc0 (gmem.c:189)
+# ==19740==    by 0x9676368: g_closure_new_simple (gclosure.c:206)
+# ==19740==    by 0x96778CF: g_cclosure_new (gclosure.c:917)
+# ==19740==    by 0x968E91D: g_signal_connect_data (gsignal.c:2443)
+# ==19740==    by 0x93DA9D8: has_connection (gdbusnameowning.c:425)
+# ==19740==    by 0x93DB278: g_bus_own_name_on_connection (gdbusnameowning.c:550)
+# ==19740==    by 0x66E560: GDBusCXX::dbus_get_bus_connection(char const*, char const*, bool, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:86)
+# ==19740==    by 0x5E3D54: main (main.cpp:109)
+# ==19740== 
+{
+   g_cclosure_new + GIO D-Bus name owning leak
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:has_connection
+}
+
+# ==10738== 72 bytes in 1 blocks are possibly lost in loss record 1,327 of 2,063
+# ==10738==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==10738==    by 0x94C3590: g_malloc0 (gmem.c:189)
+# ==10738==    by 0x9233368: g_closure_new_simple (gclosure.c:206)
+# ==10738==    by 0x92348CF: g_cclosure_new (gclosure.c:917)
+# ==10738==    by 0x924B91D: g_signal_connect_data (gsignal.c:2443)
+# ==10738==    by 0x8AC520E: notify_notification_show (in /usr/lib/x86_64-linux-gnu/libnotify.so.4.0.0)
+# ==10738==    by 0x63A1BB: SyncEvo::AutoSyncManager::syncDone(SyncEvo::SyncMLStatus) (auto-sync-manager.cpp:335)
+# ==10738==    by 0x62459C: SyncEvo::Session::run(SyncEvo::LogRedirect&) (session.cpp:768)
+# ==10738==    by 0x60C8AC: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:362)
+# ==10738==    by 0x5DDFBA: main (main.cpp:120)
+# ==10738== 
+{
+   g_cclosure_new + notify_notification_show
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:notify_notification_show
+}
+
+# ==27329== 2,032 bytes in 1 blocks are definitely lost in loss record 23,780 of 24,016
+# ==27329==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==27329==    by 0x8532590: g_malloc0 (gmem.c:189)
+# ==27329==    by 0x84FEAEF: thread_memory_from_self.part.9 (gslice.c:512)
+# ==27329==    by 0x8545984: g_slice_alloc (gslice.c:501)
+# ==27329==    by 0x8545CA5: g_slice_alloc0 (gslice.c:1029)
+# ==27329==    by 0x852BCCC: g_main_context_push_thread_default (gmain.c:671)
+# ==27329==    by 0x759B90C: gdbus_shared_thread_func (gdbusprivate.c:276)
+# ==27329==    by 0x854E404: g_thread_proxy (gthread.c:801)
+# ==27329==    by 0x6E4AB4F: start_thread (pthread_create.c:304)
+# ==27329==    by 0x9DD990C: clone (clone.S:112)
+# ==27329== 
+{
+   GIO D-Bus thread
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:thread_memory_from_self.*
+   fun:g_slice_alloc
+   fun:g_slice_alloc0
+   fun:g_main_context_push_thread_default
+   fun:gdbus_shared_thread_func
+}
+
+### KDE ###
+
+# ==21052== 1,040 bytes in 26 blocks are possibly lost in loss record 5,184 of 5,271
+# ==21052==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==21052==    by 0x6E13E80: QListData::detach_grow(int*, int) (in /usr/lib/libQtCore.so.4.7.3)
+# ==21052==    by 0x66C2028: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x677656A: KStandardDirs::addResourceType(char const*, char const*, QString const&, bool) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x6776E16: KStandardDirs::addKDEDefaults() (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x676E9E4: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x676F03F: KComponentData::config() const (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x676C2F5: KGlobal::config() (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x67EF05A: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x684285B: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x67EB637: KLocale::KLocale(QString const&, KSharedPtr<KSharedConfig>) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x676CE35: KGlobal::locale() (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x61EB01D: ??? (in /usr/lib/libkdeui.so.5.6.0)
+# ==21052==    by 0x61EBF57: KApplication::KApplication(bool) (in /usr/lib/libkdeui.so.5.6.0)
+# ==21052==    by 0x7C440E: SyncEvo::SyncContext::initMain(char const*) (SyncContext.cpp:2829)
+# ==21052==    by 0x52B95C: SyncEvo::RegisterTestEvolution::RegisterTestEvolution() (client-test-app.cpp:573)
+# ==21052==    by 0x526758: _GLOBAL__sub_I_client_test_app.cpp (client-test-app.cpp:589)
+# ==21052==    by 0x96774C: __libc_csu_init (in /data/runtests/work/testing-amd64/build/src/client-test)
+# ==21052==    by 0xA323E3F: (below main) (libc-start.c:187)
+# ==21052== 
+{
+   KApplication + malloc
+   Memcheck:Leak
+   ...
+   fun:*KDEInitMain*
+}
+{
+   Qt + malloc
+   Memcheck:Leak
+   ...
+   obj:*libQtCore*
+}
+
+# ==21052== 30,404 bytes in 414 blocks are possibly lost in loss record 5,268 of 5,271
+# ==21052==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==21052==    by 0x6E3786A: QString::QString(QChar const*, int) (in /usr/lib/libQtCore.so.4.7.3)
+# ==21052==    by 0x6E38C3A: QString::mid(int, int) const (in /usr/lib/libQtCore.so.4.7.3)
+# ==21052==    by 0x682D606: KStringHandler::perlSplit(QRegExp const&, QString const&, int) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x6718C21: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x6719E45: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x671A1CC: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x671AA1D: KSystemTimeZones::readZone(QString const&) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21052==    by 0x18342945: KCalCore::ICalTimeZoneSource::standardZone(QString const&, bool) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x1832DDCE: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x1832DF7E: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x1833743C: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x18337EC5: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x18338CBE: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x183270BA: KCalCore::ICalFormat::fromRawString(QSharedPointer<KCalCore::Calendar> const&, QByteArray const&, bool, QString const&) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x18326B5F: KCalCore::ICalFormat::fromString(QSharedPointer<KCalCore::Calendar> const&, QString const&, bool, QString const&) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x1832B8BD: KCalCore::ICalFormat::fromString(QString const&) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21052==    by 0x17E6B7F6: ??? (in /usr/lib/kde4/akonadi_serializer_kcalcore.so)
+# ==21052==    by 0x538EE31: ??? (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==21052==    by 0x538F465: ??? (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==21052==    by 0x537B1C8: Akonadi::Item::setPayloadFromData(QByteArray const&) (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==21052==    by 0x6E0C62: SyncEvo::AkonadiSyncSource::insertItem(std::string const&, std::string const&, bool) (akonadisyncsource.cpp:175)
+# ==21052==    by 0x8342FF: SyncEvo::TrackingSyncSource::insertItemRaw(std::string const&, std::string const&) (TrackingSyncSource.cpp:151)
+# ==21052==    by 0x6C2A24: SyncEvo::AkonadiTest::testTimezones() (AkonadiSyncSourceRegister.cpp:145)
+# ==21052==    by 0x7E4C749: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==21052==    by 0x7E3FC83: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==21052==    by 0x7E48CC6: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==21052==    by 0x7E53423: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::string const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==21052==    by 0x7E4C4E7: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==21052==    by 0x7E4CC22: CppUnit::TestComposite::doRunChildTests(CppUnit::TestResult*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==21052== 
+{
+   Akonadi leaks
+   Memcheck:Leak
+   ...
+   fun:*Akonadi*
+}
+
+# ==21829== 66 bytes in 1 blocks are possibly lost in loss record 2,504 of 5,276
+# ==21829==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==21829==    by 0x6E39682: QString::fromLatin1_helper(char const*, int) (in /usr/lib/libQtCore.so.4.7.3)
+# ==21829==    by 0x6E3978D: QString::fromLatin1(char const*, int) (in /usr/lib/libQtCore.so.4.7.3)
+# ==21829==    by 0x6F0B142: ??? (in /usr/lib/libQtCore.so.4.7.3)
+# ==21829==    by 0x6E397F1: QString::fromLocal8Bit(char const*, int) (in /usr/lib/libQtCore.so.4.7.3)
+# ==21829==    by 0x6E727A4: ??? (in /usr/lib/libQtCore.so.4.7.3)
+# ==21829==    by 0x6E72C49: QFile::decodeName(QByteArray const&) (in /usr/lib/libQtCore.so.4.7.3)
+# ==21829==    by 0x676FDBD: KStandardDirs::realPath(QString const&) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x67785C7: KStandardDirs::saveLocation(char const*, QString const&, bool) const (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x6778C57: KStandardDirs::locateLocal(char const*, QString const&, bool, KComponentData const&) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x6778CC0: KStandardDirs::locateLocal(char const*, QString const&, KComponentData const&) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x6743120: KTemporaryFile::KTemporaryFile(KComponentData const&) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x684459E: KLockFile::lock(QFlags<KLockFile::LockFlag>) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x677B148: KToolInvocation::startKdeinit() (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x677B51F: KToolInvocation::klauncher() (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x6719FB4: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x671A1CC: ??? (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x671AA1D: KSystemTimeZones::readZone(QString const&) (in /usr/lib/libkdecore.so.5.6.0)
+# ==21829==    by 0x18342945: KCalCore::ICalTimeZoneSource::standardZone(QString const&, bool) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x1832DDCE: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x1832DF7E: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x1833743C: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x18337EC5: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x18338CBE: ??? (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x183270BA: KCalCore::ICalFormat::fromRawString(QSharedPointer<KCalCore::Calendar> const&, QByteArray const&, bool, QString const&) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x18326B5F: KCalCore::ICalFormat::fromString(QSharedPointer<KCalCore::Calendar> const&, QString const&, bool, QString const&) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x1832B8BD: KCalCore::ICalFormat::fromString(QString const&) (in /usr/lib/libkcalcore.so.4.6.0)
+# ==21829==    by 0x17E6B7F6: ??? (in /usr/lib/kde4/akonadi_serializer_kcalcore.so)
+# ==21829==    by 0x538EE31: ??? (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==21829==    by 0x538F465: ??? (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==21829== 
+{
+   kcalcore leaks
+   Memcheck:Leak
+   ...
+   obj:*libkcalcore*
+}
+
+# ==22290== Invalid read of size 4
+# ==22290==    at 0x1224B673: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x1224D9D4: FcConfigFilename (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260895: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260F5D: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x92CEAAB: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CF8A0: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CC77B: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CE10A: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92D16B1: XML_ParseBuffer (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x122609F0: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260CF7: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260F5D: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x92CEAAB: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CF8A0: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CC77B: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CE10A: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92D16B1: XML_ParseBuffer (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x122609F0: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12256246: FcInitLoadConfig (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12256325: FcInitLoadConfigAndFonts (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12256524: FcInit (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0xBE2CF69: ??? (in /usr/lib/libQtGui.so.4.7.3)
+# ==22290==    by 0xBDBAB53: QApplicationPrivate::construct(_XDisplay*, unsigned long, unsigned long) (in /usr/lib/libQtGui.so.4.7.3)
+# ==22290==    by 0xBDBB2A7: QApplication::QApplication(int&, char**, bool, int) (in /usr/lib/libQtGui.so.4.7.3)
+# ==22290==    by 0x61EBE36: KApplication::KApplication(bool) (in /usr/lib/libkdeui.so.5.6.0)
+# ==22290==    by 0x7C440E: SyncEvo::SyncContext::initMain(char const*) (SyncContext.cpp:2829)
+# ==22290==    by 0x52B95C: SyncEvo::RegisterTestEvolution::RegisterTestEvolution() (client-test-app.cpp:573)
+# ==22290==    by 0x526758: _GLOBAL__sub_I_client_test_app.cpp (client-test-app.cpp:589)
+# ==22290==    by 0x96774C: __libc_csu_init (in /data/runtests/work/testing-amd64/build/src/client-test)
+# ==22290==    by 0xA323E3F: (below main) (libc-start.c:187)
+# ==22290==  Address 0x14d1fea4 is 20 bytes inside a block of size 22 alloc'd
+# ==22290==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==22290==    by 0x1224B5CC: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x1224D9D4: FcConfigFilename (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260895: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260F5D: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x92CEAAB: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CF8A0: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CC77B: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CE10A: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92D16B1: XML_ParseBuffer (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x122609F0: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260CF7: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12260F5D: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x92CEAAB: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CF8A0: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CC77B: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92CE10A: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x92D16B1: XML_ParseBuffer (in /lib/x86_64-linux-gnu/libexpat.so.1.5.2)
+# ==22290==    by 0x122609F0: FcConfigParseAndLoad (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12256246: FcInitLoadConfig (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12256325: FcInitLoadConfigAndFonts (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0x12256524: FcInit (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.4.4)
+# ==22290==    by 0xBE2CF69: ??? (in /usr/lib/libQtGui.so.4.7.3)
+# ==22290==    by 0xBDBAB53: QApplicationPrivate::construct(_XDisplay*, unsigned long, unsigned long) (in /usr/lib/libQtGui.so.4.7.3)
+# ==22290==    by 0xBDBB2A7: QApplication::QApplication(int&, char**, bool, int) (in /usr/lib/libQtGui.so.4.7.3)
+# ==22290==    by 0x61EBE36: KApplication::KApplication(bool) (in /usr/lib/libkdeui.so.5.6.0)
+# ==22290==    by 0x7C440E: SyncEvo::SyncContext::initMain(char const*) (SyncContext.cpp:2829)
+# ==22290==    by 0x52B95C: SyncEvo::RegisterTestEvolution::RegisterTestEvolution() (client-test-app.cpp:573)
+# ==22290==    by 0x526758: _GLOBAL__sub_I_client_test_app.cpp (client-test-app.cpp:589)
+# ==22290==    by 0x96774C: __libc_csu_init (in /data/runtests/work/testing-amd64/build/src/client-test)
+# ==22290== 
+{
+   Qt + fontconfig
+   Memcheck:Addr4
+   obj:*libfontconfig*
+}
+{
+   memory leaks in fontconfig
+   Memcheck:Leak
+   ...
+   obj:*libfontconfig*
+}
+
+# ==10153== Conditional jump or move depends on uninitialised value(s)
+# ==10153==    at 0x9758290: inflateReset2 (in /usr/lib/libz.so.1.2.3.4)
+# ==10153==    by 0x975837F: inflateInit2_ (in /usr/lib/libz.so.1.2.3.4)
+# ==10153==    by 0x126A2120: png_create_read_struct_2 (in /lib/x86_64-linux-gnu/libpng12.so.0.46.0)
+# ==10153==    by 0x126A22C6: png_create_read_struct (in /lib/x86_64-linux-gnu/libpng12.so.0.46.0)
+# ==10153==    by 0xBEA66F6: ??? (in /usr/lib/libQtGui.so.4.7.3)
+# ==10153==    by 0xBEA7414: ??? (in /usr/lib/libQtGui.so.4.7.3)
+# ==10153==    by 0xBE78FD7: QImageReader::read(QImage*) (in /usr/lib/libQtGui.so.4.7.3)
+# ==10153==    by 0xBE79606: QImageReader::read() (in /usr/lib/libQtGui.so.4.7.3)
+# ==10153==    by 0xBE69A7D: QImage::fromData(unsigned char const*, int, char const*) (in /usr/lib/libQtGui.so.4.7.3)
+# ==10153==    by 0xBE6EA3F: QImage::loadFromData(unsigned char const*, int, char const*) (in /usr/lib/libQtGui.so.4.7.3)
+# ==10153==    by 0x17CCFAC0: KABC::VCardTool::parsePicture(KABC::VCardLine const&) const (in /usr/lib/libkabc.so.4.6.0)
+# ==10153==    by 0x17CD83A5: KABC::VCardTool::parseVCards(QByteArray const&) const (in /usr/lib/libkabc.so.4.6.0)
+# ==10153==    by 0x17CCEA09: KABC::VCardConverter::parseVCards(QByteArray const&) const (in /usr/lib/libkabc.so.4.6.0)
+# ==10153==    by 0x17CCEA5C: KABC::VCardConverter::parseVCard(QByteArray const&) const (in /usr/lib/libkabc.so.4.6.0)
+# ==10153==    by 0x17A69E31: ??? (in /usr/lib/kde4/akonadi_serializer_addressee.so)
+# ==10153==    by 0x538EE31: ??? (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==10153==    by 0x538F465: ??? (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==10153==    by 0x537B1C8: Akonadi::Item::setPayloadFromData(QByteArray const&) (in /usr/lib/libakonadi-kde.so.4.6.0)
+# ==10153==    by 0x6E0C62: SyncEvo::AkonadiSyncSource::insertItem(std::string const&, std::string const&, bool) (akonadisyncsource.cpp:175)
+# ==10153==    by 0x83443F: SyncEvo::TrackingSyncSource::insertItemRaw(std::string const&, std::string const&) (TrackingSyncSource.cpp:151)
+# ==10153==    by 0x569099: SyncEvo::importItem(SyncEvo::TestingSyncSource*, SyncEvo::ClientTestConfig const&, std::string&) (ClientTest.cpp:299)
+# ==10153==    by 0x56F4E9: SyncEvo::ClientTest::import(SyncEvo::ClientTest&, SyncEvo::TestingSyncSource&, SyncEvo::ClientTestConfig const&, std::string const&, std::string&, std::list<std::string, std::allocator<std::string> >*) (ClientTest.cpp:5223)
+# ==10153==    by 0x6A05F9: boost::detail::function::function_invoker6<std::string (*)(SyncEvo::ClientTest&, SyncEvo::TestingSyncSource&, SyncEvo::ClientTestConfig const&, std::string const&, std::string&, std::list<std::string, std::allocator<std::string> >*), std::string, SyncEvo::ClientTest&, SyncEvo::TestingSyncSource&, SyncEvo::ClientTestConfig const&, std::string const&, std::string&, std::list<std::string, std::allocator<std::string> >*>::invoke(boost::detail::function::function_buffer&, SyncEvo::ClientTest&, SyncEvo::TestingSyncSource&, SyncEvo::ClientTestConfig const&, std::string const&, std::string&, std::list<std::string, std::allocator<std::string> >*) (function_template.hpp:95)
+# ==10153==    by 0x5FF153: SyncEvo::LocalTests::testImport() (function_template.hpp:1013)
+# ==10153==    by 0x7E4C749: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==10153==    by 0x7E3FC83: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==10153==    by 0x7E48CC6: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==10153==    by 0x7E53423: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::string const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==10153==    by 0x7E4C4E7: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==10153==    by 0x7E4CC22: CppUnit::TestComposite::doRunChildTests(CppUnit::TestResult*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==10153== 
+{
+   png + Qt GUI
+   Memcheck:Cond
+   ...
+   fun:png_create_*
+   ...
+   obj:*libQtGui.so*
+}
+
+# ==14778== 46 bytes in 1 blocks are possibly lost in loss record 865 of 1,692
+# ==14778==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==14778==    by 0x8217C02: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==14778==    by 0x822E3BD: g_strdup (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==14778==    by 0x7B01262: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==14778==    by 0x7B03F0C: ??? (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3000.2)
+# ==14778==    by 0x15FBC997: ??? (in /usr/lib/x86_64-linux-gnu/gio/modules/libgvfsdbus.so)
+# ==14778==    by 0x6142B4: SyncEvo::GLibNotify::GLibNotify(char const*, boost::function<void ()(_GFile*, _GFile*, GFileMonitorEvent)> const&) (GLibSupport.cpp:205)
+# ==14778==    by 0x5718DD: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:338)
+# ==14778==    by 0x54799B: main (main.cpp:120)
+# ==14778== 
+{
+   GIO potential leak
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_strdup
+   obj:*libgio-2.0.so*
+   ...
+   obj:*gio/modules/libgvfsdbus.so
+}
+
+# ==8627== 840 bytes in 28 blocks are possibly lost in loss record 574 of 681
+# ==8627==    at 0x48DB796: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==8627==    by 0x95AED52: ??? (in /lib/i386-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==8627== 
+{
+   glib leak i386
+   Memcheck:Leak
+   fun:calloc
+   obj:/lib/i386-linux-gnu/libglib-2.0.so.0.3000.2
+}
+
+# ==15919== Jump to the invalid address stated on the next line
+# ==15919==    at 0x4CE: ???
+# ==15919==    by 0x4005557: open_verify (dl-load.c:1821)
+# ==15919==    by 0x4005BE7: open_path (dl-load.c:2082)
+# ==15919==    by 0x4007A91: _dl_map_object (dl-load.c:2285)
+# ==15919==    by 0x400CF61: openaux (dl-deps.c:65)
+# ==15919==    by 0x400D925: _dl_catch_error (dl-error.c:178)
+# ==15919==    by 0x400C02B: _dl_map_object_deps (dl-deps.c:247)
+# ==15919==    by 0x40032B6: dl_main (rtld.c:1815)
+# ==15919==    by 0x4014B2D: _dl_sysdep_start (dl-sysdep.c:244)
+# ==15919==    by 0x4001422: _dl_start (rtld.c:342)
+# ==15919==    by 0x4000AF7: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
+# ==15919==  Address 0x4ce is not stack'd, malloc'd or (recently) free'd
+# ==15919== 
+{
+   segfault caused by valgrind + libdl
+   Memcheck:Jump
+   obj:*
+   ...
+   fun:_dl_*
+   ...
+   fun:openaux
+}
+
+# ==19740== 72 bytes in 1 blocks are possibly lost in loss record 1,226 of 1,985
+# ==19740==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==19740==    by 0x9906590: g_malloc0 (gmem.c:189)
+# ==19740==    by 0x9676368: g_closure_new_simple (gclosure.c:206)
+# ==19740==    by 0x96778CF: g_cclosure_new (gclosure.c:917)
+# ==19740==    by 0x968E91D: g_signal_connect_data (gsignal.c:2443)
+# ==19740==    by 0x93DA9D8: has_connection (gdbusnameowning.c:425)
+# ==19740==    by 0x93DB278: g_bus_own_name_on_connection (gdbusnameowning.c:550)
+# ==19740==    by 0x66E560: GDBusCXX::dbus_get_bus_connection(char const*, char const*, bool, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:86)
+# ==19740==    by 0x5E3D54: main (main.cpp:109)
+# ==19740== 
+{
+   g_cclosure_new + GIO D-Bus name owning leak
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:has_connection
+}
+
+# ==10738== 72 bytes in 1 blocks are possibly lost in loss record 1,327 of 2,063
+# ==10738==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==10738==    by 0x94C3590: g_malloc0 (gmem.c:189)
+# ==10738==    by 0x9233368: g_closure_new_simple (gclosure.c:206)
+# ==10738==    by 0x92348CF: g_cclosure_new (gclosure.c:917)
+# ==10738==    by 0x924B91D: g_signal_connect_data (gsignal.c:2443)
+# ==10738==    by 0x8AC520E: notify_notification_show (in /usr/lib/x86_64-linux-gnu/libnotify.so.4.0.0)
+# ==10738==    by 0x63A1BB: SyncEvo::AutoSyncManager::syncDone(SyncEvo::SyncMLStatus) (auto-sync-manager.cpp:335)
+# ==10738==    by 0x62459C: SyncEvo::Session::run(SyncEvo::LogRedirect&) (session.cpp:768)
+# ==10738==    by 0x60C8AC: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:362)
+# ==10738==    by 0x5DDFBA: main (main.cpp:120)
+# ==10738== 
+{
+   g_cclosure_new + notify_notification_show
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:notify_notification_show
+}
+
+# ==14656== 100 bytes in 1 blocks are possibly lost in loss record 838 of 1,005
+# ==14656==    at 0x4C27209: operator new(unsigned long) (vg_replace_malloc.c:287)
+# ==14656==    by 0x9C52FC8: std::string::_Rep::_S_create(unsigned long, unsigned long, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14656==    by 0x9C549D4: char* std::string::_S_construct<char const*>(char const*, char const*, std::allocator<char> const&, std::forward_iterator_tag) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14656==    by 0x9C54B22: std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(char const*, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14656==    by 0x11971F9B: ??? (in /usr/lib/libstreamanalyzer.so.0.7.7)
+# ==14656==    by 0x11972257: ??? (in /usr/lib/libstreamanalyzer.so.0.7.7)
+# ==14656==    by 0x400DCCF: call_init (dl-init.c:85)
+# ==14656==    by 0x400DDC6: _dl_init (dl-init.c:134)
+# ==14656==    by 0x4000B29: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
+# ==14656== 
+{
+   Strigi search init leak
+   Memcheck:Leak
+   ...
+   obj:*libstreamanalyzer.so*
+   fun:call_init
+   fun:_dl_init
+}
+
+# ==14906== 30 bytes in 1 blocks are possibly lost in loss record 311 of 1,005
+# ==14906==    at 0x4C27209: operator new(unsigned long) (vg_replace_malloc.c:287)
+# ==14906==    by 0x9C52FC8: std::string::_Rep::_S_create(unsigned long, unsigned long, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14906==    by 0x9C549D4: char* std::string::_S_construct<char const*>(char const*, char const*, std::allocator<char> const&, std::forward_iterator_tag) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14906==    by 0x9C54B22: std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(char const*, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14906==    by 0x145E4C5E: ??? (in /usr/lib/libstreams.so.0.7.7)
+# ==14906==    by 0x145E4CDA: ??? (in /usr/lib/libstreams.so.0.7.7)
+# ==14906==    by 0x400DCCF: call_init (dl-init.c:85)
+# ==14906==    by 0x400DDC6: _dl_init (dl-init.c:134)
+# ==14906==    by 0x4000B29: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
+# ==14906== 
+{
+   Strigi stream search leak II
+   Memcheck:Leak
+   ...
+   obj:*libstreams.so*
+   fun:call_init
+   fun:_dl_init
 }

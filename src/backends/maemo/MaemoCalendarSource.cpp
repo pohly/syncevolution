@@ -57,7 +57,9 @@ std::string MaemoCalendarSource::getMimeType() const
 {
     switch (entry_format) {
     case -1: return "text/plain";
-    case ICAL_TYPE: return "text/calendar";
+    case ICAL_TYPE: return entry_type == JOURNAL ?
+                           "text/calendar+plain" :
+                           "text/calendar";
     case VCAL_TYPE: return "text/x-calendar";
     default: return NULL;
     }
@@ -128,9 +130,6 @@ void MaemoCalendarSource::close()
     conv = NULL;
     delete cal;
     cal = NULL;
-    // since timestamps are rounded down to nearest second,
-    // sleep until next second, just in case
-    sleep(1);
 }
 
 MaemoCalendarSource::Databases MaemoCalendarSource::getDatabases()
@@ -162,7 +161,9 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
 #if 0 /* this code exposes a bug in calendar-backend, https://bugs.maemo.org/show_bug.cgi?id=8277 */
     // I've found no way to query the last modified time of a component
     // without getting the whole component.
-    // This limit should hopefully reduce memory usage of that a bit
+    // This limit should hopefully reduce memory usage of that a bit,
+    // though it could be bad if the database happens to change
+    // between getComponents() calls.
     static const int limit = 1024;
     int ofs = 0, err;
     vector< CComponent * > comps;
@@ -183,14 +184,20 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
         }
     }
 #else
-    // this avoids the calendar-backend bug, but may use unlimited memory;
-    // hopefully the users aren't saving their entire life here!
+    // Instead, get a full list of IDs from getIdList(), then
+    // load each entry from the calendar one by one. The
+    // alternative would be to load the whole calendar into
+    // memory all at once, but that's probably not all that
+    // desirable, given the N900's limited memory.
     int err;
-    vector< CComponent * > comps;
-
-    comps = cal->getComponents(entry_type, -1, -1, err);
-    BOOST_FOREACH(CComponent * c, comps) {
-        revisions[c->getId()] = get_revision(c);
+    vector< string > ids = cal->getIdList(entry_type, err);
+    BOOST_FOREACH(std::string& id, ids) {
+        CComponent *c = cal->getEntry(id, entry_type, err);
+        if (!c)
+        {
+            throwError(string("retrieving item: ") + id);
+        }
+        revisions[id] = get_revision(c);
         delete c;
     }
 #endif
@@ -279,7 +286,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
             throwError(string("creating item "));
         }
         if (err == CALENDAR_ENTRY_DUPLICATED) {
-            u = ITEM_MERGED;
+            u = ITEM_REPLACED;
         }
     }
 
@@ -312,6 +319,18 @@ string MaemoCalendarSource::get_revision(CComponent * c)
     revision << mtime;
 
     return revision.str();
+}
+
+std::string MaemoCalendarSource::getDescription(const string &uid)
+{
+    string ret;
+    int err;
+    CComponent * c = cal->getEntry(uid, entry_type, err);
+    if (c) {
+		ret = c->getSummary();
+		delete c;
+    }
+    return ret;
 }
 
 SE_END_CXX

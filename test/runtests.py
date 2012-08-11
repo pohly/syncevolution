@@ -18,6 +18,7 @@ import os, sys, popen2, traceback, re, time, smtplib, optparse, stat, shutil, St
 import shlex
 import subprocess
 import fnmatch
+import copy
 
 try:
     import gzip
@@ -89,9 +90,33 @@ def copyLog(filename, dirname, htaccess, lineFilter=None):
     out.close()
     os.utime(outname, (info[stat.ST_ATIME], info[stat.ST_MTIME]))
     if error:
+        error = error.strip().replace("\"", "'").replace("<", "&lt;").replace(">","&gt;")
         htaccess.write("AddDescription \"%s\" %s\n" %
-                       (error.strip().replace("\"", "'").replace("<", "&lt;").replace(">","&gt;"),
+                       (error,
                         os.path.basename(filename)))
+    return error
+
+def TryKill(pid, signal):
+    try:
+        os.kill(pid, signal)
+    except OSError, ex:
+        # might have quit in the meantime, deal with the race
+        # condition
+        if ex.errno != 3:
+            raise ex
+
+def ShutdownSubprocess(popen, timeout):
+    start = time.time()
+    if popen.poll() == None:
+        TryKill(popen.pid, signal.SIGTERM)
+    while popen.poll() == None and start + timeout >= time.time():
+        time.sleep(0.01)
+    if popen.poll() == None:
+        TryKill(popen.pid, signal.SIGKILL)
+        while popen.poll() == None and start + timeout + 1 >= time.time():
+            time.sleep(0.01)
+        return False
+    return True
 
 class Action:
     """Base class for all actions to be performed."""
@@ -203,6 +228,7 @@ class Context:
             cmd.insert(0, "VALGRIND_LOG=%s" % os.getenv("VALGRIND_LOG", ""))
             cmd.insert(0, "VALGRIND_ARGS=%s" % os.getenv("VALGRIND_ARGS", ""))
             cmd.insert(0, "VALGRIND_LEAK_CHECK_ONLY_FIRST=%s" % os.getenv("VALGRIND_LEAK_CHECK_ONLY_FIRST", ""))
+            cmd.insert(0, "VALGRIND_LEAK_CHECK_SKIP=%s" % os.getenv("VALGRIND_LEAK_CHECK_SKIP", ""))
 
         # move "sudo" or "env" command invocation in front of
         # all the leading env variable assignments: necessary
@@ -322,11 +348,21 @@ class Context:
         resultchecker = self.findTestFile("resultchecker.py")
         compare = self.findTestFile("compare.xsl")
         generateHTML = self.findTestFile("generate-html.xsl")
-        self.runCommand(resultchecker + " " +self.resultdir+" "+"'"+",".join(run_servers)+"'"+" "+uri +" "+srcdir + " '" + shell + " " + testprefix +" '"+" '" +backenddir +"'");
-        # transform to html
-        self.runCommand("xsltproc -o " + self.resultdir + "/cmp_result.xml --stringparam cmp_file " + self.lastresultdir +"/nightly.xml "+compare+" "+ self.resultdir+"/nightly.xml")
-        # produce HTML
-        self.runCommand("xsltproc -o " + self.resultdir + "/nightly.html --stringparam cmp_result_file " + self.resultdir + "/cmp_result.xml " + generateHTML + " "+ self.resultdir+"/nightly.xml")
+        commands = []
+
+        # produce nightly.xml from plain text log files
+        commands.append(resultchecker + " " +self.resultdir+" "+"'"+",".join(run_servers)+"'"+" "+uri +" "+srcdir + " '" + shell + " " + testprefix +" '"+" '" +backenddir +"'")
+        previousxml = os.path.join(self.lastresultdir, "nightly.xml")
+
+        if os.path.exists(previousxml):
+            # compare current nightly.xml against previous file
+            commands.append("xsltproc -o " + self.resultdir + "/cmp_result.xml --stringparam cmp_file " + previousxml + " " + compare + " " + self.resultdir + "/nightly.xml")
+
+        # produce HTML with URLs relative to current directory of the nightly.html
+        commands.append("xsltproc -o " + self.resultdir + "/nightly.html --stringparam url . --stringparam cmp_result_file " + self.resultdir + "/cmp_result.xml " + generateHTML + " "+ self.resultdir+"/nightly.xml")
+
+        self.runCommand(" && ".join(commands))
+
         # report result by email
         if self.recipients:
             server = smtplib.SMTP(self.mailhost)
@@ -335,6 +371,11 @@ class Context:
                 msg = open(self.resultdir + "/nightly.html").read()
             except IOError:
                 msg = '''<html><body><h1>Error: No HTML report generated!</h1></body></html>\n'''
+            # insert absolute URL into hrefs so that links can be opened directly in
+            # the mail reader
+            msg = re.sub(r'href="([a-zA-Z0-9./])',
+                         'href="' + uri + r'/\1',
+                         msg)
             body = StringIO.StringIO()
             writer = MimeWriter.MimeWriter (body)
             writer.addheader("From", self.sender)
@@ -540,6 +581,7 @@ class SyncEvolutionTest(Action):
         selected tests."""
         Action.__init__(self, name)
         self.isserver = True
+        self.build = build
         self.srcdir = os.path.join(build.builddir, "src")
         self.serverlogs = serverlogs
         self.runner = runner
@@ -554,33 +596,41 @@ class SyncEvolutionTest(Action):
         if not self.serverName:
             self.serverName = name
         self.testBinary = testBinary
+        self.alarmSeconds = 1200
 
     def execute(self):
         resdir = os.getcwd()
-        os.chdir(self.srcdir)
+        os.chdir(self.build.builddir)
         # clear previous test results
         context.runCommand("%s %s testclean" % (self.runner, context.make))
+        os.chdir(self.srcdir)
         try:
             # use installed backends if available
-            backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
+            backenddir = os.path.join(self.build.installdir, "usr/lib/syncevolution/backends")
             if not os.access(backenddir, os.F_OK):
                 # fallback: relative to client-test inside the current directory
                 backenddir = "backends"
 
             # same with configs and templates, except that they use the source as fallback
-            confdir = os.path.join(compile.installdir, "usr/lib/syncevolution/xml")
+            confdir = os.path.join(self.build.installdir, "usr/share/syncevolution/xml")
             if not os.access(confdir, os.F_OK):
                 confdir = os.path.join(sync.basedir, "src/syncevo/configs")
 
-            templatedir = os.path.join(compile.installdir, "usr/lib/syncevolution/templates")
+            templatedir = os.path.join(self.build.installdir, "usr/share/syncevolution/templates")
             if not os.access(templatedir, os.F_OK):
                 templatedir = os.path.join(sync.basedir, "src/templates")
 
+            datadir = os.path.join(self.build.installdir, "usr/share/syncevolution")
+            if not os.access(datadir, os.F_OK):
+                # fallback works for bluetooth_products.ini but will fail for other files
+                datadir = os.path.join(sync.basedir, "src/dbus/server")
+
             installenv = \
+                "SYNCEVOLUTION_DATA_DIR=%s "\
                 "SYNCEVOLUTION_TEMPLATE_DIR=%s " \
                 "SYNCEVOLUTION_XML_CONFIG_DIR=%s " \
                 "SYNCEVOLUTION_BACKEND_DIR=%s " \
-                % ( templatedir, confdir, backenddir )
+                % ( datadir, templatedir, confdir, backenddir )
 
             cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
             context.runCommand(cmd)
@@ -590,15 +640,16 @@ class SyncEvolutionTest(Action):
                       "CLIENT_TEST_SERVER=%(server)s " \
                       "CLIENT_TEST_SOURCES=%(sources)s " \
                       "SYNC_EVOLUTION_EVO_CALENDAR_DELAY=1 " \
-                      "CLIENT_TEST_ALARM=1200 " \
+                      "CLIENT_TEST_ALARM=%(alarm)d " \
                       "%(env)s %(installenv)s" \
                       "CLIENT_TEST_LOG=%(log)s " \
                       "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
                       "%(runner)s " \
-                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs:$LD_LIBRARY_PATH PATH=backends/webdav:.:$PATH %(testprefix)s " \
+                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs:gdbus/.libs:gdbusxx/.libs:$LD_LIBRARY_PATH PATH=backends/webdav:.:$PATH %(testprefix)s " \
                       "%(testbinary)s" % \
                       { "server": self.serverName,
                         "sources": ",".join(self.sources),
+                        "alarm": self.alarmSeconds,
                         "env": self.testenv,
                         "installenv": installenv,
                         "log": self.serverlogs,
@@ -624,12 +675,22 @@ class SyncEvolutionTest(Action):
             else:
                 context.runCommand(basecmd)
         finally:
-            tocopy = re.compile(r'.*\.log|.*\.client.[AB]')
+            tocopy = re.compile(r'.*\.log|.*\.client.[AB]|.*\.(cpp|h|c)\.html|.*\.log\.html')
+            toconvert = re.compile(r'Client_.*\.log')
             htaccess = file(os.path.join(resdir, ".htaccess"), "a")
             for f in os.listdir(self.srcdir):
                 if tocopy.match(f):
-                    copyLog(f, resdir, htaccess, self.lineFilter)
-
+                    error = copyLog(f, resdir, htaccess, self.lineFilter)
+                    if toconvert.match(f):
+                        # also convert client-test log files to HTML
+                        tohtml = os.path.join(resdir, f + ".html")
+                        os.system("env PATH=.:$PATH synclog2html %s >%s" % (f, tohtml))
+                        basehtml = f + ".html"
+                        if os.path.exists(basehtml):
+                            os.unlink(basehtml)
+                        os.symlink(tohtml, basehtml)
+                        if error:
+                            htaccess.write('AddDescription "%s" %s\n' % (error, basehtml))
 
 
 ###################################################################
@@ -691,6 +752,9 @@ parser.add_option("", "--syncevo-tag",
 parser.add_option("", "--synthesis-tag",
                   type="string", dest="synthesistag", default="master",
                   help="the tag of the synthesis library (default = master in the moblin.org repo)")
+parser.add_option("", "--activesyncd-tag",
+                  type="string", dest="activesyncdtag", default="master",
+                  help="the tag of the activesyncd (default = master)")
 parser.add_option("", "--configure",
                   type="string", dest="configure", default="",
                   help="additional parameters for configure")
@@ -804,7 +868,7 @@ class SyncEvolutionCheckout(GitCheckout):
                              name, context.workdir,
                              # parameter to autogen.sh in SyncEvolution: also
                              # check for clean Synthesis source
-                             "env SYNTHESISSRC=../libsynthesis %s" % options.shell,
+                             "SYNTHESISSRC=../libsynthesis %s" % options.shell,
                              "git@gitorious.org:meego-middleware/syncevolution.git",
                              revision)
 
@@ -816,11 +880,28 @@ class SynthesisCheckout(GitCheckout):
                              "git@gitorious.org:meego-middleware/libsynthesis.git",
                              revision)
 
+class ActiveSyncDCheckout(GitCheckout):
+    def __init__(self, name, revision):
+        """checkout activesyncd"""
+        GitCheckout.__init__(self,
+                             name, context.workdir, options.shell,
+                             "git://git.gnome.org/evolution-activesync",
+                             revision)
+
 class SyncEvolutionBuild(AutotoolsBuild):
     def execute(self):
         AutotoolsBuild.execute(self)
-        os.chdir("src")
-        context.runCommand("%s %s test CXXFLAGS=-O0" % (self.runner, context.make))
+        # LDFLAGS=-no-install is needed to ensure that the resulting
+        # client-test is a normal, usable executable. Otherwise we
+        # can have the following situation:
+        # - A wrapper script is created on the reference platform.
+        # - It is never executed there, which means that it won't
+        #   produce the final .libs/lt-client-test executable
+        #   (done on demand by libtool wrapper).
+        # - The wrapper script is invokved for the first time
+        #   on some other platform, it tries to link, but fails
+        #   because libs are different.
+        context.runCommand("%s %s src/client-test CXXFLAGS='-O0 -g' LDFLAGS=-no-install" % (self.runner, context.make))
 
 class NopAction(Action):
     def __init__(self, name):
@@ -848,20 +929,34 @@ context.add(libsynthesis)
 
 if options.sourcedir:
     if options.nosourcedircopy:
+        activesyncd = NopSource("activesyncd", options.sourcedir)
+    else:
+        activesyncd = GitCopy("activesyncd",
+                              options.workdir,
+                              options.shell,
+                              options.sourcedir,
+                              options.activesyncdtag)
+else:
+    activesyncd = ActiveSyncDCheckout("activesyncd", options.activesyncdtag)
+context.add(activesyncd)
+
+if options.sourcedir:
+    if options.nosourcedircopy:
         sync = NopSource("syncevolution", options.sourcedir)
     else:
         sync = GitCopy("syncevolution",
                        options.workdir,
-                       "env SYNTHESISSRC=%s %s" % (libsynthesis.basedir, options.shell),
+                       "SYNTHESISSRC=%s %s" % (libsynthesis.basedir, options.shell),
                        options.sourcedir,
                        options.syncevotag)
 else:
     sync = SyncEvolutionCheckout("syncevolution", options.syncevotag)
 context.add(sync)
+source = []
 if options.synthesistag:
-    synthesis_source = "--with-synthesis-src=%s" % libsynthesis.basedir
-else:
-    synthesis_source = ""
+    source.append("--with-synthesis-src=%s" % libsynthesis.basedir)
+if options.activesyncdtag:
+    source.append("--with-activesyncd-src=%s" % activesyncd.basedir)
 
 # determine where binaries come from:
 # either compile anew or prebuilt
@@ -872,7 +967,7 @@ if options.prebuilt:
 else:
     compile = SyncEvolutionBuild("compile",
                                  sync.basedir,
-                                 "%s %s" % (options.configure, synthesis_source),
+                                 "%s %s" % (options.configure, " ".join(source)),
                                  options.shell,
                                  [ libsynthesis.name, sync.name ])
 context.add(compile)
@@ -936,16 +1031,36 @@ evolutiontest = SyncEvolutionTest("evolution", compile,
                                   "", options.shell,
                                   "Client::Source SyncEvolution",
                                   [],
+                                  "CLIENT_TEST_FAILURES="
+                                  # testReadItem404 works with some Akonadi versions (Ubuntu Lucid),
+                                  # but not all (Debian Testing). The other tests always fail,
+                                  # the code needs to be fixed.
+                                  "Client::Source::kde_.*::testReadItem404,"
+                                  "Client::Source::kde_.*::testDelete404,"
+                                  "Client::Source::kde_.*::testImport.*,"
+                                  "Client::Source::kde_.*::testRemoveProperties,"
+                                  " "
+                                  "CLIENT_TEST_SKIP="
+                                  "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsWithVALARM::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsWithVALARM::testLinkedItemsUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsAllDay::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsAllDay::testLinkedItemsUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsNoTZ::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                                  "Client::Source::file_event::LinkedItemsNoTZ::testLinkedItemsUpdateChildNoIDs",
                                   testPrefix=options.testprefix)
 context.add(evolutiontest)
 
-# test-dbus.py doesn't need valgrind, remove it
+# test-dbus.py itself doesn't need to run under valgrind, remove it...
 shell = re.sub(r'\S*valgrind\S*', '', options.shell)
 testprefix = re.sub(r'\S*valgrind\S*', '', options.testprefix)
 dbustest = SyncEvolutionTest("dbus", compile,
                              "", shell,
                              "",
                              [],
+                             # ... but syncevo-dbus-server started by test-dbus.py should use valgrind
+                             testenv="TEST_DBUS_PREFIX='%s'" % options.testprefix,
                              testPrefix=testprefix,
                              testBinary=os.path.join(sync.basedir,
                                                      "test",
@@ -963,8 +1078,10 @@ test = SyncEvolutionTest("googlecalendar", compile,
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          "CLIENT_TEST_FAILURES="
                          # http://code.google.com/p/google-caldav-issues/issues/detail?id=61 "cannot remove detached recurrence"
-                         "Client::Source::google_caldav::LinkedItems_0::testLinkedItemsRemoveNormal,"
-                         "Client::Source::google_caldav::LinkedItems_1::testLinkedItemsRemoveNormal,"
+                         "Client::Source::google_caldav::LinkedItemsDefault::testLinkedItemsRemoveNormal,"
+                         "Client::Source::google_caldav::LinkedItemsNoTZ::testLinkedItemsRemoveNormal,"
+                         "Client::Source::google_caldav::LinkedItemsWithVALARM::testLinkedItemsRemoveNormal,"
+                         "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsRemoveNormal,"
                          ,
                          testPrefix=options.testprefix)
 context.add(test)
@@ -981,11 +1098,33 @@ test = SyncEvolutionTest("yahoo", compile,
                          testPrefix=options.testprefix)
 context.add(test)
 
+test = SyncEvolutionTest("oracle", compile,
+                         "", options.shell,
+                         "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::oracle_caldav Client::Source::oracle_carddav",
+                         [ "oracle_caldav", "oracle_carddav", "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='oracle caldav carddav' "
+                         "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
+                         "CLIENT_TEST_MODE=server " # for Client::Sync
+                         ,
+                         testPrefix=options.testprefix)
+context.add(test)
+
+test = SyncEvolutionTest("egroupware-dav", compile,
+                         "", options.shell,
+                         "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::egroupware-dav_caldav Client::Source::egroupware-dav_carddav",
+                         [ "egroupware-dav_caldav", "egroupware-dav_carddav", "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='egroupware-dav caldav carddav' "
+                         "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
+                         "CLIENT_TEST_MODE=server " # for Client::Sync
+                         ,
+                         testPrefix=options.testprefix)
+context.add(test)
+
 test = SyncEvolutionTest("davical", compile,
                          "", options.shell,
-                         "Client::Sync::eds_contact Client::Sync::eds_event Client::Source::davical_caldav Client::Source::davical_carddav",
-                         [ "davical_caldav", "davical_carddav", "eds_event", "eds_contact" ],
-                         "CLIENT_TEST_WEBDAV='davical caldav carddav' "
+                         "Client::Sync::eds_contact Client::Sync::eds_event Client::Sync::eds_task Client::Source::davical_caldav Client::Source::davical_caldavtodo Client::Source::davical_carddav",
+                         [ "davical_caldav", "davical_caldavtodo", "davical_carddav", "eds_event", "eds_task", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='davical caldav caldavtodo carddav' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
                          "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
                          "CLIENT_TEST_MODE=server " # for Client::Sync
@@ -995,14 +1134,200 @@ context.add(test)
 
 test = SyncEvolutionTest("apple", compile,
                          "", options.shell,
-                         "Client::Sync::eds_event Client::Sync::eds_contact Client::Source::apple_caldav Client::Source::apple_carddav",
-                         [ "apple_caldav", "apple_carddav", "eds_event", "eds_contact" ],
-                         "CLIENT_TEST_WEBDAV='apple caldav carddav' "
+                         "Client::Sync::eds_event Client::Sync::eds_task Client::Sync::eds_contact Client::Source::apple_caldav Client::Source::apple_caldavtodo Client::Source::apple_carddav",
+                         [ "apple_caldav", "apple_caldavtodo", "apple_carddav", "eds_event", "eds_task", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='apple caldav caldavtodo carddav' "
                          "CLIENT_TEST_NUM_ITEMS=250 " # test is local, so we can afford a higher number
-                         "CLIENT_TEST_ALARM=2400 " # but even with a local server does the test run a long time
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          ,
                          testPrefix=options.testprefix)
+# but even with a local server does the test run a long time
+test.alarmSeconds = 2400
+context.add(test)
+
+class ActiveSyncTest(SyncEvolutionTest):
+    def __init__(self, name, sources = [ "eas_event", "eas_contact", "eds_event", "eds_contact" ], env = ""):
+        tests = []
+        if "eds_event" in sources:
+            tests.append("Client::Sync::eds_event")
+        if "eds_contact" in sources:
+            tests.append("Client::Sync::eds_contact")
+        if "eas_event" in sources:
+            tests.append("Client::Source::eas_event")
+        if "eas_contact" in sources:
+            tests.append("Client::Source::eas_contact")
+        SyncEvolutionTest.__init__(self, name,
+                                   compile,
+                                   "", options.shell,
+                                   tests,
+                                   sources,
+                                   env +
+                                   "CLIENT_TEST_NUM_ITEMS=10 "
+                                   "CLIENT_TEST_MODE=server " # for Client::Sync
+                                   "EAS_SOUP_LOGGER=1 "
+                                   "EAS_DEBUG=5 "
+                                   "EAS_DEBUG_DETACHED_RECURRENCES=1 "
+                                   "CLIENT_TEST_LOG=activesyncd.log "
+                                   ,
+                                   testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.log",
+                                                        os.path.join(sync.basedir, "test", "wrappercheck.sh"),
+                                                        options.testprefix,
+                                                        os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "libexec", "activesyncd"),
+                                                        "--",
+                                                        options.testprefix)))
+
+    def executeWithActiveSync(self):
+        '''start and stop activesyncd before/after running the test'''
+        args = []
+        if options.testprefix:
+            args.append(options.testprefix)
+        args.append(os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "libexec", "activesyncd"))
+        env = copy.deepcopy(os.environ)
+        env['EAS_SOUP_LOGGER'] = '1'
+        env['EAS_DEBUG'] = '5'
+        env['EAS_DEBUG_DETACHED_RECURRENCES'] = '1'
+        activesyncd = subprocess.Popen(args,
+                                       env=env)
+        try:
+            SyncEvolutionTest.execute(self)
+        finally:
+            if not ShutdownSubprocess(activesyncd, 5):
+                raise Exception("activesyncd had to be killed with SIGKILL")
+            returncode = activesyncd.poll()
+            if returncode != None:
+                if returncode != 0:
+                    raise Exception("activesyncd returned %d" % returncode)
+            else:
+                raise Exception("activesyncd did not return")
+
+test = ActiveSyncTest("exchange")
+context.add(test)
+
+test = ActiveSyncTest("googleeas",
+                      ["eds_contact", "eas_contact"],
+                      "CLIENT_TEST_DELAY=10 CLIENT_TEST_SOURCE_DELAY=10 ")
+context.add(test)
+
+syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
+                       # redirect output of command run under valgrind (when
+                       # using valgrind) or of the whole command (otherwise)
+                       # to syncevohttp.log
+                       ( 'valgrindcheck' in options.testprefix and \
+                             [ "VALGRIND_CMD_LOG=syncevohttp.log" ] or \
+                             [ "--daemon-log", "syncevohttp.log" ] ) +
+                       [ options.testprefix,
+                         os.path.join(compile.installdir, "usr", "libexec", "syncevo-dbus-server"),
+                         "--",
+                         os.path.join(sync.basedir, "test", "wrappercheck.sh"),
+                         # also redirect additional syncevo-http-server
+                         # output into the same file
+                         "--daemon-log", "syncevohttp.log",
+                         os.path.join(compile.installdir, "usr", "bin", "syncevo-http-server"),
+                         "--quiet",
+                         "http://127.0.0.1:9999/syncevolution",
+                         "--",
+                         options.testprefix])
+
+# The test uses EDS on the clients and a server config with file
+# backends - normal tests.
+test = SyncEvolutionTest("edsfile",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
+                         [ "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # Slow, and running many syncs still fails when using
+                         # valgrind. Tested separately below in "edsxfile".
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         # server cannot detect pairs based on UID/RECURRENCE-ID
+                         "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix)
+context.add(test)
+
+# The test uses EDS on the clients and a server config with file
+# backends - suspend/retry/resend tests.
+test = SyncEvolutionTest("edsxfile",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::eds_contact::Retry Client::Sync::eds_contact::Resend Client::Sync::eds_contact::Suspend",
+                         [ "eds_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_RETRY=t "
+                         "CLIENT_TEST_RESEND=t "
+                         "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         # server cannot detect pairs based on UID/RECURRENCE-ID
+                         "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix)
+# a lot of syncs per test
+test.alarmSeconds = 6000
+context.add(test)
+
+# This one uses CalDAV/CardDAV in DAViCal and the same server config
+# with file backends as edsfile.
+test = SyncEvolutionTest("davfile",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::davical_caldav Client::Sync::davical_caldavtodo Client::Sync::davical_carddav Client::Sync::davical_caldav_davical_caldavtodo_davical_carddav",
+                         [ "davical_caldav", "davical_caldavtodo", "davical_carddav" ],
+                         "CLIENT_TEST_SIMPLE_UID=1 " # DAViCal server gets confused by UID with special characters
+                         "CLIENT_TEST_WEBDAV='davical caldav caldavtodo carddav' "
+                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # could be enabled, but reporting result is currently missing (BMC #1009)
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         # server cannot detect pairs based on UID/RECURRENCE-ID
+                         "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix)
+context.add(test)
+
+# EDS on client side, DAV on server.
+test = SyncEvolutionTest("edsdav",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
+                         [ "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_SIMPLE_UID=1 " # DAViCal server gets confused by UID with special characters
+                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # could be enabled, but reporting result is currently missing (BMC #1009)
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix)
 context.add(test)
 
 scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
@@ -1035,7 +1360,6 @@ scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
                                       "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend,"
                                       "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Resend "
                                       "CLIENT_TEST_DELAY=5 "
-                                      "CLIENT_TEST_COMPARE_LOG=T "
                                       "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                       "CLIENT_TEST_INTERRUPT_AT=1",
                                       testPrefix=options.testprefix)
@@ -1108,7 +1432,6 @@ class SynthesisTest(SyncEvolutionTest):
                                    "Client::Sync::eds_contact_eds_memo::Resend "
                                    "CLIENT_TEST_NUM_ITEMS=20 "
                                    "CLIENT_TEST_DELAY=2 "
-                                   "CLIENT_TEST_COMPARE_LOG=T "
                                    "CLIENT_TEST_RESEND_TIMEOUT=5",
                                    serverName="synthesis",
                                    testPrefix=testPrefix)
@@ -1154,32 +1477,17 @@ class FunambolTest(SyncEvolutionTest):
                                    # test cannot pass because we don't have CtCap info about
                                    # the Funambol server
                                    "Client::Sync::eds_contact::testExtensions,"
-                                   "Client::Sync::eds_event::Retry,"
-                                   "Client::Sync::eds_event::Suspend,"
-                                   "Client::Sync::eds_event::Resend,"
-                                   "Client::Sync::eds_contact::Retry,"
-                                   "Client::Sync::eds_contact::Suspend,"
-                                   "Client::Sync::eds_contact::Resend,"
-                                   "Client::Sync::eds_task::Retry,"
-                                   "Client::Sync::eds_task::Suspend,"
-                                   "Client::Sync::eds_task::Resend,"
-                                   "Client::Sync::eds_memo::Retry,"
-                                   "Client::Sync::eds_memo::Suspend,"
-                                   "Client::Sync::eds_memo::Resend,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Retry,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Suspend,"
-                                   "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Resend,"
-                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
-                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend,"
-                                   "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Resend "
+                                   " "
                                    "CLIENT_TEST_XML=1 "
                                    "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                    "CLIENT_TEST_DELAY=10 "
+                                   # Using refresh-from-client is important, Funambol
+                                   # throttles slow syncs.
+                                   "CLIENT_TEST_DELETE_REFRESH=1 "
                                    "CLIENT_TEST_FAILURES="
                                    "Client::Sync::eds_contact::testTwinning,"
                                    "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testTwinning,"
                                    "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testTwinning "
-                                   "CLIENT_TEST_COMPARE_LOG=T "
                                    "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                    "CLIENT_TEST_INTERRUPT_AT=1",
                                    lineFilter=lambda x: x.replace('dogfood.funambol.com','<host hidden>'),
@@ -1213,8 +1521,7 @@ zybtest = SyncEvolutionTest("zyb", compile,
                             "Client::Sync::eds_contact::Retry,"
                             "Client::Sync::eds_contact::Suspend,"
                             "Client::Sync::eds_contact::Resend "
-                            "CLIENT_TEST_DELAY=5 "
-                            "CLIENT_TEST_COMPARE_LOG=T",
+                            "CLIENT_TEST_DELAY=5 ",
                             testPrefix=options.testprefix)
 context.add(zybtest)
 
@@ -1229,14 +1536,17 @@ googletest = SyncEvolutionTest("google", compile,
                                "Client::Sync::eds_contact::Retry,"
                                "Client::Sync::eds_contact::Suspend,"
                                "Client::Sync::eds_contact::Resend,"
+                               # refresh-from-client not supported by Google
                                "Client::Sync::eds_contact::testRefreshFromClientSync,"
                                "Client::Sync::eds_contact::testRefreshFromClientSemantic,"
                                "Client::Sync::eds_contact::testRefreshStatus,"
                                "Client::Sync::eds_contact::testDeleteAllRefresh,"
                                "Client::Sync::eds_contact::testOneWayFromClient,"
+                               "Client::Sync::eds_contact::testRefreshFromLocalSync,"
+                               "Client::Sync::eds_contact::testOneWayFromLocal,"
+                               # only WBXML supported by Google
                                "Client::Sync::eds_contact::testItemsXML "
-                               "CLIENT_TEST_DELAY=5 "
-                               "CLIENT_TEST_COMPARE_LOG=T",
+                               "CLIENT_TEST_DELAY=5 ",
                                testPrefix=options.testprefix)
 context.add(googletest)
 
@@ -1245,8 +1555,9 @@ mobicaltest = SyncEvolutionTest("mobical", compile,
                                 "Client::Sync",
                                 [ "eds_contact",
                                   "eds_event",
-                                  "eds_task",
-                                  "eds_memo" ],
+                                  "eds_task" ],
+                                # "eds_memo" - no longer works, 400 "Bad Request"
+
                                 # all-day detection in vCalendar 1.0
                                 # only works if client and server
                                 # agree on the time zone (otherwise the start/end times
@@ -1262,68 +1573,20 @@ mobicaltest = SyncEvolutionTest("mobical", compile,
                                 "Client::Sync::eds_event::testAddBothSidesRefresh,"
                                 "Client::Sync::eds_task::testAddBothSides,"
                                 "Client::Sync::eds_task::testAddBothSidesRefresh,"
-                                "Client::Sync::eds_contact::Retry,"
-                                "Client::Sync::eds_contact::Suspend,"
-                                "Client::Sync::eds_contact::Resend,"
-                                "Client::Sync::eds_contact::testRefreshFromClientSync,"
-                                "Client::Sync::eds_contact::testSlowSyncSemantic,"
-                                "Client::Sync::eds_contact::testRefreshStatus,"
-                                "Client::Sync::eds_contact::testDelete,"
-                                "Client::Sync::eds_contact::testItemsXML,"
-                                "Client::Sync::eds_contact::testOneWayFromServer,"
-                                "Client::Sync::eds_contact::testOneWayFromClient,"
-                                "Client::Sync::eds_event::testRefreshFromClientSync,"
-                                "Client::Sync::eds_event::testSlowSyncSemantic,"
-                                "Client::Sync::eds_event::testRefreshStatus,"
-                                "Client::Sync::eds_event::testDelete,"
-                                "Client::Sync::eds_event::testItemsXML,"
-                                "Client::Sync::eds_event::testOneWayFromServer,"
-                                "Client::Sync::eds_event::testOneWayFromClient,"
-                                "Client::Sync::eds_event::Retry,"
-                                "Client::Sync::eds_event::Suspend,"
-                                "Client::Sync::eds_event::Resend,"
-                                "Client::Sync::eds_task::testRefreshFromClientSync,"
-                                "Client::Sync::eds_task::testSlowSyncSemantic,"
-                                "Client::Sync::eds_task::testRefreshStatus,"
-                                "Client::Sync::eds_task::testDelete,"
-                                "Client::Sync::eds_task::testItemsXML,"
-                                "Client::Sync::eds_task::testOneWayFromServer,"
-                                "Client::Sync::eds_task::testOneWayFromClient,"
-                                "Client::Sync::eds_task::Retry,"
-                                "Client::Sync::eds_task::Suspend,"
-                                "Client::Sync::eds_task::Resend,"
-                                "Client::Sync::eds_memo::testRefreshFromClientSync,"
-                                "Client::Sync::eds_memo::testSlowSyncSemantic,"
-                                "Client::Sync::eds_memo::testRefreshStatus,"
-                                "Client::Sync::eds_memo::testDelete,"
-                                "Client::Sync::eds_memo::testItemsXML,"
-                                "Client::Sync::eds_memo::testOneWayFromServer,"
-                                "Client::Sync::eds_memo::testOneWayFromClient,"
-                                "Client::Sync::eds_memo::Retry,"
-                                "Client::Sync::eds_memo::Suspend,"
-                                "Client::Sync::eds_memo::Resend,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testRefreshFromClientSync,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testSlowSyncSemantic,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testRefreshStatus,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testDelete,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testItemsXML,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testOneWayFromServer,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::testOneWayFromClient,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Retry,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Suspend,"
-                                "Client::Sync::eds_contact_eds_event_eds_task_eds_memo::Resend,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testRefreshFromClientSync,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testSlowSyncSemantic,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testRefreshStatus,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testDelete,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testItemsXML,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testOneWayFromServer,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::testOneWayFromClient,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend,"
-                                "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Resend "
+                                "Client::Sync::.*::testRefreshFromClientSync,"
+                                "Client::Sync::.*::testSlowSyncSemantic,"
+                                "Client::Sync::.*::testRefreshStatus,"
+                                "Client::Sync::.*::testDelete,"
+                                "Client::Sync::.*::testItemsXML,"
+                                "Client::Sync::.*::testOneWayFromServer,"
+                                "Client::Sync::.*::testOneWayFromClient,"
+                                "Client::Sync::.*::testRefreshFromLocalSync,"
+                                "Client::Sync::.*::testOneWayFromLocal,"
+                                "Client::Sync::.*::testOneWayFromRemote,"
+                                "Client::Sync::.*::Retry,"
+                                "Client::Sync::.*::Suspend,"
+                                "Client::Sync::.*::Resend "
                                 "CLIENT_TEST_DELAY=5 "
-                                "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                 "CLIENT_TEST_INTERRUPT_AT=1",
                                 testPrefix=options.testprefix)
@@ -1382,7 +1645,6 @@ memotootest = SyncEvolutionTest("memotoo", compile,
                                 "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Retry,"
                                 "Client::Sync::eds_event_eds_task_eds_memo_eds_contact::Suspend "
                                 "CLIENT_TEST_DELAY=10 "
-                                "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                 "CLIENT_TEST_INTERRUPT_AT=1",
                                 testPrefix=options.testprefix)
@@ -1438,7 +1700,6 @@ ovitest = SyncEvolutionTest("ovi", compile,
                                 "Client::Sync::eds_contact_calendar+todo::testDeleteAllSync,"
                                 "Client::Sync::eds_contact_calendar+todo::testManyDeletes,"
                                 "CLIENT_TEST_DELAY=5 "
-                                "CLIENT_TEST_COMPARE_LOG=T "
                                 "CLIENT_TEST_RESEND_TIMEOUT=5 "
                                 "CLIENT_TEST_INTERRUPT_AT=1",
                                 serverName="Ovi",

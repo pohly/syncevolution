@@ -1,0 +1,157 @@
+Compilation
+===========
+
+activesyncd development files must be installed so that pkg-config
+finds libeassync.pc. --enable-activesync then enables the ActiveSync
+backend. It is off by default, even if development files are found.
+
+
+Quickstart
+==========
+
+Check that it is enabled:
+
+$ syncevolution backend=? | grep -i activesync
+   ActiveSync Address Book = eas-contacts
+   ActiveSync Events = eas-events
+   ActiveSync Todos = eas-todos
+   ActiveSync Memos = eas-memos
+
+Configure access to the server:
+$ syncevolution --configure \
+                syncURL= \
+                username=<email adddress identifying the account> \
+                addressbook/backend=eas-contacts \
+                calendar/backend=eas-events \
+                todo/backend=eas-todos \
+                memo/backend=eas-memos \
+                target-config@exchange addressbook calendar todo memo
+
+List items:
+$ syncevolution --print-items target-config@exchange [calendar|addressbook|todo|memo]
+
+Debugging:
+- run with --daemon=no (otherwise syncevo-dbus-server will execute the operation)
+- set SYNCEVOLUTION_DEBUG (otherwise SyncEvolution will suppress stdout/stderr from libs)
+
+Configure synchronization:
+$ syncevolution --configure \
+                --template SyncEvolution_Client \
+                syncURL=local://@exchange \
+                username= \
+                password= \
+                exchange
+
+Run a sync (involving all four data types!):
+$ syncevolution exchange
+
+Sync only events:
+$ syncevolution exchange calendar
+
+Note that it is not possible to share the same username in the target
+config between different sync configs, because change tracking is tied
+to the account, not the config using it. For the same reason, listing
+items will affect syncing if the same username (= account) is used in
+both.
+
+As a workaround it is possible to set up different accounts for the
+same server, see below.
+
+
+Backend Testing
+===============
+
+In addition to an activesyncd account called <EAS account ID> (usually
+an email adddress), also create an activesyncd account called <EAS
+account ID>_B ("_B" appended) with the same settings *plus*
+"device_id" set explicitly. The value must be different than the one
+chosen automatically (see apps/activesyncd/device_id key). Because
+Exchange might not accept arbitrary strings, stick to the scheme of
+"32 digit hexadecimal number".
+
+This second accounts is required for Client::Source::*::testChanges,
+which must simulate two independent ActiveSync clients.
+
+Configure "local" testing (backend is covered, no syncing involved):
+./syncevolution --configure username=<EAS account ID> \
+                eas_event/backend=eas-events \
+                eas_event/database= \
+                eas_contact/backend=eas-contacts \
+                eas_contact/database= \
+                --template SyncEvolution target-config@client-test-exchange
+
+On MeeGo:
+- install syncevolution-test and syncevolution-synccompare
+- create an empty directory, enter it
+- copy /usr/share/doc/syncevolution/testcases
+- CLIENT_TEST_UNIQUE_UID=1 \
+  CLIENT_TEST_SERVER=exchange \
+  client-test Client::Source::eas_event
+
+When compiling SyncEvolution:
+- enter the src directory
+- CLIENT_TEST_UNIQUE_UID=1 \
+  CLIENT_TEST_SERVER=exchange \
+  PATH=.:$PATH \
+  ./client-test Client::Source::eas_event
+
+CLIENT_TEST_UNIQUE_UID is necessary to avoid a UID conflict in a
+simple-minded insertion test. The proper solution is to add an "item
+exists" error to activesyncd and handle that in
+ActiveSyncSource::insertItem().
+
+The test data that is used for testImport is in:
+  testcases/eds_event.ics
+
+This data was meant for Evolution. Because it is standard iCalendar 2.0,
+it is a suitable starting point for Exchange. If it turns out that this
+data doesn't work with Exchange, then a simplified/adapter version of
+the file can be put into:
+  testcases/eds_event.ics.exchange.tem
+
+
+Sync Testing
+============
+
+- Configure target-config@exchange with source 'calendar' and 'addressbook'.
+- Create two sync configs:
+  syncevolution --configure \
+                syncURL=local://@exchange \
+                username=<EAS account ID> \
+                eds_event/backend=evolution-calendar \
+                eds_event/uri=eas_event \
+                eds_event/database=SyncEvolution_Test_eds_event_1 \
+                eds_contact/backend=evolution-contacts \
+                eds_contact/uri=eas_contact \
+                eds_contact/database=SyncEvolution_Test_eds_contact_1 \
+                --template SyncEvolution_Client exchange_1@client-test-1 eds_event eds_contact
+  syncevolution --configure \
+                syncURL=local://@exchange \
+                username=<EAS account ID>_B \
+                eds_event/backend=evolution-calendar \
+                eds_event/uri=eas_event \
+                eds_event/database=SyncEvolution_Test_eds_event_2 \
+                eds_contact/backend=evolution-contacts \
+                eds_contact/uri=eas_contact \
+                eds_contact/database=SyncEvolution_Test_eds_contact_2 \
+                --template SyncEvolution_Client exchange_2@client-test-2 eds_event eds_contact
+- Create calendars named as follows in Evolution:
+  SyncEvolution_Test_eds_event_1
+  SyncEvolution_Test_eds_event_2
+- run test (see above for invoking client-test and setting up "testcases"):
+  CLIENT_TEST_UNIQUE_UID=1 CLIENT_TEST_SERVER=exchange \
+  client-test Client::Sync::eds_event::testCopy
+
+This setup depends on overriding the username in
+target-config@exchange with different usernames in each sync
+config. This is necessary because change tracking depends on that
+username.
+
+
+Google via ActiveSync
+=====================
+
+- Use "googleeas" instead of "exchange", because ActiveSyncSourceRegister.cpp
+  needs to know that it is talking to Google, to work around the lack of
+  Fetch command support.
+

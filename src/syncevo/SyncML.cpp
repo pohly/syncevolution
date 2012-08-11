@@ -21,6 +21,8 @@
 #include <syncevo/SyncML.h>
 #include <syncevo/ConfigNode.h>
 #include <syncevo/util.h>
+#include <syncevo/StringDataBlob.h>
+#include <syncevo/IniConfigNode.h>
 #include <sstream>
 #include <iomanip>
 #include <vector>
@@ -35,7 +37,97 @@
 #include <synthesis/syerror.h>
 
 #include <syncevo/declarations.h>
+using namespace std;
 SE_BEGIN_CXX
+
+SimpleSyncMode SimplifySyncMode(SyncMode mode, bool peerIsClient)
+{
+    switch (mode) {
+    case SYNC_NONE:
+    case SYNC_TWO_WAY:
+    case SYNC_SLOW:
+    case SYNC_RESTORE_FROM_BACKUP:
+    case SYNC_ONE_WAY_FROM_LOCAL:
+    case SYNC_REFRESH_FROM_LOCAL:
+    case SYNC_ONE_WAY_FROM_REMOTE:
+    case SYNC_REFRESH_FROM_REMOTE:
+        return static_cast<SimpleSyncMode>(mode);
+
+    case SA_SYNC_ONE_WAY_FROM_CLIENT:
+    case SYNC_ONE_WAY_FROM_CLIENT:
+        return peerIsClient ? SIMPLE_SYNC_ONE_WAY_FROM_REMOTE : SIMPLE_SYNC_ONE_WAY_FROM_LOCAL;
+
+    case SA_SYNC_REFRESH_FROM_CLIENT:
+    case SYNC_REFRESH_FROM_CLIENT:
+        return peerIsClient ? SIMPLE_SYNC_REFRESH_FROM_REMOTE : SIMPLE_SYNC_REFRESH_FROM_LOCAL;
+
+    case SA_SYNC_ONE_WAY_FROM_SERVER:
+    case SYNC_ONE_WAY_FROM_SERVER:
+        return peerIsClient ? SIMPLE_SYNC_ONE_WAY_FROM_LOCAL : SIMPLE_SYNC_ONE_WAY_FROM_REMOTE;
+
+    case SA_SYNC_REFRESH_FROM_SERVER:
+    case SYNC_REFRESH_FROM_SERVER:
+        return peerIsClient ? SIMPLE_SYNC_REFRESH_FROM_LOCAL : SIMPLE_SYNC_REFRESH_FROM_REMOTE;
+
+    case SA_SYNC_TWO_WAY:
+        return SIMPLE_SYNC_TWO_WAY;
+
+    case SYNC_LAST:
+    case SYNC_INVALID:
+        return SIMPLE_SYNC_INVALID;
+    }
+
+    return SIMPLE_SYNC_INVALID;
+}
+
+SANSyncMode AlertSyncMode(SyncMode mode, bool peerIsClient)
+{
+    switch(mode) {
+    case SYNC_RESTORE_FROM_BACKUP:
+    case SYNC_NONE:
+    case SYNC_LAST:
+    case SYNC_INVALID:
+        return SA_INVALID;
+
+    case SYNC_SLOW:
+        return SA_SLOW;
+
+    case SYNC_TWO_WAY:
+    case SA_SYNC_TWO_WAY:
+        return SA_TWO_WAY;
+
+    case SYNC_ONE_WAY_FROM_CLIENT:
+    case SA_SYNC_ONE_WAY_FROM_CLIENT:
+        return SA_ONE_WAY_FROM_CLIENT;
+
+    case SYNC_REFRESH_FROM_CLIENT:
+    case SA_SYNC_REFRESH_FROM_CLIENT:
+        return SA_REFRESH_FROM_CLIENT;
+
+    case SYNC_ONE_WAY_FROM_SERVER:
+    case SA_SYNC_ONE_WAY_FROM_SERVER:
+        return SA_ONE_WAY_FROM_SERVER;
+
+    case SYNC_REFRESH_FROM_SERVER:
+    case SA_SYNC_REFRESH_FROM_SERVER:
+        return SA_REFRESH_FROM_SERVER;
+
+    case SYNC_ONE_WAY_FROM_LOCAL:
+        return peerIsClient ? SA_ONE_WAY_FROM_SERVER : SA_ONE_WAY_FROM_CLIENT;
+
+    case SYNC_REFRESH_FROM_LOCAL:
+        return peerIsClient ? SA_REFRESH_FROM_SERVER : SA_REFRESH_FROM_CLIENT;
+
+    case SYNC_ONE_WAY_FROM_REMOTE:
+        return peerIsClient ? SA_ONE_WAY_FROM_CLIENT : SA_ONE_WAY_FROM_SERVER;
+
+    case SYNC_REFRESH_FROM_REMOTE:
+        return peerIsClient ? SA_REFRESH_FROM_CLIENT : SA_REFRESH_FROM_SERVER;
+    }
+
+    return SA_INVALID;
+}
+
 
 std::string PrettyPrintSyncMode(SyncMode mode, bool userVisible)
 {
@@ -61,6 +153,14 @@ std::string PrettyPrintSyncMode(SyncMode mode, bool userVisible)
         return userVisible ? "refresh-from-server" : "SYNC_REFRESH_FROM_SERVER";
     case SYNC_RESTORE_FROM_BACKUP:
         return userVisible ? "restore-from-backup" : "SYNC_RESTORE_FROM_BACKUP";
+    case SYNC_ONE_WAY_FROM_LOCAL:
+        return userVisible ? "one-way-from-local" : "SYNC_REFRESH_FROM_LOCAL";
+    case SYNC_REFRESH_FROM_LOCAL:
+        return userVisible ? "refresh-from-local" : "SYNC_REFRESH_FROM_LOCAL";
+    case SYNC_ONE_WAY_FROM_REMOTE:
+        return userVisible ? "one-way-from-remote" : "SYNC_ONE_WAY_FROM_REMOTE";
+    case SYNC_REFRESH_FROM_REMOTE:
+        return userVisible ? "refresh-from-remote" : "SYNC_REFRESH_FROM_REMOTE";
     default:
         std::stringstream res;
 
@@ -83,6 +183,14 @@ SyncMode StringToSyncMode(const std::string &mode, bool serverAlerted)
         return serverAlerted? SA_SYNC_ONE_WAY_FROM_SERVER: SYNC_ONE_WAY_FROM_SERVER;
     } else if (boost::iequals(mode, "one-way-from-client") || boost::iequals(mode, "SYNC_ONE_WAY_FROM_CLIENT")) {
         return serverAlerted? SA_SYNC_ONE_WAY_FROM_CLIENT: SYNC_ONE_WAY_FROM_CLIENT;
+    } else if (boost::iequals(mode, "refresh-from-remote") || boost::iequals(mode, "SYNC_REFRESH_FROM_REMOTE")) {
+        return SYNC_REFRESH_FROM_REMOTE;
+    } else if (boost::iequals(mode, "refresh-from-local") || boost::iequals(mode, "SYNC_REFRESH_FROM_LOCAL")) {
+        return SYNC_REFRESH_FROM_LOCAL;
+    } else if (boost::iequals(mode, "one-way-from-remote") || boost::iequals(mode, "SYNC_ONE_WAY_FROM_REMOTE")) {
+        return SYNC_ONE_WAY_FROM_REMOTE;
+    } else if (boost::iequals(mode, "one-way-from-local") || boost::iequals(mode, "SYNC_ONE_WAY_FROM_LOCAL")) {
+        return SYNC_ONE_WAY_FROM_LOCAL;
     } else if (boost::iequals(mode, "disabled") || boost::iequals(mode, "SYNC_NONE")) {
         return SYNC_NONE;
     } else {
@@ -163,8 +271,53 @@ std::string Status2String(SyncMLStatus status)
     case STATUS_COMMAND_NOT_ALLOWED:
         error = "operation not allowed";
         break;
+    case STATUS_OPTIONAL_FEATURE_NOT_SUPPORTED:
+        error = "optional feature not supported";
+        break;
+    case STATUS_AUTHORIZATION_REQUIRED:
+        error = "authorization required";
+        break;
+    case STATUS_COMMAND_GONE:
+        error = "command gone";
+        break;
+    case STATUS_SIZE_REQUIRED:
+        error = "size required";
+        break;
+    case STATUS_INCOMPLETE_COMMAND:
+        error = "incomplete command";
+        break;
+    case STATUS_REQUEST_ENTITY_TOO_LARGE:
+        error = "request entity too large";
+        break;
+    case STATUS_UNSUPPORTED_MEDIA_TYPE_OR_FORMAT:
+        error = "unsupported media type or format";
+        break;
+    case STATUS_REQUESTED_SIZE_TOO_BIG:
+        error = "requested size too big";
+        break;
+    case STATUS_RETRY_LATER:
+        error = "retry later";
+        break;
     case STATUS_ALREADY_EXISTS:
         error = "object exists already";
+        break;
+    case STATUS_UNKNOWN_SEARCH_GRAMMAR:
+        error = "unknown search grammar";
+        break;
+    case STATUS_BAD_CGI_OR_FILTER_QUERY:
+        error = "bad CGI or filter query";
+        break;
+    case STATUS_SOFT_DELETE_CONFLICT:
+        error = "soft-delete conflict";
+        break;
+    case STATUS_PARTIAL_ITEM_NOT_ACCEPTED:
+        error = "partial item not accepted";
+        break;
+    case STATUS_ITEM_NOT_EMPTY:
+        error = "item not empty";
+        break;
+    case STATUS_MOVE_FAILED:
+        error = "move failed";
         break;
     case STATUS_FATAL:
         error = "fatal error";
@@ -482,6 +635,28 @@ namespace {
     }
 }
 
+SyncReport::SyncReport(const std::string &dump)
+{
+    boost::shared_ptr<std::string> data(new std::string(dump));
+    boost::shared_ptr<StringDataBlob> blob(new StringDataBlob("sync report",
+                                                              data,
+                                                              true));
+    IniHashConfigNode node(blob);
+    node >> *this;
+}
+
+std::string SyncReport::toString() const
+{
+    boost::shared_ptr<std::string> data(new std::string);
+    boost::shared_ptr<StringDataBlob> blob(new StringDataBlob("sync report",
+                                                              data,
+                                                              false));
+    IniHashConfigNode node(blob);
+    node << *this;
+    node.flush();
+    return *data;
+}
+
 void SyncReport::prettyPrint(std::ostream &out, int flags) const
 {
     // table looks like this:
@@ -679,7 +854,11 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
                                SyncSourceReport::ITEM_ANY,
                                SyncSourceReport::ITEM_RECEIVED_BYTES)) {
             line <<
-                PrettyPrintSyncMode(source.getFinalSyncMode()) << ", " <<
+                PrettyPrintSyncMode(source.getFinalSyncMode()) << ", ";
+            if (source.getRestarts()) {
+                line << source.getRestarts() + 1 << " cycles, ";
+            }
+            line <<
                 source.getItemStat(SyncSourceReport::ITEM_LOCAL,
                                    SyncSourceReport::ITEM_ANY,
                                    SyncSourceReport::ITEM_SENT_BYTES) / 1024 <<
@@ -850,6 +1029,10 @@ ConfigNode &operator << (ConfigNode &node, const SyncReport &report)
         string key;
         key = prefix + "-mode";
         node.setProperty(key, PrettyPrintSyncMode(source.getFinalSyncMode()));
+        if (source.getRestarts()) {
+            key = prefix + "-restarts";
+            node.setProperty(key, source.getRestarts());
+        }
         key = prefix + "-first";
         node.setProperty(key, source.isFirstSync());
         key = prefix + "-resume";
@@ -936,6 +1119,11 @@ ConfigNode &operator >> (ConfigNode &node, SyncReport &report)
                     source.setItemStat(location, state, result, intval);
                 } else if (key == "mode") {
                     source.recordFinalSyncMode(StringToSyncMode(prop.second));
+                } else if (key == "restarts") {
+                    int value;
+                    if (node.getProperty(prop.first, value)) {
+                        source.setRestarts(value);
+                    }
                 } else if (key == "first") {
                     bool value;
                     if (node.getProperty(prop.first, value)) {

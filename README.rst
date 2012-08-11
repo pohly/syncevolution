@@ -13,8 +13,8 @@ synchronize personal information management data
 SYNOPSIS
 ========
 
-Show available sources:
-  syncevolution
+List databases:
+  syncevolution --print-databases [<properties>] [<config> <source>]
 
 Show information about configuration(s):
   syncevolution --print-servers|--print-configs|--print-peers
@@ -43,18 +43,21 @@ Create, update or remove a configuration:
   syncevolution --remove|--migrate <options> [--] <config>
 
 List items:
-  syncevolution --print-items [--] <config> <source>
+  syncevolution --print-items [--] [<config> [<source>]]
 
 Export item(s):
-  syncevolution [--delimiter <string>] --export <dir>|<file>|- [--] <config> <source> [<luid> ...]
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- [--] [<config> [<source> [<luid> ...]]]
+                                                                --luids <luid> ...
 
 Add item(s):
-  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [--] <config> <source>
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [--] [<config> [<source>]]
+                                                                     --luids <luid> ...
 
 Update item(s):
   syncevolution --update <dir> [--] <config> <source>
 
   syncevolution [--delimiter <string>|none] --update <file>|- [--] <config> <source> <luid> ...
+                                                               --luids <luid> ...
 
 
 Remove item(s):
@@ -287,13 +290,32 @@ USAGE
 
 ::
 
-   syncevolution
+   syncevolution --print-databases [<properties>] [<config> <source>]
 
-If no arguments are given, then SyncEvolution will list all available
-data sources regardless whether there is a configuration file for them
-or not. The output includes the identifiers which can then be used to
-select those sources in a configuration file. For each source one can
-set a different synchronization mode in its configuration file. ::
+If no additional arguments are given, then SyncEvolution will list all
+available backends and the databases that can be accessed through each
+backend. This works without existing configurations. However, some
+backends, like for example the CalDAV backend, need additional
+information (like credentials or URL of a remote server). This
+additional information can be provided on the command line with
+property assignments (``username=...``) or in an existing configuration.
+
+When listing all databases of all active sources, the output starts
+with a heading that lists the values for the ``backend`` property which
+select the backend, followed by the databases.  Each database has a
+name and a unique ID (in brackets). Typically both can be used as
+value of the 'database' property. One database might be marked as
+``default``. It will be used when ``database`` is not set explicitly.
+
+When selecting an existing source configuration or specifying the ``backend``
+property on the command line, only the databases for that backend
+are listed and the initial line shows how that backend was selected
+(<config>/<source> resp. backend value).
+
+Some backends do not support listing of databases. For example, the
+file backend synchronizes directories with one file per item and
+always needs an explicit ``database`` property because it cannot guess
+which directory it is meant to use. ::
 
    syncevolution <config>
 
@@ -396,13 +418,13 @@ the right database dumps for the selected sources.
 A restore tries to minimize the number of item changes (see section
 `Item Changes and Data Changes`_). This means that items that are
 identical before and after the change will not be transmitted anew to
-the server during the next synchronization. If the server somehow
-needs to get a clean copy of all items on the client then, use "--sync
-refresh-from-client" in the next run. ::
+the peer during the next synchronization. If the peer somehow
+needs to get a clean copy of all local items, then use ``--sync
+refresh-from-local`` in the next run. ::
 
   syncevolution --print-items <config> <source>
-  syncevolution [--delimiter <string>] --export <dir>|<file>|- <config> <source> [<luid> ...]
-  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- <config> <source>
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- [<config> [<source> [<luid> ...]]]
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [<config> <source>]
   syncevolution --update <dir> <config> <source>
   syncevolution [--delimiter <string>|none] --update <file>|- <config> <source> <luid> ...
   syncevolution --delete-items <config> <source> (<luid> ... | *)
@@ -412,15 +434,22 @@ created by SyncEvolution. Arbitrary access to item data is provided
 with additional options. <luid> here is the unique local identifier
 assigned to each item in the source, transformed so that it contains
 only alphanumeric characters, dash and underscore. A star * in
---delete-items selects all items for deletion.
+--delete-items selects all items for deletion. There are two ways
+of specifying luids: either as additional parameters after the
+config and source parameters (which may be empty in this case, but
+must be given) or after the ``--luids`` keyword.
 
-<config> and <source> must be given, but they do not have to refer to
-existing configurations. In that case, the desired backend and must be
-give via the ``backend`` property, like this::
+<config> and <source> may be given to define the database which is to
+be used. If not given or not refering to an existing configuration
+(which is not an error, due to historic reasons), the desired backend
+must be given via the ``backend`` property, like this::
 
-  syncevolution --print-items backend=evolution-contacts dummy-config dummy-source
+  syncevolution --print-items backend=evolution-contacts
+  syncevolution --export - backend=evolution-contacts \
+                --luids pas-id-4E33F24300000006 pas-id-4E36DD7B00000007
 
 The desired backend database can be chosen via ``database=<identifier>``.
+See ``--print-databases``.
 
 OPTIONS
 =======
@@ -432,17 +461,12 @@ a list of valid values.
 
 --sync|-s <mode>|?
   Temporarily synchronize the active sources in that mode. Useful
-  for a `refresh-from-server` or `refresh-from-client` sync which
+  for a `refresh-from-local` or `refresh-from-remote` sync which
   clears all data at one end and copies all items from the other.
 
-  **Warning:** in local sync (`CalDAV and CardDAV`_/ActiveSync, ...) and
-  direct sync with a phone, the sync is started by the side which acts
-  as server. Therefore the ``from-server`` variants
-  (``one-way-from-server``, ``refresh-from-server``) transfer data
-  from the sync config into the target config (see "Synchronization
-  beyond SyncML" below) resp. to a phone. The ``from-client`` variants
-  transfer in the other direction, even if the target config happens
-  to access data on a remote server.
+  **Warning:** `local` is the data accessed via the sync config
+  directly and `remote` is the data on the peer, regardless
+  where the data is actually stored physically.
 
 --print-servers|--print-configs|--print-peers
   Prints the names of all configured peers to stdout. There is no
@@ -605,25 +629,10 @@ a list of valid values.
   Suppresses most of the normal output during a synchronization. The
   log file still contains all the information.
 
---keyring|-k
-  Save or retrieve passwords from the GNOME keyring when modifying the
-  configuration or running a synchronization. Note that using this option
-  applies to *all* passwords in a configuration, so setting a single
-  password as follows moves the other passwords into the keyring, if
-  they were not stored there already::
-
-     --keyring --configure --sync-property proxyPassword=foo
-
-  When passwords were stored in the keyring, their value is set to a single
-  hyphen ("-") in the configuration. This means that when running a
-  synchronization without the --keyring argument, the password has to be
-  entered interactively. The --print-config output always shows "-" instead
-  of retrieving the password from the keyring.
-
-  The SyncEvolution daemon always uses the GNOME keyring, regardless of
-  the --keyring command line parameter. Therefore --keyring only has an
-  effect in combination with --daemon=no, or when SyncEvolution was compiled
-  without daemon support (not the default).
+--keyring[=<value>]|-k
+  A legacy option, now the same as setting the global keyring sync property.
+  When not specifying a value explicitly, "true" for "use some kind of
+  keyring" is implied. See "--sync-property keyring" for details.
 
 --daemon[=yes/no]
   By default, the SyncEvolution command line is executed inside the
@@ -819,6 +828,14 @@ address and the server supports auto-discovery of its CalDAV and/or
 CardDAV services (using DNS SRV entries, ``.well-known`` URIs, properties
 of the current principal, ...).
 
+Alternatively, credentials can also be set in the ``databaseUser`` and
+``databasePassword`` properties of the source. The downside is that these
+values have to be set for each source and cannot be shared. The advantage
+is that, in combination with setting ``database``, such sources can be
+used as part of a normal SyncML server or client sync config. SyncEvolution
+then reads and writes data directly from the server and exchanges it
+via SyncML with the peer that is defined in the sync config.
+
 The ``database`` property of each source can be set to the URL of a
 specific *collection* (= database in WebDAV terminology). If not set,
 then the WebDAV backend first locates the server based on ``username``
@@ -830,8 +847,17 @@ by setting the ``database`` property.
   **Warning:** the protocols do not uniquely identify this default
   collection. The backend tries to make an educated guess, but it might
   pick the wrong one if the server provides more than one address book
-  or calendar. A future version of SyncEvolution will support listing
-  the available collections, but 1.2 does not yet support that.
+  or calendar. It is safer to scan for collections manually with
+  ``--print-databases`` and then use the URL of the desired collection
+  as value of ``database``.
+
+To scan for collections, use::
+
+   syncevolution --print-databases \
+                 backend=<caldav or carddav> \
+                 username=<email address or user name> \
+                 "password=!@#ABcd1234" \
+                 syncURL=<base URL of server, if auto-discovery is not supported>
 
 Configuration templates for Google Calendar, Yahoo Calendar and a
 generic CalDAV/CardDAV server are included in SyncEvolution. The Yahoo
@@ -846,8 +872,8 @@ replace ``webdav`` with ``google-calendar`` resp. ``yahoo`` and remove the
    # configure target config
    syncevolution --configure \
                 --template webdav \
-                username=123456 \
-                password=!@#ABcd1234" \
+                username=123456@example.com \
+                "password=!@#ABcd1234" \
                 target-config@webdav
 
    # configure sync config
@@ -864,6 +890,52 @@ replace ``webdav`` with ``google-calendar`` resp. ``yahoo`` and remove the
 
    # incremental sync
    syncevolution webdav
+
+Here are some alternative ways of configuring the target config::
+
+   # A) Server has one URL as starting point instead of DNS auto-discovery.
+   syncevolution --configure \
+                --template webdav \
+                username=123456 \
+                "password=!@#ABcd1234" \
+                syncURL=http://example.com \
+                target-config@webdav
+
+   # B) Explicitly specify collections (from server documentation or --print-databases).
+   #    The 'calendar' and 'addressbook' names are the ones expected by the sync config
+   #    above, additional sources can also be configured and/or the names can be changed.
+   syncevolution --configure \
+                username=123456 \
+                "password=!@#ABcd1234" \
+                addressbook/backend=carddav \
+                addressbook/database=http://example.com/addressbooks/123456/ \
+                calendar/backend=caldav \
+                calendar/database=http://example.com/calendar/123456/ \
+                target-config@webdav \
+                calendar addressbook
+
+Finally, here is how the ``@webdav`` context needs to be configured so that SyncML
+clients or servers can be added to it::
+
+   # configure sources
+   syncevolution --configure \
+                databaseUser=123456 \
+                "databasePassword=!@#ABcd1234" \
+                addressbook/backend=carddav \
+                addressbook/database=http://example.com/addressbooks/123456/ \
+                calendar/backend=caldav \
+                calendar/database=http://example.com/calendar/123456/ \
+                @webdav \
+                calendar addressbook
+
+   # configure one peer (Memotoo in this example):
+   syncevolution --configure \
+                 username=654321 \
+                 password=^749@2524 \
+                 memotoo@webdav
+
+   # sync
+   syncevolution --sync slow memotoo@webdav
 
 
 NOTES
@@ -1017,8 +1089,16 @@ SYNCEVOLUTION_DEBUG
 SYNCEVOLUTION_GNUTLS_DEBUG
    Enables additional debugging output when using the libsoup HTTP transport library.
 
+SYNCEVOLUTION_DATA_DIR
+   Overrides the default path to the bluetooth device lookup table,
+   normally `/usr/lib/syncevolution/`.
+
 SYNCEVOLUTION_BACKEND_DIR
    Overrides the default path to plugins, normally `/usr/lib/syncevolution/backends`.
+
+SYNCEVOLUTION_LIBEXEC_DIR
+   Overrides the path where additional helper executables are found, normally
+   `/usr/libexec`.
 
 SYNCEVOLUTION_TEMPLATE_DIR
    Overrides the default path to template files, normally

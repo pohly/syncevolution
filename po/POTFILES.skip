@@ -1,2 +1,3 @@
 src/gtk-ui/ui.xml
 src/gtk-ui/gtkinfobar.c
+src/synthesis/src/pcre/pcre_compile.c
