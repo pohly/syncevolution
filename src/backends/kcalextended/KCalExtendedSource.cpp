@@ -292,7 +292,17 @@ void KCalExtendedSource::open()
 
 bool KCalExtendedSource::isEmpty()
 {
-    return false;
+    switch (m_data->m_type)
+    {
+    case KCalCore::IncidenceBase::TypeEvent:
+        return !m_data->m_calendar->eventCount();
+    case KCalCore::IncidenceBase::TypeTodo:
+        return !m_data->m_calendar->todoCount();
+    case KCalCore::IncidenceBase::TypeJournal:
+        return !m_data->m_calendar->journalCount();
+    default:
+        return true;
+    }
 }
 
 void KCalExtendedSource::close()
