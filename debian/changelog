@@ -1,6 +1,8 @@
 syncevolution (1:1.2.99.3-1) UNRELEASED; urgency=low
 
   * SyncEvolution 1.2.99.3 for Harmattan.
+  * Embed libneon and host into the SyncEvolution packages,
+    so that DAV support can finally be enabled.
   * Patches and updates from Fremantle merged into Harmattan tree:
     - Build-Depend on automake 1.10, libtool, libboost1.42-dev,
       and libcppunit-dev.
@@ -8,7 +10,7 @@ syncevolution (1:1.2.99.3-1) UNRELEASED; urgency=low
     - Patches to work with gcc 4.2.
     - Fixes to Maemo calendar backend.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Sat, 11 Aug 2012 10:08:23 +0200
+ -- Ove Kaaven <ovek@arcticnet.no>  Sat, 11 Aug 2012 12:28:20 +0200
 
 syncevolution (1:1.2.2-1) unstable; urgency=low
 

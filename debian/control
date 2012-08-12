@@ -4,7 +4,8 @@ Priority: extra
 Maintainer: Ove Kaaven <ovek@debian.org>
 Build-Depends: debhelper (>= 5), autotools-dev, automake (>= 1:1.10),
  libtool, libglib2.0-dev, libpcre3-dev, libcurl3-dev, libqtcontacts-dev,
- libmkcal-dev, libsqlite3-dev, libboost1.42-dev, libcppunit-dev
+ libmkcal-dev, libsqlite3-dev, libboost1.42-dev, libcppunit-dev,
+ libxml2-dev, libssl-dev, libz-dev, dpatch
 Standards-Version: 3.7.2
 XSBC-Bugtracker: http://bugs.meego.com/buglist.cgi?product=SyncEvolution
 

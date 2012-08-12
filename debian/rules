@@ -47,7 +47,18 @@ CONFIGURE_FLAGS += --enable-maemo --enable-shared --disable-static \
  --disable-ssl-certificate-check \
  --disable-libsoup --enable-libcurl --disable-ecal --disable-ebook \
  --enable-qtcontacts --enable-kcalextended \
- --disable-bluetooth --disable-dav --with-synthesis-src=libsynthesis
+ --disable-bluetooth --enable-dav --with-synthesis-src=libsynthesis
+
+HOSTDIR = host-20000331
+HOST_BIN = $(HOSTDIR)/host
+
+NEONDIR = neon27-0.29.3
+NEON_BUILD = $(NEONDIR)/src/libneon.la
+NEON_FLAGS += --disable-shared --enable-static \
+ --enable-threadsafe-ssl=posix --with-libxml2 \
+ --with-ssl=openssl
+NEON_CFLAGS = -I$(NEONDIR)/src -D_LARGEFILE64_SOURCE -DNE_LFS
+NEON_LIBS = -L$(NEONDIR)/src -lneon -lssl -lcrypto -lxml2 -lz
 
 configure: configure.ac
 	./autogen.sh
@@ -55,11 +66,29 @@ configure: configure.ac
 libsynthesis/configure: libsynthesis/configure.in configure
 	cd libsynthesis && ./autogen.sh
 
-config.status: configure libsynthesis/configure
+ifneq (,$(HOSTDIR))
+$(HOST_BIN):
+	$(MAKE) -C $(HOSTDIR)
+endif
+
+ifneq (,$(NEONDIR))
+$(NEONDIR)/config.status: $(NEONDIR)/configure
+	cd $(NEONDIR) && debian/rules patch
+	cd $(NEONDIR) && \
+	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) $(NEON_FLAGS) \
+	 --prefix=/usr --docdir=/usr/lib/syncevolution/doc --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info \
+	 --sysconfdir=/etc
+$(NEON_BUILD): $(NEONDIR)/config.status
+	$(MAKE) -C $(NEONDIR)
+endif
+
+config.status: configure libsynthesis/configure $(HOST_BIN) $(NEON_BUILD)
 	dh_testdir
 	# --enable-shared added to build SyncEvolution backends as modules,
 	# which is more flexible but not the default because it requires a
 	# specific installation layout.
+	NEON_CFLAGS="$(NEON_CFLAGS)" \
+	NEON_LIBS="$(NEON_LIBS)" \
 	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) $(CONFIGURE_FLAGS) \
 	 --prefix=/usr --docdir=/usr/lib/syncevolution/doc --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info \
 	 --sysconfdir=/etc
@@ -75,7 +104,7 @@ build-arch: build-arch-stamp
 build-arch-stamp:  config.status
 
 	# Add here commands to compile the arch part of the package.
-	$(MAKE) 
+	$(MAKE)
 	touch $@
 
 build-indep: build-indep-stamp
@@ -99,6 +128,20 @@ ifneq "$(wildcard /usr/share/misc/config.guess)" ""
 	cp -f /usr/share/misc/config.guess config.guess
 endif
 
+ifneq (,$(NEONDIR))
+	-$(MAKE) -C $(NEONDIR) distclean
+	cd $(NEONDIR) && debian/rules unpatch
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub $(NEONDIR)/config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess $(NEONDIR)/config.guess
+endif
+endif
+
+ifneq (,$(HOSTDIR))
+	-$(MAKE) -C $(HOSTDIR) clean
+endif
 
 	dh_clean 
 
@@ -124,6 +167,10 @@ install-arch:
 	# Add here commands to install the arch part of the package into 
 	# debian/tmp.
 	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+ifneq (,$(HOSTDIR))
+	install $(HOST_BIN) $(CURDIR)/debian/tmp/usr/lib/syncevolution
+endif
 
 	dh_install -s
 
