@@ -84,6 +84,8 @@ class KCalExtendedSource : public TestingSyncSource, private SyncSourceAdmin, pr
 
  private:
     KCalExtendedData *m_data;
+    unsigned m_delete_run;
+    unsigned m_insert_run;
 };
 
 SE_END_CXX

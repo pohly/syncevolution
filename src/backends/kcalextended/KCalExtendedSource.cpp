@@ -195,6 +195,8 @@ KCalExtendedSource::KCalExtendedSource(const SyncSourceParams &params) :
 #endif
 
     m_data = NULL;
+    m_delete_run = 0;
+    m_insert_run = 0;
 }
 
 KCalExtendedSource::~KCalExtendedSource()
@@ -401,6 +403,8 @@ std::string KCalExtendedSource::endSync(bool success)
             sleep(1 - (current - modtime));
             current = time(NULL);
         } while (current - modtime < 1);
+        m_delete_run = 0;
+        m_insert_run = 0;
     }
 
     QDateTime now = QDateTime::currentDateTime().toUTC();
@@ -422,6 +426,21 @@ void KCalExtendedSource::readItem(const string &uid, std::string &item)
 
 TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string &uid, const std::string &item)
 {
+    if (m_delete_run > 0)
+    {
+        // Since the storage's save() might do deletes *after* inserts,
+        // the final save() could fail if we're doing a refresh-from-peer
+        // (where everything is first deleted and then reinserted), as
+        // the inserts will fail due to the existing entries not being
+        // deleted yet. To avoid the problem, make sure we save between
+        // the deletes and the inserts.
+        if (!m_data->m_storage->save()) {
+            throwError("could not save calendar");
+        }
+        m_delete_run = 0;
+        m_insert_run = 0;
+    }
+
     KCalCore::Calendar::Ptr calendar(new KCalCore::MemoryCalendar(KDateTime::Spec::LocalZone()));
     KCalCore::ICalFormat parser;
     if (!parser.fromString(calendar, std2qstring(item))) {
@@ -504,6 +523,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     }
 
     m_data->m_modified = true;
+    m_insert_run++;
 
     return InsertItemResult(newUID,
                             "",
@@ -524,6 +544,7 @@ void KCalExtendedSource::deleteItem(const string &uid)
         throwError(string("could not delete incidence") + uid);
     }
     m_data->m_modified = true;
+    m_delete_run++;
 }
 
 void KCalExtendedSource::listAllItems(RevisionMap_t &revisions)
