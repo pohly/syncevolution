@@ -662,7 +662,7 @@ sub NormalizeItem {
         s/^(FN|X-EVOLUTION-FILE-AS|CATEGORIES)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
-    if ($googleeas) {
+    if ($googleeas || $exchange) {
         # temporarily ignore modified properties
         s/^(BDAY|X-ANNIVERSARY)(;[^:;\n]*)*:.*\r?\n?//gm;
     }

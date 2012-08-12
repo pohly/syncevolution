@@ -2518,8 +2518,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         Timeout.removeTimeout(timeout_handler)
         self.assertEqual(self.lastState, "done")
 
-    @timeout(60)
-    def testAutoSyncNetworkFailure(self):
+    def doAutoSyncNetworkFailure(self):
         """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
         self.setupConfig()
         # enable auto-sync
@@ -2529,7 +2528,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         # or any other D-Bus test.
         config[""]["syncURL"] = "http://no-such-domain.foobar"
         config[""]["autoSync"] = "1"
-        config[""]["autoSyncDelay"] = "0"
+        config[""]["autoSyncDelay"] = "1"
         config[""]["autoSyncInterval"] = "10s"
         config[""]["password"] = "foobar"
         self.session.SetConfig(True, False, config, utf8_strings=True)
@@ -2598,6 +2597,17 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
 
         # done as part of post-processing in runTest()
         self.runTestDBusCheck = checkDBusLog
+
+    @timeout(60)
+    def testAutoSyncNetworkFailure(self):
+        """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
+        self.doAutoSyncNetworkFailure()
+
+    @timeout(60)
+    @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=session")
+    def testAutoSyncNoNetworkManager(self):
+        """TestSessionAPIsDummy.testAutoSyncNoNetworkManager - test that auto-sync is triggered despite having neither NetworkManager nor Connman, fails due to (temporary?!) network error here"""
+        self.doAutoSyncNetworkFailure()
 
     @timeout(60)
     def doAutoSyncLocalConfigError(self, notifyLevel):
@@ -6766,6 +6776,13 @@ END:VCARD
         self.assertNoErrors(err)
         self.assertEqualDiff(john + "\n" + joan, out)
 
+        # export all into file
+        exportfile = xdg_root + "/export.vcf"
+        out, err, code = self.runCmdline(["--export", exportfile,
+                                          "foo", "bar"])
+        self.assertNoErrors(err)
+        self.assertEqualDiff(john + "\n" + joan, open(exportfile).read())
+
         # export one
         out, err, code = self.runCmdline(["--export", "-",
                                           "backend=file",
@@ -6780,6 +6797,13 @@ END:VCARD
                                           "foo", "bar", "1"])
         self.assertNoErrors(err)
         self.assertEqualDiff(john, out)
+
+        # export one into file
+        exportfile = xdg_root + "/export.vcf"
+        out, err, code = self.runCmdline(["--export", exportfile,
+                                          "foo", "bar", "1"])
+        self.assertNoErrors(err)
+        self.assertEqualDiff(john, open(exportfile).read())
 
         # Copied from C++ test:
         # TODO: check configuration of just the source as @foo bar
@@ -6879,10 +6903,11 @@ END:VCARD
         # The error message is not particularly informative, but the error should
         # not occur, so let it be... Also, the "connection is closed" error only
         # occurs occasionally.
-        out = out.replace('''[ERROR] The connection is closed
-''', '')
-        self.assertEqualDiff(out, '''[ERROR syncevo-dbus-server] child process quit because of signal 9
-''')
+        self.assertNotEqual(out, '')
+        self.assertTrue('''[ERROR] The connection is closed
+''' in out or
+                        '''[ERROR syncevo-dbus-server] child process quit because of signal 9
+''' in out)
 
     @property("debug", False)
     @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY2=60")
@@ -6937,7 +6962,7 @@ END:VCARD
         # occurs occasionally.
         if out.startswith('[ERROR] child process quit because of signal 9'):
             out = out.replace('''[ERROR] sending message to child failed: The connection is closed
--''', '')
+''', '')
             self.assertEqualDiff(out, '''[ERROR] child process quit because of signal 9
 [ERROR] local transport failed: child process quit because of signal 9
 [INFO] Transport giving up after x retries and y:zzmin

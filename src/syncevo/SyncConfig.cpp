@@ -1263,12 +1263,14 @@ static ConfigProperty syncPropLogDir("logdir",
                                      "if \"none\", then no backups of the databases are made and any\n"
                                      "output is printed directly to the screen");
 static UIntConfigProperty syncPropMaxLogDirs("maxlogdirs",
-                                            "Unless this option is set, SyncEvolution will never delete\n"
-                                            "anything in the \"logdir\". If set, the oldest directories and\n"
-                                            "all their content will be removed after a successful sync\n"
-                                            "to prevent the number of log directories from growing beyond\n"
-                                            "the given limit.",
-                                            "10");
+                                             "Controls how many session directories are kept at most in the logdir.\n"
+                                             "Unless set to zero, SyncEvolution will remove old directories and\n"
+                                             "all their content to prevent the number of log directories from\n"
+                                             "growing beyond the given limit. It tries to be intelligent and will\n"
+                                             "remove sessions in which nothing interesting happened (no errors,\n"
+                                             "no data changes) in favor of keeping sessions where something\n"
+                                             "happened, even if those sessions are older.",
+                                             "10");
 static UIntConfigProperty syncPropLogLevel("loglevel",
                                           "level of detail for log messages:\n"
                                           "- 0 (or unset) = INFO messages without log file, DEBUG with log file\n"

@@ -1,0 +1,32 @@
+master:
+
+testConcurrency (__main__.TestLocalSync)
+TestLocalSync.testConcurrency - D-Bus server must remain responsive while sync runs ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 7.814s
+
+$ cat temp-test-dbus/cache/syncevolution/server-2012-01-21-20-44/status.ini 
+status = 20017
+start = 1327175092, 2012-01-21 20:44:52 +0100
+end = 1327175094, 2012-01-21 20:44:54 +0100
+source-addressbook-mode = disabled
+source-addressbook-first = false
+source-addressbook-resume = false
+source-addressbook-status = 0
+source-addressbook-backup-before = -1
+source-addressbook-backup-after = -1
+
+
+[2012-01-21 20:44:52.365] parent: read select on message channel 0.000000000s
+[2012-01-21 20:44:54.111] quit transport as requested as part of GLib event loop
+[2012-01-21 20:44:54.111] aborting after TransportAgent::FAILED as requested by user
+
+=> source not active, no error in it
+=> abort detected in loop, not in transport
+
+
+for-master/fork-local-sync:
+
+sync *runs* ?!
+
