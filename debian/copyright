@@ -9,4 +9,6 @@ License: GNU General Public License version 2
 The Debian packaging is (C) 2007, Patrick Ohly <patrick.ohly@gmx.de> and
 is licensed under the GPL, see `/usr/share/common-licenses/GPL'.
 
+The Maemo builds were adopted by Ove Kaaven <ovek@debian.org> on
+Thu, 31 Dec 04:15:13 2009 +0100.
 
