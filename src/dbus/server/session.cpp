@@ -25,6 +25,7 @@
 #include "info-req.h"
 #include "session-common.h"
 #include "dbus-callbacks.h"
+#include "presence-status.h"
 
 #include <syncevo/ForkExec.h>
 #include <syncevo/SyncContext.h>

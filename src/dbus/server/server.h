@@ -26,13 +26,13 @@
 #include <boost/weak_ptr.hpp>
 #include <boost/signals2.hpp>
 
+#include <syncevo/SyncConfig.h>
+
 #include "exceptions.h"
 #include "auto-term.h"
-#include "connman-client.h"
-#include "network-manager-client.h"
-#include "presence-status.h"
 #include "timeout.h"
 #include "dbus-callbacks.h"
+#include "read-operations.h"
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -46,6 +46,12 @@ class Restart;
 class Client;
 class GLibNotify;
 class AutoSyncManager;
+class PresenceStatus;
+class ConnmanClient;
+class NetworkManagerClient;
+
+// TODO: avoid polluting namespace
+using namespace std;
 
 /**
  * Implements the main org.syncevolution.Server interface.
@@ -345,9 +351,9 @@ class Server : public GDBusCXX::DBusObjectHelper,
     /** remove InfoReq from hash map */
     void removeInfoReq(const std::string &infoReqId);
 
-    PresenceStatus m_presence;
-    ConnmanClient m_connman;
-    NetworkManagerClient m_networkManager;
+    boost::scoped_ptr<PresenceStatus> m_presence;
+    boost::scoped_ptr<ConnmanClient> m_connman;
+    boost::scoped_ptr<NetworkManagerClient> m_networkManager;
 
     /** Manager to automatic sync */
     boost::shared_ptr<AutoSyncManager> m_autoSync;
@@ -381,6 +387,7 @@ public:
            boost::shared_ptr<Restart> &restart,
            const GDBusCXX::DBusConnectionPtr &conn,
            int duration);
+    void activate();
     ~Server();
 
     /** access to the GMainLoop reference used by this Server instance */
@@ -558,7 +565,7 @@ public:
     /** poll_nm callback for connman, used for presence detection*/
     void connmanCallback(const std::map <std::string, boost::variant <std::vector <std::string> > >& props, const string &error);
 
-    PresenceStatus& getPresenceStatus() {return m_presence;}
+    PresenceStatus& getPresenceStatus();
 
     void clearPeerTempls() { m_matchedTempls.clear(); }
     void addPeerTempl(const string &templName, const boost::shared_ptr<SyncConfig::TemplateDescription> peerTempl);

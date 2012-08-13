@@ -20,6 +20,7 @@
 
 #include "network-manager-client.h"
 #include "server.h"
+#include "presence-status.h"
 
 SE_BEGIN_CXX
 
