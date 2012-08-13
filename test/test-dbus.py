@@ -63,6 +63,18 @@ configName = "dbus_unittest"
 def usingValgrind():
     return 'valgrind' in os.environ.get("TEST_DBUS_PREFIX", "")
 
+def which(program):
+    '''find absolute path to program (simple file name, no path) in PATH env variable'''
+    def isExe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    for path in os.environ["PATH"].split(os.pathsep):
+        exeFile = os.path.join(path, program)
+        if isExe(exeFile):
+            return os.path.abspath(exeFile)
+
+    return None
+
 def GrepNotifications(dbuslog):
     '''finds all Notify calls and returns their parameters as list of line lists'''
     return re.findall(r'^method call .* dest=.* .*interface=org.freedesktop.Notifications; member=Notify\n((?:^   .*\n)*)',
@@ -1250,12 +1262,71 @@ class TestDBusServer(DBusUtil, unittest.TestCase):
         else:
             self.fail("no exception thrown")
 
+class TestDBusServerStart(DBusUtil, unittest.TestCase):
+    def testAutoActivation(self):
+        '''TestDBusServerStart.testAutoActivation - check that activating syncevo-dbus-server via D-Bus daemon works'''
+        # Create a D-Bus service file for the syncevo-dbus-server that we
+        # are testing (= the one in PATH).
+        shutil.rmtree(xdg_root, True)
+        dirname = os.path.join(xdg_root, "share", "dbus-1", "services")
+        os.makedirs(dirname)
+        service = open(os.path.join(dirname, "org.syncevolution.service"), "w")
+        service.write('''[D-BUS Service]
+Name=org.syncevolution
+Exec=%s
+''' % which('syncevo-dbus-server'))
+        service.close()
+
+        # Now run a private D-Bus session in which dbus-send activates
+        # that syncevo-dbus-server. Uses a dbus-session.sh from the
+        # same dir as test-dbus.py itself.
+        env = copy.deepcopy(os.environ)
+        env['XDG_DATA_DIRS'] = os.path.abspath(os.path.join(xdg_root, "share"))
+
+        # First run something which just starts the daemon.
+        dbus = subprocess.Popen((os.path.join(os.path.dirname(sys.argv[0]), 'dbus-session.sh'),
+                                 'dbus-send',
+                                 '--print-reply',
+                                 '--dest=org.syncevolution',
+                                 '/',
+                                 'org.freedesktop.DBus.Introspectable.Introspect'),
+                                env=env,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+        (out, err) = dbus.communicate()
+        self.assertEqual(0, dbus.returncode,
+                         msg='introspection of syncevo-dbus-server failed:\n' + out)
+
+        # Now try some real command.
+        dbus = subprocess.Popen((os.path.join(os.path.dirname(sys.argv[0]), 'dbus-session.sh'),
+                                 'dbus-send',
+                                 '--print-reply',
+                                 '--dest=org.syncevolution',
+                                 '/org/syncevolution/Server',
+                                 'org.syncevolution.Server.GetVersions'),
+                                env=env,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+        (out, err) = dbus.communicate()
+        self.assertEqual(0, dbus.returncode,
+                         msg='GetVersions of syncevo-dbus-server failed:\n' + out)
+
+
 class TestDBusServerTerm(DBusUtil, unittest.TestCase):
     def setUp(self):
         self.setUpServer()
 
     def run(self, result):
         self.runTest(result, True, ["-d", "10"])
+
+    def testSingleton(self):
+        """TestDBusServerTerm.testSingleton - a second instance of syncevo-dbus-server must terminate right away"""
+        dbus = subprocess.Popen([ 'syncevo-dbus-server' ],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+        (out, err) = dbus.communicate()
+        if not re.search(r'''\[ERROR.*already running\?\n''', out):
+            self.fail('second dbus server did not recognize already running server:\n%s' % out)
 
     @timeout(100)
     def testNoTerm(self):
