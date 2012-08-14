@@ -46,6 +46,26 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
     TrackingSyncSource(params),
     entry_type(EntryType), entry_format(EntryFormat)
 {
+    switch (EntryType) {
+    case EVENT:
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY") + "LOCATION",
+                                ", ",
+                                m_operations);
+        break;
+    case TODO:
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY"),
+                                ", ",
+                                m_operations);
+        break;
+    case JOURNAL:
+        SyncSourceLogging::init(InitList<std::string>("SUBJECT"),
+                                ", ",
+                                m_operations);
+        break;
+    default:
+        throwError("invalid calendar type");
+        break;
+    }
     mc = CMulticalendar::MCInstance();
     cal = NULL;
     if (!mc) {
@@ -327,7 +347,20 @@ std::string MaemoCalendarSource::getDescription(const string &uid)
     int err;
     CComponent * c = cal->getEntry(uid, entry_type, err);
     if (c) {
-		ret = c->getSummary();
+        list<string> parts;
+        string str;
+        str = c->getSummary();
+        if (!str.empty()) {
+            parts.push_back(str);
+        }
+        if (entry_type == EVENT)
+        {
+            str = c->getLocation();
+            if (!str.empty()) {
+                parts.push_back(str);
+            }
+        }
+        ret = boost::join(parts, ", ");
 		delete c;
     }
     return ret;
