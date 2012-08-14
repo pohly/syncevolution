@@ -37,6 +37,7 @@ typedef void *GMainLoop;
 #include <boost/intrusive_ptr.hpp>
 #include <boost/utility.hpp>
 #include <boost/foreach.hpp>
+#include <boost/function.hpp>
 
 #include <iterator>
 
@@ -555,6 +556,82 @@ class PlainGStr : public boost::shared_ptr<gchar>
         operator const gchar *() const { return &**this; }
         const gchar *c_str() const { return &**this; }
 };
+
+template<class T, class F, F finish> class GAsyncReadyCXX {
+ public:
+    typedef boost::function<void (const GError *, T)> CXXFunctionCB_t;
+
+    static void handleGLibResult(GObject *sourceObject,
+                                 GAsyncResult *result,
+                                 gpointer userData) throw () {
+        try {
+            GErrorCXX gerror;
+            T t = finish(reinterpret_cast<typename boost::function<F>::arg1_type>(sourceObject),
+                         result, gerror);
+            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            (*cb)(gerror, t);
+        } catch (...) {
+            // called from C, must not let exception escape
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
+
+template<class F, F finish> class GAsyncReadyCXX<void, F, finish> {
+ public:
+    typedef boost::function<void (const GError *)> CXXFunctionCB_t;
+
+    static void handleGLibResult(GObject *sourceObject,
+                                 GAsyncResult *result,
+                                 gpointer userData) throw () {
+        try {
+            GErrorCXX gerror;
+            finish(reinterpret_cast<typename boost::function<F>::arg1_type>(sourceObject),
+                   result, gerror);
+            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            try {
+                (*cb)(gerror);
+            } catch (...) {
+                delete cb;
+                throw;
+            }
+            delete cb;
+        } catch (...) {
+            // called from C, must not let exception escape
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
+
+/** convenience macro for picking the GAsyncReadyCXX that matches the _prepare call */
+#define SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare) \
+    GAsyncReadyCXX< boost::function<typeof(_prepare ## _finish)>::result_type, \
+                    typeof(_prepare ## _finish), \
+                    _prepare ## _finish>
+
+/**
+ * Macro for asynchronous methods which use a GAsyncReadyCallback to
+ * indicate completion. The assumption is that there is a matching
+ * _finish function for the function which starts the operation.
+ *
+ * The boost::function callback will be called exactly once, with a
+ * GError * pointer as first parameter (NULL if the _finish function
+ * did not set an error), followed by the result of the _finish
+ * function (unless that function returns void).
+ *
+ * Use boost::bind() with a boost::weak_ptr as second
+ * parameter when the callback belongs to an instance which is
+ * not guaranteed to be around when the operation completes.
+ *
+ * @param _prepare     name of the function which starts the operation
+ * @param _cb          boost::function with GError pointer and optional result value;
+ *                     exceptions are considered fatal
+ * @param _args        parameters of _prepare, without the final GAsyncReadyCallback + user_data pair
+ */
+#define SYNCEVO_GLIB_CALL_ASYNC(_prepare, _cb, _args...) \
+    _prepare(_args, \
+             SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare)::handleGLibResult, \
+             new SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare)::CXXFunctionCB_t(_cb))
 
 #endif
 
