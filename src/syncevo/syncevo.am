@@ -17,6 +17,7 @@ endif
 lib_LTLIBRARIES += src/syncevo/libsyncevolution.la
 
 src_syncevo_sources = \
+  src/syncevo/GeeSupport.h \
   src/syncevo/GValueSupport.h \
   \
   src/syncevo/ConfigTree.h \
