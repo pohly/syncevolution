@@ -415,9 +415,10 @@ void KCalExtendedSource::beginSync(const std::string &lastToken, const std::stri
     const char *anchor = resumeToken.empty() ? lastToken.c_str() : resumeToken.c_str();
     KCalCore::Incidence::List incidences;
     // return all items
-    if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
-        throwError("allIncidences() failed");
-    }
+    incidences = m_data->m_calendar->incidences();
+    // if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
+    //     throwError("allIncidences() failed");
+    // }
     m_data->extractIncidences(incidences, SyncSourceChanges::ANY, *this);
     if (*anchor) {
         SE_LOG_DEBUG(NULL, NULL, "checking for changes since %s UTC", anchor);
@@ -604,9 +605,10 @@ void KCalExtendedSource::deleteItem(const string &uid)
 void KCalExtendedSource::listAllItems(RevisionMap_t &revisions)
 {
     KCalCore::Incidence::List incidences;
-    if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
-        throwError("allIncidences() failed");
-    }
+    incidences = m_data->m_calendar->incidences();
+    // if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
+    //     throwError("allIncidences() failed");
+    // }
     foreach (KCalCore::Incidence::Ptr incidence, incidences) {
         if (incidence->type() == m_data->m_type) {
             revisions[m_data->getItemID(incidence).getLUID()] = "1";
