@@ -8,6 +8,8 @@ syncevolution (1:1.2.99.3-1) unstable; urgency=low
     - In --print-databases, list UIDs instead of file name
       (all listed calendars have the same file name anyway).
       Allow selecting database by UID in addition to name.
+    - Only load one copy of the whole calendar into RAM when
+      starting the sync. It shouldn't be necessary to load two.
     - Fixed failures when refreshing from remote peer
       and the local database wasn't empty, and other bugs.
   * Patches and updates from Fremantle merged into Harmattan tree:
@@ -17,7 +19,7 @@ syncevolution (1:1.2.99.3-1) unstable; urgency=low
     - Patches to work with gcc 4.2.
     - Fixes to Maemo calendar backend.
 
- -- Ove Kaaven <ovek@arcticnet.no>  Sun, 12 Aug 2012 21:00:33 +0200
+ -- Ove Kaaven <ovek@arcticnet.no>  Tue, 14 Aug 2012 11:54:23 +0200
 
 syncevolution (1:1.2.2-1) unstable; urgency=low
 
