@@ -10,6 +10,15 @@
       }
     ]]></macro>
 
+    <macro name="VCARD_INCOMING_PHOTO_TYPE_SCRIPT"><![CDATA[
+      // Fix PHOTO TYPE=image/jpeg (sent by Funambol).
+      INTEGER pos;
+      pos = RFIND(PHOTO_TYPE, "/");
+      if (pos != UNASSIGNED) {
+          PHOTO_TYPE = SUBSTR(PHOTO_TYPE, pos + 1);
+      }
+    ]]></macro>
+
     <macro name="VCARD_OUTGOING_PHOTO_VALUE_SCRIPT"><![CDATA[
       // Ensure that PHOTO_VALUE == "binary" is not sent (it's the default).
       if (PHOTO_VALUE == "binary") {
