@@ -1,0 +1,372 @@
+Preamble
+========
+
+This text describes a D-Bus API. It might get copied into XML API definitions
+in future revisions.
+
+The API implements in-vehicle infotainment (IVI) use cases around
+contacts:
+- cache address books from peers (primarily phones connected via Bluetooth)
+  in local address books
+- provide a unified address book that combines a configurable (and changing)
+  subset of the local address books
+- fast phone number lookup
+- browsing and searching in the unified address book
+
+Tasks that are expected to be done by the user of this API:
+- identify peers and their capabilities
+- decide how and when peer data should be cached
+- define which data goes into the unified address book
+
+In other words, the API provides the mechanisms and the user the
+policy.
+
+Datatypes
+=========
+
+Peers
+-----
+
+A peer is an entity which has exactly one address book that is meant
+to be cached locally. Typically a peer is a phone connected via
+Bluetooth and accessed via PBAP, but it could also be a web service
+that supports CardDAV or a phone with SyncML support.
+
+Peers are identified by a unique string ID. That ID needs to be
+assigned by the user of this API. The string must not be empty and may
+only contain characters a-z, 0-9, hyphen and colon. No other
+assumptions about its content are made. For example, the phone's
+Bluetooth MAC address could be used.
+
+For an entity that has more than one address book, multiple peers must
+be configured.
+
+For each peer, enough information must be provided to access its
+address book. That information is passed via D-Bus as a
+string-to-string dict, with the following keys:
+
+- "protocol" - defines how to access the address book. Currently
+  only "PBAP" is implemented. "SyncML", "CardDAV" are documented
+  to illustrate how the API would work for them.
+- "transport" - defines how to establish
+  the connection. Currently only "Bluetooth" is allowed
+  (for protocol=PBAP or SyncML) and taken as default when
+  "transport" is not set.
+- "address" - the Bluetooth MAC address in the aa:bb:cc:dd:ee:ff
+  format (for transport=Bluetooth)
+- "database" - empty or unset for the internal address book
+  (protocol=PBAP), the URI (protocol=SyncML)
+
+Address books
+-------------
+
+Address books which mirror data from a specific peer use the string
+"peer-<uid>" as ID, where <uid> is the unique ID of that peer.
+
+In addition, there is a system address book which is independent of
+any particular phone. Its ID is the empty string.
+
+This naming scheme can be extended later on, to support other kinds
+of address books.
+
+Contact
+-------
+
+A single contact is transferred via D-Bus as a string->variant dict
+where the keys are predefined property names and the values represent
+simple values (a string for "full-name") or more complex structures
+(list of phone numbers for "phone-numbers", with each list entry
+itself being a combination of type flags and the actual value).
+
+[comment: this mirrors the properties of a libfolks Individual:
+http://telepathy.freedesktop.org/doc/folks/c/FolksIndividual.html]
+
+Some properties of a FolksIndividual only make sense locally and are
+not transmitted, for example the personas it is derived from.
+
+Some other properties provide information not found that way in
+FolksIndividual:
+- "source" = list of string pairs, where each pair is a combination
+  of address book ID and local contact ID inside that address book
+  (not necessarily the same as the vCard UID of a contact!)
+
+Property values which are large (like photos) are not sent via
+D-Bus. Instead a link to a local file is sent.
+
+TODO: document all properties and their types.
+
+Search results
+--------------
+
+The goal is to support a UI which:
+- displays an ordered list of the search result,
+- can show the initial results with minimal delay,
+- can load actual content for the display as needed (only
+  load the parts which are visible or will be visible soon).
+
+The content of the unified address book can change at any time. The
+API design takes that into account by using a model/view/controller
+model.
+
+The model is the complete list of contacts, sorted according to the
+currently configured sort order. Sorting is part of the model to
+simplify generating views.
+
+The view is the subset of the data that a user of the API has
+requested. In the most extreme case, all contacts are part of the
+view. Therefore contact data has to be requested explicitly. To
+support requesting data in batches, contacts are numbered 0 to n-1 in
+each view, where n is the number of contacts in the view. Sort order
+is the same as in the underlying model. Change notifications with
+these index numbers are sent as contacts are added, modified or
+removed.
+
+The controller is the part of the API which allows changing contacts
+in the system address book, changing the sort order, enabling or disabling
+address books, etc.
+
+Note that removing or adding a contact changes the numbers assigned to
+other contacts. Example:
+
+- A view containing 10 contacts is created.
+- A notification about "contacts #0 to #9 added" is sent
+  (given as pair of first index and count, not list of numbers).
+- Data for contacts #5 to #19 gets requested, five contacts #5 to #9
+  are returned. It's okay to ask for more contacts than exist,
+  because the caller cannot be sure anyway how many contacts
+  still exist at the time when the request gets processed.
+- Contact #4 gets removed. The user needs to remember that
+  the data that it has now corresponds to contacts #4 to #8.
+- Contact #5 gets added, before the contact which had that
+  number before. The user now has contacts #4 and #6 to #9.
+  It should request contact #5 if (or once) it is needed to
+  provide a complete list to the user.
+
+[comment: using a view could be simplified by including contact data
+in the change notifications. This is not planned at the moment because
+it would not work well for large views. When adding it, there should
+be an API to restrict which properties of a contact get sent.]
+
+
+Error handling
+==============
+
+D-Bus error messages are not localized. They are meant for debugging,
+not for displaying to the user. In cases where the caller may be able
+to do something about an error, specific error codes could be defined
+and returned as part of the API. However, typically errors are generic
+and the caller simply has to assume that the PIM storage is currently
+unusable.
+
+Unless noted otherwise, calls return when the requested operation is
+complete.
+
+
+API
+===
+
+PIM Manager
+-----------
+
+The PIM manager is used to hold the unified address book in memory,
+create views on it, change configuration and control data transfers
+from phones.
+
+Service: org._01.pim.contacts
+Interface: org._01.pim.contacts.Manager
+Object path: /org/01/pim/contacts
+
+Methods:
+
+    void Start()
+
+         The PIM manager does not start loading contact data right
+         away. That allows setting the options like sort order first
+         and/or delaying the loading until it is needed. After
+         Start(), changing options that affect the unified address
+         book will take effect immediately.
+
+         Calling Start() is optional, any method asking for data will
+         automatically do that.
+
+    void Stop()
+
+         Explicitly tells the PIM manager to discard the unified address
+         book and free up the memory if possible (= not currently in use).
+         Primarily useful for testing.
+
+    void SetSortOrder(string mode)
+
+         "mode" must be one of "first/last", "last/first", "full name".
+         "first/last" sorts based on the first name stored in the "name"
+         property, with the last name used to break ties between equal first
+         names. "last/first" reverts that comparison. "full name" sorts based on
+         the full name chosen for the contact if there is such a string, otherwise
+         it uses "<last name>" and "<first name>" as sort strings.
+
+         The sort order is stored persistently. The default is "last/first".
+
+    string GetSortOrder()
+
+         Returns the current sort order.
+
+    list of strings GetActiveAddressBooks()
+
+         Returns the IDs of the address books which currently
+         contribute to the unified address book.
+
+    void SetActiveAddressBooks(list of strings)
+
+         Sets the address books which contribute to the unified
+         address book.
+
+    void SetPeer(string uid, dict properties)
+
+         Adds or modifies a peer. Modifying a peer does *not* affect
+         any contact data which might be cached for it.
+
+    void RemovePeer(string uid)
+
+         Removes a peer and all its cached data. If that data was
+         part of the active address books, it will be removed
+         automatically.
+
+    void SyncPeer(string uid)
+
+         Retrieve contacts from the peer and ensure that the local
+         cache is identical to the address book of the peer. The call
+         returns once the operation is complete. Only if there was no
+         error can the caller assume that the cache is up-to-date.
+         Otherwise it is in an undefined state.
+
+    void StopSync(string uid)
+
+         Stop any running sync for the given peer. The SyncPeer() method
+         which started such a sync will return with an "aborted" error
+         once the sync was stopped.
+
+    dict of UID to string key/value dict GetAllPeers()
+
+         Returns information about all currently configured peers.
+
+    object Search(dict filter, object agent)
+
+         Creates a new view which contains all contacts matching the
+         filter. The call returns the object path of a view object
+         after validating parameters and starting the result
+         gathering, and before completing the search. The view object
+         can be used to control the view via the
+         org._01.pim.contacts.ViewControl interface.
+
+         An empty filter matches all contacts. TODO: define other
+         searches.
+
+         Notifications for the view are sent back to the caller by
+         invoking methods from the org._01.pim.contacts.ViewAgent
+         interface on the object whose path is given in the "view"
+         parameter. If any of these method calls fail, the view will
+         automatically be destroyed.
+
+         In other words, the caller first needs to get ready to process
+         results by registering an object on the bus before calling
+         Search().
+
+         [comment: this allows sending results to just one recipient,
+         something that cannot be done easily with the use of signals as in,
+         for example, obexd. In obexd, the initiator of a transfer
+         has to subscribe to org.bluez.obex.Transfer on the object path
+         returned to it when starting the transfer, then check the current
+         status before waiting for signals, because the "Completed" signal
+         might have been sent before it could register for it.]
+
+    string AddContact(string addressbook, dict contact)
+
+         Adds a new contact to the given address book. Typically
+         only the system address book is writable. Contact properties
+         which are unknown or cannot be stored are silently ignored.
+         Returns the local ID of the new contact in the address book.
+
+         Photo data that is sent inline in the dict will be split out
+         into a file that gets associated with the contact. A photo
+         file that gets linked will continue to be owned by the
+         caller; the contact storage may or may not make a copy of it,
+         depending on which storage is used.
+
+    void ModifyContact(string addressbook, string localid, dict contact)
+
+         Updates an existing contact.
+
+    void RemoveContact(string addressbook, string localid)
+
+         Remove the contact and all of its associated data (like the
+         photo, if the photo file is owned by the contact storage).
+
+
+Service: org._01.pim.contacts
+Interface: org._01.pim.contacts.ViewControl
+Object path: [variable prefix]/{view0,view1,....}
+Methods:
+
+        list of contact dicts ReadContacts(int start, int count)
+
+             Requests at most "count" contacts in the view, starting
+             with the one at "start" (numbered starting with 1). May
+             return less (or no) contacts if the request range is
+             beyond the end of the view at the time when the call is
+             processed.
+
+             Note that the caller must process the call response
+             after all events via the ViewAgent interface if it wants
+             to keep in sync with the view. Doing this call asynchronously
+             and dealing with the response as part of the main event
+             loop will do the right thing automatically, because D-Bus
+             guarantees ordering of messages.
+
+             Making this explicit by returning data via another
+             org._01.pim.contacts.ViewAgent method was considered and
+             rejected a) for the sake of keeping this API simple and
+             b) to allow simple synchronous calls where it makes sense
+             (testing, for example).
+
+        void Close()
+
+             Closes the view and all resources associated with it.
+             Pending ReadContacts() calls will return without any
+             data and no error.
+
+        void RefineSearch(dict filter)
+
+             Replaces the current filter of the view with a new one.
+             The new filter must be stricter than the old one. Contacts
+             which were already filtered out will not be added back
+             to the view when setting a less restrictive filter (simplifies
+             the implementation).
+
+
+Service: [user of the PIM Manager]
+Interface: org._01.pim.contacts.ViewAgent
+Object path: [as chosen by user of PIM Manager]
+
+Methods:
+
+        void ContactsModified(object view, int start, int count)
+
+             Contacts #start till #start + count (inclusive) have
+             changed. Data that the recipient of the call might have
+             cached became invalid and should be reloaded. In cases
+             where changing a contact changes its position in the
+             sorted list, "contact removed" and "contact added"
+             notifications will be triggered instead of a "contact
+             changed".
+
+        void ContactsAdded(object view, int start, int count)
+
+             New contacts were added to the view.
+             The contact which previously had index #start now
+             has index #start + count, etc.
+
+        void ContactsRemoved(object view, int start, int count)
+
+             Some contacts were removed from the view.
+             The contact which previous had index #start + count
+             (if there was one) now has index #start, etc.

@@ -1,0 +1,25 @@
+The code in this directory only gets compiled when SyncEvolution is
+configured with --enable-dbus-service-pim. It uses libfolks and the
+PBAP backend to implement a unified address book. This additional
+functionality is provided via the org._01.pim D-Bus API.
+
+That API is independent of libfolks and SyncEvolution. That it is
+implemented inside syncevo-dbus-server merely simplifies the
+implementation, by reusing some code provided by SyncEvolution
+and the core Server class:
+  * C++ D-Bus bindings
+  * logging
+  * D-Bus server life cycle control: delay shut down while
+    clients make calls, inhibit shutdown while clients are
+    registered, restart when files change on disk during system
+    update, ...
+  * direct access to SyncEvolution instead having to go through
+    the http://api.syncevolution.org D-Bus API
+
+
+
+
+
+
+
+

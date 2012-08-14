@@ -515,8 +515,23 @@ if test $enable_dbus_service = "yes"; then
         MLITE_LIBS=
     fi
     AC_DEFINE(DBUS_SERVICE, 1, [define if dbus service is enabled])
+
+    AC_ARG_ENABLE(dbus-service-pim,
+                  AS_HELP_STRING([--enable-dbus-service-pim],
+                                 [enable implementation of org._01.pim D-Bus APIs (depends on libfolks)]),
+                  [ enable_dbus_pim="$enableval" ],
+                  [ enable_dbus_pim="no" ])
+    case "$enable_dbus_pim" in
+         no) ;;
+         yes)
+                PKG_CHECK_MODULES(FOLKS, [folks])
+                AC_DEFINE(ENABLE_DBUS_PIM, 1, [org._01.pim D-Bus API enabled])
+                ;;
+         *) AC_MSG_ERROR([invalid value for --enable-dbus-service-pim: '$enable_dbus_pim']);;
+    esac
 fi
 AM_CONDITIONAL([NOTIFY_COMPATIBILITY], [test "$enable_notify_compat" = "yes"])
+AM_CONDITIONAL([COND_DBUS_PIM], [test "$enable_dbus_pim" = "yes"])
 
 AC_SUBST(DBUS_CFLAGS)
 AC_SUBST(DBUS_LIBS)
@@ -1023,6 +1038,7 @@ for backend in $BACKENDS; do
     eval echo $backend: \${enable_${backend}}
 done
 echo "DBus service: $enable_dbus_service"
+echo "org._01.pim support in DBus service: $enable_dbus_pim"
 echo "Notifications: $enable_notify"
 echo "GIO GDBus: $with_gio_gdbus"
 echo "GNOME keyring: $enable_gnome_keyring"
