@@ -55,7 +55,7 @@
       <versionstring>1.1</versionstring>
 
       <incomingscript><![CDATA[
-        ISEVENT = 2;
+        $MEMO_INCOMING_SCRIPT
       ]]></incomingscript>
 
       <outgoingscript><![CDATA[
