@@ -21,6 +21,9 @@
 #define TIMEOUT_H
 
 #include <syncevo/SmartPtr.h>
+#include <syncevo/util.h>
+
+#include <boost/utility.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -33,7 +36,7 @@ SE_BEGIN_CXX
  * the timeout and thus ensure that it doesn't trigger without
  * valid parameters.
  */
-class Timeout
+class Timeout : boost::noncopyable
 {
     guint m_tag;
     boost::function<bool ()> m_callback;
@@ -67,6 +70,15 @@ public:
     }
 
     /**
+     * invoke the callback once
+     */
+    void runOnce(int seconds,
+                 const boost::function<void ()> &callback)
+    {
+        activate(seconds, boost::bind(&Timeout::once, callback));
+    }
+
+    /**
      * stop calling the callback, drop callback
      */
     void deactivate()
@@ -78,11 +90,25 @@ public:
         m_callback = 0;
     }
 
+    /** true iff active */
+    operator bool () const { return m_tag != 0; }
+
 private:
-    static gboolean triggered(gpointer data)
+    static gboolean triggered(gpointer data) throw ()
     {
-        Timeout *me = static_cast<Timeout *>(data);
-        return me->m_callback();
+        try {
+            Timeout *me = static_cast<Timeout *>(data);
+            return me->m_callback();
+        } catch (...) {
+            // Something unexpected went wrong, can only shut down.
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+        return false;
+    }
+
+    static bool once(const boost::function<void ()> &callback) {
+        callback();
+        return false;
     }
 };
 

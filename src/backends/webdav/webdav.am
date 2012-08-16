@@ -23,6 +23,8 @@ src/backends/webdav/syncevo-webdav-lookup: $(srcdir)/src/backends/webdav/syncevo
 src_backends_webdav_src = \
   src/backends/webdav/CalDAVSource.h \
   src/backends/webdav/CalDAVSource.cpp \
+  src/backends/webdav/CalDAVVxxSource.h \
+  src/backends/webdav/CalDAVVxxSource.cpp \
   src/backends/webdav/CardDAVSource.h \
   src/backends/webdav/CardDAVSource.cpp \
   src/backends/webdav/WebDAVSource.h \
@@ -31,9 +33,9 @@ src_backends_webdav_src = \
   src/backends/webdav/NeonCXX.cpp
 
 src_backends_webdav_syncdav_la_SOURCES = $(src_backends_webdav_src)
-src_backends_webdav_syncdav_la_LIBADD = $(NEON_LIBS) $(SYNCEVOLUTION_LIBS)
+src_backends_webdav_syncdav_la_LIBADD = $(NEON_LIBS) $(SYNCEVOLUTION_LIBS) $(LIBICAL_LIBS)
 src_backends_webdav_syncdav_la_LDFLAGS = -module -avoid-version
-src_backends_webdav_syncdav_la_CXXFLAGS = $(NEON_CFLAGS) $(SYNCEVO_WFLAGS)
+src_backends_webdav_syncdav_la_CXXFLAGS = $(NEON_CFLAGS) $(SYNCEVO_WFLAGS) $(LIBICAL_CFLAGS)
 src_backends_webdav_syncdav_la_CPPFLAGS = $(SYNCEVOLUTION_CFLAGS) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
 src_backends_webdav_syncdav_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS)
 

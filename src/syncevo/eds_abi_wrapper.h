@@ -52,15 +52,29 @@
 
 #ifdef HAVE_EDS
 #include <glib-object.h>
+#if defined(USE_EDS_CLIENT)
+#include <libedataserver/libedataserver.h>
+#else
+#include <libedataserver/eds-version.h>
 #include <libedataserver/e-source.h>
 #include <libedataserver/e-source-list.h>
+#endif
 #ifdef ENABLE_EBOOK
+#ifdef USE_EDS_CLIENT
+#include <libebook/libebook.h>
+#else
 #include <libebook/e-book.h>
 #include <libebook/e-vcard.h>
+#include <libebook/e-book-query.h>
+#endif
 #endif
 #ifdef ENABLE_ECAL
 # define HANDLE_LIBICAL_MEMORY 1
+#ifdef USE_EDS_CLIENT
+#include <libecal/libecal.h>
+#else
 #include <libecal/e-cal.h>
+#endif
 #endif
 #endif
 #ifdef ENABLE_BLUETOOTH
@@ -79,6 +93,7 @@ extern "C" {
 
 /** libebook, libecal, libedataserver available (currently checks for e_book_new/e_cal_new/e_source_group_peek_sources) */
 extern int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
+extern int EDSAbiHaveIcal;
 
 /** libbluetooth available (checks sdp_connect()) */
 extern int SyncEvoHaveLibbluetooth;

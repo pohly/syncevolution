@@ -59,7 +59,7 @@ using namespace GDBusCXX;
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/LocalTransportAgent.h>
-#include "CmdlineSyncClient.h"
+#include <syncevo/CmdlineSyncClient.h>
 
 #include <dlfcn.h>
 #include <signal.h>
@@ -92,24 +92,6 @@ extern "C" EContact *e_contact_new_from_vcard(const char *vcard)
     return impl ? impl(vcard) : NULL;
 }
 #endif
-
-/**
- * This is a class derived from Cmdline. The purpose
- * is to implement the factory method 'createSyncClient' to create
- * new implemented 'CmdlineSyncClient' objects.
- */
-class KeyringSyncCmdline : public Cmdline {
- public:
-    KeyringSyncCmdline(int argc, const char * const * argv) :
-        Cmdline(argc, argv)
-    {}
-    /**
-     * create a user implemented sync client.
-     */
-    SyncContext* createSyncClient() {
-        return new CmdlineSyncClient(m_server, true, m_keyring);
-    }
-};
 
 #ifdef DBUS_SERVICE
 class RemoteSession;
@@ -189,7 +171,7 @@ private:
     void sessionChangedCb(const DBusObject_t &object, bool active);
 
     /** callback of 'Server.LogOutput' */
-    void logOutputCb(const DBusObject_t &object, const string &level, const string &log);
+    void logOutputCb(const DBusObject_t &object, const string &level, const string &log, const string &procname);
 
     /** callback of 'Server.InfoRequest' */
     void infoReqCb(const string &,
@@ -204,6 +186,22 @@ private:
 
     /** callback of calling 'Server.StartSession' */
     void startSessionCb(const DBusObject_t &session, const string &error);
+
+    /**
+     * receives org.freedesktop.DBus.NameOwnerChanged signals,
+     * watches for changes of org.syncevolution.server
+     */
+    void nameOwnerChangedCB(const std::string &name,
+                            const std::string &oldOwner,
+                            const std::string &newOwner)
+    {
+        if (name == "org.syncevolution") {
+            SE_LOG_ERROR(NULL, NULL, "The SyncEvolution D-Bus service died unexpectedly. A running sync might still be able to complete normally, but the command line cannot report progress anymore and has to quit.");
+            m_result = false;
+            g_main_loop_quit(m_loop);
+        }
+    }
+
 
     /** update active session vector according to 'SessionChanged' signal */
     void updateSessions(const string &session, bool active);
@@ -253,7 +251,7 @@ private:
     // listen to dbus server signal 'SessionChanged'
     SignalWatch2<DBusObject_t, bool> m_sessionChanged;
     // listen to dbus server signal 'LogOutput'
-    SignalWatch3<DBusObject_t, string, string> m_logOutput;
+    SignalWatch4<DBusObject_t, string, string, string> m_logOutput;
     // listen to dbus server signal 'InfoRequest'
     SignalWatch6<string, 
                  DBusObject_t,
@@ -304,7 +302,7 @@ public:
     void setRunSync(bool runSync) { m_runSync = runSync; }
 
     /** pass through logoutput and print them if m_output is true */
-    void logOutput(Logger::Level level, const string &log);
+    void logOutput(Logger::Level level, const string &log, const string &procname);
 
     /** set whether to print output */
     void setOutput(bool output) { m_output = output; }
@@ -450,7 +448,7 @@ int main( int argc, char **argv )
             LoggerBase::instance().setLevel(Logger::DEBUG);
         }
 
-        KeyringSyncCmdline cmdline(argc, argv);
+        SyncEvo::KeyringSyncCmdline cmdline(argc, argv);
         vector<string> parsedArgs;
         if(!cmdline.parse(parsedArgs)) {
             return 1;
@@ -564,7 +562,7 @@ RemoteDBusServer::RemoteDBusServer() :
         attachSync();
         if(m_attached) {
             m_sessionChanged.activate(boost::bind(&RemoteDBusServer::sessionChangedCb, this, _1, _2));
-            m_logOutput.activate(boost::bind(&RemoteDBusServer::logOutputCb, this, _1, _2, _3));
+            m_logOutput.activate(boost::bind(&RemoteDBusServer::logOutputCb, this, _1, _2, _3, _4));
             m_infoReq.activate(boost::bind(&RemoteDBusServer::infoReqCb, this, _1, _2, _3, _4, _5, _6));
         }
     }
@@ -630,12 +628,13 @@ void RemoteDBusServer::versionCb(const StringMap &versions,
 
 void RemoteDBusServer::logOutputCb(const DBusObject_t &object,
                                    const string &level,
-                                   const string &log)
+                                   const string &log,
+                                   const string &procname)
 {
     if (m_session && 
         (boost::equals(object, getPath()) ||
          boost::equals(object, m_session->getPath()))) {
-        m_session->logOutput(Logger::strToLevel(level.c_str()), log);
+        m_session->logOutput(Logger::strToLevel(level.c_str()), log, procname);
     }
 }
 
@@ -719,6 +718,25 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
     if(m_session) {
         m_session->setRunSync(true);
 
+        // If the syncevo-dbus-server dies while we wait for some
+        // output from it, then we used to hang forever. Worse, if it
+        // happened while signal handling was active, then the command
+        // line tool couldn't even be killed with CTRL-C.
+        // To detect this case, we watch name owner changes for org.syncevolution.server.
+        // If it changes from now on, we know that our m_session became
+        // invalid. If it already changed, then the next calls for that
+        // session will fail.
+#if 0
+        GDBusCXX::DBusRemoteObject daemon(getConnection(),
+                                          "/org/freedesktop/DBus",
+                                          "org.freedesktop.DBus",
+                                          "");
+        GDBusCXX::SignalWatch3<std::string, std::string, std::string> nameOwnerChanged(daemon,
+                                                                                       "NameOwnerChanged");
+        nameOwnerChanged.activate(boost::bind(&RemoteDBusServer::nameOwnerChangedCB, this,
+                                              _1, _2, _3));
+#endif
+
         //if session is not active, just wait
         while(!isActive()) {
             g_main_loop_run(m_loop);
@@ -728,7 +746,8 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         resetReplies();
         m_session->executeAsync(args);
 
-        while(!done()) {
+
+        while(m_result && !done()) {
             g_main_loop_run(m_loop);
         }
 
@@ -745,7 +764,7 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(SuspendFlagsChanged, m_session.get(), _1).track(m_session));
 
         //wait until status is 'done'
-        while(!m_session->statusDone()) {
+        while(m_result && !m_session->statusDone()) {
             g_main_loop_run(m_loop);
         }
 
@@ -978,9 +997,10 @@ void RemoteSession::interruptAsync(const char *operation)
     suspend.start(interruptCb);
 }
 
-void RemoteSession::logOutput(Logger::Level level, const string &log)
+void RemoteSession::logOutput(Logger::Level level, const string &log, const string &procname)
 {
     if(m_output) {
+        ProcNameGuard guard(procname);
         SE_LOG(level, NULL, NULL, "%s", log.c_str());
     }
 }

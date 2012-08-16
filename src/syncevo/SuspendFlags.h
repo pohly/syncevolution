@@ -25,6 +25,8 @@
 #include <boost/function.hpp>
 #include <boost/signals2.hpp>
 
+#include <syncevo/Logging.h>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -70,6 +72,14 @@ class SuspendFlags
     State getState() const;
 
     /**
+     * Throws a "aborting as requested by user" StatusException with
+     * LOCERR_USERABORT as status code if the current state is not
+     * NORMAL. In other words, suspend and abort are both
+     * treated like an abort request.
+     */
+    void checkForNormal() const;
+
+    /**
      * Users of this class can read a single char for each received
      * signal from this file descriptor. The char is the State that
      * was entered by that signal. This can be used to be notified
@@ -91,9 +101,6 @@ class SuspendFlags
      */
     boost::shared_ptr<Guard> activate();
 
-    /** free file descriptors, restore signal handlers */
-    void deactivate();
-
     /**
      * Retrieve state changes pushed into pipe by signal
      * handler and write user-visible messages for them.
@@ -105,7 +112,7 @@ class SuspendFlags
     /**
      * Triggered inside the main thread when the state
      * changes. Either printSignals() needs to be called
-     * or directly or a glib watch must be activated which
+     * directly or a glib watch must be activated which
      * does that.
      */
     typedef boost::signals2::signal<void (SuspendFlags &)> StateChanged_t;
@@ -138,9 +145,18 @@ class SuspendFlags
      */
     boost::shared_ptr<StateBlocker> abort();
 
+    /** log level of the "aborting" messages */
+    Logger::Level getLevel() const { return m_level; }
+    void setLevel(Logger::Level level) { m_level = level; }
+
  private:
     SuspendFlags();
     ~SuspendFlags();
+
+    Logger::Level m_level;
+
+    /** free file descriptors, restore signal handlers */
+    void deactivate();
 
     /** state as observed by signal handler */
     State m_state;

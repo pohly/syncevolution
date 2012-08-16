@@ -29,7 +29,6 @@
 #include <boost/utility/value_init.hpp>
 
 #include <stdarg.h>
-#include <time.h>
 
 #include <vector>
 #include <sstream>
@@ -38,6 +37,8 @@
 #include <exception>
 #include <list>
 
+#include <syncevo/Timespec.h>    // definitions used to be included in util.h,
+                                 // include it to avoid changing code using the time things
 #include <syncevo/Logging.h>
 
 #include <syncevo/declarations.h>
@@ -333,54 +334,11 @@ char *Strncpy(char *dest, const char *src, size_t n);
 
 /**
  * sleep() with sub-second resolution. Might be interrupted by signals
- * before the time has elapsed.
+ * or SuspendFlags abort/suspend requests before the time has elapsed.
+ *
+ * @return seconds not elapsed yet, 0 if not interrupted
  */
-void Sleep(double seconds);
-
-
-/**
- * Sub-second time stamps. Thin wrapper around timespec
- * and clock_gettime() (for monotonic time). Comparisons
- * assume normalized values (tv_nsec >= 0, < 1e9). Addition
- * and substraction produce normalized values, as long
- * as the result is positive. Substracting a - b where a < b
- * leads to an undefined result.
- */
-class Timespec : public timespec
-{
- public:
-    Timespec() { tv_sec = 0; tv_nsec = 0; }
-    Timespec(time_t sec, long nsec) { tv_sec = sec; tv_nsec = nsec; }
-
-    bool operator < (const Timespec &other) const {
-        return tv_sec < other.tv_sec ||
-            (tv_sec == other.tv_sec && tv_nsec < other.tv_nsec);
-    }
-    bool operator > (const Timespec &other) const {
-        return tv_sec > other.tv_sec ||
-            (tv_sec == other.tv_sec && tv_nsec > other.tv_nsec);
-    }
-    bool operator <= (const Timespec &other) const { return !(*this > other); }
-    bool operator >= (const Timespec &other) const { return !(*this < other); }
-
-    operator bool () const { return tv_sec || tv_nsec; }
-
-    Timespec operator + (int seconds) const { return Timespec(tv_sec + seconds, tv_nsec); }
-    Timespec operator - (int seconds) const { return Timespec(tv_sec - seconds, tv_nsec); }
-    Timespec operator + (unsigned seconds) const { return Timespec(tv_sec + seconds, tv_nsec); }
-    Timespec operator - (unsigned seconds) const { return Timespec(tv_sec - seconds, tv_nsec); }
-    Timespec operator + (const Timespec &other) const;
-    Timespec operator - (const Timespec &other) const;
-
-    operator timeval () const { timeval res; res.tv_sec = tv_sec; res.tv_usec = tv_nsec / 1000; return res; }
-
-    time_t seconds() const { return tv_sec; }
-    long nsecs() const { return tv_nsec; }
-    double duration() const { return (double)tv_sec + ((double)tv_nsec) / 1e9;  }
-
-    static Timespec monotonic() { Timespec res; clock_gettime(CLOCK_MONOTONIC, &res); return res; }
-    static Timespec system() { Timespec res; clock_gettime(CLOCK_REALTIME, &res); return res; }
-};
+double Sleep(double seconds);
 
 /**
  * Acts like the underlying type. In addition ensures that plain types
@@ -407,6 +365,8 @@ template<class T> class Init {
  */
 template<class T> class InitState {
  public:
+    typedef T value_type;
+
     InitState(const T &val, bool wasSet) : m_value(val), m_wasSet(wasSet) {}
     InitState() : m_value(boost::value_initialized<T>()), m_wasSet(false) {}
     InitState(const InitState &other) : m_value(other.m_value), m_wasSet(other.m_wasSet) {}
@@ -424,11 +384,13 @@ template<class T> class InitState {
 /** version of InitState for classes */
 template<class T> class InitStateClass : public T {
  public:
+    typedef T value_type;
+
     InitStateClass(const T &val, bool wasSet) : T(val), m_wasSet(wasSet) {}
     InitStateClass() : m_wasSet(false) {}
     InitStateClass(const char *val) : T(val), m_wasSet(false) {}
     InitStateClass(const InitStateClass &other) : T(other), m_wasSet(other.m_wasSet) {}
-    InitStateClass & operator = (const T &val) { *this = val; m_wasSet = true; return *this; }
+    InitStateClass & operator = (const T &val) { T::operator = (val); m_wasSet = true; return *this; }
     const T & get() const { return *this; }
     T & get() { return *this; }
     bool wasSet() const { return m_wasSet; }
@@ -456,6 +418,30 @@ typedef InitState<bool> Bool;
  */
 typedef InitStateClass<std::string> InitStateString;
 
+/**
+ * Version of InitState where the value can true, false, or a string.
+ * Recognizes 0/1/false/true/no/yes case-insensitively as special
+ * booleans, everything else is considered a string.
+ */
+class InitStateTri : public InitStateString
+{
+ public:
+    InitStateTri(const std::string &val, bool wasSet) : InitStateString(val, wasSet) {}
+    InitStateTri() {}
+    InitStateTri(const char *val) : InitStateString(val, false) {}
+    InitStateTri(const InitStateTri &other) : InitStateString(other) {}
+    InitStateTri(const InitStateString &other) : InitStateString(other) {}
+
+    enum Value {
+        VALUE_TRUE,
+        VALUE_FALSE,
+        VALUE_STRING
+    };
+
+    // quick check for true/false, use get() for string case
+    Value getValue() const;
+};
+
 enum HandleExceptionFlags {
     HANDLE_EXCEPTION_FLAGS_NONE = 0,
 
@@ -463,7 +449,12 @@ enum HandleExceptionFlags {
      * a 404 status error is possible and must not be logged as ERROR
      */
     HANDLE_EXCEPTION_404_IS_OKAY = 1 << 0,
-    HANDLE_EXCEPTION_MAX = 1 << 1
+    HANDLE_EXCEPTION_FATAL = 1 << 1,
+    /**
+     * don't log exception as ERROR
+     */
+    HANDLE_EXCEPTION_NO_ERROR = 1 << 2,
+    HANDLE_EXCEPTION_MAX = 1 << 3,
 };
 
 /**
@@ -503,7 +494,21 @@ class Exception : public std::runtime_error
     static SyncMLStatus handle(SyncMLStatus *status = NULL, Logger *logger = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
     static SyncMLStatus handle(Logger *logger, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, logger, NULL, Logger::ERROR, flags); }
     static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, NULL, &explanation, Logger::ERROR, flags); }
+    static void handle(HandleExceptionFlags flags) { handle(NULL, NULL, NULL, Logger::ERROR, flags); }
     static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }
+
+    /**
+     * Tries to identify exception class based on explanation string created by
+     * handle(). If successful, that exception is throw with the same
+     * attributes as in the original exception. Otherwise parse() returns.
+     */
+    static void tryRethrow(const std::string &explanation);
+
+    /**
+     * Same as tryRethrow() for strings with a 'org.syncevolution.xxxx:' prefix,
+     * as passed as D-Bus error strings.
+     */
+    static void tryRethrowDBus(const std::string &error);
 };
 
 /**

@@ -22,6 +22,7 @@
 #define INCL_LOGGING
 
 #include <stdarg.h>
+#include <stdio.h>
 #include <string>
 
 #ifdef HAVE_CONFIG_H
@@ -30,6 +31,10 @@
 #ifdef HAVE_GLIB
 # include <glib.h>
 #endif
+
+#include <syncevo/Timespec.h>
+
+#include <boost/function.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -127,6 +132,18 @@ class Logger
                          gpointer userData);
 #endif
 
+    /**
+     * can be used as replacement for libsynthesis console printf function,
+     * logs at DEBUG level
+     *
+     * @param stream   is ignored
+     * @param format   guaranteed to start with "SYSYNC "
+     * @return always 0
+     */
+    static int sysyncPrintf(FILE *stream,
+                            const char *format,
+                            ...);
+
     virtual ~Logger() {}
 
     /**
@@ -171,6 +188,33 @@ class Logger
 
  protected:
     static std::string m_processName;
+};
+
+/**
+ * Changes the process name temporarily.
+ */
+class ProcNameGuard {
+    std::string m_oldProcName;
+    bool m_modified;
+
+ public:
+    ProcNameGuard(const std::string &procname) :
+        m_oldProcName(Logger::getProcessName())
+    {
+        if (m_oldProcName != procname) {
+            Logger::setProcessName(procname);
+            m_modified = true;
+        } else {
+            m_modified = false;
+        }
+    }
+
+    ~ProcNameGuard()
+    {
+        if (m_modified) {
+            Logger::setProcessName(m_oldProcName);
+        }
+    }
 };
 
 /**
@@ -219,8 +263,34 @@ class LoggerBase : public Logger
     virtual void setLevel(Level level) { m_level = level; }
     virtual Level getLevel() { return m_level; }
 
+ protected:
+    /**
+     * Prepares the output. The result is passed back to the caller
+     * line-by-line (expectedTotal > 0) and/or as full chunk
+     * (expectedTotal = 0). The expected size is just a guess, be
+     * prepared to handle more output.
+     *
+     * Each chunk already includes the necessary line breaks (in
+     * particular after the last line when it contains the entire
+     * output). It may be modified by the callback.
+     */
+    void formatLines(Level msglevel,
+                     Level outputlevel,
+                     const std::string &processName,
+                     const char *prefix,
+                     const char *format,
+                     va_list args,
+                     boost::function<void (std::string &chunk, size_t expectedTotal)> print);
+
  private:
     Level m_level;
+
+    /**
+     * Set by formatLines() before writing the first message if log
+     * level is debugging, together with printing a message that gives
+     * the local time.
+     */
+    Timespec m_startTime;
 };
 
 

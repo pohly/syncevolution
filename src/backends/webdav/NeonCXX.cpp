@@ -21,6 +21,7 @@
 #include <syncevo/Logging.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/SmartPtr.h>
+#include <syncevo/SuspendFlags.h>
 
 #include <sstream>
 
@@ -489,6 +490,9 @@ void Session::startOperation(const string &operation, const Timespec &deadline)
                                          (deadline - Timespec::monotonic()).duration()).c_str() :
                  "no deadline");
 
+    // now is a good time to check for user abort
+    SuspendFlags::getSuspendFlags().checkForNormal();
+
     // remember current operation attributes
     m_operation = operation;
     m_deadline = deadline;
@@ -510,9 +514,11 @@ void Session::flush()
     }
 }
 
-bool Session::checkError(int error, int code, const ne_status *status, const string &location)
+bool Session::checkError(int error, int code, const ne_status *status, const string &location,
+                         const std::set<int> *expectedCodes)
 {
     flush();
+    SuspendFlags &s = SuspendFlags::getSuspendFlags();
 
     // unset operation, set it again only if the same operation is going to be retried
     string operation = m_operation;
@@ -539,8 +545,10 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     if ((error == NE_ERROR || error == NE_OK) &&
         (code >= 300 && code <= 399)) {
         // special case Google: detect redirect to temporary error page
-        // and retry
-        if (location == "http://www.google.com/googlecalendar/unavailable.html") {
+        // and retry; same for redirect to login page
+        if (boost::starts_with(location, "http://www.google.com/googlecalendar/unavailable.html") ||
+            boost::starts_with(location, "https://www.google.com/googlecalendar/unavailable.html") ||
+            boost::starts_with(location, "https://accounts.google.com/ServiceLogin")) {
             retry = true;
         } else {
             SE_THROW_EXCEPTION_2(RedirectException,
@@ -556,6 +564,12 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     switch (error) {
     case NE_OK:
         // request itself completed, but might still have resulted in bad status
+        if (expectedCodes &&
+            expectedCodes->find(code) != expectedCodes->end()) {
+            // return to caller immediately as if we had succeeded,
+            // without throwing an exception and without retrying
+            return true;
+        }
         if (code &&
             (code < 200 || code >= 300)) {
             if (status) {
@@ -661,6 +675,13 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                                      operation.c_str(),
                                      duration,
                                      m_attempt);
+                        // Inform the user, because this will take a
+                        // while and we don't want to give the
+                        // impression of being stuck.
+                        SE_LOG_INFO(NULL, NULL, "operation temporarily (?) failed, going to retry in %.1lfs before giving up in %.1lfs: %s",
+                                    duration,
+                                    (m_deadline - now).duration(),
+                                    descr.c_str());
                         Sleep(duration);
                     } else {
                         SE_LOG_DEBUG(NULL, NULL, "retry %s immediately (due already), attempt #%d",
@@ -673,9 +694,11 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                                  m_attempt);
                 }
 
-                // try same operation again
-                m_operation = operation;
-                return false;
+                // try same operation again?
+                if (s.getState() == SuspendFlags::NORMAL) {
+                    m_operation = operation;
+                    return false;
+                }
             } else {
                 SE_LOG_DEBUG(NULL, NULL, "retry %s would exceed deadline, bailing out",
                              m_operation.c_str());
@@ -854,7 +877,7 @@ static int ne_accept_2xx(void *userdata, ne_request *req, const ne_status *st)
 }
 #endif
 
-bool Request::run()
+bool Request::run(const std::set<int> *expectedCodes)
 {
     int error;
 
@@ -867,7 +890,7 @@ bool Request::run()
         error = ne_xml_dispatch_request(m_req, m_parser->get());
     }
 
-    return checkError(error);
+    return checkError(error, expectedCodes);
 }
 
 int Request::addResultData(void *userdata, const char *buf, size_t len)
@@ -877,9 +900,10 @@ int Request::addResultData(void *userdata, const char *buf, size_t len)
     return 0;
 }
 
-bool Request::checkError(int error)
+bool Request::checkError(int error, const std::set<int> *expectedCodes)
 {
-    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"));
+    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"),
+                                expectedCodes);
 }
 
 }

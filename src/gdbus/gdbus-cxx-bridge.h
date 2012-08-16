@@ -88,10 +88,21 @@ static inline void intrusive_ptr_release(DBusServer *server) { dbus_server_unref
  * keep changes to a minimum while supporting both dbus
  * implementations, this is made to be a define. The intention is to
  * remove the define once the in-tree gdbus is dropped. */
-#define DBUS_MESSAGE_TYPE    DBusMessage
 #define DBUS_NEW_ERROR_MSG   b_dbus_create_error
 
 namespace GDBusCXX {
+
+// GDBusCXX aliases for the underlying types.
+// Useful for some external dbus_traits which
+// need to pass pointers to these types in their
+// append()/get() methods without depending on GIO or
+// libdbus types.
+typedef DBusConnection connection_type;
+typedef DBusMessage message_type;
+typedef DBusMessageIter builder_type;
+typedef DBusMessageIter reader_type;
+
+class DBusMessagePtr;
 
 class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
 {
@@ -108,6 +119,11 @@ class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
         dbus_connection_ref(conn);
         return conn;
     }
+
+    /** GDBus GIO specific: disconnect callback */
+    typedef boost::function<void ()> Disconnect_t;
+    void setDisconnect(const Disconnect_t &func);
+#define GDBUS_CXX_HAVE_DISCONNECT 1
 };
 
 class DBusMessagePtr : public boost::intrusive_ptr<DBusMessage>
@@ -174,7 +190,10 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           DBusErrorCXX *err);
 
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
-                                          DBusErrorCXX *err);
+                                          DBusErrorCXX *err,
+                                          bool delayed = false);
+
+void dbus_bus_connection_undelay(const DBusConnectionPtr &conn);
 
 /**
  * Wrapper around DBusServer. Does intentionally not expose
@@ -412,7 +431,7 @@ class DBusObject
         m_interface(interface),
         m_closeConnection(closeConnection)
     {}
-    ~DBusObject() {
+    virtual ~DBusObject() {
         if (m_closeConnection &&
             m_conn) {
             dbus_connection_close(m_conn.get());
@@ -443,17 +462,19 @@ public:
     const char *getDestination() const { return m_destination.c_str(); }
 };
 
-class EmitSignal0
+template<bool optional = false> class EmitSignal0Template
 {
     const DBusObject &m_object;
     const std::string m_signal;
 
  public:
-    EmitSignal0(const DBusObject &object,
-                const std::string &signal) :
+    EmitSignal0Template(const DBusObject &object,
+                        const std::string &signal) :
         m_object(object),
         m_signal(signal)
     {}
+
+    typedef void result_type;
 
     void operator () ()
     {
@@ -461,10 +482,16 @@ class EmitSignal0
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
 
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -480,7 +507,9 @@ class EmitSignal0
     }
 };
 
-template <typename A1>
+typedef EmitSignal0Template<false> EmitSignal0;
+
+template <typename A1, bool optional = false>
 class EmitSignal1
 {
     const DBusObject &m_object;
@@ -493,17 +522,25 @@ class EmitSignal1
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1)
     {
         DBusMessagePtr msg(dbus_message_new_signal(m_object.getPath(),
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1;
 
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -520,7 +557,7 @@ class EmitSignal1
     }
 };
 
-template <typename A1, typename A2>
+template <typename A1, typename A2, bool optional = false>
 class EmitSignal2
 {
     const DBusObject &m_object;
@@ -533,17 +570,25 @@ class EmitSignal2
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2)
     {
         DBusMessagePtr msg(dbus_message_new_signal(m_object.getPath(),
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2;
 
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -561,7 +606,7 @@ class EmitSignal2
     }
 };
 
-template <typename A1, typename A2, typename A3>
+template <typename A1, typename A2, typename A3, bool optional = false>
 class EmitSignal3
 {
     const DBusObject &m_object;
@@ -574,16 +619,24 @@ class EmitSignal3
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2, A3 a3)
     {
         DBusMessagePtr msg(dbus_message_new_signal(m_object.getPath(),
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3;
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -602,7 +655,7 @@ class EmitSignal3
     }
 };
 
-template <typename A1, typename A2, typename A3, typename A4>
+template <typename A1, typename A2, typename A3, typename A4, bool optional = false>
 class EmitSignal4
 {
     const DBusObject &m_object;
@@ -615,16 +668,24 @@ class EmitSignal4
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2, A3 a3, A4 a4)
     {
         DBusMessagePtr msg(dbus_message_new_signal(m_object.getPath(),
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4;
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -644,7 +705,7 @@ class EmitSignal4
     }
 };
 
-template <typename A1, typename A2, typename A3, typename A4, typename A5>
+template <typename A1, typename A2, typename A3, typename A4, typename A5, bool optional = false>
 class EmitSignal5
 {
     const DBusObject &m_object;
@@ -657,16 +718,24 @@ class EmitSignal5
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2, A3 a3, A4 a4, A5 a5)
     {
         DBusMessagePtr msg(dbus_message_new_signal(m_object.getPath(),
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -687,7 +756,7 @@ class EmitSignal5
     }
 };
 
-template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6>
+template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, bool optional = false>
 class EmitSignal6
 {
     const DBusObject &m_object;
@@ -700,16 +769,24 @@ class EmitSignal6
         m_signal(signal)
     {}
 
+    typedef void result_type;
+
     void operator () (A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6)
     {
         DBusMessagePtr msg(dbus_message_new_signal(m_object.getPath(),
                                                    m_object.getInterface(),
                                                    m_signal.c_str()));
         if (!msg) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_message_new_signal() failed");
         }
         AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
         if (!dbus_connection_send(m_object.getConnection(), msg.get(), NULL)) {
+            if (optional) {
+                return;
+            }
             throw std::runtime_error("dbus_connection_send failed");
         }
     }
@@ -884,7 +961,7 @@ class DBusObjectHelper : public DBusObject
     }
     static void interfaceCallback(void *userData) {
         DBusObjectHelper* helper = static_cast<DBusObjectHelper*>(userData);
-        if(!helper->m_callback.empty()) {
+        if (helper->m_callback) {
             helper->m_callback();
         }
     }
@@ -1206,7 +1283,9 @@ template<class V> struct dbus_traits< DBusArray<V> > : public dbus_traits_base
         DBusMessageIter sub;
         dbus_message_iter_recurse(&iter, &sub);
         int type = dbus_message_iter_get_arg_type(&sub);
-        if (type != dbus_traits<V>::dbus_type) {
+        // type is zero for empty arrays?!
+        if (type &&
+            type != dbus_traits<V>::dbus_type) {
             throw std::runtime_error("invalid argument");
         }
         int nelements;
@@ -1215,6 +1294,10 @@ template<class V> struct dbus_traits< DBusArray<V> > : public dbus_traits_base
         array.first = nelements;
         array.second = data;
         dbus_message_iter_next(&iter);
+        if (!type && nelements) {
+            // non-empty array of invalid type?!
+            throw std::runtime_error("could not decode DBusArray: type is zero, but array isn't empty");
+        }
     }
 
     static void append(DBusMessageIter &iter, arg_type array)
@@ -1578,6 +1661,27 @@ template<class K, class M> struct dbus_struct_traits : public dbus_traits_base
 };
 
 /**
+ * a helper class which implements dbus_traits for an enum,
+ * parameterize it with the enum type and an integer type
+ * large enough to hold all valid enum values
+ */
+template<class E, class I> struct dbus_enum_traits : public dbus_traits<I>
+{
+    typedef E host_type;
+    typedef E arg_type;
+
+    // cast from enum to int in append() is implicit; in
+    // get() we have to make it explicit
+    static void get(DBusConnection *conn, DBusMessage *msg,
+                    DBusMessageIter &iter, host_type &val)
+    {
+        I ival;
+        dbus_traits<I>::get(conn, msg, iter, ival);
+        val = static_cast<E>(ival);
+    }
+};
+
+/**
  * special case const reference parameter:
  * treat like pass-by-value input argument
  *
@@ -1639,7 +1743,7 @@ static DBusMessage *handleException(DBusMessage *msg)
 /**
  * Check presence of a certain D-Bus client.
  */
-class DBusWatch : public Watch
+class Watch : private boost::noncopyable
 {
     DBusConnectionPtr m_conn;
     boost::function<void (void)> m_callback;
@@ -1649,7 +1753,7 @@ class DBusWatch : public Watch
     static void disconnect(DBusConnection *connection,
                            void *user_data)
     {
-        DBusWatch *watch = static_cast<DBusWatch *>(user_data);
+        Watch *watch = static_cast<Watch *>(user_data);
         if (!watch->m_called) {
             watch->m_called = true;
             if (watch->m_callback) {
@@ -1659,7 +1763,7 @@ class DBusWatch : public Watch
     }
 
  public:
-    DBusWatch(const DBusConnectionPtr &conn,
+    Watch(const DBusConnectionPtr &conn,
               const boost::function<void (void)> &callback = boost::function<void (void)>()) :
         m_conn(conn),
         m_callback(callback),
@@ -1668,7 +1772,7 @@ class DBusWatch : public Watch
     {
     }
 
-    virtual void setCallback(const boost::function<void (void)> &callback)
+    void setCallback(const boost::function<void (void)> &callback)
     {
         m_callback = callback;
         if (m_called && m_callback) {
@@ -1679,7 +1783,7 @@ class DBusWatch : public Watch
     void activate(const char *peer)
     {
         if (!peer) {
-            throw std::runtime_error("DBusWatch::activate(): no peer");
+            throw std::runtime_error("Watch::activate(): no peer");
         }
 
         // Install watch first ...
@@ -1708,7 +1812,7 @@ class DBusWatch : public Watch
         }
     }
 
-    ~DBusWatch()
+    ~Watch()
     {
         if (m_watchID) {
             if (!b_dbus_remove_watch(m_conn.get(), m_watchID)) {
@@ -1733,7 +1837,7 @@ template <> struct dbus_traits< boost::shared_ptr<Watch> >  : public dbus_traits
     static void get(DBusConnection *conn, DBusMessage *msg,
                     DBusMessageIter &iter, boost::shared_ptr<Watch> &value)
     {
-        boost::shared_ptr<DBusWatch> watch(new DBusWatch(conn));
+        boost::shared_ptr<Watch> watch(new Watch(conn));
         watch->activate(dbus_message_get_sender(msg));
         value = watch;
     }
@@ -1773,7 +1877,7 @@ class DBusResult : virtual public Result
 
     virtual Watch *createWatch(const boost::function<void (void)> &callback)
     {
-        std::auto_ptr<DBusWatch> watch(new DBusWatch(m_conn, callback));
+        std::auto_ptr<Watch> watch(new Watch(m_conn, callback));
         watch->activate(dbus_message_get_sender(m_msg.get()));
         return watch.release();
     }
@@ -3959,92 +4063,100 @@ struct VoidTraits : public TraitsBase<boost::function<void (const std::string &)
     static void handleMessage(DBusMessagePtr &/*reply*/, base::CallbackData *data, const std::string &error)
     {
         //unmarshal the return results and call user callback
-        (data->m_callback)(error);
+        if (data->m_callback) {
+            data->m_callback(error);
+        }
     }
 };
 
 template <class R1>
 struct Ret1Traits : public TraitsBase<boost::function<void (const R1 &, const std::string &)>, R1>
 {
-  typedef TraitsBase<boost::function<void (const R1 &, const std::string &)>, R1> base;
-  typedef typename base::Callback_t Callback_t;
-  typedef typename base::Return_t Return_t;
+    typedef TraitsBase<boost::function<void (const R1 &, const std::string &)>, R1> base;
+    typedef typename base::Callback_t Callback_t;
+    typedef typename base::Return_t Return_t;
 
-  static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
-  {
-    typename dbus_traits<R1>::host_type r;
+    static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
+    {
+        typename dbus_traits<R1>::host_type r;
 
-    ExtractArgs(conn.get(), reply.get()) >> Get<R1>(r);
-    return r;
-  }
-
-  static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, const std::string &error)
-  {
-    typename dbus_traits<R1>::host_type r;
-    if (error.empty()) {
-      ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r);
+        ExtractArgs(conn.get(), reply.get()) >> Get<R1>(r);
+        return r;
     }
 
-    //unmarshal the return results and call user callback
-    (data->m_callback)(r, error);
-  }
+    static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, const std::string &error)
+    {
+        typename dbus_traits<R1>::host_type r;
+        if (error.empty()) {
+            ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r);
+        }
+
+        //unmarshal the return results and call user callback
+        if (data->m_callback) {
+            data->m_callback(r, error);
+        }
+    }
 };
 
 template <class R1, class R2>
 struct Ret2Traits : public TraitsBase<boost::function<void (const R1 &, const R2 &, const std::string &)>, std::pair<R1, R2> >
 {
-  typedef TraitsBase<boost::function<void (const R1 &, const R2 &, const std::string &)>, std::pair<R1, R2> > base;
-  typedef typename base::Callback_t Callback_t;
-  typedef typename base::Return_t Return_t;
+    typedef TraitsBase<boost::function<void (const R1 &, const R2 &, const std::string &)>, std::pair<R1, R2> > base;
+    typedef typename base::Callback_t Callback_t;
+    typedef typename base::Return_t Return_t;
 
-  static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
-  {
-    Return_t r;
+    static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
+    {
+        Return_t r;
 
-    ExtractArgs(conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
-    return r;
-  }
-
-  static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, const std::string &error)
-  {
-    typename dbus_traits<R1>::host_type r1;
-    typename dbus_traits<R2>::host_type r2;
-    if (error.empty()) {
-      ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2);
+        ExtractArgs(conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
+        return r;
     }
 
-    //unmarshal the return results and call user callback
-    (data->m_callback)(r1, r2, error);
-  }
+    static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, const std::string &error)
+    {
+        typename dbus_traits<R1>::host_type r1;
+        typename dbus_traits<R2>::host_type r2;
+        if (error.empty()) {
+            ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2);
+        }
+
+        //unmarshal the return results and call user callback
+        if (data->m_callback) {
+            data->m_callback(r1, r2, error);
+        }
+    }
 };
 
 template <class R1, class R2, class R3>
 struct Ret3Traits : public TraitsBase<boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)>, boost::tuple<R1, R2, R3> >
 {
-  typedef TraitsBase<boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)>, boost::tuple<R1, R2, R3> > base;
-  typedef typename base::Callback_t Callback_t;
-  typedef typename base::Return_t Return_t;
+    typedef TraitsBase<boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)>, boost::tuple<R1, R2, R3> > base;
+    typedef typename base::Callback_t Callback_t;
+    typedef typename base::Return_t Return_t;
 
-  static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
-  {
-    Return_t r;
+    static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
+    {
+        Return_t r;
 
-    ExtractArgs(conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
-    return r;
-  }
-
-  static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, const std::string &error)
-  {
-    typename dbus_traits<R1>::host_type r1;
-    typename dbus_traits<R2>::host_type r2;
-    typename dbus_traits<R3>::host_type r3;
-    if (error.empty()) {
-      ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
+        ExtractArgs(conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
+        return r;
     }
 
-    //unmarshal the return results and call user callback
-    (data->m_callback)(r1, r2, r3, error);
-  }
+    static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, const std::string &error)
+    {
+        typename dbus_traits<R1>::host_type r1;
+        typename dbus_traits<R2>::host_type r2;
+        typename dbus_traits<R3>::host_type r3;
+        if (error.empty()) {
+            ExtractArgs(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
+        }
+
+        //unmarshal the return results and call user callback
+        if (data->m_callback) {
+            data->m_callback(r1, r2, r3, error);
+        }
+    }
 };
 
 /** fill buffer with error name and description (if available), return true if error found */
@@ -4055,9 +4167,9 @@ template <class CallTraits>
 class DBusClientCall
 {
 public:
-  typedef typename CallTraits::Callback_t Callback_t;
-  typedef typename CallTraits::Return_t Return_t;
-  typedef typename CallTraits::base::CallbackData CallbackData;
+    typedef typename CallTraits::Callback_t Callback_t;
+    typedef typename CallTraits::Return_t Return_t;
+    typedef typename CallTraits::base::CallbackData CallbackData;
 
 protected:
     const std::string m_destination;
@@ -4103,6 +4215,8 @@ protected:
         DBusPendingCall *call;
         if (!dbus_connection_send_with_reply(m_conn.get(), msg.get(), &call, -1)) {
             throw std::runtime_error("dbus_connection_send failed");
+        } else if (call == NULL) {
+            throw std::runtime_error("received pending call is NULL");
         }
 
 

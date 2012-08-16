@@ -121,6 +121,8 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
+        // tell testInsertTwice that we won't detect duplicates
+        config.m_sourceKnowsItemSemantic = false;
         config.m_type = "file:text/vcard:3.0";
     }
 } VCard30Test;
@@ -153,6 +155,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
+        config.m_sourceKnowsItemSemantic = false;
         config.m_type = "file:text/calendar:2.0";
     }
 } ITodo20Test;
@@ -163,6 +166,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
+        config.m_sourceKnowsItemSemantic = false;
         config.m_type = "virtual:text/x-vcalendar";
         config.m_subConfigs = "file_event,file_task";
     }

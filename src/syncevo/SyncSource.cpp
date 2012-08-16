@@ -125,7 +125,12 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
         (serverModeEnabled() ? "yes" : "no") <<
         "</plugin_datastoreadmin>\n"
         "      <fromremoteonlysupport> yes </fromremoteonlysupport>\n"
-        "      <canrestart>yes</canrestart>\n"
+        "      <canrestart>yes</canrestart>\n";
+    if (info.m_globalIDs) {
+        xmlstream << 
+            "      <syncmode>1122583000</syncmode>";
+    }
+    xmlstream <<
         "\n"
         "      <!-- conflict strategy: Newer item wins\n"
         "           You can set 'server-wins' or 'client-wins' as well\n"
@@ -615,6 +620,11 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
     // default remote rule (local-storage.xml): suppresses empty properties
     info.m_backendRule = "LOCALSTORAGE";
 
+    // We store entire items locally and thus have to make sure that
+    // they are complete by having the engine merge incoming and local
+    // data.
+    info.m_datastoreOptions += "      <updateallfields>true</updateallfields>\n";
+
     if (type == "text/x-vcard") {
         info.m_native = "vCard21";
         info.m_fieldlist = "contacts";
@@ -651,14 +661,17 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
          * to info.m_afterReadScript and info.m_beforeWriteScript.
          */
         info.m_afterReadScript = "$VCALENDAR10_AFTERREAD_SCRIPT;\n";
-        info.m_beforeWriteScript = "$VCALENDAR10_BEFOREWRITE_SCRIPT;\n";
-    } else if (type == "text/calendar") {
+        info.m_beforeWriteScript = "$VCALENDAR10_BEFOREWRITE_SCRIPT;\n"
+            "$CALENDAR_BEFOREWRITE_SCRIPT;\n";
+    } else if (type == "text/calendar" ||
+               boost::starts_with(type, "text/calendar+")) {
         info.m_native = "iCalendar20";
         info.m_fieldlist = "calendar";
         info.m_profile = "\"vCalendar\", 2";
         info.m_datatypes =
             "        <use datatype='vCalendar10' mode='rw'/>\n"
             "        <use datatype='iCalendar20' mode='rw' preferred='yes'/>\n";
+        info.m_beforeWriteScript = "$CALENDAR_BEFOREWRITE_SCRIPT;\n";
     } else if (type == "text/plain") {
         info.m_fieldlist = "Note";
         info.m_profile = "\"Note\", 2";
@@ -707,6 +720,11 @@ std::string SyncSourceBase::getDataTypeSupport(const std::string &type,
             datatypes +=
                 "        <use datatype='vcalendar10' mode='rw'/>\n";
         }
+    } else if (type == "text/calendar+plain") {
+        datatypes =
+            "        <use datatype='icalendar20' mode='rw' preferred='yes'/>\n"
+            "        <use datatype='journaltext10' mode='rw'/>\n"
+            "        <use datatype='journaltext11' mode='rw'/>\n";
     } else if (type == "text/plain:1.0" || type == "text/plain") {
         // note10 are the same as note11, so ignore force format
         datatypes =
@@ -1153,16 +1171,18 @@ void SyncSourceRevisions::deleteRevision(ConfigNode &trackingNode,
 
 void SyncSourceRevisions::sleepSinceModification()
 {
-    time_t current = time(NULL);
-    while (current - m_modTimeStamp < m_revisionAccuracySeconds) {
-        sleep(m_revisionAccuracySeconds - (current - m_modTimeStamp));
-        current = time(NULL);
+    Timespec current = Timespec::monotonic();
+    // Don't let this get interrupted by user abort.
+    // It is needed for correct change tracking.
+    while ((current - m_modTimeStamp).duration() < m_revisionAccuracySeconds) {
+        Sleep(m_revisionAccuracySeconds - (current - m_modTimeStamp).duration());
+        current = Timespec::monotonic();
     }
 }
 
 void SyncSourceRevisions::databaseModified()
 {
-    m_modTimeStamp = time(NULL);
+    m_modTimeStamp = Timespec::monotonic();
 }
 
 void SyncSourceRevisions::init(SyncSourceRaw *raw,
@@ -1172,7 +1192,6 @@ void SyncSourceRevisions::init(SyncSourceRaw *raw,
 {
     m_raw = raw;
     m_del = del;
-    m_modTimeStamp = 0;
     m_revisionAccuracySeconds = granularity;
     m_revisionsSet = false;
     m_firstCycle = false;
@@ -1323,7 +1342,7 @@ sysync::TSyError SyncSourceAdmin::updateMapItem(sysync::cMapID mID)
     string key, value;
     mapid2entry(mID, key, value);
 
-    StringMap::iterator it = m_mapping.find(key);
+    ConfigProps::iterator it = m_mapping.find(key);
     if (it == m_mapping.end()) {
         // error, does not exist
         return sysync::DB_Forbidden;
@@ -1341,7 +1360,7 @@ sysync::TSyError SyncSourceAdmin::deleteMapItem(sysync::cMapID mID)
     string key, value;
     mapid2entry(mID, key, value);
 
-    StringMap::iterator it = m_mapping.find(key);
+    ConfigProps::iterator it = m_mapping.find(key);
     if (it == m_mapping.end()) {
         // error, does not exist
         return sysync::DB_Forbidden;

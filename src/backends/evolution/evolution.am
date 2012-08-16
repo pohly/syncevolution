@@ -36,7 +36,7 @@ src_backends_evolution_cppflags = \
   -I$(top_srcdir)/src/backends/evolution
 
 src_backends_evolution_syncecal_la_SOURCES = $(src_backends_evolution_syncecal_src)
-src_backends_evolution_syncecal_la_LIBADD = $(ECAL_LIBS) $(SYNCEVOLUTION_LIBS)
+src_backends_evolution_syncecal_la_LIBADD = $(ECAL_LIBS) $(SYNCEVOLUTION_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS)
 # _GNU_SOURCE and -ldl for libical.c + dlsym():
 src_backends_evolution_syncecal_la_CPPFLAGS = -D_GNU_SOURCE \
   -De_cal_check_timezones=syncevolution_check_timezones \
@@ -45,12 +45,12 @@ src_backends_evolution_syncecal_la_CPPFLAGS = -D_GNU_SOURCE \
   -De_cal_match_tzid=syncevolution_match_tzid \
   $(src_backends_evolution_cppflags)
 src_backends_evolution_syncecal_la_LDFLAGS = -module -avoid-version -ldl
-src_backends_evolution_syncecal_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS)
+src_backends_evolution_syncecal_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS)
 src_backends_evolution_syncecal_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS)
 
 src_backends_evolution_syncebook_la_SOURCES = $(src_backends_evolution_syncebook_src)
-src_backends_evolution_syncebook_la_LIBADD = $(EBOOK_LIBS) $(SYNCEVOLUTION_LIBS)
+src_backends_evolution_syncebook_la_LIBADD = $(EBOOK_LIBS) $(SYNCEVOLUTION_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS)
 src_backends_evolution_syncebook_la_LDFLAGS = -module -avoid-version
-src_backends_evolution_syncebook_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS)
+src_backends_evolution_syncebook_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS)
 src_backends_evolution_syncebook_la_CPPFLAGS = $(src_backends_evolution_cppflags)
 src_backends_evolution_syncebook_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS)

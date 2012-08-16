@@ -241,6 +241,9 @@ class ClientTest {
     ClientTest(int serverSleepSec = 0, const std::string &serverLog= "");
     virtual ~ClientTest();
 
+    /** a unique string - "1" or "2" in practice */
+    virtual std::string getClientID() const = 0;
+
     /** set up before running a test */
     virtual void setup() { }
 
@@ -448,7 +451,7 @@ public:
 
     TestingSyncSource *operator() () {
         CPPUNIT_ASSERT(createSource);
-        return createSource(client, source, isSourceA);
+        return createSource(client, client.getClientID(), source, isSourceA);
     }
 
     const ClientTest::Config::createsource_t createSource;
@@ -472,6 +475,19 @@ public:
 
     /** configuration that corresponds to source */
     const ClientTest::Config config;
+
+    /** shortcut for config.m_sourceName */
+    const std::string &getSourceName() const { return config.m_sourceName; }
+
+    /**
+     * A list of config pointers which share the same
+     * database. Normally, sources are tested in isolation, but for
+     * such linked sources we also need to test interdependencies, in
+     * particular regarding change tracking and item listing.
+     *
+     * This includes *all* configs, not just the other ones.
+     */
+    std::list<LocalTests *> m_linkedSources;
 
     /** helper funclets to create sources */
     CreateSource createSourceA, createSourceB;
@@ -607,13 +623,16 @@ public:
     virtual void testIterateTwice();
     virtual void testDelete404();
     virtual void testReadItem404();
+    void doInsert(bool withUID = true);
     virtual void testSimpleInsert();
     virtual void testLocalDeleteAll();
     virtual void testComplexInsert();
+    virtual void testInsertTwice();
     virtual void testLocalUpdate();
     void doChanges(bool restart);
     virtual void testChanges();
     virtual void testChangesMultiCycles();
+    virtual void testLinkedSources();
     virtual void testImport();
     virtual void testImportDelete();
     virtual void testRemoveProperties();
@@ -883,7 +902,7 @@ protected:
     virtual void postSync(int res, const std::string &logname);
 
  private:
-    void allSourcesInsert();
+    void allSourcesInsert(bool withUID = true);
     void allSourcesUpdate();
     void allSourcesDeleteAll();
     void allSourcesInsertMany(int startIndex, int numItems,

@@ -41,8 +41,10 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
     // erase content which might have been set in a previous call
     reset();
 
-    // claim item node for our change tracking
-    m_trackingNode.swap(m_itemNode);
+    // claim item node for our change tracking, if not done already
+    if (m_itemNode && !m_trackingNode) {
+        m_trackingNode.swap(m_itemNode);
+    }
 
     // incremental sync (non-empty token) or start from scratch
     setStartSyncKey(lastToken);
@@ -92,7 +94,6 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
         }
     }
 
-    GErrorCXX gerror;
     gboolean moreAvailable = TRUE;
 
     setCurrentSyncKey(getStartSyncKey());
@@ -104,6 +105,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
          moreAvailable;
          firstIteration = false) {
         gchar *buffer = NULL;
+        GErrorCXX gerror;
         EASItemsCXX created, updated;
         EASIdsCXX deleted;
         bool wasSlowSync = getCurrentSyncKey().empty();
@@ -121,7 +123,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
                 gerror.m_gerror->domain == EAS_TYPE_CONECTION_ERROR &&
                 gerror.m_gerror->code == EAS_CONNECTION_SYNC_ERROR_INVALIDSYNCKEY && */
                 gerror.m_gerror->message &&
-                !strcmp(gerror.m_gerror->message, "Sync error: Invalid synchronization key") &&
+                !strstr(gerror.m_gerror->message, "Sync error: Invalid synchronization key") &&
                 firstIteration) {
                 // fall back to slow sync
                 // slowSync = true;

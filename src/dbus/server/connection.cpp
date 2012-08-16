@@ -31,16 +31,34 @@ SE_BEGIN_CXX
 
 void Connection::failed(const std::string &reason)
 {
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: failed: %s (old state %s)",
+                 m_sessionID.c_str(),
+                 reason.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
     if (m_failure.empty()) {
         m_failure = reason;
         if (m_session) {
             m_session->setStubConnectionError(reason);
         }
     }
-    if (m_state != FAILED) {
-        abort();
+    // notify client
+    abort();
+    // ensure that state is failed
+    m_state = SessionCommon::FAILED;
+    // tell helper (again)
+    m_statusSignal(reason);
+
+    // A "failed" connection is dead, no further operations on it
+    // are allowed, in particular not the normal Connection.Close().
+    // Therefore remove ourselves.
+    //
+    // But don't delete ourselves while some code of the Connection still
+    // runs. Instead let server do that as part of its event loop.
+    boost::shared_ptr<Connection> c = m_me.lock();
+    if (c) {
+        m_server.delayDeletion(c);
+        m_server.detach(this);
     }
-    m_state = FAILED;
 }
 
 std::string Connection::buildDescription(const StringMap &peer)
@@ -78,23 +96,16 @@ std::string Connection::buildDescription(const StringMap &peer)
     return buffer;
 }
 
-void Connection::wakeupSession()
-{
-    if (m_loop) {
-        g_main_loop_quit(m_loop);
-        m_loop = NULL;
-    }
-}
-
 void Connection::process(const Caller_t &caller,
                          const GDBusCXX::DBusArray<uint8_t> &message,
                          const std::string &message_type)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s sends %lu bytes via connection %s, %s",
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: D-Bus client %s sends %lu bytes, %s (old state %s)",
+                 m_sessionID.c_str(),
                  caller.c_str(),
                  (unsigned long)message.first,
-                 getPath(),
-                 message_type.c_str());
+                 message_type.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
 
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
@@ -110,7 +121,7 @@ void Connection::process(const Caller_t &caller,
     // any kind of error from now on terminates the connection
     try {
         switch (m_state) {
-        case SETUP: {
+        case SessionCommon::SETUP: {
             std::string config;
             std::string peerDeviceID;
             bool serverMode = false;
@@ -277,15 +288,14 @@ void Connection::process(const Caller_t &caller,
                                         info.toString());
                 }
 
-                // abort previous session of this client
-                m_server.killSessions(info.m_deviceID);
+                // identified peer, still need to abort previous sessions below
                 peerDeviceID = info.m_deviceID;
             } else {
                 throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
             }
 
             // run session as client or server
-            m_state = PROCESSING;
+            m_state = SessionCommon::PROCESSING;
             m_session = Session::createSession(m_server,
                                                peerDeviceID,
                                                config,
@@ -302,27 +312,47 @@ void Connection::process(const Caller_t &caller,
             // or overwritten with the error given to us in
             // Connection::close()
             m_session->setStubConnectionError("closed prematurely");
+
+            // Now abort all earlier sessions, if necessary.  The new
+            // session will be enqueued below and thus won't get
+            // killed. It also won't run unless all other sessions
+            // before it terminate, therefore we don't need to check
+            // for success.
+            if (!peerDeviceID.empty()) {
+                // TODO: On failure we should kill the connection (beware,
+                // it might go away before killing completes and/or
+                // fails - need to use shared pointer tracking).
+                //
+                // boost::shared_ptr<Connection> c = m_me.lock();
+                // if (!c) {
+                //     SE_THROW("internal error: Connection::process() cannot lock its own instance");
+                // }
+                m_server.killSessionsAsync(peerDeviceID,
+                                           SimpleResult(SuccessCb_t(),
+                                                        ErrorCb_t()));
+            }
             m_server.enqueue(m_session);
             break;
         }
-        case PROCESSING:
+        case SessionCommon::PROCESSING:
             throw std::runtime_error("protocol error: already processing a message");
             break;
-        case WAITING:
+        case SessionCommon::WAITING:
             m_incomingMsg = SharedBuffer(reinterpret_cast<const char *>(message.second),
                                          message.first);
             m_incomingMsgType = message_type;
-            m_state = PROCESSING;
-            // get out of DBusTransportAgent::wait()
-            wakeupSession();
+            m_messageSignal(DBusArray<uint8_t>(m_incomingMsg.size(),
+                                               reinterpret_cast<uint8_t *>(m_incomingMsg.get())),
+                            m_incomingMsgType);
+            m_state = SessionCommon::PROCESSING;
+            m_timeout.deactivate();
             break;
-        case FINAL:
-            wakeupSession();
+        case SessionCommon::FINAL:
             throw std::runtime_error("protocol error: final reply sent, no further message processing possible");
-        case DONE:
+        case SessionCommon::DONE:
             throw std::runtime_error("protocol error: connection closed, no further message processing possible");
             break;
-        case FAILED:
+        case SessionCommon::FAILED:
             throw std::runtime_error(m_failure);
             break;
         default:
@@ -338,54 +368,120 @@ void Connection::process(const Caller_t &caller,
     }
 }
 
+void Connection::send(const DBusArray<uint8_t> buffer,
+                      const std::string &type,
+                      const std::string &url)
+{
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: send %lu bytes, %s, %s (old state %s)",
+                 m_sessionID.c_str(),
+                 (unsigned long)buffer.first,
+                 type.c_str(),
+                 url.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
+
+    if (m_state != SessionCommon::PROCESSING) {
+        SE_THROW_EXCEPTION(TransportException,
+                           "cannot send to our D-Bus peer");
+    }
+
+    // Change state in advance. If we fail while replying, then all
+    // further resends will fail with the error above.
+    m_state = SessionCommon::WAITING;
+    activateTimeout();
+    m_incomingMsg = SharedBuffer();
+
+    // TODO: turn D-Bus exceptions into transport exceptions
+    StringMap meta;
+    meta["URL"] = url;
+    reply(buffer, type, meta, false, m_sessionID);
+}
+
+void Connection::sendFinalMsg()
+{
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: shut down (old state %s)",
+                 m_sessionID.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
+    if (m_state == SessionCommon::PROCESSING) {
+        // send final, empty message and wait for close
+        m_state = SessionCommon::FINAL;
+        reply(GDBusCXX::DBusArray<uint8_t>(0, 0),
+              "", StringMap(),
+              true, m_sessionID);
+    }
+}
+
 void Connection::close(const Caller_t &caller,
                        bool normal,
                        const std::string &error)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s closes connection %s %s%s%s",
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: client %s closes connection %s %s%s%s (old state %s)",
+                 m_sessionID.c_str(),
                  caller.c_str(),
                  getPath(),
                  normal ? "normally" : "with error",
                  error.empty() ? "" : ": ",
-                 error.c_str());
+                 error.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
 
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
         throw runtime_error("unknown client");
     }
 
+    // Remove reference to us from client, will destruct *this*
+    // instance. To let us finish our work safely, keep a reference
+    // that the server will unref when everything is idle again.
+    boost::shared_ptr<Connection> c = m_me.lock();
+    if (!c) {
+        SE_THROW("connection already destructing");
+    }
+    m_server.delayDeletion(c);
+    client->detach(this);
+
     if (!normal ||
-        m_state != FINAL) {
+        m_state != SessionCommon::FINAL) {
         std::string err = error.empty() ?
             "connection closed unexpectedly" :
             error;
+        m_statusSignal(err);
         if (m_session) {
             m_session->setStubConnectionError(err);
         }
         failed(err);
     } else {
-        m_state = DONE;
+        m_state = SessionCommon::DONE;
+        m_statusSignal("");
         if (m_session) {
             m_session->setStubConnectionError("");
         }
     }
 
-    // remove reference to us from client, will destruct *this*
-    // instance!
-    client->detach(this);
+    // TODO (?): errors during shutdown of the helper will not get
+    // reported back to the client, which sees the operation as
+    // completed successfully once this call returns.
 }
 
 void Connection::abort()
 {
     if (!m_abortSent) {
+        SE_LOG_DEBUG(NULL, NULL, "Connection %s: send abort to client (state %s)",
+                     m_sessionID.c_str(),
+                     SessionCommon::ConnectionStateToString(m_state).c_str());
         sendAbort();
         m_abortSent = true;
-        m_state = FAILED;
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "Connection %s: not sending abort to client, already done (state %s)",
+                     m_sessionID.c_str(),
+                     SessionCommon::ConnectionStateToString(m_state).c_str());
     }
 }
 
+
 void Connection::shutdown()
 {
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: self-destructing (state %s)",
+                 m_sessionID.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
     // trigger removal of this connection by removing all
     // references to it
     m_server.detach(this);
@@ -403,9 +499,9 @@ Connection::Connection(Server &server,
     m_server(server),
     m_peer(peer),
     m_mustAuthenticate(must_authenticate),
-    m_state(SETUP),
+    m_state(SessionCommon::SETUP),
     m_sessionID(sessionID),
-    m_loop(NULL),
+    m_timeoutSeconds(-1),
     sendAbort(*this, "Abort"),
     m_abortSent(false),
     reply(*this, "Reply"),
@@ -416,22 +512,38 @@ Connection::Connection(Server &server,
     add(sendAbort);
     add(reply);
     m_server.autoTermRef();
+
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: created",
+                 m_sessionID.c_str());
+}
+
+boost::shared_ptr<Connection> Connection::createConnection(Server &server,
+                                                           const DBusConnectionPtr &conn,
+                                                           const std::string &sessionID,
+                                                           const StringMap &peer,
+                                                           bool must_authenticate)
+{
+    boost::shared_ptr<Connection> c(new Connection(server, conn, sessionID, peer, must_authenticate));
+    c->m_me = c;
+    return c;
 }
 
 Connection::~Connection()
 {
-    SE_LOG_DEBUG(NULL, NULL, "done with connection to '%s'%s%s%s",
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: done with '%s'%s%s%s (old state %s)",
+                 m_sessionID.c_str(),
                  m_description.c_str(),
-                 m_state == DONE ? ", normal shutdown" : " unexpectedly",
+                 m_state == SessionCommon::DONE ? ", normal shutdown" : " unexpectedly",
                  m_failure.empty() ? "" : ": ",
-                 m_failure.c_str());
+                 m_failure.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
     try {
-        if (m_state != DONE) {
+        if (m_state != SessionCommon::DONE) {
             abort();
+            m_state = SessionCommon::FAILED;
         }
         // DBusTransportAgent waiting? Wake it up.
-        wakeupSession();
-        m_session.use_count();
+        m_statusSignal(m_failure);
         m_session.reset();
     } catch (...) {
         // log errors, but do not propagate them because we are
@@ -443,6 +555,10 @@ Connection::~Connection()
 
 void Connection::ready()
 {
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: ready to run (old state %s)",
+                 m_sessionID.c_str(),
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
+
     //if configuration not yet created
     std::string configName = m_session->getConfigName();
     SyncConfig config (configName);
@@ -458,6 +574,12 @@ void Connection::ready()
         }
         m_session->setConfig (false, false, from);
     }
+
+    // As we cannot resend messages via D-Bus even if running as
+    // client (API not designed for it), let's use the hard server
+    // timeout from RetryDuration here.
+    m_timeoutSeconds = config.getRetryDuration();
+
     const SyncContext context (configName);
     std::list<std::string> sources = context.getSyncSources();
 
@@ -503,6 +625,25 @@ void Connection::ready()
     }
     // proceed with sync now that our session is ready
     m_session->sync(m_syncMode, m_sourceModes);
+}
+
+void Connection::activateTimeout()
+{
+    if (m_timeoutSeconds >= 0) {
+        m_timeout.runOnce(m_timeoutSeconds,
+                          boost::bind(&Connection::timeoutCb,
+                                      this));
+    } else {
+        m_timeout.deactivate();
+    }
+}
+
+void Connection::timeoutCb()
+{
+    SE_LOG_DEBUG(NULL, NULL, "Connection %s: timed out after %ds (state %s)",
+                 m_sessionID.c_str(), m_timeoutSeconds,
+                 SessionCommon::ConnectionStateToString(m_state).c_str());
+    failed(StringPrintf("timed out after %ds", m_timeoutSeconds));
 }
 
 SE_END_CXX

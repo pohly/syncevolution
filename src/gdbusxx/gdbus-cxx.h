@@ -50,18 +50,6 @@ private:
     std::string m_dbus_name;
 };
 
-class Watch : private boost::noncopyable
-{
- public:
-    virtual ~Watch() {};
-
-    /**
-     * Changes the callback triggered by this Watch.  If the watch has
-     * already fired, the callback is invoked immediately.
-     */
-    virtual void setCallback(const boost::function<void (void)> &callback) = 0;
-};
-
 /**
  * Special parameter type that identifies a caller. A string in practice.
  */
@@ -72,6 +60,8 @@ class Caller_t : public std::string
     template <class T> Caller_t(T val) : std::string(val) {}
     template <class T> Caller_t &operator = (T val) { assign(val); return *this; }
 };
+
+class Watch;
 
 /**
  * Call object which needs to be called with the results

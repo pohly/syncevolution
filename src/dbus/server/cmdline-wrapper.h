@@ -23,6 +23,8 @@
 #include <syncevo/Cmdline.h>
 
 #include "dbus-sync.h"
+#include "exceptions.h"
+#include "session-helper.h"
 
 SE_BEGIN_CXX
 
@@ -31,62 +33,39 @@ SE_BEGIN_CXX
  * dbus clients. It creates the DBusSync instance when required and
  * sets up the same environment as in the D-Bus client.
  */
-class CmdlineWrapper
+class CmdlineWrapper : public Cmdline
 {
-    class DBusCmdline : public Cmdline {
-        Session &m_session;
-    public:
-        DBusCmdline(Session &session,
-                    const vector<string> &args) :
-            Cmdline(args),
-            m_session(session)
-        {}
+    virtual SyncContext* createSyncClient() {
+        SessionCommon::SyncParams params;
+        params.m_config = getConfigName();
+        return new DBusSync(params, m_helper);
+    }
 
-        SyncContext* createSyncClient() {
-            return new DBusSync(m_server, m_session);
-        }
-    };
-
-    /** instance to run command line arguments */
-    DBusCmdline m_cmdline;
+    SessionHelper &m_helper;
 
     /** environment variables passed from client */
     map<string, string> m_envVars;
 
 public:
-    CmdlineWrapper(Session &session,
+    CmdlineWrapper(SessionHelper &helper,
                    const vector<string> &args,
                    const map<string, string> &vars) :
-        m_cmdline(session, args),
+        Cmdline(args),
+        m_helper(helper),
         m_envVars(vars)
     {}
 
-    bool parse() { return m_cmdline.parse(); }
-    bool run(LogRedirect &redirect)
+    bool run()
     {
-        bool success = true;
-
         //temporarily set environment variables and restore them after running
         list<boost::shared_ptr<ScopedEnvChange> > changes;
         BOOST_FOREACH(const StringPair &var, m_envVars) {
             changes.push_back(boost::shared_ptr<ScopedEnvChange>(new ScopedEnvChange(var.first, var.second)));
         }
-        // exceptions must be handled (= printed) before returning,
-        // so that our client gets the output
-        try {
-            success = m_cmdline.run();
-        } catch (...) {
-            redirect.flush();
-            throw;
-        }
-        // always forward all currently pending redirected output
-        // before closing the session
-        redirect.flush();
 
+        bool success = Cmdline::run();
         return success;
     }
-
-    bool configWasModified() { return m_cmdline.configWasModified(); }
 };
 
 SE_END_CXX

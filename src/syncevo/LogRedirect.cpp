@@ -93,6 +93,13 @@ void LogRedirect::init()
             ++it;
         }
     }
+
+    // CONSOLEPRINTF in libsynthesis.
+    m_knownErrors.insert("SYSYNC   Rejected with error:");
+    // libneon 'Request ends, status 207 class 2xx, error line:'
+    m_knownErrors.insert("xx, error line:\n");
+    // some internal Qt warning (?)
+    m_knownErrors.insert("Qt: Session management error: None of the authentication protocols specified are supported");
 }
 
 LogRedirect::LogRedirect(bool both, const char *filename) throw()
@@ -593,10 +600,11 @@ void LogRedirect::flush() throw()
 {
     process();
     if (!m_stdoutData.empty()) {
+        std::string buffer;
+        std::swap(buffer, m_stdoutData);
         LoggerBase::instance().message(Logger::SHOW, NULL,
                                        NULL, 0, NULL,
-                                       "%s", m_stdoutData.c_str());
-        m_stdoutData.clear();
+                                       "%s", buffer.c_str());
     }
 }
 

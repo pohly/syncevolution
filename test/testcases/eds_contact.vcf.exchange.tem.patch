@@ -111,12 +111,9 @@
  LABEL;TYPE=HOME:Address Line 1\nAddress Line 2\nAddress Line 3
  UID:pas-id-43C15DFB000001AB
  END:VCARD
-@@ -164,51 +153,35 @@
- BDAY:2006-01-08
- X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
- X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
--X-EVOLUTION-ANNIVERSARY:2006-01-09
--X-EVOLUTION-SPOUSE:Joan Doe
+@@ -167,48 +156,34 @@
+ X-EVOLUTION-ANNIVERSARY:2006-01-09
+ X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
 -FN:John Doe
  N:Doe;John;;;
@@ -179,7 +176,7 @@
  END:VCARD
  
  BEGIN:VCARD
-@@ -221,8 +194,7 @@
+@@ -221,8 +196,7 @@
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
  NOTE:image in JPG format
@@ -189,7 +186,7 @@
  X-EVOLUTION-FILE-AS:JPG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -257,8 +229,7 @@
+@@ -257,8 +231,7 @@
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
  NOTE:image in PNG format
@@ -199,7 +196,7 @@
  X-EVOLUTION-FILE-AS:PNG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -288,8 +259,7 @@
+@@ -288,8 +261,7 @@
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
@@ -209,7 +206,7 @@
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -309,8 +279,7 @@
+@@ -309,8 +281,7 @@
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
  NOTE:image in GIF format
@@ -219,7 +216,7 @@
  X-EVOLUTION-FILE-AS:GIF
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -429,7 +398,6 @@
+@@ -429,7 +400,6 @@
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <

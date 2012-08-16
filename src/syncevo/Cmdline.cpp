@@ -19,12 +19,14 @@
  */
 
 #include <syncevo/Cmdline.h>
+#include <syncevo/CmdlineSyncClient.h>
 #include <syncevo/FilterConfigNode.h>
 #include <syncevo/VolatileConfigNode.h>
 #include <syncevo/IniConfigNode.h>
 #include <syncevo/SyncSource.h>
 #include <syncevo/SyncContext.h>
 #include <syncevo/util.h>
+#include <syncevo/SuspendFlags.h>
 #include "test.h"
 
 #include <synthesis/SDK_util.h>
@@ -104,6 +106,18 @@ bool Cmdline::parse()
     return parse(parsed);
 }
 
+/**
+ * Detects "--sync foo", "--sync=foo", "-s foo".
+ */
+static bool IsKeyword(const std::string arg,
+                      const char *longWord,
+                      const char *shortWord)
+{
+    return boost::istarts_with(arg, std::string(longWord) + "=") ||
+        boost::iequals(arg, longWord) ||
+        boost::iequals(arg, shortWord);
+}
+
 bool Cmdline::parse(vector<string> &parsed)
 {
     parsed.clear();
@@ -143,21 +157,18 @@ bool Cmdline::parse(vector<string> &parsed)
                 break;
             }
         }
-        if (boost::iequals(m_argv[opt], "--sync") ||
-            boost::iequals(m_argv[opt], "-s")) {
-            opt++;
-            string param;
-            string cmdopt(m_argv[opt - 1]);
-            if (!parseProp(SOURCE_PROPERTY_TYPE,
-                           m_argv[opt - 1], opt == m_argc ? NULL : m_argv[opt],
-                           "sync")) {
+        if (IsKeyword(m_argv[opt], "--sync", "-s")) {
+            if (!parseAssignment(opt, parsed, SOURCE_PROPERTY_TYPE, "sync", NULL)) {
                 return false;
             }
-            parsed.push_back(m_argv[opt]);
 
             // disable requirement to add --run explicitly in order to
             // be compatible with traditional command lines
             m_run = true;
+        } else if (IsKeyword(m_argv[opt], "--keyring", "-k")) {
+            if (!parseAssignment(opt, parsed, SYNC_PROPERTY_TYPE, "keyring", "true")) {
+                return false;
+            }
         } else if(boost::iequals(m_argv[opt], "--sync-property") ||
                   boost::iequals(m_argv[opt], "-y")) {
                 opt++;
@@ -293,10 +304,6 @@ bool Cmdline::parse(vector<string> &parsed)
         } else if(boost::iequals(m_argv[opt], "--version")) {
             operations.push_back(m_argv[opt]);
             m_version = true;
-        } else if (parseBool(opt, "--keyring", "-k", true, m_keyring, ok)) {
-            if (!ok) {
-                return false;
-            }
         } else if (parseBool(opt, "--daemon", NULL, true, m_useDaemon, ok)) {
             if (!ok) {
                 return false;
@@ -309,6 +316,7 @@ bool Cmdline::parse(vector<string> &parsed)
             // all following parameters are luids; can't be combined
             // with setting config and source name
             while (++opt < m_argc) {
+                parsed.push_back(m_argv[opt]);
                 m_luids.push_back(CmdlineLUID::toLUID(m_argv[opt]));
             }
         } else {
@@ -402,11 +410,16 @@ bool Cmdline::isSync()
         !m_restore.empty() ||
         m_accessItems ||
         m_dryrun ||
-        (!m_run && m_props.hasProperties())) {
+        (!m_run && m_props.hasProperties(FullProps::IGNORE_GLOBAL_PROPS))) {
         return false;
     } else {
         return true;
     }
+}
+
+bool Cmdline::isRestore() const
+{
+    return !m_restore.empty();
 }
 
 bool Cmdline::dontRun() const
@@ -496,6 +509,13 @@ void Cmdline::copyConfig(const boost::shared_ptr<SyncConfig> &from,
         from->setConfigFilter(false, entry.first, entry.second);
     }
 
+    // Modify behavior of target UI before using it: set keyring
+    // property separately.
+    InitStateTri keyring = from->getKeyring();
+    if (keyring.wasSet()) {
+        to->setKeyring(keyring);
+    }
+
     // Write into the requested configuration, creating it if necessary.
     to->prepareConfigForWrite();
     to->copy(*from, sources);
@@ -531,21 +551,21 @@ void Cmdline::finishCopy(const boost::shared_ptr<SyncConfig> &from,
         // Also disable auto-syncing in the migrated config.
         StringConfigProperty autosync("autoSync", "", "");
         {
-            FileConfigNode node(from->getRootPath(), "config.ini", false);
+            IniFileConfigNode node(from->getRootPath(), "config.ini", false);
             if (ready.getPropertyValue(node)) {
                 ready.setProperty(node, false);
             }
             if (!autosync.getProperty(node).empty()) {
-                autosync.setProperty(node, "0");
+                autosync.setProperty(node, InitStateString("0", true));
             }
             node.flush();
         }
 
         // same for very old configs
         {
-            FileConfigNode node(from->getRootPath() + "/spds/syncml", "config.txt", false);
+            IniFileConfigNode node(from->getRootPath() + "/spds/syncml", "config.txt", false);
             if (!autosync.getProperty(node).empty()) {
-                autosync.setProperty(node, "0");
+                autosync.setProperty(node, InitStateString("0", true));
             }
             node.flush();
         }
@@ -626,6 +646,30 @@ public:
     }
 };
 
+void Cmdline::checkSyncPasswords(SyncContext &context)
+{
+    ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
+    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        prop->checkPassword(context.getUserInterfaceNonNull(),
+                            context.getConfigName(),
+                            *context.getProperties());
+    }
+}
+
+void Cmdline::checkSourcePasswords(SyncContext &context,
+                                   const std::string &sourceName,
+                                   SyncSourceNodes &nodes)
+{
+    ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
+    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        prop->checkPassword(context.getUserInterfaceNonNull(),
+                            context.getConfigName(),
+                            *context.getProperties(),
+                            sourceName,
+                            nodes.getProperties());
+    }
+}
+
 bool Cmdline::run() {
     // --dry-run is only supported by some operations.
     // Be very strict about it and make sure it is off in all
@@ -666,8 +710,9 @@ bool Cmdline::run() {
         boost::shared_ptr<SyncSourceNodes> nodes;
         std::string header;
         boost::shared_ptr<SyncContext> context;
-        FilterConfigNode::ConfigFilter sourceFilter = m_props.createSourceFilter(m_server, "");
-        FilterConfigNode::ConfigFilter::const_iterator backend = sourceFilter.find("backend");
+        FilterConfigNode::ConfigFilter sourceFilter;
+        std::string sourceName;
+        FilterConfigNode::ConfigFilter::const_iterator backend;
 
         if (!m_server.empty()) {
             // list for specific backend chosen via config
@@ -675,18 +720,23 @@ bool Cmdline::run() {
                 SE_THROW(StringPrintf("must specify exactly one source after the config name '%s'",
                                       m_server.c_str()));
             }
-            context.reset(new SyncContext(m_server));
+            sourceName = *m_sources.begin();
+            sourceFilter = m_props.createSourceFilter(m_server, sourceName);
+            backend = sourceFilter.find("backend");
+            context.reset(createSyncClient());
             if (!context->exists()) {
                 SE_THROW(StringPrintf("config '%s' does not exist", m_server.c_str()));
             }
-            nodes.reset(new SyncSourceNodes(context->getSyncSourceNodesNoTracking(*m_sources.begin())));
-            header = StringPrintf("%s/%s", m_server.c_str(), m_sources.begin()->c_str());
+            nodes.reset(new SyncSourceNodes(context->getSyncSourceNodesNoTracking(sourceName)));
+            header = StringPrintf("%s/%s", m_server.c_str(), sourceName.c_str());
             if (!nodes->dataConfigExists()) {
                 SE_THROW(StringPrintf("%s does not exist",
                                       header.c_str()));
             }
         } else {
-            context.reset(new SyncContext);
+            sourceFilter = m_props.createSourceFilter(m_server, "");
+            backend = sourceFilter.find("backend");
+            context.reset(createSyncClient());
             boost::shared_ptr<FilterConfigNode> sharedNode(new VolatileConfigNode());
             boost::shared_ptr<FilterConfigNode> configNode(new VolatileConfigNode());
             boost::shared_ptr<FilterConfigNode> hiddenNode(new VolatileConfigNode());
@@ -706,6 +756,11 @@ bool Cmdline::run() {
             // list for specific backend
             auto_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
             if (source.get() != NULL) {
+                if (!m_server.empty() && nodes) {
+                    // ensure that we have passwords for this config
+                    checkSyncPasswords(*context);
+                    checkSourcePasswords(*context, sourceName, *nodes);
+                }
                 listSources(*source, header);
                 SE_LOG_SHOW(NULL, NULL, "\n");
             } else {
@@ -813,15 +868,6 @@ bool Cmdline::run() {
         }
         if (m_dryrun) {
             SyncContext::throwError("--dry-run not supported for configuration changes");
-        }
-        if (m_keyring &&
-            GetLoadPasswordSignal().empty()) {
-            SE_LOG_ERROR(NULL, NULL,
-                         "This syncevolution binary was compiled without support for storing "
-                         "passwords in a keyring or wallet, or the backends for that functionality are not usable. "
-                         "Either store passwords in your configuration "
-                         "files or enter them interactively on each program run.");
-            return false;
         }
 
         // name of renamed config ("foo.old") after migration
@@ -1053,9 +1099,9 @@ bool Cmdline::run() {
 
             BOOST_FOREACH(const std::string source, from->getSyncSources()) {
                 BOOST_FOREACH(const string &peer, peers) {
-                    FileConfigNode node(from->getRootPath() + "/peers/" + peer + "/sources/" + source,
-                                        "config.ini",
-                                        true);
+                    IniFileConfigNode node(from->getRootPath() + "/peers/" + peer + "/sources/" + source,
+                                           "config.ini",
+                                           true);
                     string sync = node.readProperty("sync");
                     if (sync.empty() ||
                         boost::iequals(sync, "none") ||
@@ -1091,6 +1137,12 @@ bool Cmdline::run() {
             }
         }
 
+        // TODO: update complete --configure output to be more informative.
+        // This is a first step, but shouldn't be done in isolation.
+        // SE_LOG_INFO(NULL, NULL, "%s configuration %s",
+        //             fromScratch ? "creating" : "updating",
+        //             to->getConfigName().c_str());
+
         // copy and filter into the target config: createSyncClient()
         // creates a SyncContext for m_server, with propert
         // implementation of the password handling methods in derived
@@ -1103,7 +1155,8 @@ bool Cmdline::run() {
         if (fromScratch) {
             list<string> configuredSources = to->getSyncSources();
             set<string> sources = m_sources;
-            
+            SuspendFlags &s = SuspendFlags::getSuspendFlags();
+
             BOOST_FOREACH(const string &source, configuredSources) {
                 boost::shared_ptr<PersistentSyncSourceConfig> sourceConfig(to->getSyncSourceConfig(source));
                 string disable = "";
@@ -1120,7 +1173,10 @@ bool Cmdline::run() {
                         sources.erase(entry);
                     }
 
-                    // check whether the sync source works
+                    // check whether the sync source works; this can
+                    // take some time, so allow the user to abort
+                    SE_LOG_INFO(NULL, NULL, "%s: looking for databases...",
+                                source.c_str());
                     SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
                     auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
                     if (syncSource.get() == NULL) {
@@ -1135,6 +1191,10 @@ bool Cmdline::run() {
                             disable = "backend failed";
                         }
                     }
+                    s.checkForNormal();
+                    SE_LOG_INFO(NULL, NULL, "%s: %s\n",
+                                source.c_str(),
+                                disable.empty() ? "okay" : disable.c_str());
                 }
 
                 // Do sanity checking of source (can it be enabled?),
@@ -1188,7 +1248,7 @@ bool Cmdline::run() {
 
         // extra sanity check
         if (!m_sources.empty() ||
-            m_props.hasProperties()) {
+            m_props.hasProperties(FullProps::IGNORE_GLOBAL_PROPS)) {
             usage(false, "too many parameters for --remove");
             return false;
         } else {
@@ -1253,22 +1313,8 @@ bool Cmdline::run() {
         sysync::TSyError err;
 #define CHECK_ERROR(_op) if (err) { SE_THROW_EXCEPTION_STATUS(StatusException, string(source->getName()) + ": " + (_op), SyncMLStatus(err)); }
 
-        // acquire passwords before doing anything (interactive password
-        // access not supported for the command line)
-        {
-            ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
-            BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(context->getUserInterfaceNonNull(), m_server, *context->getProperties());
-            }
-        }
-        {
-            ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-            BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(context->getUserInterfaceNonNull(), m_server, *context->getProperties(),
-                                    source->getName(), sourceNodes.getProperties());
-            }
-        }
-
+        checkSyncPasswords(*context);
+        checkSourcePasswords(*context, source->getName(), sourceNodes);
         source->open();
         const SyncSource::Operations &ops = source->getOperations();
         if (m_printItems) {
@@ -1475,7 +1521,7 @@ bool Cmdline::run() {
                             haveNewline = true;
                         } else {
                             // write to file
-                            *out << item;
+                            *out << delimiter << item;
                             haveNewline = boost::ends_with(item, "\n");
                         }
                         haveItem = true;
@@ -1548,7 +1594,7 @@ bool Cmdline::run() {
 
             // temporarily disable the rest
             FilterConfigNode::ConfigFilter disabled;
-            disabled["sync"] = "disabled";
+            disabled["sync"] = InitStateString("disabled", true);
             context->setConfigFilter(false, "", disabled);
         }
 
@@ -1595,13 +1641,14 @@ bool Cmdline::run() {
                              SyncContext::DATABASE_BEFORE_SYNC);
         } else {
             if (m_dryrun) {
-                SyncContext::throwError("--dry-run not supported for running a synchronization");
+                usage(false, "--dry-run not supported for running a synchronization");
+                return false;
             }
 
             // safety catch: if props are given, then --run
             // is required
             if (!m_run &&
-                (m_props.hasProperties())) {
+                (m_props.hasProperties(FullProps::IGNORE_GLOBAL_PROPS))) {
                 usage(false, "Properties specified, but neither '--configure' nor '--run' - what did you want?");
                 return false;
             }
@@ -1643,10 +1690,14 @@ string Cmdline::cmdOpt(const char *opt, const char *param)
     if (opt) {
         res += opt;
     }
-    if (opt && param) {
+    // parameter was provided as part of option
+    bool included = opt && param &&
+        boost::ends_with(std::string(opt),
+                         std::string("=") + param);
+    if (!included && opt && param) {
         res += " ";
     }
-    if (param) {
+    if (!included && param) {
         res += param;
     }
     res += "'";
@@ -1755,10 +1806,19 @@ bool Cmdline::parseProp(PropertyType propertyType,
                     return false;
                 }
                 ContextProps &props = m_props[spec.m_config];
-                props.m_sourceProps[spec.m_source]["backend"] = sourceType.m_backend;
-                props.m_sourceProps[spec.m_source]["databaseFormat"] = sourceType.m_localFormat;
-                props.m_sourceProps[spec.m_source]["syncFormat"] = sourceType.m_format;
-                props.m_sourceProps[spec.m_source]["forceSyncFormat"] = sourceType.m_forceFormat ? "1" : "0";
+                props.m_sourceProps[spec.m_source]["backend"] =
+                    InitStateString(sourceType.m_backend,
+                                    !sourceType.m_backend.empty());
+                props.m_sourceProps[spec.m_source]["databaseFormat"] =
+                    InitStateString(sourceType.m_localFormat,
+                                    !sourceType.m_localFormat.empty());
+                props.m_sourceProps[spec.m_source]["syncFormat"] =
+                    InitStateString(sourceType.m_format,
+                                    !sourceType.m_format.empty());
+                props.m_sourceProps[spec.m_source]["forceSyncFormat"] =
+                    sourceType.m_forceFormat ?
+                    InitStateString("1", true) :
+                    InitStateString("0", false);
                 return true;
             } else if (!prop) {
                 SE_LOG_ERROR(NULL, NULL, "%s: no such property", args.c_str());
@@ -1787,6 +1847,36 @@ bool Cmdline::parseProp(PropertyType propertyType,
             }
         }
     }
+}
+
+bool Cmdline::parseAssignment(int &opt, vector<string> &parsed,
+                              PropertyType propertyType,
+                              const char *propname,
+                              const char *def)
+{
+    string param;
+    bool haveParam = false;
+    string cmdopt(m_argv[opt]);
+    size_t off = cmdopt.find('=');
+    if (off != cmdopt.npos) {
+        // value embedded in option
+        param = cmdopt.substr(off + 1);
+        haveParam = true;
+    } else if (!def && ++opt < m_argc) {
+        // assume next entry is parameter
+        param = m_argv[opt];
+        parsed.push_back(m_argv[opt]);
+        haveParam = true;
+    } else if (def) {
+        // use default
+        param = def;
+        haveParam = true;
+    }
+
+    return parseProp(propertyType,
+                     cmdopt.c_str(),
+                     haveParam ? param.c_str() : NULL,
+                     propname);
 }
 
 bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
@@ -2149,7 +2239,7 @@ static bool isPropAssignment(const string &buffer) {
 
 // remove pure comment lines from buffer,
 // also empty lines,
-// also defaultPeer (because reference properties do not include global props)
+// also defaultPeer and keyring (because reference properties do not include global props)
 static string filterConfig(const string &buffer)
 {
     ostringstream res;
@@ -2162,6 +2252,7 @@ static string filterConfig(const string &buffer)
         string line = boost::copy_range<string>(*it);
         if (!line.empty() &&
             line.find("defaultPeer =") == line.npos &&
+            line.find("keyring =") == line.npos &&
             (!boost::starts_with(line, "# ") ||
              isPropAssignment(line.substr(2)))) {
             res << line << endl;
@@ -2189,30 +2280,6 @@ static string removeComments(const string &buffer)
 
     return res.str();
 }
-
-// remove comment lines from scanFiles() output
-static string filterFiles(const string &buffer)
-{
-    ostringstream res;
-
-    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
-    for (string_split_iterator it =
-             boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal()));
-         it != string_split_iterator();
-         ++it) {
-        string line = boost::copy_range<string>(*it);
-        if (line.find(":#") == line.npos) {
-            res << line;
-            // do not add extra newline after last newline
-            if (!line.empty() || it->end() < buffer.end()) {
-                res << endl;
-            }
-        }
-    }
-
-    return res.str();
-}
-
 
 static string injectValues(const string &buffer)
 {
@@ -2400,23 +2467,20 @@ class CmdlineTest : public CppUnit::TestFixture {
     CPPUNIT_TEST(testSetupFunambol);
     CPPUNIT_TEST(testSetupSynthesis);
     CPPUNIT_TEST(testPrintServers);
-    CPPUNIT_TEST(testPrintConfig);
     CPPUNIT_TEST(testPrintFileTemplates);
     CPPUNIT_TEST(testPrintFileTemplatesConfig);
     CPPUNIT_TEST(testTemplate);
     CPPUNIT_TEST(testMatchTemplate);
     CPPUNIT_TEST(testAddSource);
     CPPUNIT_TEST(testSync);
+    CPPUNIT_TEST(testKeyring);
     CPPUNIT_TEST(testWebDAV);
     CPPUNIT_TEST(testConfigure);
-    CPPUNIT_TEST(testConfigureTemplates);
     CPPUNIT_TEST(testConfigureSources);
     CPPUNIT_TEST(testOldConfigure);
-    CPPUNIT_TEST(testPrintDatabases);
     CPPUNIT_TEST(testMigrate);
     CPPUNIT_TEST(testMigrateContext);
     CPPUNIT_TEST(testMigrateAutoSync);
-    CPPUNIT_TEST(testItemOperations);
     CPPUNIT_TEST_SUITE_END();
     
 public:
@@ -2925,203 +2989,6 @@ protected:
         CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
     }
 
-    void testPrintConfig() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
-        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
-        ScopedEnvChange home("HOME", m_testDir);
-
-        testSetupFunambol();
-
-        {
-            TestCmdline failure("--print-config", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            CPPUNIT_ASSERT_NO_THROW(failure.expectUsageError("[ERROR] --print-config requires either a --template or a server name.\n"));
-        }
-
-        {
-            TestCmdline failure("--print-config", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL(string("[ERROR] Server 'foo' has not been configured yet.\n"),
-                                 failure.m_err.str());
-        }
-
-        {
-            TestCmdline failure("--print-config", "--template", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL(string("[ERROR] No configuration template for 'foo' available.\n"),
-                                 failure.m_err.str());
-        }
-
-        {
-            TestCmdline cmdline("--print-config", "--template", "scheduleworld", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string actual = cmdline.m_out.str();
-            // deviceId must be the one from Funambol
-            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            string filtered = injectValues(filterConfig(actual));
-            CPPUNIT_ASSERT_EQUAL_DIFF(filterConfig(internalToIni(ScheduleWorldConfig())),
-                                      filtered);
-            // there should have been comments
-            CPPUNIT_ASSERT(actual.size() > filtered.size());
-        }
-
-        {
-            TestCmdline cmdline("--print-config", "--template", "scheduleworld@nosuchcontext", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string actual = cmdline.m_out.str();
-            // deviceId must *not* be the one from Funambol because of the new context
-            CPPUNIT_ASSERT(!boost::contains(actual, "deviceId = fixed-devid"));
-        }
-
-        {
-            TestCmdline cmdline("--print-config", "--template", "Default", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string actual = injectValues(filterConfig(cmdline.m_out.str()));
-            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            CPPUNIT_ASSERT_EQUAL_DIFF(filterConfig(internalToIni(DefaultConfig())),
-                                      actual);
-        }
-
-        {
-            TestCmdline cmdline("--print-config", "funambol", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF(filterConfig(internalToIni(FunambolConfig())),
-                                      injectValues(filterConfig(cmdline.m_out.str())));
-        }
-
-        {
-            // override context and template properties
-            TestCmdline cmdline("--print-config", "--template", "scheduleworld",
-                                "syncURL=foo",
-                                "database=Personal",
-                                "--source-property", "sync=disabled",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
-            boost::replace_first(expected,
-                                 "syncURL = http://sync.scheduleworld.com/funambol/ds",
-                                 "syncURL = foo");
-            boost::replace_all(expected,
-                               "# database = ",
-                               "database = Personal");
-            boost::replace_all(expected,
-                               "sync = two-way",
-                               "sync = disabled");
-            string actual = injectValues(filterConfig(cmdline.m_out.str()));
-            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            CPPUNIT_ASSERT_EQUAL_DIFF(expected,
-                                      actual);
-        }
-
-        {
-            // override context and template properties, using legacy property name
-            TestCmdline cmdline("--print-config", "--template", "scheduleworld",
-                                "--sync-property", "syncURL=foo",
-                                "--source-property", "evolutionsource=Personal",
-                                "--source-property", "sync=disabled",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
-            boost::replace_first(expected,
-                                 "syncURL = http://sync.scheduleworld.com/funambol/ds",
-                                 "syncURL = foo");
-            boost::replace_all(expected,
-                               "# database = ",
-                               "database = Personal");
-            boost::replace_all(expected,
-                               "sync = two-way",
-                               "sync = disabled");
-            string actual = injectValues(filterConfig(cmdline.m_out.str()));
-            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            CPPUNIT_ASSERT_EQUAL_DIFF(expected,
-                                      actual);
-        }
-
-        {
-            TestCmdline cmdline("--print-config", "--quiet",
-                                "--template", "scheduleworld",
-                                "funambol",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string actual = cmdline.m_out.str();
-            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            CPPUNIT_ASSERT_EQUAL_DIFF(internalToIni(ScheduleWorldConfig()),
-                                      injectValues(filterConfig(actual)));
-        }
-
-        {
-            // change shared source properties, then check template again
-            TestCmdline cmdline("--configure",
-                                "--source-property", "database=Personal",
-                                "funambol",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-        }
-        {
-            TestCmdline cmdline("--print-config", "--quiet",
-                                "--template", "scheduleworld",
-                                "funambol",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
-            // from modified Funambol config
-            boost::replace_all(expected,
-                               "# database = ",
-                               "database = Personal");
-            string actual = injectValues(filterConfig(cmdline.m_out.str()));
-            CPPUNIT_ASSERT(boost::contains(actual, "deviceId = fixed-devid"));
-            CPPUNIT_ASSERT_EQUAL_DIFF(expected,
-                                      actual);
-        }
-
-        {
-            // print config => must not use settings from default context
-            TestCmdline cmdline("--print-config", "--template", "scheduleworld@nosuchcontext", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            // source settings *not* from modified Funambol config
-            string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
-            string actual = injectValues(filterConfig(cmdline.m_out.str()));
-            CPPUNIT_ASSERT(!boost::contains(actual, "deviceId = fixed-devid"));
-            removeRandomUUID(actual);
-            CPPUNIT_ASSERT_EQUAL_DIFF(expected,
-                                      actual);
-        }
-
-        {
-            // create config => again, must not use settings from default context
-            TestCmdline cmdline("--configure", "--template", "scheduleworld", "other@other", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-        }
-        {
-            TestCmdline cmdline("--print-config", "other@other", NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            // source settings *not* from modified Funambol config
-            string expected = filterConfig(internalToIni(ScheduleWorldConfig()));
-            string actual = injectValues(filterConfig(cmdline.m_out.str()));
-            CPPUNIT_ASSERT(!boost::contains(actual, "deviceId = fixed-devid"));
-            removeRandomUUID(actual);
-            CPPUNIT_ASSERT_EQUAL_DIFF(expected,
-                                      actual);
-        }
-    }
-
     void testPrintFileTemplates() {
         // use local copy of templates in build dir (no need to install)
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "./templates");
@@ -3232,6 +3099,11 @@ protected:
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure2.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n", failure2.m_err.str());
 
+        TestCmdline failure3("--sync=foo", NULL);
+        CPPUNIT_ASSERT(!failure3.m_cmdline->parse());
+        CPPUNIT_ASSERT_EQUAL_DIFF("", failure3.m_out.str());
+        CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync=foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n", failure3.m_err.str());
+
         TestCmdline help("--sync", " ?", NULL);
         help.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("--sync\n"
@@ -3297,6 +3169,218 @@ protected:
         TestCmdline filter5("=1", NULL);
         CPPUNIT_ASSERT(!filter5.m_cmdline->parse());
         CPPUNIT_ASSERT_NO_THROW(filter5.expectUsageError("[ERROR] a property name must be given in '=1'\n"));
+    }
+
+    void testKeyring() {
+        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
+        ScopedEnvChange home("HOME", m_testDir);
+
+        rm_r(m_testDir);
+        {
+            TestCmdline cmdline(NULL, NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(false, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--sync-property", "keyring=True", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("keyring=True", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=true", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=1", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=Yes", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=false", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_FALSE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=0", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_FALSE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=NO", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_FALSE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=GNOME", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_STRING, keyring.getValue());
+            CPPUNIT_ASSERT_EQUAL(std::string("GNOME"), keyring.get());
+        }
+
+        // Broken command line: treated like a sync, but config doesn't exist.
+        {
+            TestCmdline cmdline("keyring=KDE", "@foobar", NULL);
+            cmdline.doit(false);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"@foobar\" does not refer to a sync peer.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
+        }
+        {
+            TestCmdline cmdline("keyring=KDE", "nosuchpeer@foobar", NULL);
+            cmdline.doit(false);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"nosuchpeer@foobar\" does not exist.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
+        }
+
+        // empty config prop
+        {
+            TestCmdline cmdline("--configure", "@default", NULL);
+            cmdline.doit();
+        }
+
+        // Try broken command line again.
+        {
+            TestCmdline cmdline("keyring=KDE", "@foobar", NULL);
+            cmdline.doit(false);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"@foobar\" does not refer to a sync peer.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
+        }
+        {
+            TestCmdline cmdline("keyring=KDE", "nosuchpeer@foobar", NULL);
+            cmdline.doit(false);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"nosuchpeer@foobar\" does not exist.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
+        }
+
+        {
+            TestCmdline cmdline("@foobar", NULL);
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(false, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+
+        // now set the value permanently
+        {
+            TestCmdline cmdline("--keyring", "--configure", "@default", NULL);
+            cmdline.doit();
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("--keyring=KDE", "--configure", "@default", NULL);
+            cmdline.doit();
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_STRING, keyring.getValue());
+            CPPUNIT_ASSERT_EQUAL(std::string("KDE"), keyring.get());
+        }
+
+        // create by setting keyring in @default, then update;
+        // @default not strictly needed
+        rm_r(m_testDir);
+        {
+            TestCmdline cmdline("keyring=KDE", "--configure", "@default", NULL);
+            cmdline.doit();
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_STRING, keyring.getValue());
+        }
+        {
+            TestCmdline cmdline("keyring=yes", "--configure", "@default", NULL);
+            cmdline.doit();
+            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            CPPUNIT_ASSERT(context);
+            InitStateTri keyring = context->getKeyring();
+            CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
+            CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
+        }
+
+        // allow sync operation although --keyring was set
+        {
+            TestCmdline cmdline("keyring=GNOME", "foobar@default", NULL);
+            cmdline.doit(false);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"foobar@default\" does not exist.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
+        }
+
+        // catch invalid "keyring" value
+        {
+            TestCmdline cmdline("--configure",
+                                "username=foo",
+                                "password=bar",
+                                "syncURL=http://no.such.server",
+                                "keyring=no-such-keyring",
+                                "foobar@default", NULL);
+            cmdline.doit(false);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] addressbook: looking for databases...\n"
+                                             "[INFO] addressbook: okay\n"
+                                             "[INFO] calendar: looking for databases...\n"
+                                             "[INFO] calendar: okay\n"
+                                             "[INFO] memo: looking for databases...\n"
+                                             "[INFO] memo: okay\n"
+                                             "[INFO] todo: looking for databases...\n"
+                                             "[INFO] todo: okay\n"
+                                             "[ERROR] Unsupported value for the \"keyring\" property, no such keyring found: no-such-keyring"),
+                                 cmdline.m_err.str());
+        }
     }
 
     void testWebDAV() {
@@ -3400,9 +3484,6 @@ protected:
             boost::replace_first(expected,
                                  "# databaseFormat = ",
                                  "databaseFormat = text/vcard");
-            boost::replace_first(expected,
-                                 "# forceSyncFormat = 0",
-                                 "forceSyncFormat = 0");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected,
                                       filterConfig(printConfig("scheduleworld")));
             string shared = filterConfig(printConfig("@default"));
@@ -3438,6 +3519,8 @@ protected:
                               "logdir (no default, shared)\n"
                               "\n"
                               "loglevel (0, unshared)\n"
+                              "\n"
+                              "notifyLevel (3, unshared)\n"
                               "\n"
                               "printChanges (TRUE, unshared)\n"
                               "\n"
@@ -3481,6 +3564,8 @@ protected:
                               "\n"
                               "enableWBXML (TRUE, unshared)\n"
                               "\n"
+                              "enableRefreshSync (FALSE, unshared)\n"
+                              "\n"
                               "maxMsgSize (150000, unshared), maxObjSize (4000000, unshared)\n"
                               "\n"
                               "SSLServerCertificates (" SYNCEVOLUTION_SSL_SERVER_CERTIFICATES ", unshared)\n"
@@ -3497,7 +3582,9 @@ protected:
                               "\n"
                               "peerType (no default, unshared)\n"
                               "\n"
-                              "defaultPeer (no default, global)\n");
+                              "defaultPeer (no default, global)\n"
+                              "\n"
+                              "keyring (yes, global)\n");
 
         string sourceProperties("sync (disabled, unshared, required)\n"
                                 "\n"
@@ -3580,230 +3667,6 @@ protected:
                                       filterIndented(cmdline.m_out.str()));
         }
     }
-
-    /**
-     * Test semantic of config creation (instead of updating) with and without
-     * templates. See BMC #14805.
-     */
-    void testConfigureTemplates() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
-        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
-        ScopedEnvChange home("HOME", m_testDir);
-
-        rm_r(m_testDir);
-        {
-            // catch possible typos like "sheduleworld"
-            TestCmdline failure("--configure", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(!failure.m_cmdline->run());
-            static const char error[] = "[ERROR] No configuration template for 'foo@default' available.\n"
-                "[INFO] Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: syncURL\n"
-                "[INFO] \n"
-                "[INFO] Available configuration templates (clients and servers):\n";
-            std::string out = failure.m_out.str();
-            std::string err = failure.m_err.str();
-            std::string all = failure.m_all.str();
-            CPPUNIT_ASSERT(boost::starts_with(err, error));
-            CPPUNIT_ASSERT(boost::ends_with(err, "\n"));
-            CPPUNIT_ASSERT(!boost::ends_with(err, "\n\n"));
-            CPPUNIT_ASSERT_EQUAL(string(""), out);
-            CPPUNIT_ASSERT_EQUAL(all, err);
-        }
-
-        rm_r(m_testDir);
-        {
-            // catch possible typos like "sheduleworld" when
-            // enough properties are specified to continue without
-            // a template
-            TestCmdline failure("--configure", "syncURL=http://foo.com", "--template", "foo", "bar", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(!failure.m_cmdline->run());
-
-            static const char error[] = "[ERROR] No configuration template for 'foo' available.\n"
-                "[INFO] All relevant properties seem to be set, omit the --template parameter to proceed.\n"
-                "[INFO] \n"
-                "[INFO] Available configuration templates (clients and servers):\n";
-            std::string out = failure.m_out.str();
-            std::string err = failure.m_err.str();
-            std::string all = failure.m_all.str();
-            CPPUNIT_ASSERT(boost::starts_with(err, error));
-            CPPUNIT_ASSERT(boost::ends_with(err, "\n"));
-            CPPUNIT_ASSERT(!boost::ends_with(err, "\n\n"));
-            CPPUNIT_ASSERT_EQUAL(string(""), out);
-            CPPUNIT_ASSERT_EQUAL(all, err);
-        }
-
-        string fooconfig =
-            StringPrintf("syncevolution/.internal.ini:rootMinVersion = %d\n"
-                         "syncevolution/.internal.ini:rootCurVersion = %d\n"
-                         "syncevolution/default/.internal.ini:contextMinVersion = %d\n"
-                         "syncevolution/default/.internal.ini:contextCurVersion = %d\n"
-                         "syncevolution/default/config.ini:deviceId = fixed-devid\n"
-                         "syncevolution/default/peers/foo/.internal.ini:peerMinVersion = %d\n"
-                         "syncevolution/default/peers/foo/.internal.ini:peerCurVersion = %d\n",
-                         CONFIG_ROOT_MIN_VERSION, CONFIG_ROOT_CUR_VERSION,
-                         CONFIG_CONTEXT_MIN_VERSION, CONFIG_CONTEXT_CUR_VERSION,
-                         CONFIG_PEER_MIN_VERSION, CONFIG_PEER_CUR_VERSION);
-
-        string syncurl =
-            "syncevolution/default/peers/foo/config.ini:syncURL = local://@bar\n";
-
-        string configsource =
-            "syncevolution/default/peers/foo/sources/eds_event/config.ini:sync = two-way\n"
-            "syncevolution/default/sources/eds_event/config.ini:backend = calendar\n";
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish: should result in no sources configured
-            TestCmdline failure("--configure", "--template", "none", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            bool success  = failure.m_cmdline->run();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-            CPPUNIT_ASSERT(success);
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig, filterFiles(res));
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish: should result in no sources configured,
-            // even if general source properties are specified
-            TestCmdline failure("--configure", "--template", "none", "backend=calendar", "foo", NULL);
-            bool success = failure.m_cmdline->parse() && failure.m_cmdline->run();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-            CPPUNIT_ASSERT(success);
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig, filterFiles(res));
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish: should result in no sources configured,
-            // even if specific source properties are specified
-            TestCmdline failure("--configure", "--template", "none", "eds_event/backend=calendar", "foo", NULL);
-            bool success = failure.m_cmdline->parse() && failure.m_cmdline->run();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-            CPPUNIT_ASSERT(success);
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig, filterFiles(res));
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish and possible: here eds_event is not usable
-            TestCmdline failure("--configure", "--template", "none", "foo", "eds_event", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            bool caught = false;
-            try {
-                CPPUNIT_ASSERT(failure.m_cmdline->run());
-            } catch (const StatusException &ex) {
-                if (!strcmp(ex.what(), "eds_event: no backend available")) {
-                    caught = true;
-                } else {
-                    throw;
-                }
-            }
-            CPPUNIT_ASSERT(caught);
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish and possible: here eds_event is not configurable
-            TestCmdline failure("--configure", "syncURL=local://@bar", "foo", "eds_event", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            bool caught = false;
-            try {
-                CPPUNIT_ASSERT(failure.m_cmdline->run());
-            } catch (const StatusException &ex) {
-                if (!strcmp(ex.what(), "no such source(s): eds_event")) {
-                    caught = true;
-                } else {
-                    throw;
-                }
-            }
-            CPPUNIT_ASSERT(caught);
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish and possible: here eds_event is not configurable (wrong context)
-            TestCmdline failure("--configure", "syncURL=local://@bar", "eds_event/backend@xyz=calendar", "foo", "eds_event", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            bool caught = false;
-            try {
-                CPPUNIT_ASSERT(failure.m_cmdline->run());
-            } catch (const StatusException &ex) {
-                if (!strcmp(ex.what(), "no such source(s): eds_event")) {
-                    caught = true;
-                } else {
-                    throw;
-                }
-            }
-            CPPUNIT_ASSERT(caught);
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they wish: configure exactly the specified sources
-            TestCmdline failure("--configure", "--template", "none", "backend=calendar", "foo", "eds_event", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig + configsource, filterFiles(res));
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they provide enough information: should result in no sources configured
-            TestCmdline failure("--configure", "syncURL=local://@bar", "foo", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig + syncurl, filterFiles(res));
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they provide enough information;
-            // source created because listed and usable
-            TestCmdline failure("--configure", "syncURL=local://@bar", "backend=calendar", "foo", "eds_event", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig + syncurl + configsource, filterFiles(res));
-        }
-
-        rm_r(m_testDir);
-        {
-            // allow user to proceed if they provide enough information;
-            // source created because listed and usable
-            TestCmdline failure("--configure", "syncURL=local://@bar", "eds_event/backend@default=calendar", "foo", "eds_event", NULL);
-            CPPUNIT_ASSERT(failure.m_cmdline->parse());
-            CPPUNIT_ASSERT(failure.m_cmdline->run());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_out.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", failure.m_err.str());
-            string res = scanFiles(m_testDir);
-            removeRandomUUID(res);
-            CPPUNIT_ASSERT_EQUAL_DIFF(fooconfig + syncurl + configsource, filterFiles(res));
-        }
-    }
-
 
     void testConfigureSources() {
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
@@ -3965,9 +3828,8 @@ protected:
         boost::replace_first(expected, "# database = ", "database = xyz");
         boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
         boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-        // migrating "type" sets forceSyncFormat (always)
+        // migrating "type" sets forceSyncFormat if not the default,
         // and databaseFormat (if format was part of type, as for addressbook)
-        boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
         boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
         doConfigure(expected, "sources/addressbook/config.ini:");
     }
@@ -4051,65 +3913,6 @@ protected:
         return expected;
     }
 
-    void testPrintDatabases() {
-        {
-            // full output
-            TestCmdline cmdline("--print-databases", (char *)0);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            // exact output varies, do not test
-        }
-        bool haveEDS;
-        {
-            // limit output to one specific backend
-            TestCmdline cmdline("--print-databases", "backend=evolution-contacts", (char *)0);
-            cmdline.doit();
-            if (cmdline.m_err.str().find("not one of the valid values") != std::string::npos) {
-                // not enabled, only this error messages expected
-                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-            } else {
-                // enabled, no error, one entry
-                haveEDS = true;
-                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-                CPPUNIT_ASSERT(boost::starts_with(cmdline.m_out.str(), "evolution-contacts:\n"));
-                int entries = 0;
-		std::string out = cmdline.m_out.str();
-                BOOST_FOREACH(const std::string &line,
-                              boost::tokenizer< boost::char_separator<char> >(out,
-                                                                              boost::char_separator<char>("\n"))) {
-                    if (!boost::starts_with(line, " ")) {
-                        entries++;
-                    }
-                }
-                CPPUNIT_ASSERT_EQUAL(1, entries);
-            }
-        }
-        if (haveEDS) {
-            // limit output to one specific backend, chosen via config
-            {
-                TestCmdline cmdline("--configure", "backend=evolution-contacts", "@foo-config", "bar-source", (char *)0);
-                cmdline.doit();
-                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-            }
-            {
-                TestCmdline cmdline("--print-databases", "@foo-config", "bar-source", (char *)0);
-                cmdline.doit();
-                CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-                CPPUNIT_ASSERT(boost::starts_with(cmdline.m_out.str(), "@foo-config/bar-source:\n"));
-                int entries = 0;
-		std::string out = cmdline.m_out.str();
-                BOOST_FOREACH(const std::string &line,
-                              boost::tokenizer< boost::char_separator<char> >(out,
-                                                                              boost::char_separator<char>("\n"))) {
-                    if (!boost::starts_with(line, " ")) {
-                        entries++;
-                    }
-                }
-                CPPUNIT_ASSERT_EQUAL(1, entries);
-            }
-        }
-    }
-
     void testMigrate() {
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
@@ -4141,9 +3944,8 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            // migrating "type" sets forceSyncFormat (always)
+            // migrating "type" sets forceSyncFormat if different from the "false" default
             // and databaseFormat (if format was part of type, as for addressbook)
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(oldRoot + ".old");
@@ -4176,7 +3978,6 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(newRoot, "scheduleworld.old.1");
@@ -4209,7 +4010,6 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             boost::replace_first(expected,
                                  "peers/scheduleworld/sources/addressbook/config.ini",
@@ -4249,7 +4049,6 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(oldRoot + ".old");
@@ -4277,7 +4076,6 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             renamedConfig = scanFiles(otherRoot, "scheduleworld.old.3");
@@ -4443,9 +4241,8 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            // migrating "type" sets forceSyncFormat (always)
+            // migrating "type" sets forceSyncFormat if not already the default,
             // and databaseFormat (if format was part of type, as for addressbook)
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(oldRoot + ".old");
@@ -4473,7 +4270,6 @@ protected:
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
             boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
-            boost::replace_all(expected, "# forceSyncFormat = 0", "forceSyncFormat = 0");
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(newRoot, "scheduleworld.old.1");
@@ -4483,206 +4279,6 @@ protected:
             boost::replace_all(createdConfig, "ConsumerReady = 1", "ConsumerReady = 0");
             boost::replace_all(createdConfig, "/scheduleworld/", "/scheduleworld.old.1/");
             CPPUNIT_ASSERT_EQUAL_DIFF(createdConfig, renamedConfig);
-        }
-    }
-
-    void testItemOperations() {
-        ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "templates");
-        ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
-        ScopedEnvChange home("HOME", m_testDir);
-
-        {
-            // "foo" not configured
-            TestCmdline cmdline("--print-items",
-                                "foo",
-                                "bar",
-                                NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] bar: backend not supported or not correctly configured (backend=select backend databaseFormat= syncFormat=)\nconfiguration 'foo' does not exist\nsource 'bar' does not exist\nbackend property not set", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // "foo" not configured, no source named
-            TestCmdline cmdline("--print-items",
-                                "foo",
-                                NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] backend not supported or not correctly configured (backend=select backend databaseFormat= syncFormat=)\nconfiguration 'foo' does not exist\nno source selected\nbackend property not set", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // nothing known about source
-            TestCmdline cmdline("--print-items",
-                                NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] backend not supported or not correctly configured (backend=select backend databaseFormat= syncFormat=)\nno source selected\nbackend property not set", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // now create foo
-            TestCmdline cmdline("--configure",
-                                "--template",
-                                "default",
-                                "foo",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // "foo" now configured, still no source
-            TestCmdline cmdline("--print-items",
-                                "foo",
-                                NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] backend not supported or not correctly configured (backend=select backend databaseFormat= syncFormat=)\nno source selected\nbackend property not set", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // foo configured, but "bar" is not
-            TestCmdline cmdline("--print-items",
-                                "foo",
-                                "bar",
-                                NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] bar: backend not supported or not correctly configured (backend=select backend databaseFormat= syncFormat=)\nsource 'bar' does not exist\nbackend property not set", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // add "bar" source, using file backend
-            TestCmdline cmdline("--configure",
-                                "backend=file",
-                                ("database=file://" + m_testDir + "/addressbook").c_str(),
-                                "databaseFormat=text/vcard",
-                                "foo",
-                                "bar",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        {
-            // no items yet
-            TestCmdline cmdline("--print-items",
-                                "foo",
-                                "bar",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
-        }
-
-        static const std::string john =
-            "BEGIN:VCARD\n"
-            "VERSION:3.0\n"
-            "FN:John Doe\n"
-            "N:Doe;John;;;\n"
-            "END:VCARD\n",
-            joan =
-            "BEGIN:VCARD\n"
-            "VERSION:3.0\n"
-            "FN:Joan Doe\n"
-            "N:Doe;Joan;;;\n"
-            "END:VCARD\n";
-
-        {
-            // create one file
-            std::string file1 = "1:" + john, file2 = "2:" + joan;
-            boost::replace_all(file1, "\n", "\n1:");
-            file1.resize(file1.size() - 2);
-            boost::replace_all(file2, "\n", "\n2:");
-            file2.resize(file2.size() - 2);
-            createFiles(m_testDir + "/addressbook", file1 + file2);
-
-            TestCmdline cmdline("--print-items",
-                                "foo",
-                                "bar",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("1\n2\n", cmdline.m_out.str());
-        }
-
-        {
-            // alternatively just specify enough parameters,
-            // without the foo bar config part
-            TestCmdline cmdline("--print-items",
-                                "backend=file",
-                                ("database=file://" + m_testDir + "/addressbook").c_str(),
-                                "databaseFormat=text/vcard",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("1\n2\n", cmdline.m_out.str());
-        }
-
-        {
-            // export all
-            TestCmdline cmdline("--export", "-",
-                                "backend=file",
-                                ("database=file://" + m_testDir + "/addressbook").c_str(),
-                                "databaseFormat=text/vcard",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF(john + "\n" + joan, cmdline.m_out.str());
-        }
-
-        {
-            // export all via config
-            TestCmdline cmdline("--export", "-",
-                                "foo", "bar",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF(john + "\n" + joan, cmdline.m_out.str());
-        }
-
-        {
-            // export one
-            TestCmdline cmdline("--export", "-",
-                                "backend=file",
-                                ("database=file://" + m_testDir + "/addressbook").c_str(),
-                                "databaseFormat=text/vcard",
-                                "--luids", "1",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF(john, cmdline.m_out.str());
-        }
-
-        {
-            // export one via config
-            TestCmdline cmdline("--export", "-",
-                                "foo", "bar", "1",
-                                NULL);
-            cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF(john, cmdline.m_out.str());
-        }
-
-        // TODO: check configuration of just the source as @foo bar without peer
-
-        {
-            // check error message for missing config name
-            TestCmdline cmdline((const char *)NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_NO_THROW(cmdline.expectUsageError("[ERROR] No configuration name specified.\n"));
-        }
-
-        {
-            // check error message for missing config name, version II
-            TestCmdline cmdline("--run",
-                                NULL);
-            cmdline.doit(false);
-            CPPUNIT_ASSERT_NO_THROW(cmdline.expectUsageError("[ERROR] No configuration name specified.\n"));
         }
     }
 
@@ -4706,7 +4302,7 @@ private:
                 m_argv[index + 1] = m_argvstr[index].c_str();
             }
 
-            m_cmdline.set(new Cmdline(m_argvstr.size() + 1, m_argv.get()), "cmdline");
+            m_cmdline.set(new KeyringSyncCmdline(m_argvstr.size() + 1, m_argv.get()), "cmdline");
         }
 
     public:
@@ -4731,6 +4327,16 @@ private:
 
         ~TestCmdline() {
             popLogger();
+        }
+
+        boost::shared_ptr<SyncContext> parse()
+        {
+            if (!m_cmdline->parse()) {
+                return boost::shared_ptr<SyncContext>();
+            }
+            boost::shared_ptr<SyncContext> context(new SyncContext(m_cmdline->m_server));
+            context->setConfigFilter(true, "", m_cmdline->m_props.createSyncFilter(m_cmdline->m_server));
+            return context;
         }
 
         void doit(bool expectSuccess = true) {
@@ -4850,6 +4456,7 @@ private:
                          ".internal.ini:contextCurVersion = %d\n"
                          "config.ini:# logdir = \n"
                          "peers/scheduleworld/config.ini:# loglevel = 0\n"
+                         "peers/scheduleworld/config.ini:# notifyLevel = 3\n"
                          "peers/scheduleworld/config.ini:# printChanges = 1\n"
                          "peers/scheduleworld/config.ini:# dumpData = 1\n"
                          "config.ini:# maxlogdirs = 10\n"
@@ -4871,6 +4478,7 @@ private:
                          "config.ini:deviceId = fixed-devid\n" /* this is not the default! */
                          "peers/scheduleworld/config.ini:# remoteDeviceId = \n"
                          "peers/scheduleworld/config.ini:# enableWBXML = 1\n"
+                         "peers/scheduleworld/config.ini:# enableRefreshSync = 0\n"
                          "peers/scheduleworld/config.ini:# maxMsgSize = 150000\n"
                          "peers/scheduleworld/config.ini:# maxObjSize = 4000000\n"
                          "peers/scheduleworld/config.ini:# SSLServerCertificates = \n"
@@ -4964,6 +4572,7 @@ private:
             "spds/syncml/config.txt:# password = \n"
             "spds/syncml/config.txt:# logdir = \n"
             "spds/syncml/config.txt:# loglevel = 0\n"
+            "spds/syncml/config.txt:# notifyLevel = 3\n"
             "spds/syncml/config.txt:# printChanges = 1\n"
             "spds/syncml/config.txt:# dumpData = 1\n"
             "spds/syncml/config.txt:# maxlogdirs = 10\n"
@@ -4985,6 +4594,7 @@ private:
             "spds/syncml/config.txt:deviceId = fixed-devid\n" /* this is not the default! */
             "spds/syncml/config.txt:# remoteDeviceId = \n"
             "spds/syncml/config.txt:# enableWBXML = 1\n"
+            "spds/syncml/config.txt:# enableRefreshSync = 0\n"
             "spds/syncml/config.txt:# maxMsgSize = 150000\n"
             "spds/syncml/config.txt:# maxObjSize = 4000000\n"
 #ifdef ENABLE_LIBSOUP
@@ -5050,6 +4660,10 @@ private:
         boost::replace_first(config,
                              "# enableWBXML = 1",
                              "enableWBXML = 0");
+
+        boost::replace_first(config,
+                             "# enableRefreshSync = 0",
+                             "enableRefreshSync = 1");
 
         boost::replace_first(config,
                              "# RetryInterval = 2M",

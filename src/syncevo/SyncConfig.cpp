@@ -29,6 +29,7 @@
 #include <syncevo/DevNullConfigNode.h>
 #include <syncevo/MultiplexConfigNode.h>
 #include <syncevo/SingleFileConfigTree.h>
+#include <syncevo/IniConfigNode.h>
 #include <syncevo/Cmdline.h>
 #include <syncevo/lcs.h>
 #include <test.h>
@@ -428,9 +429,9 @@ SyncConfig::SyncConfig(const string &peer,
         path = m_peerPath;
         if (path.empty()) {
             if (!m_redirectPeerRootPath.empty()) {
-                node.reset(new FileConfigNode(m_redirectPeerRootPath,
-                                              ".internal.ini",
-                                              false));
+                node.reset(new IniFileConfigNode(m_redirectPeerRootPath,
+                                                 ".internal.ini",
+                                                 false));
                 node = m_tree->add(m_redirectPeerRootPath + "/.internal.ini",
                                    node);
             } else {
@@ -837,7 +838,7 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     // up in the UI.
     if (server == "default") {
         config->setConsumerReady(true);
-        config->setUserPeerName("");
+        config->setUserPeerName(InitStateString());
     }
 
     return config;
@@ -952,29 +953,25 @@ list<string> SyncConfig::getSyncSources() const
     // 1. contextpath/sources
     // 2. peers/[one-peer]/sources
     // 3. sources in source filter
-    list<string> sources;
+    set<string> sources;
+    list<string> sourceList;
     if (m_layout == SHARED_LAYOUT) {
         // get sources in context
-        sources = m_tree->getChildren(m_contextPath + "/sources");
-        list<string> peerSources;
-        // get sources from peer if it's not empty
+        sourceList = m_tree->getChildren(m_contextPath + "/sources");
+        sources.insert(sourceList.begin(), sourceList.end());
+        // get sources from peer if it's not empty and merge into
+        // full set of sources
         if (!m_peerPath.empty()) {
-            peerSources = m_tree->getChildren(m_peerPath + "/sources");
-        }
-        // union sources in specific peer
-        BOOST_FOREACH(const string &peerSource, peerSources) {
-            list<string>::iterator it = std::find(sources.begin(), sources.end(), peerSource);
-            // not found
-            if ( it == sources.end()) {
-                sources.push_back(peerSource); 
-            }
+            sourceList = m_tree->getChildren(m_peerPath + "/sources");
+            sources.insert(sourceList.begin(), sourceList.end());
         }
     } else {
         // get sources from peer
-        sources = m_tree->getChildren(m_peerPath +
-                                      (m_layout == SYNC4J_LAYOUT ? 
-                                       "/spds/sources" :
-                                       "/sources"));
+        sourceList = m_tree->getChildren(m_peerPath +
+                                         (m_layout == SYNC4J_LAYOUT ? 
+                                          "/spds/sources" :
+                                          "/sources"));
+        sources.insert(sourceList.begin(), sourceList.end());
     }
     // get sources from filter and union them into returned sources
     BOOST_FOREACH(const SourceProps::value_type &value, m_sourceFilters) {
@@ -982,14 +979,12 @@ list<string> SyncConfig::getSyncSources() const
             // ignore filter for all sources
             continue;
         }
-        list<string>::iterator it = std::find(sources.begin(), sources.end(), value.first);
-        if (it == sources.end()) {
-            // found a filter for a source which does not exist yet
-            sources.push_back(value.first); 
-        }
+        sources.insert(value.first);
     }
 
-    return sources;
+    // Convert back to simple list. As a nice side-effect of
+    // temporarily using a set, the final list is sorted.
+    return list<string>(sources.begin(), sources.end());
 }
 
 SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
@@ -1065,11 +1060,17 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         node = m_tree->open(peerPath, ConfigTree::visible);
         if (compatMode) {
             boost::shared_ptr<FilterConfigNode> compat(new FilterConfigNode(node));
-            compat->addFilter("syncFormat", sourceType.m_format);
-            compat->addFilter("forceSyncFormat", sourceType.m_forceFormat ? "1" : "0");
+            compat->addFilter("syncFormat",
+                              InitStateString(sourceType.m_format, !sourceType.m_format.empty()));
+            compat->addFilter("forceSyncFormat",
+                              sourceType.m_forceFormat ?
+                              InitStateString("1", true) :
+                              InitStateString("0", false));
             if (sharedPath.empty()) {
-                compat->addFilter("databaseFormat", sourceType.m_localFormat);
-                compat->addFilter("backend", sourceType.m_backend);
+                compat->addFilter("databaseFormat",
+                                  InitStateString(sourceType.m_localFormat, !sourceType.m_localFormat.empty()));
+                compat->addFilter("backend",
+                                  InitStateString(sourceType.m_backend, !sourceType.m_backend.empty()));
             }
             node = compat;
         }
@@ -1085,13 +1086,13 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         // against the same context end up sharing .internal.ini and
         // .other.ini files inside that context.
         string path = m_redirectPeerRootPath + "/sources/" + lower;
-        trackingNode.reset(new HashFileConfigNode(path,
-                                                  ".other.ini",
-                                                  false));
+        trackingNode.reset(new IniHashConfigNode(path,
+                                                 ".other.ini",
+                                                 false));
         trackingNode = m_tree->add(path + "/.other.ini", trackingNode);
-        boost::shared_ptr<ConfigNode> node(new HashFileConfigNode(path,
-                                                                  ".internal.ini",
-                                                                  false));
+        boost::shared_ptr<ConfigNode> node(new IniHashConfigNode(path,
+                                                                 ".internal.ini",
+                                                                 false));
         hiddenPeerNode.reset(new FilterConfigNode(node));
         hiddenPeerNode = boost::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
         if (peerPath.empty()) {
@@ -1105,8 +1106,10 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         node = m_tree->open(sharedPath, ConfigTree::visible);
         if (compatMode) {
             boost::shared_ptr<FilterConfigNode> compat(new FilterConfigNode(node));
-            compat->addFilter("databaseFormat", sourceType.m_localFormat);
-            compat->addFilter("backend", sourceType.m_backend);
+            compat->addFilter("databaseFormat",
+                              InitStateString(sourceType.m_localFormat, !sourceType.m_localFormat.empty()));
+            compat->addFilter("backend",
+                              InitStateString(sourceType.m_backend, !sourceType.m_backend.empty()));
             node = compat;
         }
         sharedNode.reset(new FilterConfigNode(node, m_sourceFilters.createSourceFilter(name)));
@@ -1242,6 +1245,16 @@ static BoolConfigProperty syncPropWBXML("enableWBXML",
                                         "not applicable when the peer is a SyncML client, because then the client\n"
                                         "chooses the encoding",
                                         "TRUE");
+static BoolConfigProperty syncPropRefreshSync("enableRefreshSync",
+                                              "Use the more advanced refresh-from-server sync mode to\n"
+                                              "implement the refresh-from-remote operation. Some SyncML\n"
+                                              "servers do not support this. Therefore the default is to\n"
+                                              "delete local data before doing a slow sync, which has the\n"
+                                              "same effect. However, some servers work better when they\n"
+                                              "are told explicitly that the sync is a refresh sync. For\n"
+                                              "example, Funambol's One Media server rejects too many slow\n"
+                                              "syncs in a row with a 417 'retry later' error.\n",
+                                              "FALSE");
 static ConfigProperty syncPropLogDir("logdir",
                                      "full path to directory where automatic backups and logs\n"
                                      "are stored for all synchronizations; if unset, then\n"
@@ -1250,12 +1263,14 @@ static ConfigProperty syncPropLogDir("logdir",
                                      "if \"none\", then no backups of the databases are made and any\n"
                                      "output is printed directly to the screen");
 static UIntConfigProperty syncPropMaxLogDirs("maxlogdirs",
-                                            "Unless this option is set, SyncEvolution will never delete\n"
-                                            "anything in the \"logdir\". If set, the oldest directories and\n"
-                                            "all their content will be removed after a successful sync\n"
-                                            "to prevent the number of log directories from growing beyond\n"
-                                            "the given limit.",
-                                            "10");
+                                             "Controls how many session directories are kept at most in the logdir.\n"
+                                             "Unless set to zero, SyncEvolution will remove old directories and\n"
+                                             "all their content to prevent the number of log directories from\n"
+                                             "growing beyond the given limit. It tries to be intelligent and will\n"
+                                             "remove sessions in which nothing interesting happened (no errors,\n"
+                                             "no data changes) in favor of keeping sessions where something\n"
+                                             "happened, even if those sessions are older.",
+                                             "10");
 static UIntConfigProperty syncPropLogLevel("loglevel",
                                           "level of detail for log messages:\n"
                                           "- 0 (or unset) = INFO messages without log file, DEBUG with log file\n"
@@ -1263,6 +1278,16 @@ static UIntConfigProperty syncPropLogLevel("loglevel",
                                           "- 2 = also INFO messages\n"
                                           "- 3 = also DEBUG messages\n"
                                           "> 3 = increasing amounts of debug messages for developers");
+static UIntConfigProperty syncPropNotifyLevel("notifyLevel",
+                                              "Level of detail for desktop notifications. Currently such\n"
+                                              "notifications are generated only for automatically started\n"
+                                              "sync sessions.\n"
+                                              "\n"
+                                              "0 - suppress all notifications\n"
+                                              "1 - show only errors\n"
+                                              "2 - show information about changes and errors (in practice currently the same as level 3)\n"
+                                              "3 - show all notifications, including starting a sync\n",
+                                              "3");
 static BoolConfigProperty syncPropPrintChanges("printChanges",
                                                "enables or disables the detailed (and sometimes slow) comparison\n"
                                                "of database content before and after a sync session",
@@ -1414,8 +1439,43 @@ static SafeConfigProperty syncPropDeviceData("deviceData",
                                              "information about the peer in the format described in the\n"
                                              "Synthesis SDK manual under 'Session_SaveDeviceInfo'");
 
-static SafeConfigProperty syncPropDefaultPeer("defaultPeer",
-                                              "the peer which is used by default in some frontends, like the sync-UI");
+static SafeConfigProperty globalPropDefaultPeer("defaultPeer",
+                                                "the peer which is used by default in some frontends, like the sync-UI");
+
+static ConfigProperty globalPropKeyring("keyring",
+                                        "Explicitly selects a certain safe password storage.\n"
+                                        "Depending on how SyncEvolution was compiled and installed\n"
+                                        "the following values are possible:\n"
+                                        "\n"
+                                        "GNOME\n  GNOME Keyring\n"
+                                        "KDE\n  KWallet\n"
+                                        "yes/true/1\n  pick one automatically\n"
+                                        "no/false/0\n  store passwords in SyncEvolution config files\n"
+                                        "\n"
+                                        "If unset, the default is to pick one automatically in\n"
+                                        "the D-Bus server and not use any keyring in the command\n"
+                                        "tool when running without that D-Bus server (because the\n"
+                                        "keyring might not be usable without a desktop session).\n"
+                                        "If support for only storage was compiled and installed,\n"
+                                        "then that is the one which gets picked. Otherwise the\n"
+                                        "default is to use GNOME Keyring (because distinguishing\n"
+                                        "between KDE and GNOME sessions automatically is tricky).\n"
+                                        "\n"
+                                        "Note that using this option applies to *all* passwords in\n"
+                                        "a configuration and that the --keyring command line option\n"
+                                        "is merely an alias for setting the global property, so setting\n"
+                                        "a single password as follows sets both `keyring` and\n"
+                                        "`proxyPasswords`, and also moves the other passwords into the\n"
+                                        "keyring, even if they were not stored there already:\n"
+                                        "\n"
+                                        "     --keyring --configure proxyPassword=foo\n"
+                                        "\n"
+                                        "When passwords were stored in the keyring, their value is set to a single\n"
+                                        "hyphen (\"-\") in the configuration. This means that when running a\n"
+                                        "synchronization without the --keyring argument, the password has to be\n"
+                                        "entered interactively. The --print-config output always shows \"-\" instead\n"
+                                        "of retrieving the password from the keyring.\n",
+                                        "yes");
 
 static StringConfigProperty syncPropAutoSync("autoSync",
                                              "Controls automatic synchronization. Currently,\n"
@@ -1465,17 +1525,17 @@ static SecondsConfigProperty syncPropAutoSyncDelay("autoSyncDelay",
                                                    "5M");
 
 /* config and on-disk file versionsing */
-static IntConfigProperty syncPropRootMinVersion("rootMinVersion", "");
-static IntConfigProperty syncPropRootCurVersion("rootCurVersion", "");
-static IntConfigProperty syncPropContextMinVersion("contextMinVersion", "");
-static IntConfigProperty syncPropContextCurVersion("contextCurVersion", "");
-static IntConfigProperty syncPropPeerMinVersion("peerMinVersion", "");
-static IntConfigProperty syncPropPeerCurVersion("peerCurVersion", "");
+static IntConfigProperty propRootMinVersion("rootMinVersion", "");
+static IntConfigProperty propRootCurVersion("rootCurVersion", "");
+static IntConfigProperty propContextMinVersion("contextMinVersion", "");
+static IntConfigProperty propContextCurVersion("contextCurVersion", "");
+static IntConfigProperty propPeerMinVersion("peerMinVersion", "");
+static IntConfigProperty propPeerCurVersion("peerCurVersion", "");
 
 static const IntConfigProperty *configVersioning[CONFIG_LEVEL_MAX][CONFIG_VERSION_MAX] = {
-    { &syncPropRootMinVersion, &syncPropRootCurVersion },
-    { &syncPropContextMinVersion, &syncPropContextCurVersion },
-    { &syncPropPeerMinVersion, &syncPropPeerCurVersion }
+    { &propRootMinVersion, &propRootCurVersion },
+    { &propContextMinVersion, &propContextCurVersion },
+    { &propPeerMinVersion, &propPeerCurVersion }
 };
 
 static const IntConfigProperty &getConfigVersionProp(ConfigLevel level, ConfigLimit limit)
@@ -1534,6 +1594,7 @@ public:
         registry.push_back(&syncPropPassword);
         registry.push_back(&syncPropLogDir);
         registry.push_back(&syncPropLogLevel);
+        registry.push_back(&syncPropNotifyLevel);
         registry.push_back(&syncPropPrintChanges);
         registry.push_back(&syncPropDumpData);
         registry.push_back(&syncPropMaxLogDirs);
@@ -1555,6 +1616,7 @@ public:
         registry.push_back(&syncPropDevID);
         registry.push_back(&syncPropRemoteDevID);
         registry.push_back(&syncPropWBXML);
+        registry.push_back(&syncPropRefreshSync);
         registry.push_back(&syncPropMaxMsgSize);
         registry.push_back(&syncPropMaxObjSize);
         registry.push_back(&syncPropSSLServerCertificates);
@@ -1568,7 +1630,8 @@ public:
         registry.push_back(&syncPropConfigDate);
         registry.push_back(&syncPropNonce);
         registry.push_back(&syncPropDeviceData);
-        registry.push_back(&syncPropDefaultPeer);
+        registry.push_back(&globalPropDefaultPeer);
+        registry.push_back(&globalPropKeyring);
 
 #if 0
         // Must not be registered! Not valid for --sync-property and
@@ -1602,24 +1665,25 @@ public:
         syncPropConfigDate.setHidden(true);
         syncPropNonce.setHidden(true);
         syncPropDeviceData.setHidden(true);
-        syncPropRootMinVersion.setHidden(true);
-        syncPropRootCurVersion.setHidden(true);
-        syncPropContextMinVersion.setHidden(true);
-        syncPropContextCurVersion.setHidden(true);
-        syncPropPeerMinVersion.setHidden(true);
-        syncPropPeerCurVersion.setHidden(true);
+        propRootMinVersion.setHidden(true);
+        propRootCurVersion.setHidden(true);
+        propContextMinVersion.setHidden(true);
+        propContextCurVersion.setHidden(true);
+        propPeerMinVersion.setHidden(true);
+        propPeerCurVersion.setHidden(true);
 
         // global sync properties
-        syncPropDefaultPeer.setSharing(ConfigProperty::GLOBAL_SHARING);
-        syncPropRootMinVersion.setSharing(ConfigProperty::GLOBAL_SHARING);
-        syncPropRootCurVersion.setSharing(ConfigProperty::GLOBAL_SHARING);
+        globalPropDefaultPeer.setSharing(ConfigProperty::GLOBAL_SHARING);
+        globalPropKeyring.setSharing(ConfigProperty::GLOBAL_SHARING);
+        propRootMinVersion.setSharing(ConfigProperty::GLOBAL_SHARING);
+        propRootCurVersion.setSharing(ConfigProperty::GLOBAL_SHARING);
 
         // peer independent sync properties
         syncPropLogDir.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         syncPropMaxLogDirs.setSharing(ConfigProperty::SOURCE_SET_SHARING);
         syncPropDevID.setSharing(ConfigProperty::SOURCE_SET_SHARING);
-        syncPropContextMinVersion.setSharing(ConfigProperty::SOURCE_SET_SHARING);
-        syncPropContextCurVersion.setSharing(ConfigProperty::SOURCE_SET_SHARING);
+        propContextMinVersion.setSharing(ConfigProperty::SOURCE_SET_SHARING);
+        propContextCurVersion.setSharing(ConfigProperty::SOURCE_SET_SHARING);
     }
 } RegisterSyncConfigProperties;
 
@@ -1670,9 +1734,9 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
      * Previous impl use temp string to store them, this is not good for expansion in the backend */
     if(!passwordSave.empty()) {
         if(sourceConfigNode.get() == NULL) {
-            globalConfigNode.addFilter(getMainName(), passwordSave);
+            globalConfigNode.addFilter(getMainName(), InitStateString(passwordSave, true));
         } else {
-            sourceConfigNode->addFilter(getMainName(), passwordSave);
+            sourceConfigNode->addFilter(getMainName(), InitStateString(passwordSave, true));
         }
     }
 }
@@ -1845,12 +1909,19 @@ InitStateString SyncConfig::getDevID() const { return syncPropDevID.getProperty(
 void SyncConfig::setDevID(const string &value, bool temporarily) { syncPropDevID.setProperty(*getNode(syncPropDevID), value, temporarily); }
 InitState<bool> SyncConfig::getWBXML() const { return syncPropWBXML.getPropertyValue(*getNode(syncPropWBXML)); }
 void SyncConfig::setWBXML(bool value, bool temporarily) { syncPropWBXML.setProperty(*getNode(syncPropWBXML), value, temporarily); }
+InitState<bool> SyncConfig::getRefreshSync() const { return syncPropRefreshSync.getPropertyValue(*getNode(syncPropRefreshSync)); }
+void SyncConfig::setRefreshSync(bool value, bool temporarily) { syncPropRefreshSync.setProperty(*getNode(syncPropRefreshSync), value, temporarily); }
 InitStateString SyncConfig::getLogDir() const { return syncPropLogDir.getProperty(*getNode(syncPropLogDir)); }
 void SyncConfig::setLogDir(const string &value, bool temporarily) { syncPropLogDir.setProperty(*getNode(syncPropLogDir), value, temporarily); }
 InitState<unsigned int> SyncConfig::getMaxLogDirs() const { return syncPropMaxLogDirs.getPropertyValue(*getNode(syncPropMaxLogDirs)); }
 void SyncConfig::setMaxLogDirs(unsigned int value, bool temporarily) { syncPropMaxLogDirs.setProperty(*getNode(syncPropMaxLogDirs), value, temporarily); }
 InitState<unsigned int> SyncConfig::getLogLevel() const { return syncPropLogLevel.getPropertyValue(*getNode(syncPropLogLevel)); }
 void SyncConfig::setLogLevel(unsigned int value, bool temporarily) { syncPropLogLevel.setProperty(*getNode(syncPropLogLevel), value, temporarily); }
+InitState<SyncConfig::NotifyLevel> SyncConfig::getNotifyLevel() const {
+    InitState<unsigned int> res = syncPropNotifyLevel.getPropertyValue(*getNode(syncPropNotifyLevel));
+    return InitState<SyncConfig::NotifyLevel>(static_cast<SyncConfig::NotifyLevel>(res.get()), res.wasSet());
+}
+void SyncConfig::setNotifyLevel(SyncConfig::NotifyLevel value, bool temporarily) { syncPropNotifyLevel.setProperty(*getNode(syncPropNotifyLevel), value, temporarily); }
 InitState<unsigned int> SyncConfig::getRetryDuration() const {return syncPropRetryDuration.getPropertyValue(*getNode(syncPropRetryDuration));}
 void SyncConfig::setRetryDuration(unsigned int value, bool temporarily) { syncPropRetryDuration.setProperty(*getNode(syncPropRetryDuration), value, temporarily); }
 InitState<unsigned int> SyncConfig::getRetryInterval() const { return syncPropRetryInterval.getPropertyValue(*getNode(syncPropRetryInterval)); }
@@ -1867,7 +1938,7 @@ InitStateString SyncConfig::getSyncMLVersion() const { return syncPropSyncMLVers
 void SyncConfig::setSyncMLVersion(const string &value, bool temporarily) { syncPropSyncMLVersion.setProperty(*getNode(syncPropSyncMLVersion), value, temporarily); }
 
 InitStateString SyncConfig::getUserPeerName() const { return syncPropPeerName.getProperty(*getNode(syncPropPeerName)); }
-void SyncConfig::setUserPeerName(const string &name) { syncPropPeerName.setProperty(*getNode(syncPropPeerName), name); }
+void SyncConfig::setUserPeerName(const InitStateString &name) { syncPropPeerName.setProperty(*getNode(syncPropPeerName), name); }
 
 InitState<bool> SyncConfig::getPrintChanges() const { return syncPropPrintChanges.getPropertyValue(*getNode(syncPropPrintChanges)); }
 void SyncConfig::setPrintChanges(bool value, bool temporarily) { syncPropPrintChanges.setProperty(*getNode(syncPropPrintChanges), value, temporarily); }
@@ -1903,8 +1974,10 @@ InitStateString SyncConfig::getNonce() const { return syncPropNonce.getProperty(
 void SyncConfig::setNonce(const string &value) { syncPropNonce.setProperty(*getNode(syncPropNonce), value); }
 InitStateString SyncConfig::getDeviceData() const { return syncPropDeviceData.getProperty(*getNode(syncPropDeviceData)); }
 void SyncConfig::setDeviceData(const string &value) { syncPropDeviceData.setProperty(*getNode(syncPropDeviceData), value); }
-InitStateString SyncConfig::getDefaultPeer() const { return syncPropDefaultPeer.getProperty(*getNode(syncPropDefaultPeer)); }
-void SyncConfig::setDefaultPeer(const string &value) { syncPropDefaultPeer.setProperty(*getNode(syncPropDefaultPeer), value); }
+InitStateString SyncConfig::getDefaultPeer() const { return globalPropDefaultPeer.getProperty(*getNode(globalPropDefaultPeer)); }
+void SyncConfig::setDefaultPeer(const string &value) { globalPropDefaultPeer.setProperty(*getNode(globalPropDefaultPeer), value); }
+InitStateTri SyncConfig::getKeyring() const { return globalPropKeyring.getProperty(*getNode(globalPropKeyring)); }
+void SyncConfig::setKeyring(const string &value) { globalPropKeyring.setProperty(*getNode(globalPropKeyring), value); }
 
 InitStateString SyncConfig::getAutoSync() const { return syncPropAutoSync.getProperty(*getNode(syncPropAutoSync)); }
 void SyncConfig::setAutoSync(const string &value, bool temporarily) { syncPropAutoSync.setProperty(*getNode(syncPropAutoSync), value, temporarily); }
@@ -2082,8 +2155,9 @@ static void copyProperties(const ConfigNode &fromProps,
              prop->getSharing() != ConfigProperty::NO_SHARING)) {
             InitStateString value = prop->getProperty(fromProps);
             string name = prop->getName(toProps);
-            toProps.setProperty(name, value, prop->getComment(),
-                                !value.wasSet() ? &value : NULL);
+            toProps.setProperty(name,
+                                value,
+                                prop->getComment());
         }
     }
 }
@@ -2559,7 +2633,7 @@ void SyncSourceConfig::setSourceType(const SourceType &type, bool temporarily)
     // been converted to the new format before writing is allowed
     setBackend(type.m_backend, temporarily);
     setDatabaseFormat(type.m_localFormat, temporarily);
-    setSyncFormat(type.m_format, temporarily);
+    setSyncFormat(InitStateString(type.m_format, !type.m_format.empty()), temporarily);
     setForceSyncFormat(type.m_forceFormat, temporarily);
 }
 
@@ -2585,7 +2659,7 @@ InitStateString SyncSourceConfig::getDatabaseFormat() const
     return sourcePropDatabaseFormat.getProperty(*getNode(sourcePropDatabaseFormat));
 }
 
-void SyncSourceConfig::setSyncFormat(const std::string &value, bool temporarily)
+void SyncSourceConfig::setSyncFormat(const InitStateString &value, bool temporarily)
 {
     sourcePropSyncFormat.setProperty(*getNode(sourcePropSyncFormat),
                                      value,

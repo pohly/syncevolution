@@ -24,6 +24,7 @@
 #include <syncevo/SyncConfig.h>
 #include <syncevo/Logging.h>
 #include <syncevo/SyncML.h>
+#include <syncevo/Timespec.h>
 
 #include <synthesis/sync_declarations.h>
 #include <synthesis/syerror.h>
@@ -201,11 +202,14 @@ struct ClientTestConfig {
      * the sync source's desctructor should not thow exceptions.
      *
      * @param client    the same instance to which this config belongs
+     * @param clientID  the unique ID of the client, "1" resp. "2" in practice (can also be obtained as
+     *                  client->getClientID(), but not all implementers have (or want) access to the
+     *                  class definition)
      * @param source    index of the data source (from 0 to ClientTest::getNumSources() - 1)
      * @param isSourceA true if the requested SyncSource is the first one accessing that
      *                  data, otherwise the second
      */
-    typedef boost::function<TestingSyncSource *(ClientTest &, int, bool)> createsource_t;
+    typedef boost::function<TestingSyncSource *(ClientTest &, const std::string &, int, bool)> createsource_t;
 
     /**
      * Creates a sync source which references the primary database;
@@ -363,6 +367,8 @@ struct ClientTestConfig {
      * setting this to false disables tests which depend
      * on the source's support for linked item semantic
      * (testLinkedItemsInsertParentTwice, testLinkedItemsInsertChildTwice)
+     *
+     * Matches SynthesisInfo::m_globalIDs.
      */
     Bool m_sourceKnowsItemSemantic;
 
@@ -482,6 +488,15 @@ struct ClientTestConfig {
      */
     boost::function<void (std::string &)> m_update;
     boost::function<void (std::string &)> m_genericUpdate;
+
+    /**
+     * A list of m_sourceName values of other ClientTestConfigs
+     * which share the same database. Normally, sources are tested in
+     * isolation, but for such linked sources we also need to test
+     * interdependencies, in particular regarding change tracking and
+     * item listing.
+     */
+    std::list<std::string> m_linkedSources;
 };
 
 /**
@@ -527,6 +542,13 @@ class RegisterSyncSourceTest
 {
  public:
     /**
+     * Invoked after all global constructors are run.
+     * May add further RegisterSyncSourceTests to the
+     * global registry.
+     */
+    virtual void init() const {}
+
+    /**
      * This call is invoked after setting up the config with default
      * values for the test cases selected via the constructor's
      * testCaseName parameter (one of eds_contact, eds_contact, eds_event, eds_task;
@@ -558,6 +580,15 @@ class RegisterSyncSourceTest
 
     const string m_configName;
     const string m_testCaseName;
+
+    /**
+     * A list of m_configName values of other RegisterSyncSourceTest
+     * which share the same database. Normally, sources are tested in
+     * isolation, but for such linked sources we also need to test
+     * interdependencies, in particular regarding change tracking and
+     * item listing.
+     */
+    std::list<std::string> m_linkedSources;
 };
 
 class TestRegistry : public vector<const RegisterSyncSourceTest *>
@@ -1362,7 +1393,9 @@ class SyncSourceBase : public Logger {
          *
          * One example is adding <updateallfields>: this is necessary
          * in backends which depend on getting complete items (= for example,
-         * vCard 3.0 strings) from the engine.
+         * vCard 3.0 strings) from the engine. Note that any source
+         * derived from SyncSourceSerialize (= the majority of the backends)
+         * have this set by default.
          */
         std::string m_datastoreOptions;
 
@@ -1382,6 +1415,18 @@ class SyncSourceBase : public Logger {
          * might send back modified items.
          */
         Bool m_readOnly;
+
+        /**
+         * If true, then the storage preserves and supports UID and
+         * (in iCalendar 2.0) RECURRENCE-ID with the "globally unique"
+         * semantic from iCalendar 2.0 (id assigned once when item is
+         * created). If both sides in a sync support this, then the
+         * engine can rely on these properties to find matching items
+         * during a slow sync.
+         *
+         * Matches ClientTestConfig::m_sourceKnowsItemSemantic.
+         */
+        Bool m_globalIDs;
     };
 
     /**
@@ -2300,7 +2345,7 @@ class SyncSourceRevisions : virtual public SyncSourceChanges, virtual public Syn
     void databaseModified();
 
     /** time stamp of latest database modification, for sleepSinceModification() */
-    time_t m_modTimeStamp;
+    Timespec m_modTimeStamp;
     void sleepSinceModification();
 };
 
@@ -2420,7 +2465,8 @@ class SyncSourceBlob : public virtual SyncSourceBase
                               bool aFirst, bool *aLast) {
         // Translate between sysync::memSize and size_t, which
         // is different on s390 (or at least the compiler complains...).
-        sysync::memSize blksize, totsize;
+        sysync::memSize blksize = aBlkSize ? static_cast<sysync::memSize>(*aBlkSize) : 0,
+            totsize = aTotSize ? static_cast<sysync::memSize>(*aTotSize) : 0;
         sysync::TSyError err = m_blob.ReadBlob(aID, aBlobID, aBlkPtr,
                                                aBlkSize ? &blksize : NULL,
                                                aTotSize ? &totsize : NULL,

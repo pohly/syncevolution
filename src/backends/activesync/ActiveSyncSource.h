@@ -173,24 +173,7 @@ class ActiveSyncSource :
  protected:
 
     virtual void getSynthesisInfo(SynthesisInfo &info,
-                                  XMLConfigFragments &fragments)
-    {
-        TestingSyncSource::getSynthesisInfo(info, fragments);
-
-        /**
-         * no ActiveSync specific rules yet, use condensed format as
-         * if we were storing locally, with all extensions enabled
-         */
-        info.m_backendRule = "LOCALSTORAGE";
-
-        /**
-         * access to data must be done early so that a slow sync can be
-         * enforced when the ActiveSync sync key turns out to be
-         * invalid
-         */
-        info.m_earlyStartDataRead = true;
-    }
-
+                                  XMLConfigFragments &fragments);
     EasSyncHandler *getHandler() { return m_handler.get(); }
     std::string getFolder() { return m_folder; }
     std::string getStartSyncKey() { return m_startSyncKey; }

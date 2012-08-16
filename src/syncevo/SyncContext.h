@@ -237,8 +237,10 @@ class SyncContext : public SyncConfig {
 
     /**
      * throws error if config is needed and not available
+     *
+     * @param operation   a noun describing what is to be done next ("proceed with %s", operation)
      */
-    void checkConfig() const;
+    void checkConfig(const std::string &operation) const;
 
     /**
      * Sets configuration filters. Currently only used in local sync
@@ -329,13 +331,6 @@ class SyncContext : public SyncConfig {
      * sync session, identified by absolute path to the log dir.
      */
     void restore(const string &dirname, RestoreDatabase database);
-
-    /**
-     * Sleep the sync session in interval seconds, blocks until the interval
-     * is expired or a user suspend/abort request is signaled (CTRL+C)
-     * returns time left to sleep if the method is interrupted by CTRL+C.
-     */
-    virtual int sleep (int interval);
 
     /**
      * fills vector with absolute path to information about previous

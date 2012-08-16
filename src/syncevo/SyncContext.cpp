@@ -29,7 +29,7 @@
 #include <syncevo/SuspendFlags.h>
 
 #include <syncevo/SafeConfigNode.h>
-#include <syncevo/FileConfigNode.h>
+#include <syncevo/IniConfigNode.h>
 
 #include <syncevo/LogStdout.h>
 #include <syncevo/TransportAgent.h>
@@ -285,7 +285,7 @@ class LogDir : public LoggerBase, private boost::noncopyable, private LogDirName
                                   of the file is hard-coded in the engine. Despite
                                   that this class still is the central point to ask
                                   for the name of the log file. */
-    SafeConfigNode *m_info;  /**< key/value representation of sync information */
+    boost::scoped_ptr<SafeConfigNode> m_info;  /**< key/value representation of sync information */
     bool m_readonly;         /**< m_info is not to be written to */
     SyncReport *m_report;    /**< record start/end times here */
 
@@ -376,8 +376,8 @@ public:
      * access existing log directory to extract status information
      */
     void openLogdir(const string &dir) {
-        boost::shared_ptr<ConfigNode> filenode(new FileConfigNode(dir, "status.ini", true));
-        m_info = new SafeConfigNode(filenode);
+        boost::shared_ptr<ConfigNode> filenode(new IniFileConfigNode(dir, "status.ini", true));
+        m_info.reset(new SafeConfigNode(filenode));
         m_info->setMode(false);
         m_readonly = true;
     }
@@ -544,14 +544,14 @@ public:
         }
         m_readonly = mode == SESSION_READ_ONLY;
         if (!m_path.empty()) {
-            boost::shared_ptr<ConfigNode> filenode(new FileConfigNode(m_path, "status.ini", m_readonly));
-            m_info = new SafeConfigNode(filenode);
+            boost::shared_ptr<ConfigNode> filenode(new IniFileConfigNode(m_path, "status.ini", m_readonly));
+            m_info.reset(new SafeConfigNode(filenode));
             m_info->setMode(false);
             if (mode != SESSION_READ_ONLY) {
                 // Create a status.ini which contains an error.
                 // Will be overwritten later on, unless we crash.
                 m_info->setProperty("status", STATUS_DIED_PREMATURELY);
-                m_info->setProperty("error", "synchronization process died prematurely");
+                m_info->setProperty("error", InitStateString("synchronization process died prematurely", true));
                 writeTimestamp("start", start);
             }
         }
@@ -695,11 +695,9 @@ public:
         }
     }
 
-    // remove redirection of logging
-    void restore() {
-        if (&LoggerBase::instance() == this) {
-            LoggerBase::popLogger();
-        }
+    // finalize session
+    void endSession()
+    {
         time_t end = time(NULL);
         if (m_report) {
             m_report->setEnd(end);
@@ -712,8 +710,14 @@ public:
                 }
                 m_info->flush();
             }
-            delete m_info;
-            m_info = NULL;
+            m_info.reset();
+        }
+    }
+
+    // remove redirection of logging (safe for destructor)
+    void restore() {
+        if (&LoggerBase::instance() == this) {
+            LoggerBase::popLogger();
         }
     }
 
@@ -1325,8 +1329,11 @@ public:
                 updateSyncReport(*report);
             }
 
-            // ensure that stderr is seen again, also writes out session status
+            // ensure that stderr is seen again
             m_logdir.restore();
+
+            // write out session status
+            m_logdir.endSession();
 
             if (m_reportTodo) {
                 // haven't looked at result of sync yet;
@@ -1345,7 +1352,11 @@ public:
 
                 // pretty-print report
                 if (m_logLevel > LOGGING_QUIET) {
-                    SE_LOG_SHOW(NULL, NULL, "\nChanges applied during synchronization:");
+                    std::string procname = Logger::getProcessName();
+                    SE_LOG_SHOW(NULL, NULL, "\nChanges applied during synchronization%s%s%s:",
+                                procname.empty() ? "" : " (",
+                                procname.c_str(),
+                                procname.empty() ? "" : ")");
                 }
                 if (m_logLevel > LOGGING_QUIET && report) {
                     ostringstream out;
@@ -1369,6 +1380,10 @@ public:
                 // now remove some old logdirs
                 m_logdir.expire();
             }
+        } else {
+            // finish debug session
+            m_logdir.restore();
+            m_logdir.endSession();
         }
     }
 
@@ -1525,7 +1540,7 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainl
 
     if (m_localSync) {
         string peer = url.substr(strlen("local://"));
-        boost::shared_ptr<LocalTransportAgent> agent(new LocalTransportAgent(this, peer, gmainloop));
+        boost::shared_ptr<LocalTransportAgent> agent(LocalTransportAgent::create(this, peer, gmainloop));
         InitializeTransport(agent, timeout);
         agent->start();
         return agent;
@@ -2342,9 +2357,8 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         "      delayedabort = FALSE;\n"
         "      INTEGER alarmTimeToUTC;\n"
         "      alarmTimeToUTC = FALSE;\n"
-        "      // for VCALENDAR_COMPARE_SCRIPT: don't use UID by default\n"
-        "      INTEGER VCALENDAR_COMPARE_UID;\n"
-        "      VCALENDAR_COMPARE_UID = FALSE;\n"
+        "      INTEGER stripUID;\n"
+        "      stripUID = FALSE;\n"
         "    ]]></sessioninitscript>\n";
 
     ostringstream clientorserver;
@@ -2377,8 +2391,14 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         clientorserver <<
             "  <client type='plugin'>\n"
             "    <binfilespath>$(binfilepath)</binfilespath>\n"
-            "    <defaultauth/>\n"
+            "    <defaultauth/>\n";
+        if (getRefreshSync()) {
+            clientorserver <<
+                "    <preferslowsync>no</preferslowsync>\n";
+        }
+        clientorserver <<
             "\n" ;
+
          string syncMLVersion (getSyncMLVersion());
          if (!syncMLVersion.empty()) {
              clientorserver << "<defaultsyncmlversion>"
@@ -2793,6 +2813,10 @@ void SyncContext::initEngine(bool logXML)
     }
 }
 
+extern "C" int (*SySync_ConsolePrintf)(FILE *stream, const char *format, ...);
+
+static int nopPrintf(FILE *stream, const char *format, ...) { return 0; }
+
 void SyncContext::initMain(const char *appname)
 {
 #if defined(HAVE_GLIB)
@@ -2804,6 +2828,11 @@ void SyncContext::initMain(const char *appname)
     // redirect glib logging into our own logging
     g_log_set_default_handler(Logger::glogFunc, NULL);
 #endif
+    if (atoi(getEnv("SYNCEVOLUTION_DEBUG", "0")) > 3) {
+        SySync_ConsolePrintf = Logger::sysyncPrintf;
+    } else {
+        SySync_ConsolePrintf = nopPrintf;
+    }
 
     // invoke optional init parts, for example KDE KApplication init
     // in KDE backend
@@ -2863,12 +2892,18 @@ void SyncContext::setStableRelease(bool isStableRelease)
     IsStableRelease = isStableRelease;
 }
 
-void SyncContext::checkConfig() const
+void SyncContext::checkConfig(const std::string &operation) const
 {
+    std::string peer, context;
+    splitConfigString(m_server, peer, context);
     if (isConfigNeeded() &&
-        !exists()) {
-        SE_LOG_ERROR(NULL, NULL, "No configuration for server \"%s\" found.", m_server.c_str());
-        throwError("cannot proceed without configuration");
+        (!exists() || peer.empty())) {
+        if (peer.empty()) {
+            SE_LOG_INFO(NULL, NULL, "Configuration \"%s\" does not refer to a sync peer.", m_server.c_str());
+        } else {
+            SE_LOG_INFO(NULL, NULL, "Configuration \"%s\" does not exist.", m_server.c_str());
+        }
+        throwError(StringPrintf("Cannot proceed with %s without a configuration.", operation.c_str()));
     }
 }
 
@@ -2876,7 +2911,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
 {
     SyncMLStatus status = STATUS_OK;
 
-    checkConfig();
+    checkConfig("sync");
 
     // redirect logging as soon as possible
     SourceList sourceList(*this, m_doLogging);
@@ -3262,6 +3297,18 @@ SyncMLStatus SyncContext::doSync()
         signalGuard = SuspendFlags::getSuspendFlags().activate();
     }
 
+    // delay the sync for debugging purposes
+    SE_LOG_DEBUG(NULL, NULL, "ready to sync");
+    const char *delay = getenv("SYNCEVOLUTION_SYNC_DELAY");
+    if (delay) {
+        Sleep(atoi(delay));
+    }
+
+    if (checkForSuspend() ||
+        checkForAbort()) {
+        return (SyncMLStatus)sysync::LOCERR_USERABORT;
+    }
+
     SyncMLStatus status = STATUS_OK;
     std::string s;
 
@@ -3291,6 +3338,11 @@ SyncMLStatus SyncContext::doSync()
             //by pass the exception if we will try again with legacy SANFormat
         }
 
+        if (checkForSuspend() ||
+            checkForAbort()) {
+            return (SyncMLStatus)sysync::LOCERR_USERABORT;
+        }
+
         if (! status) {
             if (sanFormat.empty()) {
                 SE_LOG_DEBUG (NULL, NULL, "Server Alerted Sync init with SANFormat %d failed, trying with legacy format", version);
@@ -3304,6 +3356,11 @@ SyncMLStatus SyncContext::doSync()
                 throwError ("Server Alerted Sync init failed");
             }
         }
+    }
+
+    if (checkForSuspend() ||
+        checkForAbort()) {
+        return (SyncMLStatus)sysync::LOCERR_USERABORT;
     }
 
     // re-init engine with all sources configured
@@ -3439,17 +3496,6 @@ SyncMLStatus SyncContext::doSync()
         // TODO: set "sendrespuri" session key to control
         // whether the generated messages contain a respURI
         // (not needed for OBEX)
-    }
-
-    // Choosing between comparing UID/RECURRENCE-ID vs. other
-    // iCalendar 2.0 properties is a hack: in local sync mode, the
-    // iCalendar 2.0 semantic is always picked.
-    if (m_serverMode && m_localSync) {
-        SharedKey sessionKey = m_engine.OpenSessionKey(session);
-        SharedKey contextKey = m_engine.OpenKeyByPath(sessionKey, "/sessionvars");
-        m_engine.SetInt32Value(contextKey,
-                               "VCALENDAR_COMPARE_UID",
-                               true);
     }
 
     // Sync main loop: runs until SessionStep() signals end or error.
@@ -3767,7 +3813,7 @@ SyncMLStatus SyncContext::doSync()
                         // retry send
                         int leftTime = m_retryInterval - (curTime - resendStart);
                         if (leftTime >0 ) {
-                            if (sleep (leftTime) > 0) {
+                            if (Sleep(leftTime) > 0) {
                                 if (checkForSuspend()) {
                                     SE_LOG_DEBUG(NULL, NULL, "suspending after premature exit from sleep() caused by user suspend");
                                     stepCmd = sysync::STEPCMD_SUSPEND;
@@ -3806,6 +3852,12 @@ SyncMLStatus SyncContext::doSync()
                     break;
                 }
             }
+
+            // Don't tell engine to abort when it already did.
+            if (aborting && stepCmd == sysync::STEPCMD_ABORT) {
+                stepCmd = sysync::STEPCMD_DONE;
+            }
+
             previousStepCmd = stepCmd;
             // loop until session done or aborted with error
         } catch (const BadSynthesisResult &result) {
@@ -3824,12 +3876,14 @@ SyncMLStatus SyncContext::doSync()
             } else {
                 Exception::handle(&status);
                 SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
-                stepCmd = sysync::STEPCMD_ABORT;
+                // Don't tell engine to abort when it already did.
+                stepCmd = aborting ? sysync::STEPCMD_DONE : sysync::STEPCMD_ABORT;
             }
         } catch (...) {
             Exception::handle(&status);
             SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
-            stepCmd = sysync::STEPCMD_ABORT;
+            // Don't tell engine to abort when it already did.
+            stepCmd = aborting ? sysync::STEPCMD_DONE : sysync::STEPCMD_ABORT;
         }
     } while (stepCmd != sysync::STEPCMD_DONE && stepCmd != sysync::STEPCMD_ERROR);
 
@@ -3868,7 +3922,7 @@ SyncMLStatus SyncContext::handleException()
 
 void SyncContext::status()
 {
-    checkConfig();
+    checkConfig("status check");
 
     SourceList sourceList(*this, false);
     initSources(sourceList);
@@ -3920,7 +3974,7 @@ void SyncContext::status()
 
 void SyncContext::checkStatus(SyncReport &report)
 {
-    checkConfig();
+    checkConfig("status check");
 
     SourceList sourceList(*this, false);
     initSources(sourceList);
@@ -3982,16 +4036,6 @@ void SyncContext::checkSourceChanges(SourceList &sourceList, SyncReport &changes
     changes.setEnd(time(NULL));
 }
 
-int SyncContext::sleep (int intervals) 
-{
-    while ( (intervals = ::sleep (intervals)) > 0) {
-        if (checkForSuspend() || checkForAbort ()) {
-            break;
-        }
-    }
-    return intervals;
-}
-
 bool SyncContext::checkForScriptAbort(SharedSession session)
 {
     try {
@@ -4010,7 +4054,7 @@ bool SyncContext::checkForScriptAbort(SharedSession session)
 
 void SyncContext::restore(const string &dirname, RestoreDatabase database)
 {
-    checkConfig();
+    checkConfig("restore");
 
     SourceList sourceList(*this, false);
     sourceList.accessSession(dirname.c_str());
@@ -4340,11 +4384,11 @@ private:
         Sessions_t sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)1, sessions.size());
         CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
-        FileConfigNode status(dir, "status.ini", true);
+        IniFileConfigNode status(dir, "status.ini", true);
         CPPUNIT_ASSERT(status.exists());
-        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before"));
-        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-after"));
-        CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
+        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before").get());
+        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-after").get());
+        CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status").get());
         CPPUNIT_ASSERT(!LogDir::haveDifferentContent("file_event",
                                                      dir, "before",
                                                      dir, "after"));
@@ -4359,11 +4403,11 @@ private:
         Sessions_t sessions = listSessions();
         CPPUNIT_ASSERT_EQUAL((size_t)1, sessions.size());
         CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
-        FileConfigNode status(dir, "status.ini", true);
+        IniFileConfigNode status(dir, "status.ini", true);
         CPPUNIT_ASSERT(status.exists());
-        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before"));
-        CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-after"));
-        CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
+        CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before").get());
+        CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-after").get());
+        CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status").get());
         CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                     dir, "before",
                                                     dir, "after"));
@@ -4383,13 +4427,13 @@ private:
             Sessions_t sessions = listSessions();
             CPPUNIT_ASSERT_EQUAL((size_t)1, sessions.size());
             CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
-            FileConfigNode status(dir, "status.ini", true);
+            IniFileConfigNode status(dir, "status.ini", true);
             CPPUNIT_ASSERT(status.exists());
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-after"));
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__contact-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__contact-backup-after"));
-            CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-before").get());
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-after").get());
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__contact-backup-before").get());
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__contact-backup-after").get());
+            CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status").get());
             CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                         dir, "before",
                                                         dir, "after"));
@@ -4407,13 +4451,13 @@ private:
             CPPUNIT_ASSERT_EQUAL((size_t)2, sessions.size());
             CPPUNIT_ASSERT_EQUAL(dir, sessions[0]);
             CPPUNIT_ASSERT_EQUAL(seconddir, sessions[1]);
-            FileConfigNode status(seconddir, "status.ini", true);
+            IniFileConfigNode status(seconddir, "status.ini", true);
             CPPUNIT_ASSERT(status.exists());
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-after"));
-            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__contact-backup-before"));
-            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__contact-backup-after"));
-            CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status"));
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__event-backup-before").get());
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__event-backup-after").get());
+            CPPUNIT_ASSERT_EQUAL(string("2"), status.readProperty("source-file__contact-backup-before").get());
+            CPPUNIT_ASSERT_EQUAL(string("1"), status.readProperty("source-file__contact-backup-after").get());
+            CPPUNIT_ASSERT_EQUAL(string("200"), status.readProperty("status").get());
             CPPUNIT_ASSERT(LogDir::haveDifferentContent("file_event",
                                                         seconddir, "before",
                                                         seconddir, "after"));

@@ -84,7 +84,9 @@ my $full_timezones = $ENV{CLIENT_TEST_FULL_TIMEZONES}; # do not simplify VTIMEZO
 my $exchange = $server =~ /exchange/; # Exchange via ActiveSync
 my $egroupware = $server =~ /egroupware/;
 my $funambol = $server =~ /funambol/;
-my $google = $server =~ /google/;
+my $googlesyncml = $server eq "google";
+my $googlecaldav = $server eq "googlecalendar";
+my $googleeas = $server eq "googleeas";
 my $google_valarm = $ENV{CLIENT_TEST_GOOGLE_VALARM};
 my $yahoo = $server =~ /yahoo/;
 my $davical = $server =~ /davical/;
@@ -363,7 +365,7 @@ sub NormalizeItem {
     #                                      >    LY                                 
     s/^(\w+)([^:\n]*);X-EVOLUTION-ENDDATE=[0-9TZ]*/$1$2/mg;
 
-    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$google || $mobical || $memotoo) {
+    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$googlesyncml || $googleeas || $mobical || $memotoo) {
       # does not preserve X-EVOLUTION-UI-SLOT=
       s/^(\w+)([^:\n]*);X-EVOLUTION-UI-SLOT=\d+/$1$2/mg;
     }
@@ -389,16 +391,21 @@ sub NormalizeItem {
       s/^(TEL.*);TYPE=PREF/$1/mg;
     }
 
-   if($google) {
-      # ignore the PHOTO encoding data 
-      s/^PHOTO(.*?): .*\n/^PHOTO$1: [...]\n/mg; 
+   if($googlesyncml || $googleeas) {
+      # ignore the PHOTO encoding data
+      s/^PHOTO(.*?): .*\n/PHOTO$1: [...]\n/mg;
+   }
+
+   if($googlesyncml) {
       # FN propertiey is not correct 
       s/^FN:.*\n/FN$1: [...]\n/mg;
       # Not support car type in telephone
       s!^TEL\;TYPE=CAR(.*)\n!TEL$1\n!mg;
       # some properties are lost
       s/^(X-EVOLUTION-FILE-AS|NICKNAME|BDAY|CATEGORIES|CALURI|FBURL|ROLE|URL|X-AIM|X-EVOLUTION-UI-SLOT|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-MOZILLA-HTML|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
+   }
 
+   if ($googlecaldav) {
       #several properties are not preserved by Google in icalendar2.0 format
       s/^(SEQUENCE|X-EVOLUTION-ALARM-UID)(;[^:;\n]*)*:.*\r?\n?//gm;
 
@@ -429,7 +436,7 @@ sub NormalizeItem {
         s/^(X-RADICALE-NAME)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
-    if ($google || $yahoo) {
+    if ($googlecaldav || $yahoo) {
       # default status is CONFIRMED
       s/^STATUS:CONFIRMED\r?\n?//gm;
     }
@@ -650,6 +657,16 @@ sub NormalizeItem {
         s/^DESCRIPTION:Reminder\n//m;
     }
 
+    if ($googleeas) {
+        # unsupported properties
+        s/^(FN|X-EVOLUTION-FILE-AS|CATEGORIES)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($googleeas || $exchange) {
+        # temporarily ignore modified properties
+        s/^(BDAY|X-ANNIVERSARY)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
     # treat X-MOZILLA-HTML=FALSE as if the property didn't exist
     s/^X-MOZILLA-HTML:FALSE\r?\n?//gm;
 
@@ -766,7 +783,7 @@ if($#ARGV > 1) {
       # Both "files" are really directories of individual files.
       # Don't include files in the comparison which are known
       # to be identical because the refer to the same inode.
-      # - build map from inode to filename
+      # - build map from inode to filename(s) (each inode might be used more than once!)
       my %files1;
       my %files2;
       my @content1;
@@ -778,7 +795,10 @@ if($#ARGV > 1) {
       foreach $entry (grep { -f "$file1/$_" } readdir($dh)) {
           $fullname = "$file1/$entry";
           $inode = (stat($fullname))[1];
-          $files1{$inode} = $entry;
+          if (!$files1{$inode}) {
+              $files1{$inode} = [];
+          }
+          push(@{$files1{$inode}}, $entry);
       }
       closedir($dh);
       # - remove common files, read others
@@ -786,18 +806,21 @@ if($#ARGV > 1) {
       foreach $entry (grep { -f "$file2/$_" } readdir($dh)) {
           $fullname = "$file2/$entry";
           $inode = (stat($fullname))[1];
-          if ($files1{$inode}) {
-              delete $files1{$inode};
+          if (@{$files1{$inode}}) {
+              # randomly match against the last file
+              pop @{$files1{$inode}};
           } else {
               open(IN, "<:utf8", "$fullname") || die "$fullname: $!";
               push @content2, <IN>;
           }
       }
       # - read remaining entries from first dir
-      foreach $entry (values %files1) {
-          $fullname = "$file1/$entry";
-          open(IN, "<:utf8", "$fullname") || die "$fullname: $!";
-          push @content1, <IN>;
+      foreach my $array (values %files1) {
+          foreach $entry (@{$array}) {
+              $fullname = "$file1/$entry";
+              open(IN, "<:utf8", "$fullname") || die "$fullname: $!";
+              push @content1, <IN>;
+          }
       }
       my $content1 = join("", @content1);
       my $content2 = join("", @content2); 

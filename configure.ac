@@ -8,7 +8,7 @@ dnl Invoke autogen.sh to produce a configure script.
 #
 # Starting with the 1.1 release cycle, the rpm-style
 # .99 pseudo-version number is used to mark a pre-release.
-AC_INIT([syncevolution], [m4_esyscmd([build/gen-git-version.sh 1.2.99])])
+AC_INIT([syncevolution], [m4_esyscmd([build/gen-git-version.sh 1.2.99.4])])
 # STABLE_VERSION=1.0.1+
 AC_SUBST(STABLE_VERSION)
 
@@ -25,7 +25,7 @@ SE_CHECK_FOR_STABLE_RELEASE
 
 # Minimum version of libsynthesis as defined in its
 # configure script and thus .pc files:
-define([SYNTHESIS_MIN_VERSION], [3.4.0.16.6])
+define([SYNTHESIS_MIN_VERSION], [3.4.0.16.7])
 
 # Line above is patched by gen-autotools.sh. Handle
 # both "yes" and "no".
@@ -66,8 +66,8 @@ AC_PROG_MAKE_SET
 # currently uses the "#pragma }" trick. Should remove that.
 # Fix code to work without deprecated methods: G GDK GDK_PIXBUF CAIRO PANGO GTK
 DK_ARG_ENABLE_WARNINGS([SYNCEVO_WFLAGS],
-                       [-Wall -Wno-unknown-pragmas],
-                       [-Wall -Wno-unknown-pragmas],
+                       [-Wall -Wno-unknown-pragmas -Wno-deprecated-declarations],
+                       [-Wall -Wno-unknown-pragmas -Wno-deprecated-declarations],
                        [])
 
 dnl default device type (see AC_DEFINE below)
@@ -129,17 +129,6 @@ AC_ARG_ENABLE(integration-tests,
                              [enables tests outside of the library (can be used together with normal builds of the library)]),
               enable_integration_tests="$enableval", enable_integration_tests="no")
 
-AC_ARG_ENABLE(buteo-tests,
-              AS_HELP_STRING([--enable-buteo-tests],
-                             [enables tests for Buteo sync framework. Not enabled when neither '--enable-unit-tests' nor '--enable-integration-tests' is specified]),
-              [ if test "$enable_unit_tests" = "yes" || test "$enable_integration_tests" = "yes" ; then
-                    enable_buteo_tests="$enableval"
-                else
-                    enable_buteo_tests="no"
-                fi], enable_buteo_tests="no")
-PKG_CHECK_MODULES(BUTEOSYNCPROFILE, [syncprofile], HAVE_SYNCPROFILE=yes, HAVE_SYNCPROFILE=no)
-PKG_CHECK_MODULES(BUTEOSYNCCOMMON, [synccommon], HAVE_SYNCCOMMON=yes, HAVE_SYNCCOMMON=no)
-
 AC_ARG_ENABLE(static-cxx,
               AS_HELP_STRING([--enable-static-cxx],
                              [build executables which contain libstdc++ instead of requiring suitable libstdc++.so to run]),
@@ -188,17 +177,8 @@ fi
 if test "x$enable_integration_tests" = 'xyes'; then
         AC_DEFINE(ENABLE_INTEGRATION_TESTS, 1, [enable integration tests inside the final library])
 fi
-if test "$enable_buteo_tests" = "yes"; then
-        AC_DEFINE(ENABLE_BUTEO_TESTS, 1, [enable buteo tests])
-        need_qt_modules="$need_qt_modules dbus xml"
-        AC_PATH_PROG(SQLITE3, sqlite3)
-        if test -z "$SQLITE3"; then
-            AC_MSG_ERROR([sqlite3 not found, is required for buteo testing])
-        fi
-fi
 AM_CONDITIONAL([ENABLE_UNIT_TESTS], [test "$enable_unit_tests" = "yes"])
 AM_CONDITIONAL([ENABLE_TESTING], [test "$enable_unit_tests" = "yes" || test "$enable_integration_tests" = "yes" ])
-AM_CONDITIONAL([ENABLE_BUTEO_TESTS], [test "$enable_buteo_tests" = "yes"])
 
 if test $enable_static_cxx = "yes"; then
         LIBS="$LIBS -L."
@@ -467,7 +447,7 @@ AC_ARG_WITH([gio-gdbus],
             AS_HELP_STRING([--with-gio-gdbus],
                            [enables use of GIO's GDBus instead of the in-tree, Bluez gdbus.]),
             with_gio_gdbus="$withval",
-            PKG_CHECK_EXISTS([gio-2.0 >= 2.26],
+            PKG_CHECK_EXISTS([gio-2.0 >= 2.30],
                              [with_gio_gdbus="yes"],
                              [with_gio_gdbus="no"]))
 AM_CONDITIONAL([COND_GIO_GDBUS], [test "x$with_gio_gdbus" = "xyes"])
@@ -545,10 +525,6 @@ AC_SUBST(DBUS_GLIB_LIBS)
 AC_SUBST(LIBNOTIFY_CFLAGS)
 AC_SUBST(LIBNOTIFY_LIBS)
 AC_SUBST(LIBEXECDIR)
-AC_SUBST(BUTEOSYNCPROFILE_LIBS)
-AC_SUBST(BUTEOSYNCPROFILE_CFLAGS)
-AC_SUBST(BUTEOSYNCCOMMON_LIBS)
-AC_SUBST(BUTEOSYNCCOMMON_CFLAGS)
 
 DBUS_SERVICES_DIR="${datadir}/dbus-1/services"
 AC_SUBST(DBUS_SERVICES_DIR)
@@ -735,7 +711,7 @@ elif test "$SYNTHESISSRC" != "none" && test -d $srcdir/src/synthesis; then
 elif test "$enable_shared" = "no"; then
     # link against engine
     PKG_CHECK_MODULES([SYNTHESIS], [synthesis >= 3.4])
-    SYNTHESIS_ENGINE="$SYNTHESIS_LIBS -lsynthesis"
+    SYNTHESIS_ENGINE="$SYNTHESIS_LIBS -lsynthesis -lsmltk"
 else
     # link against SDK alone, except in client-test
     #PKG_CHECK_MODULES(SYNTHESIS, "synthesis-sdk")
@@ -756,7 +732,7 @@ if test $SYNTHESIS_SRC != "no-synthesis-source"; then
     # to trigger building the synthesis library
     SYNTHESIS_SUBDIR=$PWD/src/build-synthesis
     SYNTHESIS_CFLAGS="-I$SYNTHESIS_SUBDIR/src"
-    SYNTHESIS_LIBS="$SYNTHESIS_SUBDIR/src/libsynthesissdk.la"
+    SYNTHESIS_LIBS="$SYNTHESIS_SUBDIR/src/libsynthesissdk.la $SYNTHESIS_SUBDIR/src/libsmltk.la"
 
     if test "x$enable_core" = "xno" && test "x$enable_gui" != "xno"; then
        # SYNTHESIS_SUBDIR is ignored, at least build headers for GUI
@@ -765,14 +741,14 @@ if test $SYNTHESIS_SRC != "no-synthesis-source"; then
 
     if test "$enable_shared" = "no"; then
         # link against the engines that were enabled
-        case $SYNCML_ENGINES in both|client|server) SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la";; esac
+        case $SYNCML_ENGINES in both|client|server) SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la $SYNTHESIS_SUBDIR/src/libsmltk.la";; esac
         AC_DEFINE(ENABLE_SYNCML_LINKED, 1, [SyncML engines are linked directly])
     else
         # It would be nice if we could avoid linking against libsynthesis.la here.
         # This doesn't work at the moment because sysync::SySyncDebugPuts()
         # is called directly by the libsynthesissdk instead of going through
         # the normal C function pointer lookup.
-        SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la"
+        SYNTHESIS_LIBS="$SYNTHESIS_LIBS $SYNTHESIS_SUBDIR/src/libsynthesis.la $SYNTHESIS_SUBDIR/src/libsmltk.la"
     fi
     SYNTHESIS_DEP=$SYNTHESIS_LIBS
 
@@ -1020,8 +996,11 @@ fi
 # that a backend can alternatively use its own top-level configure
 # with PKG_CHECK_MODULES(SYNCEVOLUTION, "syncevolution") to set them.
 # need absolute path, use pwd instead of relative $srcdir
+#
+# When adding something here, remember to also update syncevolution.pc.in.
+# -lrt is for clock_gettime() in the Timespec.h inline functions.
 SYNCEVOLUTION_CFLAGS=-I`cd $srcdir && pwd`/src
-SYNCEVOLUTION_LIBS=`pwd`/src/syncevo/libsyncevolution.la
+SYNCEVOLUTION_LIBS="src/syncevo/libsyncevolution.la -lrt"
 AC_SUBST(SYNCEVOLUTION_CFLAGS)
 AC_SUBST(SYNCEVOLUTION_LIBS)
 

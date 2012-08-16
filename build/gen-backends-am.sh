@@ -14,10 +14,10 @@ tf()
   echo "$1" >>"$tmpfile"
 }
 
-tf '# This is a stupid workaround for an absolute path in SYNCEVOLUTION_LIBS.'
-tf '# See AUTOTOOLS-TODO for details.'
-tf '@SYNCEVOLUTION_LIBS@: src/syncevo/libsyncevolution.la ; @true'
-tf ''
+# tf '# This is a stupid workaround for an absolute path in SYNCEVOLUTION_LIBS.'
+# tf '# See AUTOTOOLS-TODO for details.'
+# tf '@SYNCEVOLUTION_LIBS@: src/syncevo/libsyncevolution.la ; @true'
+# tf ''
 tf "BACKENDS = $BACKENDS"
 tf ''
 tf "BACKEND_REGISTRIES = $BACKEND_REGISTRIES"
