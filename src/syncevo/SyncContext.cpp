@@ -2140,18 +2140,6 @@ extern "C" {
     extern const char *SyncEvolutionXMLClientRules;
 }
 
-void SyncContext::setSyncModes(const std::vector<SyncSource *> &sources,
-                                       const SyncModes &modes)
-{
-    BOOST_FOREACH(SyncSource *source, sources) {
-        SyncMode mode = modes.getSyncMode(source->getName());
-        if (mode != SYNC_NONE) {
-            string modeString(PrettyPrintSyncMode(mode));
-            source->setSync(modeString, true);
-        }
-    }
-}
-
 /**
  * helper class which scans directories for
  * XML config files
