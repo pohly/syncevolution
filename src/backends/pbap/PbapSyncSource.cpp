@@ -36,11 +36,16 @@
 
 #include <errno.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+
+#include <pcrecpp.h>
 
 #include <pcrecpp.h>
 #include <algorithm>
 
 #include <syncevo/util.h>
+#include <syncevo/BoostHelper.h>
 
 #include "gdbus-cxx-bridge.h"
 
@@ -52,29 +57,97 @@
 SE_BEGIN_CXX
 
 #define OBC_SERVICE "org.openobex.client"
+#define OBC_SERVICE_NEW "org.bluez.obex.client"
 #define OBC_CLIENT_INTERFACE "org.openobex.Client"
+#define OBC_CLIENT_INTERFACE_NEW "org.bluez.obex.Client"
 #define OBC_PBAP_INTERFACE "org.openobex.PhonebookAccess"
+#define OBC_PBAP_INTERFACE_NEW "org.bluez.obex.PhonebookAccess"
 
-class PbapSession {
+class PbapSession : private boost::noncopyable {
 public:
-    PbapSession(void);
+    static boost::shared_ptr<PbapSession> create();
 
     void initSession(const std::string &address, const std::string &format);
 
     typedef std::map<std::string, std::string> Content;
-    void pullAll(Content &dst);
+    typedef std::map<std::string, boost::variant<std::string> > Params;
 
+    void pullAll(Content &dst);
+    
     void shutdown(void);
 
 private:
-    GDBusCXX::DBusRemoteObject m_client;
+    PbapSession(void);
+    
+    boost::weak_ptr<PbapSession> m_self;
+    std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
+    bool m_newobex;
+    /**
+     * m_transferComplete will be set to true when observing a
+     * "Complete" signal on a transfer object path which has the
+     * current session as prefix.
+     *
+     * It also gets set when an error occurred for such a transfer,
+     * in which case m_error will also be set.
+     *
+     * This only works as long as the session is only used for a
+     * single transfer. Otherwise a more complex tracking of
+     * completion, for example per transfer object path, is needed.
+     */
+    bool m_transferComplete;
+    std::string m_transferErrorCode;
+    std::string m_transferErrorMsg;
+    
+    std::auto_ptr<GDBusCXX::SignalWatch1<GDBusCXX::Path_t> > m_completeSignal;
+    std::auto_ptr<GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> >
+        m_errorSignal;
+    
+    void completeCb(const GDBusCXX::Path_t &path);
+    void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
+                 const std::string &msg);
+        
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
 };
 
 PbapSession::PbapSession(void) :
-    m_client(GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL),
-             "/", OBC_CLIENT_INTERFACE, OBC_SERVICE, true)
+    m_transferComplete(false)
 {
+    GDBusCXX::DBusConnectionPtr session = GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL);
+    m_client.reset(new GDBusCXX::DBusRemoteObject(session, "/", OBC_CLIENT_INTERFACE_NEW, 
+                                          OBC_SERVICE_NEW, true));
+    if (!m_client.get()) {
+        m_client.reset(new GDBusCXX::DBusRemoteObject(session, "/", OBC_CLIENT_INTERFACE,
+                                              OBC_SERVICE, true));
+        m_newobex = false;
+        SE_LOG_DEBUG(NULL, NULL, "Using old obex %s", OBC_CLIENT_INTERFACE);
+    } else {
+        m_newobex = true;
+        SE_LOG_DEBUG(NULL, NULL, "Using new obex %s", OBC_CLIENT_INTERFACE_NEW);
+    }
+}
+
+boost::shared_ptr<PbapSession> PbapSession::create()
+{
+    boost::shared_ptr<PbapSession> session(new PbapSession());
+    session->m_self = session;
+    return session;
+}
+
+void PbapSession::completeCb(const GDBusCXX::Path_t &path)
+{
+    SE_LOG_DEBUG(NULL, NULL, "obexd transfer %s completed", path.c_str());
+    m_transferComplete = true;
+}
+
+void PbapSession::errorCb(const GDBusCXX::Path_t &path,
+                          const std::string &error,
+                          const std::string &msg)
+{
+    SE_LOG_DEBUG(NULL, NULL, "obexd transfer %s failed: %s %s",
+                 path.c_str(), error.c_str(), msg.c_str());
+    m_transferComplete = true;
+    m_transferErrorCode = error;
+    m_transferErrorMsg = msg;
 }
 
 void PbapSession::initSession(const std::string &address, const std::string &format)
@@ -111,22 +184,65 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
     GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
-        createSession(m_client, "CreateSession");
+        createSession(*m_client, "CreateSession");
 
     Params params;
-    params["Destination"] = std::string(address);
     params["Target"] = std::string("PBAP");
 
-    std::string session = createSession(params);
+    std::string session;
+    if (m_newobex) {
+        session = createSession(address, params);
+    } else {
+        params["Destination"] = std::string(address);
+        session = createSession(params);
+    }
+        
     if (session.empty()) {
         SE_THROW("PBAP: got empty session from CreateSession()");
     }
 
-    m_session.reset(new GDBusCXX::DBusRemoteObject(m_client.getConnection(),
+    if (m_newobex) {
+        m_session.reset(new GDBusCXX::DBusRemoteObject(m_client->getConnection(),
+                        session,
+                        OBC_PBAP_INTERFACE_NEW,
+                        OBC_SERVICE_NEW,
+                        true));
+        
+        // Filter Transfer signals via path prefix. Discussions on Bluez
+        // list showed that this is meant to be possible, even though the
+        // client-api.txt documentation itself didn't (and still doesn't)
+        // make it clear:
+        // "[PATCH obexd v0] client-doc: Guarantee prefix in transfer paths"
+        // http://www.spinics.net/lists/linux-bluetooth/msg28409.html
+        m_completeSignal.reset(new GDBusCXX::SignalWatch1<GDBusCXX::Path_t>
+                               (GDBusCXX::SignalFilter(m_client->getConnection(),
+                               session,
+                               "org.bluez.obex.Transfer",
+                               "Complete",
+                               GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+        // Be extra careful with asynchronous callbacks: bind to weak
+        // pointer and ignore callback when the instance is already gone.
+        // Should not happen with signals (destructing the class unregisters
+        // the watch), but very well may happen in asynchronous method
+        // calls. Therefore maintain m_self and show how to use it here.
+        m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
+
+        // same for error
+        m_errorSignal.reset(new GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string>
+                            (GDBusCXX::SignalFilter(m_client->getConnection(),
+                            session,
+                            "org.bluez.obex.Transfer",
+                            "Error",
+                            GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+        m_errorSignal->activate(boost::bind(&PbapSession::errorCb, m_self, _1, _2, _3));
+
+    } else {
+        m_session.reset(new GDBusCXX::DBusRemoteObject(m_client->getConnection(),
                                                    session,
                                                    OBC_PBAP_INTERFACE,
                                                    OBC_SERVICE,
                                                    true));
+    }
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", m_session->getPath());
 
@@ -192,55 +308,102 @@ void vcardParse(const std::string &content, std::size_t begin, std::size_t end, 
 
 void PbapSession::pullAll(Content &dst)
 {
-    GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
-    std::string content = pullall();
+    std::string content;
+    if (m_newobex) {
+        char *filename;
+        GError *error = NULL;
+        char *addr;
+        gint fd = g_file_open_tmp (NULL, &filename, &error);
+        if (error != NULL) {
+            SE_LOG_ERROR(NULL, NULL, "Unable to create temporary file for transfer");
+            return;
+        }
+        SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", filename);
+        GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
+        std::pair<GDBusCXX::DBusObject_t, Params> tuple = pullall(std::string(filename));
+        const GDBusCXX::DBusObject_t &transfer = tuple.first;
+        const Params &properties = tuple.second;
+        
+        SE_LOG_DEBUG(NULL, NULL, "pullall transfer path %s, %ld properties", transfer.c_str(), (long)properties.size());
 
-    // empty content not treated as an error
-
-    typedef std::map<std::string, int> CounterMap;
-    CounterMap counterMap;
-
-    std::size_t pos = 0;
-    int count = 0;
-    while(pos < content.size()) {
-        static const std::string beginStr("BEGIN:VCARD");
-        static const std::string endStr("END:VCARD");
-
-        pos = content.find(beginStr, pos);
-        if(pos == std::string::npos) {
-            break;
+        while (!m_transferComplete) {
+            g_main_context_iteration(NULL, true);
         }
 
-        std::size_t endPos = content.find(endStr, pos + beginStr.size());
-        if(endPos == std::string::npos) {
-            break;
+        struct stat sb;
+        if (fstat(fd, &sb) == -1) {
+            SE_LOG_ERROR(NULL, NULL, "Stat on file failed");
+            return;
         }
+        SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %d", (long)sb.st_size);
 
-        endPos += endStr.size();
+        addr = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (addr == MAP_FAILED) {
+            SE_LOG_ERROR(NULL, NULL, "Unable to mmap temporary file");
+            return;
+        }
+        
+        pcrecpp::StringPiece content(addr, sb.st_size);
+        
+        string vcarddata;
+        int count = 0;
+        pcrecpp::RE re("(^BEGIN:VCARD.*?^END:VCARD)",
+                       pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
+        while (re.Consume(&content, &vcarddata)) {
+            std::string id = StringPrintf("%d", count);
+            dst[id] = vcarddata;
 
-        typedef std::map<std::string, std::string> VcardMap;
-        VcardMap vcard;
-        vcardParse(content, pos, endPos, vcard);
+            ++count;
+        }
+    } else {
+        GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
+        content = pullall();
 
-        VcardMap::const_iterator it = vcard.find("N");
-        if(it != vcard.end() && !it->second.empty()) {
-            const std::string &fn = it->second;
+        // empty content not treated as an error
 
-            const std::pair<CounterMap::iterator, bool> &r =
-                counterMap.insert(CounterMap::value_type(fn, 0));
-            if(!r.second) {
-                r.first->second ++;
+        typedef std::map<std::string, int> CounterMap;
+        CounterMap counterMap;
+
+        std::size_t pos = 0;
+        while(pos < content.size()) {
+            static const std::string beginStr("BEGIN:VCARD");
+            static const std::string endStr("END:VCARD");
+
+            pos = content.find(beginStr, pos);
+            if(pos == std::string::npos) {
+                break;
             }
 
-            char suffix[8];
-            sprintf(suffix, "%07d", r.first->second);
+            std::size_t endPos = content.find(endStr, pos + beginStr.size());
+            if(endPos == std::string::npos) {
+                break;
+            }
 
-            std::string id = StringPrintf("%d", count); // fn + std::string(suffix);
-            dst[id] = content.substr(pos, endPos - pos);
+            endPos += endStr.size();
+
+            typedef std::map<std::string, std::string> VcardMap;
+            VcardMap vcard;
+            vcardParse(content, pos, endPos, vcard);
+
+            VcardMap::const_iterator it = vcard.find("N");
+            if(it != vcard.end() && !it->second.empty()) {
+                const std::string &fn = it->second;
+
+                const std::pair<CounterMap::iterator, bool> &r =
+                    counterMap.insert(CounterMap::value_type(fn, 0));
+                if(!r.second) {
+                    r.first->second ++;
+                }
+
+                char suffix[8];
+                sprintf(suffix, "%07d", r.first->second);
+
+                std::string id = fn + std::string(suffix);
+                dst[id] = content.substr(pos, endPos - pos);
+            }
+
+            pos = endPos;
         }
-
-        pos = endPos;
-        count++;
     }
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
@@ -248,11 +411,11 @@ void PbapSession::pullAll(Content &dst)
 
 void PbapSession::shutdown(void)
 {
-    GDBusCXX::DBusClientCall0 removeSession(m_client, "RemoveSession");
+    GDBusCXX::DBusClientCall0 removeSession(*m_client, "RemoveSession");
 
     // always clear pointer, even if method call fails
     GDBusCXX::DBusObject_t path(m_session->getPath());
-    m_session.reset();
+    //m_session.reset();
     SE_LOG_DEBUG(NULL, NULL, "removed session: %s", path.c_str());
 
     removeSession(path);
@@ -263,7 +426,7 @@ void PbapSession::shutdown(void)
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
 {
-    m_session.reset(new PbapSession());
+    m_session = PbapSession::create();
 }
 
 std::string PbapSyncSource::getMimeType() const
