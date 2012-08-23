@@ -2235,6 +2235,11 @@ StringConfigProperty SyncSourceConfig::m_sourcePropSync("sync",
                                            "    transmit changes from peer\n"
                                            "  one-way-from-local\n"
                                            "    transmit local changes\n"
+                                           "  local-cache-slow (server only)\n"
+                                           "    mirror remote data locally, transferring all data\n"
+                                           "  local-cache-incremental (server only)\n"
+                                           "    mirror remote data locally, transferring only changes;\n"
+                                           "    falls back to local-cache-slow automatically if necessary\n"
                                            "  disabled (or none)\n"
                                            "    synchronization disabled\n"
                                            "\n"
@@ -2264,6 +2269,8 @@ StringConfigProperty SyncSourceConfig::m_sourcePropSync("sync",
                                            (Aliases("refresh-from-server") + "refresh-server") +
                                            (Aliases("one-way-from-client") + "one-way-client") +
                                            (Aliases("one-way-from-server") + "one-way-server") +
+                                           (Aliases("local-cache-slow")) +
+                                           (Aliases("local-cache-incremental") + "local-cache") +
                                            (Aliases("disabled") + "none"));
 
 static class SourceBackendConfigProperty : public StringConfigProperty {

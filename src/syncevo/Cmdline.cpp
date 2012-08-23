@@ -3097,12 +3097,12 @@ protected:
         TestCmdline failure2("--sync", "foo", NULL);
         CPPUNIT_ASSERT(!failure2.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure2.m_out.str());
-        CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n", failure2.m_err.str());
+        CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, local-cache-slow, local-cache-incremental = local-cache, disabled = none)\n", failure2.m_err.str());
 
         TestCmdline failure3("--sync=foo", NULL);
         CPPUNIT_ASSERT(!failure3.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure3.m_out.str());
-        CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync=foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n", failure3.m_err.str());
+        CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync=foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, local-cache-slow, local-cache-incremental = local-cache, disabled = none)\n", failure3.m_err.str());
 
         TestCmdline help("--sync", " ?", NULL);
         help.doit();
@@ -3123,7 +3123,12 @@ protected:
                                   "       transmit changes from peer\n"
                                   "     one-way-from-local\n"
                                   "       transmit local changes\n"
-                                  "     disabled (or none)\n"
+                                  "     local-cache-slow (server only)\n"
+                                  "       mirror remote data locally, transferring all data\n"
+                                  "     local-cache-incremental (server only)\n"
+                                  "       mirror remote data locally, transferring only changes;\n"
+                                  "       falls back to local-cache-slow automatically if necessary\n"
+                                 "     disabled (or none)\n"
                                   "       synchronization disabled\n"
                                   "   \n"
                                   "   refresh/one-way-from-server/client are also supported. Their use is\n"

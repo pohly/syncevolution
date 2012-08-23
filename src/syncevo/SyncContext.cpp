@@ -1647,16 +1647,20 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 case 0:
                     mode = SIMPLE_SYNC_TWO_WAY;
                     if (m_serverMode &&
-                        m_serverAlerted &&
-                        (sync == SYNC_ONE_WAY_FROM_SERVER ||
-                         sync == SYNC_ONE_WAY_FROM_LOCAL) {
-                        // As in the slow/refresh-from-server case below,
-                        // pretending to do a two-way incremental sync
-                        // is a correct way of executing the requested
-                        // one-way sync, as long as the client doesn't
-                        // send any of its own changes. The Synthesis
-                        // engine does that.
-                        mode = SIMPLE_SYNC_ONE_WAY_FROM_LOCAL;
+                        m_serverAlerted) {
+                        if (sync == SYNC_ONE_WAY_FROM_SERVER ||
+                            sync == SYNC_ONE_WAY_FROM_LOCAL) {
+                            // As in the slow/refresh-from-server case below,
+                            // pretending to do a two-way incremental sync
+                            // is a correct way of executing the requested
+                            // one-way sync, as long as the client doesn't
+                            // send any of its own changes. The Synthesis
+                            // engine does that.
+                            mode = SIMPLE_SYNC_ONE_WAY_FROM_LOCAL;
+                        } else if (sync == SYNC_LOCAL_CACHE_SLOW ||
+                                   sync == SYNC_LOCAL_CACHE_INCREMENTAL) {
+                            mode = SIMPLE_SYNC_LOCAL_CACHE_INCREMENTAL;
+                        }
                     }
                     break;
                 case 1:
@@ -1673,15 +1677,19 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 case 0:
                     mode = SIMPLE_SYNC_SLOW;
                     if (m_serverMode &&
-                        m_serverAlerted &&
-                        (sync == SYNC_REFRESH_FROM_SERVER ||
-                         sync == SYNC_REFRESH_FROM_LOCAL) {
-                        // We run as server and told the client to refresh
-                        // its data. A slow sync is how some clients (the
-                        // Synthesis engine included) execute that sync mode;
-                        // let's be optimistic and assume that the client
-                        // did as it was told and deleted its data.
-                        mode = SIMPLE_SYNC_REFRESH_FROM_LOCAL;
+                        m_serverAlerted) {
+                        if (sync == SYNC_REFRESH_FROM_SERVER ||
+                            sync == SYNC_REFRESH_FROM_LOCAL) {
+                            // We run as server and told the client to refresh
+                            // its data. A slow sync is how some clients (the
+                            // Synthesis engine included) execute that sync mode;
+                            // let's be optimistic and assume that the client
+                            // did as it was told and deleted its data.
+                            mode = SIMPLE_SYNC_REFRESH_FROM_LOCAL;
+                        } else if (sync == SYNC_LOCAL_CACHE_SLOW ||
+                                   sync == SYNC_LOCAL_CACHE_INCREMENTAL) {
+                            mode = SIMPLE_SYNC_LOCAL_CACHE_SLOW;
+                        }
                     }
                     break;
                 case 1:
@@ -2502,6 +2510,13 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             if (source->getForceSlowSync()) {
                 // we *want* a slow sync, but couldn't tell the client -> force it server-side
                 datastores << "      <alertscript> FORCESLOWSYNC(); </alertscript>\n";
+            } else if (mode == SYNC_LOCAL_CACHE_SLOW ||
+                       mode == SYNC_LOCAL_CACHE_INCREMENTAL) {
+                if (!m_serverMode) {
+                    SE_THROW("sync modes 'local-cache-*' are only supported on the server side");
+                }
+                datastores << "      <alertscript>SETREFRESHONLY(1); SETCACHEDATA(1);</alertscript>\n";
+                // datastores << "      <datastoreinitscript>REFRESHONLY(); CACHEDATA(); SLOWSYNC(); ALERTCODE();</datastoreinitscript>\n";
             } else if (mode != SYNC_SLOW &&
                        // slow-sync detection not implemented when running as server,
                        // not even when initiating the sync (direct sync with phone)

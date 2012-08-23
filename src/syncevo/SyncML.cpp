@@ -72,6 +72,12 @@ SimpleSyncMode SimplifySyncMode(SyncMode mode, bool peerIsClient)
     case SA_SYNC_TWO_WAY:
         return SIMPLE_SYNC_TWO_WAY;
 
+    case SYNC_LOCAL_CACHE_SLOW:
+        return SIMPLE_SYNC_LOCAL_CACHE_SLOW;
+
+    case SYNC_LOCAL_CACHE_INCREMENTAL:
+        return SIMPLE_SYNC_LOCAL_CACHE_INCREMENTAL;
+
     case SYNC_LAST:
     case SYNC_INVALID:
         return SIMPLE_SYNC_INVALID;
@@ -90,10 +96,12 @@ SANSyncMode AlertSyncMode(SyncMode mode, bool peerIsClient)
         return SA_INVALID;
 
     case SYNC_SLOW:
+    case SYNC_LOCAL_CACHE_SLOW:
         return SA_SLOW;
 
     case SYNC_TWO_WAY:
     case SA_SYNC_TWO_WAY:
+    case SYNC_LOCAL_CACHE_INCREMENTAL: // use two-way because it is more likely to be implemented
         return SA_TWO_WAY;
 
     case SYNC_ONE_WAY_FROM_CLIENT:
@@ -161,6 +169,10 @@ std::string PrettyPrintSyncMode(SyncMode mode, bool userVisible)
         return userVisible ? "one-way-from-remote" : "SYNC_ONE_WAY_FROM_REMOTE";
     case SYNC_REFRESH_FROM_REMOTE:
         return userVisible ? "refresh-from-remote" : "SYNC_REFRESH_FROM_REMOTE";
+    case SYNC_LOCAL_CACHE_SLOW:
+        return userVisible ? "local-cache-slow" : "SYNC_LOCAL_CACHE_SLOW";
+    case SYNC_LOCAL_CACHE_INCREMENTAL:
+        return userVisible ? "local-cache-incremental" : "SYNC_LOCAL_CACHE_INCREMENTAL";
     default:
         std::stringstream res;
 
@@ -193,6 +205,10 @@ SyncMode StringToSyncMode(const std::string &mode, bool serverAlerted)
         return SYNC_ONE_WAY_FROM_LOCAL;
     } else if (boost::iequals(mode, "disabled") || boost::iequals(mode, "SYNC_NONE")) {
         return SYNC_NONE;
+    } else if (boost::iequals(mode, "local-cache-slow") || boost::iequals(mode, "SYNC_LOCAL_CACHE_SLOW")) {
+        return SYNC_LOCAL_CACHE_SLOW;
+    } else if (boost::iequals(mode, "local-cache-incremental") || boost::iequals(mode, "SYNC_LOCAL_CACHE_INCREMENTAL")) {
+        return SYNC_LOCAL_CACHE_INCREMENTAL;
     } else {
         return SYNC_INVALID;
     }

@@ -1,4 +1,6 @@
 #! /usr/bin/python -u
+# -*- coding: utf-8 -*-
+# vim: set fileencoding=utf-8 :#
 #
 # Copyright (C) 2009 Intel Corporation
 #
@@ -854,6 +856,7 @@ class DBusUtil(Timeout):
                         DBusUtil.quit_events.append("session done")
                     loop.quit()
 
+        DBusUtil.events = []
         bus.add_signal_receiver(progress,
                                 'ProgressChanged',
                                 'org.syncevolution.Session',
@@ -930,7 +933,7 @@ class DBusUtil(Timeout):
         while not until in self.prettyPrintEvents():
             loop.get_context().iteration(True)
 
-    def setUpLocalSyncConfigs(self, childPassword=None, enableCalendar=False):
+    def setUpLocalSyncConfigs(self, childPassword=None, enableCalendar=False, preventSlowSync=None):
         # create file<->file configs
         self.setUpSession("target-config@client")
         addressbook = { "sync": "two-way",
@@ -945,6 +948,8 @@ class DBusUtil(Timeout):
             addressbook["databaseUser"] = "foo-user"
             addressbook["databasePassword"] = childPassword
         config = {"" : { "loglevel": "4" } }
+        if preventSlowSync != None:
+            config = {"" : { "preventSlowSync": preventSlowSync and "1" or "0" }}
         config["source/addressbook"] = addressbook
         if enableCalendar:
             config["source/calendar"] = calendar
@@ -1066,7 +1071,7 @@ status: idle, 0, {}
         else:
             self.assertEqual(error, realError)
 
-    def doCheckSync(self, expectedError=0, expectedResult=0, reportOptional=False, numReports=1):
+    def doCheckSync(self, expectedError=0, expectedResult=0, reportOptional=False, numReports=1, checkPercent=True):
         # check recorded events in DBusUtil.events, first filter them
         statuses = []
         progresses = []
@@ -2149,7 +2154,9 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                  "refresh-from-local, refresh-from-remote = refresh, one-way-from-local, "
                                  "one-way-from-remote = one-way, refresh-from-client = refresh-client, "
                                  "refresh-from-server = refresh-server, one-way-from-client = one-way-client, "
-                                 "one-way-from-server = one-way-server, disabled = none)'")
+                                 "one-way-from-server = one-way-server, "
+                                 "local-cache-slow, local-cache-incremental = local-cache, "
+                                 "disabled = none)'")
         else:
             self.fail("no exception thrown")
 
@@ -4036,6 +4043,578 @@ END:VCARD''')
         # Sync should have succeeded.
         self.assertSyncStatus('server', 200, None)
 
+class TestLocalCache(unittest.TestCase, DBusUtil):
+    """Tests involving local sync and the local-cache mode."""
+
+    serverDB = os.path.join(xdg_root, "server")
+    clientDB = os.path.join(xdg_root, "client")
+    johnVCard = '''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+ORG:Test Inc.
+END:VCARD'''
+    johnComplexVCard = '''BEGIN:VCARD
+VERSION:3.0
+URL:http://john.doe.com
+TITLE:Senior Tester
+ORG:Test Inc.;Testing;test#1
+ROLE:professional test case
+X-EVOLUTION-MANAGER:John Doe Senior
+X-EVOLUTION-ASSISTANT:John Doe Junior
+NICKNAME:user1
+BDAY:2006-01-08
+X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
+X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
+X-EVOLUTION-ANNIVERSARY:2006-01-09
+X-EVOLUTION-SPOUSE:Joan Doe
+NOTE:This is a test case which uses almost all Evolution fields.
+FN:John Doe
+N:Doe;John;;;
+X-EVOLUTION-FILE-AS:Doe\, John
+CATEGORIES:TEST
+X-EVOLUTION-BLOG-URL:web log
+CALURI:calender
+FBURL:free/busy
+X-EVOLUTION-VIDEO-URL:chat
+X-MOZILLA-HTML:TRUE
+ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
+ ld Testovia
+LABEL;TYPE=WORK:Test Drive 2\nTest Town\, Upper Test County\n12346\nTest Bo
+ x #2\nOld Testovia
+ADR;TYPE=HOME:Test Box #1;;Test Drive 1;Test Village;Lower Test County;1234
+ 5;Testovia
+LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
+  Box #1\nTestovia
+ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
+LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
+  #3\nNew Testonia
+UID:pas-id-43C0ED3900000001
+EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
+EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=4:john.doe@yet.another.world
+TEL;TYPE=work;TYPE=Voice;X-EVOLUTION-UI-SLOT=1:business 1
+TEL;TYPE=homE;TYPE=VOICE;X-EVOLUTION-UI-SLOT=2:home 2
+TEL;TYPE=CELL;X-EVOLUTION-UI-SLOT=3:mobile 3
+TEL;TYPE=WORK;TYPE=FAX;X-EVOLUTION-UI-SLOT=4:businessfax 4
+TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
+TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6
+TEL;TYPE=CAR;X-EVOLUTION-UI-SLOT=7:car 7
+TEL;TYPE=PREF;X-EVOLUTION-UI-SLOT=8:primary 8
+X-AIM;X-EVOLUTION-UI-SLOT=1:AIM JOHN
+X-YAHOO;X-EVOLUTION-UI-SLOT=2:YAHOO JDOE
+X-ICQ;X-EVOLUTION-UI-SLOT=3:ICQ JD
+X-GROUPWISE;X-EVOLUTION-UI-SLOT=4:GROUPWISE DOE
+X-GADUGADU:GADUGADU DOE
+X-JABBER:JABBER DOE
+X-MSN:MSN DOE
+X-SKYPE:SKYPE DOE
+X-SIP:SIP DOE
+PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQEASABIAAD/4QAWRXhpZgAATU0AKgAA
+ AAgAAAAAAAD//gAXQ3JlYXRlZCB3aXRoIFRoZSBHSU1Q/9sAQwAFAwQEBAMFBAQEBQUFBgcM
+ CAcHBwcPCwsJDBEPEhIRDxERExYcFxMUGhURERghGBodHR8fHxMXIiQiHiQcHh8e/9sAQwEF
+ BQUHBgcOCAgOHhQRFB4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4e
+ Hh4eHh4eHh4e/8AAEQgAFwAkAwEiAAIRAQMRAf/EABkAAQADAQEAAAAAAAAAAAAAAAAGBwgE
+ Bf/EADIQAAECBQMCAwQLAAAAAAAAAAECBAADBQYRBxIhEzEUFSIIFjNBGCRHUVZ3lqXD0+P/
+ xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMR
+ AD8AuX6UehP45/aXv9MTPTLVKxNSvMPcqu+a+XdLxf1SfJ6fU37PioTnOxfbOMc/KIZ7U/2V
+ fmTR/wCaKlu6+blu/Ui72zxWtUmmUOrTaWwkWDT09FPR4K587OVrUfVsIwElPPPAbAjxr2um
+ hWXbDu5rmfeApLPZ4hx0lzNm9aUJ9KAVHKlJHAPf7ozPLqWt9y6Z0EPGmoLNjTq48a1iaybJ
+ YV52yEtCms5KJmAT61JXtJyUdyQTEc1WlMql7N1/oZ6jagVZVFfUyZPpFy5lvWcxU7Z03BUk
+ GZLWJqVhPYLkIIPBEBtSEUyNAsjI1q1m/VP+UICwL/sqlXp7v+aOHsnyGttq218MtKd8+Ru2
+ JXuScoO45Awe2CIi96aKW1cVyubkYVy6rTqz0J8a5t2qqZl0UjAMwYKScfPAJ+cIQHHP0Dth
+ VFaMWt0XwxetnM50Ks2rsxL6ZMnJlJmb5hBBBEiVxjA28dznqo+hdksbQuS3Hs6tVtNzdM1Z
+ /VH5nO3Bl/CJmYHKDynjv3zCEB5rLQNo0bIbydWNWxKljbLQLoWkISOAkBKAABCEID//2Q==
+END:VCARD
+'''
+    joanVCard = '''BEGIN:VCARD
+VERSION:3.0
+FN:Joan Doe
+N:Doe;Joan
+ORG:Test Inc.
+END:VCARD'''
+    vcardFormat = '''BEGIN:VCARD
+VERSION:3.0
+FN:John_%(index)02d Doe
+N:Doe;John_%(index)02d
+ORG:Test Inc.
+END:VCARD'''
+    itemName = "test-dbus.vcf"
+    itemNameFormat = "test-dbus-%d.vcf"
+
+    def run(self, result):
+        self.runTest(result)
+
+    def setUp(self):
+        self.setUpServer()
+
+    def setUpConfigs(self, childPassword=None):
+        self.setUpLocalSyncConfigs(childPassword, preventSlowSync=False)
+
+    def checkInSync(self, numReports=2):
+        '''verify that client and server do not need to transmit anything in an incremental sync'''
+        self.sessionpath, self.session = self.createSession("server", True)
+        self.setUpListeners(self.sessionpath)
+        self.session.Sync("local-cache-incremental", {})
+        loop.run()
+        self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+        report = self.checkSync(numReports=numReports)
+        self.assertEqual("local-cache-incremental", report.get('source-addressbook-mode'))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.session.Detach()
+        DBusUtil.quit_events = []
+        self.sessionpath, self.session = self.createSession("target-config@client", True)
+        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        self.assertEqual(numReports, len(reports))
+        report = reports[0]
+        self.assertEqual("two-way", report.get('source-addressbook-mode'))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.session.Detach()
+
+    @timeout(100)
+    def testItemRemoval(self):
+        """TestLocalCache.testItemRemoval - ensure that extra item on server gets removed"""
+        self.setUpConfigs()
+        os.makedirs(self.serverDB)
+        output = open(os.path.join(self.serverDB, self.itemName), "w")
+        output.write(self.johnVCard)
+        output.close()
+        self.setUpListeners(self.sessionpath)
+        # ask for incremental caching, expecting it do be done in slow mode
+        self.session.Sync("local-cache-incremental", {})
+        loop.run()
+        self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+        # check sync from server perspective
+        report = self.checkSync()
+        self.assertEqual("local-cache-slow", report.get('source-addressbook-mode'))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("1", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.assertEqual(0, len(os.listdir(self.serverDB)))
+        self.assertEqual(0, len(os.listdir(self.clientDB)))
+        # check client report
+        self.session.Detach()
+        DBusUtil.quit_events = []
+        self.sessionpath, self.session = self.createSession("target-config@client", True)
+        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        self.assertEqual(1, len(reports))
+        report = reports[0]
+        self.assertEqual("slow", report.get('source-addressbook-mode'))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.session.Detach()
+
+        self.checkInSync()
+
+    def doItemChange(self, numAdditional=0, syncFirst=False, change="Add"):
+        self.setUpConfigs()
+        entries = []
+        os.makedirs(self.clientDB)
+        os.makedirs(self.serverDB)
+
+        numReports = 1
+        added = 0
+        updated = 0
+        deleted = 0
+
+        # Create additional items in client and server, before initial
+        # sync. Creating items on the server later would violate the
+        # rule that items on the server are only written during a
+        # sync.
+        for i in range(0, numAdditional):
+            filename = self.itemNameFormat % i
+            data = self.vcardFormat % { 'index': i }
+            entries.append(filename)
+            output = open(os.path.join(self.clientDB, filename), "w")
+            output.write(data)
+            output.close()
+            output = open(os.path.join(self.serverDB, filename), "w")
+            output.write(data)
+            output.close()
+
+        if syncFirst:
+            # get client and server into sync with empty databases
+            self.setUpListeners(self.sessionpath)
+            self.session.Sync("local-cache-incremental", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            report = self.checkSync(numReports=numReports)
+            self.assertEqual("local-cache-slow", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+            DBusUtil.quit_events = []
+            self.sessionpath, self.session = self.createSession("server", True)
+            numReports = numReports + 1
+
+        # create named contact on client
+        entries.append(self.itemName)
+        output = open(os.path.join(self.clientDB, self.itemName), "w")
+        output.write(self.johnVCard)
+        output.close()
+
+        # ask for incremental caching, expecting it do be done in slow mode
+        # or incremental, depending on whether both sides were in sync
+        self.setUpListeners(self.sessionpath)
+        self.session.Sync("local-cache-incremental", {})
+        loop.run()
+        self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+
+        # check sync from server perspective
+        report = self.checkSync(numReports=numReports)
+        self.assertEqual(syncFirst and "local-cache-incremental" or "local-cache-slow",
+                         report.get('source-addressbook-mode'))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("1", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.assertEqual(1 + numAdditional, len(os.listdir(self.serverDB)))
+        clientDBEntries = os.listdir(self.clientDB)
+        clientDBEntries.sort()
+        entries.sort()
+        self.assertEqual(entries, clientDBEntries)
+
+        # check client report
+        self.session.Detach()
+        DBusUtil.quit_events = []
+        self.sessionpath, self.session = self.createSession("target-config@client", True)
+        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        self.assertEqual(numReports, len(reports))
+        report = reports[0]
+        self.assertEqual(syncFirst and "two-way" or "slow", report.get('source-addressbook-mode'))
+        self.assertEqual(str(1 + (not syncFirst and numAdditional or 0)), report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.session.Detach()
+
+        numReports = numReports + 1
+
+        if change == "Add" or change == "Add+Slow":
+            # client and server are now in sync
+            self.checkInSync(numReports=numReports)
+        elif change == "Update":
+            # update item to something completely, using an incremental sync
+            serverContent = os.listdir(self.serverDB)
+            output = open(os.path.join(self.clientDB, self.itemName), "w")
+            output.write(self.joanVCard)
+            output.close()
+            self.sessionpath, self.session = self.createSession("server", True)
+            self.setUpListeners(self.sessionpath)
+            self.session.Sync("local-cache-incremental", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            report = self.checkSync(numReports=numReports)
+            self.assertEqual("local-cache-incremental", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("1", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+            self.assertEqual(serverContent, os.listdir(self.serverDB))
+            clientDBEntries = os.listdir(self.clientDB)
+            clientDBEntries.sort()
+            self.assertEqual(entries, clientDBEntries)
+            DBusUtil.quit_events = []
+            self.sessionpath, self.session = self.createSession("target-config@client", True)
+            reports = self.session.GetReports(0, 100, utf8_strings=True)
+            self.assertEqual(numReports, len(reports))
+            report = reports[0]
+            self.assertEqual("two-way", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("1", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+        elif change == "Delete":
+            # remove item, using an incremental sync
+            os.unlink(os.path.join(self.clientDB, self.itemName))
+            self.sessionpath, self.session = self.createSession("server", True)
+            self.setUpListeners(self.sessionpath)
+            self.session.Sync("local-cache-incremental", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            report = self.checkSync(numReports=numReports)
+            self.assertEqual("local-cache-incremental", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("1", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+            self.assertEqual(numAdditional, len(os.listdir(self.serverDB)))
+            clientDBEntries = os.listdir(self.clientDB)
+            clientDBEntries.sort()
+            entries.remove(self.itemName)
+            self.assertEqual(entries, clientDBEntries)
+            DBusUtil.quit_events = []
+            self.sessionpath, self.session = self.createSession("target-config@client", True)
+            reports = self.session.GetReports(0, 100, utf8_strings=True)
+            self.assertEqual(numReports, len(reports))
+            report = reports[0]
+            self.assertEqual("two-way", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("1", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+
+        numReports = numReports + 1
+
+        if change == "Add+Slow":
+            # explicitly request a slow sync
+            DBusUtil.quit_events = []
+            self.sessionpath, self.session = self.createSession("server", True)
+            self.setUpListeners(self.sessionpath)
+            self.session.Sync("local-cache-slow", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            report = self.checkSync(numReports=numReports)
+            self.assertEqual("local-cache-slow", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+            numReports = numReports + 1
+
+
+    @timeout(100)
+    def testItemAdd(self):
+        """TestLocalCache.testItemAdd - ensure that new item from client gets added in initial slow sync"""
+        self.doItemChange()
+
+    @timeout(200)
+    def testItemAdd100(self):
+        """TestLocalCache.testItemAdd100 - ensure that new item from client gets added in initial slow sync while leaving 100 items unchanged"""
+        self.doItemChange(numAdditional=100)
+
+    @timeout(100)
+    def testSyncMode(self):
+        """TestLocalCache.testSyncMode - ensure that requesting specific caching sync works"""
+        self.doItemChange(change="Add+Slow")
+
+    @timeout(100)
+    def testItemAddIncremental(self):
+        """TestLocalCache.testItemAddIncremental - ensure that new item from client gets added in incremental sync"""
+        self.doItemChange(syncFirst=True)
+
+    @timeout(200)
+    def testItemAdd100Incremental(self):
+        """TestLocalCache.testItemAdd100Incremental - ensure that new item from client gets added in incremental while leaving 100 items unchanged"""
+        self.doItemChange(numAdditional=100, syncFirst=True)
+
+    @timeout(100)
+    def testItemUpdate(self):
+        """TestLocalCache.testItemUpdate - ensure that an item can be updated incrementally"""
+        self.doItemChange(change="Update")
+
+    @timeout(200)
+    def testItemUpdate100(self):
+        """TestLocalCache.testItemUpdate100 - ensure that an item can be updated incrementally while leaving 100 items unchanged"""
+        self.doItemChange(change="Update", numAdditional=100)
+
+    @timeout(100)
+    def testItemDelete(self):
+        """TestLocalCache.testItemUpdate - ensure that an item can be deleted incrementally"""
+        self.doItemChange(change="Delete")
+
+    @timeout(200)
+    def testItemDelete100(self):
+        """TestLocalCache.testItemUpdate100 - ensure that an item can be deleted incrementally while leaving 100 items unchanged"""
+        self.doItemChange(change="Delete", numAdditional=100)
+
+    def doPropertyRemoval(self, step=0, numAdditional=0):
+        """ensure that obsolete items of an item get removed, either during initial slow sync, second slow sync or incremental sync"""
+        self.setUpConfigs()
+        entries = []
+        os.makedirs(self.clientDB)
+        os.makedirs(self.serverDB)
+        output = open(os.path.join(self.serverDB, self.itemName), "w")
+        output.write(self.johnComplexVCard)
+        output.close()
+        entries.append(self.itemName)
+        output = open(os.path.join(self.clientDB, self.itemName), "w")
+        if step == 0:
+            # Client has simple version of John,
+            # slow sync applies update.
+            data = self.johnVCard
+        else:
+            # Client has same data as on server,
+            # slow sync changes nothing.
+            data = self.johnComplexVCard
+        output.write(data)
+        output.close()
+
+        # create additional items in client and server
+        for i in range(0, numAdditional):
+            filename = self.itemNameFormat % i
+            data = self.vcardFormat % { 'index': i }
+            entries.append(filename)
+            output = open(os.path.join(self.clientDB, filename), "w")
+            output.write(data)
+            output.close()
+            output = open(os.path.join(self.serverDB, filename), "w")
+            output.write(data)
+            output.close()
+
+        self.setUpListeners(self.sessionpath)
+        self.session.Sync("local-cache-incremental", {})
+        loop.run()
+        self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+        # check sync from server perspective
+        report = self.checkSync()
+        self.assertEqual("local-cache-slow", report.get('source-addressbook-mode'))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual((step == 0) and "1" or "0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.assertEqual(1 + numAdditional, len(os.listdir(self.serverDB)))
+        clientDBEntries = os.listdir(self.clientDB)
+        clientDBEntries.sort()
+        entries.sort()
+        self.assertEqual(entries, clientDBEntries)
+        # check client report
+        self.session.Detach()
+        DBusUtil.quit_events = []
+        self.sessionpath, self.session = self.createSession("target-config@client", True)
+        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        self.assertEqual(1, len(reports))
+        report = reports[0]
+        self.assertEqual("slow", report.get('source-addressbook-mode'))
+        self.assertEqual(str(1 + numAdditional), report.get('source-addressbook-stat-remote-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+        self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+        self.session.Detach()
+
+        if step == 0:
+            # Work done already, just check that in sync.
+            self.checkInSync()
+        else:
+            # update item to simple version, using an incremental sync
+            # or another slow sync
+            if step == 1:
+                # force slow sync by removing client-side meta data
+                shutil.rmtree(os.path.join(xdg_root, 'config', 'syncevolution', 'default', 'peers', 'server', '.@client', '.synthesis'))
+            serverContent = os.listdir(self.serverDB)
+            output = open(os.path.join(self.clientDB, self.itemName), "w")
+            output.write(self.johnVCard)
+            output.close()
+            self.sessionpath, self.session = self.createSession("server", True)
+            self.setUpListeners(self.sessionpath)
+            self.session.Sync("local-cache-incremental", {})
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
+            report = self.checkSync(numReports=2)
+            self.assertEqual(step == 1 and "local-cache-slow" or "local-cache-incremental", report.get('source-addressbook-mode'))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("1", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+            self.assertEqual(serverContent, os.listdir(self.serverDB))
+            clientDBEntries = os.listdir(self.clientDB)
+            clientDBEntries.sort()
+            self.assertEqual(entries, clientDBEntries)
+            DBusUtil.quit_events = []
+            self.sessionpath, self.session = self.createSession("target-config@client", True)
+            reports = self.session.GetReports(0, 100, utf8_strings=True)
+            self.assertEqual(2, len(reports))
+            report = reports[0]
+            self.assertEqual(step == 1 and "slow" or "two-way", report.get('source-addressbook-mode'))
+            self.assertEqual(step == 1 and str(1 + numAdditional) or "0", report.get('source-addressbook-stat-remote-added-total', "0"))
+            self.assertEqual(step == 1 and "0" or "1", report.get('source-addressbook-stat-remote-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-remote-removed-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-added-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-updated-total', "0"))
+            self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
+            self.session.Detach()
+
+        if step == 1:
+            # second sync was a slow sync, now we should be in sync
+            self.checkInSync(numReports=3)
+
+        # Server item should be the simple one now, as in the client.
+        sub = subprocess.Popen(['synccompare', self.clientDB, self.serverDB],
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT)
+        stdout, stderr = sub.communicate()
+        self.assertEqual(0, sub.returncode,
+                         msg=stdout)
+
+    @timeout(100)
+    def testPropertyRemovalSlow(self):
+        """TestLocalCache.testPropertyRemovalSlow - ensure that obsolete item properties are removed during slow sync"""
+        self.doPropertyRemoval()
+
+    @timeout(200)
+    def testPropertyRemovalSlow100(self):
+        """TestLocalCache.testPropertyRemovalSlow100 - ensure that obsolete item properties are removed during slow sync while leaving 100 items unchanged"""
+        self.doPropertyRemoval(numAdditional=100)
+
+    @timeout(100)
+    def testPropertyRemovalSecondSlow(self):
+        """TestLocalCache.testPropertyRemovalSecondSlow - ensure that obsolete item properties are removed during non-initial slow sync"""
+        self.doPropertyRemoval(step=1)
+
+    @timeout(200)
+    def testPropertyRemovalSecondSlow100(self):
+        """TestLocalCache.testPropertyRemovalSecondSlow100 - ensure that obsolete item properties are removed during non-initial slow sync while leaving 100 items unchanged"""
+        self.doPropertyRemoval(step=1, numAdditional=100)
+
+    @timeout(100)
+    def testPropertyRemovalIncremental(self):
+        """TestLocalCache.testPropertyRemovalIncremental - ensure that obsolete item properties are removed during incremental sync"""
+        self.doPropertyRemoval(step=2)
+
+    @timeout(200)
+    def testPropertyRemovalIncremental100(self):
+        """TestLocalCache.testPropertyRemoval - ensure that obsolete item properties are removed during incremental sync while leaving 100 items unchanged"""
+        self.doPropertyRemoval(step=2, numAdditional=100)
+
+
 class TestFileNotify(unittest.TestCase, DBusUtil):
     """syncevo-dbus-server must stop if one of its files mapped into
     memory (executable, libraries) change. Furthermore it must restart
@@ -5604,7 +6183,7 @@ sources/xyz/config.ini:# databasePassword = """)
                                          sessionFlags=None,
                                          expectSuccess = False)
         self.assertEqualDiff('', out)
-        self.assertEqualDiff("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, disabled = none)\n",
+        self.assertEqualDiff("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, local-cache-slow, local-cache-incremental = local-cache, disabled = none)\n",
                              stripOutput(err))
 
         out, err, code = self.runCmdline(["--sync", " ?"],
@@ -5626,6 +6205,11 @@ sources/xyz/config.ini:# databasePassword = """)
        transmit changes from peer
      one-way-from-local
        transmit local changes
+     local-cache-slow (server only)
+       mirror remote data locally, transferring all data
+     local-cache-incremental (server only)
+       mirror remote data locally, transferring only changes;
+       falls back to local-cache-slow automatically if necessary
      disabled (or none)
        synchronization disabled
    

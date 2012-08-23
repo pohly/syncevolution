@@ -64,6 +64,13 @@ enum SimpleSyncMode {
     SIMPLE_SYNC_ONE_WAY_FROM_REMOTE = 214,
     SIMPLE_SYNC_REFRESH_FROM_REMOTE = 215,
 
+    // custom modes in SyncEvolution
+
+    /** mirror data on server side, slow variant (client sends all items) */
+    SIMPLE_SYNC_LOCAL_CACHE_SLOW = 218,
+    /** mirror data on server side, incremental variant (client sends only changes) */
+    SIMPLE_SYNC_LOCAL_CACHE_INCREMENTAL = 219,
+
     SIMPLE_SYNC_INVALID = 255
 };
 
@@ -96,6 +103,10 @@ enum SyncMode {
     SYNC_REFRESH_FROM_LOCAL = 213,
     SYNC_ONE_WAY_FROM_REMOTE = 214,
     SYNC_REFRESH_FROM_REMOTE = 215,
+
+    // custom mode
+    SYNC_LOCAL_CACHE_SLOW = 218,
+    SYNC_LOCAL_CACHE_INCREMENTAL = 219,
 
     SYNC_LAST = 220,
     /** error situation (in contrast to SYNC_NONE) */

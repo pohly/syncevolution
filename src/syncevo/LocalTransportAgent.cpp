@@ -781,6 +781,17 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
                     mode = SYNC_ONE_WAY_FROM_REMOTE;
                 } else if (mode == SYNC_ONE_WAY_FROM_REMOTE) {
                     mode = SYNC_ONE_WAY_FROM_LOCAL;
+                } else if (mode == SYNC_LOCAL_CACHE_SLOW) {
+                    // Remote side is running in caching mode and
+                    // asking for refresh. Send all our data.
+                    mode = SYNC_SLOW;
+                } else if (mode == SYNC_LOCAL_CACHE_INCREMENTAL) {
+                    // Remote side is running in caching mode and
+                    // asking for an update. Use two-way mode although
+                    // nothing is going to come back (simpler that way
+                    // than using one-way, which has special code
+                    // paths in libsynthesis).
+                    mode = SYNC_TWO_WAY;
                 }
                 targetSource.setSync(PrettyPrintSyncMode(mode, true), true);
                 targetSource.setURI(sourceName, true);
