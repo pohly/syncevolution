@@ -138,6 +138,7 @@ void PbapSession::pullAll(Content &dst)
     CounterMap counterMap;
 
     std::size_t pos = 0;
+    int count = 0;
     while(pos < content.size()) {
         static const std::string beginStr("BEGIN:VCARD");
         static const std::string endStr("END:VCARD");
@@ -171,11 +172,12 @@ void PbapSession::pullAll(Content &dst)
             char suffix[8];
             sprintf(suffix, "%07d", r.first->second);
 
-            std::string id = fn + std::string(suffix);
+            std::string id = StringPrintf("%d", count); // fn + std::string(suffix);
             dst[id] = content.substr(pos, endPos);
         }
 
         pos = endPos;
+        count++;
     }
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
