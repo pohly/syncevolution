@@ -4539,13 +4539,6 @@ template <class T> class SignalWatch
     guint m_tag;
     T m_callback;
 
-    static gboolean isMatched(GDBusMessage *msg, void *data)
-    {
-        SignalWatch *watch = static_cast<SignalWatch*>(data);
-        return boost::iequals(g_dbus_message_get_path(msg), watch->m_object.getPath()) &&
-            g_dbus_message_get_message_type(msg) == G_DBUS_MESSAGE_TYPE_SIGNAL;
-    }
-
     void activateInternal(const Callback_t &callback, GDBusSignalCallback cb)
     {
         m_callback = callback;
