@@ -29,8 +29,8 @@ const float ProgressData::ONEITEM_SEND_RATIO = 0.05;
 const float ProgressData::ONEITEM_RECEIVE_RATIO = 0.05;
 const float ProgressData::CONN_SETUP_RATIO = 0.5;
 
-ProgressData::ProgressData(int32_t &progress)
-    : m_progress(progress),
+ProgressData::ProgressData()
+    : m_progress(0),
     m_step(PRO_SYNC_INVALID),
     m_sendCounts(0),
     m_internalMode(INTERNAL_NONE)
@@ -57,11 +57,18 @@ ProgressData::ProgressData(int32_t &progress)
     m_syncProp[PRO_SYNC_TOTAL - 1] = 1.0;
 }
 
+void ProgressData::setProgress(int progress)
+{
+    m_progress = progress > 100 ? 100 :
+        progress < 0 ? 0 :
+        progress;
+}
+
 void ProgressData::setStep(ProgressStep step)
 {
     if(m_step != step) {
         /** if state is changed, progress is set as the end of current step*/
-        m_progress = 100.0 * m_syncProp[(int)m_step];
+        setProgress(100.0 * m_syncProp[(int)m_step]);
         m_step = step; ///< change to new state
         m_sendCounts = 0; ///< clear send/receive counts
         m_source = ""; ///< clear source
@@ -157,7 +164,7 @@ void ProgressData::itemReceive(const std::string &source, int count, int total)
 
 void ProgressData::updateProg(float ratio)
 {
-    m_progress += m_propOfUnit * 100 * ratio;
+    setProgress(m_progress + m_propOfUnit * 100 * ratio);
     m_syncUnits[(int)m_step] -= ratio;
 }
 

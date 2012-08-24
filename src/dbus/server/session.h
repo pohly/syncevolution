@@ -197,8 +197,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
      */
     int m_priority;
 
-    int32_t m_progress;
-
     /** progress data, holding progress calculation related info */
     ProgressData m_progData;
 

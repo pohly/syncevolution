@@ -103,7 +103,12 @@ public:
     /** default times of message send/receive in each step */
     static const int MSG_SEND_RECEIVE_TIMES = 1;
 
-    ProgressData(int32_t &progress);
+    ProgressData();
+
+    int32_t getProgress() const { return m_progress; }
+
+    /** set percentage, including clipping to the 0-100 range */
+    void setProgress(int32_t progress);
 
     /**
      * change the big step
@@ -155,8 +160,8 @@ private:
     static float getDefaultUnits(ProgressStep step);
 
 private:
-    /** a reference of progress percentage */
-    int32_t &m_progress;
+    /** progress percentage */
+    int32_t m_progress;
     /** current big step */
     ProgressStep m_step;
     /** count of message send/receive in current step. Cleared in the start of a new step */

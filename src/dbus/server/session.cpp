@@ -484,7 +484,7 @@ void Session::getProgress(int32_t &progress,
                           SourceProgresses_t &sources)
 {
     Session::LoggingGuard guard(this);
-    progress = m_progress;
+    progress = m_progData.getProgress();
     sources = m_sourceProgress;
 }
 
@@ -557,8 +557,6 @@ Session::Session(Server &server,
     m_syncStatus(SYNC_QUEUEING),
     m_stepIsWaiting(false),
     m_priority(PRI_DEFAULT),
-    m_progress(0),
-    m_progData(m_progress),
     m_error(0),
     m_statusTimer(100),
     m_progressTimer(50),
@@ -1141,7 +1139,7 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
                 m_restoreSrcEnd++;
                 SourceStatus &status = m_sourceStatus[sourceName];
                 status.set(PrettyPrintSyncMode(sourceSyncMode), "done", 0);
-                m_progress = 100 * m_restoreSrcEnd / m_restoreSrcTotal;
+                m_progData.setProgress(100 * m_restoreSrcEnd / m_restoreSrcTotal);
                 fireStatus(true);
                 fireProgress(true);
             }
