@@ -253,9 +253,13 @@ string FileSyncSource::getATimeString(const string &filename)
         throwError(filename, errno);
     }
     time_t mtime = buf.st_mtime;
+    int mnsec = buf.st_mtim.tv_nsec;
 
     ostringstream revision;
     revision << mtime;
+    if (mnsec) {
+        revision << "." << mnsec;
+    }
 
     return revision.str();
 }
