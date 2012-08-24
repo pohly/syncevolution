@@ -25,6 +25,19 @@
 #include <syncevo/eds_abi_wrapper.h>
 
 #include <syncevo/declarations.h>
+#include <syncevo/GLibSupport.h>
+
+#if defined(HAVE_EDS)
+# if defined(USE_EDS_CLIENT)
+typedef SyncEvo::GListCXX<ESource, GList, SyncEvo::GObjectDestructor> ESourceListCXX;
+SE_GOBJECT_TYPE(ESourceRegistry)
+SE_GOBJECT_TYPE(ESource)
+SE_GOBJECT_TYPE(EClient)
+# else
+SE_GOBJECT_TYPE(ESourceList)
+#endif
+#endif
+
 SE_BEGIN_CXX
 
 
@@ -51,19 +64,28 @@ class EvolutionSyncSource : public TrackingSyncSource
     {
         TrackingSyncSource::getSynthesisInfo(info, fragments);
         info.m_backendRule = "EVOLUTION";
-        info.m_datastoreOptions += "      <updateallfields>true</updateallfields>\n";
     }
 
   protected:
 #ifdef HAVE_EDS
+#ifdef USE_EDS_CLIENT
+    void getDatabasesFromRegistry(SyncSource::Databases &result,
+                                  const char *extension,
+                                  ESource *(*getDef)(ESourceRegistry *));
+    EClientCXX openESource(const char *extension,
+                           ESource *(*refBuiltin)(ESourceRegistry *),
+                           const boost::function<EClient *(ESource *, GError **gerror)> &newClient);
+    ESourceRegistryCXX getSourceRegistry();
+#endif
     /**
      * searches the list for a source with the given uri or name
      *
      * @param list      a list previously obtained from Gnome
      * @param id        a string identifying the data source: either its name or uri
-     * @return   pointer to source or NULL if not found
+     * @return   pointer to source (caller owns reference) or NULL if not found
      */
-    ESource *findSource( ESourceList *list, const string &id );
+    ESource *findSource(const ESourceListCXX &list,
+                        const string &id);
 #endif
 
  public:
@@ -77,14 +99,38 @@ class EvolutionSyncSource : public TrackingSyncSource
      * output format: <source name>: <action>: <error string>
      *
      * @param action     a string describing the operation or object involved
-     * @param gerror     if not NULL: a more detailed description of the failure,
-     *                                will be freed
+     * @param gerror     a more detailed description of the failure,
+     *                   may be empty
      */
     void throwError(const string &action,
-                    GError *gerror);
+                    GErrorCXX &gerror);
 #endif
 };
 
+/**
+ * Utility class which hides the mechanisms needed to handle events
+ * during asynchronous calls.
+ */
+class EvolutionAsync {
+    public:
+    EvolutionAsync()
+    {
+        m_loop = GMainLoopCXX(g_main_loop_new(NULL, FALSE), false);
+    }
+     
+    /** start processing events */
+    void run() {
+        g_main_loop_run(m_loop.get());
+    }
+ 
+    /** stop processing events, to be called inside run() by callback */
+    void quit() {
+        g_main_loop_quit(m_loop.get());
+    }
+ 
+    private:
+    GMainLoopCXX m_loop;
+};
 
 SE_END_CXX
 #endif // INCL_EVOLUTIONSYNCSOURCE

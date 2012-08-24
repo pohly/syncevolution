@@ -116,6 +116,8 @@ public:
 
     /* check whether command line runs sync. It should be called after parsing. */
     bool isSync();
+    /** same as isSync() for --restore */
+    bool isRestore() const;
 
 protected:
     // vector to store strings for arguments 
@@ -145,7 +147,6 @@ protected:
     Bool m_printConfig;
     Bool m_printSessions;
     Bool m_dontrun;
-    Bool m_keyring;
     Bool m_monitor;
     Bool m_useDaemon;
     FullProps m_props;
@@ -211,6 +212,20 @@ protected:
                    const char *opt,
                    const char *param,
                    const char *propname = NULL);
+
+    /**
+     * parse keyword which sets a certain property,
+     * like --sync=two-way, --sync two-way, ... for the "sync" property
+     *
+     * If a default value is give, then the format is like:
+     * --keyring[=<def>], --keyring=<value>, ...
+     * but not
+     * --keyring <value>
+     */
+    bool parseAssignment(int &opt, std::vector<std::string> &parsed,
+                         PropertyType propertyType,
+                         const char *propname,
+                         const char *def);
 
     bool listPropValues(const ConfigPropertyRegistry &validProps,
                         const std::string &propName,
@@ -312,6 +327,11 @@ protected:
      * @return encoded luid of inserted item
      */
     CmdlineLUID insertItem(SyncSourceRaw *source, const std::string &luid, const std::string &data);
+
+    static void checkSyncPasswords(SyncContext &context);
+    static void checkSourcePasswords(SyncContext &context,
+                                     const std::string &sourceName,
+                                     SyncSourceNodes &nodes);
 };
 
 

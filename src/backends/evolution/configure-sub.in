@@ -65,6 +65,10 @@ if test "$enable_evo" = "yes"; then
         else
                 AC_MSG_ERROR($evomissing)
         fi
+        # Only the EClient code supports the API in EDS 3.5.x.
+        PKG_CHECK_MODULES(EDS_VERSION, [libedataserver-1.2 >= 3.5],
+                          [AC_DEFINE(USE_EDS_CLIENT, 1, [use e_book/cal_client_* calls])],
+                          [true])
 else
         EPACKAGE_CFLAGS=
         EPACKAGE_LIBS=

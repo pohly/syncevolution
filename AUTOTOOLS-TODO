@@ -13,24 +13,6 @@ IMPROVEMENTS:
 - Probably client test should be built only when unit tests or integration tests
   are enabled.
 
-
-- Look at the note at the bottom of configure.ac:
-
-  # Avoid hard-coding paths in backends. These names are chosen so
-  # that a backend can alternatively use its own top-level configure
-  # with PKG_CHECK_MODULES(SYNCEVOLUTION, "syncevolution") to set them.
-  # need absolute path, use pwd instead of relative $srcdir
-  SYNCEVOLUTION_CFLAGS=-I`cd $srcdir && pwd`/src
-  SYNCEVOLUTION_LIBS=`pwd`/src/syncevo/libsyncevolution.la
-  AC_SUBST(SYNCEVOLUTION_CFLAGS)
-  AC_SUBST(SYNCEVOLUTION_LIBS)
-
-  Backends does not have their own top-level configure scripts, so usage of
-  absolute path have to be checked. For now this is worked around
-  in generated backends.am. Also, for relative path not $(srcdir) should be used
-  but $(builddir).
-
-
 - Review CLEANFILES, DISTCLEANFILES, MAINTAINERCLEANFILES and MOSTLYCLEANFILES.
   That is - check which files should be assigned to which of CLEAN variables.
 
@@ -81,10 +63,6 @@ NITPICKS:
 
 - Check if SyncEvolutionXML.c should always be recreated, patches always checked
   and test-client always relinked.
-
-
-- Check if /etc/sync and /lib/sync really have to be created, even if they are
-  going to be empty after install (this is probably some buteo stuff).
 
 
 - Maybe do not create /share/man/man1 directory if we do not put there anything.

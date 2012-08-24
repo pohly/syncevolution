@@ -45,10 +45,6 @@ class CalDAVSource : public WebDAVSource,
     virtual void removeMergedItem(const std::string &luid);
     virtual void flushItem(const string &uid);
     virtual std::string getSubDescription(const string &uid, const string &subid);
-    virtual void updateSynthesisInfo(SynthesisInfo &info,
-                                     XMLConfigFragments &fragments) {
-        info.m_backendRule = "HAVE-SYNCEVOLUTION-EXDATE-DETACHED";
-    }
 
     // implementation of SyncSourceLogging callback
     virtual std::string getDescription(const string &luid);
@@ -81,6 +77,8 @@ class CalDAVSource : public WebDAVSource,
 
     virtual std::string contentType() const { return "text/calendar; charset=utf-8"; }
     virtual std::string suffix() const { return ".ics"; }
+    virtual std::string getContent() const { return "VEVENT"; }
+    virtual bool getContentMixed() const { return true; }
 
  private:
     /**

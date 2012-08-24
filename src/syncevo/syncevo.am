@@ -4,7 +4,7 @@ include $(top_srcdir)/src/syncevo/configs/configs.am
 # the Funambol C++ client library
 src_syncevo_cxxflags = @SYNCEVOLUTION_CXXFLAGS@
 src_syncevo_cppflags = @BACKEND_CPPFLAGS@ @GLIB_CFLAGS@ -I$(top_srcdir)/test -I$(gdbus_dir) $(DBUS_CFLAGS) -I$(top_builddir)/src/syncevo -I$(top_srcdir)/src -DSYNCEVO_LIBEXEC=\"$(libexecdir)\" -DSYNCEVO_BACKEND=\"$(BACKENDS_SEARCH_DIRECTORY)\"
-src_syncevo_ldadd = @SYNCEVOLUTION_LDADD@
+src_syncevo_ldadd = @SYNCEVOLUTION_LDADD@ 
 
 # needed in all cases
 src_syncevo_ldadd += $(gdbus_build_dir)/libgdbussyncevo.la
@@ -22,6 +22,7 @@ src_syncevo_sources = \
   src/syncevo/ConfigFilter.cpp \
   src/syncevo/ConfigNode.h \
   src/syncevo/ConfigNode.cpp \
+  src/syncevo/DBusTraits.h \
   src/syncevo/HashConfigNode.h \
   src/syncevo/VolatileConfigNode.h \
   src/syncevo/VolatileConfigTree.h \
@@ -43,6 +44,8 @@ src_syncevo_sources = \
   src/syncevo/LogStdout.cpp \
   src/syncevo/LogRedirect.h \
   src/syncevo/LogRedirect.cpp \
+  src/syncevo/LogSyslog.h \
+  src/syncevo/LogSyslog.cpp \
   \
   src/syncevo/TransportAgent.h \
   src/syncevo/TransportAgent.cpp \
@@ -57,6 +60,9 @@ src_syncevo_sources = \
   \
   src/syncevo/util.cpp \
   src/syncevo/util.h \
+  src/syncevo/BoostHelper.h \
+  \
+  src/syncevo/Timespec.h \
   \
   src/syncevo/lcs.h \
   src/syncevo/lcs.cpp \
@@ -66,6 +72,8 @@ src_syncevo_sources = \
   \
   src/syncevo/Cmdline.cpp \
   src/syncevo/Cmdline.h \
+  src/syncevo/CmdlineSyncClient.h \
+  src/syncevo/CmdlineSyncClient.cpp \
   \
   src/syncevo/SyncSource.h \
   src/syncevo/SyncSource.cpp \
@@ -96,9 +104,6 @@ src_syncevo_sources = \
   \
   src/syncevo/PrefixConfigNode.h \
   src/syncevo/PrefixConfigNode.cpp \
-  \
-  src/syncevo/FileConfigNode.h \
-  src/syncevo/FileConfigNode.cpp \
   \
   src/syncevo/IniConfigNode.h \
   src/syncevo/IniConfigNode.cpp \
@@ -140,7 +145,7 @@ src_syncevo_libsyncevolution_include_HEADERS = \
   src/syncevo/MapSyncSource.h \
   src/syncevo/LogRedirect.h \
   src/syncevo/LogStdout.h \
-  src/syncevo/FileConfigNode.h \
+  src/syncevo/LogSyslog.h \
   \
   src/syncevo/FilterConfigNode.h \
   src/syncevo/PrefixConfigNode.h \
@@ -148,8 +153,10 @@ src_syncevo_libsyncevolution_include_HEADERS = \
   src/syncevo/SyncConfig.h \
   src/syncevo/SyncSource.h \
   src/syncevo/util.h \
+  src/syncevo/BoostHelper.h \
   src/syncevo/SuspendFlags.h \
   src/syncevo/SyncContext.h \
+  src/syncevo/Timespec.h \
   src/syncevo/UserInterface.h \
   src/syncevo/SynthesisEngine.h \
   src/syncevo/Logging.h \
@@ -191,7 +198,11 @@ src_syncevo_libsyncevolution_la_LIBADD = \
   $(TRANSPORT_LIBS) \
   @LIBS@ \
   $(src_syncevo_ldadd) \
+  $(DBUS_LIBS) \
   $(NSS_LIBS)
+if ENABLE_MODULES
+src_syncevo_libsyncevolution_la_LIBADD += -ldl
+endif
 src_syncevo_libsyncevolution_la_CXXFLAGS = \
   $(PCRECPP_CFLAGS) \
   $(TRANSPORT_CFLAGS) \
@@ -203,6 +214,7 @@ src_syncevo_libsyncevolution_la_CFLAGS = \
   $(SYNCEVO_WFLAGS)
 src_syncevo_libsyncevolution_la_CPPFLAGS = \
   $(src_syncevo_cppflags) \
+  $(DBUS_CFLAGS) \
   -DDATA_DIR=\""$(pkgdatadir)"\" \
   -DXML_CONFIG_DIR=\""$(datadir)/syncevolution/xml"\" \
   -DTEMPLATE_DIR=\""$(datadir)/syncevolution/templates"\" \

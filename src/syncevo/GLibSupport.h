@@ -33,6 +33,7 @@
 typedef void *GMainLoop;
 #endif
 
+#include <boost/shared_ptr.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/utility.hpp>
 #include <boost/foreach.hpp>
@@ -76,7 +77,7 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
  * *inside* the SyncEvolution namespace.
  *
  * Example:
- * SE_GOBJECT_TYPE(GFile);
+ * SE_GOBJECT_TYPE(GFile)
  * SE_BEGIN_CXX
  * {
  *   // reference normally increased during construction,
@@ -96,6 +97,7 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
          _x ## CXX(_x *ptr, bool add_ref = true) : boost::intrusive_ptr<_x>(ptr, add_ref) {} \
          _x ## CXX() {} \
          _x ## CXX(const _x ## CXX &other) : boost::intrusive_ptr<_x>(other) {} \
+         operator _x * () { return get(); } \
 \
          static  _x ## CXX steal(_x *ptr) { return _x ## CXX(ptr, false); } \
     }; \
@@ -155,14 +157,36 @@ struct GErrorCXX {
     /** copies error content */
     GErrorCXX(const GErrorCXX &other) : m_gerror(g_error_copy(other.m_gerror)) {}
     GErrorCXX &operator =(const GErrorCXX &other) {
-        if (this != &other) {
+        if (m_gerror != other.m_gerror) {
             if (m_gerror) {
                 g_clear_error(&m_gerror);
             }
-            m_gerror = g_error_copy(other.m_gerror);
+            if (other.m_gerror) {
+                m_gerror = g_error_copy(other.m_gerror);
+            }
         }
         return *this;
     }
+    GErrorCXX &operator =(const GError* err) {
+        if (err != m_gerror) {
+            if (m_gerror) {
+                g_clear_error(&m_gerror);
+            }
+            if (err) {
+                m_gerror = g_error_copy(err);
+            }
+        }
+        return *this;
+    }
+
+    /** For convenient access to GError members (message, domain, ...) */
+    const GError * operator-> () const { return m_gerror; }
+
+    /**
+     * For passing to C functions. They must not free the GError,
+     * because GErrorCXX retains ownership.
+     */
+    operator const GError * () const { return m_gerror; }
 
     /** error description, with fallback if not set (not expected, so not localized) */
     operator const char * () { return m_gerror ? m_gerror->message : "<<no error>>"; }
@@ -172,6 +196,9 @@ struct GErrorCXX {
 
     /** clear error if any is set */
     void clear() { g_clear_error(&m_gerror); }
+
+    /** transfer ownership of error back to caller */
+    GError *release() { GError *gerror = m_gerror; m_gerror = NULL; return gerror; }
 
     /** checks whether the current error is the one passed as parameters */
     bool matches(GQuark domain, gint code) { return g_error_matches(m_gerror, domain, code); }
@@ -184,6 +211,9 @@ struct GErrorCXX {
      */
     operator GError ** () { return &m_gerror; }
 
+    /** true if error set */
+    operator bool () { return m_gerror != NULL; }
+
     /**
      * always throws an exception, including information from GError if available:
      * <action>: <error message>|failure
@@ -192,6 +222,7 @@ struct GErrorCXX {
 };
 
 template<class T> void NoopDestructor(T *) {}
+template<class T> void GObjectDestructor(T *ptr) { g_object_unref(ptr); }
 template<class T> void GFreeDestructor(T *ptr) { g_free(static_cast<void *>(ptr)); }
 
 /**
@@ -261,11 +292,11 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
     static void listFree(GSList *l) { g_slist_free(l); }
     static void listFree(GList *l) { g_list_free(l); }
 
-    static GSList *listPrepend(GSList *list, T *entry) { return g_slist_prepend(list, static_cast<gpointer>(entry)); }
-    static GList *listPrepend(GList *list, T *entry) { return g_list_prepend(list, static_cast<gpointer>(entry)); }
+    static GSList *listPrepend(GSList *list, T *entry) { return g_slist_prepend(list, (gpointer)entry); }
+    static GList *listPrepend(GList *list, T *entry) { return g_list_prepend(list, (gpointer)entry); }
 
-    static GSList *listAppend(GSList *list, T *entry) { return g_slist_append(list, static_cast<gpointer>(entry)); }
-    static GList *listAppend(GList *list, T *entry) { return g_list_append(list, static_cast<gpointer>(entry)); }
+    static GSList *listAppend(GSList *list, T *entry) { return g_slist_append(list, (gpointer)entry); }
+    static GList *listAppend(GList *list, T *entry) { return g_list_append(list, (gpointer)entry); }
 
  public:
     typedef T * value_type;
@@ -371,6 +402,19 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
 typedef GListCXX<char, GList, GFreeDestructor<char> > GStringListFreeCXX;
 /** use this for a list which does not own the strings it points to */
 typedef GListCXX<char, GList> GStringListNoFreeCXX;
+
+/**
+ * Wraps a C gchar array and takes care of freeing the memory.
+ */
+class PlainGStr : public boost::shared_ptr<gchar>
+{
+    public:
+        PlainGStr() {}
+        PlainGStr(gchar *str) : boost::shared_ptr<char>(str, g_free) {}
+        PlainGStr(const PlainGStr &other) : boost::shared_ptr<gchar>(other) {}    
+        operator const gchar *() const { return &**this; }
+        const gchar *c_str() const { return &**this; }
+};
 
 #endif
 

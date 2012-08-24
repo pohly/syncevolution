@@ -676,6 +676,7 @@ static void handle_unregister(DBusConnection *connection, void *user_data)
 	g_slist_free(data->interfaces);
 
 	g_free(data->introspect);
+        g_static_mutex_free(&data->mutex);
 	g_free(data);
 }
 
@@ -1246,7 +1247,7 @@ gboolean b_dbus_send_error(DBusConnection *connection, DBusMessage *message,
 
 	va_start(args, format);
 
-	error = b_dbus_create_error(message, name, format, args);
+	error = b_dbus_create_error_valist(message, name, format, args);
 
 	va_end(args);
 

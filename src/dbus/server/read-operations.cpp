@@ -18,8 +18,11 @@
  */
 
 #include "read-operations.h"
+#include "dbus-user-interface.h"
 #include "server.h"
 #include "dbus-sync.h"
+
+#include <syncevo/IniConfigNode.h>
 
 SE_BEGIN_CXX
 
@@ -172,8 +175,8 @@ void ReadOperations::getNamedConfig(const std::string &configName,
         }
         syncConfig = dbusConfig.get();
     } else {
-        DBusUserInterface ui;
         dbusConfig = getLocalConfig(configName);
+        DBusUserInterface ui(dbusConfig->getKeyring());
         //try to check password and read password from gnome keyring if possible
         ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
@@ -267,7 +270,7 @@ void ReadOperations::getReports(uint32_t start, uint32_t count,
             }
 
             /** serialize report to ConfigProps and then copy them to reports */
-            HashFileConfigNode node("/dev/null","",true);
+            IniHashConfigNode node("/dev/null","",true);
             node << report;
             ConfigProps props;
             node.readProperties(props);

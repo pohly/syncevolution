@@ -63,9 +63,10 @@ public:
     void stateChanged(uint32_t uiState);
 
     /** TRUE if watching Network Manager status */
-    bool isAvailable() { return getConnection() != NULL; }
+    bool isAvailable() { return m_available; }
 
 private:
+    bool m_available;
 
     class NetworkManagerProperties : public DBusRemoteObject
     {

@@ -30,6 +30,7 @@ ConnmanClient::ConnmanClient(Server &server):
                                                        "SYSTEM" /* use real ConnMan */,
                                                        NULL, true, NULL),
                      "/", "net.connman.Manager", "net.connman", true),
+    m_available(false),
     m_server(server),
     m_propertyChanged(*this, "PropertyChanged")
 {
@@ -39,13 +40,14 @@ ConnmanClient::ConnmanClient(Server &server):
         getProp.start(boost::bind(&ConnmanClient::getPropCb, this, _1, _2));
         m_propertyChanged.activate(boost::bind(&ConnmanClient::propertyChanged, this, _1, _2));
     }else{
-        SE_LOG_ERROR (NULL, NULL, "DBus connection setup for connman failed");
+        SE_LOG_DEBUG (NULL, NULL, "DBus connection setup for connman failed");
     }
 }
 
 void ConnmanClient::getPropCb (const std::map <std::string,
                                boost::variant<std::string> >& props, const string &error){
     if (!error.empty()) {
+        m_available = false;
         if (error == "org.freedesktop.DBus.Error.ServiceUnknown") {
             // ensure there is still first set of singal set in case of no
             // connman available
@@ -57,6 +59,7 @@ void ConnmanClient::getPropCb (const std::map <std::string,
         return;
     }
 
+    m_available = true;
     typedef std::pair <std::string, boost::variant<std::string> > element;
     bool httpPresence = false;
     BOOST_FOREACH (element entry, props) {

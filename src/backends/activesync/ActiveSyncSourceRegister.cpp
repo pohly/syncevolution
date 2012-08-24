@@ -126,7 +126,6 @@ SYNCEVOLUTION_TEST_SUITE_REGISTRATION(ActiveSyncsTest);
 
 #endif // ENABLE_UNIT_TESTS
 
-#ifdef ENABLE_INTEGRATION_TESTS
 namespace {
 #if 0
 }
@@ -142,7 +141,8 @@ namespace {
  * operation. Using the cached information implies that we won't find bugs in
  * the handling of that information.
  */
-static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::string &file)
+static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::string &file,
+                     bool forceBaseReadItem)
 {
     ActiveSyncSource &eassource = static_cast<ActiveSyncSource &>(source);
     ofstream out(file.c_str());
@@ -161,7 +161,20 @@ static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::s
 
     BOOST_FOREACH(const std::string &easid, easids) {
         std::string item;
-        eassource.ActiveSyncSource::readItem(easid, item);
+        if (forceBaseReadItem) {
+            // This bypasses the more specialized
+            // ActiveSyncCalendarSource::readItem(), which helps
+            // reveal potential bugs in it. However, it depends on a
+            // working Fetch operation in the ActiveSync server, which
+            // Google doesn't seem to provide (404 error).
+            eassource.ActiveSyncSource::readItem(easid, item);
+        } else {
+            // Normal readItem() works with Google by using the cached
+            // item. However, the source must have done a beginSync()
+            // with empty sync key, because otherwise the cache is
+            // not guaranteed to be complete.
+            eassource.readItem(easid, item);
+        }
         out << item << '\n';
         if (!boost::ends_with(item, "\n")) {
             out << '\n';
@@ -171,45 +184,51 @@ static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::s
 }
 
 static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t &create,
-                                          ClientTest &client, int source, bool isSourceA)
+                                          ClientTest &client,
+                                          const std::string &clientID,
+                                          int source, bool isSourceA)
 {
-    TestingSyncSource *res = create(client, source, isSourceA);
+    std::auto_ptr<TestingSyncSource> res(create(client, clientID, source, isSourceA));
 
     // Mangle username: if the base username in the config is account
     // "foo", then source B uses "foo_B", because otherwise it'll end
     // up sharing change tracking with source A.
     if (!isSourceA) {
-        ActiveSyncSource *eassource = static_cast<ActiveSyncSource *>(res);
+        ActiveSyncSource *eassource = static_cast<ActiveSyncSource *>(res.get());
         std::string account = eassource->getSyncConfig().getSyncUsername();
         account += "_B";
         eassource->getSyncConfig().setSyncUsername(account, true);
     }
 
-    if (boost::ends_with(res->getDatabaseID(), "_1")) {
-        // only default database currently supported,
-        // use that instead of first named database
-        res->setDatabaseID("");
-        return res;
+    if (res->getDatabaseID().empty()) {
+        return res.release();
     } else {
         // sorry, no database
-        delete res;
+        SE_LOG_ERROR(NULL, NULL, "cannot create EAS source for database %s, check config",
+                     res->getDatabaseID().c_str());
         return NULL;
     }
 }
 
 // common settings for all kinds of data
 static void updateConfigEAS(const RegisterSyncSourceTest */* me */,
-                            ClientTestConfig &config)
+                            ClientTestConfig &config,
+                            EasItemType type)
 {
         // cannot run tests involving a second database:
         // wrap orginal source creation, set default database for
         // database #0 and refuse to return a source for database #1
         config.m_createSourceA = boost::bind(createEASSource, config.m_createSourceA,
-                                             _1, _2, _3);
+                                             _1, _2, _3, _4);
         config.m_createSourceB = boost::bind(createEASSource, config.m_createSourceB,
-                                             _1, _2, _3);
+                                             _1, _2, _3, _4);
 
-        config.m_dump = DumpItems;
+        config.m_dump = boost::bind(DumpItems, _1, _2, _3,
+                                    type == EAS_ITEM_CONTACT ||
+                                    // need to read from our cache for Google Calendar,
+                                    // because it does not support Fetch
+                                    strcmp(getEnv("CLIENT_TEST_SERVER", ""), "googleeas")
+                                    );
         config.m_sourceLUIDsAreVolatile = true;
         // TODO: find out how ActiveSync/Exchange handle children without parent;
         // at the moment, the child is stored as if it was a stand-alone event
@@ -231,7 +250,7 @@ public:
         // TODO: provide comprehensive set of vCard 3.0 contacts as they are understood by the ActiveSync library
         // config.testcases = "testcases/eas_contact.vcf";
 
-        updateConfigEAS(this, config);
+        updateConfigEAS(this, config, EAS_ITEM_CONTACT);
     }
 } ActiveSyncContactTest;
 
@@ -244,7 +263,7 @@ public:
     virtual void updateConfig(ClientTestConfig &config) const
     {
         config.m_type = "eas-events";
-        updateConfigEAS(this, config);
+        updateConfigEAS(this, config, EAS_ITEM_CALENDAR);
     }
 } ActiveSyncEventTest;
 
@@ -257,7 +276,7 @@ public:
     virtual void updateConfig(ClientTestConfig &config) const
     {
         config.m_type = "eas-todos";
-        updateConfigEAS(this, config);
+        updateConfigEAS(this, config, EAS_ITEM_TODO);
     }
 } ActiveSyncTodoTest;
 
@@ -270,12 +289,11 @@ public:
     virtual void updateConfig(ClientTestConfig &config) const
     {
         config.m_type = "eas-memos";
-        updateConfigEAS(this, config);
+        updateConfigEAS(this, config, EAS_ITEM_JOURNAL);
     }
 } ActiveSyncMemoTest;
 
 } // anonymous namespace
-#endif // ENABLE_INTEGRATION_TESTS
 
 #endif // ENABLE_ACTIVESYNC
 

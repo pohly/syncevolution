@@ -34,9 +34,6 @@ std::string lookupDebug, lookupInfo;
 
 }
 
-int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
-int SyncEvoHaveLibbluetooth;
-
 #ifdef EVOLUTION_COMPATIBILITY
 
 struct EDSAbiWrapper EDSAbiWrapperSingleton;
@@ -168,8 +165,9 @@ void *findSymbols(const char *libname, int minver, int maxver,
 
 #endif // EVOLUTION_COMPATIBILITY
 
-extern "C" int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
-extern "C" int SyncEvoHaveLibbluetooth;
+int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
+int EDSAbiHaveIcal;
+int SyncEvoHaveLibbluetooth;
 
 extern "C" void EDSAbiWrapperInit()
 {
@@ -184,8 +182,8 @@ extern "C" void EDSAbiWrapperInit()
 #ifdef EVOLUTION_COMPATIBILITY
 # ifdef HAVE_EDS
     edshandle =
-    findSymbols("libedataserver-1.2.so", 7, 14,
-                FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+    findSymbols("libedataserver-1.2.so", 7, 16,
+                FIND_SYMBOLS_NEED_ALL, NULL,
                 &EDSAbiWrapperSingleton.e_source_get_type, "e_source_get_type",
                 &EDSAbiWrapperSingleton.e_source_get_uri, "e_source_get_uri",
                 &EDSAbiWrapperSingleton.e_source_group_get_type, "e_source_group_get_type",
@@ -198,10 +196,10 @@ extern "C" void EDSAbiWrapperInit()
 
 # ifdef ENABLE_EBOOK
     static const int libebookMinVersion = 5,
-        libebookMaxVersion = 12;
+        libebookMaxVersion = 13;
     ebookhandle =
     findSymbols("libebook-1.2.so", libebookMinVersion, libebookMaxVersion,
-                FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                FIND_SYMBOLS_NEED_ALL, NULL,
                 &EDSAbiWrapperSingleton.e_book_add_contact, "e_book_add_contact",
                 &EDSAbiWrapperSingleton.e_book_authenticate_user, "e_book_authenticate_user",
                 &EDSAbiWrapperSingleton.e_book_commit_contact, "e_book_commit_contact",
@@ -237,12 +235,92 @@ extern "C" void EDSAbiWrapperInit()
 
 # endif // ENABLE_EBOOK
 
+#define EDS_ABI_WRAPPER_ICAL_BASE \
+                &EDSAbiWrapperSingleton.icalcomponent_add_component, "icalcomponent_add_component", \
+                &EDSAbiWrapperSingleton.icalcomponent_add_property, "icalcomponent_add_property", \
+                &EDSAbiWrapperSingleton.icalcomponent_as_ical_string, "icalcomponent_as_ical_string", \
+                &EDSAbiWrapperSingleton.icalcomponent_free, "icalcomponent_free", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_first_component, "icalcomponent_get_first_component", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_first_property, "icalcomponent_get_first_property", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_next_component, "icalcomponent_get_next_component", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_next_property, "icalcomponent_get_next_property", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_recurrenceid, "icalcomponent_get_recurrenceid", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_timezone, "icalcomponent_get_timezone", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_location, "icalcomponent_get_location", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_summary, "icalcomponent_get_summary", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_uid, "icalcomponent_get_uid", \
+                &EDSAbiWrapperSingleton.icalcomponent_get_dtstart, "icalcomponent_get_dtstart", \
+                &EDSAbiWrapperSingleton.icalcomponent_isa, "icalcomponent_isa", \
+                &EDSAbiWrapperSingleton.icalcomponent_new_clone, "icalcomponent_new_clone", \
+                &EDSAbiWrapperSingleton.icalcomponent_new_from_string, "icalcomponent_new_from_string", \
+                &EDSAbiWrapperSingleton.icalcomponent_new, "icalcomponent_new", \
+                &EDSAbiWrapperSingleton.icalcomponent_merge_component, "icalcomponent_merge_component", \
+                &EDSAbiWrapperSingleton.icalcomponent_remove_component, "icalcomponent_remove_component", \
+                &EDSAbiWrapperSingleton.icalcomponent_remove_property, "icalcomponent_remove_property", \
+                &EDSAbiWrapperSingleton.icalcomponent_set_uid, "icalcomponent_set_uid", \
+                &EDSAbiWrapperSingleton.icalcomponent_set_recurrenceid, "icalcomponent_set_recurrenceid", \
+                &EDSAbiWrapperSingleton.icalcomponent_vanew, "icalcomponent_vanew", \
+                &EDSAbiWrapperSingleton.icalparameter_get_tzid, "icalparameter_get_tzid", \
+                &EDSAbiWrapperSingleton.icalparameter_set_tzid, "icalparameter_set_tzid", \
+                &EDSAbiWrapperSingleton.icalparameter_new_from_value_string, "icalparameter_new_from_value_string", \
+                &EDSAbiWrapperSingleton.icalparameter_new_clone, "icalparameter_new_clone", \
+                &EDSAbiWrapperSingleton.icalproperty_new_clone, "icalproperty_new_clone", \
+                &EDSAbiWrapperSingleton.icalproperty_free, "icalproperty_free", \
+                &EDSAbiWrapperSingleton.icalproperty_get_description, "icalproperty_get_description", \
+                &EDSAbiWrapperSingleton.icalproperty_get_uid, "icalproperty_get_uid", \
+                &EDSAbiWrapperSingleton.icalproperty_get_recurrenceid, "icalproperty_get_recurrenceid", \
+                &EDSAbiWrapperSingleton.icalproperty_set_recurrenceid, "icalproperty_set_recurrenceid", \
+                &EDSAbiWrapperSingleton.icalproperty_get_sequence, "icalproperty_get_sequence", \
+                &EDSAbiWrapperSingleton.icalproperty_get_property_name, "icalproperty_get_property_name", \
+                &EDSAbiWrapperSingleton.icalproperty_get_first_parameter, "icalproperty_get_first_parameter", \
+                &EDSAbiWrapperSingleton.icalproperty_get_lastmodified, "icalproperty_get_lastmodified", \
+                &EDSAbiWrapperSingleton.icalproperty_get_next_parameter, "icalproperty_get_next_parameter", \
+                &EDSAbiWrapperSingleton.icalproperty_set_parameter, "icalproperty_set_parameter", \
+                &EDSAbiWrapperSingleton.icalproperty_get_summary, "icalproperty_get_summary", \
+                &EDSAbiWrapperSingleton.icalproperty_new_description, "icalproperty_new_description", \
+                &EDSAbiWrapperSingleton.icalproperty_new_summary, "icalproperty_new_summary", \
+                &EDSAbiWrapperSingleton.icalproperty_new_uid, "icalproperty_new_uid", \
+                &EDSAbiWrapperSingleton.icalproperty_new_sequence, "icalproperty_new_sequence", \
+                &EDSAbiWrapperSingleton.icalproperty_new_recurrenceid, "icalproperty_new_recurrenceid", \
+                &EDSAbiWrapperSingleton.icalproperty_set_value_from_string, "icalproperty_set_value_from_string", \
+                &EDSAbiWrapperSingleton.icalproperty_set_dtstamp, "icalproperty_set_dtstamp", \
+                &EDSAbiWrapperSingleton.icalproperty_set_lastmodified, "icalproperty_set_lastmodified", \
+                &EDSAbiWrapperSingleton.icalproperty_set_sequence, "icalproperty_set_sequence", \
+                &EDSAbiWrapperSingleton.icalproperty_set_uid, "icalproperty_set_uid", \
+                &EDSAbiWrapperSingleton.icalproperty_remove_parameter_by_kind, "icalproperty_remove_parameter_by_kind", \
+                &EDSAbiWrapperSingleton.icalproperty_add_parameter, "icalproperty_add_parameter", \
+                &EDSAbiWrapperSingleton.icalproperty_get_value_as_string, "icalproperty_get_value_as_string", \
+                &EDSAbiWrapperSingleton.icalproperty_get_x_name, "icalproperty_get_x_name", \
+                &EDSAbiWrapperSingleton.icalproperty_new_from_string, "icalproperty_new_from_string", \
+                &EDSAbiWrapperSingleton.icaltime_is_null_time, "icaltime_is_null_time", \
+                &EDSAbiWrapperSingleton.icaltime_is_utc, "icaltime_is_utc", \
+                &EDSAbiWrapperSingleton.icaltime_as_ical_string, "icaltime_as_ical_string", \
+                &EDSAbiWrapperSingleton.icaltime_from_string, "icaltime_from_string", \
+                &EDSAbiWrapperSingleton.icaltime_from_timet, "icaltime_from_timet", \
+                &EDSAbiWrapperSingleton.icaltime_null_time, "icaltime_null_time", \
+                &EDSAbiWrapperSingleton.icaltime_as_timet, "icaltime_as_timet", \
+                &EDSAbiWrapperSingleton.icaltime_set_timezone, "icaltime_set_timezone", \
+                &EDSAbiWrapperSingleton.icaltime_convert_to_zone, "icaltime_convert_to_zone", \
+                &EDSAbiWrapperSingleton.icaltime_get_timezone, "icaltime_get_timezone", \
+                &EDSAbiWrapperSingleton.icaltimezone_free, "icaltimezone_free", \
+                &EDSAbiWrapperSingleton.icaltimezone_get_builtin_timezone, "icaltimezone_get_builtin_timezone", \
+                &EDSAbiWrapperSingleton.icaltimezone_get_builtin_timezone_from_tzid, "icaltimezone_get_builtin_timezone_from_tzid", \
+                &EDSAbiWrapperSingleton.icaltimezone_get_component, "icaltimezone_get_component", \
+                &EDSAbiWrapperSingleton.icaltimezone_get_tzid, "icaltimezone_get_tzid", \
+                &EDSAbiWrapperSingleton.icaltimezone_new, "icaltimezone_new", \
+                &EDSAbiWrapperSingleton.icaltimezone_set_component, "icaltimezone_set_component",
+
+#define EDS_ABI_WRAPPER_ICAL_R \
+                &EDSAbiWrapperSingleton.icalcomponent_as_ical_string_r, "icalcomponent_as_ical_string_r", \
+                &EDSAbiWrapperSingleton.icaltime_as_ical_string_r, "icaltime_as_ical_string_r", \
+                &EDSAbiWrapperSingleton.icalproperty_get_value_as_string_r, "icalproperty_get_value_as_string_r",
+
 # ifdef ENABLE_ECAL
     static const int libecalMinVersion = 3,
-        libecalMaxVersion = 10;
+        libecalMaxVersion = 11;
     ecalhandle =
     findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
-                FIND_SYMBOLS_NEED_ALL|FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                FIND_SYMBOLS_NEED_ALL, NULL,
                 &EDSAbiWrapperSingleton.e_cal_add_timezone, "e_cal_add_timezone",
                 &EDSAbiWrapperSingleton.e_cal_component_get_icalcomponent, "e_cal_component_get_icalcomponent",
                 &EDSAbiWrapperSingleton.e_cal_component_get_last_modified, "e_cal_component_get_last_modified",
@@ -264,89 +342,33 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.e_cal_remove_object, "e_cal_remove_object",
                 &EDSAbiWrapperSingleton.e_cal_remove_object_with_mod, "e_cal_remove_object_with_mod",
                 &EDSAbiWrapperSingleton.e_cal_set_auth_func, "e_cal_set_auth_func",
-                &EDSAbiWrapperSingleton.icalcomponent_add_component, "icalcomponent_add_component",
-                &EDSAbiWrapperSingleton.icalcomponent_add_property, "icalcomponent_add_property",
-                &EDSAbiWrapperSingleton.icalcomponent_as_ical_string, "icalcomponent_as_ical_string",
-                &EDSAbiWrapperSingleton.icalcomponent_free, "icalcomponent_free",
-                &EDSAbiWrapperSingleton.icalcomponent_get_first_component, "icalcomponent_get_first_component",
-                &EDSAbiWrapperSingleton.icalcomponent_get_first_property, "icalcomponent_get_first_property",
-                &EDSAbiWrapperSingleton.icalcomponent_get_next_component, "icalcomponent_get_next_component",
-                &EDSAbiWrapperSingleton.icalcomponent_get_next_property, "icalcomponent_get_next_property",
-                &EDSAbiWrapperSingleton.icalcomponent_get_recurrenceid, "icalcomponent_get_recurrenceid",
-                &EDSAbiWrapperSingleton.icalcomponent_get_timezone, "icalcomponent_get_timezone",
-                &EDSAbiWrapperSingleton.icalcomponent_get_location, "icalcomponent_get_location",
-                &EDSAbiWrapperSingleton.icalcomponent_get_summary, "icalcomponent_get_summary",
-                &EDSAbiWrapperSingleton.icalcomponent_get_uid, "icalcomponent_get_uid",
-                &EDSAbiWrapperSingleton.icalcomponent_get_dtstart, "icalcomponent_get_dtstart",
-                &EDSAbiWrapperSingleton.icalcomponent_isa, "icalcomponent_isa",
-                &EDSAbiWrapperSingleton.icalcomponent_new_clone, "icalcomponent_new_clone",
-                &EDSAbiWrapperSingleton.icalcomponent_new_from_string, "icalcomponent_new_from_string",
-                &EDSAbiWrapperSingleton.icalcomponent_new, "icalcomponent_new",
-                &EDSAbiWrapperSingleton.icalcomponent_merge_component, "icalcomponent_merge_component",
-                &EDSAbiWrapperSingleton.icalcomponent_remove_component, "icalcomponent_remove_component",
-                &EDSAbiWrapperSingleton.icalcomponent_remove_property, "icalcomponent_remove_property",
-                &EDSAbiWrapperSingleton.icalcomponent_set_uid, "icalcomponent_set_uid",
-                &EDSAbiWrapperSingleton.icalcomponent_set_recurrenceid, "icalcomponent_set_recurrenceid",
-                &EDSAbiWrapperSingleton.icalcomponent_vanew, "icalcomponent_vanew",
-                &EDSAbiWrapperSingleton.icalparameter_get_tzid, "icalparameter_get_tzid",
-                &EDSAbiWrapperSingleton.icalparameter_set_tzid, "icalparameter_set_tzid",
-                &EDSAbiWrapperSingleton.icalparameter_new_from_value_string, "icalparameter_new_from_value_string",
-                &EDSAbiWrapperSingleton.icalparameter_new_clone, "icalparameter_new_clone",
-                &EDSAbiWrapperSingleton.icalproperty_new_clone, "icalproperty_new_clone",
-                &EDSAbiWrapperSingleton.icalproperty_free, "icalproperty_free",
-                &EDSAbiWrapperSingleton.icalproperty_get_description, "icalproperty_get_description",
-                &EDSAbiWrapperSingleton.icalproperty_get_uid, "icalproperty_get_uid",
-                &EDSAbiWrapperSingleton.icalproperty_get_recurrenceid, "icalproperty_get_recurrenceid",
-                &EDSAbiWrapperSingleton.icalproperty_set_recurrenceid, "icalproperty_set_recurrenceid",
-                &EDSAbiWrapperSingleton.icalproperty_get_sequence, "icalproperty_get_sequence",
-                &EDSAbiWrapperSingleton.icalproperty_get_property_name, "icalproperty_get_property_name",
-                &EDSAbiWrapperSingleton.icalproperty_get_first_parameter, "icalproperty_get_first_parameter",
-                &EDSAbiWrapperSingleton.icalproperty_get_lastmodified, "icalproperty_get_lastmodified",
-                &EDSAbiWrapperSingleton.icalproperty_get_next_parameter, "icalproperty_get_next_parameter",
-                &EDSAbiWrapperSingleton.icalproperty_set_parameter, "icalproperty_set_parameter",
-                &EDSAbiWrapperSingleton.icalproperty_get_summary, "icalproperty_get_summary",
-                &EDSAbiWrapperSingleton.icalproperty_new_description, "icalproperty_new_description",
-                &EDSAbiWrapperSingleton.icalproperty_new_summary, "icalproperty_new_summary",
-                &EDSAbiWrapperSingleton.icalproperty_new_uid, "icalproperty_new_uid",
-                &EDSAbiWrapperSingleton.icalproperty_new_sequence, "icalproperty_new_sequence",
-                &EDSAbiWrapperSingleton.icalproperty_new_recurrenceid, "icalproperty_new_recurrenceid",
-                &EDSAbiWrapperSingleton.icalproperty_set_value_from_string, "icalproperty_set_value_from_string",
-                &EDSAbiWrapperSingleton.icalproperty_set_dtstamp, "icalproperty_set_dtstamp",
-                &EDSAbiWrapperSingleton.icalproperty_set_lastmodified, "icalproperty_set_lastmodified",
-                &EDSAbiWrapperSingleton.icalproperty_set_sequence, "icalproperty_set_sequence",
-                &EDSAbiWrapperSingleton.icalproperty_set_uid, "icalproperty_set_uid",
-                &EDSAbiWrapperSingleton.icalproperty_remove_parameter_by_kind, "icalproperty_remove_parameter_by_kind",
-                &EDSAbiWrapperSingleton.icalproperty_add_parameter, "icalproperty_add_parameter",
-                &EDSAbiWrapperSingleton.icalproperty_get_value_as_string, "icalproperty_get_value_as_string",
-                &EDSAbiWrapperSingleton.icalproperty_get_x_name, "icalproperty_get_x_name",
-                &EDSAbiWrapperSingleton.icalproperty_new_from_string, "icalproperty_new_from_string",
-                &EDSAbiWrapperSingleton.icaltime_is_null_time, "icaltime_is_null_time",
-                &EDSAbiWrapperSingleton.icaltime_is_utc, "icaltime_is_utc",
-                &EDSAbiWrapperSingleton.icaltime_as_ical_string, "icaltime_as_ical_string",
-                &EDSAbiWrapperSingleton.icaltime_from_string, "icaltime_from_string",
-                &EDSAbiWrapperSingleton.icaltime_from_timet, "icaltime_from_timet",
-                &EDSAbiWrapperSingleton.icaltime_null_time, "icaltime_null_time",
-                &EDSAbiWrapperSingleton.icaltime_as_timet, "icaltime_as_timet",
-                &EDSAbiWrapperSingleton.icaltime_set_timezone, "icaltime_set_timezone",
-                &EDSAbiWrapperSingleton.icaltime_convert_to_zone, "icaltime_convert_to_zone",
-                &EDSAbiWrapperSingleton.icaltime_get_timezone, "icaltime_get_timezone",
-                &EDSAbiWrapperSingleton.icaltimezone_free, "icaltimezone_free",
-                &EDSAbiWrapperSingleton.icaltimezone_get_builtin_timezone, "icaltimezone_get_builtin_timezone",
-                &EDSAbiWrapperSingleton.icaltimezone_get_builtin_timezone_from_tzid, "icaltimezone_get_builtin_timezone_from_tzid",
-                &EDSAbiWrapperSingleton.icaltimezone_get_component, "icaltimezone_get_component",
-                &EDSAbiWrapperSingleton.icaltimezone_get_tzid, "icaltimezone_get_tzid",
-                &EDSAbiWrapperSingleton.icaltimezone_new, "icaltimezone_new",
-                &EDSAbiWrapperSingleton.icaltimezone_set_component, "icaltimezone_set_component",
+                EDS_ABI_WRAPPER_ICAL_BASE
                 (void *)0);
     EDSAbiHaveEcal = EDSAbiWrapperSingleton.e_cal_new != 0;
     ecalhandle =
         findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
                 FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
-                &EDSAbiWrapperSingleton.icalcomponent_as_ical_string_r, "icalcomponent_as_ical_string_r",
-                &EDSAbiWrapperSingleton.icaltime_as_ical_string_r, "icaltime_as_ical_string_r",
-                &EDSAbiWrapperSingleton.icalproperty_get_value_as_string_r, "icalproperty_get_value_as_string_r",
+                EDS_ABI_WRAPPER_ICAL_R
                 (void *)0);
 # endif // ENABLE_ECAL
+
+# ifdef ENABLE_ICAL
+    if (!EDSAbiWrapperSingleton.icalcomponent_add_component) {
+        // libecal not found above (or not enabled), but libical
+        // might still be available, so check for it separately
+        ecalhandle =
+            findSymbols("libical.so", 0, 0,
+                        FIND_SYMBOLS_NEED_ALL, NULL,
+                        EDS_ABI_WRAPPER_ICAL_BASE
+                        (void *)0);
+        ecalhandle =
+            findSymbols("libical.so", 0, 0,
+                        0, NULL,
+                        EDS_ABI_WRAPPER_ICAL_R
+                        (void *)0);
+    }
+    EDSAbiHaveIcal = EDSAbiWrapperSingleton.icalcomponent_add_component != 0;
+# endif // ENABLE_ICAL
 
 # ifdef ENABLE_BLUETOOTH
     int bluetooth_version;
@@ -399,6 +421,9 @@ extern "C" void EDSAbiWrapperInit()
 # endif
 # ifdef ENABLE_ECAL
     EDSAbiHaveEcal = true;
+# endif
+# ifdef ENABLE_ICAL
+    EDSAbiHaveIcal = true;
 # endif
 # ifdef ENABLE_BLUETOOTH
     SyncEvoHaveLibbluetooth = true;

@@ -309,12 +309,16 @@ class Session {
      * @param code       HTTP status code
      * @param status     optional ne_status pointer, non-NULL for all requests
      * @param location   optional "Location" header value
+     * @param expectedCodes   set of codes which are normal and must not result
+     *                        in retrying or an exception (returns true, as if the
+     *                        operation succeeded)
      *
      * @return true for success, false if retry needed (only if deadline not empty);
      *         errors reported via exceptions
      */ 
     bool checkError(int error, int code = 0, const ne_status *status = NULL,
-                    const string &location = "");
+                    const string &location = "",
+                    const std::set<int> *expectedCodes = NULL);
 
     ne_session *getSession() const { return m_session; }
 
@@ -528,7 +532,7 @@ class Request
      *
      * @return result of Session::checkError()
      */
-    bool run();
+    bool run(const std::set<int> *expectedCodes = NULL);
 
     std::string getResponseHeader(const std::string &name) {
         const char *value = ne_get_response_header(m_req, name.c_str());
@@ -552,7 +556,7 @@ class Request
     static int addResultData(void *userdata, const char *buf, size_t len);
 
     /** throw error if error code *or* current status indicates failure */
-    bool checkError(int error);
+    bool checkError(int error, const std::set<int> *expectedCodes = NULL);
 };
 
 /** thrown for 301 HTTP status */

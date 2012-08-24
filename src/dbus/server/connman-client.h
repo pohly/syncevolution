@@ -45,9 +45,10 @@ public:
     void getPropCb(const std::map <std::string, boost::variant<std::string> >& props, const std::string &error);
 
     /** TRUE if watching ConnMan status */
-    bool isAvailable() { return getConnection() != NULL; }
+    bool isAvailable() { return m_available; }
 
 private:
+    bool m_available;
     Server &m_server;
 
     GDBusCXX::SignalWatch2 <std::string, boost::variant<std::string> > m_propertyChanged;

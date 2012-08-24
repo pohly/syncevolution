@@ -36,6 +36,10 @@
 
 SE_BEGIN_CXX
 
+#ifndef GDBUS_CXX_HAVE_DISCONNECT
+class ForkExecParentDBusAPI;
+#endif
+
 /**
  * Utility class which starts a specific helper binary in a second
  * process. The helper binary is identified via its base name like
@@ -128,9 +132,11 @@ class ForkExecParent : public ForkExec
 
     /**
      * request that the child process terminates by sending it a
-     * SIGINT
+     * SIGINT and/or SIGTERM
+     * @param signal   if zero (default), send both signals, otherwise
+     *                 the specified one
      */
-    void stop();
+    void stop(int signal = 0);
 
     /**
      * kill the child process without giving it a chance to shut down
@@ -140,10 +146,28 @@ class ForkExecParent : public ForkExec
 
     /**
      * Called when the helper has quit. The parameter of the signal is
-     * the return status of the helper (see waitpid()).
+     * the return status of the helper (see waitpid()). If output
+     * redirection is active, then this signal will only be invoked
+     * after processing all output.
      */
     typedef boost::signals2::signal<void (int)> OnQuit;
     OnQuit m_onQuit;
+
+    /**
+     * Called when output from the helper is available. The buffer is
+     * guaranteed to be nul-terminated with a byte that is not
+     * included in the size.
+     *
+     * Register slots *before* calling start(), because output
+     * redirection of the helper will only be done if someone is
+     * waiting for it. If m_onOutput has a slot, then both stderr and
+     * stdout are redirected into the same stream and only m_onOutput
+     * will be invoked.
+     */
+    typedef boost::signals2::signal<void (const char *buffer, size_t length)> OnOutput;
+    OnOutput m_onOutput;
+    OnOutput m_onStdout;
+    OnOutput m_onStderr;
 
     enum State {
         IDLE,           /**< instance constructed, but start() not called yet */
@@ -159,6 +183,17 @@ class ForkExecParent : public ForkExec
             IDLE;
     }
 
+    /**
+     * Get the childs pid. This can be used as a unique id common to
+     * both parent and child.
+     */
+    int getChildPid() { return static_cast<int>(m_childPid); }
+
+    /**
+     * Simply pushes a new environment variable onto m_envStrings.
+     */
+    void addEnvVar(const std::string &name, const std::string &value);
+
  private:
     ForkExecParent(const std::string &helper);
 
@@ -171,8 +206,17 @@ class ForkExecParent : public ForkExec
     GPid m_childPid;
     bool m_hasConnected;
     bool m_hasQuit;
+    gint m_status;
     bool m_sigIntSent;
     bool m_sigTermSent;
+#ifndef GDBUS_CXX_HAVE_DISCONNECT
+    boost::scoped_ptr<class ForkExecParentDBusAPI> m_api;
+#endif
+
+    /** invoke m_onOutput while reading from a single stream */
+    bool m_mergedStdoutStderr;
+    GIOChannel *m_out, *m_err;
+    guint m_outID, m_errID;
 
     GSource *m_watchChild;
     static void watchChildCallback(GPid pid,
@@ -180,6 +224,15 @@ class ForkExecParent : public ForkExec
                                    gpointer data) throw();
 
     void newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw();
+
+    void setupPipe(GIOChannel *&channel, guint &sourceID, int fd);
+    static gboolean outputReady(GIOChannel *source,
+                                GIOCondition condition,
+                                gpointer data) throw ();
+
+    void checkCompletion() throw ();
+
+    static void forked(gpointer me) throw();
 };
 
 /**
@@ -202,11 +255,29 @@ class ForkExecChild : public ForkExec
     static boost::shared_ptr<ForkExecChild> create();
 
     /**
-     * initiates connection to parent, connect to ForkExec::m_onConnect
+     * Initiates connection to parent, connect to ForkExec::m_onConnect
      * before calling this function to be notified of success and
-     * ForkExec::m_onFailure for failures
+     * ForkExec::m_onFailure for failures.
+     *
+     * m_onConnect is guaranteed to be called before message processing
+     * starts. It's the right place to add objects to the bus that are
+     * expected by the parent.
      */
     void connect();
+
+    /**
+     * Called when the parent has quit.
+     */
+    typedef boost::signals2::signal<void ()> OnQuit;
+    OnQuit m_onQuit;
+
+    enum State {
+        IDLE,         /**< created, connect() not called yet */
+        CONNECTING,   /**< connect() called but no connection yet */
+        CONNECTED,    /**< connection established */
+        DISCONNECTED  /**< lost connection or failed to establish it */
+    };
+    State getState() const { return m_state; }
 
     /**
      * true if the current process was created by ForkExecParent
@@ -217,6 +288,8 @@ class ForkExecChild : public ForkExec
     ForkExecChild();
 
     static const char *getParentDBusAddress();
+    void connectionLost();
+    State m_state;
 };
 
 SE_END_CXX

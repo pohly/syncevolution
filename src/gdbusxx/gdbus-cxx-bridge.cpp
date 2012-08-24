@@ -33,6 +33,65 @@ namespace GDBusCXX {
 MethodHandler::MethodMap MethodHandler::m_methodMap;
 boost::function<void (void)> MethodHandler::m_callback;
 
+// It should be okay to use global variables here because they are
+// only used inside the main thread while it waits in undelay() for a
+// positive or negative result to g_bus_own_name_on_connection().
+// Once acquired, the name can only get lost again when the
+// D-Bus daemon dies (no name owership alloed), in which case the
+// process dies anyway.
+static bool nameError;
+static bool nameAcquired;
+static void BusNameAcquired(GDBusConnection *connection,
+                            const gchar *name,
+                            gpointer userData) throw ()
+{
+    try {
+        g_debug("got D-Bus name %s", name);
+        nameAcquired = true;
+    } catch (...) {
+        nameError = true;
+    }
+}
+
+static void BusNameLost(GDBusConnection *connection,
+                        const gchar *name,
+                        gpointer userData) throw ()
+{
+    try {
+        g_debug("lost %s %s",
+                connection ? "D-Bus connection for name" :
+                "D-Bus name",
+                name);
+    } catch (...) {
+    }
+    nameError = true;
+}
+
+void DBusConnectionPtr::undelay() const
+{
+    if (!m_name.empty()) {
+        g_debug("starting to acquire D-Bus name %s", m_name.c_str());
+        nameAcquired = false;
+        nameError = false;
+        char *copy = g_strdup(m_name.c_str());
+        g_bus_own_name_on_connection(get(),
+                                     copy,
+                                     G_BUS_NAME_OWNER_FLAGS_NONE,
+                                     BusNameAcquired,
+                                     BusNameLost,
+                                     copy,
+                                     g_free);
+        while (!nameAcquired && !nameError) {
+            g_main_context_iteration(NULL, true);
+        }
+        g_debug("done with acquisition of %s", m_name.c_str());
+        if (nameError) {
+            throw std::runtime_error("could not obtain D-Bus name - already running?");
+        }
+    }
+    g_dbus_connection_start_message_processing(get());
+}
+
 DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           const char *name,
                                           bool unshared,
@@ -40,10 +99,13 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
 {
     DBusConnectionPtr conn;
     GError* error = NULL;
+    GBusType type =
+        boost::iequals(busType, "SESSION") ?
+        G_BUS_TYPE_SESSION :
+        G_BUS_TYPE_SYSTEM;
 
-    if(unshared) {
-        char *address = g_dbus_address_get_for_bus_sync(boost::iequals(busType, "SESSION") ?
-                                                        G_BUS_TYPE_SESSION : G_BUS_TYPE_SYSTEM,
+    if (unshared) {
+        char *address = g_dbus_address_get_for_bus_sync(type,
                                                         NULL, &error);
         if(address == NULL) {
             if (err) {
@@ -68,9 +130,7 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
         }
     } else {
         // This returns a singleton, shared connection object.
-        conn = DBusConnectionPtr(g_bus_get_sync(boost::iequals(busType, "SESSION") ?
-                                                G_BUS_TYPE_SESSION :
-                                                G_BUS_TYPE_SYSTEM,
+        conn = DBusConnectionPtr(g_bus_get_sync(type,
                                                 NULL, &error),
                                  false);
         if(conn == NULL) {
@@ -81,9 +141,11 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
         }
     }
 
-    if(name) {
-        g_bus_own_name_on_connection(conn.get(), name, G_BUS_NAME_OWNER_FLAGS_NONE,
-                                     NULL, NULL, NULL, NULL);
+    if (name) {
+        // Request name later in undelay(), after the caller
+        // had a chance to add objects.
+        conn.addName(name);
+        // Acting as client, need to stop when D-Bus daemon dies.
         g_dbus_connection_set_exit_on_close(conn.get(), TRUE);
     }
 
@@ -91,11 +153,18 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
 }
 
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
-                                          DBusErrorCXX *err)
+                                          DBusErrorCXX *err,
+                                          bool delayed /*= false*/)
 {
     GError* error = NULL;
+    int flags = G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT;
+
+    if (delayed) {
+        flags |= G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING;
+    }
+
     DBusConnectionPtr conn(g_dbus_connection_new_for_address_sync(address.c_str(),
-                                                                  G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                                                  static_cast<GDBusConnectionFlags>(flags),
                                                                   NULL, /* GDBusAuthObserver */
                                                                   NULL, /* GCancellable */
                                                                   &error),
@@ -105,6 +174,32 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
     }
 
     return conn;
+}
+
+static void ConnectionLost(GDBusConnection *connection,
+                           gboolean remotePeerVanished,
+                           GError *error,
+                           gpointer data)
+{
+    DBusConnectionPtr::Disconnect_t *cb = static_cast<DBusConnectionPtr::Disconnect_t *>(data);
+    (*cb)();
+}
+
+static void DestroyDisconnect(gpointer data,
+                              GClosure *closure)
+                           {
+    DBusConnectionPtr::Disconnect_t *cb = static_cast<DBusConnectionPtr::Disconnect_t *>(data);
+    delete cb;
+}
+
+void DBusConnectionPtr::setDisconnect(const Disconnect_t &func)
+{
+    g_signal_connect_closure(get(),
+                             "closed",
+                             g_cclosure_new(G_CALLBACK(ConnectionLost),
+                                            new Disconnect_t(func),
+                                            DestroyDisconnect),
+                             true);
 }
 
 boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &address, DBusErrorCXX *err)
@@ -150,7 +245,7 @@ boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &addres
         return boost::shared_ptr<DBusServerCXX>();
     }
 
-    g_dbus_server_start(server);
+    // steals reference to 'server'
     boost::shared_ptr<DBusServerCXX> res(new DBusServerCXX(server, realAddr));
     g_signal_connect(server,
                      "new-connection",
@@ -181,10 +276,14 @@ gboolean DBusServerCXX::newConnection(GDBusServer *server, GDBusConnection *newC
                 g_dbus_connection_get_capabilities(newConn) & G_DBUS_CAPABILITY_FLAGS_UNIX_FD_PASSING);
 
         try {
-            DBusConnectionPtr conn(newConn);
+            // Ref count of connection has to be increased if we want to handle it.
+            // Something inside m_newConnection has to take ownership of connection,
+            // because conn increases ref count only temporarily.
+            DBusConnectionPtr conn(newConn, true);
             me->m_newConnection(*me, conn);
         } catch (...) {
             g_error("handling new D-Bus connection failed with C++ exception");
+            return FALSE;
         }
 
         return TRUE;
@@ -194,10 +293,137 @@ gboolean DBusServerCXX::newConnection(GDBusServer *server, GDBusConnection *newC
 }
 
 DBusServerCXX::DBusServerCXX(GDBusServer *server, const std::string &address) :
-    m_server(server),
+    m_server(server, false), // steal reference
     m_address(address)
+{
+    g_dbus_server_start(server);
+}
+
+DBusServerCXX::~DBusServerCXX()
+{
+    g_dbus_server_stop(m_server.get());
+}
+
+void Watch::nameOwnerChanged(GDBusConnection *connection,
+                             const gchar *sender_name,
+                             const gchar *object_path,
+                             const gchar *interface_name,
+                             const gchar *signal_name,
+                             GVariant *parameters,
+                             gpointer user_data)
+{
+    Watch *watch = static_cast<Watch *>(user_data);
+    if (!watch->m_called) {
+        gchar *name = NULL, *oldOwner = NULL, *newOwner = NULL;
+        g_variant_get(parameters, "(sss)", &name, &oldOwner, &newOwner);
+        bool matches = name && watch->m_peer == name &&
+            newOwner && !*newOwner;
+        g_free(name);
+        g_free(oldOwner);
+        g_free(newOwner);
+        if (matches) {
+            watch->disconnected();
+        }
+    }
+}
+
+void Watch::disconnected()
+{
+    if (!m_called) {
+        m_called = true;
+        if (m_callback) {
+            m_callback();
+        }
+    }
+}
+
+Watch::Watch(const DBusConnectionPtr &conn,
+                     const boost::function<void (void)> &callback) :
+    m_conn(conn),
+    m_callback(callback),
+    m_called(false),
+    m_watchID(0)
 {
 }
 
-
+void Watch::setCallback(const boost::function<void (void)> &callback)
+{
+    m_callback = callback;
+    if (m_called && m_callback) {
+        m_callback();
+    }
 }
+
+void Watch::activate(const char *peer)
+{
+    if (!peer) {
+        throw std::runtime_error("Watch::activate(): no peer");
+    }
+    m_peer = peer;
+
+    // Install watch first ...
+    m_watchID = g_dbus_connection_signal_subscribe(m_conn.get(),
+                                                   NULL, // TODO org.freedesktop.DBus?
+                                                   "org.freedesktop.DBus",
+                                                   "NameOwnerChanged",
+                                                   "/org/freedesktop/DBus",
+                                                   NULL,
+                                                   G_DBUS_SIGNAL_FLAGS_NONE,
+                                                   nameOwnerChanged,
+                                                   this,
+                                                   NULL);
+    if (!m_watchID) {
+        throw std::runtime_error("g_dbus_connection_signal_subscribe(): NameLost failed");
+    }
+
+    // ... then check that the peer really exists,
+    // otherwise we'll never notice the disconnect.
+    // If it disconnects while we are doing this,
+    // then disconnect() will be called twice,
+    // but it handles that.
+    GError *error = NULL;
+
+    GVariant *result = g_dbus_connection_call_sync(m_conn.get(),
+                                                   "org.freedesktop.DBus",
+                                                   "/org/freedesktop/DBus",
+                                                   "org.freedesktop.DBus",
+                                                   "NameHasOwner",
+                                                   g_variant_new("(s)", peer),
+                                                   G_VARIANT_TYPE("(b)"),
+                                                   G_DBUS_CALL_FLAGS_NONE,
+                                                   -1, // default timeout
+                                                   NULL,
+                                                   &error);
+
+    if (result != NULL) {
+        bool actual_result = false;
+
+        g_variant_get(result, "(b)", &actual_result);
+        if (!actual_result) {
+            disconnected();
+        }
+    } else {
+        std::string error_message(error->message);
+        g_error_free(error);
+        std::string err_msg("g_dbus_connection_call_sync(): NameHasOwner - ");
+        throw std::runtime_error(err_msg + error_message);
+    }
+}
+
+Watch::~Watch()
+{
+    if (m_watchID) {
+        g_dbus_connection_signal_unsubscribe(m_conn.get(), m_watchID);
+        m_watchID = 0;
+    }
+}
+
+void getWatch(GDBusConnection *conn, GDBusMessage *msg,
+              GVariantIter &iter, boost::shared_ptr<Watch> &value)
+{
+    std::auto_ptr<Watch> watch(new Watch(conn));
+    watch->activate(g_dbus_message_get_sender(msg));
+    value.reset(watch.release());
+}
+
+} // namespace GDBusCXX

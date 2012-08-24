@@ -102,6 +102,47 @@
    fun:getpwnam_r
 }
 
+# ==19822== 300 (60 direct, 240 indirect) bytes in 1 blocks are definitely lost in loss record 649 of 788
+# ==19822==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
+# ==19822==    by 0xA43599C: nss_parse_service_list (nsswitch.c:626)
+# ==19822==    by 0xA436171: __nss_database_lookup (nsswitch.c:167)
+# ==19822==    by 0x17C8C1EF: ???
+# ==19822==    by 0x17C8CD94: ???
+# ==19822==    by 0xA3F5ADC: getpwuid_r@@GLIBC_2.2.5 (getXXbyYY_r.c:256)
+# ==19822==    by 0x95742E7: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x95775FE: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x957788A: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9577916: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9577AD8: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9577BA5: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9552188: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9551260: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x955178D: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x9552C09: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956C188: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956CE62: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956D8D2: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956C481: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x95573BB: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x956E5E9: dbus_watch_handle (in /lib/x86_64-linux-gnu/libdbus-1.so.3.5.8)
+# ==19822==    by 0x6139EE: dispatch_watch (mainloop.c:126)
+# ==19822==    by 0x92980CE: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==19822==    by 0x92988C7: ??? (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==19822==    by 0x9298E01: g_main_loop_run (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
+# ==19822==    by 0x7B849B: SyncEvo::LocalTransportAgent::wait(bool) (LocalTransportAgent.cpp:333)
+# ==19822==    by 0x73A153: SyncEvo::SyncContext::doSync() (SyncContext.cpp:3689)
+# ==19822==    by 0x741334: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3003)
+# ==19822==    by 0x5F3C68: SyncEvo::SessionHelper::doSync(SyncEvo::SessionCommon::SyncParams const&, boost::shared_ptr<GDBusCXX::Result0> const&) (session-helper.cpp:96)
+# ==19822== 
+{
+   nss_parse_service_list
+   Memcheck:Leak
+   fun:malloc
+   fun:nss_parse_service_list
+   ...
+   fun:getpwuid_r*
+}
+
 # ==7948== 292 (52 direct, 240 indirect) bytes in 1 blocks are definitely lost in loss record 7 of 53
 # ==7948==    at 0x4C21C16: malloc (vg_replace_malloc.c:149)
 # ==7948==    by 0x93B2120: (within /lib/libc-2.6.1.so)
@@ -905,6 +946,75 @@
    fun:b_dbus_setup_server
 }
 
+# ==19740== 72 bytes in 1 blocks are possibly lost in loss record 1,226 of 1,985
+# ==19740==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==19740==    by 0x9906590: g_malloc0 (gmem.c:189)
+# ==19740==    by 0x9676368: g_closure_new_simple (gclosure.c:206)
+# ==19740==    by 0x96778CF: g_cclosure_new (gclosure.c:917)
+# ==19740==    by 0x968E91D: g_signal_connect_data (gsignal.c:2443)
+# ==19740==    by 0x93DA9D8: has_connection (gdbusnameowning.c:425)
+# ==19740==    by 0x93DB278: g_bus_own_name_on_connection (gdbusnameowning.c:550)
+# ==19740==    by 0x66E560: GDBusCXX::dbus_get_bus_connection(char const*, char const*, bool, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:86)
+# ==19740==    by 0x5E3D54: main (main.cpp:109)
+# ==19740== 
+{
+   g_cclosure_new + GIO D-Bus name owning leak
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:has_connection
+}
+
+# ==10738== 72 bytes in 1 blocks are possibly lost in loss record 1,327 of 2,063
+# ==10738==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==10738==    by 0x94C3590: g_malloc0 (gmem.c:189)
+# ==10738==    by 0x9233368: g_closure_new_simple (gclosure.c:206)
+# ==10738==    by 0x92348CF: g_cclosure_new (gclosure.c:917)
+# ==10738==    by 0x924B91D: g_signal_connect_data (gsignal.c:2443)
+# ==10738==    by 0x8AC520E: notify_notification_show (in /usr/lib/x86_64-linux-gnu/libnotify.so.4.0.0)
+# ==10738==    by 0x63A1BB: SyncEvo::AutoSyncManager::syncDone(SyncEvo::SyncMLStatus) (auto-sync-manager.cpp:335)
+# ==10738==    by 0x62459C: SyncEvo::Session::run(SyncEvo::LogRedirect&) (session.cpp:768)
+# ==10738==    by 0x60C8AC: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:362)
+# ==10738==    by 0x5DDFBA: main (main.cpp:120)
+# ==10738== 
+{
+   g_cclosure_new + notify_notification_show
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:notify_notification_show
+}
+
+# ==27329== 2,032 bytes in 1 blocks are definitely lost in loss record 23,780 of 24,016
+# ==27329==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==27329==    by 0x8532590: g_malloc0 (gmem.c:189)
+# ==27329==    by 0x84FEAEF: thread_memory_from_self.part.9 (gslice.c:512)
+# ==27329==    by 0x8545984: g_slice_alloc (gslice.c:501)
+# ==27329==    by 0x8545CA5: g_slice_alloc0 (gslice.c:1029)
+# ==27329==    by 0x852BCCC: g_main_context_push_thread_default (gmain.c:671)
+# ==27329==    by 0x759B90C: gdbus_shared_thread_func (gdbusprivate.c:276)
+# ==27329==    by 0x854E404: g_thread_proxy (gthread.c:801)
+# ==27329==    by 0x6E4AB4F: start_thread (pthread_create.c:304)
+# ==27329==    by 0x9DD990C: clone (clone.S:112)
+# ==27329== 
+{
+   GIO D-Bus thread
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:thread_memory_from_self.*
+   fun:g_slice_alloc
+   fun:g_slice_alloc0
+   fun:g_main_context_push_thread_default
+   fun:gdbus_shared_thread_func
+}
+
 ### KDE ###
 
 # ==21052== 1,040 bytes in 26 blocks are possibly lost in loss record 5,184 of 5,271
@@ -1186,28 +1296,93 @@
    segfault caused by valgrind + libdl
    Memcheck:Jump
    obj:*
-   fun:open_verify
-   fun:open_path
+   ...
+   fun:_dl_*
+   ...
+   fun:openaux
 }
 
-# ==17052== Jump to the invalid address stated on the next line
-# ==17052==    at 0x4CE: ???
-# ==17052==    by 0x4005557: open_verify (dl-load.c:1821)
-# ==17052==    by 0x4007913: _dl_map_object (dl-load.c:2368)
-# ==17052==    by 0x400CF61: openaux (dl-deps.c:65)
-# ==17052==    by 0x400D925: _dl_catch_error (dl-error.c:178)
-# ==17052==    by 0x400C02B: _dl_map_object_deps (dl-deps.c:247)
-# ==17052==    by 0x40032B6: dl_main (rtld.c:1815)
-# ==17052==    by 0x4014B2D: _dl_sysdep_start (dl-sysdep.c:244)
-# ==17052==    by 0x4001422: _dl_start (rtld.c:342)
-# ==17052==    by 0x4000AF7: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
-# ==17052==  Address 0x4ce is not stack'd, malloc'd or (recently) free'd
-# ==17052== 
+# ==19740== 72 bytes in 1 blocks are possibly lost in loss record 1,226 of 1,985
+# ==19740==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==19740==    by 0x9906590: g_malloc0 (gmem.c:189)
+# ==19740==    by 0x9676368: g_closure_new_simple (gclosure.c:206)
+# ==19740==    by 0x96778CF: g_cclosure_new (gclosure.c:917)
+# ==19740==    by 0x968E91D: g_signal_connect_data (gsignal.c:2443)
+# ==19740==    by 0x93DA9D8: has_connection (gdbusnameowning.c:425)
+# ==19740==    by 0x93DB278: g_bus_own_name_on_connection (gdbusnameowning.c:550)
+# ==19740==    by 0x66E560: GDBusCXX::dbus_get_bus_connection(char const*, char const*, bool, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:86)
+# ==19740==    by 0x5E3D54: main (main.cpp:109)
+# ==19740== 
 {
-   segfault caused by valgrind + libdl, II
-   Memcheck:Jump
-   obj:*
-   fun:open_verify
-   fun:_dl_map_object
-   fun:openaux
+   g_cclosure_new + GIO D-Bus name owning leak
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:has_connection
+}
+
+# ==10738== 72 bytes in 1 blocks are possibly lost in loss record 1,327 of 2,063
+# ==10738==    at 0x4C260C6: calloc (vg_replace_malloc.c:566)
+# ==10738==    by 0x94C3590: g_malloc0 (gmem.c:189)
+# ==10738==    by 0x9233368: g_closure_new_simple (gclosure.c:206)
+# ==10738==    by 0x92348CF: g_cclosure_new (gclosure.c:917)
+# ==10738==    by 0x924B91D: g_signal_connect_data (gsignal.c:2443)
+# ==10738==    by 0x8AC520E: notify_notification_show (in /usr/lib/x86_64-linux-gnu/libnotify.so.4.0.0)
+# ==10738==    by 0x63A1BB: SyncEvo::AutoSyncManager::syncDone(SyncEvo::SyncMLStatus) (auto-sync-manager.cpp:335)
+# ==10738==    by 0x62459C: SyncEvo::Session::run(SyncEvo::LogRedirect&) (session.cpp:768)
+# ==10738==    by 0x60C8AC: SyncEvo::Server::run(SyncEvo::LogRedirect&) (server.cpp:362)
+# ==10738==    by 0x5DDFBA: main (main.cpp:120)
+# ==10738== 
+{
+   g_cclosure_new + notify_notification_show
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:notify_notification_show
+}
+
+# ==14656== 100 bytes in 1 blocks are possibly lost in loss record 838 of 1,005
+# ==14656==    at 0x4C27209: operator new(unsigned long) (vg_replace_malloc.c:287)
+# ==14656==    by 0x9C52FC8: std::string::_Rep::_S_create(unsigned long, unsigned long, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14656==    by 0x9C549D4: char* std::string::_S_construct<char const*>(char const*, char const*, std::allocator<char> const&, std::forward_iterator_tag) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14656==    by 0x9C54B22: std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(char const*, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14656==    by 0x11971F9B: ??? (in /usr/lib/libstreamanalyzer.so.0.7.7)
+# ==14656==    by 0x11972257: ??? (in /usr/lib/libstreamanalyzer.so.0.7.7)
+# ==14656==    by 0x400DCCF: call_init (dl-init.c:85)
+# ==14656==    by 0x400DDC6: _dl_init (dl-init.c:134)
+# ==14656==    by 0x4000B29: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
+# ==14656== 
+{
+   Strigi search init leak
+   Memcheck:Leak
+   ...
+   obj:*libstreamanalyzer.so*
+   fun:call_init
+   fun:_dl_init
+}
+
+# ==14906== 30 bytes in 1 blocks are possibly lost in loss record 311 of 1,005
+# ==14906==    at 0x4C27209: operator new(unsigned long) (vg_replace_malloc.c:287)
+# ==14906==    by 0x9C52FC8: std::string::_Rep::_S_create(unsigned long, unsigned long, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14906==    by 0x9C549D4: char* std::string::_S_construct<char const*>(char const*, char const*, std::allocator<char> const&, std::forward_iterator_tag) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14906==    by 0x9C54B22: std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(char const*, std::allocator<char> const&) (in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.16)
+# ==14906==    by 0x145E4C5E: ??? (in /usr/lib/libstreams.so.0.7.7)
+# ==14906==    by 0x145E4CDA: ??? (in /usr/lib/libstreams.so.0.7.7)
+# ==14906==    by 0x400DCCF: call_init (dl-init.c:85)
+# ==14906==    by 0x400DDC6: _dl_init (dl-init.c:134)
+# ==14906==    by 0x4000B29: ??? (in /lib/x86_64-linux-gnu/ld-2.13.so)
+# ==14906== 
+{
+   Strigi stream search leak II
+   Memcheck:Leak
+   ...
+   obj:*libstreams.so*
+   fun:call_init
+   fun:_dl_init
 }
