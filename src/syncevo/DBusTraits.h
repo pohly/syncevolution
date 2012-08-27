@@ -49,6 +49,15 @@ namespace GDBusCXX {
         typedef I host_type;
         typedef const I &arg_type;
 
+#ifdef GDBUS_CXX_GIO
+        static void get(ExtractArgs &context,
+                        reader_type &reader, host_type &value)
+        {
+            typename base_traits::host_type tmp;
+            base_traits::get(context, reader, tmp);
+            value = host_type(tmp.first, tmp.second);
+        }
+#else
         static void get(connection_type *conn,
                         message_type *msg,
                         reader_type &reader, host_type &value)
@@ -57,6 +66,7 @@ namespace GDBusCXX {
             base_traits::get(conn, msg, reader, tmp);
             value = host_type(tmp.first, tmp.second);
         }
+#endif
 
         static void append(builder_type &builder, arg_type value)
         {
