@@ -37,11 +37,15 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include <pcrecpp.h>
+#include <algorithm>
+
 #include <syncevo/util.h>
 
 #include "gdbus-cxx-bridge.h"
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/bind.hpp>
 
 #include <syncevo/SyncContext.h>
 #include <syncevo/declarations.h>
@@ -55,7 +59,7 @@ class PbapSession {
 public:
     PbapSession(void);
 
-    void initSession(const std::string &address);
+    void initSession(const std::string &address, const std::string &format);
 
     typedef std::map<std::string, std::string> Content;
     void pullAll(Content &dst);
@@ -73,12 +77,37 @@ PbapSession::PbapSession(void) :
 {
 }
 
-void PbapSession::initSession(const std::string &address)
+void PbapSession::initSession(const std::string &address, const std::string &format)
 {
     if (m_session.get()) {
         return;
     }
 
+    // format string uses:
+    // [(2.1|3.0):][^]propname,propname,...
+    //
+    // 3.0:^PHOTO = download in vCard 3.0 format, excluding PHOTO
+    // 2.1:PHOTO = download in vCard 2.1 format, only the PHOTO
+
+    std::string version;
+    std::string tmp;
+    std::string properties;
+    const pcrecpp::RE re("(?:(2\\.1|3\\.0):?)?(\\^?)([-a-zA-Z,]*)");
+    if (!re.FullMatch(format, &version, &tmp, &properties)) {
+        SE_THROW(StringPrintf("invalid specification of PBAP vCard format (databaseFormat): %s",
+                              format.c_str()));
+    }
+    char negated = tmp.c_str()[0];
+    if (version.empty()) {
+        // same default as in obexd
+        version = "2.1";
+    }
+    if (version != "2.1" && version != "3.0") {
+        SE_THROW(StringPrintf("invalid vCard version prefix in PBAP vCard format specification (databaseFormat): %s",
+                              format.c_str()));
+    }
+    std::set<std::string> keywords;
+    boost::split(keywords, properties, boost::is_from_range(',', ','));
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
     GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
@@ -101,8 +130,42 @@ void PbapSession::initSession(const std::string &address)
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", m_session->getPath());
 
-    GDBusCXX::DBusClientCall0 select(*m_session, "Select");
-    select(std::string("int"), std::string("PB"));
+    // get filter list so that we can continue validating our format specifier
+    std::vector<std::string> filterFields =
+        GDBusCXX::DBusClientCall1< std::vector<std::string> >(*m_session, "ListFilterFields")();
+
+    std::list<std::string> filter;
+    if (negated) {
+        // negated, start with everything set
+        filter.insert(filter.begin(), filterFields.begin(), filterFields.end());
+    }
+
+    // validate parameters and update filter
+    BOOST_FOREACH (const std::string &prop, keywords) {
+        if (prop.empty()) {
+            continue;
+        }
+
+        std::vector<std::string>::const_iterator entry =
+            std::find_if(filterFields.begin(),
+                         filterFields.end(),
+                         boost::bind(&boost::iequals<std::string,std::string>, _1, prop, std::locale()));
+
+        if (entry == filterFields.end()) {
+            SE_THROW(StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
+                                  prop.c_str()));
+        }
+
+        if (negated) {
+            filter.remove(*entry);
+        } else {
+            filter.push_back(*entry);
+        }
+    }
+
+    GDBusCXX::DBusClientCall0(*m_session, "Select")(std::string("int"), std::string("PB"));
+    GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(std::vector<std::string>(filter.begin(), filter.end()));
+    GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
 }
@@ -224,7 +287,7 @@ void PbapSyncSource::open()
 
     std::string address = database.substr(prefix.size());
 
-    m_session->initSession(address);
+    m_session->initSession(address, getDatabaseFormat());
     m_session->pullAll(m_content);
     m_session->shutdown();
 }
