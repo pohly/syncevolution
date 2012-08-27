@@ -173,7 +173,7 @@ void PbapSession::pullAll(Content &dst)
             sprintf(suffix, "%07d", r.first->second);
 
             std::string id = StringPrintf("%d", count); // fn + std::string(suffix);
-            dst[id] = content.substr(pos, endPos);
+            dst[id] = content.substr(pos, endPos - pos);
         }
 
         pos = endPos;
