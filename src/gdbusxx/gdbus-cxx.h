@@ -51,7 +51,7 @@ private:
 };
 
 /**
- * Special parameter type that identifies a caller. A string in practice.
+ * Special parameter type that identifies a D-Bus bus address. A string in practice.
  */
 class Caller_t : public std::string
 {
@@ -59,6 +59,40 @@ class Caller_t : public std::string
     Caller_t() {}
     template <class T> Caller_t(T val) : std::string(val) {}
     template <class T> Caller_t &operator = (T val) { assign(val); return *this; }
+};
+
+/**
+ * Special parameter type that identifies the path in a D-Bus message. A string in practice.
+ */
+class Path_t : public std::string
+{
+ public:
+    Path_t() {}
+    template <class T> Path_t(T val) : std::string(val) {}
+    template <class T> Path_t &operator = (T val) { assign(val); return *this; }
+};
+
+/**
+ * Special parameter type that identifies the interface in a D-Bus message. A string in practice.
+ */
+class Interface_t : public std::string
+{
+ public:
+    Interface_t() {}
+    template <class T> Interface_t(T val) : std::string(val) {}
+    template <class T> Interface_t &operator = (T val) { assign(val); return *this; }
+};
+
+/**
+ * Special parameter type that identifies the member of an interface
+ * (= signal or method) in a D-Bus message. A string in practice.
+ */
+class Member_t : public std::string
+{
+ public:
+    Member_t() {}
+    template <class T> Member_t(T val) : std::string(val) {}
+    template <class T> Member_t &operator = (T val) { assign(val); return *this; }
 };
 
 class Watch;

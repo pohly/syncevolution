@@ -171,6 +171,15 @@ namespace GDBusCXX {
         typedef SharedBuffer host_type;
         typedef const SharedBuffer &arg_type;
 
+#ifdef GDBUS_CXX_GIO
+        static void get(GDBusCXX::ExtractArgs &context,
+                        GDBusCXX::reader_type &iter, host_type &buffer)
+        {
+            base::host_type array;
+            base::get(context, iter, array);
+            buffer = SharedBuffer(reinterpret_cast<const char *>(array.second), array.first);
+        }
+#else
         static void get(GDBusCXX::connection_type *conn, GDBusCXX::message_type *msg,
                         GDBusCXX::reader_type &iter, host_type &buffer)
         {
@@ -178,6 +187,7 @@ namespace GDBusCXX {
             base::get(conn, msg, iter, array);
             buffer = SharedBuffer(reinterpret_cast<const char *>(array.second), array.first);
         }
+#endif
 
         static void append(GDBusCXX::builder_type &builder, arg_type buffer)
         {
