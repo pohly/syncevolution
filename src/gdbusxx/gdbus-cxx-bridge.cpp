@@ -418,11 +418,11 @@ Watch::~Watch()
     }
 }
 
-void getWatch(GDBusConnection *conn, GDBusMessage *msg,
-              GVariantIter &iter, boost::shared_ptr<Watch> &value)
+void getWatch(ExtractArgs &context,
+              boost::shared_ptr<Watch> &value)
 {
-    std::auto_ptr<Watch> watch(new Watch(conn));
-    watch->activate(g_dbus_message_get_sender(msg));
+    std::auto_ptr<Watch> watch(new Watch(context.m_conn));
+    watch->activate(g_dbus_message_get_sender(context.m_msg));
     value.reset(watch.release());
 }
 
