@@ -56,7 +56,7 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual void removeItem(const string &uid);
 
  private:
-    std::auto_ptr<PbapSession> m_session;
+    boost::shared_ptr<PbapSession> m_session;
 
     typedef std::map<std::string, std::string> Content;
     Content m_content;

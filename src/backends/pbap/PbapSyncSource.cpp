@@ -41,6 +41,7 @@
 #include <algorithm>
 
 #include <syncevo/util.h>
+#include <syncevo/BoostHelper.h>
 
 #include "gdbus-cxx-bridge.h"
 
@@ -51,14 +52,15 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-#define OBC_SERVICE "org.openobex.client"
-#define OBC_CLIENT_INTERFACE "org.openobex.Client"
-#define OBC_PBAP_INTERFACE "org.openobex.PhonebookAccess"
+#define OBC_SERVICE "org.bluez.obex.client"
+#define OBC_CLIENT_INTERFACE "org.bluez.obex.Client"
+#define OBC_PBAP_INTERFACE "org.bluez.obex.PhonebookAccess"
 
-class PbapSession {
+typedef std::map<std::string, boost::variant<std::string> > Params;
+
+class PbapSession : private boost::noncopyable {
 public:
-    PbapSession(void);
-
+    static boost::shared_ptr<PbapSession> create();
     void initSession(const std::string &address, const std::string &format);
 
     typedef std::map<std::string, std::string> Content;
@@ -67,14 +69,62 @@ public:
     void shutdown(void);
 
 private:
+    PbapSession();
+
+    boost::weak_ptr<PbapSession> m_self;
     GDBusCXX::DBusRemoteObject m_client;
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
+
+    /**
+     * m_transferComplete will be set to true when observing a
+     * "Complete" signal on a Transfer object path which has the
+     * current session as prefix.
+     *
+     * It also gets set when an error occurred for such a transfer,
+     * in which case m_error will also be set.
+     *
+     * This only works as long as the session is only used for a
+     * single transfer. Otherwise a more complex tracking of
+     * completion, for example per transfer object path, is needed.
+     */
+    bool m_transferComplete;
+    std::string m_transferErrorCode;
+    std::string m_transferErrorMsg;
+
+    std::auto_ptr< GDBusCXX::SignalWatch1<GDBusCXX::Path_t> > m_completeSignal;
+    std::auto_ptr< GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> > m_errorSignal;
+
+    void completeCb(const GDBusCXX::Path_t &path);
+    void errorCb(const GDBusCXX::Path_t &path, const std::string &error, const std::string &msg);
 };
 
 PbapSession::PbapSession(void) :
     m_client(GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL),
-             "/", OBC_CLIENT_INTERFACE, OBC_SERVICE, true)
+             "/", OBC_CLIENT_INTERFACE, OBC_SERVICE, true),
+    m_transferComplete(false)
 {
+}
+
+boost::shared_ptr<PbapSession> PbapSession::create()
+{
+    boost::shared_ptr<PbapSession> session(new PbapSession());
+    session->m_self = session;
+    return session;
+}
+
+void PbapSession::completeCb(const GDBusCXX::Path_t &path)
+{
+    SE_LOG_DEBUG(NULL, NULL, "obexd transfer %s completed", path.c_str());
+    m_transferComplete = true;
+}
+
+void PbapSession::errorCb(const GDBusCXX::Path_t &path, const std::string &error, const std::string &msg)
+{
+    SE_LOG_DEBUG(NULL, NULL, "obexd transfer %s failed: %s %s",
+                 path.c_str(), error.c_str(), msg.c_str());
+    m_transferComplete = true;
+    m_transferErrorCode = error;
+    m_transferErrorMsg = msg;
 }
 
 void PbapSession::initSession(const std::string &address, const std::string &format)
@@ -108,16 +158,15 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     }
     std::set<std::string> keywords;
     boost::split(keywords, properties, boost::is_from_range(',', ','));
-    typedef std::map<std::string, boost::variant<std::string> > Params;
 
     GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
         createSession(m_client, "CreateSession");
 
     Params params;
-    params["Destination"] = std::string(address);
+    // params["Destination"] = std::string(address);
     params["Target"] = std::string("PBAP");
 
-    std::string session = createSession(params);
+    std::string session = createSession(std::string(address), params);
     if (session.empty()) {
         SE_THROW("PBAP: got empty session from CreateSession()");
     }
@@ -127,6 +176,32 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                    OBC_PBAP_INTERFACE,
                                                    OBC_SERVICE,
                                                    true));
+
+    // Filter Transfer signals via path prefix. Discussions on Bluez
+    // list showed that this is meant to be possible, even though the
+    // client-api.txt documentation itself didn't (and still doesn't)
+    // make it clear:
+    // "[PATCH obexd v0] client-doc: Guarantee prefix in transfer paths"
+    // http://www.spinics.net/lists/linux-bluetooth/msg28409.html
+    m_completeSignal.reset(new GDBusCXX::SignalWatch1<GDBusCXX::Path_t>(GDBusCXX::SignalFilter(m_client.getConnection(),
+                                                                                               session,
+                                                                                               "org.bluez.obex.Transfer",
+                                                                                               "Complete",
+                                                                                               GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+    // Be extra careful with asynchronous callbacks: bind to weak
+    // pointer and ignore callback when the instance is already gone.
+    // Should not happen with signals (destructing the class unregisters
+    // the watch), but very well may happen in asynchronous method
+    // calls. Therefore maintain m_self and show how to use it here.
+    m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
+
+    // same for error
+    m_errorSignal.reset(new GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string>(GDBusCXX::SignalFilter(m_client.getConnection(),
+                                                                                                                      session,
+                                                                                                                      "org.bluez.obex.Transfer",
+                                                                                                                      "Error",
+                                                                                                                      GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+    m_errorSignal->activate(boost::bind(&PbapSession::errorCb, m_self, _1, _2, _3));
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", m_session->getPath());
 
@@ -192,9 +267,18 @@ void vcardParse(const std::string &content, std::size_t begin, std::size_t end, 
 
 void PbapSession::pullAll(Content &dst)
 {
-    GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
-    std::string content = pullall();
+    GDBusCXX::DBusClientCall1< std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
+    std::pair<GDBusCXX::DBusObject_t, Params> transfer = pullall(std::string("/tmp/temp.vcard"));
+    const GDBusCXX::DBusObject_t &path = transfer.first;
+    const Params &properties = transfer.second;
 
+    SE_LOG_DEBUG(NULL, NULL, "pullall transfer path %s, %ld properties:", path.c_str(), (long)properties.size());
+
+    while (!m_transferComplete) {
+        g_main_context_iteration(NULL, true);
+    }
+
+#if 0
     // empty content not treated as an error
 
     typedef std::map<std::string, int> CounterMap;
@@ -244,6 +328,7 @@ void PbapSession::pullAll(Content &dst)
     }
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
+#endif
 }
 
 void PbapSession::shutdown(void)
@@ -263,7 +348,7 @@ void PbapSession::shutdown(void)
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
 {
-    m_session.reset(new PbapSession());
+    m_session = PbapSession::create();
 }
 
 std::string PbapSyncSource::getMimeType() const
