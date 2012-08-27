@@ -215,7 +215,7 @@ std::string PbapSyncSource::getMimeVersion() const
 
 void PbapSyncSource::open()
 {
-    const string &database = getDatabaseID();
+    string database = getDatabaseID();
     const string prefix("obex-bt://");
 
     if (!boost::starts_with(database, prefix)) {
