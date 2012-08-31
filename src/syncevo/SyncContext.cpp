@@ -1640,7 +1640,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                         peerIsClient ? "peer is client" : "peer is server");
          
             SimpleSyncMode mode = SIMPLE_SYNC_NONE;
-            std::string sync = source.getSync();
+            SyncMode sync = StringToSyncMode(source.getSync());
             switch (extra1) {
             case 0:
                 switch (extra3) {
@@ -1648,8 +1648,8 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                     mode = SIMPLE_SYNC_TWO_WAY;
                     if (m_serverMode &&
                         m_serverAlerted &&
-                        (sync == "one-way-from-server" ||
-                         sync == "one-way-from-local")) {
+                        (sync == SYNC_ONE_WAY_FROM_SERVER ||
+                         sync == SYNC_ONE_WAY_FROM_LOCAL) {
                         // As in the slow/refresh-from-server case below,
                         // pretending to do a two-way incremental sync
                         // is a correct way of executing the requested
@@ -1674,8 +1674,8 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                     mode = SIMPLE_SYNC_SLOW;
                     if (m_serverMode &&
                         m_serverAlerted &&
-                        (sync == "refresh-from-server" ||
-                         sync == "refresh-from-local")) {
+                        (sync == SYNC_REFRESH_FROM_SERVER ||
+                         sync == SYNC_REFRESH_FROM_LOCAL) {
                         // We run as server and told the client to refresh
                         // its data. A slow sync is how some clients (the
                         // Synthesis engine included) execute that sync mode;
@@ -2035,7 +2035,8 @@ void SyncContext::initSources(SourceList &sourceList)
         boost::shared_ptr<PersistentSyncSourceConfig> sc(getSyncSourceConfig(name));
         SyncSourceNodes source = getSyncSourceNodes (name);
         std::string sync = sc->getSync();
-        if (sync != "disabled") {
+        SyncMode mode = StringToSyncMode(sync);
+        if (mode != SYNC_NONE) {
             SourceType sourceType = SyncSource::getSourceType(source);
             if (sourceType.m_backend == "virtual") {
                 //This is a virtual sync source, check and enable the referenced
@@ -2497,18 +2498,18 @@ void SyncContext::getConfigXML(string &xml, string &configname)
                 datastores << "      <resumeitemsupport>on</resumeitemsupport>\n";
             }
 
-            string mode = source->getSync();
+            SyncMode mode = StringToSyncMode(source->getSync());
             if (source->getForceSlowSync()) {
                 // we *want* a slow sync, but couldn't tell the client -> force it server-side
                 datastores << "      <alertscript> FORCESLOWSYNC(); </alertscript>\n";
-            } else if (mode != "slow" &&
+            } else if (mode != SYNC_SLOW &&
                        // slow-sync detection not implemented when running as server,
                        // not even when initiating the sync (direct sync with phone)
                        !m_serverMode &&
                        // is implemented as "delete local data" + "slow sync",
                        // so a slow sync is acceptable in this case
-                       mode != "refresh-from-server" &&
-                       mode != "refresh-from-remote" &&
+                       mode != SYNC_REFRESH_FROM_SERVER &&
+                       mode != SYNC_REFRESH_FROM_REMOTE &&
                        // The forceSlow should be disabled if the sync session is
                        // initiated by a remote peer (eg. Server Alerted Sync)
                        !m_remoteInitiated &&

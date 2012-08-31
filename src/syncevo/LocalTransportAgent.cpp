@@ -748,7 +748,8 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
             const std::string &sourceName = entry.first;
             const std::string &targetName = entry.second.first;
             std::string sync = entry.second.second;
-            if (sync != "disabled") {
+            SyncMode mode = StringToSyncMode(sync);
+            if (mode != SYNC_NONE) {
                 SyncSourceNodes targetNodes = m_client->getSyncSourceNodes(targetName);
                 SyncSourceConfig targetSource(targetName, targetNodes);
                 string fullTargetName = clientContext + "/" + targetName;
@@ -772,16 +773,16 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
                                                       serverConfig.first.c_str()));
                 }
                 // invert data direction
-                if (sync == "refresh-from-local") {
-                    sync = "refresh-from-remote";
-                } else if (sync == "refresh-from-remote") {
-                    sync = "refresh-from-local";
-                } else if (sync == "one-way-from-local") {
-                    sync = "one-way-from-remote";
-                } else if (sync == "one-way-from-remote") {
-                    sync = "one-way-from-local";
+                if (mode == SYNC_REFRESH_FROM_LOCAL) {
+                    mode = SYNC_REFRESH_FROM_REMOTE;
+                } else if (mode == SYNC_REFRESH_FROM_REMOTE) {
+                    mode = SYNC_REFRESH_FROM_LOCAL;
+                } else if (mode == SYNC_ONE_WAY_FROM_LOCAL) {
+                    mode = SYNC_ONE_WAY_FROM_REMOTE;
+                } else if (mode == SYNC_ONE_WAY_FROM_REMOTE) {
+                    mode = SYNC_ONE_WAY_FROM_LOCAL;
                 }
-                targetSource.setSync(sync, true);
+                targetSource.setSync(PrettyPrintSyncMode(mode, true), true);
                 targetSource.setURI(sourceName, true);
             }
         }
