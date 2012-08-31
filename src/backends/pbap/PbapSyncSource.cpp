@@ -270,7 +270,7 @@ void PbapSession::pullAll(Content &dst)
             SE_LOG_ERROR(NULL, NULL, "Stat on file failed");
             return;
         }
-        SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %d", (long)sb.st_size);
+        SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %ld", (long)sb.st_size);
 
         addr = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (addr == MAP_FAILED) {
