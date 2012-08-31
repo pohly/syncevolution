@@ -9,22 +9,43 @@ be running.
 The "database" property specifies the Bluetooth address of the
 device to be connected.
 
+The backend itself is not able to detect changes since the last
+sync, mostly because PBAP as a protocol makes that hard. For example,
+it makes no guarantee that an item has the same ID in two different
+sessions.
+
+The intended use for the PBAP backend therefore is in the "slow local
+cache" sync mode: always pull all data and let the sync engine update
+a local database. The local database is not allowed to be modified
+outside of the sync. Any such change may get lost at any time.
+
+
 # configure backend
+#
+#
+# Preventing a slow sync is possible in local-cache mode. It
+# makes no sense for PBAP and thus has to be turned off.
 syncevolution --configure \
                 syncURL= \
                 addressbook/backend=pbap \
 		addressbook/database=obex-bt://XX:XX:XX:XX:XX:XX \
+                preventSlowSync=false \
                 target-config@pbap addressbook
 
 # print items
 syncevolution --print-items \
  	        target-config@pbap addressbook
 
-# configure synchronization
+# Configure synchronization.
+#
+# 'local-cache' expands to 'local-cache-incremental', which will try
+# to do an incremental sync but be turned into a slow sync by
+# the PBAP backend.
 syncevolution --configure \
                 --template SyncEvolution_Client \
                 syncURL=local://@pbap \
-                pbap
+                sync=local-cache \
+                pbap addressbook
 
 # run synchronization
-syncevolution --sync refresh-from-client pbap addressbook
+syncevolution pbap
