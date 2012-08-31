@@ -549,7 +549,7 @@ class DBusUtil(Timeout):
         # timeout.
         timeout = self.getTestProperty("timeout", defTimeout)
         timeout_handle = None
-        if timeout and not debugger:
+        if timeout and not debugger and not os.environ.get("SYNCEVOLUTION_LOCAL_CHILD_DELAY", None):
             def timedout():
                 error = "%s timed out after %d seconds, current quit events: %s" % (self.id(), timeout, self.quit_events)
                 if Timeout.debugTimeout:
