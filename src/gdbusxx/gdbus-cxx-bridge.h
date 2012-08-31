@@ -4692,6 +4692,7 @@ class SignalFilter : public DBusRemoteObject
                  const std::string &signal,
                  Flags flags) :
         DBusRemoteObject(conn, path, interface, ""),
+        m_signal(signal),
         m_flags(flags)
     {}
 
@@ -4707,7 +4708,6 @@ class SignalFilter : public DBusRemoteObject
     bool matches(const ExtractArgs &context) const
     {
         return
-            (m_path.empty() || m_path == context.m_path) &&
             (m_interface.empty() || m_interface == context.m_interface) &&
             (m_signal.empty() || m_signal == context.m_signal) &&
             (m_path.empty() ||
