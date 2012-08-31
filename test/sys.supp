@@ -29,9 +29,7 @@
    obj:*/libdb-5.1.so
    fun:__log_put_record
    fun:__ham_add_el
-   obj:*/libdb-5.1.so
-   fun:__dbc_iput
-   fun:__db_put
+   ...
    fun:__db_put_pp
 }
 
@@ -825,6 +823,34 @@
    ...
    fun:*GNOME*Password*
 }
+
+# ==5221== 280 (24 direct, 256 indirect) bytes in 1 blocks are definitely lost in loss record 2,234 of 2,429
+# ==5221==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==5221==    by 0xB37B960: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0xB37C888: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0xB37CBCE: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0xB3C5A09: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0x7EE7AFA: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x7EDC0AB: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x7EDC2B1: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x7EDB743: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x5063089: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.1)
+# ==5221==    by 0x5066152: dbus_connection_dispatch (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.1)
+# ==5221==    by 0x7EE6E44: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x5536204: g_main_context_dispatch (gmain.c:2539)
+# ==5221==    by 0x5536537: g_main_context_iterate.isra.23 (gmain.c:3146)
+# ==5221==    by 0x5536931: g_main_loop_run (gmain.c:3340)
+# ==5221==    by 0x4042F6: main (activesyncd-server.c:300)
+# ==5221== 
+{
+   gcrypt + activesyncd
+   Memcheck:Leak
+   fun:malloc
+   obj:*libgcrypt.so*
+   ...
+   obj:*libgnome-keyring.so*
+}
+
 
 # ==10804== 60 (16 direct, 44 indirect) bytes in 1 blocks are definitely lost in loss record 1,121 of 2,014
 # ==10804==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
