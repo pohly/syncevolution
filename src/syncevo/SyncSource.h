@@ -2185,6 +2185,9 @@ class SyncSourceRevisions : virtual public SyncSourceChanges, virtual public Syn
      * string. The caller of this method will detect situations where
      * a non-empty string is necessary and none was provided.
      *
+     * An source must set the revision string for all items or
+     * none at all.
+     *
      * This call is typically only invoked only once during the
      * lifetime of a source, at the time when detectChanges() needs
      * the information. The result returned in that invocation is
@@ -2237,12 +2240,6 @@ class SyncSourceRevisions : virtual public SyncSourceChanges, virtual public Syn
          * Don't rely on previous information. Will call
          * listAllItems() and generate a full list of items based on
          * the result.
-         *
-         * TODO: Added/updated/deleted information is still getting
-         * calculated based on the previous items although it is not
-         * needed. In other words, CHANGES_SLOW == CHANGES_FULL at the
-         * moment. Once we are sure that slow sync detection works,
-         * calculating changes in this mode can be removed.
          */
         CHANGES_SLOW,
 
@@ -2273,8 +2270,10 @@ class SyncSourceRevisions : virtual public SyncSourceChanges, virtual public Syn
      *                         use CHANGES_FULL, which will always produce
      *                         the required information, albeit more slowly
      *                         than the other modes
+     * @return true if change detection could only provide a list of currently
+     *         existing items, but not the list of added/updated/deleted items
      */
-    void detectChanges(ConfigNode &trackingNode, ChangeMode mode);
+    bool detectChanges(ConfigNode &trackingNode, ChangeMode mode);
 
     /**
      * record that an item was added or updated

@@ -110,7 +110,13 @@ void TrackingSyncSource::beginSync(const std::string &lastToken, const std::stri
         SE_LOG_DEBUG(this, NULL, "using full item scan to detect changes");
     }
 
-    detectChanges(*m_trackingNode, mode);
+    bool forceSlowSync = detectChanges(*m_trackingNode, mode);
+    if (forceSlowSync) {
+        // tell engine that we need a slow sync
+        SE_THROW_EXCEPTION_STATUS(StatusException,
+                                  "change detection incomplete, must do slow sync",
+                                  STATUS_SLOW_SYNC_508);
+    }
 }
 
 std::string TrackingSyncSource::endSync(bool success)
