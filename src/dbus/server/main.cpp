@@ -154,9 +154,11 @@ int main(int argc, char **argv, char **envp)
         server->run();
         SE_LOG_DEBUG(NULL, NULL, "cleaning up");
         server.reset();
-        conn.reset();
         obj.reset();
         guard.reset();
+        SE_LOG_DEBUG(NULL, NULL, "flushing D-Bus connection");
+        conn.flush();
+        conn.reset();
         SE_LOG_INFO(NULL, NULL, "terminating");
         return 0;
     } catch ( const std::exception &ex ) {

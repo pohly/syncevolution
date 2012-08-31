@@ -146,6 +146,12 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
         return conn;
     }
 
+    /**
+     * Ensure that all IO is sent out of the process.
+     * Blocks. Only use it right before shutting down.
+     */
+    void flush();
+
     typedef boost::function<void ()> Disconnect_t;
     void setDisconnect(const Disconnect_t &func);
     // #define GDBUS_CXX_HAVE_DISCONNECT 1

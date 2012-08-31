@@ -192,6 +192,12 @@ static void DestroyDisconnect(gpointer data,
     delete cb;
 }
 
+void DBusConnectionPtr::flush()
+{
+    // ignore errors
+    g_dbus_connection_flush_sync(get(), NULL, NULL);
+}
+
 void DBusConnectionPtr::setDisconnect(const Disconnect_t &func)
 {
     g_signal_connect_closure(get(),
