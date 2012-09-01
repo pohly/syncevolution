@@ -345,13 +345,13 @@ void PbapSession::pullAll(Content &dst)
         
         pcrecpp::StringPiece content(addr, sb.st_size);
         
-        string vcarddata;
+        pcrecpp::StringPiece vcarddata;
         int count = 0;
-        pcrecpp::RE re("(^BEGIN:VCARD.*?^END:VCARD)",
+        pcrecpp::RE re("[\\r\\n]*(^BEGIN:VCARD.*?^END:VCARD)",
                        pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
         while (re.Consume(&content, &vcarddata)) {
             std::string id = StringPrintf("%d", count);
-            dst[id] = vcarddata;
+            dst[id] = vcarddata.as_string();
 
             ++count;
         }
