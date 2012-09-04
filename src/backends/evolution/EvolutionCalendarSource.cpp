@@ -307,15 +307,23 @@ bool EvolutionCalendarSource::isEmpty()
 #ifdef USE_EDS_CLIENT
 class ECalClientViewSyncHandler {
   public:
-    ECalClientViewSyncHandler(ECalClientView *view, void (*processList)(const GSList *list, void *user_data), void *user_data): 
-        m_processList(processList), m_userData(user_data), m_view(view)
+    typedef boost::function<void(const GSList *list)> Process_t;
+
+    ECalClientViewSyncHandler(ECalClientViewCXX &view,
+                              const Process_t &process) :
+        m_process(process),
+        m_view(view)
     {}
 
     bool processSync(GErrorCXX &gerror)
     {
         // Listen for view signals
-        g_signal_connect(m_view, "objects-added", G_CALLBACK(objectsAdded), this);
-        g_signal_connect(m_view, "complete", G_CALLBACK(completed), this);
+        m_view.connectSignal<void (ECalClientView *ebookview,
+                                   const GSList *contacts)>("objects-added",
+                                                            boost::bind(m_process, _2));
+        m_view.connectSignal<void (EBookClientView *ebookview,
+                                   const GError *error)>("complete",
+                                                         boost::bind(&ECalClientViewSyncHandler::completed, this, _2));
 
         // Start the view
         e_cal_client_view_start (m_view, m_error);
@@ -335,41 +343,30 @@ class ECalClientViewSyncHandler {
             return true;
         }
     }
- 
-    static void objectsAdded(ECalClientView *ebookview,
-                             const GSList *objects,
-                             gpointer user_data) {
-        ECalClientViewSyncHandler *that = (ECalClientViewSyncHandler *)user_data;
-        that->m_processList(objects, that->m_userData);
+
+    void completed(const GError *error)
+    {
+        m_error = error;
+        m_loop.quit();
     }
- 
-    static void completed(ECalClientView *ebookview,
-                          const GError *error,
-                          gpointer user_data) {
-        ECalClientViewSyncHandler *that = (ECalClientViewSyncHandler *)user_data;
-        that->m_error = error;
-        that->m_loop.quit();
-    }
- 
+
     public:
-      // Process list callback
-      void (*m_processList)(const GSList *list, void *user_data);
-      void *m_userData;
       // Event loop for Async -> Sync
       EvolutionAsync m_loop;
 
     private:
+      // Process list callback
+      Process_t m_process;
+
       // View watched
-      ECalClientView *m_view;
+      ECalClientViewCXX m_view;
 
       // Possible error while watching the view
       GErrorCXX m_error;
 };
 
-static void list_revisions(const GSList *objects, void *user_data)
+static void list_revisions(const GSList *objects, EvolutionCalendarSource::RevisionMap_t *revisions)
 {
-    EvolutionCalendarSource::RevisionMap_t *revisions = 
-        static_cast<EvolutionCalendarSource::RevisionMap_t *>(user_data);
     const GSList *l;
 
     for (l = objects; l; l = l->next) {
@@ -396,7 +393,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 
     // TODO: Optimization: use set fields_of_interest (UID / REV / LAST-MODIFIED)
 
-    ECalClientViewSyncHandler handler(viewPtr, list_revisions, &revisions);
+    ECalClientViewSyncHandler handler(viewPtr, boost::bind(list_revisions, _1, &revisions));
     if (!handler.processSync(gerror)) {
         throwError("watching view", gerror);
     }

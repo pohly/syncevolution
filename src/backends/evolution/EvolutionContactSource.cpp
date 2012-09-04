@@ -259,15 +259,22 @@ bool EvolutionContactSource::isEmpty()
 #ifdef USE_EDS_CLIENT
 class EBookClientViewSyncHandler {
     public:
-        EBookClientViewSyncHandler(EBookClientView *view, 
-                                   void (*processList)(const GSList *list, void *user_data), 
-                                   void *user_data): 
-            m_processList(processList), m_userData(user_data), m_view(view) {}
+        typedef boost::function<void (const GSList *list)> Process_t;
+
+        EBookClientViewSyncHandler(const EBookClientViewCXX &view,
+                                   const Process_t &process) :
+            m_process(process),
+            m_view(view)
+        {}
 
         bool process(GErrorCXX &gerror) {
-                 // Listen for view signals
-            g_signal_connect(m_view, "objects-added", G_CALLBACK(contactsAdded), this);
-            g_signal_connect(m_view, "complete", G_CALLBACK(completed), this);
+            // Listen for view signals
+            m_view.connectSignal<void (EBookClientView *ebookview,
+                                       const GSList *contacts)>("objects-added",
+                                                                boost::bind(m_process, _2));
+            m_view.connectSignal<void (EBookClientView *ebookview,
+                                       const GError *error)>("complete",
+                                                             boost::bind(&EBookClientViewSyncHandler::completed, this, _2));
 
             // Start the view
             e_book_client_view_start (m_view, m_error);
@@ -287,40 +294,27 @@ class EBookClientViewSyncHandler {
                 return true;
             }
         }
-     
-        static void contactsAdded(EBookClientView *ebookview,
-                                  const GSList *contacts,
-                                  gpointer user_data) {
-            EBookClientViewSyncHandler *that = (EBookClientViewSyncHandler *)user_data;
-            that->m_processList(contacts, that->m_userData);
-        }
  
-        static void completed(EBookClientView *ebookview,
-                              const GError *error,
-                              gpointer user_data) {
-            EBookClientViewSyncHandler *that = (EBookClientViewSyncHandler *)user_data;
-            that->m_error = error;
-            that->m_loop.quit();
+        void completed(const GError *error) {
+            m_error = error;
+            m_loop.quit();
         }
 
     public:
-         // Process list callback
-         void (*m_processList)(const GSList *contacts, void *user_data);
-         void *m_userData;
         // Event loop for Async -> Sync
         EvolutionAsync m_loop;
 
     private:
+        // Process list callback
+        boost::function<void (const GSList *list)> m_process;
         // View watched
-        EBookClientView *m_view;
+        EBookClientViewCXX m_view;
         // Possible error while watching the view
         GErrorCXX m_error;
 };
 
-static void list_revisions(const GSList *contacts, void *user_data)
+static void list_revisions(const GSList *contacts, EvolutionContactSource::RevisionMap_t *revisions)
 {
-    EvolutionContactSource::RevisionMap_t *revisions = 
-        static_cast<EvolutionContactSource::RevisionMap_t *>(user_data);
     const GSList *l;
 
     for (l = contacts; l; l = l->next) {
@@ -371,7 +365,7 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
         gerror.clear();
     }
 
-    EBookClientViewSyncHandler handler(viewPtr, list_revisions, &revisions);
+    EBookClientViewSyncHandler handler(viewPtr, boost::bind(list_revisions, _1, &revisions));
     if (!handler.process(gerror)) {
         throwError("watching view", gerror);
     }
