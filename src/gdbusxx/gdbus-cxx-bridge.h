@@ -4354,7 +4354,7 @@ protected:
         }
     }
 
-    void prepare(DBusMessagePtr &msg)
+    void prepare(DBusMessagePtr &msg) const
     {
         // Constructor steals reference, reset() doesn't!
         // Therefore use constructor+copy instead of reset().
@@ -4367,7 +4367,7 @@ protected:
         }
     }
 
-    void send(DBusMessagePtr &msg, const Callback_t &callback)
+    void send(DBusMessagePtr &msg, const Callback_t &callback) const
     {
         CallbackData *data = new CallbackData(m_conn, callback);
         g_dbus_connection_send_message_with_reply(m_conn.get(), msg.get(), G_DBUS_SEND_MESSAGE_FLAGS_NONE,
@@ -4375,7 +4375,7 @@ protected:
                                                   NULL, NULL, dbusCallback, data);
     }
 
-    Return_t sendAndReturn(DBusMessagePtr &msg)
+    Return_t sendAndReturn(DBusMessagePtr &msg) const
     {
         GError* error = NULL;
         DBusMessagePtr reply(g_dbus_connection_send_message_with_reply_sync(m_conn.get(),
@@ -4413,7 +4413,7 @@ public:
         return sendAndReturn(msg);
     }
 
-    void start(const Callback_t &callback)
+    void start(const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4421,7 +4421,7 @@ public:
     }
 
     template <class A1>
-    Return_t operator () (const A1 &a1)
+    Return_t operator () (const A1 &a1) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4430,7 +4430,7 @@ public:
     }
 
     template <class A1>
-    void start(const A1 &a1, const Callback_t &callback)
+    void start(const A1 &a1, const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4439,7 +4439,7 @@ public:
     }
 
     template <class A1, class A2>
-    Return_t operator () (const A1 &a1, const A2 &a2)
+    Return_t operator () (const A1 &a1, const A2 &a2) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4448,7 +4448,7 @@ public:
     }
 
     template <class A1, class A2>
-    void start(const A1 &a1, const A2 &a2, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4457,7 +4457,7 @@ public:
     }
 
     template <class A1, class A2, class A3>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3)
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4466,7 +4466,7 @@ public:
     }
 
     template <class A1, class A2, class A3>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4475,7 +4475,7 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4)
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4484,7 +4484,7 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4493,7 +4493,7 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5)
+    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4502,7 +4502,7 @@ public:
     }
 
     template <class A1, class A2, class A3, class A4, class A5>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback)
+    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4512,7 +4512,7 @@ public:
 
     template <class A1, class A2, class A3, class A4, class A5, class A6>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6)
+                      const A6 &a6) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4523,7 +4523,7 @@ public:
     template <class A1, class A2, class A3, class A4, class A5, class A6>
     void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                const A6 &a6,
-               const Callback_t &callback)
+               const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4533,7 +4533,7 @@ public:
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7)
+                      const A6 &a6, const A7 &a7) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4544,7 +4544,7 @@ public:
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
     void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                const A6 &a6, const A7 &a7,
-               const Callback_t &callback)
+               const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4554,7 +4554,7 @@ public:
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8)
+                      const A6 &a6, const A7 &a7, const A8 &a8) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4565,7 +4565,7 @@ public:
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
     void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                const A6 &a6, const A7 &a7, const A8 &a8,
-               const Callback_t &callback)
+               const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4575,7 +4575,7 @@ public:
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9)
+                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4586,7 +4586,7 @@ public:
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
     void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
-               const Callback_t &callback)
+               const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4596,7 +4596,7 @@ public:
 
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
     void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10)
+                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10) const
     {
         DBusMessagePtr msg;
         prepare(msg);
@@ -4607,7 +4607,7 @@ public:
     template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
     void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
                const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10,
-               const Callback_t &callback)
+               const Callback_t &callback) const
     {
         DBusMessagePtr msg;
         prepare(msg);
