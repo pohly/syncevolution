@@ -1231,9 +1231,14 @@ context.add(test)
 test = ActiveSyncTest("googleeas",
                       ["eds_contact", "eas_contact"],
                       env="CLIENT_TEST_DELAY=10 CLIENT_TEST_SOURCE_DELAY=10 ",
-                      # Google does not support the Fetch operation, leading
-                      # to an unhandled generic error.
-                      knownFailures=[ ".*::testReadItem404" ])
+                      knownFailures=[
+                          # Google does not support the Fetch operation, leading
+                          # to an unhandled generic error.
+                          ".*::testReadItem404",
+                          # Remove of PHOTO not supported by Google (?),
+                          # works with Exchange.
+                          "Client::Source::eas_contact::testRemoveProperties",
+                          ])
 context.add(test)
 
 syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
