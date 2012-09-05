@@ -143,6 +143,12 @@ class IndividualView
 
     /** current number of entries */
     virtual int size() const = 0;
+
+    /** read a range of contacts - see org.01.pim.contacts.ViewControl.ReadContacts() */
+    virtual void readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts);
+
+    /** returns access to one individual or an empty pointer if outside of the current range */
+    virtual FolksIndividualCXX getContact(int index) = 0;
 };
 
 /**
@@ -187,6 +193,7 @@ class FullView : public IndividualView
 
     // from IndividualView
     virtual int size() const { return (int)m_entries.size(); }
+    virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_entries.size()) ? m_entries[index].m_individual : FolksIndividualCXX(); }
 };
 
 /**
@@ -239,6 +246,7 @@ class FilteredView : public IndividualView
 
     // from IndividualView
     virtual int size() const { return (int)m_local2parent.size(); }
+    virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_local2parent.size()) ? m_parent->getContact(m_local2parent[index]) : FolksIndividualCXX(); }
 };
 
 /**

@@ -26,6 +26,21 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+void IndividualView::readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
+{
+    contacts.clear();
+    if (start < size()) {
+        int actualCount = size() - start;
+        if (actualCount > count) {
+            actualCount = count;
+        }
+        contacts.reserve(actualCount);
+        for (int i = start; i < start + actualCount; i++) {
+            contacts.push_back(getContact(i));
+        }
+    }
+}
+
 bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const
 {
     Criteria_t::const_iterator ita = a.begin(),
