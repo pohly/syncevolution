@@ -1359,9 +1359,7 @@
    Memcheck:Jump
    obj:*
    ...
-   fun:_dl_*
-   ...
-   fun:openaux
+   fun:_dl_start
 }
 
 # ==19740== 72 bytes in 1 blocks are possibly lost in loss record 1,226 of 1,985
