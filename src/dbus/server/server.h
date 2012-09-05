@@ -650,6 +650,11 @@ public:
     virtual bool isProcessSafe() const { return false; }
 };
 
+// extensions to the D-Bus server, created dynamically by main()
+#ifdef ENABLE_DBUS_PIM
+boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::shared_ptr<Server> &server);
+#endif
+
 SE_END_CXX
 
 #endif // SYNCEVO_DBUS_SERVER_H

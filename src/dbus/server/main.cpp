@@ -143,8 +143,12 @@ int main(int argc, char **argv, char **envp)
         // make this object the main owner of the connection
         boost::scoped_ptr<DBusObject> obj(new DBusObject(conn, "foo", "bar", true));
 
-        boost::scoped_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
+        boost::shared_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
         server->activate();
+
+#ifdef ENABLE_DBUS_PIM
+        boost::shared_ptr<GDBusCXX::DBusObjectHelper> manager(SyncEvo::CreateContactManager(server));
+#endif
 
         if (gdbus) {
             unsetenv("G_DBUS_DEBUG");
@@ -153,6 +157,9 @@ int main(int argc, char **argv, char **envp)
         dbus_bus_connection_undelay(conn);
         server->run();
         SE_LOG_DEBUG(NULL, NULL, "cleaning up");
+#ifdef ENABLE_DBUS_PIM
+        manager.reset();
+#endif
         server.reset();
         obj.reset();
         guard.reset();
