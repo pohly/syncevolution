@@ -250,6 +250,7 @@ class IndividualAggregator
     boost::shared_ptr<FullView> m_view;
     boost::weak_ptr<IndividualAggregator> m_self;
     FolksIndividualAggregatorCXX m_folks;
+    Bool m_started;
 
     IndividualAggregator() {}
 
@@ -273,6 +274,9 @@ class IndividualAggregator
     /**
      * Starts pulling and sorting of contacts.
      * Populates m_view and all other, derived views.
+     * Can be called multiple times.
+     *
+     * See also org.01.pim.contacts.Manager.Start().
      */
     void start();
 

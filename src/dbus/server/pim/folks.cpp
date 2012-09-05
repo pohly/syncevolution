@@ -143,10 +143,13 @@ static void logResult(const GError *gerror, const char *operation)
 
 void IndividualAggregator::start()
 {
-    SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
-                            boost::bind(logResult, _1,
-                                        "folks_individual_aggregator_prepare"),
-                            getFolks());
+    if (!m_started) {
+        m_started = true;
+        SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
+                                boost::bind(logResult, _1,
+                                            "folks_individual_aggregator_prepare"),
+                                getFolks());
+    }
 }
 
 #ifdef ENABLE_UNIT_TESTS
