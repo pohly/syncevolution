@@ -397,7 +397,7 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
         bool isDefault = (m_type != Journal) ?
                          (*it)->isDefault() :
                          (uid == "66666666-7777-8888-9999-000000000000");
-        result.push_back(Database( name, uid, isDefault ));
+        result.push_back(Database( name, "uid:" + uid, isDefault ));
 #else
         bool isDefault = (*it)->isDefault();
         result.push_back(Database( (*it)->name().toStdString(), 
