@@ -1,3 +1,11 @@
+syncevolution (1:1.2.99.4-2) unstable; urgency=low
+
+  * Bugfix release:
+    - Fix for converting notes synced in text/plain format.
+    - Fix for dbus timeout during slow WebDAV syncs.
+
+ -- Ove Kaaven <ovek@arcticnet.no>  Thu, 06 Sep 2012 23:35:59 +0200
+
 syncevolution (1:1.2.99.4-1) unstable; urgency=low
 
   * SyncEvolution 1.2.99.4 for Harmattan.
