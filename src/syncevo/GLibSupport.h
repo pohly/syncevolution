@@ -38,6 +38,7 @@ typedef void *GMainLoop;
 #include <boost/utility.hpp>
 #include <boost/foreach.hpp>
 #include <boost/function.hpp>
+#include <boost/bind.hpp>
 
 #include <iterator>
 
@@ -557,7 +558,8 @@ class PlainGStr : public boost::shared_ptr<gchar>
         const gchar *c_str() const { return &**this; }
 };
 
-template<class T, class F, F finish> class GAsyncReadyCXX {
+// non-void result, three parameters to finish function
+template<class T, class F, F finish, int arity> class GAsyncReadyCXX {
  public:
     typedef boost::function<void (const GError *, T)> CXXFunctionCB_t;
 
@@ -577,7 +579,28 @@ template<class T, class F, F finish> class GAsyncReadyCXX {
     }
 };
 
-template<class F, F finish> class GAsyncReadyCXX<void, F, finish> {
+// non-void result type, two parameters for finish
+template<class T, class F, F finish> class GAsyncReadyCXX<T, F, finish, 2> {
+ public:
+    typedef boost::function<void (const GError *, T)> CXXFunctionCB_t;
+
+    static void handleGLibResult(GObject *sourceObject,
+                                 GAsyncResult *result,
+                                 gpointer userData) throw () {
+        try {
+            GErrorCXX gerror;
+            T t = finish(result, gerror);
+            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            (*cb)(gerror, t);
+        } catch (...) {
+            // called from C, must not let exception escape
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
+
+// void result type, three parameters of finish
+template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 3> {
  public:
     typedef boost::function<void (const GError *)> CXXFunctionCB_t;
 
@@ -603,11 +626,38 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish> {
     }
 };
 
+// void result type, two parameters of finish
+template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 2> {
+ public:
+    typedef boost::function<void (const GError *)> CXXFunctionCB_t;
+
+    static void handleGLibResult(GObject *sourceObject,
+                                 GAsyncResult *result,
+                                 gpointer userData) throw () {
+        try {
+            GErrorCXX gerror;
+            finish(result, gerror);
+            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            try {
+                (*cb)(gerror);
+            } catch (...) {
+                delete cb;
+                throw;
+            }
+            delete cb;
+        } catch (...) {
+            // called from C, must not let exception escape
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
+
 /** convenience macro for picking the GAsyncReadyCXX that matches the _prepare call */
 #define SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare) \
     GAsyncReadyCXX< boost::function<typeof(_prepare ## _finish)>::result_type, \
                     typeof(_prepare ## _finish), \
-                    _prepare ## _finish>
+                    _prepare ## _finish, \
+                    boost::function<typeof(_prepare ## _finish)>::arity >
 
 /**
  * Macro for asynchronous methods which use a GAsyncReadyCallback to
@@ -623,15 +673,93 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish> {
  * parameter when the callback belongs to an instance which is
  * not guaranteed to be around when the operation completes.
  *
+ * Example:
+ *
+ *  static void asyncCB(const GError *gerror, const char *func, bool &failed, bool &done) {
+ *      done = true;
+ *      if (gerror) {
+ *          failed = true;
+ *          // log gerror->message or store in GErrorCXX
+ *      }
+ *  }
+ *
+ *  bool done = false, failed = false;
+ *  SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
+ *                          boost::bind(asyncCB, _1,
+ *                                      "folks_individual_aggregator_prepare",
+ *                                      boost::ref(failed), boost::ref(done)),
+ *                          aggregator);
+ *
+ *  // Don't continue unless finished, because the callback will write
+ *  // into "done" and possibly "failed".
+ *  while (!done) {
+ *      g_main_context_iteration(NULL, true);
+ *  }
+ *
  * @param _prepare     name of the function which starts the operation
  * @param _cb          boost::function with GError pointer and optional result value;
  *                     exceptions are considered fatal
- * @param _args        parameters of _prepare, without the final GAsyncReadyCallback + user_data pair
+ * @param _args        parameters of _prepare, without the final GAsyncReadyCallback + user_data pair;
+ *                     usually at least a GCancellable pointer is part of the arguments
  */
 #define SYNCEVO_GLIB_CALL_ASYNC(_prepare, _cb, _args...) \
     _prepare(_args, \
              SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare)::handleGLibResult, \
              new SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare)::CXXFunctionCB_t(_cb))
+
+// helper class for finish method with some kind of result other than void
+template<class T> class GAsyncReadyDoneCXX
+{
+ public:
+    template<class R> static void storeResult(GErrorCXX &gerrorStorage,
+                                              R &resultStorage,
+                                              bool &done,
+                                              const GError *gerror,
+                                              T result) {
+        done = true;
+        gerrorStorage = gerror;
+        resultStorage = result;
+    }
+
+    template<class R> static boost::function<void (const GError *, T)> createCB(R &result, GErrorCXX &gerror, bool &done) {
+        return boost::bind(storeResult<R>, boost::ref(gerror), boost::ref(result), boost::ref(done), _1, _2);
+    }
+};
+
+// helper class for finish method with void result
+template<> class GAsyncReadyDoneCXX<void>
+{
+ public:
+    static void storeResult(GErrorCXX &gerrorStorage,
+                            bool &done,
+                            const GError *gerror) {
+        done = true;
+        gerrorStorage = gerror;
+    }
+
+    static boost::function<void (const GError *)> createCB(const int *dummy, GErrorCXX &gerror, bool &done) {
+        return boost::bind(storeResult, boost::ref(gerror), boost::ref(done), _1);
+    }
+};
+
+/**
+ * Like SYNCEVO_GLIB_CALL_ASYNC, but blocks until the operation
+ * has finished.
+ *
+ * @param _res         an instance which will hold the result when done, NULL when result is void
+ * @param _gerror      a GErrorCXX instance which will hold an error
+ *                     pointer afterwards in case of a failure
+ */
+#define SYNCEVO_GLIB_CALL_SYNC(_res, _gerror, _prepare, _args...) \
+    do { \
+        bool done = false; \
+        SYNCEVO_GLIB_CALL_ASYNC(_prepare, \
+                                GAsyncReadyDoneCXX<boost::function<typeof(_prepare ## _finish)>::result_type>::createCB(_res, _gerror, done), \
+                                _args); \
+        while (!done) { \
+            g_main_context_iteration(NULL, true); \
+        } \
+    } while (false); \
 
 #endif
 
