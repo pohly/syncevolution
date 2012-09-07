@@ -57,7 +57,18 @@ ESourceRegistryCXX EvolutionSyncSource::getSourceRegistry()
     static ESourceRegistryCXX registry;
     if (!registry) {
         GErrorCXX gerror;
-        registry = ESourceRegistryCXX::steal(e_source_registry_new_sync(NULL, gerror));
+        // A workaround for
+        // https://bugzilla.gnome.org/show_bug.cgi?id=683519:
+        // e_source_registry_new_sync() hangs randomly in 3.5 because
+        // of a glib bug and it is unclear whether the workaround
+        // suggested in the bug will be added to it.
+        //
+        // e_source_registry_new() doesn't have the problem and
+        // (with the helper macro) isn't harder to use either.
+        SYNCEVO_GLIB_CALL_SYNC(registry, gerror,
+                               e_source_registry_new,
+                               NULL);
+        // registry = ESourceRegistryCXX::steal(e_source_registry_new_sync(NULL, gerror));
         if (!registry) {
             throwError("unable to access databases registry", gerror);
         }
