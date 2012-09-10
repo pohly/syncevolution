@@ -828,6 +828,16 @@ out officially as the next stable release.
   those do not contain a slash
   (http://www.iana.org/assignments/media-types/image/index.html).
 
+* syncevo-http-server: fixed printing of server debug output
+
+  Python failed to call logSyncEvoOutput() after adding the additional
+  'process' parameter to LogOutput because it extracts all four
+  parameters and then cannot pass them to logSyncEvoOutput().
+
+  Now logSyncEvoOutput() uses the new process information to instantiate
+  a logger with the right prefix, using 'sync' as fallback for messages
+  without that information (as before).
+
 * Some minor code and test cleanup.
 
 
