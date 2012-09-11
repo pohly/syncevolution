@@ -93,6 +93,10 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
                   const std::string &uid);
 
+    typedef std::map<std::string, StringMap> PeersMap;
+    /** Manager.GetAllPeers() */
+    PeersMap getAllPeers();
+
     /**
      * Starts a session for the given config and with the
      * given flags, then when it is active, invokes the callback.

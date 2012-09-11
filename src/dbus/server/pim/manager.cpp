@@ -136,6 +136,7 @@ void Manager::init()
     add(this, &Manager::removePeer, "RemovePeer");
     add(this, &Manager::syncPeer, "SyncPeer");
     add(this, &Manager::stopSync, "StopSync");
+    add(this, &Manager::getAllPeers, "GetAllPeers");
 
     // Ready, make it visible via D-Bus.
     activate();
@@ -442,6 +443,10 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     std::string localDatabaseName = MANAGER_PREFIX + uid;
     std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
 
+    SE_LOG_DEBUG(NULL, NULL, "%s: creating config for protocol %s",
+                 uid.c_str(),
+                 protocol.c_str());
+
     if (protocol == PEER_PBAP_PROTOCOL) {
         if (!database.empty()) {
             SE_THROW(StringPrintf("peer config: %s=%s: choosing database not supported for %s=%s",
@@ -477,7 +482,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         bool found = false;
         BOOST_FOREACH (const SyncSource::Database &database, databases) {
             if (database.m_uri == localDatabaseName) {
-                // found = true;
+                found = true;
                 break;
             }
         }
@@ -500,8 +505,55 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     }
 
     // Report success.
+    SE_LOG_DEBUG(NULL, NULL, "%s: created config for protocol %s",
+                 uid.c_str(),
+                 protocol.c_str());
     result->done();
 }
+
+Manager::PeersMap Manager::getAllPeers()
+{
+    PeersMap peers;
+
+    SyncConfig::ConfigList configs = SyncConfig::getConfigs();
+    std::string prefix = StringPrintf("%s@%s",
+                                      MANAGER_LOCAL_CONFIG,
+                                      MANAGER_PREFIX);
+
+    BOOST_FOREACH (const StringPair &entry, configs) {
+        if (boost::starts_with(entry.first, prefix)) {
+            // One of our configs.
+            std::string uid = entry.first.substr(prefix.size());
+            StringMap &properties = peers[uid];
+            // Extract relevant properties from configs.
+            SyncConfig localConfig(entry.first);
+            InitState< std::vector<std::string> > syncURLs = localConfig.getSyncURL();
+            std::string syncURL;
+            if (!syncURLs.empty()) {
+                syncURL = syncURLs[0];
+            }
+            if (boost::starts_with(syncURL, "local://")) {
+                // Look at target source to determine protocol.
+                SyncConfig targetConfig(StringPrintf("%s@%s%s",
+                                                     MANAGER_REMOTE_CONFIG,
+                                                     MANAGER_PREFIX,
+                                                     uid.c_str()));
+                boost::shared_ptr<PersistentSyncSourceConfig> source(targetConfig.getSyncSourceConfig(MANAGER_REMOTE_SOURCE));
+                std::string backend = source->getBackend();
+                if (backend == "PBAP Address Book") {
+                    properties[PEER_KEY_PROTOCOL] = PEER_PBAP_PROTOCOL;
+                    std::string database = source->getDatabaseID();
+                    if (boost::starts_with(database, "obex-bt://")) {
+                        properties[PEER_KEY_ADDRESS] = database.substr(strlen("obex-bt://"));
+                    }
+                }
+            }
+        }
+    }
+
+    return peers;
+}
+
 
 void Manager::removePeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                          const std::string &uid)
