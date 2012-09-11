@@ -186,8 +186,32 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
     void setDisconnect(const Disconnect_t &func);
     // #define GDBUS_CXX_HAVE_DISCONNECT 1
 
+    /**
+     * Starts processing of messages,
+     * claims the bus name set with addName() or
+     * when creating the connection (legacy API,
+     * done that way for compatibility with GDBus for libdbus).
+     */
     void undelay() const;
     void addName(const std::string &name) { m_name = name; }
+
+    /**
+     * Claims another name on the connection.
+     *
+     * The callback will be invoked with true as
+     * parameter once the name was successfully
+     * claimed. If that fails, false will be passed.
+     *
+     * The caller should be prepared to get called
+     * again later on, when loosing an already obtained
+     * name. Currently this shouldn't happen, though,
+     * because name transfer is not enabled when
+     * registering the name.
+     *
+     * The callback is allowed to be empty.
+     */
+    void ownNameAsync(const std::string &name,
+                      const boost::function<void (bool)> &obtainedCB) const;
 };
 
 class DBusMessagePtr : public boost::intrusive_ptr<GDBusMessage>
