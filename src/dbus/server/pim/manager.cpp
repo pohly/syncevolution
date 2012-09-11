@@ -105,8 +105,6 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
                      MANAGER_IFACE),
     m_server(server)
 {
-    // TODO: claim MANAGER_SERVICE name on connection
-
     // Prevent automatic shut down during idle times, because we need
     // to keep our unified address book available.
     m_server->autoTermRef();
@@ -140,6 +138,11 @@ void Manager::init()
 
     // Ready, make it visible via D-Bus.
     activate();
+
+    // Claim MANAGER_SERVICE name on connection.
+    // We don't care about the result.
+    GDBusCXX::DBusConnectionPtr(getConnection()).ownNameAsync(MANAGER_SERVICE,
+                                                              boost::function<void (bool)>());
 }
 
 void Manager::initFolks()
