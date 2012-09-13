@@ -213,6 +213,7 @@ SyncSource::SyncSource(const SyncSourceParams &params) :
     SyncSourceConfig(params.m_name, params.m_nodes),
     m_numDeleted(0),
     m_forceSlowSync(false),
+    m_database("", ""),
     m_name(params.getDisplayName())
 {
 }

@@ -1505,6 +1505,26 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     virtual Databases getDatabases() = 0;
 
     /**
+     * Creates a new database.
+     * The default implementation just throws an error.
+     *
+     * @param database     At least the name should be set. Some backends
+     *                     may also be able to create the database with
+     *                     a specific URI.
+     * @return description of the new database
+     */
+    virtual Database createDatabase(const Database &database) { throwError("creating databases is not supported by backend " + getBackend()); return Database("", ""); }
+
+    /**
+     * Removes a database. To map a "database" property to a uri,
+     * instantiate the source with the desired config, open() it and
+     * then call getDatabase().
+     *
+     * @param uri    unique identifier for the database
+     */
+    virtual void deleteDatabase(const std::string &uri) { throwError("deleting databases is not supported by backend " + getBackend()); }
+
+    /**
      * Actually opens the data source specified in the constructor,
      * will throw the normal exceptions if that fails. Should
      * not modify the state of the sync source.
@@ -1520,6 +1540,27 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * the client asks for it, but not sooner.
      */
     virtual void open() = 0;
+
+    /**
+     * Returns the actual database that is in use. open() must
+     * have been called first.
+     *
+     * Useful because the "database" property might be empty or
+     * be interpreted in different ways by different backends.
+     *
+     * Needed for deleting databases. Not implemented in all
+     * backends. The default implementation returns an empty
+     * structure.
+     *
+     * @return Database structure with at least m_uri set if
+     *         the actual database is known.
+     */
+    Database getDatabase() const { return m_database; }
+
+    /**
+     * To be called by derived implementation of open().
+     */
+    void setDatabase(const Database &database) { m_database = database; }
 
     /**
      * Read-only access to operations.  Derived classes can modify
@@ -1665,6 +1706,9 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * the engine is running.
      */
     std::vector<sysync::SDK_InterfaceType *> m_synthesisAPI;
+
+    /** database in use after open(), to be set via setDatabase() by derived class */
+    Database m_database;
 
     /** actual name of the source */
     std::string m_name;
