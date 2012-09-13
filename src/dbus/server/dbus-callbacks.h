@@ -63,11 +63,9 @@ SE_BEGIN_CXX
  *
  * It is the responsibility of the caller to ensure that any objects
  * bound to the callback are still around when the callback gets
- * invoked.
- *
- * TODO: utility class which allows runtime checking whether the
- * callback is still possible when it binds to volatile instances (see
- * boost::signals2 automatic connection management).
+ * invoked. One simple way of doing that is via BoostHelper.h and
+ * binding to a boost::weak_ptr that tracks the instance to which
+ * the callback belongs.
  *
  * The recommended naming is to use the "Async" suffix in the function
  * name and a "const SimpleResult &result" as last parameter. Example:
