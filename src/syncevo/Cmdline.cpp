@@ -204,6 +204,12 @@ bool Cmdline::parse(vector<string> &parsed)
         } else if(boost::iequals(m_argv[opt], "--print-databases")) {
             operations.push_back(m_argv[opt]);
             m_printDatabases = true;
+        } else if(boost::iequals(m_argv[opt], "--create-database")) {
+            operations.push_back(m_argv[opt]);
+            m_createDatabase = true;
+        } else if(boost::iequals(m_argv[opt], "--remove-database")) {
+            operations.push_back(m_argv[opt]);
+            m_removeDatabase = true;
         } else if(boost::iequals(m_argv[opt], "--print-servers") ||
                   boost::iequals(m_argv[opt], "--print-peers") ||
                   boost::iequals(m_argv[opt], "--print-configs")) {
@@ -403,6 +409,8 @@ bool Cmdline::isSync()
         m_printTemplates || m_dontrun ||
         m_argc == 1 || (m_useDaemon.wasSet() && m_argc == 2) ||
         m_printDatabases ||
+        m_createDatabase ||
+        m_removeDatabase ||
         m_printConfig || m_remove ||
         (m_server == "" && m_argc > 1) ||
         m_configure || m_migrate ||
@@ -704,8 +712,8 @@ bool Cmdline::run() {
         }
     } else if (m_dontrun) {
         // user asked for information
-    } else if (m_printDatabases) {
-        // list databases
+    } else if (m_printDatabases || m_createDatabase || m_removeDatabase) {
+        // manipulate databases
         const SourceRegistry &registry(SyncSource::getSourceRegistry());
         boost::shared_ptr<SyncSourceNodes> nodes;
         std::string header;
@@ -713,6 +721,11 @@ bool Cmdline::run() {
         FilterConfigNode::ConfigFilter sourceFilter;
         std::string sourceName;
         FilterConfigNode::ConfigFilter::const_iterator backend;
+
+        void (Cmdline::*operation)(SyncSource *, const std::string &) =
+            m_printDatabases ? &Cmdline::listDatabases :
+            m_createDatabase ? &Cmdline::createDatabase :
+            &Cmdline::removeDatabase;
 
         if (!m_server.empty()) {
             // list for specific backend chosen via config
@@ -754,6 +767,7 @@ bool Cmdline::run() {
         SyncSourceParams params("list", *nodes, context);
         if (!m_server.empty() || backend != sourceFilter.end()) {
             // list for specific backend
+            params.m_name = sourceName;
             auto_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
             if (source.get() != NULL) {
                 if (!m_server.empty() && nodes) {
@@ -761,10 +775,9 @@ bool Cmdline::run() {
                     checkSyncPasswords(*context);
                     checkSourcePasswords(*context, sourceName, *nodes);
                 }
-                listSources(*source, header);
-                SE_LOG_SHOW(NULL, NULL, "\n");
+                (this->*operation)(source.get(), header);
             } else {
-                SE_LOG_SHOW(NULL, NULL, "%s:\n   cannot list databases", header.c_str());
+                SE_LOG_SHOW(NULL, NULL, "%s:\n   cannot access databases", header.c_str());
             }
         } else {
             // list for all backends
@@ -775,16 +788,14 @@ bool Cmdline::run() {
                         nodes->getProperties()->setProperty("backend", type.m_backend);
                         std::string header = boost::join(alias, " = ");
                         try {
+                            // The name is used in error messages. We
+                            // don't have a source name, so let's fall
+                            // back to the backend instead.
+                            params.m_name = type.m_backend;
                             auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
-                            if (!source.get()) {
-                                // silently skip backends like the "file" backend which do not support
-                                // listing databases and return NULL unless configured properly
-                            } else {
-                                listSources(*source, header);
-                                SE_LOG_SHOW(NULL, NULL, "\n");
-                            }
+                            (this->*operation)(source.get(), header);
                         } catch (...) {
-                            SE_LOG_ERROR(NULL, NULL, "%s:\nlisting databases failed", header.c_str());
+                            SE_LOG_ERROR(NULL, NULL, "%s:\nacessing databases failed", header.c_str());
                             Exception::handle();
                         }
                     }
@@ -1997,15 +2008,21 @@ void Cmdline::checkForPeerProps()
     }
 }
 
-void Cmdline::listSources(SyncSource &syncSource, const string &header)
+void Cmdline::listDatabases(SyncSource *source, const string &header)
 {
+    if (!source) {
+        // silently skip backends like the "file" backend which do not support
+        // listing databases and return NULL unless configured properly
+        return;
+    }
+
     ostringstream out;
     out << header << ":\n";
 
-    if (syncSource.isInactive()) {
-        out << "not enabled during compilation or not usable in the current environment\n";
+    if (source->isInactive()) {
+        out << source->getBackend() << ": not enabled during compilation or not usable in the current environment\n";
     } else {
-        SyncSource::Databases databases = syncSource.getDatabases();
+        SyncSource::Databases databases = source->getDatabases();
 
         BOOST_FOREACH(const SyncSource::Database &database, databases) {
             out << "   " << database.m_name << " (" << database.m_uri << ")";
@@ -2016,6 +2033,53 @@ void Cmdline::listSources(SyncSource &syncSource, const string &header)
         }
     }
     SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+    SE_LOG_SHOW(NULL, NULL, "\n");
+}
+
+void Cmdline::createDatabase(SyncSource *source, const string &header)
+{
+    if (!source) {
+        SE_THROW(StringPrintf("%s:\ncannot access databases", header.c_str()));
+        return;
+    }
+
+    // Only the name can be set via the command line. URI is chosen by backend.
+    InitStateString databaseID = source->getDatabaseID();
+    if (!databaseID.wasSet()) {
+        SE_THROW("The 'database' property must be set to the name of the new database");
+    }
+    SyncSource::Database database = source->createDatabase(SyncSource::Database(databaseID, ""));
+    SE_LOG_SHOW(NULL, NULL, "%s: database '%s' (%s) was created.",
+                header.c_str(),
+                database.m_name.c_str(),
+                database.m_uri.c_str());
+}
+
+void Cmdline::removeDatabase(SyncSource *source, const string &header)
+{
+    if (!source) {
+        SE_THROW(StringPrintf("%s:\ncannot access databases", header.c_str()));
+        return;
+    }
+
+    InitStateString databaseID = source->getDatabaseID();
+    if (!databaseID.wasSet()) {
+        SE_THROW("The 'database' property was not set. Cowardly refusing to remove the default database. Set it to the empty string and try again if that was the intention.");
+    }
+
+    // determine URI
+    source->open();
+    SyncSource::Database database = source->getDatabase();
+    if (database.m_uri.empty()) {
+        SE_THROW(StringPrintf("Cannot determine database from 'database' property value '%s'.",
+                              databaseID.c_str()));
+    }
+
+    source->deleteDatabase(database.m_uri);
+    SE_LOG_SHOW(NULL, NULL, "%s: database '%s' (%s) was removed.",
+                header.c_str(),
+                database.m_name.c_str(),
+                database.m_uri.c_str());
 }
 
 void Cmdline::dumpConfigs(const string &preamble,
@@ -4373,7 +4437,7 @@ private:
             std::string out = m_out.str();
             std::string err = m_err.str();
             std::string all = m_all.str();
-            CPPUNIT_ASSERT(boost::starts_with(out, "List databases:\n"));
+            CPPUNIT_ASSERT(boost::starts_with(out, "List and manipulate databases:\n"));
             CPPUNIT_ASSERT(out.find("\nOptions:\n") == std::string::npos);
             CPPUNIT_ASSERT(boost::ends_with(out,
                                             "Remove item(s):\n"

@@ -13,8 +13,8 @@ synchronize personal information management data
 SYNOPSIS
 ========
 
-List databases:
-  syncevolution --print-databases [<properties>] [<config> <source>]
+List and manipulate databases:
+  syncevolution --print-databases|--create-database|--remove-database [<properties>] [<config> <source>]
 
 Show information about configuration(s):
   syncevolution --print-servers|--print-configs|--print-peers
@@ -316,6 +316,25 @@ Some backends do not support listing of databases. For example, the
 file backend synchronizes directories with one file per item and
 always needs an explicit ``database`` property because it cannot guess
 which directory it is meant to use. ::
+
+   syncevolution --create-database [<properties>] [<config> <source>]
+
+Creates a new database for the selected ``backend``, using the
+information given in the ``database`` property. As with
+``--print-databases``, it is possible to give the properties directly
+without configuring a source first.
+
+The interpretation of the ``database`` property depends on the
+backend. Not all backends support this operation.
+
+The EDS backend uses the value of the ``database`` as name of the new
+database and assigns a unique URI automatically. ::
+
+   syncevolution --remove-database [<properties>] [<config> <source>]
+
+Looks up the database based on the ``database`` property (depending
+on the backend, both name and a URI are valid), then deletes the data.
+Note that source configurations using the database are not removed. ::
 
    syncevolution <config>
 

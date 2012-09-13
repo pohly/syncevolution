@@ -5569,7 +5569,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
     def expectUsageError(self, out, err, specific_error):
         '''verify a short usage info was produced and specific error
         message was printed'''
-        self.assertTrue(out.startswith("List databases:\n"))
+        self.assertTrue(out.startswith("List and manipulate databases:\n"))
         self.assertEqual(out.find("\nOptions:\n"), -1)
         self.assertTrue(out.endswith("Remove item(s):\n" \
                                      "  syncevolution --delete-items [--] <config> <source> (<luid> ... | '*')\n\n"))
@@ -5703,7 +5703,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
                                          sessionFlags=None,
                                          expectSuccess=False)
         self.assertEqualDiff('[ERROR] --foo-bar: unknown parameter\n', stripOutput(err))
-        self.assertRegexpMatches(out, '^List databases:\n')
+        self.assertRegexpMatches(out, '^List and manipulate databases:\n')
         self.assertEqual(1, code)
 
         # Run command without talking to server, joined streams.
@@ -5712,7 +5712,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
                                          expectSuccess=False,
                                          preserveOutputOrder=True)
         self.assertEqual(err, None)
-        self.assertRegexpMatches(stripOutput(out), r'^List databases:\n(.*\n)*\[ERROR\] --foo-bar: unknown parameter\n$')
+        self.assertRegexpMatches(stripOutput(out), r'^List and manipulate databases:\n(.*\n)*\[ERROR\] --foo-bar: unknown parameter\n$')
         self.assertEqual(1, code)
 
         peerMin = self.getPeerMinVersion()

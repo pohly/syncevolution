@@ -142,6 +142,8 @@ protected:
     Bool m_run;
     Bool m_migrate;
     Bool m_printDatabases;
+    Bool m_createDatabase;
+    Bool m_removeDatabase;
     Bool m_printServers;
     Bool m_printTemplates;
     Bool m_printConfig;
@@ -244,7 +246,9 @@ protected:
     /**
      * list all known data sources of a certain type
      */
-    void listSources(SyncSource &syncSource, const std::string &header);
+    void listDatabases(SyncSource *source, const std::string &header);
+    void createDatabase(SyncSource *source, const std::string &header);
+    void removeDatabase(SyncSource *source, const std::string &header);
 
     void dumpConfigs(const std::string &preamble,
                      const SyncConfig::ConfigList &servers);
