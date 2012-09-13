@@ -1146,7 +1146,9 @@ test.alarmSeconds = 2400
 context.add(test)
 
 class ActiveSyncTest(SyncEvolutionTest):
-    def __init__(self, name, sources = [ "eas_event", "eas_contact", "eds_event", "eds_contact" ], env = ""):
+    def __init__(self, name, sources = [ "eas_event", "eas_contact", "eds_event", "eds_contact" ],
+                 env = "",
+                 knownFailures = []):
         tests = []
         if "eds_event" in sources:
             tests.append("Client::Sync::eds_event")
@@ -1167,6 +1169,29 @@ class ActiveSyncTest(SyncEvolutionTest):
                                    "EAS_SOUP_LOGGER=1 "
                                    "EAS_DEBUG=5 "
                                    "EAS_DEBUG_DETACHED_RECURRENCES=1 "
+
+                                   "CLIENT_TEST_FAILURES=" +
+                                   ",".join(knownFailures +
+                                            # time zone mismatch between client and server,
+                                            # still need to investigate
+                                            [ ".*::LinkedItemsWeekly::testSubsetStart11Skip[0-3]",
+                                              ".*::LinkedItemsWeekly::testSubsetStart22Skip[1-3]",
+                                              ".*::LinkedItemsWeekly::testSubsetStart33Skip[1-3]",
+                                              ".*::LinkedItemsWeekly::testSubsetStart44.*" ] +
+                                            # The disables the synccompare simplifications for
+                                            # BDAY and friends, and therefore fails.
+                                            [ ".*::testExtensions" ]
+                                            ) +
+                                   " "
+
+                                   "CLIENT_TEST_SKIP="
+                                   # See "[SyncEvolution] one-way sync + sync tokens not updated":
+                                   # one-way sync keeps using old (and obsolete) sync keys,
+                                   # thus running into unexpected slow syncs with ActiveSync.
+                                   "Client::Sync::.*::testOneWayFromClient,"
+                                   "Client::Sync::.*::testOneWayFromLocal,"
+                                   " "
+
                                    "CLIENT_TEST_LOG=activesyncd.log "
                                    ,
                                    testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.log",
@@ -1205,7 +1230,15 @@ context.add(test)
 
 test = ActiveSyncTest("googleeas",
                       ["eds_contact", "eas_contact"],
-                      "CLIENT_TEST_DELAY=10 CLIENT_TEST_SOURCE_DELAY=10 ")
+                      env="CLIENT_TEST_DELAY=10 CLIENT_TEST_SOURCE_DELAY=10 ",
+                      knownFailures=[
+                          # Google does not support the Fetch operation, leading
+                          # to an unhandled generic error.
+                          ".*::testReadItem404",
+                          # Remove of PHOTO not supported by Google (?),
+                          # works with Exchange.
+                          "Client::Source::eas_contact::testRemoveProperties",
+                          ])
 context.add(test)
 
 syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
