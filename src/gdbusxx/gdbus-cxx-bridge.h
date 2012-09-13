@@ -2232,11 +2232,7 @@ class DBusResult0 :
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
-        GError *error = NULL;
-        if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
-                                            G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, &error)) {
-            throwFailure("", "g_dbus_connection_send_message()", error);
-        }
+        sendMsg(reply);
     }
 
     static std::string getSignature() { return ""; }
@@ -2348,11 +2344,7 @@ class DBusResult4 :
             throw std::runtime_error("no GDBusMessage");
         }
         AppendRetvals(reply) << a1 << a2 << a3 << a4;
-        GError *error = NULL;
-        if (!g_dbus_connection_send_message(m_conn.get(), reply.get(),
-                                            G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, &error)) {
-            throwFailure("", "g_dbus_connection_send_message()", error);
-        }
+        sendMsg(reply);
     }
     static std::string getSignature() {
         return dbus_traits<A1>::getSignature() +
