@@ -170,7 +170,7 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
     ECalClientSourceType sourceType() const {
         return (ECalClientSourceType)m_type;
     }
-    const char *sourceExtension() const {
+    virtual const char *sourceExtension() const {
         return
             m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? E_SOURCE_EXTENSION_CALENDAR :
             m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? E_SOURCE_EXTENSION_TASK_LIST :

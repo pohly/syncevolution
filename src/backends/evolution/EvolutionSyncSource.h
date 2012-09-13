@@ -76,7 +76,16 @@ class EvolutionSyncSource : public TrackingSyncSource
                            ESource *(*refBuiltin)(ESourceRegistry *),
                            const boost::function<EClient *(ESource *, GError **gerror)> &newClient);
     ESourceRegistryCXX getSourceRegistry();
+
+    // Implementation of SyncSource calls which only works when using EDS Client API
+    // and EDS > 3.4. Older EDS has no way of creating sources easily (or at all).
+    virtual Database createDatabase(const Database &database);
+    virtual void deleteDatabase(const std::string &uri);
+
+    /** E_SOURCE_EXTENSION_ADDRESS_BOOK, etc. */
+    virtual const char *sourceExtension() const = 0;
 #endif
+
     /**
      * searches the list for a source with the given uri or name
      *

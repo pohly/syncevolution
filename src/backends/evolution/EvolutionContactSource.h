@@ -86,6 +86,10 @@ class EvolutionContactSource : public EvolutionSyncSource,
         info.m_afterReadScript = "$VCARD_AFTERREAD_SCRIPT_EVOLUTION;";
     }
 
+#ifdef USE_EDS_CLIENT
+    virtual const char *sourceExtension() const { return E_SOURCE_EXTENSION_ADDRESS_BOOK; }
+#endif
+
   private:
     /** extract REV string for contact, throw error if not found */
     std::string getRevision(const std::string &uid);
