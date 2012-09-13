@@ -2184,9 +2184,11 @@ class DBusResult : virtual public Result
  protected:
     DBusConnectionPtr m_conn;     /**< connection via which the message was received */
     DBusMessagePtr m_msg;         /**< the method invocation message */
+    bool m_replied;               /**< a response was sent */
 
     void sendMsg(const DBusMessagePtr &msg)
     {
+        m_replied = true;
         GError *error = NULL;
         if (!g_dbus_connection_send_message(m_conn.get(), msg.get(),
                                             G_DBUS_SEND_MESSAGE_FLAGS_NONE, NULL, &error)) {
@@ -2198,8 +2200,22 @@ class DBusResult : virtual public Result
     DBusResult(GDBusConnection *conn,
                GDBusMessage *msg) :
         m_conn(conn, true),
-        m_msg(msg, true)
+        m_msg(msg, true),
+        m_replied(false)
     {}
+
+    ~DBusResult()
+    {
+        if (!m_replied) {
+            try {
+                failed(dbus_error("org.syncevolution.gdbus", "processing the method call failed"));
+            } catch (...) {
+                // Ignore failure, we are probably shutting down
+                // anyway, which will tell the caller that the
+                // method won't be processed.
+            }
+        }
+    }
 
     virtual void failed(const dbus_error &error)
     {
