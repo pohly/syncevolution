@@ -206,6 +206,37 @@ void Server::startSessionWithFlags(const Caller_t &caller,
     object = session->getPath();
 }
 
+
+boost::shared_ptr<Session> Server::startInternalSession(const std::string &server,
+                                                        SessionFlags flags,
+                                                        const boost::function<void (const boost::weak_ptr<Session> &session)> &callback)
+{
+    if (m_shutdownRequested) {
+        // don't allow new sessions, we cannot activate them
+        SE_THROW("server shutting down");
+    }
+
+    std::vector<std::string> dbusFlags;
+    if (flags & SESSION_FLAG_NO_SYNC) {
+        dbusFlags.push_back("no-sync");
+    }
+    if (flags & SESSION_FLAG_ALL_CONFIGS) {
+        dbusFlags.push_back("all-configs");
+    }
+
+    std::string new_session = getNextSession();
+    boost::shared_ptr<Session> session = Session::createSession(*this,
+                                                                "is this a client or server session?",
+                                                                server,
+                                                                new_session,
+                                                                dbusFlags);
+    session->m_sessionActiveSignal.connect(boost::bind(callback, boost::weak_ptr<Session>(session)));
+    session->activate();
+    enqueue(session);
+    return session;
+}
+
+
 void Server::checkPresence(const std::string &server,
                            std::string &status,
                            std::vector<std::string> &transports)

@@ -67,6 +67,21 @@ class Session : public GDBusCXX::DBusObjectHelper,
                 private ReadOperations,
                 private boost::noncopyable
 {
+ public:
+    /**
+     * the sync status for session
+     */
+    enum SyncStatus {
+        SYNC_QUEUEING,  ///< waiting to become ready for use
+        SYNC_IDLE,      ///< ready, session is initiated but sync not started
+        SYNC_RUNNING,   ///< sync is running
+        SYNC_ABORT,     ///< sync is aborting
+        SYNC_SUSPEND,   ///< sync is suspending
+        SYNC_DONE,      ///< sync is done
+        SYNC_ILLEGAL
+    };
+
+ private:
     Server &m_server;
     std::vector<std::string> m_flags;
     const std::string m_sessionID;
@@ -158,19 +173,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
      * Indicates whether this session was initiated by the peer or locally.
      */
     bool m_remoteInitiated;
-
-    /**
-     * the sync status for session
-     */
-    enum SyncStatus {
-        SYNC_QUEUEING,  ///< waiting to become ready for use
-        SYNC_IDLE,      ///< ready, session is initiated but sync not started
-        SYNC_RUNNING,   ///< sync is running
-        SYNC_ABORT,     ///< sync is aborting
-        SYNC_SUSPEND,   ///< sync is suspending
-        SYNC_DONE,      ///< sync is done
-        SYNC_ILLEGAL
-    } m_syncStatus;
+    SyncStatus m_syncStatus;
 
     /** maps to names as used in D-Bus API */
     inline std::string static syncStatusToString(SyncStatus state)
@@ -444,6 +447,8 @@ public:
      * see GetStatus documentation.
      */
     void setWaiting(bool isWaiting);
+
+    SyncStatus getSyncStatus() const { return m_syncStatus; }
 
     /** session was just activated */
     typedef boost::signals2::signal<void ()> SessionActiveSignal_t;

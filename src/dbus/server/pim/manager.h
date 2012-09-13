@@ -40,6 +40,14 @@ class Manager : public GDBusCXX::DBusObjectHelper
     boost::shared_ptr<Server> m_server;
     boost::shared_ptr<IndividualAggregator> m_folks;
     std::string m_sortOrder;
+    /**
+     * Contains the UIDs of all peers contributing to the current
+     * unified address book.
+     */
+    std::set<std::string> m_enabledPeers;
+
+    /** holds the references to pending session requests, see runInSession() */
+    std::list< boost::shared_ptr<Session> > m_pending;
 
     Manager(const boost::shared_ptr<Server> &server);
     void init();
@@ -59,6 +67,51 @@ class Manager : public GDBusCXX::DBusObjectHelper
                                   const boost::shared_ptr<GDBusCXX::Watch> &watch,
                                   const StringMap &filter,
                                   const GDBusCXX::DBusObject_t &agentPath);
+
+    /** Manager.SetPeer() */
+    void setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                 const std::string &uid, const StringMap &properties);
+    void doSetPeer(const boost::shared_ptr<Session> &session,
+                   const boost::shared_ptr<GDBusCXX::Result0> &result,
+                   const std::string &uid, const StringMap &properties);
+
+    /** Manager.RemovePeer() */
+    void removePeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                    const std::string &uid);
+    void doRemovePeer(const boost::shared_ptr<Session> &session,
+                      const boost::shared_ptr<GDBusCXX::Result0> &result,
+                      const std::string &uid);
+
+    /** Manager.SyncPeer() */
+    void syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                  const std::string &uid);
+    void doSyncPeer(const boost::shared_ptr<Session> &session,
+                    const boost::shared_ptr<GDBusCXX::Result0> &result,
+                    const std::string &uid);
+
+    /** Manager.StopSync() */
+    void stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                  const std::string &uid);
+
+    /**
+     * Starts a session for the given config and with the
+     * given flags, then when it is active, invokes the callback.
+     * Failures will be reported back to via the result
+     * pointer.
+     */
+    void runInSession(const std::string &config,
+                      Server::SessionFlags flags,
+                      const boost::shared_ptr<GDBusCXX::Result> &result,
+                      const boost::function<void (const boost::shared_ptr<Session> &session)> &callback);
+
+    /**
+     * Common boilerplate code for anything that runs inside
+     * an active session in response to some D-Bus method call
+     * (like doSetPeer).
+     */
+    void doSession(const boost::weak_ptr<Session> &session,
+                   const boost::shared_ptr<GDBusCXX::Result> &result,
+                   const boost::function<void (const boost::shared_ptr<Session> &session)> &callback);
 
  public:
     /**

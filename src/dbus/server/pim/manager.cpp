@@ -20,6 +20,9 @@
 #include "manager.h"
 #include "../resource.h"
 #include "../client.h"
+#include "../session.h"
+
+#include <boost/scoped_ptr.hpp>
 
 namespace GDBusCXX {
     using namespace SyncEvo;
@@ -80,6 +83,22 @@ static const char * const MANAGER_IFACE = "org._01.pim.contacts.Manager";
 static const char * const AGENT_IFACE = "org._01.pim.contacts.ViewAgent";
 static const char * const CONTROL_IFACE = "org._01.pim.contacts.ViewControl";
 
+/**
+ * Name prefix for SyncEvolution config contexts used by PIM manager.
+ * Used in combination with the uid string provided by the PIM manager
+ * client, like this:
+ *
+ * eds@pim-manager-<uid> source 'eds' syncs with target-config@pim-manager-<uid>
+ * source 'remote' for PBAP.
+ *
+ * eds@pim-manager-<uid> source 'local' syncs with a SyncML peer directly.
+ */
+static const char * const MANAGER_PREFIX = "pim-manager-";
+static const char * const MANAGER_LOCAL_CONFIG = "eds";
+static const char * const MANAGER_LOCAL_SOURCE = "local";
+static const char * const MANAGER_REMOTE_CONFIG = "target-config";
+static const char * const MANAGER_REMOTE_SOURCE = "remote";
+
 Manager::Manager(const boost::shared_ptr<Server> &server) :
     DBusObjectHelper(server->getConnection(),
                      MANAGER_PATH,
@@ -93,6 +112,13 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
     m_server->autoTermRef();
 }
 
+Manager::~Manager()
+{
+    // Clear the pending queue before self-desctructing, because the
+    // entries hold pointers to this instance.
+    m_pending.clear();
+    m_server->autoTermUnref();
+}
 
 void Manager::init()
 {
@@ -106,6 +132,10 @@ void Manager::init()
     add(this, &Manager::setSortOrder, "SetSortOrder");
     add(this, &Manager::getSortOrder, "GetSortOrder");
     add(this, &Manager::search, "Search");
+    add(this, &Manager::setPeer, "SetPeer");
+    add(this, &Manager::removePeer, "RemovePeer");
+    add(this, &Manager::syncPeer, "SyncPeer");
+    add(this, &Manager::stopSync, "StopSync");
 
     // Ready, make it visible via D-Bus.
     activate();
@@ -119,11 +149,6 @@ void Manager::initFolks()
 void Manager::initSorting()
 {
     // TODO: mirror m_sortOrder in m_folks main view
-}
-
-Manager::~Manager()
-{
-    m_server->autoTermUnref();
 }
 
 boost::shared_ptr<Manager> Manager::create(const boost::shared_ptr<Server> &server)
@@ -322,6 +347,294 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
 
     // created local resource
     return viewResource->getPath();
+}
+
+void Manager::runInSession(const std::string &config,
+                           Server::SessionFlags flags,
+                           const boost::shared_ptr<GDBusCXX::Result> &result,
+                           const boost::function<void (const boost::shared_ptr<Session> &session)> &callback)
+{
+    try {
+        boost::shared_ptr<Session> session = m_server->startInternalSession(config,
+                                                                            flags,
+                                                                            boost::bind(&Manager::doSession,
+                                                                                        this,
+                                                                                        _1,
+                                                                                        result,
+                                                                                        callback));
+        if (session->getSyncStatus() == Session::SYNC_QUEUEING) {
+            // Must continue to wait instead of dropping the last reference.
+            m_pending.push_back(session);
+        }
+    } catch (...) {
+        // Tell caller about specific error.
+        dbusErrorCallback(result);
+    }
+}
+
+void Manager::doSession(const boost::weak_ptr<Session> &weakSession,
+                        const boost::shared_ptr<GDBusCXX::Result> &result,
+                        const boost::function<void (const boost::shared_ptr<Session> &session)> &callback)
+{
+    try {
+        boost::shared_ptr<Session> session = weakSession.lock();
+        if (!session) {
+            // Destroyed already?
+            return;
+        }
+        // Drop permanent reference, session will be destroyed when we
+        // return.
+        m_pending.remove(session);
+
+        // Now run the operation.
+        callback(session);
+    } catch (...) {
+        // Tell caller about specific error.
+        dbusErrorCallback(result);
+    }
+}
+
+void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                      const std::string &uid, const StringMap &properties)
+{
+    runInSession(StringPrintf("@%s%s",
+                              MANAGER_PREFIX,
+                              uid.c_str()),
+                 Server::SESSION_FLAG_NO_SYNC,
+                 result,
+                 boost::bind(&Manager::doSetPeer, this, _1, result, uid, properties));
+}
+
+static const char * const PEER_KEY_PROTOCOL = "protocol";
+static const char * const PEER_SYNCML_PROTOCOL = "SyncML";
+static const char * const PEER_PBAP_PROTOCOL = "PBAP";
+static const char * const PEER_KEY_TRANSPORT = "transport";
+static const char * const PEER_BLUETOOTH_TRANSPORT = "Bluetooth";
+static const char * const PEER_IP_TRANSPORT = "IP";
+static const char * const PEER_DEF_TRANSPORT = PEER_BLUETOOTH_TRANSPORT;
+static const char * const PEER_KEY_ADDRESS = "address";
+static const char * const PEER_KEY_DATABASE = "database";
+
+static std::string GetEssential(const StringMap &properties, const char *key,
+                                bool allowEmpty = false)
+{
+    InitStateString entry = GetWithDef(properties, key);
+    if (!entry.wasSet() ||
+        (!allowEmpty && entry.empty())) {
+        SE_THROW(StringPrintf("peer config: '%s' must be set%s",
+                              key,
+                              allowEmpty ? "" : " to a non-empty value"));
+    }
+    return entry;
+}
+
+void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
+                        const boost::shared_ptr<GDBusCXX::Result0> &result,
+                        const std::string &uid, const StringMap &properties)
+{
+    // The session is active now, we have exclusive control over the
+    // databases and the config. Create or update config.
+    std::string protocol = GetEssential(properties, PEER_KEY_PROTOCOL);
+    std::string transport = GetWithDef(properties, PEER_KEY_TRANSPORT, PEER_DEF_TRANSPORT);
+    std::string address = GetEssential(properties, PEER_KEY_ADDRESS);
+    std::string database = GetWithDef(properties, PEER_KEY_DATABASE);
+
+    std::string localDatabaseName = MANAGER_PREFIX + uid;
+    std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
+
+    if (protocol == PEER_PBAP_PROTOCOL) {
+        if (!database.empty()) {
+            SE_THROW(StringPrintf("peer config: %s=%s: choosing database not supported for %s=%s",
+                                  PEER_KEY_ADDRESS, address.c_str(),
+                                  PEER_KEY_PROTOCOL, protocol.c_str()));
+        }
+        if (transport != PEER_BLUETOOTH_TRANSPORT) {
+            SE_THROW(StringPrintf("peer config: %s=%s: only transport %s is supported for %s=%s",
+                                  PEER_KEY_TRANSPORT, transport.c_str(),
+                                  PEER_BLUETOOTH_TRANSPORT,
+                                  PEER_KEY_PROTOCOL, protocol.c_str()));
+        }
+
+        // Create or set local config.
+        boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_LOCAL_CONFIG + context));
+        config->setDefaults();
+        config->prepareConfigForWrite();
+        config->setSyncURL("local://" + context);
+        config->setPeerIsClient(true);
+        boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
+        source->setBackend("evolution-contacts");
+        source->setDatabaseID(localDatabaseName);
+        source->setSync("local-cache");
+        source->setURI(MANAGER_REMOTE_SOURCE);
+        config->flush();
+        // Ensure that database exists.
+        SyncSourceParams params(MANAGER_LOCAL_SOURCE,
+                                config->getSyncSourceNodes(MANAGER_LOCAL_SOURCE),
+                                config,
+                                context);
+        boost::scoped_ptr<SyncSource> syncSource(SyncSource::createSource(params));
+        SyncSource::Databases databases = syncSource->getDatabases();
+        bool found = false;
+        BOOST_FOREACH (const SyncSource::Database &database, databases) {
+            if (database.m_uri == localDatabaseName) {
+                // found = true;
+                break;
+            }
+        }
+        if (!found) {
+            syncSource->createDatabase(SyncSource::Database(localDatabaseName, localDatabaseName));
+        }
+
+        // Now also create target config, in the same context.
+        config.reset(new SyncConfig(MANAGER_REMOTE_CONFIG + context));
+        config->setDefaults();
+        config->prepareConfigForWrite();
+        source = config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE);
+        source->setDatabaseID("obex-bt://" + address);
+        source->setBackend("pbap");
+        config->flush();
+    } else {
+        SE_THROW(StringPrintf("peer config: %s=%s not supported",
+                              PEER_KEY_PROTOCOL,
+                              protocol.c_str()));
+    }
+
+    // Report success.
+    result->done();
+}
+
+void Manager::removePeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                         const std::string &uid)
+{
+    runInSession(StringPrintf("@%s%s",
+                              MANAGER_PREFIX,
+                              uid.c_str()),
+                 Server::SESSION_FLAG_NO_SYNC,
+                 result,
+                 boost::bind(&Manager::doRemovePeer, this, _1, result, uid));
+}
+
+void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
+                           const boost::shared_ptr<GDBusCXX::Result0> &result,
+                           const std::string &uid)
+{
+    // Remove database. This is expected to be noticed by libfolks
+    // without us having to tell it.
+    m_enabledPeers.erase(uid);
+
+    std::string localDatabaseName = MANAGER_PREFIX + uid;
+    std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
+
+    // Access config via context (includes sync and target config).
+    boost::shared_ptr<SyncConfig> config(new SyncConfig(context));
+
+    // Remove database, if it exists.
+    if (config->exists(CONFIG_LEVEL_CONTEXT)) {
+        boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
+        SyncSourceNodes nodes = config->getSyncSourceNodes(MANAGER_LOCAL_SOURCE);
+        if (nodes.dataConfigExists()) {
+            SyncSourceParams params(MANAGER_LOCAL_SOURCE,
+                                    nodes,
+                                    config,
+                                    context);
+            boost::scoped_ptr<SyncSource> syncSource(SyncSource::createSource(params));
+            SyncSource::Databases databases = syncSource->getDatabases();
+            bool found = false;
+            BOOST_FOREACH (const SyncSource::Database &database, databases) {
+                if (database.m_uri == localDatabaseName) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                syncSource->deleteDatabase(localDatabaseName);
+            }
+        }
+    }
+
+    // Remove entire context, just in case. Placing the code here also
+    // ensures that nothing except the config itself has the config
+    // nodes open, which would prevent removing them. For the same
+    // reason the SyncConfig is recreated: to clear all references to
+    // sources that were opened via it.
+    config.reset(new SyncConfig(context));
+    config->remove();
+    config->flush();
+
+    // Report success.
+    result->done();
+}
+
+void Manager::syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                       const std::string &uid)
+{
+    runInSession(StringPrintf("%s@%s%s",
+                              MANAGER_LOCAL_CONFIG,
+                              MANAGER_PREFIX,
+                              uid.c_str()),
+                 Server::SESSION_FLAG_NO_SYNC,
+                 result,
+                 boost::bind(&Manager::doSyncPeer, this, _1, result, uid));
+}
+
+static void doneSyncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                         SyncMLStatus status)
+{
+    if (status == STATUS_OK ||
+        status == STATUS_HTTP_OK) {
+        result->done();
+    } else {
+        result->failed(GDBusCXX::dbus_error(MANAGER_IFACE, Status2String(status)));
+    }
+}
+
+void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
+                         const boost::shared_ptr<GDBusCXX::Result0> &result,
+                         const std::string &uid)
+{
+    // After sync(), the session is tracked as the active sync session
+    // by the server. It was removed from our own m_pending list by
+    // doSession().
+    session->sync("", SessionCommon::SourceModes_t());
+    // Relay result to caller when done.
+    session->m_doneSignal.connect(boost::bind(doneSyncPeer, result, _1));
+}
+
+void Manager::stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                       const std::string &uid)
+{
+    // Fully qualified peer config name. Only used for sync sessions
+    // and thus good enough to identify them.
+    std::string syncConfigName = StringPrintf("%s@%s%s",
+                                              MANAGER_LOCAL_CONFIG,
+                                              MANAGER_PREFIX,
+                                              uid.c_str());
+
+    // Remove all pending sessions of the peer. Make a complete
+    // copy of the list, to avoid issues with modifications of the
+    // underlying list while we iterate over it.
+    BOOST_FOREACH (const boost::shared_ptr<Session> &session, std::list< boost::shared_ptr<Session> >(m_pending)) {
+        std::string configName = session->getConfigName();
+        if (configName == syncConfigName) {
+            m_pending.remove(session);
+        }
+    }
+
+    // Stop the currently running sync if it is for the peer.
+    boost::shared_ptr<Session> session = m_server->getSyncSession();
+    bool aborting = false;
+    if (session) {
+        std::string configName = session->getConfigName();
+        if (configName == syncConfigName) {
+            // Return to caller later, when aborting is done.
+            session->abortAsync(SimpleResult(boost::bind(&GDBusCXX::Result0::done, result),
+                                             createDBusErrorCb(result)));
+            aborting = true;
+        }
+    }
+    if (!aborting) {
+        result->done();
+    }
 }
 
 SE_END_CXX

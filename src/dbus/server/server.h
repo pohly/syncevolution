@@ -247,6 +247,24 @@ class Server : public GDBusCXX::DBusObjectHelper,
                                const std::vector<std::string> &flags,
                                GDBusCXX::DBusObject_t &object);
 
+    /** internal representation of D-Bus API Server.StartSessionWithFlags() */
+    enum SessionFlags {
+        SESSION_FLAG_NONE = 0,
+        SESSION_FLAG_NO_SYNC = 1<<0,
+        SESSION_FLAG_ALL_CONFIGS = 1<<1
+    };
+
+    /**
+     * Creates a session, queues it, then invokes the callback
+     * once the session is active. The caller is responsible
+     * for holding a reference to the session. If it drops
+     * that reference, the session gets deleted and the callback
+     * will not be called.
+     */
+    boost::shared_ptr<Session> startInternalSession(const std::string &server,
+                                                    SessionFlags flags,
+                                                    const boost::function<void (const boost::weak_ptr<Session> &session)> &callback);
+
     /** Server.GetConfig() */
     void getConfig(const std::string &config_name,
                    bool getTemplate,
@@ -395,6 +413,9 @@ public:
 
     /** process D-Bus calls until the server is ready to quit */
     void run();
+
+    /** currently running operation */
+    boost::shared_ptr<Session> getSyncSession() const { return m_syncSession; }
 
     /** true iff no work is pending */
     bool isIdle() const { return !m_activeSession && m_workQueue.empty(); }
