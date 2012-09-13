@@ -1457,7 +1457,7 @@ class SyncConfig {
     virtual void setProxyUsername(const std::string &value, bool temporarily = false);
     virtual InitStateString getProxyPassword() const;
     virtual void setProxyPassword(const std::string &value, bool temporarily = false);
-    virtual InitStateClass< std::vector<std::string> > getSyncURL() const;
+    virtual InitState< std::vector<std::string> > getSyncURL() const;
     virtual void setSyncURL(const std::string &value, bool temporarily = false);
     virtual void setSyncURL(const std::vector<std::string> &value, bool temporarily = false);
     virtual InitStateString getClientAuthType() const;
@@ -1880,8 +1880,8 @@ class SyncSourceConfig {
      * they support that type. This call has to work before instantiating
      * a source and thus gets passed a node to read from.
      */
-    static InitStateClass<SourceType> getSourceType(const SyncSourceNodes &nodes);
-    virtual InitStateClass<SourceType> getSourceType() const;
+    static InitState<SourceType> getSourceType(const SyncSourceNodes &nodes);
+    virtual InitState<SourceType> getSourceType() const;
 
     /** set source backend and formats in one step */
     virtual void setSourceType(const SourceType &type, bool temporarily = false);

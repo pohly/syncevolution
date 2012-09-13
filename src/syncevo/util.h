@@ -27,6 +27,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/function.hpp>
 #include <boost/utility/value_init.hpp>
+#include <boost/type_traits/is_class.hpp>
 
 #include <stdarg.h>
 
@@ -365,39 +366,53 @@ template<class T> class Init {
  * are not left uninitialized and tracks whether a value was every
  * assigned explicitly.
  */
-template<class T> class InitState {
- public:
-    typedef T value_type;
+template<class T, bool isClass> class InitStateBase {
+    T m_value;
 
-    InitState(const T &val, bool wasSet) : m_value(val), m_wasSet(wasSet) {}
-    InitState() : m_value(boost::value_initialized<T>()), m_wasSet(false) {}
-    InitState(const InitState &other) : m_value(other.m_value), m_wasSet(other.m_wasSet) {}
-    InitState & operator = (const T &val) { m_value = val; m_wasSet = true; return *this; }
+ protected:
+    InitStateBase() : m_value(boost::value_initialized<T>()) {}
+    InitStateBase(const InitStateBase &other) : m_value(other.m_value) {}
+    template<class V> InitStateBase(const V &val) : m_value(val) {}
+
+ public:
     operator const T & () const { return m_value; }
     operator T & () { return m_value; }
     const T & get() const { return m_value; }
     T & get() { return m_value; }
-    bool wasSet() const { return m_wasSet; }
- private:
-    T m_value;
-    bool m_wasSet;
 };
 
-/** version of InitState for classes */
-template<class T> class InitStateClass : public T {
+/** version of InitState for classes: can call methods directly */
+template<class T> class InitStateBase<T, true> : public T {
+ protected:
+    InitStateBase() {}
+    template<class V> InitStateBase(const V &val) : T(val) {}
+    InitStateBase(const InitStateBase &other) : T(other) {}
+
+ public:
+    const T & get() const { return *this; }
+    T & get() { return *this; }
+};
+
+template<class T> class InitState : public InitStateBase<T, boost::is_class<T>::value> {
+    typedef InitStateBase<T, boost::is_class<T>::value> parent_type;
+    bool m_wasSet;
+
  public:
     typedef T value_type;
 
-    InitStateClass(const T &val, bool wasSet) : T(val), m_wasSet(wasSet) {}
-    InitStateClass() : m_wasSet(false) {}
-    InitStateClass(const char *val) : T(val), m_wasSet(false) {}
-    InitStateClass(const InitStateClass &other) : T(other), m_wasSet(other.m_wasSet) {}
-    InitStateClass & operator = (const T &val) { T::operator = (val); m_wasSet = true; return *this; }
-    const T & get() const { return *this; }
-    T & get() { return *this; }
+    InitState() : m_wasSet(false) {}
+    InitState(const InitState &other) : parent_type(other.get()), m_wasSet(other.m_wasSet) {}
+    template<class V> InitState(const V &val, bool wasSet = false) : parent_type(val), m_wasSet(wasSet) {}
+    InitState & operator = (const InitState &val) { this->get() = val; m_wasSet = val.m_wasSet; return *this; }
+    template<class V> InitState & operator = (const V &val) { this->get() = val; m_wasSet = true; return *this; }
+
+    /**
+     * Only tracks modifications done through this class.
+     * Modifications of the contained value after obtaining
+     * direct access to it (for example, via get()) are not
+     * noticed.
+     */
     bool wasSet() const { return m_wasSet; }
- private:
-    bool m_wasSet;
 };
 
 /**
@@ -418,7 +433,7 @@ typedef InitState<bool> Bool;
  * Acts like a string, but in addition, can also tell whether the
  * value was explicitly set.
  */
-typedef InitStateClass<std::string> InitStateString;
+typedef InitState<std::string> InitStateString;
 
 /**
  * Version of InitState where the value can true, false, or a string.
