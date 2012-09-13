@@ -215,6 +215,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                      'egroupware-dav',
                      'oracle',
                      'exchange',
+                     'pim',
                      'dbus']
     sourceServersRun = 0
     haveSource = False
@@ -303,7 +304,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
             logs = map(lambda entry: entry[1], logs)
             logdic ={}
             logprefix ={}
-            if server == 'dbus':
+            if server in ('dbus', 'pim'):
                 # Extract tests and their results from output.txt,
                 # which contains Python unit test output. Example follows.
                 # Note that there can be arbitrary text between the test name

@@ -1072,6 +1072,20 @@ dbustest = SyncEvolutionTest("dbus", compile,
                                                      "test",
                                                      "test-dbus.py -v"))
 context.add(dbustest)
+pimtest = SyncEvolutionTest("pim", compile,
+                            "", shell,
+                            "",
+                            [],
+                            # ... but syncevo-dbus-server started by test-dbus.py should use valgrind
+                            testenv="TEST_DBUS_PREFIX='%s'" % options.testprefix,
+                            testPrefix=testprefix,
+                            testBinary=os.path.join(sync.basedir,
+                                                    "src",
+                                                    "dbus",
+                                                    "server",
+                                                    "pim",
+                                                    "testpim.py -v"))
+context.add(pimtest)
 
 test = SyncEvolutionTest("googlecalendar", compile,
                          "", options.shell,
