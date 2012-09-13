@@ -416,6 +416,23 @@ template<class T> class InitState : public InitStateBase<T, boost::is_class<T>::
 };
 
 /**
+ * Retrieve value if found in map, otherwise the
+ * default. wasSet() returns true only in the first case.
+ */
+template<class C> InitState<typename C::mapped_type>
+GetWithDef(const C &map,
+           const typename C::key_type &key,
+           const typename C::mapped_type &def = boost::value_initialized<typename C::mapped_type>())
+{
+    typename C::const_iterator it = map.find(key);
+    if (it != map.end()) {
+        return InitState<typename C::mapped_type>(it->second, true);
+    } else {
+        return InitState<typename C::mapped_type>(def, false);
+    }
+}
+
+/**
  * a nop destructor which doesn't do anything, for boost::shared_ptr
  */
 struct NopDestructor
