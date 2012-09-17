@@ -14,7 +14,7 @@ src_backends_pbap_src = \
   src/backends/pbap/PbapSyncSource.cpp
 
 src_backends_pbap_syncpbap_la_SOURCES = $(src_backends_pbap_src)
-src_backends_pbap_syncpbap_la_LIBADD = $(PBAP_LIBS) $(SYNCEVOLUTION_LIBS) $(DBUS_LIBS) $(gdbus_build_dir)/libgdbussyncevo.la
+src_backends_pbap_syncpbap_la_LIBADD = $(PBAP_LIBS) $(PCRECPP_LIBS) $(SYNCEVOLUTION_LIBS) $(DBUS_LIBS) $(gdbus_build_dir)/libgdbussyncevo.la
 src_backends_pbap_syncpbap_la_LDFLAGS = -module -avoid-version $(DBUS_LIBS)
 src_backends_pbap_syncpbap_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(DBUS_CFLAGS)
 src_backends_pbap_syncpbap_la_CPPFLAGS = $(SYNCEVOLUTION_CFLAGS) -I$(gdbus_dir) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
