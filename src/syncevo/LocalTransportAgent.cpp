@@ -86,9 +86,14 @@ void LocalTransportAgent::start()
                               m_clientContext.c_str(),
                               context.c_str()));
     }
-    if (m_clientContext == m_server->getContextName()) {
-        SE_THROW(StringPrintf("invalid local sync inside context '%s', need second context with different databases", context.c_str()));
-    }
+    // TODO (?): check that there are no conflicts between the active
+    // sources. The old "contexts must be different" check achieved that
+    // via brute force (because by definition, databases from different
+    // contexts are meant to be independent), but it was too coarse
+    // and ruled out valid configurations.
+    // if (m_clientContext == m_server->getContextName()) {
+    //     SE_THROW(StringPrintf("invalid local sync inside context '%s', need second context with different databases", context.c_str()));
+    // }
 
     if (m_forkexec) {
         SE_THROW("local transport already started");
