@@ -412,6 +412,7 @@ void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
 static const char * const PEER_KEY_PROTOCOL = "protocol";
 static const char * const PEER_SYNCML_PROTOCOL = "SyncML";
 static const char * const PEER_PBAP_PROTOCOL = "PBAP";
+static const char * const PEER_FILES_PROTOCOL = "files";
 static const char * const PEER_KEY_TRANSPORT = "transport";
 static const char * const PEER_BLUETOOTH_TRANSPORT = "Bluetooth";
 static const char * const PEER_IP_TRANSPORT = "IP";
@@ -462,7 +463,10 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
                                   PEER_BLUETOOTH_TRANSPORT,
                                   PEER_KEY_PROTOCOL, protocol.c_str()));
         }
+    }
 
+    if (protocol == PEER_PBAP_PROTOCOL ||
+        protocol == PEER_FILES_PROTOCOL) {
         // Create or set local config.
         boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_LOCAL_CONFIG + context));
         config->setDefaults();
@@ -498,8 +502,17 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         config->setDefaults();
         config->prepareConfigForWrite();
         source = config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE);
-        source->setDatabaseID("obex-bt://" + address);
-        source->setBackend("pbap");
+        if (protocol == PEER_PBAP_PROTOCOL) {
+            // PBAP
+            source->setDatabaseID("obex-bt://" + address);
+            source->setBackend("pbap");
+        } else {
+            // Local sync with files on the target side.
+            // Format is hard-coded to vCard 3.0.
+            source->setDatabaseID("file://" + address);
+            source->setDatabaseFormat("text/vcard");
+            source->setBackend("file");
+        }
         config->flush();
     } else {
         SE_THROW(StringPrintf("peer config: %s=%s not supported",
@@ -543,11 +556,16 @@ Manager::PeersMap Manager::getAllPeers()
                                                      uid.c_str()));
                 boost::shared_ptr<PersistentSyncSourceConfig> source(targetConfig.getSyncSourceConfig(MANAGER_REMOTE_SOURCE));
                 std::string backend = source->getBackend();
+                std::string database = source->getDatabaseID();
                 if (backend == "PBAP Address Book") {
                     properties[PEER_KEY_PROTOCOL] = PEER_PBAP_PROTOCOL;
-                    std::string database = source->getDatabaseID();
                     if (boost::starts_with(database, "obex-bt://")) {
                         properties[PEER_KEY_ADDRESS] = database.substr(strlen("obex-bt://"));
+                    }
+                } else if (backend == "file") {
+                    properties[PEER_KEY_PROTOCOL] = PEER_FILES_PROTOCOL;
+                    if (boost::starts_with(database, "file://")) {
+                        properties[PEER_KEY_ADDRESS] = database.substr(strlen("file://"));
                     }
                 }
             }
