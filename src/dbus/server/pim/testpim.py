@@ -117,14 +117,44 @@ XDG root.
         '''dump local cache content into file'''
         self.runCmdline(['--export', filename, '@' + self.managerPrefix + uid, 'local'])
 
-    def compareDBs(self, expected, real):
+    def compareDBs(self, expected, real, ignoreExtensions=True):
         '''ensure that two sets of items (file or directory) are identical at the semantic level'''
+        env = copy.deepcopy(os.environ)
+        if ignoreExtensions:
+            # Allow the phone to add extensions like X-CLASS=private
+            # (seen with Nokia N97 mini - FWIW, the phone should have
+            # use CLASS=PRIVATE, because it was using vCard 3.0).
+            env['CLIENT_TEST_STRIP_PROPERTIES'] = 'X-[-_a-zA-Z0-9]*'
         sub = subprocess.Popen(['synccompare', expected, real],
+                               env=env,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT)
         stdout, stderr = sub.communicate()
         self.assertEqual(0, sub.returncode,
                          msg=stdout)
+
+    def configurePhone(self, phone, uid, contacts):
+        '''set up SyncML for copying all vCard 3.0 files in 'contacts' to the phone, if phone was set'''
+        if phone:
+             self.runCmdline(['--configure',
+                              'syncURL=obex-bt://' + phone,
+                              'backend=file',
+                              'database=file://' + contacts,
+                              'databaseFormat=text/vcard',
+                              # Hard-coded Nokia config.
+                              'remoteIdentifier=PC Suite',
+                              'peerIsClient=1',
+                              'uri=Contacts',
+                              # Config name and source for syncPhone().
+                              'phone@' + self.managerPrefix + uid,
+                              'addressbook'])
+
+    def syncPhone(self, phone, uid, syncMode='refresh-from-local'):
+        '''use SyncML config for copying all vCard 3.0 files in 'contacts' to the phone, if phone was set'''
+        if phone:
+             self.runCmdline(['--sync', syncMode,
+                              'phone@' + self.managerPrefix + uid,
+                              'addressbook'])
 
     def run(self, result):
         # Runtime varies a lot when using valgrind, because
@@ -259,10 +289,21 @@ XDG root.
 
     @timeout(100)
     def testSync(self):
-        '''TestContacts.testSync - test caching of a dummy peer which uses a local directory instead of PBAP'''
+        '''TestContacts.testSync - test caching of a dummy peer which uses a real phone or a local directory as fallback'''
         sources = self.currentSources()
         expected = sources.copy()
         peers = {}
+
+        # Must be the Bluetooth MAC address (like A0:4E:04:1E:AD:30)
+        # of a phone which is paired, currently connected, and
+        # supports both PBAP and SyncML. SyncML is needed for putting
+        # data onto the phone. Nokia phones like the N97 Mini are
+        # known to work and easily available, therefore the test
+        # hard-codes the Nokia SyncML settings (could be changed).
+        #
+        # If set, that phone will be used instead of local sync with
+        # the file backend.
+        phone = os.environ.get('TEST_DBUS_PBAP_PHONE', None)
 
         # dummy peer directory
         contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
@@ -270,8 +311,12 @@ XDG root.
 
         # add foo
         uid = self.uidPrefix + 'foo'
-        peers[uid] = {'protocol': 'files',
-                      'address': contacts}
+        if phone:
+            peers[uid] = {'protocol': 'PBAP',
+                          'address': phone}
+        else:
+            peers[uid] = {'protocol': 'files',
+                          'address': contacts}
         self.manager.SetPeer(uid,
                              peers[uid],
                              timeout=self.timeout)
@@ -280,7 +325,10 @@ XDG root.
         self.assertEqual(expected, self.currentSources())
 
         # Throw away data that might have been in the local database.
+        self.configurePhone(phone, uid, contacts)
+        self.syncPhone(phone, uid)
         self.manager.SyncPeer(uid)
+        # TODO: check that syncPhone() really used PBAP - but how?
 
         # Export data from local database into a file via the --export
         # operation in the syncevo-dbus-server. Depends on (and tests)
@@ -303,6 +351,7 @@ END:VCARD'''
         output = open(item, "w")
         output.write(john)
         output.close()
+        self.syncPhone(phone, uid)
         self.manager.SyncPeer(uid)
         self.exportCache(uid, export)
         self.compareDBs(contacts, export)
