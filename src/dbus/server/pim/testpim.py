@@ -96,6 +96,35 @@ XDG root.
             # Give EDS time to notice the removal.
             time.sleep(5)
 
+    def runCmdline(self, command, **args):
+         '''use syncevolution command line without syncevo-dbus-server, for the sake of keeping code here minimal'''
+         cmdline = testdbus.TestCmdline()
+         cmdline.setUp()
+         try:
+              cmdline.running = True
+              cmdline.session = None
+              # Must use our own self.storedenv here, cmdline doesn't have it.
+              c = [ '--daemon=no' ] + command
+              logging.printf('running syncevolution command line: %s' % c)
+              return cmdline.runCmdline(c,
+                                        env=self.storedenv,
+                                        sessionFlags=None,
+                                        **args)
+         finally:
+              cmdline.running = False
+
+    def exportCache(self, uid, filename):
+        '''dump local cache content into file'''
+        self.runCmdline(['--export', filename, '@' + self.managerPrefix + uid, 'local'])
+
+    def compareDBs(self, expected, real):
+        '''ensure that two sets of items (file or directory) are identical at the semantic level'''
+        sub = subprocess.Popen(['synccompare', expected, real],
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT)
+        stdout, stderr = sub.communicate()
+        self.assertEqual(0, sub.returncode,
+                         msg=stdout)
 
     def run(self, result):
         # Runtime varies a lot when using valgrind, because
@@ -228,6 +257,55 @@ XDG root.
         # EDS workaround
         time.sleep(2)
 
+    @timeout(100)
+    def testSync(self):
+        '''TestContacts.testSync - test caching of a dummy peer which uses a local directory instead of PBAP'''
+        sources = self.currentSources()
+        expected = sources.copy()
+        peers = {}
+
+        # dummy peer directory
+        contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
+        os.makedirs(contacts)
+
+        # add foo
+        uid = self.uidPrefix + 'foo'
+        peers[uid] = {'protocol': 'files',
+                      'address': contacts}
+        self.manager.SetPeer(uid,
+                             peers[uid],
+                             timeout=self.timeout)
+        expected.add(self.managerPrefix + uid)
+        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(expected, self.currentSources())
+
+        # Throw away data that might have been in the local database.
+        self.manager.SyncPeer(uid)
+
+        # Export data from local database into a file via the --export
+        # operation in the syncevo-dbus-server. Depends on (and tests)
+        # that the SyncEvolution configuration was created as
+        # expected. It does not actually check that EDS is used - the
+        # test would also pass for any other storage.
+        export = os.path.join(xdg_root, 'local.vcf')
+        self.exportCache(uid, export)
+
+        # Server item should be the simple one now, as in the client.
+        self.compareDBs(contacts, export)
+
+        # Add a contact.
+        john = '''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+END:VCARD'''
+        item = os.path.join(contacts, 'john.vcf')
+        output = open(item, "w")
+        output.write(john)
+        output.close()
+        self.manager.SyncPeer(uid)
+        self.exportCache(uid, export)
+        self.compareDBs(contacts, export)
 
 if __name__ == '__main__':
     unittest.main()
