@@ -34,6 +34,7 @@ import difflib
 import traceback
 import ConfigParser
 import io
+import inspect
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -412,11 +413,13 @@ class DBusUtil(Timeout):
 
     def getTestProperty(self, key, default):
         """retrieve values set with @property()"""
-        test = eval(self.id().replace("__main__.", ""))
-        if "properties" in dir(test):
-            return test.properties.get(key, default)
-        else:
-            return default
+        # Assume that IDs are composed of class name + dot + function name.
+        # Directly acccessing self._testMethodName would bypass the public
+        # Unittest API.
+        testMethodName = self.id().split('.')[-1]
+        testMethod = getattr(self, testMethodName)
+        properties = getattr(testMethod, "properties", {})
+        return properties.get(key, default)
 
     def runTest(self, result, own_xdg=True, serverArgs=[], own_home=False, defTimeout=20):
         """Starts the D-Bus server and dbus-monitor before the test
