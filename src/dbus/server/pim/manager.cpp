@@ -80,6 +80,8 @@ SE_BEGIN_CXX
 static const char * const MANAGER_SERVICE = "org._01.pim.contacts";
 static const char * const MANAGER_PATH = "/org/01/pim/contacts";
 static const char * const MANAGER_IFACE = "org._01.pim.contacts.Manager";
+static const char * const MANAGER_ERROR_ABORTED = "org._01.pim.contacts.Manager.Aborted";
+static const char * const MANAGER_ERROR_BAD_STATUS = "org._01.pim.contacts.Manager.BadStatus";
 static const char * const AGENT_IFACE = "org._01.pim.contacts.ViewAgent";
 static const char * const CONTROL_IFACE = "org._01.pim.contacts.ViewControl";
 
@@ -368,7 +370,7 @@ void Manager::runInSession(const std::string &config,
                                                                                         callback));
         if (session->getSyncStatus() == Session::SYNC_QUEUEING) {
             // Must continue to wait instead of dropping the last reference.
-            m_pending.push_back(session);
+            m_pending.push_back(std::make_pair(result, session));
         }
     } catch (...) {
         // Tell caller about specific error.
@@ -388,7 +390,7 @@ void Manager::doSession(const boost::weak_ptr<Session> &weakSession,
         }
         // Drop permanent reference, session will be destroyed when we
         // return.
-        m_pending.remove(session);
+        m_pending.remove(std::make_pair(result, session));
 
         // Now run the operation.
         callback(session);
@@ -656,8 +658,10 @@ static void doneSyncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
     if (status == STATUS_OK ||
         status == STATUS_HTTP_OK) {
         result->done();
+    } else if (status == (SyncMLStatus)sysync::LOCERR_USERABORT) {
+        result->failed(GDBusCXX::dbus_error(MANAGER_ERROR_ABORTED, "running sync aborted, probably by StopSync()"));
     } else {
-        result->failed(GDBusCXX::dbus_error(MANAGER_IFACE, Status2String(status)));
+        result->failed(GDBusCXX::dbus_error(MANAGER_ERROR_BAD_STATUS, Status2String(status)));
     }
 }
 
@@ -686,14 +690,17 @@ void Manager::stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
     // Remove all pending sessions of the peer. Make a complete
     // copy of the list, to avoid issues with modifications of the
     // underlying list while we iterate over it.
-    BOOST_FOREACH (const boost::shared_ptr<Session> &session, std::list< boost::shared_ptr<Session> >(m_pending)) {
-        std::string configName = session->getConfigName();
+    BOOST_FOREACH (const Pending_t::value_type &entry, Pending_t(m_pending)) {
+        std::string configName = entry.second->getConfigName();
         if (configName == syncConfigName) {
-            m_pending.remove(session);
+            entry.first->failed(GDBusCXX::dbus_error(MANAGER_ERROR_ABORTED, "pending sync aborted by StopSync()"));
+            m_pending.remove(entry);
         }
     }
 
     // Stop the currently running sync if it is for the peer.
+    // It may or may not complete, depending on what it is currently
+    // doing. We'll check in doneSyncPeer().
     boost::shared_ptr<Session> session = m_server->getSyncSession();
     bool aborting = false;
     if (session) {
