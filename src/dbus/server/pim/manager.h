@@ -46,8 +46,9 @@ class Manager : public GDBusCXX::DBusObjectHelper
      */
     std::set<std::string> m_enabledPeers;
 
+    typedef std::list< std::pair< boost::shared_ptr<GDBusCXX::Result>, boost::shared_ptr<Session> > > Pending_t;
     /** holds the references to pending session requests, see runInSession() */
-    std::list< boost::shared_ptr<Session> > m_pending;
+    Pending_t m_pending;
 
     Manager(const boost::shared_ptr<Server> &server);
     void init();

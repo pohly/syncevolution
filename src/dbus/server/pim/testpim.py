@@ -46,7 +46,7 @@ testFolder = os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect
 if testFolder not in sys.path:
     sys.path.insert(0, testFolder)
 
-from testdbus import DBusUtil, timeout, usingValgrind, xdg_root, bus
+from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, loop
 import testdbus
 
 
@@ -355,6 +355,66 @@ END:VCARD'''
         self.manager.SyncPeer(uid)
         self.exportCache(uid, export)
         self.compareDBs(contacts, export)
+
+    @timeout(100)
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=200")
+    def testSyncAbort(self):
+        '''TestContacts.testSyncAbort - test StopSync()'''
+        self.setUpServer()
+        sources = self.currentSources()
+        expected = sources.copy()
+        peers = {}
+
+        # dummy peer directory
+        contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
+        os.makedirs(contacts)
+
+        # add foo
+        uid = self.uidPrefix + 'foo'
+        peers[uid] = {'protocol': 'files',
+                      'address': contacts}
+        self.manager.SetPeer(uid,
+                             peers[uid],
+                             timeout=self.timeout)
+        expected.add(self.managerPrefix + uid)
+        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(expected, self.currentSources())
+
+        # Start a sync. Because of SYNCEVOLUTION_SYNC_DELAY, this will block until
+        # we kill it.
+        syncCompleted = [ False, False ]
+        self.aborted = False
+        def result(index, res):
+             syncCompleted[index] = res
+        def output(path, level, text, procname):
+            if self.running and not self.aborted and text == 'ready to sync':
+                logging.printf('aborting sync')
+                self.manager.StopSync(uid)
+                self.aborted = True
+        receiver = bus.add_signal_receiver(output,
+                                           'LogOutput',
+                                           'org.syncevolution.Server',
+                                           self.server.bus_name,
+                                           byte_arrays=True,
+                                           utf8_strings=True)
+        try:
+             self.manager.SyncPeer(uid,
+                                   reply_handler=lambda: result(0, True),
+                                   error_handler=lambda x: result(0, x))
+             self.manager.SyncPeer(uid,
+                                   reply_handler=lambda: result(1, True),
+                                   error_handler=lambda x: result(1, x))
+             self.runUntil('both syncs done',
+                           check=lambda: True,
+                           until=lambda: not False in syncCompleted)
+        finally:
+            receiver.remove()
+
+        # Check for specified error.
+        self.assertIsInstance(syncCompleted[0], dbus.DBusException)
+        self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[0].get_dbus_name())
+        self.assertIsInstance(syncCompleted[1], dbus.DBusException)
+        self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[1].get_dbus_name())
 
 if __name__ == '__main__':
     unittest.main()
