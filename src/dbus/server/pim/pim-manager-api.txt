@@ -153,13 +153,23 @@ Error handling
 
 D-Bus error messages are not localized. They are meant for debugging,
 not for displaying to the user. In cases where the caller may be able
-to do something about an error, specific error codes could be defined
-and returned as part of the API. However, typically errors are generic
-and the caller simply has to assume that the PIM storage is currently
-unusable.
+to do something about an error, specific error codes are defined as
+part of the API. However, typically errors are generic and the caller
+simply has to assume that the PIM storage is currently unusable.
 
 Unless noted otherwise, calls return when the requested operation is
 complete.
+
+The following errors are defined. In addition to the D-Bus name of the
+error they provide a textual error description.
+
+org._01.pim.contacts.Manager.Aborted
+   Some operation was intentionally aborted instead of letting it
+   complete. Typically not an error.
+
+org._01.pim.contacts.Manager.BadStatus
+   A generic error report. The error description is a string
+   which gives further information for debugging.
 
 
 API
