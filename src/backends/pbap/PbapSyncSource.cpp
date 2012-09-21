@@ -355,6 +355,13 @@ void PbapSession::pullAll(Content &dst)
 
             ++count;
         }
+        
+        close (fd);
+        
+        if (remove(filename) == -1)
+        {
+            SE_LOG_ERROR(NULL, NULL, "Unable to remove temporary file");
+        }
     } else {
         GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
         content = pullall();
