@@ -51,6 +51,7 @@ src_dbus_server_libsyncevodbusserver_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(C
 
 if COND_DBUS_PIM
 src_dbus_server_server_cpp_files += \
+  src/dbus/server/pim/individual-traits.cpp \
   src/dbus/server/pim/folks.cpp \
   src/dbus/server/pim/manager.cpp
 src_dbus_server_libsyncevodbusserver_la_LIBADD += $(FOLKS_LIBS)

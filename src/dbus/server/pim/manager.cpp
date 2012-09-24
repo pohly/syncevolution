@@ -18,62 +18,12 @@
  */
 
 #include "manager.h"
+#include "individual-traits.h"
 #include "../resource.h"
 #include "../client.h"
 #include "../session.h"
 
 #include <boost/scoped_ptr.hpp>
-
-namespace GDBusCXX {
-    using namespace SyncEvo;
-
-    /**
-     * The mapping between the internal representation of a
-     * FolksIndividual and D-Bus. Only a subset of the internal
-     * properties are supported.
-     *
-     * The D-Bus side is a mapping from string keys to values which
-     * are either plain text or another such mapping. Boost
-     * cannot represent such a variant, so we cheat and only declare
-     * std::string as content. It doesn't matter for the D-Bus
-     * signature and decoding/encoding is done differently anyway.
-     *
-     * Like the rest of the code for the org._01 API, this code only
-     * works with GDBus GIO.
-     */
-    template <> struct dbus_traits<FolksIndividualCXX> :
-        public dbus_traits< std::map<std::string, boost::variant<std::string> >  >
-    {
-        typedef FolksIndividualCXX host_type;
-        typedef const FolksIndividualCXX &arg_type;
-
-        static void get(GDBusCXX::connection_type *conn, GDBusCXX::message_type *msg,
-                        GDBusCXX::reader_type &iter, host_type &buffer)
-        {
-            buffer = FolksIndividualCXX::steal(folks_individual_new(NULL));
-            // TODO
-        }
-
-        static void append(GDBusCXX::builder_type &builder, arg_type individual)
-        {
-            g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str())); // dict
-
-            // full name
-            const gchar *fullname = folks_name_details_get_full_name(FOLKS_NAME_DETAILS(individual.get()));
-            if (fullname) {
-                g_variant_builder_open(&builder, G_VARIANT_TYPE(getContainedType().c_str())); // dict entry
-                dbus_traits<std::string>::append(builder, "full-name"); // variant
-                g_variant_builder_open(&builder, G_VARIANT_TYPE("v"));
-                dbus_traits<std::string>::append(builder, fullname);
-                g_variant_builder_close(&builder); // variant
-                g_variant_builder_close(&builder); // dict entry
-            }
-
-            g_variant_builder_close(&builder); // dict
-        }
-    };
-}
-
 
 SE_BEGIN_CXX
 
