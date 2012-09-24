@@ -154,6 +154,12 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     GDBusCXX::DBusRemoteObject m_viewAgent;
     boost::shared_ptr<IndividualView> m_view;
     boost::weak_ptr<Client> m_owner;
+    struct Change {
+        Change() : m_start(0), m_count(0), m_call(NULL) {}
+
+        int m_start, m_count;
+        const GDBusCXX::DBusClientCall0 *m_call;
+    } m_pendingChange, m_lastChange;
     GDBusCXX::DBusClientCall0 m_contactsModified,
         m_contactsAdded,
         m_contactsRemoved;
@@ -172,6 +178,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                     ID),
         m_view(view),
         m_owner(owner),
+
         // use ViewAgent interface
         m_contactsModified(m_viewAgent, "ContactsModified"),
         m_contactsAdded(m_viewAgent, "ContactsAdded"),
@@ -186,9 +193,163 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     void sendChange(const GDBusCXX::DBusClientCall0 &call,
                     int start, int count)
     {
-        call.start(boost::bind(ViewResource::sendDone,
+        // Changes get aggregated inside sendChange().
+
+
+        call.start(getObject(),
+                   start,
+                   count,
+                   boost::bind(ViewResource::sendDone,
                                m_self,
                                _1));
+    }
+
+    /**
+     * Merge local changes as much as possible, to avoid excessive
+     * D-Bus traffic. Pending changes get flushed each time the
+     * view reports that it is stable again or contact data
+     * needs to be sent back to the client. Flushing in the second
+     * case is necessary, because otherwise the client will not have
+     * an up-to-date view when the requested data arrives.
+     */
+    void handleChange(const GDBusCXX::DBusClientCall0 &call,
+                      int start, int count)
+    {
+        SE_LOG_DEBUG(NULL, NULL, "handle change: %s, #%d + %d",
+                     &call == &m_contactsModified ? "modified" :
+                     &call == &m_contactsAdded ? "added" :
+                     &call == &m_contactsRemoved ? "remove" : "???",
+                     start, count);
+        if (!count) {
+            // Nothing changed.
+            SE_LOG_DEBUG(NULL, NULL, "handle change: no change");
+            return;
+        }
+
+        if (m_pendingChange.m_count == 0) {
+            // Sending a "contact modified" twice for the same range is redundant.
+            if (m_lastChange.m_call == &m_contactsModified &&
+                &call == &m_contactsModified &&
+                start >= m_lastChange.m_start &&
+                start + count <= m_lastChange.m_start + m_lastChange.m_count) {
+                SE_LOG_DEBUG(NULL, NULL, "handle change: redundant 'modified' signal, ignore");
+                return;
+            }
+
+            // Nothing pending, delay sending.
+            m_pendingChange.m_call = &call;
+            m_pendingChange.m_start = start;
+            m_pendingChange.m_count = count;
+            SE_LOG_DEBUG(NULL, NULL, "handle change: stored as pending change");
+            return;
+        }
+
+        if (m_pendingChange.m_call == &call) {
+            // Same operation. Can we extend it?
+            if (&call == &m_contactsModified) {
+                // Modification, indices are unchanged. The union of
+                // old and new range must not have a gap between the
+                // original ranges, which can be checked by looking at
+                // the number of items.
+                int newStart = std::min(m_pendingChange.m_start, start);
+                int newEnd = std::max(m_pendingChange.m_start + m_pendingChange.m_count, start + count);
+                int newCount = newEnd - newStart;
+                if (newCount <= m_pendingChange.m_count + count) {
+                    // Okay, no unrelated individuals were included in
+                    // the tentative new range, we can use it.
+                    SE_LOG_DEBUG(NULL, NULL, "handle change: modification, #%d + %d and #%d + %d => #%d + %d",
+                                 m_pendingChange.m_start, m_pendingChange.m_count,
+                                 start, count,
+                                 newStart, newCount);
+                    m_pendingChange.m_start = newStart;
+                    m_pendingChange.m_count = newCount;
+                    return;
+                }
+            } else if (&call == &m_contactsAdded) {
+                // Added individuals. The new start index already includes
+                // the previously added individuals.
+                int newCount = m_pendingChange.m_count + count;
+                if (start >= m_pendingChange.m_start) {
+                    // Adding in the middle or at the end?
+                    if (start <= m_pendingChange.m_start + m_pendingChange.m_count) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change: increase count of 'added' individuals, #%d + %d and #%d + %d new => #%d + %d",
+                                     m_pendingChange.m_start, m_pendingChange.m_count,
+                                     start, count,
+                                     m_pendingChange.m_start, newCount);
+                        m_pendingChange.m_count = newCount;
+                        return;
+                    }
+                } else {
+                    // Adding directly before the previous start?
+                    if (start + count >= m_pendingChange.m_start) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change: reduce start and increase count of 'added' individuals, #%d + %d and #%d + %d => #%d + %d",
+                                     m_pendingChange.m_start, m_pendingChange.m_count,
+                                     start, count,
+                                     start, newCount);
+                        m_pendingChange.m_start = start;
+                        m_pendingChange.m_count = newCount;
+                        return;
+                    }
+                }
+            } else {
+                // Removed individuals. The new start was already reduced by
+                // previously removed individuals.
+                int newCount = m_pendingChange.m_count + count;
+                if (start >= m_pendingChange.m_start) {
+                    // Removing directly at end?
+                    if (start == m_pendingChange.m_start) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change: increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
+                                     m_pendingChange.m_start, m_pendingChange.m_count,
+                                     start, count,
+                                     m_pendingChange.m_start, newCount);
+                        m_pendingChange.m_count = newCount;
+                        return;
+                    }
+                } else {
+                    // Removing directly before the previous start or overlapping with it?
+                    if (start + count >= m_pendingChange.m_start) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change: reduce start and increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
+                                     m_pendingChange.m_start, m_pendingChange.m_count,
+                                     start, count,
+                                     start, newCount);
+                        m_pendingChange.m_start = start;
+                        m_pendingChange.m_count = newCount;
+                        return;
+                    }
+                }
+            }
+        }
+
+        // More complex merging is possible. For example, "removed 1
+        // at #10" and "added 1 at #10" could be turned into "modified
+        // 1 at #10". But it is uncertain how common and useful that
+        // would be, so not implemented...
+
+        // Cannot merge changes.
+        flushChanges();
+
+        // Now remember requested change.
+        m_pendingChange.m_call = &call;
+        m_pendingChange.m_start = start;
+        m_pendingChange.m_count = count;
+    }
+
+    /** Clear pending state and flush. */
+    void flushChanges()
+    {
+        int count = m_pendingChange.m_count;
+        if (count) {
+            SE_LOG_DEBUG(NULL, NULL, "send change: %s, #%d + %d",
+                         m_pendingChange.m_call == &m_contactsModified ? "modified" :
+                         m_pendingChange.m_call == &m_contactsAdded ? "added" :
+                         m_pendingChange.m_call == &m_contactsRemoved ? "remove" : "???",
+                         m_pendingChange.m_start, count);
+            m_lastChange = m_pendingChange;
+            m_pendingChange.m_count = 0;
+            sendChange(*m_pendingChange.m_call,
+                       m_pendingChange.m_start,
+                       count);
+        }
     }
 
     /**
@@ -219,18 +380,19 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         add(this, &ViewResource::refineSearch, "RefineSearch");
         activate();
 
-        // TODO: aggregate changes into batches
-        m_view->m_modifiedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::sendChange,
+        m_view->m_quiesenceSignal.connect(IndividualView::QuiesenceSignal_t::slot_type(&ViewResource::flushChanges,
+                                                                                       this).track(self));
+        m_view->m_modifiedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                    this,
                                                                                    boost::cref(m_contactsModified),
                                                                                    _1,
                                                                                    1).track(self));
-        m_view->m_addedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::sendChange,
+        m_view->m_addedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                 this,
                                                                                 boost::cref(m_contactsAdded),
                                                                                 _1,
                                                                                 1).track(self));
-        m_view->m_removedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::sendChange,
+        m_view->m_removedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                   this,
                                                                                   boost::cref(m_contactsRemoved),
                                                                                   _1,
@@ -256,7 +418,22 @@ public:
     /** ViewControl.ReadContacts() */
     void readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
     {
-        m_view->readContacts(start, count, contacts);
+        if (count) {
+            // Ensure that client's view is up-to-date, then prepare the
+            // data for it.
+            flushChanges();
+            m_view->readContacts(start, count, contacts);
+            // Discard the information about the previous 'modified' signal
+            // if the client now has data in that range. Necessary because
+            // otherwise future 'modified' signals for that range might get
+            // suppressed in handleChange().
+            if (m_lastChange.m_call == &m_contactsModified &&
+                m_lastChange.m_count &&
+                ((m_lastChange.m_start >= start && m_lastChange.m_start < start + count) ||
+                 (start >= m_lastChange.m_start && start < m_lastChange.m_start + m_lastChange.m_count))) {
+                m_lastChange.m_count = 0;
+            }
+        }
     }
 
     /** ViewControl.Close() */
@@ -287,6 +464,8 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
                                        const StringMap &filter,
                                        const GDBusCXX::DBusObject_t &agentPath)
 {
+    start();
+
     // Create and track view which is owned by the caller.
     boost::shared_ptr<Client> client = m_server->addClient(ID, watch);
 

@@ -30,6 +30,8 @@
 
 #include <folks/folks.h>
 
+#include "../timeout.h"
+
 #include <syncevo/GLibSupport.h>
 #include <syncevo/GeeSupport.h>
 #include <syncevo/GValueSupport.h>
@@ -90,8 +92,36 @@ class IndividualCompare
  */
 struct IndividualData
 {
+    /**
+     * Sets all members to match the given individual, using the
+     * compare instance to compute values.
+     */
+    void init(const boost::shared_ptr<IndividualCompare> &compare,
+              FolksIndividual *individual);
+
     FolksIndividualCXX m_individual;
     IndividualCompare::Criteria_t m_criteria;
+};
+
+/**
+ * wraps an IndividualCompare for std algorithms on IndividualData
+ */
+class IndividualDataCompare : public std::binary_function<IndividualData, IndividualData, bool>
+{
+    boost::shared_ptr<IndividualCompare> m_compare;
+
+ public:
+    IndividualDataCompare(const boost::shared_ptr<IndividualCompare> &compare) :
+       m_compare(compare)
+    {}
+    IndividualDataCompare(const IndividualDataCompare &other) :
+       m_compare(other.m_compare)
+    {}
+
+    bool operator () (const IndividualData &a, const IndividualData &b) const
+    {
+        return m_compare->compare(a.m_criteria, b.m_criteria);
+    }
 };
 
 /**
@@ -119,6 +149,13 @@ class IndividualView
 {
  public:
     typedef boost::signals2::signal<void (int, FolksIndividual *)> ChangeSignal_t;
+    typedef boost::signals2::signal<void (void)> QuiesenceSignal_t;
+
+    /**
+     * Triggered each time the view reaches a quiesence state, meaning
+     * that its current content is stable, at least for now.
+     */
+    QuiesenceSignal_t m_quiesenceSignal;
 
     /**
      * A new FolksIndividual was added at a specific index. This
@@ -157,22 +194,69 @@ class IndividualView
  */
 class FullView : public IndividualView
 {
+    FolksIndividualAggregatorCXX m_folks;
     boost::weak_ptr<FullView> m_self;
+    Timeout m_waitForIdle;
+    std::set<FolksIndividualCXX> m_pendingModifications;
 
     /**
      * Sorted vector. Sort order is maintained by this class.
      */
-    std::vector<IndividualData> m_entries;
+    typedef std::vector<IndividualData> Entries_t;
+    Entries_t m_entries;
 
     /**
      * The sort object to be used.
      */
     boost::shared_ptr<IndividualCompare> m_compare;
 
-    FullView() {}
+    FullView(const FolksIndividualAggregatorCXX &folks);
+    void init();
+
+    /**
+     * Run via m_waitForIdle if (and only if) something
+     * changed.
+     */
+    void onIdle();
+
+    /**
+     * Ensure that onIdle() gets invoked.
+     */
+    void waitForIdle();
+
+    void doAddIndividual(const IndividualData &data);
 
  public:
-    static boost::shared_ptr<FullView> create();
+    /**
+     * @param folks     the aggregator to use, may be empty for testing
+     */
+    static boost::shared_ptr<FullView> create(const FolksIndividualAggregatorCXX &folks =
+                                              FolksIndividualAggregatorCXX());
+
+    /** FolksIndividualAggregator "individuals-changed" slot */
+    void individualsChanged(GeeSet *added,
+                            GeeSet *removed,
+                            gchar *message,
+                            FolksPersona *actor,
+                            FolksGroupDetailsChangeReason reason = FOLKS_GROUP_DETAILS_CHANGE_REASON_NONE);
+
+    /** GObject "notify" slot */
+    void individualModified(gpointer gobject,
+                            GParamSpec *pspec);
+
+    /**
+     * FolksIndividualAggregator "is-quiesent" property change slot.
+     *
+     * It turned out that "quiesence" is only set to true once in
+     * FolksIndividualAggregator. The code which watches that signal
+     * is still in place, but it will only get invoked once.
+     *
+     * Therefore the main mechanism for emitting m_quiesenceSignal in
+     * FullView is an idle callback which gets invoked each time the
+     * daemon has nothing to do, which implies that (at least for now)
+     * libfolks has no pending work to do.
+     */
+    void quiesenceChanged();
 
     /**
      * Add a FolksIndividual. Starts monitoring it for changes.
@@ -180,6 +264,11 @@ class FullView : public IndividualView
     void addIndividual(FolksIndividual *individual);
 
     /**
+     * Deal with FolksIndividual modification.
+     */
+    void modifyIndividual(FolksIndividual *individual);
+
+   /**
      * Remove a FolksIndividual.
      */
     void removeIndividual(FolksIndividual *individual);
@@ -255,16 +344,12 @@ class FilteredView : public IndividualView
  */
 class IndividualAggregator
 {
+    /** empty when not started yet */
     boost::shared_ptr<FullView> m_view;
     boost::weak_ptr<IndividualAggregator> m_self;
     FolksIndividualAggregatorCXX m_folks;
-    Bool m_started;
 
     IndividualAggregator() {}
-
-    void individualsChanged(GeeSet *added,
-                            GeeSet *removed,
-                            gchar *message) throw ();
 
  public:
     /**
@@ -281,7 +366,7 @@ class IndividualAggregator
 
     /**
      * Starts pulling and sorting of contacts.
-     * Populates m_view and all other, derived views.
+     * Creates m_view and starts populating it.
      * Can be called multiple times.
      *
      * See also org.01.pim.contacts.Manager.Start().
@@ -292,9 +377,11 @@ class IndividualAggregator
 
     /**
      * Each aggregator has exactly one full view on the data. This
-     * method grants access to the change signals.
+     * method grants access to it and its change signals.
+     *
+     * @return never empty, start() will be called if necessary
      */
-    boost::shared_ptr<IndividualView> getMainView() const { return m_view; }
+    boost::shared_ptr<IndividualView> getMainView();
 };
 
 

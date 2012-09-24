@@ -21,10 +21,58 @@
 #include "folks.h"
 #include <boost/bind.hpp>
 #include "test.h"
+#include <syncevo/BoostHelper.h>
 
+#include <boost/ptr_container/ptr_vector.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+class CompareFormattedName : public IndividualCompare {
+    bool m_reversed;
+    bool m_firstLast;
+
+public:
+    CompareFormattedName(bool reversed = false, bool firstLast = false) :
+        m_reversed(reversed),
+        m_firstLast(firstLast)
+    {
+    }
+
+    virtual void createCriteria(FolksIndividual *individual, Criteria_t &criteria) const {
+        FolksStructuredName *fn =
+            folks_name_details_get_structured_name(FOLKS_NAME_DETAILS(individual));
+        if (fn) {
+            const char *family = folks_structured_name_get_family_name(fn);
+            const char *given = folks_structured_name_get_given_name(fn);
+            SE_LOG_DEBUG(NULL, NULL, "criteria: formatted name: %s, %s",
+                         family, given);
+            if (m_firstLast) {
+                criteria.push_back(given ? given : "");
+                criteria.push_back(family ? family : "");
+            } else {
+                criteria.push_back(family ? family : "");
+                criteria.push_back(given ? given : "");
+            }
+        } else {
+            SE_LOG_DEBUG(NULL, NULL, "criteria: no formatted");
+        }
+    }
+
+    virtual bool compare(const Criteria_t &a, const Criteria_t &b) const {
+        return m_reversed ?
+            IndividualCompare::compare(b, a) :
+            IndividualCompare::compare(a, b);
+    }
+};
+
+void IndividualData::init(const boost::shared_ptr<IndividualCompare> &compare,
+                          FolksIndividual *individual)
+{
+    m_individual = individual;
+    m_criteria.clear();
+    compare->createCriteria(individual, m_criteria);
+}
 
 void IndividualView::readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
 {
@@ -70,21 +118,226 @@ bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const
     return false;
 }
 
-boost::shared_ptr<FullView> FullView::create()
+FullView::FullView(const FolksIndividualAggregatorCXX &folks) :
+    m_folks(folks),
+    // Ensure that there is a sort criteria.
+    m_compare(new CompareFormattedName())
 {
-    boost::shared_ptr<FullView> view(new FullView);
+}
+
+void FullView::init()
+{
+    // Populate view from current set of data. Usually FullView
+    // gets instantiated when the aggregator is idle, in which
+    // case there won't be any contacts yet.
+    //
+    // Optimize the initial loading by filling a vector and sorting it
+    // more efficiently, then adding it all in one go.
+
+    // Use pointers in array, to speed up sorting.
+    boost::ptr_vector<IndividualData> individuals;
+    IndividualData data;
+    typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksIndividual *> > Coll;
+    GeeMap *map = folks_individual_aggregator_get_individuals(m_folks);
+    Coll coll(map);
+    guint size = gee_map_get_size(map);
+    individuals.reserve(size);
+    SE_LOG_DEBUG(NULL, NULL, "starting with %u individuals", size);
+    BOOST_FOREACH (const Coll::value_type &entry, coll) {
+        data.init(m_compare, entry.value());
+        individuals.push_back(new IndividualData(data));
+    }
+    individuals.sort(IndividualDataCompare(m_compare));
+
+    // Copy the sorted data into the view. No slots are called,
+    // because nothing can be connected at the moment.
+    m_entries.insert(m_entries.begin(), individuals.begin(), individuals.end());
+
+    // Connect to changes. Aggregator might live longer than we do, so
+    // bind to weak pointer and check our existence at runtime.
+    m_folks.connectSignal<void (FolksIndividualAggregator *folks,
+                                GeeSet *added,
+                                GeeSet *removed,
+                                gchar  *message,
+                                FolksPersona *actor,
+                                FolksGroupDetailsChangeReason reason)>("individuals-changed",
+                                                                       boost::bind(&FullView::individualsChanged,
+                                                                                   m_self,
+                                                                                   _2, _3, _4, _5, _6));
+    m_folks.connectSignal<void (GObject *gobject,
+                                GParamSpec *pspec)>("notify::is-quiescent",
+                                                    boost::bind(&FullView::quiesenceChanged,
+                                                                m_self));
+}
+
+boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX &folks)
+{
+    boost::shared_ptr<FullView> view(new FullView(folks));
     view->m_self = view;
+    view->init();
     return view;
+}
+
+void FullView::individualsChanged(GeeSet *added,
+                                  GeeSet *removed,
+                                  gchar *message,
+                                  FolksPersona *actor,
+                                  FolksGroupDetailsChangeReason reason)
+{
+    SE_LOG_DEBUG(NULL, NULL, "individuals changed, %s, %d added, %d removed, message: %s",
+                 actor ? folks_persona_get_display_id(actor) : "<<no actor>>",
+                 added ? gee_collection_get_size(GEE_COLLECTION(added)) : 0,
+                 removed ? gee_collection_get_size(GEE_COLLECTION(removed)) : 0,
+                 message);
+    typedef GeeCollCXX<FolksIndividual *> Coll;
+    if (added) {
+        // TODO (?): Optimize adding many new individuals by pre-sorting them,
+        // then using that information to avoid comparisons in addIndividual().
+        BOOST_FOREACH (FolksIndividual *individual, Coll(added)) {
+            addIndividual(individual);
+        }
+    }
+    if (removed) {
+        BOOST_FOREACH (FolksIndividual *individual, Coll(removed)) {
+            removeIndividual(individual);
+        }
+    }
+}
+
+void FullView::individualModified(gpointer gobject,
+                                  GParamSpec *pspec)
+{
+    SE_LOG_DEBUG(NULL, NULL, "individual %p modified",
+                 gobject);
+    FolksIndividual *individual = FOLKS_INDIVIDUAL(gobject);
+    // Delay the expensive modification check until the process is
+    // idle, because in practice we get several change signals for
+    // each contact change in EDS.
+    //
+    // See https://bugzilla.gnome.org/show_bug.cgi?id=684764
+    // "too many FolksIndividual modification signals"
+    m_pendingModifications.insert(individual);
+    waitForIdle();
+}
+
+void FullView::quiesenceChanged()
+{
+    bool quiesent = folks_individual_aggregator_get_is_quiescent(m_folks);
+    SE_LOG_DEBUG(NULL, NULL, "aggregator is %s", quiesent ? "quiesent" : "busy");
+    // In practice, libfolks only switches from "busy" to "quiesent"
+    // once. See https://bugzilla.gnome.org/show_bug.cgi?id=684766
+    // "enter and leave quiesence state".
+    if (quiesent) {
+        m_quiesenceSignal();
+    }
+}
+
+void FullView::doAddIndividual(const IndividualData &data)
+{
+    // Binary search to find insertion point.
+    Entries_t::iterator it =
+        std::lower_bound(m_entries.begin(),
+                         m_entries.end(),
+                         data,
+                         IndividualDataCompare(m_compare));
+    size_t index = it - m_entries.begin();
+    it = m_entries.insert(it, data);
+    SE_LOG_DEBUG(NULL, NULL, "full view: added at #%ld/%ld", index, m_entries.size());
+    m_addedSignal(index, it->m_individual);
+    waitForIdle();
+
+    // Monitor individual for changes.
+    it->m_individual.connectSignal<void (GObject *gobject,
+                                         GParamSpec *pspec)>("notify",
+                                                             boost::bind(&FullView::individualModified,
+                                                                         m_self,
+                                                                         _1, _2));
 }
 
 void FullView::addIndividual(FolksIndividual *individual)
 {
-    // TODO
+    IndividualData data;
+    data.init(m_compare, individual);
+    doAddIndividual(data);
 }
+
+void FullView::modifyIndividual(FolksIndividual *individual)
+{
+    // Brute-force search for the individual. Pointer comparison is
+    // sufficient, libfolks will not change instances without
+    // announcing it.
+    for (Entries_t::iterator it = m_entries.begin();
+         it != m_entries.end();
+         ++it) {
+        if (it->m_individual.get() == individual) {
+            size_t index = it - m_entries.begin();
+
+            IndividualData data;
+            data.init(m_compare, individual);
+            if (data.m_criteria != it->m_criteria &&
+                ((it != m_entries.begin() && !m_compare->compare((it - 1)->m_criteria, data.m_criteria)) ||
+                 (it + 1 != m_entries.end() && !m_compare->compare(data.m_criteria, (it + 1)->m_criteria)))) {
+                // Sort criteria changed in such a way that the old
+                // sorting became invalid => move the entry. Do it
+                // as simple as possible, because this is not expected
+                // to happen often.
+                SE_LOG_DEBUG(NULL, NULL, "full view: temporarily removed at #%ld/%ld", index, m_entries.size());
+                m_entries.erase(it);
+                m_removedSignal(index, individual);
+                doAddIndividual(data);
+            } else {
+                SE_LOG_DEBUG(NULL, NULL, "full view: modified at #%ld/%ld", index, m_entries.size());
+                m_modifiedSignal(index, individual);
+                waitForIdle();
+            }
+            return;
+        }
+    }
+    // Not a bug: individual might have been removed before we got
+    // around to processing the modification notification.
+    SE_LOG_DEBUG(NULL, NULL, "full view: modified individual not found");
+}
+
 void FullView::removeIndividual(FolksIndividual *individual)
 {
-    // TODO
+    for (Entries_t::iterator it = m_entries.begin();
+         it != m_entries.end();
+         ++it) {
+        if (it->m_individual.get() == individual) {
+            size_t index = it - m_entries.begin();
+            SE_LOG_DEBUG(NULL, NULL, "full view: removed at #%ld/%ld", index, m_entries.size());
+            m_entries.erase(it);
+            m_removedSignal(index, individual);
+            waitForIdle();
+            return;
+        }
+    }
+    // A bug?!
+    SE_LOG_DEBUG(NULL, NULL, "full view: individual to be removed not found");
 }
+
+void FullView::onIdle()
+{
+    SE_LOG_DEBUG(NULL, NULL, "process is idle");
+
+    // Process delayed contact modifications.
+    BOOST_FOREACH (const FolksIndividualCXX &individual,
+                   m_pendingModifications) {
+        modifyIndividual(const_cast<FolksIndividual *>(individual.get()));
+    }
+    m_pendingModifications.clear();
+
+    m_quiesenceSignal();
+    m_waitForIdle.deactivate();
+}
+
+void FullView::waitForIdle()
+{
+    if (!m_waitForIdle) {
+        m_waitForIdle.runOnce(-1, boost::bind(&FullView::onIdle, this));
+    }
+}
+
 void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
 {
     // TODO
@@ -96,6 +349,7 @@ boost::shared_ptr<FilteredView> FilteredView::create(const boost::shared_ptr<Ind
     boost::shared_ptr<FilteredView> view(new FilteredView);
     view->m_self = view;
     view->m_parent = parent;
+    parent->m_quiesenceSignal.connect(QuiesenceSignal_t::slot_type(boost::bind(boost::cref(view->m_quiesenceSignal))).track(view->m_self));
     // TODO
     return view;
 }
@@ -122,25 +376,7 @@ boost::shared_ptr<IndividualAggregator> IndividualAggregator::create()
     aggregator->m_self = aggregator;
     aggregator->m_folks =
         FolksIndividualAggregatorCXX::steal(folks_individual_aggregator_new());
-    boost::shared_ptr<FullView> view(FullView::create());
-    aggregator->m_view = view;
-    aggregator->m_folks.connectSignal<void (FolksIndividualAggregator *,
-                                            GeeSet *added,
-                                            GeeSet *removed,
-                                            gchar *message,
-                                            FolksPersona *actor,
-                                            FolksGroupDetailsChangeReason)>("individuals-changed",
-                                                                            boost::bind(&IndividualAggregator::individualsChanged,
-                                                                                        aggregator.get(),
-                                                                                        _2, _3, _4));
     return aggregator;
-}
-
-void IndividualAggregator::individualsChanged(GeeSet *added,
-                                              GeeSet *removed,
-                                              gchar *message) throw ()
-{
-    // TODO
 }
 
 /**
@@ -158,8 +394,8 @@ static void logResult(const GError *gerror, const char *operation)
 
 void IndividualAggregator::start()
 {
-    if (!m_started) {
-        m_started = true;
+    if (!m_view) {
+        m_view = FullView::create(m_folks);
         SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
                                 boost::bind(logResult, _1,
                                             "folks_individual_aggregator_prepare"),
@@ -167,41 +403,15 @@ void IndividualAggregator::start()
     }
 }
 
+boost::shared_ptr<IndividualView> IndividualAggregator::getMainView()
+{
+    if (!m_view) {
+        start();
+    }
+    return m_view;
+}
+
 #ifdef ENABLE_UNIT_TESTS
-
-class CompareFormattedName : public IndividualCompare {
-    bool m_reversed;
-    bool m_firstLast;
-
-public:
-    CompareFormattedName(bool reversed = false, bool firstLast = false) :
-        m_reversed(reversed),
-        m_firstLast(firstLast)
-    {
-    }
-
-    virtual void createCriteria(FolksIndividual *individual, Criteria_t &criteria) const {
-        FolksStructuredName *fn =
-            folks_name_details_get_structured_name(FOLKS_NAME_DETAILS(individual));
-        if (fn) {
-            const char *family = folks_structured_name_get_family_name(fn);
-            const char *given = folks_structured_name_get_given_name(fn);
-            if (m_firstLast) {
-                criteria.push_back(given ? given : "");
-                criteria.push_back(family ? family : "");
-            } else {
-                criteria.push_back(family ? family : "");
-                criteria.push_back(given ? given : "");
-            }
-        }
-    }
-
-    virtual bool compare(const Criteria_t &a, const Criteria_t &b) const {
-        return m_reversed ?
-            IndividualCompare::compare(b, a) :
-            IndividualCompare::compare(a, b);
-    }
-};
 
 class FolksTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE(FolksTest);
