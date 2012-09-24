@@ -208,8 +208,17 @@ class FolksTest : public CppUnit::TestFixture {
     CPPUNIT_TEST(open);
     CPPUNIT_TEST(asyncError);
     CPPUNIT_TEST(gvalue);
-    CPPUNIT_TEST(fullview);
-    CPPUNIT_TEST(filter);
+
+    // The tests are not working because it is currently not possible
+    // to create FolksIndividual instances directly with some chosen
+    // properties. Testing the FullView and IndividualFilter thus must
+    // be done by putting real data into EDS and reading it via libfolks.
+    // See testpim.py.
+    // CPPUNIT_TEST(fullview);
+    // CPPUNIT_TEST(filter);
+
+    // aggregate() works, but doesn't do anything. Keeping it and the
+    // other two tests as compile test for the API.
     CPPUNIT_TEST(aggregate);
     CPPUNIT_TEST_SUITE_END();
 
@@ -224,8 +233,24 @@ public:
         FolksStructuredName *fn;
 
         contact = FolksIndividualCXX::steal(folks_individual_new(NULL));
-        folks_name_details_set_full_name(FOLKS_NAME_DETAILS(contact.get()), "Abraham Zzz");
-        fn = folks_name_details_get_structured_name(FOLKS_NAME_DETAILS(contact.get()));
+        FolksNameDetails *nd = FOLKS_NAME_DETAILS(contact.get());
+
+        // Crashes due to bug in Vala:
+        // https://bugzilla.gnome.org/show_bug.cgi?id=684557
+        // GErrorCXX gerror;
+        // SYNCEVO_GLIB_CALL_SYNC(NULL, gerror,
+        //                        folks_name_details_change_full_name,
+        //                        nd,
+        //                        "Abraham Zzz");
+        // if (gerror) {
+        //     gerror.throwError("folks_name_details_change_full_name(Abraham Zzz)");
+        // }
+
+        // Doesn't have any effect: without an associated store,
+        // properties in a FolksIndividual are not writable.
+        folks_name_details_set_full_name(nd, "Abraham Zzz");
+
+        fn = folks_name_details_get_structured_name(nd);
         folks_structured_name_set_family_name(fn, "Zzz");
         folks_structured_name_set_given_name(fn, "Abraham");
         m_contactA = contact;
