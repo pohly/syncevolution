@@ -550,7 +550,7 @@ class DBusObject
 {
  protected:
     DBusConnectionPtr m_conn;
-    std::string m_path;
+    DBusObject_t m_path;
     std::string m_interface;
 
  private:
@@ -587,6 +587,7 @@ class DBusObject
 
     GDBusConnection *getConnection() const { return m_conn.get(); }
     const char *getPath() const { return m_path.c_str(); }
+    const DBusObject_t &getObject() const { return m_path; }
     const char *getInterface() const { return m_interface.c_str(); }
 };
 
