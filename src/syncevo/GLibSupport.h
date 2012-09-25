@@ -162,6 +162,15 @@ template<> struct GObjectSignalHandler<void ()> {
         }
     }
 };
+template<class A1> struct GObjectSignalHandler<void (A1)> {
+    static void handler(A1 a1, gpointer data) throw () {
+        try {
+            (*reinterpret_cast< boost::function<void (A1)> *>(data))(a1);
+        } catch (...) {
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
 template<class A1, class A2> struct GObjectSignalHandler<void (A1, A2)> {
     static void handler(A1 a1, A2 a2, gpointer data) throw () {
         try {
