@@ -387,6 +387,7 @@ ReadDir::ReadDir(const string &path, bool throwError) : m_path(path)
         if (errno) {
             SyncContext::throwError(path, errno);
         }
+        std::sort(m_entries.begin(), m_entries.end());
     } catch(...) {
         if (dir) {
             closedir(dir);

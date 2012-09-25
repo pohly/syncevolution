@@ -270,6 +270,8 @@ inline const char *NullPtrCheck(const char *ptr, const char *def = "(null)")
  * A C++ wrapper around readir() which provides the names of all
  * directory entries, excluding . and ..
  *
+ * In contrast to the underlying readdir(), this class sorts
+ * the result by name before granting access to it.
  */
 class ReadDir {
  public:
