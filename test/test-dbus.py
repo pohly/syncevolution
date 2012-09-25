@@ -507,19 +507,9 @@ class DBusUtil(Timeout):
             DBusUtil.pserver = subprocess.Popen([debugger] + gdbinit + server,
                                                 env=env)
 
-            while True:
-                check = subprocess.Popen("ps x | grep %s | grep -w -v -e %s -e grep -e ps" % \
-                                             (server[0], debugger),
-                                         env=env,
-                                         shell=True,
-                                         stdout=subprocess.PIPE)
-                out, err = check.communicate()
-                if out:
-                    # process exists, but might still be loading,
-                    # so give it some more time
-                    print "found syncevo-dbus-server, starting test in two seconds:\n", out
-                    time.sleep(2)
-                    break
+            while not bus.name_has_owner('org.syncevolution'):
+                time.sleep(1)
+            print "\nfound org.syncevolution on session bus, starting test"
         else:
             logfile = open(syncevolog, "w")
             prefix = os.environ.get("TEST_DBUS_PREFIX", "")
@@ -579,7 +569,10 @@ class DBusUtil(Timeout):
         self.running = False
         self.removeTimeout(timeout_handle)
         if debugger:
-            print "\ndone, quit gdb now\n"
+            # Print result of this test run.
+            for test, trace in result.errors[numerrors:] + result.failures[numfailures:]:
+                print trace
+            print "\nDone, quit gdb now to proceed.\nSee %s for D-Bus messages.\n" % dbuslog
         hasfailed = numerrors + numfailures != len(result.errors) + len(result.failures)
 
         if debugger:
@@ -598,17 +591,23 @@ class DBusUtil(Timeout):
             print "   ", error
             result.errors.append((self, error))
 
-        serverout = open(syncevolog).read()
+        if debugger:
+            serverout = '<see console>'
+        else:
+            serverout = open(syncevolog).read()
         if DBusUtil.pserver is not None and DBusUtil.pserver.returncode != -15:
             hasfailed = True
-        if hasfailed:
+        if hasfailed and not debugger:
             # give D-Bus time to settle down
             time.sleep(1)
         if not ShutdownSubprocess(self.pmonitor, 5):
             print "   dbus-monitor had to be killed with SIGKILL"
             result.errors.append((self,
                                   "dbus-monitor had to be killed with SIGKILL"))
-        monitorout = open(dbuslog).read()
+        if debugger:
+            monitorout = '<see %s>' % dbuslog
+        else:
+            monitorout = open(dbuslog).read()
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
         if self.runTestDBusCheck:
