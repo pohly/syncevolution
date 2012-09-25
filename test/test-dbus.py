@@ -555,12 +555,14 @@ class DBusUtil(Timeout):
         timeout = self.getTestProperty("timeout", defTimeout)
         timeout_handle = None
         if timeout and not debugger and not os.environ.get("SYNCEVOLUTION_LOCAL_CHILD_DELAY", None):
+            logging.printf('killing test in %d seconds' % timeout)
             def timedout():
                 error = "%s timed out after %d seconds, current quit events: %s" % (self.id(), timeout, self.quit_events)
-                if Timeout.debugTimeout:
-                    print error
+                logging.log('%s\n%s' % (error, ''.join(traceback.format_stack())))
                 raise Exception(error)
             timeout_handle = self.addTimeout(timeout, timedout, use_glib=False)
+        else:
+            logging.printf('killing test disabled')
         try:
             self.running = True
             unittest.TestCase.run(self, result)
@@ -627,6 +629,27 @@ class DBusUtil(Timeout):
         elif numfailures != len(result.failures):
             # same for failure
             result.failures[-1] = (result.failures[-1][0], result.failures[-1][1] + report)
+
+    def loopIteration(self, message, may_block=True):
+        '''Trigger glib, allow it to wait once (optional).'''
+        # Calling this is necessary, Python uses it to re-raise a
+        # timeout exception that was originally raised inside the C
+        # glib code. If None, the caller must do it.
+        if message:
+            logging.log(message)
+        loop.get_context().iteration(may_block)
+
+    def runUntil(self, state, check, until):
+        '''Loop until 'check' throws an exception or 'until' returns True.
+Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
+        '''
+        message = 'waiting for ' + state
+        while True:
+            logging.log(message)
+            check()
+            if until():
+                break
+            self.loopIteration(None)
 
     def isServerRunning(self):
         """True while the syncevo-dbus-server executable is still running"""
