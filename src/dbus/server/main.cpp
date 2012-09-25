@@ -150,12 +150,15 @@ int main(int argc, char **argv, char **envp)
             unsetenv("G_DBUS_DEBUG");
         }
 
+        dbus_bus_connection_undelay(conn);
         server->run();
         SE_LOG_DEBUG(NULL, NULL, "cleaning up");
         server.reset();
-        conn.reset();
         obj.reset();
         guard.reset();
+        SE_LOG_DEBUG(NULL, NULL, "flushing D-Bus connection");
+        conn.flush();
+        conn.reset();
         SE_LOG_INFO(NULL, NULL, "terminating");
         return 0;
     } catch ( const std::exception &ex ) {

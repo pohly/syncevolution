@@ -124,6 +124,14 @@ inline void throwFailure(const std::string &object,
 
 class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
 {
+    /**
+     * Bus name of client, as passed to dbus_get_bus_connection().
+     * The name will be requested in dbus_bus_connection_undelay() =
+     * undelay(), to give the caller a chance to register objects on
+     * the new connection.
+     */
+    std::string m_name;
+
  public:
     DBusConnectionPtr() {}
     // connections are typically created once, so increment the ref counter by default
@@ -138,9 +146,18 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
         return conn;
     }
 
+    /**
+     * Ensure that all IO is sent out of the process.
+     * Blocks. Only use it right before shutting down.
+     */
+    void flush();
+
     typedef boost::function<void ()> Disconnect_t;
     void setDisconnect(const Disconnect_t &func);
     // #define GDBUS_CXX_HAVE_DISCONNECT 1
+
+    void undelay() const;
+    void addName(const std::string &name) { m_name = name; }
 };
 
 class DBusMessagePtr : public boost::intrusive_ptr<GDBusMessage>
@@ -224,7 +241,7 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
                                           DBusErrorCXX *err,
                                           bool delayed = false);
 
-void dbus_bus_connection_undelay(const DBusConnectionPtr &conn);
+inline void dbus_bus_connection_undelay(const DBusConnectionPtr &conn) { conn.undelay(); }
 
 /**
  * Wrapper around DBusServer. Does intentionally not expose

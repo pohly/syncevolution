@@ -135,8 +135,7 @@ class ActiveSyncSource :
         // also for other keys if the need ever arises).
         m_itemNode(new PrefixConfigNode("item-",
                                         boost::shared_ptr<ConfigNode>(new SafeConfigNode(params.m_nodes.getTrackingNode())))),
-        m_context(params.m_context),
-        m_account(0)
+        m_context(params.m_context)
         {
             if (!m_context) {
                 m_context.reset(new SyncConfig());
@@ -188,7 +187,7 @@ class ActiveSyncSource :
     boost::shared_ptr<SyncConfig> m_context;
 
     /** account ID for libeas, must be set in "username" config property */
-    const char* m_account;
+    std::string m_account;
 
     /** folder ID for libeas, optionally set in "database" config property */
     std::string m_folder;

@@ -45,8 +45,22 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+// TODO: this check should be global
+static bool HaveDBus;
+
 void KDEInitMainSlot(const char *appname)
 {
+    // Very simple check. API doesn't say whether asking
+    // for the bus connection will connect immediately.
+    QDBusConnection dbus = QDBusConnection::sessionBus();
+    HaveDBus = dbus.isConnected();
+
+    if (!HaveDBus) {
+        // KApplication has been seen to crash without D-Bus (BMC #25596).
+        // Bail out here if we don't have D-Bus.
+        return;
+    }
+
     //QCoreApplication *app;
     int argc = 1;
     static char *argv[] = { const_cast<char *>(appname), NULL };
@@ -114,6 +128,11 @@ static bool UseKWallet(const InitStateTri &keyring,
     if (keyring.getValue() == InitStateTri::VALUE_STRING &&
         !boost::iequals(keyring.get(), "KDE")) {
         return false;
+    }
+
+    // User wants KWallet, but is it usable?
+    if (!HaveDBus) {
+        SE_THROW("KDE KWallet requested, but it is not usable (running outside of a D-Bus session)");
     }
 
     // Use KWallet.

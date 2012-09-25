@@ -32,9 +32,6 @@ from OpenSSL import SSL
 # for output from this script itself
 logger = logging.getLogger("syncevo-http")
 
-# for output from core SyncEvolution
-loggerCore = logging.getLogger("sync")
-
 class ChainedOpenSSLContextFactory(ssl.DefaultOpenSSLContextFactory):
     def __init__(self, privateKeyFileName, certificateChainFileName,
                  sslmethod = SSL.SSLv3_METHOD):
@@ -372,8 +369,8 @@ evo2python = {
     "WARNING": logging.WARNING
 }
 
-def logSyncEvoOutput(path, level, output):
-    loggerCore.log(evo2python.get(level, logging.ERROR), "%s: %s", path, output)
+def logSyncEvoOutput(path, level, output, component):
+    logging.getLogger(component or 'sync').log(evo2python.get(level, logging.ERROR), "%s: %s", path, output)
 
 usage =  """usage: %prog [options] http://localhost:<port>/<path>
 

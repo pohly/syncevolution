@@ -658,8 +658,13 @@ sub NormalizeItem {
     }
 
     if ($googleeas) {
-        # unsupported properties
-        s/^(FN|X-EVOLUTION-FILE-AS|CATEGORIES)(;[^:;\n]*)*:.*\r?\n?//gm;
+        # properties not supported by Google
+        s/^(X-EVOLUTION-FILE-AS|CATEGORIES)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($googleeas || $exchange) {
+        # properties not supported by ActiveSync
+        s/^(FN)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
     if ($googleeas || $exchange) {

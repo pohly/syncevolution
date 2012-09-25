@@ -111,7 +111,7 @@
  LABEL;TYPE=HOME:Address Line 1\nAddress Line 2\nAddress Line 3
  UID:pas-id-43C15DFB000001AB
  END:VCARD
-@@ -167,48 +156,34 @@
+@@ -167,48 +156,31 @@
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
@@ -135,9 +135,8 @@
  LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
    Box #1\nTestovia
 -ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
-+ADR;TYPE=OTHER:;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
- LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
-   #3\nNew Testonia
+-LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
+-  #3\nNew Testonia
  UID:pas-id-43C0ED3900000001
 -EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
 -EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
@@ -170,13 +169,13 @@
 +TEL;TYPE=HOME;TYPE=FAX:homefax 5
 +TEL;TYPE=PAGER:pager 6
 +TEL;TYPE=CAR:car 7
-+TEL;TYPE=RADIO:radio 8
++TEL;TYPE="X-EVOLUTION-RADIO":radio 8
 +TEL;TYPE=work:business 9
 +TEL;HOME:home 10
  END:VCARD
  
  BEGIN:VCARD
-@@ -221,8 +196,7 @@
+@@ -221,8 +193,7 @@
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
  NOTE:image in JPG format
@@ -186,7 +185,7 @@
  X-EVOLUTION-FILE-AS:JPG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -257,8 +231,7 @@
+@@ -257,8 +228,7 @@
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
  NOTE:image in PNG format
@@ -196,7 +195,7 @@
  X-EVOLUTION-FILE-AS:PNG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -288,8 +261,7 @@
+@@ -288,8 +258,7 @@
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
@@ -206,7 +205,7 @@
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -309,8 +281,7 @@
+@@ -309,8 +278,7 @@
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
  NOTE:image in GIF format
@@ -216,7 +215,7 @@
  X-EVOLUTION-FILE-AS:GIF
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -429,7 +400,6 @@
+@@ -429,7 +397,6 @@
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <

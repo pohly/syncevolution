@@ -60,6 +60,14 @@
 #include "gdbus.h"
 #include "gdbus-cxx.h"
 
+// Not defined by 1.4.x in Maemo Harmattan; INT_MAX has the same
+// value and effect there. In older libdbus, it is the same as
+// a very long timeout (2147483s), which is good enough.
+#include <stdint.h>
+#ifndef DBUS_TIMEOUT_INFINITE
+# define DBUS_TIMEOUT_INFINITE INT_MAX
+#endif
+
 #include <map>
 #include <vector>
 #include <utility>
@@ -119,6 +127,9 @@ class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
         dbus_connection_ref(conn);
         return conn;
     }
+
+    /** empty stub: flushing only necessary with GIO D-Bus */
+    void flush() {}
 
     /** GDBus GIO specific: disconnect callback */
     typedef boost::function<void ()> Disconnect_t;
@@ -4213,7 +4224,7 @@ protected:
     void send(DBusMessagePtr &msg, const Callback_t &callback)
     {
         DBusPendingCall *call;
-        if (!dbus_connection_send_with_reply(m_conn.get(), msg.get(), &call, -1)) {
+        if (!dbus_connection_send_with_reply(m_conn.get(), msg.get(), &call, DBUS_TIMEOUT_INFINITE)) {
             throw std::runtime_error("dbus_connection_send failed");
         } else if (call == NULL) {
             throw std::runtime_error("received pending call is NULL");
@@ -4233,7 +4244,7 @@ protected:
         DBusErrorCXX error;
         // Constructor steals reference, reset() doesn't!
         // Therefore use constructor+copy instead of reset().
-        DBusMessagePtr reply = DBusMessagePtr(dbus_connection_send_with_reply_and_block(m_conn.get(), msg.get(), -1, &error));
+        DBusMessagePtr reply = DBusMessagePtr(dbus_connection_send_with_reply_and_block(m_conn.get(), msg.get(), DBUS_TIMEOUT_INFINITE, &error));
         if (!reply) {
             error.throwFailure(m_method);
         }
