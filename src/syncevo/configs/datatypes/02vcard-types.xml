@@ -7,6 +7,7 @@
      <incomingscript><![CDATA[
         $VCARD_INCOMING_NAMECHANGE_SCRIPT
         $VCARD_INCOMING_PHOTO_VALUE_SCRIPT
+        $VCARD_INCOMING_PHOTO_TYPE_SCRIPT
       ]]></incomingscript>
       <outgoingscript><![CDATA[
         $VCARD_OUTGOING_ADDREV_SCRIPT
@@ -22,6 +23,7 @@
       <incomingscript><![CDATA[
         $VCARD_INCOMING_NAMECHANGE_SCRIPT
         $VCARD_INCOMING_PHOTO_VALUE_SCRIPT
+        $VCARD_INCOMING_PHOTO_TYPE_SCRIPT
       ]]></incomingscript>
       <outgoingscript><![CDATA[
         $VCARD_OUTGOING_ADDREV_SCRIPT

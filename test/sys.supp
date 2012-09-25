@@ -29,9 +29,7 @@
    obj:*/libdb-5.1.so
    fun:__log_put_record
    fun:__ham_add_el
-   obj:*/libdb-5.1.so
-   fun:__dbc_iput
-   fun:__db_put
+   ...
    fun:__db_put_pp
 }
 
@@ -826,6 +824,34 @@
    fun:*GNOME*Password*
 }
 
+# ==5221== 280 (24 direct, 256 indirect) bytes in 1 blocks are definitely lost in loss record 2,234 of 2,429
+# ==5221==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==5221==    by 0xB37B960: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0xB37C888: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0xB37CBCE: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0xB3C5A09: ??? (in /lib/x86_64-linux-gnu/libgcrypt.so.11.7.0)
+# ==5221==    by 0x7EE7AFA: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x7EDC0AB: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x7EDC2B1: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x7EDB743: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x5063089: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.1)
+# ==5221==    by 0x5066152: dbus_connection_dispatch (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.1)
+# ==5221==    by 0x7EE6E44: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==5221==    by 0x5536204: g_main_context_dispatch (gmain.c:2539)
+# ==5221==    by 0x5536537: g_main_context_iterate.isra.23 (gmain.c:3146)
+# ==5221==    by 0x5536931: g_main_loop_run (gmain.c:3340)
+# ==5221==    by 0x4042F6: main (activesyncd-server.c:300)
+# ==5221== 
+{
+   gcrypt + activesyncd
+   Memcheck:Leak
+   fun:malloc
+   obj:*libgcrypt.so*
+   ...
+   obj:*libgnome-keyring.so*
+}
+
+
 # ==10804== 60 (16 direct, 44 indirect) bytes in 1 blocks are definitely lost in loss record 1,121 of 2,014
 # ==10804==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
 # ==10804==    by 0x7FABC02: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)
@@ -881,6 +907,42 @@
    ...
    obj:*libgio*
    obj:*libglib*
+   fun:start_thread
+}
+
+# ==12501== 168 (64 direct, 104 indirect) bytes in 1 blocks are definitely lost in loss record 1,124 of 1,317
+# ==12501==    at 0x4C272B8: calloc (vg_replace_malloc.c:566)
+# ==12501==    by 0x9736E38: g_malloc0 (gmem.c:189)
+# ==12501==    by 0x9211965: _g_socket_read_with_control_messages (gdbusprivate.c:182)
+# ==12501==    by 0x9211B54: _g_dbus_worker_do_read_unlocked (gdbusprivate.c:860)
+# ==12501==    by 0x9213AA1: _g_dbus_worker_do_read_cb (gdbusprivate.c:809)
+# ==12501==    by 0x91B53F6: g_simple_async_result_complete (gsimpleasyncresult.c:767)
+# ==12501==    by 0x91B54F8: complete_in_idle_cb (gsimpleasyncresult.c:779)
+# ==12501==    by 0x9731204: g_main_context_dispatch (gmain.c:2539)
+# ==12501==    by 0x9731537: g_main_context_iterate.isra.23 (gmain.c:3146)
+# ==12501==    by 0x9731931: g_main_loop_run (gmain.c:3340)
+# ==12501==    by 0x92117F5: gdbus_shared_thread_func (gdbusprivate.c:277)
+# ==12501==    by 0x9753DF4: g_thread_proxy (gthread.c:801)
+# ==12501==    by 0x7C08B4F: start_thread (pthread_create.c:304)
+# ==12501==    by 0xA2556DC: clone (clone.S:112)
+#
+# Also found elsewhere:
+# https://mail.gnome.org/archives/commits-list/2011-November/msg05945.html
+#
+# Seen in syncevo-local-sync during TestLocalSync.testPassswordRequestTimeout
+# and some other, non-D-Bus tests. Perhaps we fail to handle a message?
+{
+   GIO D-Bus leak in syncevo-local-sync
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:_g_socket_read_with_control_messages
+   fun:_g_dbus_worker_do_read_unlocked
+   fun:_g_dbus_worker_do_read_cb
+   fun:g_simple_async_result_complete
+   fun:complete_in_idle_cb
+   ...
+   fun:g_thread_proxy
    fun:start_thread
 }
 
@@ -1297,9 +1359,7 @@
    Memcheck:Jump
    obj:*
    ...
-   fun:_dl_*
-   ...
-   fun:openaux
+   fun:_dl_start
 }
 
 # ==19740== 72 bytes in 1 blocks are possibly lost in loss record 1,226 of 1,985

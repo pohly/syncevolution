@@ -68,11 +68,11 @@ void ActiveSyncSource::open()
                  username.c_str(),
                  m_context->getConfigName().c_str());
 
-    m_account = username.c_str();
+    m_account = username;
     m_folder = getDatabaseID();
 
     // create handler
-    m_handler.set(eas_sync_handler_new(m_account), "EAS handler");
+    m_handler.set(eas_sync_handler_new(m_account.c_str()), "EAS handler");
 }
 
 void ActiveSyncSource::close()
@@ -98,7 +98,10 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
         SE_LOG_DEBUG(this, NULL, "sync key empty, starting slow sync");
         m_ids->clear();
     } else {
-        SE_LOG_DEBUG(this, NULL, "sync key %s, starting incremental sync", lastToken.c_str());
+        SE_LOG_DEBUG(this, NULL, "sync key %s for account '%s' folder '%s', starting incremental sync",
+                     lastToken.c_str(),
+                     m_account.c_str(),
+                     m_folder.c_str());
     }
 
     gboolean moreAvailable = TRUE;
@@ -219,7 +222,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
     }
 
     if (slowSync) {
-        // tell engine that we need a slow sync
+        // tell engine that we need a slow sync, if it didn't know already
         SE_THROW_EXCEPTION_STATUS(StatusException,
                                   "ActiveSync error: Invalid synchronization key",
                                   STATUS_SLOW_SYNC_508);

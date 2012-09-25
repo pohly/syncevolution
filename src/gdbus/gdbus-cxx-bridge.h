@@ -128,6 +128,9 @@ class DBusConnectionPtr : public boost::intrusive_ptr<DBusConnection>
         return conn;
     }
 
+    /** empty stub: flushing only necessary with GIO D-Bus */
+    void flush() {}
+
     /** GDBus GIO specific: disconnect callback */
     typedef boost::function<void ()> Disconnect_t;
     void setDisconnect(const Disconnect_t &func);

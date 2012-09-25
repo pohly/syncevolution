@@ -4695,14 +4695,8 @@ bool addBothSidesAddStatsBroken = false;
 // duplicates itself; the client needs to do that
 bool addBothSidesServerIsDumb = getenv("CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB") != NULL;
 
-void SyncTests::testAddBothSides()
+static void testAddBothSidesFixUpdateItem(std::string &updateItem)
 {
-    CT_ASSERT_NO_THROW(deleteAll());
-    accessClientB->deleteAll();
-
-    std::string insertItem = sources[0].second->config.m_insertItem;
-    std::string updateItem = sources[0].second->config.m_updateItem;
-
     if (addBothSidesNoMergeLines) {
         // VEVENT
         boost::replace_all(updateItem, "LOCATION:big meeting room", "LOCATION:my office");
@@ -4712,6 +4706,16 @@ void SyncTests::testAddBothSides()
         // VTODO
         boost::replace_all(updateItem, "DESCRIPTION:to be done", "DESCRIPTION:to be done<<REVISION>>");
     }
+}
+
+void SyncTests::testAddBothSides()
+{
+    CT_ASSERT_NO_THROW(deleteAll());
+    accessClientB->deleteAll();
+
+    std::string insertItem = sources[0].second->config.m_insertItem;
+    std::string updateItem = sources[0].second->config.m_updateItem;
+    testAddBothSidesFixUpdateItem(updateItem);
 
     CT_ASSERT_NO_THROW(sources[0].second->insert(sources[0].second->createSourceA,
                                                       insertItem));
@@ -4809,11 +4813,7 @@ void SyncTests::testAddBothSidesRefresh()
 
     std::string insertItem = sources[0].second->config.m_insertItem;
     std::string updateItem = sources[0].second->config.m_updateItem;
-
-    if (addBothSidesNoMergeLines) {
-        boost::replace_all(updateItem, "LOCATION:big meeting room", "LOCATION:my office");
-        boost::replace_all(updateItem, "DESCRIPTION:nice to see you", "DESCRIPTION:let's talk<<REVISION>>");
-    }
+    testAddBothSidesFixUpdateItem(updateItem);
 
     // insert initial item data on B
     CT_ASSERT_NO_THROW(accessClientB->sources[0].second->insert(accessClientB->sources[0].second->createSourceA,
