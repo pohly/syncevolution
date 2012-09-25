@@ -24,6 +24,7 @@
 #include <syncevo/util.h>
 
 #include <boost/utility.hpp>
+#include <boost/bind.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -56,6 +57,9 @@ public:
 
     /**
      * call the callback at regular intervals until it returns false
+     *
+     * @param seconds   a value < 0 runs the function as soon as the process is idle,
+     *                  otherwise in the specified amount of time
      */
     void activate(int seconds,
                   const boost::function<bool ()> &callback)
@@ -63,9 +67,11 @@ public:
         deactivate();
 
         m_callback = callback;
-        m_tag = g_timeout_add_seconds(seconds, triggered, static_cast<gpointer>(this));
+        m_tag = seconds < 0 ?
+            g_idle_add(triggered, static_cast<gpointer>(this)) :
+            g_timeout_add_seconds(seconds, triggered, static_cast<gpointer>(this));
         if (!m_tag) {
-            SE_THROW("g_timeout_add_seconds() failed");
+            SE_THROW("g_timeout_add_seconds() or g_idle_add() failed");
         }
     }
 
