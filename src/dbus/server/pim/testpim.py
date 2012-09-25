@@ -37,6 +37,9 @@ import time
 import copy
 import subprocess
 import dbus
+import traceback
+import re
+import itertools
 
 # Update path so that testdbus.py can be found.
 pimFolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
@@ -49,6 +52,93 @@ if testFolder not in sys.path:
 from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, loop
 import testdbus
 
+class ContactsView(dbus.service.Object, unittest.TestCase):
+     '''Implements ViewAgent, starts a search and mirrors the remote state locally.'''
+
+     counter = 1
+
+     def __init__(self, manager):
+          '''Create ViewAgent with the chosen path.'''
+          self.manager = manager
+          # Ensure unique path across different tests.
+          self.path = '/org/syncevolution/testpim%d' % ContactsView.counter
+          ContactsView.counter = ContactsView.counter + 1
+          self.view = None
+          # List of encountered errors in ViewAgent, should always be empty.
+          self.errors = []
+          # Currently known contact data, size matches view.
+          self.contacts = []
+          # Change events, as list of ("modified/added/removed", start, count).
+          self.events = []
+
+          dbus.service.Object.__init__(self, dbus.SessionBus(), self.path)
+
+     def search(self, filter):
+          '''Start a search.'''
+          self.viewPath = self.manager.Search(filter, self.path)
+          self.view = dbus.Interface(bus.get_object(self.manager.bus_name,
+                                                    self.viewPath),
+                                     'org._01.pim.contacts.ViewControl')
+
+     # A function decorator for the boiler-plate code would be nice...
+     # Or perhaps the D-Bus API should merge the three different callbacks
+     # into one?
+
+     @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
+                          in_signature='oii', out_signature='')
+     def ContactsModified(self, view, start, count):
+          try:
+               logging.log('contacts modified: %s, start %d, count %d' %
+                           (view, start, count))
+               self.events.append(('modified', start, count))
+               assert view == self.viewPath
+               assert start >= 0
+               assert count >= 0
+               assert start + count <= len(self.contacts)
+               self.contacts[start:start + count] = itertools.repeat(None, count)
+               logging.printf('contacts modified => %s', self.contacts)
+          except:
+               self.errors.append(traceback.format_exc())
+
+
+     @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
+                          in_signature='oii', out_signature='')
+     def ContactsAdded(self, view, start, count):
+          try:
+               logging.log('contacts added: %s, start %d, count %d' %
+                           (view, start, count))
+               self.events.append(('added', start, count))
+               assert view == self.viewPath
+               assert start >= 0
+               assert count >= 0
+               assert start <= len(self.contacts)
+               for i in range(0, count):
+                    self.contacts.insert(start, None)
+               logging.printf('contacts added => %s', self.contacts)
+          except:
+               self.errors.append(traceback.format_exc())
+
+     @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
+                          in_signature='oii', out_signature='')
+     def ContactsRemoved(self, view, start, count):
+          try:
+               logging.log('contacts removed: %s, start %d, count %d' %
+                           (view, start, count))
+               self.events.append(('removed', start, count))
+               assert view == self.viewPath
+               assert start >= 0
+               assert count >= 0
+               assert start + count <= len(self.contacts)
+               del self.contacts[start:start + count]
+               logging.printf('contacts removed => %s', self.contacts)
+          except:
+               self.errors.append(traceback.format_exc())
+
+     def read(self, index, count=1):
+          '''Read the specified range of contact data.'''
+          self.view.ReadContacts(index, count,
+                                 reply_handler=lambda x: self.contacts.__setslice__(index, index+len(x), x),
+                                 error_handler=lambda x: self.errors.append(x))
 
 class TestContacts(DBusUtil, unittest.TestCase):
     """Tests for org._01.pim.contacts API.
@@ -96,6 +186,49 @@ XDG root.
             # Give EDS time to notice the removal.
             time.sleep(5)
 
+    def setUpView(self):
+        '''Set up a a 'foo' peer and create a view for it.'''
+        # Ignore all currently existing EDS databases.
+        self.sources = self.currentSources()
+        self.expected = self.sources.copy()
+        self.peers = {}
+
+        # dummy peer directory
+        self.contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
+        os.makedirs(self.contacts)
+
+        # add foo
+        self.uid = self.uidPrefix + 'foo'
+        self.peers[self.uid] = {'protocol': 'PBAP',
+                                'address': 'xxx'}
+        self.manager.SetPeer(self.uid,
+                             self.peers[self.uid],
+                             timeout=self.timeout)
+        self.expected.add(self.managerPrefix + self.uid)
+        self.assertEqual(self.peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(self.expected, self.currentSources())
+
+        # Limit active databases to the one we just created.
+        # TODO: self.manager.SetActiveAddressBooks(['peer-' + self.uid])
+
+        # Start view. We don't know the current state, so give it some time to settle.
+        self.view = ContactsView(self.manager)
+        self.view.search([])
+        time.sleep(5)
+
+        # Delete all local data in 'foo' cache.
+        logging.log('deleting all items')
+        self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', '*'])
+
+        # Run until view is empty.
+        self.runUntil('empty view',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 0)
+
+        # Clear unknown sequence of events.
+        self.view.events = []
+
+
     def runCmdline(self, command, **args):
          '''use syncevolution command line without syncevo-dbus-server, for the sake of keeping code here minimal'''
          cmdline = testdbus.TestCmdline()
@@ -116,6 +249,13 @@ XDG root.
     def exportCache(self, uid, filename):
         '''dump local cache content into file'''
         self.runCmdline(['--export', filename, '@' + self.managerPrefix + uid, 'local'])
+
+    def extractLUIDs(self, out):
+         '''Extract the LUIDs from syncevolution --import/update output.'''
+         r = re.compile(r'''#.*: (\S+)\n''')
+         matches = r.split(out)
+         # Even entry is text (empty here), odd entry is the match group.
+         return matches[1::2]
 
     def compareDBs(self, expected, real, ignoreExtensions=True):
         '''ensure that two sets of items (file or directory) are identical at the semantic level'''
@@ -415,6 +555,274 @@ END:VCARD'''
         self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[0].get_dbus_name())
         self.assertIsInstance(syncCompleted[1], dbus.DBusException)
         self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[1].get_dbus_name())
+
+    @timeout(60)
+    def testView(self):
+        '''TestContacts.testView - test making changes to the unified address book'''
+        self.setUpView()
+
+        # Insert new contact.
+        john = '''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+END:VCARD'''
+        item = os.path.join(self.contacts, 'john.vcf')
+        output = open(item, "w")
+        output.write(john)
+        output.close()
+        logging.log('inserting John')
+        out, err, returncode = self.runCmdline(['--import', item, '@' + self.managerPrefix + self.uid, 'local'])
+        luid = self.extractLUIDs(out)[0]
+
+        # Run until the view has adapted.
+        self.runUntil('view with one contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 1)
+
+        # Check for the one expected event.
+        self.assertEqual([('added', 0, 1)], self.view.events)
+        self.view.events = []
+
+        # Read contact.
+        logging.log('reading contact')
+        self.view.read(0)
+        self.runUntil('contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual('John Doe', self.view.contacts[0]['full-name'])
+
+        # Update contacts.
+        johnBDay = '''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+BDAY:20120924
+END:VCARD'''
+        output = open(item, "w")
+        output.write(johnBDay)
+        output.close()
+        logging.log('updating John')
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luid])
+        self.runUntil('view with changed contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] == None)
+        self.assertEqual([('modified', 0, 1)], self.view.events)
+        self.view.events = []
+
+        # Remove contact.
+        self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', '*'])
+        self.runUntil('view without contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 0)
+        self.assertEqual([('removed', 0, 1)], self.view.events)
+        self.view.events = []
+
+
+    @timeout(60)
+    def testViewSorting(self):
+        '''TestContacts.testViewSorting - check that sorting works'''
+        self.setUpView()
+
+        # Insert new contacts.
+        #
+        # The names are chosen so that sorting by first name and sorting by last name needs to
+        # reverse the list.
+        for i, contact in enumerate(['''BEGIN:VCARD
+VERSION:3.0
+FN:Abraham Zoo
+N:Zoo;Abraham
+END:VCARD''',
+
+'''BEGIN:VCARD
+VERSION:3.0
+FN:Benjamin Yeah
+N:Yeah;Benjamin
+END:VCARD''',
+
+'''BEGIN:VCARD
+VERSION:3.0
+FN:Charly Xing
+N:Xing;Charly
+END:VCARD''']):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = open(item, "w")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+        # Relies on importing contacts sorted ascending by file name.
+        luids = self.extractLUIDs(out)
+        logging.printf('created contacts with luids: %s' % luids)
+
+        # Run until the view has adapted.
+        self.runUntil('view with three contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 3)
+
+        # Check for the one expected event.
+        # TODO: self.assertEqual([('added', 0, 3)], view.events)
+        self.view.events = []
+
+        # Read contacts.
+        logging.log('reading contacts')
+        self.view.read(0, 3)
+        self.runUntil('contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
+        self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+        # No re-ordering necessary: criteria doesn't change.
+        item = os.path.join(self.contacts, 'contact0.vcf')
+        output = open(item, "w")
+        output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:Abraham Zoo
+N:Zoo;Abraham
+BDAY:20120924
+END:VCARD''')
+        output.close()
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
+        self.runUntil('view with changed contact #2',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[2] == None)
+        self.assertEqual([('modified', 2, 1)], self.view.events)
+        self.view.events = []
+        logging.log('reading updated contact')
+        self.view.read(2, 1)
+        self.runUntil('updated contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[2] != None)
+        self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
+        self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+        # No re-ordering necessary: criteria changes, but not in a relevant way, at end.
+        item = os.path.join(self.contacts, 'contact0.vcf')
+        output = open(item, "w")
+        output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:Abraham Zoo
+N:Zoo;Abraham;Middle
+BDAY:20120924
+END:VCARD''')
+        output.close()
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
+        self.runUntil('view with changed contact #2',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[2] == None)
+        self.assertEqual([('modified', 2, 1)], self.view.events)
+        self.view.events = []
+        logging.log('reading updated contact')
+        self.view.read(2, 1)
+        self.runUntil('updated contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[2] != None)
+        self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
+        self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+        # No re-ordering necessary: criteria changes, but not in a relevant way, in the middle.
+        item = os.path.join(self.contacts, 'contact1.vcf')
+        output = open(item, "w")
+        output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:Benjamin Yeah
+N:Yeah;Benjamin;Middle
+END:VCARD''')
+        output.close()
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[1]])
+        self.runUntil('view with changed contact #1',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[1] == None)
+        self.assertEqual([('modified', 1, 1)], self.view.events)
+        self.view.events = []
+        logging.log('reading updated contact')
+        self.view.read(1, 1)
+        self.runUntil('updated contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[1] != None)
+        self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
+        self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+        # No re-ordering necessary: criteria changes, but not in a relevant way, in the middle.
+        item = os.path.join(self.contacts, 'contact2.vcf')
+        output = open(item, "w")
+        output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:Charly Xing
+N:Xing;Charly;Middle
+END:VCARD''')
+        output.close()
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[2]])
+        self.runUntil('view with changed contact #0',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] == None)
+        self.assertEqual([('modified', 0, 1)], self.view.events)
+        self.view.events = []
+        logging.log('reading updated contact')
+        self.view.read(0, 1)
+        self.runUntil('updated contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
+        self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+        # Re-ordering necessary: last item (Zoo;Abraham) becomes first (Ace;Abraham).
+        item = os.path.join(self.contacts, 'contact0.vcf')
+        output = open(item, "w")
+        output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:Abraham Ace
+N:Ace;Abraham;Middle
+BDAY:20120924
+END:VCARD''')
+        output.close()
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
+        self.runUntil('view with changed contact #0',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] == None)
+        self.assertEqual([('removed', 2, 1),
+                          ('added', 0, 1)], self.view.events)
+        self.view.events = []
+        logging.log('reading updated contact')
+        self.view.read(0, 1)
+        self.runUntil('updated contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual('Abraham Ace', self.view.contacts[0]['full-name'])
+        self.assertEqual('Charly Xing', self.view.contacts[1]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[2]['full-name'])
+
+        # Re-ordering necessary: first item (Ace;Abraham) becomes last (Zoo;Abraham).
+        item = os.path.join(self.contacts, 'contact0.vcf')
+        output = open(item, "w")
+        output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:Abraham Zoo
+N:Zoo;Abraham;Middle
+BDAY:20120924
+END:VCARD''')
+        output.close()
+        self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
+        self.runUntil('view with changed contact #2',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[2] == None)
+        self.assertEqual([('removed', 0, 1),
+                          ('added', 2, 1)], self.view.events)
+        self.view.events = []
+        logging.log('reading updated contact')
+        self.view.read(2, 1)
+        self.runUntil('updated contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[2] != None)
+        self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
+        self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
+        self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
 
 if __name__ == '__main__':
     unittest.main()
