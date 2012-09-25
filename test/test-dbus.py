@@ -499,7 +499,12 @@ class DBusUtil(Timeout):
         
         if debugger:
             print "\n%s: %s\n" % (self.id(), self.shortDescription())
-            DBusUtil.pserver = subprocess.Popen([debugger] + server,
+            if env.get("HOME") != os.environ.get("HOME") and \
+                    os.path.exists(os.path.join(os.environ.get("HOME"), ".gdbinit")):
+                gdbinit = ['-x', os.path.join(os.environ.get("HOME"), ".gdbinit")]
+            else:
+                gdbinit = []
+            DBusUtil.pserver = subprocess.Popen([debugger] + gdbinit + server,
                                                 env=env)
 
             while True:
