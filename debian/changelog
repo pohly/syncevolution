@@ -1,6 +1,11 @@
 syncevolution (1:1.3-1) unstable; urgency=low
 
   * SyncEvolution 1.3 for Maemo Fremantle.
+    Should fix problems with the new support for autodetecting
+    what format to sync notes in, among others.
+  * Merged from Harmattan branch (irrelevant on Fremantle):
+    Support for Harmattan tasks and notes, selecting databases
+    by UID. Also reduced memory requirements and fixed some bugs.
 
  -- Ove Kaaven <ovek@arcticnet.no>  Tue, 25 Sep 2012 21:51:24 +0200
 
