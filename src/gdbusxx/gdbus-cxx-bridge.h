@@ -73,6 +73,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/tuple/tuple.hpp>
+#include <boost/utility.hpp>
 
 /* The SyncEvolution exception handler must integrate into the D-Bus
  * C++ wrapper. In contrast to the rest of the code, that handler uses
@@ -106,6 +107,29 @@ typedef GDBusConnection connection_type;
 typedef GDBusMessage message_type;
 typedef GVariantBuilder builder_type;
 typedef GVariantIter reader_type;
+
+/**
+ * Simple auto_ptr for GVariant.
+ */
+class GVariantCXX : boost::noncopyable
+{
+    GVariant *m_var;
+ public:
+    /** takes over ownership */
+    GVariantCXX(GVariant *var = NULL) : m_var(var) {}
+    ~GVariantCXX() { if (m_var) { g_variant_unref(m_var); } }
+
+    operator GVariant * () { return m_var; }
+    GVariantCXX &operator = (GVariant *var) {
+        if (m_var != var) {
+            if (m_var) {
+                g_variant_unref(m_var);
+            }
+            m_var = var;
+        }
+        return *this;
+    }
+};
 
 class DBusMessagePtr;
 
@@ -1277,12 +1301,11 @@ template<class host, class VariantTraits> struct basic_marshal : public dbus_tra
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host &value)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), VariantTraits::getVariantType())) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
         g_variant_get(var, g_variant_get_type_string(var), &value);
-        g_variant_unref(var);
     }
 
     /**
@@ -1374,14 +1397,13 @@ template<> struct dbus_traits<bool> : public dbus_traits_base
     static void get(ExtractArgs &context,
                     GVariantIter &iter, bool &value)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), VariantTypeBoolean::getVariantType())) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
         gboolean buffer;
         g_variant_get(var, g_variant_get_type_string(var), &buffer);
         value = buffer;
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, bool value)
@@ -1401,14 +1423,12 @@ template<> struct dbus_traits<std::string> : public dbus_traits_base
     static void get(ExtractArgs &context,
                     GVariantIter &iter, std::string &value)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_STRING)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
         const char *str = g_variant_get_string(var, NULL);
         value = str;
-
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, const std::string &value)
@@ -1429,13 +1449,12 @@ template <> struct dbus_traits<DBusObject_t> : public dbus_traits_base
     static void get(ExtractArgs &context,
                     GVariantIter &iter, DBusObject_t &value)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_OBJECT_PATH)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
         const char *objPath = g_variant_get_string(var, NULL);
         value = objPath;
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, const DBusObject_t &value)
@@ -1575,7 +1594,7 @@ template<class A, class B> struct dbus_traits< std::pair<A,B> > : public dbus_tr
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &pair)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
@@ -1584,8 +1603,6 @@ template<class A, class B> struct dbus_traits< std::pair<A,B> > : public dbus_tr
         g_variant_iter_init(&tupIter, var);
         dbus_traits<A>::get(context, tupIter, pair.first);
         dbus_traits<B>::get(context, tupIter, pair.second);
-
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, arg_type pair)
@@ -1639,7 +1656,7 @@ template<class V> struct dbus_traits< DBusArray<V> > : public dbus_traits_base
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &array)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
@@ -1651,7 +1668,6 @@ template<class V> struct dbus_traits< DBusArray<V> > : public dbus_traits_base
                                                          static_cast<gsize>(sizeof(V_host_type)));
         array.first = nelements;
         array.second = data;
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, arg_type array)
@@ -1691,13 +1707,13 @@ template<class K, class V, class C> struct dbus_traits< std::map<K, V, C> > : pu
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &dict)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
 
         GVariantIter contIter;
-        GVariant *child;
+        GVariantCXX child;
         g_variant_iter_init(&contIter, var);
         while((child = g_variant_iter_next_value(&contIter)) != NULL) {
             K key;
@@ -1707,9 +1723,7 @@ template<class K, class V, class C> struct dbus_traits< std::map<K, V, C> > : pu
             dbus_traits<K>::get(context, childIter, key);
             dbus_traits<V>::get(context, childIter, value);
             dict.insert(std::make_pair(key, value));
-            g_variant_unref(child);
         }
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, arg_type dict)
@@ -1752,7 +1766,7 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &array)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
@@ -1765,7 +1779,6 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
             dbus_traits<V>::get(context, childIter, value);
             array.push_back(value);
         }
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, arg_type array)
@@ -1816,15 +1829,14 @@ template <class V> struct dbus_traits <boost::variant <V> > : public dbus_traits
     static void get(ExtractArgs &context,
                     GVariantIter &iter, boost::variant <V> &value)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
 
-        GVariant *varVar;
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
-        varVar = g_variant_iter_next_value(&varIter);
+        GVariantCXX varVar(g_variant_iter_next_value(&varIter));
         if (!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V>::getSignature())) {
             //ignore unrecognized sub type in variant
             return;
@@ -1835,9 +1847,6 @@ template <class V> struct dbus_traits <boost::variant <V> > : public dbus_traits
         g_variant_iter_init(&varIter, var);
         dbus_traits<V>::get(context, varIter, val);
         value = val;
-
-        g_variant_unref(var);
-        g_variant_unref(varVar);
     }
 
     static void append(GVariantBuilder &builder, const boost::variant<V> &value)
@@ -1866,15 +1875,14 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
     static void get(ExtractArgs &context,
                     GVariantIter &iter, boost::variant <V1, V2> &value)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
 
-        GVariant *varVar;
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
-        varVar = g_variant_iter_next_value(&varIter);
+        GVariantCXX varVar(g_variant_iter_next_value(&varIter));
         if ((!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V2>::getSignature())) &&
             (!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V1>::getSignature()))) {
             // ignore unrecognized sub type in variant
@@ -1893,8 +1901,6 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
             dbus_traits<V2>::get(context, varIter, val);
             value = val;
         }
-        g_variant_unref(var);
-        g_variant_unref(varVar);
     }
 
     static void append(GVariantBuilder &builder, const boost::variant<V1, V2> &value)
@@ -1985,7 +1991,7 @@ template<class K, class M> struct dbus_struct_traits : public dbus_traits_base
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &val)
     {
-        GVariant *var = g_variant_iter_next_value(&iter);
+        GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
@@ -1993,8 +1999,6 @@ template<class K, class M> struct dbus_struct_traits : public dbus_traits_base
         GVariantIter tupIter;
         g_variant_iter_init(&tupIter, var);
         M::get(context, tupIter, val);
-
-        g_variant_unref(var);
     }
 
     static void append(GVariantBuilder &builder, arg_type val)
