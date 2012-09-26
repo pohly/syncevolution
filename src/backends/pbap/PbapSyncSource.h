@@ -28,6 +28,8 @@
 #include <memory>
 #include <boost/noncopyable.hpp>
 
+#include <pcrecpp.h>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -58,7 +60,7 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
  private:
     boost::shared_ptr<PbapSession> m_session;
 
-    typedef std::map<std::string, std::string> Content;
+    typedef std::map<std::string, pcrecpp::StringPiece> Content;
     Content m_content;
 };
 

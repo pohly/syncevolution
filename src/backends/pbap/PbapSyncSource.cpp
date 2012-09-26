@@ -40,8 +40,6 @@
 #include <sys/mman.h>
 
 #include <pcrecpp.h>
-
-#include <pcrecpp.h>
 #include <algorithm>
 
 #include <syncevo/util.h>
@@ -69,7 +67,7 @@ public:
 
     void initSession(const std::string &address, const std::string &format);
 
-    typedef std::map<std::string, std::string> Content;
+    typedef std::map<std::string, pcrecpp::StringPiece> Content;
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
     void pullAll(Content &dst);
@@ -351,7 +349,7 @@ void PbapSession::pullAll(Content &dst)
                        pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
         while (re.Consume(&content, &vcarddata)) {
             std::string id = StringPrintf("%d", count);
-            dst[id] = vcarddata.as_string();
+            dst[id] = vcarddata;
 
             ++count;
         }
@@ -482,7 +480,7 @@ PbapSyncSource::Databases PbapSyncSource::getDatabases()
 
 void PbapSyncSource::listAllItems(RevisionMap_t &revisions)
 {
-    typedef std::pair<std::string, std::string> Entry;
+    typedef std::pair<std::string, pcrecpp::StringPiece> Entry;
     BOOST_FOREACH(const Entry &entry, m_content) {
         revisions[entry.first] = "0";
     }
@@ -492,7 +490,7 @@ void PbapSyncSource::readItem(const string &uid, std::string &item, bool raw)
 {
     Content::iterator it = m_content.find(uid);
     if(it != m_content.end()) {
-        item = it->second;
+        item = it->second.as_string();
     }
 }
 
