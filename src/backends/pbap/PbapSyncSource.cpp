@@ -42,6 +42,7 @@
 #include <pcrecpp.h>
 #include <algorithm>
 
+#include <syncevo/GLibSupport.h> // PBAP backend does not compile without GLib.
 #include <syncevo/util.h>
 #include <syncevo/BoostHelper.h>
 
@@ -63,20 +64,21 @@ SE_BEGIN_CXX
 
 class PbapSession : private boost::noncopyable {
 public:
-    static boost::shared_ptr<PbapSession> create();
+    static boost::shared_ptr<PbapSession> create(PbapSyncSource &parent);
 
     void initSession(const std::string &address, const std::string &format);
 
     typedef std::map<std::string, pcrecpp::StringPiece> Content;
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
-    void pullAll(Content &dst);
+    void pullAll(Content &dst, std::string &buffer, pcrecpp::StringPiece &memRange);
     
     void shutdown(void);
 
 private:
-    PbapSession(void);
-    
+    PbapSession(PbapSyncSource &parent);
+
+    PbapSyncSource &m_parent;
     boost::weak_ptr<PbapSession> m_self;
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
     bool m_newobex;
@@ -107,26 +109,15 @@ private:
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
 };
 
-PbapSession::PbapSession(void) :
+PbapSession::PbapSession(PbapSyncSource &parent) :
+    m_parent(parent),
     m_transferComplete(false)
 {
-    GDBusCXX::DBusConnectionPtr session = GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL);
-    m_client.reset(new GDBusCXX::DBusRemoteObject(session, "/", OBC_CLIENT_INTERFACE_NEW, 
-                                          OBC_SERVICE_NEW, true));
-    if (!m_client.get()) {
-        m_client.reset(new GDBusCXX::DBusRemoteObject(session, "/", OBC_CLIENT_INTERFACE,
-                                              OBC_SERVICE, true));
-        m_newobex = false;
-        SE_LOG_DEBUG(NULL, NULL, "Using old obex %s", OBC_CLIENT_INTERFACE);
-    } else {
-        m_newobex = true;
-        SE_LOG_DEBUG(NULL, NULL, "Using new obex %s", OBC_CLIENT_INTERFACE_NEW);
-    }
 }
 
-boost::shared_ptr<PbapSession> PbapSession::create()
+boost::shared_ptr<PbapSession> PbapSession::create(PbapSyncSource &parent)
 {
-    boost::shared_ptr<PbapSession> session(new PbapSession());
+    boost::shared_ptr<PbapSession> session(new PbapSession(parent));
     session->m_self = session;
     return session;
 }
@@ -165,8 +156,8 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     std::string properties;
     const pcrecpp::RE re("(?:(2\\.1|3\\.0):?)?(\\^?)([-a-zA-Z,]*)");
     if (!re.FullMatch(format, &version, &tmp, &properties)) {
-        SE_THROW(StringPrintf("invalid specification of PBAP vCard format (databaseFormat): %s",
-                              format.c_str()));
+        m_parent.throwError(StringPrintf("invalid specification of PBAP vCard format (databaseFormat): %s",
+                                         format.c_str()));
     }
     char negated = tmp.c_str()[0];
     if (version.empty()) {
@@ -174,29 +165,48 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         version = "2.1";
     }
     if (version != "2.1" && version != "3.0") {
-        SE_THROW(StringPrintf("invalid vCard version prefix in PBAP vCard format specification (databaseFormat): %s",
-                              format.c_str()));
+        m_parent.throwError(StringPrintf("invalid vCard version prefix in PBAP vCard format specification (databaseFormat): %s",
+                                         format.c_str()));
     }
     std::set<std::string> keywords;
     boost::split(keywords, properties, boost::is_from_range(',', ','));
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
-    GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
-        createSession(*m_client, "CreateSession");
-
     Params params;
     params["Target"] = std::string("PBAP");
 
     std::string session;
-    if (m_newobex) {
-        session = createSession(address, params);
-    } else {
-        params["Destination"] = std::string(address);
-        session = createSession(params);
+    GDBusCXX::DBusConnectionPtr conn = GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL);
+
+    // We must attempt to use the new interface, otherwise we won't know whether
+    // the daemon exists or can be started.
+    m_newobex = true;
+    m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE_NEW, 
+                                                  OBC_SERVICE_NEW, true));
+    try {
+        SE_LOG_DEBUG(NULL, NULL, "trying to use new obexd service %s", OBC_SERVICE_NEW);
+        session =
+            GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
+    } catch (const std::exception &error) {
+        if (!strstr(error.what(), "org.freedesktop.DBus.Error.ServiceUnknown")) {
+            throw;
+        }
+        // Fall back to old interface.
+        SE_LOG_DEBUG(NULL, NULL, "new obexd service not available (%s), falling back to old one %s",
+                     error.what(),
+                     OBC_SERVICE);
+        m_newobex = false;
     }
-        
+
+    if (!m_newobex) {
+        m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE,
+                                                      OBC_SERVICE, true));
+        params["Destination"] = std::string(address);
+        session = GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(params);
+    }
+
     if (session.empty()) {
-        SE_THROW("PBAP: got empty session from CreateSession()");
+        m_parent.throwError("PBAP: got empty session from CreateSession()");
     }
 
     if (m_newobex) {
@@ -266,8 +276,8 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                          boost::bind(&boost::iequals<std::string,std::string>, _1, prop, std::locale()));
 
         if (entry == filterFields.end()) {
-            SE_THROW(StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
-                                  prop.c_str()));
+            m_parent.throwError(StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
+                                             prop.c_str()));
         }
 
         if (negated) {
@@ -284,41 +294,47 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
 }
 
-void vcardParse(const std::string &content, std::size_t begin, std::size_t end, std::map<std::string, std::string> &dst)
+void PbapSession::pullAll(Content &dst, std::string &buffer, pcrecpp::StringPiece &memRange)
 {
-    static const boost::char_separator<char> lineSep("\n\r");
-
-    typedef boost::tokenizer<boost::char_separator<char> > Tokenizer;
-    Tokenizer tok(content.begin() + begin, content.begin() + end, lineSep);
-
-    for(Tokenizer::iterator it = tok.begin(); it != tok.end(); it ++) {
-        const std::string &line = *it;
-        size_t i = line.find(':');
-        if(i != std::string::npos) {
-            std::size_t j = line.find(';');
-            j = (j == std::string::npos)? i : std::min(i, j);
-            std::string key = line.substr(0, j);
-            std::string value = line.substr(i + 1);
-            dst[key] = value;
-        }
-    }
-}
-
-void PbapSession::pullAll(Content &dst)
-{
-    std::string content;
+    pcrecpp::StringPiece content;
     if (m_newobex) {
-        char *filename;
-        GError *error = NULL;
         char *addr;
-        gint fd = g_file_open_tmp (NULL, &filename, &error);
-        if (error != NULL) {
-            SE_LOG_ERROR(NULL, NULL, "Unable to create temporary file for transfer");
-            return;
-        }
-        SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", filename);
+        class TmpFileGuard {
+            int m_fd;
+            PlainGStr m_filename;
+        public:
+            /**
+             * Create temporary file. Will be closed and unlinked when
+             * this instance destructs.
+             */
+            TmpFileGuard(PbapSyncSource &parent) {
+                gchar *filename;
+                GErrorCXX gerror;
+                m_fd = g_file_open_tmp (NULL, &filename, gerror);
+                m_filename = filename;
+                if (m_fd == -1) {
+                    parent.throwError(std::string("opening temporary file for PBAP: ") +
+                                      (gerror ? gerror->message : "unknown failure"));
+                }
+            }
+            ~TmpFileGuard() {
+                // Unlink before closing to avoid race condition
+                // (close, someone else opens file, we remove it).
+                if (remove(m_filename) == -1) {
+                    // Continue despite error.
+                    SE_LOG_ERROR(NULL, NULL, "Unable to remove temporary file %s: %s",
+                                 m_filename.get(), strerror(errno));
+                }
+                close (m_fd);
+            }
+
+            const char *getFilename() const { return m_filename; }
+            int getFD() const { return m_fd; }
+        } tmpfile(m_parent);
+
+        SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", tmpfile.getFilename());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
-        std::pair<GDBusCXX::DBusObject_t, Params> tuple = pullall(std::string(filename));
+        std::pair<GDBusCXX::DBusObject_t, Params> tuple = pullall(std::string(tmpfile.getFilename()));
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
         
@@ -327,88 +343,39 @@ void PbapSession::pullAll(Content &dst)
         while (!m_transferComplete) {
             g_main_context_iteration(NULL, true);
         }
+        if (!m_transferErrorCode.empty()) {
+            m_parent.throwError(StringPrintf("%s: %s",
+                                             m_transferErrorCode.c_str(),
+                                             m_transferErrorMsg.c_str()));
+        }
 
         struct stat sb;
-        if (fstat(fd, &sb) == -1) {
-            SE_LOG_ERROR(NULL, NULL, "Stat on file failed");
-            return;
+        if (fstat(tmpfile.getFD(), &sb) == -1) {
+            m_parent.throwError("stat on PBAP temp file", errno);
         }
         SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %ld", (long)sb.st_size);
 
-        addr = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        addr = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tmpfile.getFD(), 0);
         if (addr == MAP_FAILED) {
-            SE_LOG_ERROR(NULL, NULL, "Unable to mmap temporary file");
-            return;
+            m_parent.throwError("mmap temporary file", errno);
         }
-        
-        pcrecpp::StringPiece content(addr, sb.st_size);
-        
-        pcrecpp::StringPiece vcarddata;
-        int count = 0;
-        pcrecpp::RE re("[\\r\\n]*(^BEGIN:VCARD.*?^END:VCARD)",
-                       pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
-        while (re.Consume(&content, &vcarddata)) {
-            std::string id = StringPrintf("%d", count);
-            dst[id] = vcarddata;
+        memRange.set(addr, sb.st_size);
+        content = memRange;
 
-            ++count;
-        }
-        
-        close (fd);
-        
-        if (remove(filename) == -1)
-        {
-            SE_LOG_ERROR(NULL, NULL, "Unable to remove temporary file");
-        }
     } else {
         GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
-        content = pullall();
+        buffer = pullall();
+        content = buffer;
+    }
 
-        // empty content not treated as an error
-
-        typedef std::map<std::string, int> CounterMap;
-        CounterMap counterMap;
-
-        std::size_t pos = 0;
-        while(pos < content.size()) {
-            static const std::string beginStr("BEGIN:VCARD");
-            static const std::string endStr("END:VCARD");
-
-            pos = content.find(beginStr, pos);
-            if(pos == std::string::npos) {
-                break;
-            }
-
-            std::size_t endPos = content.find(endStr, pos + beginStr.size());
-            if(endPos == std::string::npos) {
-                break;
-            }
-
-            endPos += endStr.size();
-
-            typedef std::map<std::string, std::string> VcardMap;
-            VcardMap vcard;
-            vcardParse(content, pos, endPos, vcard);
-
-            VcardMap::const_iterator it = vcard.find("N");
-            if(it != vcard.end() && !it->second.empty()) {
-                const std::string &fn = it->second;
-
-                const std::pair<CounterMap::iterator, bool> &r =
-                    counterMap.insert(CounterMap::value_type(fn, 0));
-                if(!r.second) {
-                    r.first->second ++;
-                }
-
-                char suffix[8];
-                sprintf(suffix, "%07d", r.first->second);
-
-                std::string id = fn + std::string(suffix);
-                dst[id] = content.substr(pos, endPos - pos);
-            }
-
-            pos = endPos;
-        }
+    pcrecpp::StringPiece vcarddata;
+    int count = 0;
+    pcrecpp::RE re("[\\r\\n]*(^BEGIN:VCARD.*?^END:VCARD)",
+                   pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
+    while (re.Consume(&content, &vcarddata)) {
+        std::string id = StringPrintf("%d", count);
+        dst[id] = vcarddata;
+        ++count;
     }
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
@@ -431,7 +398,14 @@ void PbapSession::shutdown(void)
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
 {
-    m_session = PbapSession::create();
+    m_session = PbapSession::create(*this);
+}
+
+PbapSyncSource::~PbapSyncSource()
+{
+    if (m_memRange.data()) {
+        munmap(const_cast<char *>(m_memRange.data()), m_memRange.size());
+    }
 }
 
 std::string PbapSyncSource::getMimeType() const
@@ -456,7 +430,7 @@ void PbapSyncSource::open()
     std::string address = database.substr(prefix.size());
 
     m_session->initSession(address, getDatabaseFormat());
-    m_session->pullAll(m_content);
+    m_session->pullAll(m_content, m_buffer, m_memRange);
     m_session->shutdown();
 }
 
@@ -496,12 +470,13 @@ void PbapSyncSource::readItem(const string &uid, std::string &item, bool raw)
 
 TrackingSyncSource::InsertItemResult PbapSyncSource::insertItem(const string &uid, const std::string &item, bool raw)
 {
-    throw std::runtime_error("Operation not supported");
+    throwError("Operation not supported");
+    return InsertItemResult();
 }
 
 void PbapSyncSource::removeItem(const string &uid)
 {
-    throw std::runtime_error("Operation not supported");
+    throwError("Operation not supported");
 }
 
 SE_END_CXX

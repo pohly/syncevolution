@@ -24,13 +24,15 @@ dnl --enable/disable chosen explicitly
 dnl default, may depend on availability of prerequisites in more complex backends
 SE_ARG_ENABLE_BACKEND(pbap,
                       pbap,
-                      [AS_HELP_STRING([--disable-pbap],
-                                      [disable pbap-based backend which provides one-way synchronization (default on)])],
+                      [AS_HELP_STRING([--enable-pbap],
+                                      [enable Phone Book Access Protocol (PBAP) based backend which provides one-way synchronization (default off)])],
                       [enable_pbap="$enableval"],
-                      [enable_pbap="yes"]
+                      [enable_pbap="no"]
                      )
 
 if test "$enable_pbap" = "yes"; then
         dnl It's good to check the prerequisites here, in case --enable-pbap was used.
         AC_DEFINE(ENABLE_PBAP, 1, [pbap available])
+        dnl Needed for g_file_open_tmp().
+        need_glib="yes"
 fi

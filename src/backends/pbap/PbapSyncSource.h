@@ -39,7 +39,7 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
 {
   public:
     PbapSyncSource(const SyncSourceParams &params);
-
+    ~PbapSyncSource();
 
  protected:
     /* implementation of SyncSource interface */
@@ -60,8 +60,15 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
  private:
     boost::shared_ptr<PbapSession> m_session;
 
+    /**
+     * Refers to memory owned elsewhere: std::string m_buffer for old obexd,
+     * memory-mapped memory in m_memRange for new obexd.
+     */
     typedef std::map<std::string, pcrecpp::StringPiece> Content;
     Content m_content;
+
+    std::string m_buffer;
+    pcrecpp::StringPiece m_memRange;
 };
 
 SE_END_CXX
