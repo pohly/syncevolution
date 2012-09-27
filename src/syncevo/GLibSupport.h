@@ -134,16 +134,26 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
     }; \
     SE_END_CXX \
 
+/**
+ * Defines a CXX smart pointer similar to SE_GOBJECT_TYPE,
+ * but for types which have their own _ref and _unref
+ * calls.
+ *
+ * Example:
+ * SE_GLIB_TYPE(GMainLoop, g_main_loop)
+ */
+#define SE_GLIB_TYPE(_type, _func_prefix) \
+    void inline intrusive_ptr_add_ref(_type *ptr) { _func_prefix ## _ref(ptr); } \
+    void inline intrusive_ptr_release(_type *ptr) { _func_prefix ## _unref(ptr); } \
+    SE_BEGIN_CXX \
+        typedef boost::intrusive_ptr<_type> _type ## CXX; \
+    SE_END_CXX
+
 SE_END_CXX
 
 SE_GOBJECT_TYPE(GFile)
 SE_GOBJECT_TYPE(GFileMonitor)
-
-void inline intrusive_ptr_add_ref(GMainLoop *ptr) { g_main_loop_ref(ptr); }
-void inline intrusive_ptr_release(GMainLoop *ptr) { g_main_loop_unref(ptr); }
-SE_BEGIN_CXX
-typedef boost::intrusive_ptr<GMainLoop> GMainLoopCXX;
-SE_END_CXX
+SE_GLIB_TYPE(GMainLoop, g_main_loop)
 
 SE_BEGIN_CXX
 
