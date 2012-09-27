@@ -1222,6 +1222,53 @@ status: idle, 0, {}
             else:
                 self.fail("'" + str(needle) + "' found in '" + str(haystack) + "'")
 
+    dbusTypeMapping = {
+        dbus.Array: list,
+        dbus.Boolean: bool,
+        dbus.Byte: int,
+        dbus.Dictionary: dict,
+        dbus.Double: float,
+        dbus.Int16: int,
+        dbus.Int32: int,
+        dbus.Int64: long,
+        dbus.ObjectPath: str,
+        dbus.Signature: str,
+        dbus.String: unicode,
+        dbus.Struct: tuple,
+        dbus.UInt16: int,
+        dbus.UInt32: int,
+        dbus.UInt64: long,
+        dbus.UTF8String: unicode
+        }
+
+    def stripDBus(self, instance, sortLists):
+        base =  DBusUtil.dbusTypeMapping.get(type(instance), None)
+        if base == dict or isinstance(instance, dict):
+            return dict([(self.stripDBus(k, sortLists), self.stripDBus(v, sortLists)) for k, v in instance.iteritems()])
+        if base == list or isinstance(instance, list):
+            l = [self.stripDBus(v, sortLists) for v in instance]
+            if sortLists:
+                l.sort()
+            return l
+        if base == tuple or isinstance(instance, tuple):
+            return tuple([self.stripDBus(v, sortLists) for v in instance])
+        if base == None:
+            return instance
+        if base == unicode:
+            # try conversion to normal string
+            try:
+                return str(instance)
+            except UnicodeEncodeError:
+                pass
+        return base(instance)
+
+    def assertEqualCustom(self, a, b, msg=None, sortLists=False):
+        '''Reduce custom dbus types to the corresponding Python type, to simplify the output in the error message.'''
+        unittest.TestCase.assertEqual(self, self.stripDBus(a, sortLists), self.stripDBus(b, sortLists), msg)
+
+    # always use our own compare
+    assertEqual = assertEqualCustom
+
     # reimplement Python 2.7 assertions only in older Python
     if True or not 'assertRegexpMatches' in dir(unittest.TestCase):
         assertRegexpMatches = assertRegexpMatchesCustom
