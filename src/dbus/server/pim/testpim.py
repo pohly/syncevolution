@@ -137,6 +137,7 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
      def read(self, index, count=1):
           '''Read the specified range of contact data.'''
           self.view.ReadContacts(index, count,
+                                 timeout=100000,
                                  reply_handler=lambda x: self.contacts.__setslice__(index, index+len(x), x),
                                  error_handler=lambda x: self.errors.append(x))
 
@@ -823,6 +824,189 @@ END:VCARD''')
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+    @timeout(60)
+    def testRead(self):
+        '''TestContacts.testRead - check that folks and PIM Manager deliver EDS data correctly'''
+        self.setUpView()
+
+        # Insert new contacts.
+        #
+        # Not all of the vCard properties need to be available via PIM Manager.
+        testcases = ['''BEGIN:VCARD
+VERSION:3.0
+URL:http://john.doe.com
+TITLE:Senior Tester
+ORG:Test Inc.;Testing;test#1
+ROLE:professional test case
+X-EVOLUTION-MANAGER:John Doe Senior
+X-EVOLUTION-ASSISTANT:John Doe Junior
+NICKNAME:user1
+BDAY:2006-01-08
+X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
+X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
+X-EVOLUTION-ANNIVERSARY:2006-01-09
+X-EVOLUTION-SPOUSE:Joan Doe
+NOTE:This is a test case which uses almost all Evolution fields.
+FN:John Doe
+N:Doe;John;;;
+X-EVOLUTION-FILE-AS:Doe\, John
+CATEGORIES:TEST
+X-EVOLUTION-BLOG-URL:web log
+CALURI:calender
+FBURL:free/busy
+X-EVOLUTION-VIDEO-URL:chat
+X-MOZILLA-HTML:TRUE
+ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
+ ld Testovia
+LABEL;TYPE=WORK:Test Drive 2\nTest Town\, Upper Test County\n12346\nTest Bo
+ x #2\nOld Testovia
+ADR;TYPE=HOME:Test Box #1;;Test Drive 1;Test Village;Lower Test County;1234
+ 5;Testovia
+LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
+  Box #1\nTestovia
+ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
+LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
+  #3\nNew Testonia
+UID:pas-id-43C0ED3900000001
+EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
+EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=4:john.doe@yet.another.world
+TEL;TYPE=work;TYPE=Voice;X-EVOLUTION-UI-SLOT=1:business 1
+TEL;TYPE=homE;TYPE=VOICE;X-EVOLUTION-UI-SLOT=2:home 2
+TEL;TYPE=CELL;X-EVOLUTION-UI-SLOT=3:mobile 3
+TEL;TYPE=WORK;TYPE=FAX;X-EVOLUTION-UI-SLOT=4:businessfax 4
+TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
+TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6
+TEL;TYPE=CAR;X-EVOLUTION-UI-SLOT=7:car 7
+TEL;TYPE=PREF;X-EVOLUTION-UI-SLOT=8:primary 8
+X-AIM;X-EVOLUTION-UI-SLOT=1:AIM JOHN
+X-YAHOO;X-EVOLUTION-UI-SLOT=2:YAHOO JDOE
+X-ICQ;X-EVOLUTION-UI-SLOT=3:ICQ JD
+X-GROUPWISE;X-EVOLUTION-UI-SLOT=4:GROUPWISE DOE
+X-GADUGADU:GADUGADU DOE
+X-JABBER:JABBER DOE
+X-MSN:MSN DOE
+X-SKYPE:SKYPE DOE
+X-SIP:SIP DOE
+PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQEASABIAAD/4QAWRXhpZgAATU0AKgAA
+ AAgAAAAAAAD//gAXQ3JlYXRlZCB3aXRoIFRoZSBHSU1Q/9sAQwAFAwQEBAMFBAQEBQUFBgcM
+ CAcHBwcPCwsJDBEPEhIRDxERExYcFxMUGhURERghGBodHR8fHxMXIiQiHiQcHh8e/9sAQwEF
+ BQUHBgcOCAgOHhQRFB4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4e
+ Hh4eHh4eHh4e/8AAEQgAFwAkAwEiAAIRAQMRAf/EABkAAQADAQEAAAAAAAAAAAAAAAAGBwgE
+ Bf/EADIQAAECBQMCAwQLAAAAAAAAAAECBAADBQYRBxIhEzEUFSIIFjNBGCRHUVZ3lqXD0+P/
+ xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMR
+ AD8AuX6UehP45/aXv9MTPTLVKxNSvMPcqu+a+XdLxf1SfJ6fU37PioTnOxfbOMc/KIZ7U/2V
+ fmTR/wCaKlu6+blu/Ui72zxWtUmmUOrTaWwkWDT09FPR4K587OVrUfVsIwElPPPAbAjxr2um
+ hWXbDu5rmfeApLPZ4hx0lzNm9aUJ9KAVHKlJHAPf7ozPLqWt9y6Z0EPGmoLNjTq48a1iaybJ
+ YV52yEtCms5KJmAT61JXtJyUdyQTEc1WlMql7N1/oZ6jagVZVFfUyZPpFy5lvWcxU7Z03BUk
+ GZLWJqVhPYLkIIPBEBtSEUyNAsjI1q1m/VP+UICwL/sqlXp7v+aOHsnyGttq218MtKd8+Ru2
+ JXuScoO45Awe2CIi96aKW1cVyubkYVy6rTqz0J8a5t2qqZl0UjAMwYKScfPAJ+cIQHHP0Dth
+ VFaMWt0XwxetnM50Ks2rsxL6ZMnJlJmb5hBBBEiVxjA28dznqo+hdksbQuS3Hs6tVtNzdM1Z
+ /VH5nO3Bl/CJmYHKDynjv3zCEB5rLQNo0bIbydWNWxKljbLQLoWkISOAkBKAABCEID//2Q==
+END:VCARD
+''']
+        for i, contact in enumerate(testcases):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = open(item, "w")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+        # Relies on importing contacts sorted ascending by file name.
+        luids = self.extractLUIDs(out)
+        logging.printf('created contacts with luids: %s' % luids)
+
+        # Run until the view has adapted.
+        self.runUntil('view with contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == len(testcases))
+
+        # Check for the one expected event.
+        # TODO: self.assertEqual([('added', 0, len(testcases))], view.events)
+        self.view.events = []
+
+        # Read contacts.
+        logging.log('reading contacts')
+        self.view.read(0, len(testcases))
+        self.runUntil('contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        contact = copy.deepcopy(self.view.contacts[0])
+        # Simplify the photo URI, if there was one. Avoid any assumptions
+        # about the filename, except that it is a file:/// uri.
+        if contact.has_key('photo'):
+             contact['photo'] = re.sub('^file:///.*', 'file:///<stripped>', contact['photo'])
+        self.assertEqual({'full-name': 'John Doe',
+                          'nickname': 'user1',
+                          'structured-name': {'given': 'John', 'family': 'Doe'},
+                          'birthday': (2006, 1, 8),
+                          'photo': 'file:///<stripped>',
+                          'roles': [
+                       {
+                        'organisation': 'Test Inc.',
+                        'role': 'professional test case',
+                        'title': 'Senior Tester',
+                        },
+                       ],
+                          'source': [
+                       ('test-dbus-foo', luids[0])
+                       ],
+                          'notes': [
+                       'This is a test case which uses almost all Evolution fields.',
+                       ],
+                          'emails': [
+                       ('john.doe@home.priv', ['home']),
+                       ('john.doe@other.world', ['other']),
+                       ('john.doe@work.com', ['work']),
+                       ('john.doe@yet.another.world', ['other']),
+                       ],
+                          'phones': [
+                       ('business 1', ['voice', 'work']),
+                       ('businessfax 4', ['fax', 'work']),
+                       ('car 7', ['car']),
+                       ('home 2', ['home', 'voice']),
+                       ('homefax 5', ['fax', 'home']),
+                       ('mobile 3', ['cell']),
+                       ('pager 6', ['pager']),
+                       ('primary 8', ['pref']),
+                       ],
+                          'addresses': [
+                       ({'country': 'New Testonia',
+                         'locality': 'Test Megacity',
+                         'po-box': 'Test Box #3',
+                         'postal-code': '12347',
+                         'region': 'Test County',
+                         'street': 'Test Drive 3'},
+                        []),
+                       ({'country': 'Old Testovia',
+                         'locality': 'Test Town',
+                         'po-box': 'Test Box #2',
+                         'postal-code': '12346',
+                         'region': 'Upper Test County',
+                         'street': 'Test Drive 2'},
+                        ['work']),
+                       ({'country': 'Testovia',
+                         'locality': 'Test Village',
+                         'po-box': 'Test Box #1',
+                         'postal-code': '12345',
+                         'region': 'Lower Test County',
+                         'street': 'Test Drive 1'},
+                        ['home']),
+                       ],
+                          'urls': [
+                       ('chat', ['x-video']),
+                       ('free/busy', ['x-free-busy']),
+                       ('http://john.doe.com', ['x-home-page']),
+                       ('web log', ['x-blog']),
+                       ],
+                          },
+                         # Order of list entries in the result is not specified.
+                         # Must sort before comparing.
+                         contact,
+                         sortLists=True)
+
 
 if __name__ == '__main__':
     unittest.main()
