@@ -1465,6 +1465,23 @@ template<> struct dbus_traits<std::string> : public dbus_traits_base
     typedef const std::string &arg_type;
 };
 
+template<> struct dbus_traits<const char *> : public dbus_traits_base
+{
+    static std::string getType() { return "s"; }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+
+    // Cannot copy into that type. Can only be used for encoding.
+
+    static void append(GVariantBuilder &builder, const char *value)
+    {
+        g_variant_builder_add_value(&builder, g_variant_new_string(value ? value : ""));
+    }
+
+    typedef const char *host_type;
+    typedef const char *arg_type;
+};
+
 template <> struct dbus_traits<DBusObject_t> : public dbus_traits_base
 {
     static std::string getType() { return "o"; }
