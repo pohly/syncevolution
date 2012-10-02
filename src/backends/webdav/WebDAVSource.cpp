@@ -565,7 +565,6 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                                                                const Neon::URI &)> &storeResult)
 {
     bool res = true; // completed
-    bool found = false;
     int timeoutSeconds = m_settings->timeoutSeconds();
     int retrySeconds = m_settings->retrySeconds();
     SE_LOG_DEBUG(this, NULL, "timout %ds, retry %ds => %s",
@@ -674,18 +673,57 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     // scan more throroughly, then decide deterministically.
     int counter = 0;
     const int limit = 1000;
+    // Keeps track of paths to look at and those
+    // which were already tested.
     class Tried : public std::set<std::string> {
+        std::list<std::string> m_candidates;
+        bool m_found;
     public:
+        Tried() : m_found(false) {}
+
+        /** Was path not tested yet? */
         bool isNew(const std::string &path) {
             return find(Neon::URI::normalizePath(path, true)) == end();
         }
+
+        /** Hand over next candidate to caller, empty if none available. */
+        std::string getNextCandidate() {
+            if (!m_candidates.empty() ) {
+                std::string candidate = m_candidates.front();
+                m_candidates.pop_front();
+                return candidate;
+            } else {
+                return "";
+            }
+        }
+
+        /** remember that path was tested */
         std::string insert(const std::string &path) {
             std::string normal = Neon::URI::normalizePath(path, true);
             std::set<std::string>::insert(normal);
+            m_candidates.remove(normal);
             return normal;
         }
+        enum Position {
+            FRONT,
+            BACK
+        };
+        void addCandidate(const std::string &path, Position position) {
+            std::string normal = Neon::URI::normalizePath(path, true);
+            if (isNew(normal)) {
+                if (position == FRONT) {
+                    m_candidates.push_front(normal);
+                } else {
+                    m_candidates.push_back(normal);
+                }
+            }
+        }
+
+        void foundResult() { m_found = true; }
+
+        /** Nothing left to try and nothing found => bail out with error for last candidate. */
+        bool errorIsFatal() { return m_candidates.empty() && !m_found; }
     } tried;
-    std::list<std::string> candidates;
     std::string path = m_session->getURI().m_path;
     Neon::Session::PropfindPropCallback_t callback =
         boost::bind(&WebDAVSource::openPropCallback,
@@ -710,7 +748,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     if (path.empty() || path == "/") {
         std::string wellknown = wellKnownURL();
         if (!wellknown.empty()) {
-            candidates.push_back(wellknown);
+            tried.addCandidate(wellknown, Tried::BACK);
         }
     }
 
@@ -746,7 +784,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             // Yahoo! Calendar returns no redirect. According to rfc4918 appendix-E,
             // a client may simply try the root path in case of such a failure,
             // which happens to work for Yahoo.
-            candidates.push_back("/");
+            tried.addCandidate("/", Tried::BACK);
             // TODO: Google Calendar, with workarounds
             // candidates.push_back(StringPrintf("/calendar/dav/%s/user/", Neon::URI::escape(username).c_str()));
         }
@@ -771,7 +809,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                                     this, _1, _2, _3, _4);
                     m_session->propfindProp(path, 0, NULL, callback, Timespec());
                 } catch (...) {
-                    handleException();
+                    handleException(HANDLE_EXCEPTION_NO_ERROR);
                 }
             }
         
@@ -855,20 +893,14 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 next.m_port != old.m_port) {
                 SE_LOG_DEBUG(NULL, NULL, "ignore redirection to different server (not implemented): %s",
                              ex.getLocation().c_str());
-                if (candidates.empty()) {
-                    // nothing left to try, bail out with this error
-                    // unless we found something else already
-                    if (found) {
-                        break;
-                    } else {
-                        throw;
-                    }
+                if (tried.errorIsFatal()) {
+                    throw;
                 }
             } else if (tried.isNew(next.m_path)) {
                 SE_LOG_DEBUG(NULL, NULL, "new candidate from %s -> %s redirect",
                              old.m_path.c_str(),
                              next.m_path.c_str());
-                candidates.push_front(next.m_path);
+                tried.addCandidate(next.m_path, Tried::FRONT);
             } else {
                 SE_LOG_DEBUG(NULL, NULL, "already known candidate from %s -> %s redirect",
                              old.m_path.c_str(),
@@ -885,8 +917,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 int code = 401;
                 SE_THROW_EXCEPTION_STATUS(TransportStatusException, descr, SyncMLStatus(code));
             } else {
-                if (candidates.empty()) {
-                    // nothing left to try, bail out with this error
+                if (tried.errorIsFatal()) {
                     throw;
                 } else {
                     // ignore the error (whatever it was!), try next
@@ -897,8 +928,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 }
             }
         } catch (const Exception &ex) {
-            if (candidates.empty()) {
-                // nothing left to try, bail out with this error
+            if (tried.errorIsFatal()) {
                 throw;
             } else {
                 // ignore the error (whatever it was!), try next
@@ -924,7 +954,9 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 }
             }
             StringMap &props = pathProps->second;
+            bool isResult = false;
             if (typeMatches(props)) {
+                isResult = true;
                 StringMap::const_iterator it;
 
                 // TODO: filter out CalDAV collections which do
@@ -932,7 +964,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // (urn:ietf:params:xml:ns:caldav:supported-calendar-component-set)
 
                 // found something
-                found = true;
+                tried.foundResult();
                 it = props.find("DAV::displayname");
                 Neon::URI uri = m_session->getURI();
                 uri.m_path = path;
@@ -948,8 +980,6 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (!res) {
                     // done
                     break;
-                } else {
-                    goto next;
                 }
             }
 
@@ -964,21 +994,27 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                         next = home;
                     } else {
                         SE_LOG_DEBUG(NULL, NULL, "new candidate from home-set property %s", home.c_str());
-                        candidates.push_front(home);
+                        tried.addCandidate(home, Tried::FRONT);
                     }
                 }
             }
             // alternatively, follow principal URL
             if (next.empty()) {
                 std::string principal = extractHREF(props["DAV::current-user-principal"]);
+
+                // TODO:
+                // xmlns:d="DAV:"
+                // <d:current-user-principal><d:href>/m8/carddav/principals/__uids__/patrick.ohly@googlemail.com/</d:href></d:current-user-principal>
                 if (!principal.empty() &&
                     tried.isNew(principal)) {
                     next = principal;
                     SE_LOG_DEBUG(NULL, NULL, "follow current-user-prinicipal to %s", next.c_str());
                 }
             }
-            // finally, recursively descend into collections
-            if (next.empty()) {
+            // finally, recursively descend into collections,
+            // unless we identified it as a result (because those
+            // cannot be recursive)
+            if (next.empty() && !isResult) {
                 const std::string &type = props["DAV::resourcetype"];
                 if (type.find("<DAV:collection></DAV:collection>") != type.npos) {
                     // List members and find new candidates.
@@ -1029,25 +1065,16 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
 
                     // insert before other candidates, sorted
                     // alphabetically
-                    candidates.insert(candidates.begin(),
-                                      subs.begin(),
-                                      subs.end());
+                    BOOST_REVERSE_FOREACH (const std::string &path, subs) {
+                        tried.addCandidate(path, Tried::FRONT);
+                    }
                 }
             }
         }
 
-        next:
         if (next.empty()) {
             // use next untried candidate
-            next = "";
-            while (!candidates.empty() ) {
-                std::string candidate = candidates.front();
-                candidates.pop_front();
-                if (tried.isNew(candidate)) {
-                    next = candidate;
-                    break;
-                }
-            }
+            next = tried.getNextCandidate();
             if (next.empty()) {
                 // done searching
                 break;
