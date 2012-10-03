@@ -653,7 +653,10 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
             check()
             if until():
                 break
-            self.loopIteration(None)
+            # Don't block forever if nothing is to be processed.
+            # To keep the load down, sleep for a short period.
+            time.sleep(0.1)
+            self.loopIteration(None, may_block=False)
 
     def isServerRunning(self):
         """True while the syncevo-dbus-server executable is still running"""
