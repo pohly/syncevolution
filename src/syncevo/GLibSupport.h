@@ -39,6 +39,8 @@ typedef void *GMainLoop;
 #include <boost/foreach.hpp>
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
+#include <boost/type_traits/remove_pointer.hpp>
+#include <boost/type_traits/function_traits.hpp>
 
 #include <iterator>
 
@@ -559,7 +561,7 @@ class PlainGStr : public boost::shared_ptr<gchar>
 };
 
 // non-void result, three parameters to finish function
-template<class T, class F, F finish, int arity> class GAsyncReadyCXX {
+template<class T, class F, F finish, class A1, int arity> class GAsyncReadyCXX {
  public:
     typedef boost::function<void (const GError *, T)> CXXFunctionCB_t;
 
@@ -568,7 +570,7 @@ template<class T, class F, F finish, int arity> class GAsyncReadyCXX {
                                  gpointer userData) throw () {
         try {
             GErrorCXX gerror;
-            T t = finish(reinterpret_cast<typename boost::function<F>::arg1_type>(sourceObject),
+            T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, gerror);
             CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
             (*cb)(gerror, t);
@@ -579,8 +581,30 @@ template<class T, class F, F finish, int arity> class GAsyncReadyCXX {
     }
 };
 
-// non-void result type, two parameters for finish
-template<class T, class F, F finish> class GAsyncReadyCXX<T, F, finish, 2> {
+// non-void result type, two parameters for finish,
+// first parameter is not GAsyncResult (= must be object pointer)
+template<class T, class F, F finish, class A1> class GAsyncReadyCXX<T, F, finish, A1, 2> {
+ public:
+    typedef boost::function<void (T)> CXXFunctionCB_t;
+
+    static void handleGLibResult(GObject *sourceObject,
+                                 GAsyncResult *result,
+                                 gpointer userData) throw () {
+        try {
+            T t = finish(reinterpret_cast<A1>(sourceObject),
+                         result);
+            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            (*cb)(t);
+        } catch (...) {
+            // called from C, must not let exception escape
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
+
+// non-void result type, two parameters for finish,
+// first parameter is GAsyncResult (= no object pointer)
+template<class T, class F, F finish> class GAsyncReadyCXX<T, F, finish, GAsyncResult *, 2> {
  public:
     typedef boost::function<void (const GError *, T)> CXXFunctionCB_t;
 
@@ -600,7 +624,7 @@ template<class T, class F, F finish> class GAsyncReadyCXX<T, F, finish, 2> {
 };
 
 // void result type, three parameters of finish
-template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 3> {
+template<class F, F finish, class A1> class GAsyncReadyCXX<void, F, finish, A1, 3> {
  public:
     typedef boost::function<void (const GError *)> CXXFunctionCB_t;
 
@@ -609,7 +633,7 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 3> {
                                  gpointer userData) throw () {
         try {
             GErrorCXX gerror;
-            finish(reinterpret_cast<typename boost::function<F>::arg1_type>(sourceObject),
+            finish(reinterpret_cast<A1>(sourceObject),
                    result, gerror);
             CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
             try {
@@ -626,8 +650,36 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 3> {
     }
 };
 
-// void result type, two parameters of finish
-template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 2> {
+// void result type, two parameters of finish,
+// first is not GAsyncResult (= must be object pointer)
+template<class F, F finish, class A1> class GAsyncReadyCXX<void, F, finish, A1, 2> {
+ public:
+    typedef boost::function<void ()> CXXFunctionCB_t;
+
+    static void handleGLibResult(GObject *sourceObject,
+                                 GAsyncResult *result,
+                                 gpointer userData) throw () {
+        try {
+            finish(reinterpret_cast<A1>(sourceObject),
+                   result);
+            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            try {
+                (*cb)();
+            } catch (...) {
+                delete cb;
+                throw;
+            }
+            delete cb;
+        } catch (...) {
+            // called from C, must not let exception escape
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
+};
+
+// void result type, two parameters of finish,
+// first is GAsyncResult (= no object pointer)
+template<class F, F finish> class GAsyncReadyCXX<void, F, finish, GAsyncResult *, 2> {
  public:
     typedef boost::function<void (const GError *)> CXXFunctionCB_t;
 
@@ -654,10 +706,11 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish, 2> {
 
 /** convenience macro for picking the GAsyncReadyCXX that matches the _prepare call */
 #define SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare) \
-    GAsyncReadyCXX< boost::function<typeof(_prepare ## _finish)>::result_type, \
+    GAsyncReadyCXX< boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::result_type, \
                     typeof(_prepare ## _finish), \
                     _prepare ## _finish, \
-                    boost::function<typeof(_prepare ## _finish)>::arity >
+                    boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::arg1_type, \
+                    boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::arity >
 
 /**
  * Macro for asynchronous methods which use a GAsyncReadyCallback to
