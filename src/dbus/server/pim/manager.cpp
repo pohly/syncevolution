@@ -36,6 +36,11 @@ static const char * const AGENT_IFACE = "org._01.pim.contacts.ViewAgent";
 static const char * const CONTROL_IFACE = "org._01.pim.contacts.ViewControl";
 
 /**
+ * Prefix for peer databases ("peer-<uid>")
+ */
+static const char * const DB_PEER_PREFIX = "peer-";
+
+/**
  * Name prefix for SyncEvolution config contexts used by PIM manager.
  * Used in combination with the uid string provided by the PIM manager
  * client, like this:
@@ -82,6 +87,7 @@ void Manager::init()
     add(this, &Manager::setSortOrder, "SetSortOrder");
     add(this, &Manager::getSortOrder, "GetSortOrder");
     add(this, &Manager::search, "Search");
+    add(this, &Manager::setActiveAddressBooks, "SetActiveAddressBooks");
     add(this, &Manager::setPeer, "SetPeer");
     add(this, &Manager::removePeer, "RemovePeer");
     add(this, &Manager::syncPeer, "SyncPeer");
@@ -105,6 +111,7 @@ void Manager::initFolks()
 void Manager::initSorting()
 {
     // TODO: mirror m_sortOrder in m_folks main view
+
 }
 
 boost::shared_ptr<Manager> Manager::create(const boost::shared_ptr<Server> &server)
@@ -130,6 +137,7 @@ void Manager::stop()
     // TODO: if there are no active searches, then recreate aggregator
     if (true) {
         initFolks();
+        initDatabases();
         initSorting();
     }
 }
@@ -529,6 +537,35 @@ void Manager::doSession(const boost::weak_ptr<Session> &weakSession,
     }
 }
 
+void Manager::setActiveAddressBooks(const std::vector<std::string> &dbIDs)
+{
+    // Build list of EDS UUIDs.
+    std::set<std::string> uuids;
+    BOOST_FOREACH (const std::string &dbID, dbIDs) {
+        if (boost::starts_with(dbID, DB_PEER_PREFIX)) {
+            // Database of a specific peer.
+            std::string uid = dbID.substr(strlen(DB_PEER_PREFIX));
+            uuids.insert(MANAGER_PREFIX + uid);
+        } else if (dbID.empty()) {
+            // System database. It's UUID is hard-coded here because
+            // it is fixed in practice and managing an ESourceRegistry
+            // just to get the value seems overkill.
+            uuids.insert("system-address-book");
+        } else {
+            SE_THROW("invalid address book ID: " + dbID);
+        }
+    }
+
+    // Swap and set in aggregator.
+    std::swap(uuids, m_enabledEBooks);
+    initDatabases();
+}
+
+void Manager::initDatabases()
+{
+    m_folks->setDatabases(m_enabledEBooks);
+}
+
 void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                       const std::string &uid, const StringMap &properties)
 {
@@ -722,12 +759,14 @@ void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
                            const boost::shared_ptr<GDBusCXX::Result0> &result,
                            const std::string &uid)
 {
-    // Remove database. This is expected to be noticed by libfolks
-    // without us having to tell it.
-    m_enabledPeers.erase(uid);
-
     std::string localDatabaseName = MANAGER_PREFIX + uid;
     std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
+
+    // Remove database. This is expected to be noticed by libfolks
+    // once we delete the database without us having to tell it, but
+    // doing so doesn't hurt.
+    m_enabledEBooks.erase(localDatabaseName);
+    initDatabases();
 
     // Access config via context (includes sync and target config).
     boost::shared_ptr<SyncConfig> config(new SyncConfig(context));

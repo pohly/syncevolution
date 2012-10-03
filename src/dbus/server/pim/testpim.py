@@ -187,8 +187,8 @@ XDG root.
             # Give EDS time to notice the removal.
             time.sleep(5)
 
-    def setUpView(self):
-        '''Set up a a 'foo' peer and create a view for it.'''
+    def setUpView(self, peers = ['foo']):
+        '''Set up a peers and create a view for them.'''
         # Ignore all currently existing EDS databases.
         self.sources = self.currentSources()
         self.expected = self.sources.copy()
@@ -198,28 +198,36 @@ XDG root.
         self.contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
         os.makedirs(self.contacts)
 
-        # add foo
-        self.uid = self.uidPrefix + 'foo'
-        self.peers[self.uid] = {'protocol': 'PBAP',
+        # add peers
+        self.uid = None
+        self.uids = []
+        for peer in peers:
+             uid = self.uidPrefix + peer
+             if self.uid == None:
+                  # Remember first uid for tests which only use one.
+                  self.uid = uid
+             self.uids.append(uid)
+             self.peers[uid] = {'protocol': 'PBAP',
                                 'address': 'xxx'}
-        self.manager.SetPeer(self.uid,
-                             self.peers[self.uid],
-                             timeout=self.timeout)
-        self.expected.add(self.managerPrefix + self.uid)
-        self.assertEqual(self.peers, self.manager.GetAllPeers(timeout=self.timeout))
-        self.assertEqual(self.expected, self.currentSources())
+             self.manager.SetPeer(uid,
+                                  self.peers[uid],
+                                  timeout=self.timeout)
+             self.expected.add(self.managerPrefix + uid)
+             self.assertEqual(self.peers, self.manager.GetAllPeers(timeout=self.timeout))
+             self.assertEqual(self.expected, self.currentSources())
 
         # Limit active databases to the one we just created.
-        # TODO: self.manager.SetActiveAddressBooks(['peer-' + self.uid])
+        self.manager.SetActiveAddressBooks(['peer-' + uid for uid in self.uids])
 
         # Start view. We don't know the current state, so give it some time to settle.
         self.view = ContactsView(self.manager)
         self.view.search([])
         time.sleep(5)
 
-        # Delete all local data in 'foo' cache.
+        # Delete all local data in the caches.
         logging.log('deleting all items')
-        self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', '*'])
+        for uid in self.uids:
+             self.runCmdline(['--delete-items', '@' + self.managerPrefix + uid, 'local', '*'])
 
         # Run until view is empty.
         self.runUntil('empty view',
@@ -1000,6 +1008,81 @@ END:VCARD
                        ('free/busy', ['x-free-busy']),
                        ('http://john.doe.com', ['x-home-page']),
                        ('web log', ['x-blog']),
+                       ],
+                          },
+                         # Order of list entries in the result is not specified.
+                         # Must sort before comparing.
+                         contact,
+                         sortLists=True)
+
+    @timeout(60)
+    def testEmpty(self):
+        '''TestContacts.testEmpty - start with empty view without databases'''
+        self.setUpView(peers=[])
+        # Let it run for a bit longer, to catch further unintentional changes.
+        now = time.time()
+        self.runUntil('delay',
+                      check=lambda: (self.assertEqual([], self.view.errors),
+                                     self.assertEqual([], self.view.contacts)),
+                      until=lambda: time.time() - now > 10)
+
+    @timeout(60)
+    def testMerge(self):
+        '''TestContacts.testMerge - merge identical contacts from two stores'''
+        self.setUpView(peers=['foo', 'bar'])
+
+        # folks merges this because a) X-JABBER (always) b) EMAIL (only
+        # with patch for https://bugzilla.gnome.org/show_bug.cgi?id=685401).
+        john = '''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+TEL:1234-5678
+EMAIL:john.doe@example.com
+URL:http://john.doe.com
+X-JABBER:jd@example.com
+END:VCARD'''
+        item = os.path.join(self.contacts, 'john.vcf')
+        output = open(item, "w")
+        output.write(john)
+        output.close()
+
+        luids = {}
+        for uid in self.uids:
+             logging.log('inserting John into ' + uid)
+             out, err, returncode = self.runCmdline(['--import', item, '@' + self.managerPrefix + uid, 'local'])
+             luids[uid] = self.extractLUIDs(out)
+
+        # Run until the view has adapted.
+        self.runUntil('view with contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) != 0)
+        self.assertEqual(1, len(self.view.contacts))
+
+        # Let it run for a bit longer, to catch further unintentional changes
+        # and ensure that changes from both stores where processed.
+        now = time.time()
+        self.runUntil('delay',
+                      check=lambda: (self.assertEqual([], self.view.errors),
+                                     self.assertEqual(1, len(self.view.contacts))),
+                      until=lambda: time.time() - now > 10)
+
+        # Read contact.
+        logging.log('reading contact')
+        self.view.read(0, 1)
+        self.runUntil('contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        contact = copy.deepcopy(self.view.contacts[0])
+        self.assertEqual({'full-name': 'John Doe',
+                          'structured-name': {'given': 'John', 'family': 'Doe'},
+                          'emails': [('john.doe@example.com', [])],
+                          'phones': [('1234-5678', [])],
+                          'urls': [('http://john.doe.com', ['x-home-page'])],
+                          'source': [
+                       ('test-dbus-bar', luids[self.uidPrefix + 'bar'][0]),
+                       ('test-dbus-foo', luids[self.uidPrefix + 'foo'][0])
+
                        ],
                           },
                          # Order of list entries in the result is not specified.

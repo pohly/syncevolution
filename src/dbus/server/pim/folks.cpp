@@ -28,6 +28,19 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+/**
+ * Generic error callback. There really isn't much that can be done if
+ * libfolks fails, except for logging the problem.
+ */
+static void logResult(const GError *gerror, const char *operation)
+{
+    if (gerror) {
+        SE_LOG_ERROR(NULL, NULL, "%s: %s", operation, gerror->message);
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "%s: done", operation);
+    }
+}
+
 class CompareFormattedName : public IndividualCompare {
     bool m_reversed;
     bool m_firstLast;
@@ -370,25 +383,106 @@ void FilteredView::changeIndividual(int parentIndex, FolksIndividual *individual
     // TODO
 }
 
+IndividualAggregator::IndividualAggregator() :
+    m_databases(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc) g_strdup, g_free, NULL, NULL), false)
+{
+}
+
+void IndividualAggregator::init(boost::shared_ptr<IndividualAggregator> &self)
+{
+    m_self = self;
+    m_backendStore =
+        FolksBackendStoreCXX::steal(folks_backend_store_dup());
+
+    // Have to hard-code the list of known backends that we don't want.
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "telepathy");
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "tracker");
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "key-file");
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "libsocialweb");
+    // Explicitly enable EDS, just to be sure.
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_enable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_enable_backend"),
+                            m_backendStore, "eds");
+
+    // Start loading backends right away.
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_load_backends,
+                            boost::bind(&IndividualAggregator::backendsLoaded, m_self),
+                            m_backendStore);
+
+    m_folks =
+        FolksIndividualAggregatorCXX::steal(folks_individual_aggregator_new_with_backend_store(m_backendStore));
+}
+
 boost::shared_ptr<IndividualAggregator> IndividualAggregator::create()
 {
     boost::shared_ptr<IndividualAggregator> aggregator(new IndividualAggregator);
-    aggregator->m_self = aggregator;
-    aggregator->m_folks =
-        FolksIndividualAggregatorCXX::steal(folks_individual_aggregator_new());
+    aggregator->init(aggregator);
     return aggregator;
 }
 
-/**
- * Generic error callback. There really isn't much that can be done if
- * libfolks fails, except for logging the problem.
- */
-static void logResult(const GError *gerror, const char *operation)
+std::string IndividualAggregator::dumpDatabases()
 {
-    if (gerror) {
-        SE_LOG_ERROR(NULL, NULL, "%s: %s", operation, gerror->message);
+    std::string res;
+
+    BOOST_FOREACH (const gchar *tmp, GeeCollCXX<const gchar *>(GEE_COLLECTION(m_databases.get()))) {
+        if (!res.empty()) {
+            res += ", ";
+        }
+        res += tmp;
+    }
+    return res;
+}
+
+void IndividualAggregator::backendsLoaded()
+{
+    SE_LOG_DEBUG(NULL, NULL, "backend store has loaded backends");
+    GeeCollectionCXX coll(folks_backend_store_list_backends(m_backendStore));
+    BOOST_FOREACH (FolksBackend *backend, GeeCollCXX<FolksBackend *>(coll.get())) {
+        SE_LOG_DEBUG(NULL, NULL, "folks backend: %s", folks_backend_get_name(backend));
+    }
+    m_eds =
+        FolksBackendCXX::steal(folks_backend_store_dup_backend_by_name(m_backendStore, "eds"));
+    if (m_eds) {
+        // Tell the backend which databases we want.
+        SE_LOG_DEBUG(NULL, NULL, "backends loaded: setting EDS persona stores: [%s]",
+                     dumpDatabases().c_str());
+        folks_backend_set_persona_stores(m_eds, GEE_SET(m_databases.get()));
+
+        if (m_view) {
+            // We were started, prepare aggregator.
+            SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
+                                    boost::bind(logResult, _1,
+                                                "folks_individual_aggregator_prepare"),
+                                    getFolks());
+        }
     } else {
-        SE_LOG_DEBUG(NULL, NULL, "%s: done", operation);
+        SE_LOG_ERROR(NULL, NULL, "EDS backend not active?!");
+    }
+}
+
+void IndividualAggregator::setDatabases(std::set<std::string> &databases)
+{
+    gee_collection_clear(GEE_COLLECTION(m_databases.get()));
+    BOOST_FOREACH (const std::string &database, databases) {
+        gee_collection_add(GEE_COLLECTION(m_databases.get()), database.c_str());
+    }
+
+    if (m_eds) {
+        // Backend is loaded, tell it about the change.
+        folks_backend_set_persona_stores(m_eds, GEE_SET(m_databases.get()));
     }
 }
 
@@ -396,10 +490,13 @@ void IndividualAggregator::start()
 {
     if (!m_view) {
         m_view = FullView::create(m_folks);
-        SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
-                                boost::bind(logResult, _1,
-                                            "folks_individual_aggregator_prepare"),
-                                getFolks());
+        if (m_eds) {
+            // Backend was loaded and configured, we can prepare the aggregator.
+            SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
+                                    boost::bind(logResult, _1,
+                                                "folks_individual_aggregator_prepare"),
+                                    getFolks());
+        }
     }
 }
 

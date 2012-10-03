@@ -42,6 +42,10 @@
 SE_GOBJECT_TYPE(FolksIndividualAggregator)
 SE_GOBJECT_TYPE(FolksIndividual)
 SE_GOBJECT_TYPE(FolksEmailFieldDetails)
+SE_GOBJECT_TYPE(FolksBackendStore)
+SE_GOBJECT_TYPE(FolksBackend)
+SE_GOBJECT_TYPE(GeeCollection)
+SE_GOBJECT_TYPE(GeeHashSet)
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -348,8 +352,31 @@ class IndividualAggregator
     boost::shared_ptr<FullView> m_view;
     boost::weak_ptr<IndividualAggregator> m_self;
     FolksIndividualAggregatorCXX m_folks;
+    FolksBackendStoreCXX m_backendStore;
+    /**
+     * NULL when backends haven't been loaded yet.
+     * Set by backendsLoaded().
+     */
+    FolksBackendCXX m_eds;
 
-    IndividualAggregator() {}
+    /**
+     * The set of enabled EDS databases, referenced by the UUID.
+     * Empty by default.
+     */
+    GeeHashSetCXX m_databases;
+    /** string representation for debugging */
+    std::string dumpDatabases();
+
+    IndividualAggregator();
+    void init(boost::shared_ptr<IndividualAggregator> &self);
+
+    /**
+     * Called when all Folks backends are loaded, before the
+     * aggregator does its work. Now is the right time to initialize
+     * the set of databases and prepare the aggregator, if start() was
+     * already called.
+     */
+    void backendsLoaded();
 
  public:
     /**
@@ -373,7 +400,13 @@ class IndividualAggregator
      */
     void start();
 
-    /** TODO: configure active databases */
+    /**
+     * configure active databases
+     *
+     * @param set of EDS database UUIDs, empty string for the default
+     * system address book
+     */
+    void setDatabases(std::set<std::string> &databases);
 
     /**
      * Each aggregator has exactly one full view on the data. This

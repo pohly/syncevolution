@@ -41,10 +41,10 @@ class Manager : public GDBusCXX::DBusObjectHelper
     boost::shared_ptr<IndividualAggregator> m_folks;
     std::string m_sortOrder;
     /**
-     * Contains the UIDs of all peers contributing to the current
+     * Contains the EDS UUIDs of all address books contributing to the current
      * unified address book.
      */
-    std::set<std::string> m_enabledPeers;
+    std::set<std::string> m_enabledEBooks;
 
     typedef std::list< std::pair< boost::shared_ptr<GDBusCXX::Result>, boost::shared_ptr<Session> > > Pending_t;
     /** holds the references to pending session requests, see runInSession() */
@@ -53,6 +53,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     Manager(const boost::shared_ptr<Server> &server);
     void init();
     void initFolks();
+    void initDatabases();
     void initSorting();
 
     /** Manager.Start() */
@@ -68,6 +69,9 @@ class Manager : public GDBusCXX::DBusObjectHelper
                                   const boost::shared_ptr<GDBusCXX::Watch> &watch,
                                   const StringMap &filter,
                                   const GDBusCXX::DBusObject_t &agentPath);
+
+    /** Manager.SetActiveAddressBooks() */
+    void setActiveAddressBooks(const std::vector<std::string> &dbIDs);
 
     /** Manager.SetPeer() */
     void setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
