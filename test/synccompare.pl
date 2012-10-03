@@ -86,6 +86,7 @@ my $egroupware = $server =~ /egroupware/;
 my $funambol = $server =~ /funambol/;
 my $googlesyncml = $server eq "google";
 my $googlecaldav = $server eq "googlecalendar";
+my $googlecarddav = $server eq "googlecontacts";
 my $googleeas = $server eq "googleeas";
 my $google_valarm = $ENV{CLIENT_TEST_GOOGLE_VALARM};
 my $yahoo = $server =~ /yahoo/;
@@ -93,6 +94,7 @@ my $davical = $server =~ /davical/;
 my $apple = $server =~ /apple/;
 my $oracle = $server =~ /oracle/;
 my $radicale = $server =~ /radicale/;
+my $zimbra = $server =~ /zimbra/;
 my $evolution = $client =~ /evolution/;
 my $addressbook = $client =~ /addressbook/;
 
@@ -164,6 +166,12 @@ sub NormalizeItem {
     my $width = shift;
     $_ = shift;
 
+    # Reduce \N to \n (both are allowed in vCard 3.0).
+    # Using a regular expression is a bit too broad
+    # because it also matches \\N, which must not be
+    # changed.
+    s/\\N/\\n/g;
+
     # undo line continuation
     s/\n\s//gs;
     # ignore charset specifications, assume UTF-8
@@ -201,8 +209,8 @@ sub NormalizeItem {
     # replace parameters with a sorted parameter list
     s!^([^;:\n]*);(.*?):!$1 . ";" . join(';',sort(split(/;/, $2))) . ":"!meg;
 
-    # EXDATE;VALUE=DATE is the default, no need to show it
-    s/^EXDATE;VALUE=DATE:/EXDATE:/mg;
+    # VALUE=DATE is the default, no need to show it
+    s/^(EXDATE|BDAY);VALUE=DATE:/\1:/mg;
 
     # default opacity is OPAQUE
     s/^TRANSP:OPAQUE\r?\n?//gm;
@@ -365,7 +373,7 @@ sub NormalizeItem {
     #                                      >    LY                                 
     s/^(\w+)([^:\n]*);X-EVOLUTION-ENDDATE=[0-9TZ]*/$1$2/mg;
 
-    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$googlesyncml || $googleeas || $mobical || $memotoo) {
+    if ($scheduleworld || $egroupware || $synthesis || $addressbook || $funambol ||$googlesyncml || $googleeas || $googlecarddav || $mobical || $memotoo || $zimbra) {
       # does not preserve X-EVOLUTION-UI-SLOT=
       s/^(\w+)([^:\n]*);X-EVOLUTION-UI-SLOT=\d+/$1$2/mg;
     }
@@ -391,14 +399,26 @@ sub NormalizeItem {
       s/^(TEL.*);TYPE=PREF/$1/mg;
     }
 
-   if($googlesyncml || $googleeas) {
+   if($googlesyncml || $googleeas || $googlecarddav) {
       # ignore the PHOTO encoding data
       s/^PHOTO(.*?): .*\n/PHOTO$1: [...]\n/mg;
    }
 
-   if($googlesyncml) {
-      # FN propertiey is not correct 
+   if($googlesyncml || $googlecarddav) {
+      # FN property gets synthesized by Google.
       s/^FN:.*\n/FN$1: [...]\n/mg;
+   }
+
+   if ($googlecarddav) {
+       # Adds .X-ABLabel to URL, TEL, etc. to represent custom
+       # labels. TODO: support that in SyncEvolution
+       s/^.*\.X-ABLabel(;[^:;\n]*)*:.*\r?\n?//mg;
+
+       # Ignore groups. TODO: support that in SyncEvolution.
+       s/^[a-zA-Z0-9]+\.//mg;
+   }
+
+   if ($googlesyncml) {
       # Not support car type in telephone
       s!^TEL\;TYPE=CAR(.*)\n!TEL$1\n!mg;
       # some properties are lost
