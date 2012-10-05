@@ -12,6 +12,12 @@ Minor bug fix release. Details:
 
   The final version of the fix hadn't made it into the source code.
 
+* vCalendar 1.0 + tasks: DUE date could be shifted by a day (FDO #55238)
+
+  Because of incomplete support for time conversion, the due date
+  could get mixed up when phone and PC were set to something other
+  than UTC. Reported and fixed by Peter Jan.
+
 * syncevolution.org: syncevolution-evolution had incorrect dependencies
 
   Installation on older Linux distros was not possible because the ebook/ecal
