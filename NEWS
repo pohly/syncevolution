@@ -1,3 +1,45 @@
+SyncEvolution 1.3 -> 1.3.1, 05.10.2012
+======================================
+
+Minor bug fix release. Details:
+
+* command line: fix output of --import for directories
+
+  The running count at the start of the line (#0, #1, ...) was
+  not incremented when reading individual files from a directory.
+
+* Funambol: work around PHOTO TYPE=image/jpeg, part II
+
+  The final version of the fix hadn't made it into the source code.
+
+* syncevolution.org: syncevolution-evolution had incorrect dependencies
+
+  Installation on older Linux distros was not possible because the ebook/ecal
+  package dependencies were named incorrectly, for example libebook-1.2-10
+  instead of libebook1.2-10. Only more recent packages have the extra
+  dash, for example libebook-1.2-12. Reported by Mariusz Sokolowski.
+
+* GTK-3 UI: fixed compile problem
+
+  The GTK-3 UI depends on a class from gio-unix-2.0 and failed to
+  compile on Fedora Core 16 because the configure checks for that lib
+  (and thus the compiler flags) were missing. Reported by Peter
+  Robinson.
+
+* Curl: allow using it in the D-Bus server
+
+  In the past, using curl as HTTP transport in the syncevo-dbus-server
+  was prevented, leading to "unsupported transport type is specified in
+  the configuration". The reason was that using curl would block the
+  server and make it unresponsive on D-Bus.
+
+  This reason has gone away, because now the HTTP traffic happens in a
+  separate process. Thus now it is allowed to use curl in the
+  syncevo-dbus-server.
+
+* fix for false negative in syncevo-dbus-server testing
+
+
 SyncEvolution 1.2.2 -> 1.3, 10.09.2012
 ======================================
 
