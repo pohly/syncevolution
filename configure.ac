@@ -8,7 +8,7 @@ dnl Invoke autogen.sh to produce a configure script.
 #
 # Starting with the 1.1 release cycle, the rpm-style
 # .99 pseudo-version number is used to mark a pre-release.
-AC_INIT([syncevolution], [m4_esyscmd([build/gen-git-version.sh 1.3])])
+AC_INIT([syncevolution], [m4_esyscmd([build/gen-git-version.sh 1.3.1])])
 # STABLE_VERSION=1.0.1+
 AC_SUBST(STABLE_VERSION)
 
@@ -559,7 +559,7 @@ if test $enable_gui != "no"; then
     AC_PATH_PROG(DBUS_BINDING_TOOL, dbus-binding-tool)
     AC_PATH_PROG(GLIB_GENMARSHAL, glib-genmarshal)
 
-    gui_modules="$gtk_version glib-2.0 dbus-glib-1 >= 0.60 gio-2.0"
+    gui_modules="$gtk_version glib-2.0 dbus-glib-1 >= 0.60 gio-2.0 gio-unix-2.0"
     if test $enable_gui = "moblin"; then
         AC_DEFINE(USE_MOBLIN_UX, 1, [Use Moblin UI widgets])
     fi

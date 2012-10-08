@@ -1552,12 +1552,10 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainl
         InitializeTransport(agent, timeout);
         return agent;
 #elif defined(ENABLE_LIBCURL)
-        if (!gmainloop) {
-            boost::shared_ptr<CurlTransportAgent> agent(new CurlTransportAgent());
-            agent->setConfig(*this);
-            InitializeTransport(agent, timeout);
-            return agent;
-        }
+        boost::shared_ptr<CurlTransportAgent> agent(new CurlTransportAgent());
+        agent->setConfig(*this);
+        InitializeTransport(agent, timeout);
+        return agent;
 #endif
     } else if (url.find("obex-bt://") ==0) {
 #ifdef ENABLE_BLUETOOTH

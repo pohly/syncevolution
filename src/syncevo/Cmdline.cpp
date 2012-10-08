@@ -1462,6 +1462,7 @@ bool Cmdline::run() {
                                     count,
                                     entry.c_str(),
                                     insertItem(raw, "", content).getEncoded().c_str());
+                        count++;
                     }
                 }
                 char *token = NULL;

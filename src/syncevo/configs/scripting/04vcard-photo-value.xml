@@ -13,7 +13,7 @@
     <macro name="VCARD_INCOMING_PHOTO_TYPE_SCRIPT"><![CDATA[
       // Fix PHOTO TYPE=image/jpeg (sent by Funambol).
       INTEGER pos;
-      pos = RFIND(PHOTO_TYPE, "/");
+      pos = RFIND(PHOTO_TYPE, "/", SIZE(PHOTO_TYPE));
       if (pos != UNASSIGNED) {
           PHOTO_TYPE = SUBSTR(PHOTO_TYPE, pos + 1);
       }

@@ -117,6 +117,7 @@
         if (SUMMARY==EMPTY) SUMMARY="unnamed"; // set dummy summary if we still don't have one
         // due shaping for non-iCalendar 2.0
         if (ITEMDATATYPE()=="vCalendar10" && ALLDAYCOUNT(DUE,DUE,TRUE,TRUE)>0) {
+          DUE = CONVERTTOUSERZONE(DUE);
           DUE = DATEONLY(DUE);
         }
         if (ITEMDATATYPE()=="vCalendar10") {

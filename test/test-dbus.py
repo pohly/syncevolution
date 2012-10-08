@@ -1288,6 +1288,14 @@ Exec=%s
         env = copy.deepcopy(os.environ)
         env['XDG_DATA_DIRS'] = os.path.abspath(os.path.join(xdg_root, "share"))
 
+        # Avoid running EDS and Akonadi. They are not needed for this test
+        # and can cause false failures, for example when the daemons
+        # return an unexpected error cause, which then would be returned
+        # by dbus-session.sh.
+        for key in ('DBUS_SESSION_SH_EDS_BASE', 'DBUS_SESSION_SH_AKONADI'):
+            if env.has_key(key):
+                del env[key]
+
         # First run something which just starts the daemon.
         dbus = subprocess.Popen((os.path.join(os.path.dirname(sys.argv[0]), 'dbus-session.sh'),
                                  'dbus-send',
