@@ -40,6 +40,7 @@ import dbus
 import traceback
 import re
 import itertools
+import codecs
 
 # Update path so that testdbus.py can be found.
 pimFolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
@@ -630,13 +631,14 @@ END:VCARD'''
 
     @timeout(60)
     def testViewSorting(self):
-        '''TestContacts.testViewSorting - check that sorting works'''
+        '''TestContacts.testViewSorting - check that sorting works when changing contacts'''
         self.setUpView()
 
         # Insert new contacts.
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
-        # reverse the list.
+        # reverse the list. The default sort method is active, which is not
+        # locale-aware. Therefore the test data only uses ASCII characters.
         for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 FN:Abraham Zoo
@@ -832,6 +834,108 @@ END:VCARD''')
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
+
+    @timeout(60)
+    # boost::locale checks LC_TYPE first, then LC_ALL, LANG. Set all, just
+    # to be sure.
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
+    def testSortOrder(self):
+        '''TestContacts.testSortOrder - check that sorting works when changing the comparison'''
+        self.setUpView()
+
+        # Expect an error.
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     'sort order.*not supported'):
+             self.manager.SetSortOrder('no-such-order',
+                                       timeout=self.timeout)
+
+        # Enable locale-aware "first/last" sorting.
+        self.manager.SetSortOrder("first/last",
+                                  timeout=self.timeout)
+
+        # Insert new contacts.
+        #
+        # The names are chosen so that sorting by first name and sorting by last name needs to
+        # reverse the list.
+        for i, contact in enumerate([u'''BEGIN:VCARD
+VERSION:3.0
+N:Zoo;Äbraham
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+N:Yeah;Bénjamin
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+FN:Chàrly Xing
+N:Xing;Chàrly
+END:VCARD''']):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = codecs.open(item, "w", "utf-8")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+        # Relies on importing contacts sorted ascending by file name.
+        luids = self.extractLUIDs(out)
+        logging.printf('created contacts with luids: %s' % luids)
+
+        # Run until the view has adapted.
+        self.runUntil('view with three contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 3)
+
+        # Check for the one expected event.
+        # TODO: self.assertEqual([('added', 0, 3)], view.events)
+        self.view.events = []
+
+        # Read contacts.
+        logging.log('reading contacts')
+        self.view.read(0, 3)
+        self.runUntil('contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual(u'Äbraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Bénjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
+
+        # Invert sort order.
+        self.manager.SetSortOrder("last/first",
+                                  timeout=self.timeout)
+        # Contact in the middle may or may not become invalidated.
+        self.runUntil('reordered',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 3 and \
+                           self.view.contacts[0] == None and \
+                           self.view.contacts[2] == None)
+        # Read contacts.
+        logging.log('reading contacts')
+        self.view.read(0, 3)
+        self.runUntil('contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual('Xing', self.view.contacts[0]['structured-name']['family'])
+        self.assertEqual('Yeah', self.view.contacts[1]['structured-name']['family'])
+        self.assertEqual('Zoo', self.view.contacts[2]['structured-name']['family'])
+
+        # Sort by FN or <first last> as fallback.
+        self.manager.SetSortOrder("fullname",
+                                  timeout=self.timeout)
+        self.runUntil('reordered',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 3 and \
+                           self.view.contacts[0] == None and \
+                           self.view.contacts[2] == None)
+        logging.log('reading contacts')
+        self.view.read(0, 3)
+        self.runUntil('contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual(u'Äbraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Bénjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
 
     @timeout(60)
     def testRead(self):
