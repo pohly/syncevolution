@@ -210,9 +210,20 @@ Methods:
          "mode" must be one of "first/last", "last/first", "full name".
          "first/last" sorts based on the first name stored in the "name"
          property, with the last name used to break ties between equal first
-         names. "last/first" reverts that comparison. "full name" sorts based on
-         the full name chosen for the contact if there is such a string, otherwise
-         it uses "<last name>" and "<first name>" as sort strings.
+         names.
+
+         "last/first" reverts that comparison.
+
+         "full name" sorts based on the full name chosen for the
+         contact if there is such a string, otherwise it uses the
+         concatenation of the individual name componts without prefix
+         (= "[<first name>] [<middle name>] [<last name>] [<suffix>])"
+         as fallback. In other words, it sorts correctly when either
+         all contacts have a full name explicitly set or the full
+         names that were set following the same pattern as the
+         fallback.
+
+         Sorting is case-insensitive.
 
          The sort order is stored persistently. The default is "last/first".
 
