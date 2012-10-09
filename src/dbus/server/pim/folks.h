@@ -151,6 +151,8 @@ class IndividualAggregator;
  */
 class IndividualView
 {
+    Bool m_started;
+
  public:
     typedef boost::signals2::signal<void (int, FolksIndividual *)> ChangeSignal_t;
     typedef boost::signals2::signal<void (void)> QuiesenceSignal_t;
@@ -182,6 +184,12 @@ class IndividualView
      */
     ChangeSignal_t m_modifiedSignal;
 
+    /**
+     * Start filling the view. Gives the user a chance to connect
+     * to the signals first. May be called multiple times.
+     */
+    void start();
+
     /** current number of entries */
     virtual int size() const = 0;
 
@@ -190,6 +198,12 @@ class IndividualView
 
     /** returns access to one individual or an empty pointer if outside of the current range */
     virtual FolksIndividualCXX getContact(int index) = 0;
+
+ protected:
+    /**
+     * Start filling the view. Will only be called once by start().
+     */
+    virtual void doStart() = 0;
 };
 
 /**
@@ -215,7 +229,7 @@ class FullView : public IndividualView
     boost::shared_ptr<IndividualCompare> m_compare;
 
     FullView(const FolksIndividualAggregatorCXX &folks);
-    void init();
+    void init(const boost::shared_ptr<FullView> &self);
 
     /**
      * Run via m_waitForIdle if (and only if) something
@@ -281,10 +295,13 @@ class FullView : public IndividualView
      * Set new sort method. Reorders current set of entries on the
      * fly. Default is lexicographical comparison of the single-string
      * full name.
+     *
+     * @param compare   the new ordering or NULL for the builtin default (last/first with ASCII lexicographic comparison)
      */
     void setCompare(const boost::shared_ptr<IndividualCompare> &compare);
 
     // from IndividualView
+    virtual void doStart();
     virtual int size() const { return (int)m_entries.size(); }
     virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_entries.size()) ? m_entries[index].m_individual : FolksIndividualCXX(); }
 };
@@ -297,8 +314,8 @@ class FullView : public IndividualView
 class FilteredView : public IndividualView
 {
     boost::weak_ptr<FilteredView> m_self;
-    boost::shared_ptr<IndividualFilter> m_filter;
     boost::shared_ptr<IndividualView> m_parent;
+    boost::shared_ptr<IndividualFilter> m_filter;
 
     /**
      * Maps local indices to indices in parent view. Could be be
@@ -307,6 +324,10 @@ class FilteredView : public IndividualView
      */
     std::vector<int> m_local2parent;
 
+    FilteredView(const boost::shared_ptr<IndividualView> &parent,
+                 const boost::shared_ptr<IndividualFilter> &filter);
+    void init(const boost::shared_ptr<FilteredView> &self);
+
  public:
     /**
      * Creates an idle IndividualAggregator. Configure it and
@@ -314,12 +335,6 @@ class FilteredView : public IndividualView
      */
     static boost::shared_ptr<FilteredView> create(const boost::shared_ptr<IndividualView> &parent,
                                                   const boost::shared_ptr<IndividualFilter> &filter);
-
-    /**
-     * Populates view from current content of parent, then
-     * updates it based on incoming signals.
-     */
-    void start();
 
     /**
      * Add a FolksIndividual if it matches the filter. Tracking of
@@ -335,9 +350,10 @@ class FilteredView : public IndividualView
     /**
      * Check whether a changed individual still belongs into the view.
      */
-    void changeIndividual(int parentIndex, FolksIndividual *individual);
+    void modifyIndividual(int parentIndex, FolksIndividual *individual);
 
     // from IndividualView
+    virtual void doStart();
     virtual int size() const { return (int)m_local2parent.size(); }
     virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_local2parent.size()) ? m_parent->getContact(m_local2parent[index]) : FolksIndividualCXX(); }
 };
@@ -414,7 +430,7 @@ class IndividualAggregator
      *
      * @return never empty, start() will be called if necessary
      */
-    boost::shared_ptr<IndividualView> getMainView();
+    boost::shared_ptr<FullView> getMainView();
 };
 
 

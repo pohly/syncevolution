@@ -26,6 +26,7 @@
 #define INCL_SYNCEVO_DBUS_SERVER_PIM_MANAGER
 
 #include "folks.h"
+#include "locale-factory.h"
 #include "../server.h"
 
 #include <syncevo/declarations.h>
@@ -39,6 +40,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     boost::weak_ptr<Manager> m_self;
     boost::shared_ptr<Server> m_server;
     boost::shared_ptr<IndividualAggregator> m_folks;
+    boost::shared_ptr<LocaleFactory> m_locale;
     std::string m_sortOrder;
     /**
      * Contains the EDS UUIDs of all address books contributing to the current

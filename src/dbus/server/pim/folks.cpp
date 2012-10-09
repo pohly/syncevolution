@@ -87,6 +87,14 @@ void IndividualData::init(const boost::shared_ptr<IndividualCompare> &compare,
     compare->createCriteria(individual, m_criteria);
 }
 
+void IndividualView::start()
+{
+    if (!m_started) {
+        m_started = true;
+        doStart();
+    }
+}
+
 void IndividualView::readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
 {
     contacts.clear();
@@ -138,7 +146,12 @@ FullView::FullView(const FolksIndividualAggregatorCXX &folks) :
 {
 }
 
-void FullView::init()
+void FullView::init(const boost::shared_ptr<FullView> &self)
+{
+    m_self = self;
+}
+
+void FullView::doStart()
 {
     // Populate view from current set of data. Usually FullView
     // gets instantiated when the aggregator is idle, in which
@@ -162,9 +175,14 @@ void FullView::init()
     }
     individuals.sort(IndividualDataCompare(m_compare));
 
-    // Copy the sorted data into the view. No slots are called,
-    // because nothing can be connected at the moment.
+    // Copy the sorted data into the view in one go.
     m_entries.insert(m_entries.begin(), individuals.begin(), individuals.end());
+    // Avoid loop if no-one is listening.
+    if (!m_addedSignal.empty()) {
+        for (size_t index = 0; index < m_entries.size(); index++) {
+            m_addedSignal(index, m_entries[index].m_individual);
+        }
+    }
 
     // Connect to changes. Aggregator might live longer than we do, so
     // bind to weak pointer and check our existence at runtime.
@@ -181,13 +199,14 @@ void FullView::init()
                                 GParamSpec *pspec)>("notify::is-quiescent",
                                                     boost::bind(&FullView::quiesenceChanged,
                                                                 m_self));
+
+
 }
 
 boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX &folks)
 {
     boost::shared_ptr<FullView> view(new FullView(folks));
-    view->m_self = view;
-    view->init();
+    view->init(view);
     return view;
 }
 
@@ -353,22 +372,74 @@ void FullView::waitForIdle()
 
 void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
 {
-    // TODO
+    if (!compare) {
+        // Fall back to debug ordering.
+        m_compare.reset(new CompareFormattedName());
+    } else {
+        m_compare = compare;
+    }
+
+    // Reorder a copy of the current data.
+    Entries_t entries(m_entries);
+    BOOST_FOREACH (IndividualData &data, entries) {
+        data.init(m_compare, data.m_individual);
+    }
+    std::sort(entries.begin(), entries.end(), IndividualDataCompare(m_compare));
+
+    // Now update real array.
+    for (size_t index = 0; index < entries.size(); index++) {
+        IndividualData &previous = m_entries[index],
+            &current = entries[index];
+        if (previous.m_individual != current.m_individual) {
+            // Contact at the index changed. Don't try to find out
+            // where it came from now. The effect is that temporarily
+            // the same contact might be shown at two different
+            // indices.
+            m_modifiedSignal(index, current.m_individual);
+        }
+        // Ensure that m_entries is up-to-date, whatever the change
+        // may have been.
+        std::swap(previous, current);
+    }
+
+    // Current status is stable again, send out all modifications.
+    m_quiesenceSignal();
+}
+
+FilteredView::FilteredView(const boost::shared_ptr<IndividualView> &parent,
+                           const boost::shared_ptr<IndividualFilter> &filter) :
+    m_parent(parent),
+    m_filter(filter)
+{
+}
+
+void FilteredView::init(const boost::shared_ptr<FilteredView> &self)
+{
+    m_self = self;
+    m_parent->m_quiesenceSignal.connect(QuiesenceSignal_t::slot_type(boost::bind(boost::cref(m_quiesenceSignal))).track(m_self));
 }
 
 boost::shared_ptr<FilteredView> FilteredView::create(const boost::shared_ptr<IndividualView> &parent,
                                                      const boost::shared_ptr<IndividualFilter> &filter)
 {
-    boost::shared_ptr<FilteredView> view(new FilteredView);
-    view->m_self = view;
-    view->m_parent = parent;
-    parent->m_quiesenceSignal.connect(QuiesenceSignal_t::slot_type(boost::bind(boost::cref(view->m_quiesenceSignal))).track(view->m_self));
-    // TODO
+    boost::shared_ptr<FilteredView> view(new FilteredView(parent, filter));
+    view->init(view);
     return view;
 }
-void FilteredView::start()
+
+void FilteredView::doStart()
 {
-    // TODO
+    // Add initial content. Our processing of the new contact must not
+    // cause changes to the parent view, otherwise the result will not
+    // be inconsistent.
+    for (int index = 0; index < m_parent->size(); index++) {
+        addIndividual(index, m_parent->getContact(index));
+    }
+
+    // Start listening to signals.
+    m_parent->m_addedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::addIndividual, this, _1, _2)).track(m_self));
+    m_parent->m_modifiedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::modifyIndividual, this, _1, _2)).track(m_self));
+    m_parent->m_removedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::removeIndividual, this, _1, _2)).track(m_self));
 }
 void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)
 {
@@ -378,7 +449,7 @@ void FilteredView::removeIndividual(int parentIndex, FolksIndividual *individual
 {
     // TODO
 }
-void FilteredView::changeIndividual(int parentIndex, FolksIndividual *individual)
+void FilteredView::modifyIndividual(int parentIndex, FolksIndividual *individual)
 {
     // TODO
 }
@@ -500,7 +571,7 @@ void IndividualAggregator::start()
     }
 }
 
-boost::shared_ptr<IndividualView> IndividualAggregator::getMainView()
+boost::shared_ptr<FullView> IndividualAggregator::getMainView()
 {
     if (!m_view) {
         start();

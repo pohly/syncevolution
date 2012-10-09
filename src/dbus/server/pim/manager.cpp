@@ -60,7 +60,8 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
     DBusObjectHelper(server->getConnection(),
                      MANAGER_PATH,
                      MANAGER_IFACE),
-    m_server(server)
+    m_server(server),
+    m_locale(LocaleFactory::createFactory())
 {
     // Prevent automatic shut down during idle times, because we need
     // to keep our unified address book available.
@@ -78,7 +79,7 @@ Manager::~Manager()
 void Manager::init()
 {
     // TODO: restore sort order
-    m_sortOrder = "first/last";
+    m_sortOrder = ""; // use default sorting in FullView
     initFolks();
     initSorting();
 
@@ -110,8 +111,15 @@ void Manager::initFolks()
 
 void Manager::initSorting()
 {
-    // TODO: mirror m_sortOrder in m_folks main view
-
+    // Mirror m_sortOrder in m_folks main view.
+    // Empty string passes NULL pointer to setCompare(),
+    // which chooses the builtin sorting in folks.cpp,
+    // independent of the locale plugin.
+    boost::shared_ptr<IndividualCompare> compare;
+    if (!m_sortOrder.empty()) {
+        compare = m_locale->createCompare(m_sortOrder);
+    }
+    m_folks->getMainView()->setCompare(compare);
 }
 
 boost::shared_ptr<Manager> Manager::create(const boost::shared_ptr<Server> &server)
@@ -388,6 +396,14 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         add(this, &ViewResource::refineSearch, "RefineSearch");
         activate();
 
+        // The view might have been started already, for example when
+        // reconnecting a ViewResource to the persistent full view.
+        // Therefore tell the agent about the current content before
+        // starting, then connect to signals, and finally start.
+        int size = m_view->size();
+        if (size) {
+            sendChange(m_contactsAdded, 0, size);
+        }
         m_view->m_quiesenceSignal.connect(IndividualView::QuiesenceSignal_t::slot_type(&ViewResource::flushChanges,
                                                                                        this).track(self));
         m_view->m_modifiedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
@@ -405,7 +421,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                                                                                   boost::cref(m_contactsRemoved),
                                                                                   _1,
                                                                                   1).track(self));
-
+        m_view->start();
     }
 
 public:
@@ -478,8 +494,11 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
     boost::shared_ptr<Client> client = m_server->addClient(ID, watch);
 
     boost::shared_ptr<IndividualView> view;
-    // TODO: parse filter
     view = m_folks->getMainView();
+    if (!filter.empty()) {
+        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
+        view = FilteredView::create(view, individualFilter);
+    }
 
     boost::shared_ptr<ViewResource> viewResource(ViewResource::create(view,
                                                                       client,

@@ -61,6 +61,11 @@ dnl check for programs.
 AC_PROG_CXX
 AC_PROG_MAKE_SET
 
+# Boost headers: boost/foreach.hpp is needed (1.33/Debian Etch
+# doesn't have it, 1.34/Ubuntu 8.10 Hardy does). 1.35 is available
+# as Debian Etch backport.
+AX_BOOST_BASE(1.34)
+
 # TODO: Fix code to pass with -pedantic -Wextra.
 # -Wno-unknown-pragmas needed because icalstrdup.h
 # currently uses the "#pragma }" trick. Should remove that.
@@ -517,21 +522,48 @@ if test $enable_dbus_service = "yes"; then
     AC_DEFINE(DBUS_SERVICE, 1, [define if dbus service is enabled])
 
     AC_ARG_ENABLE(dbus-service-pim,
-                  AS_HELP_STRING([--enable-dbus-service-pim],
-                                 [enable implementation of org._01.pim D-Bus APIs (depends on libfolks)]),
+                  AS_HELP_STRING([--enable-dbus-service-pim[=<locale>]],
+                                 [Enable implementation of org._01.pim D-Bus APIs (depends on libfolks),
+                                  using src/dbus/server/pim/locale-factory-<locale>.cpp to implement sorting
+                                  and searching. The default is <locale>=boost, which uses boost::locale.]),
                   [ enable_dbus_pim="$enableval" ],
                   [ enable_dbus_pim="no" ])
     case "$enable_dbus_pim" in
          no) ;;
-         yes)
+         *)
+                if test "$enable_dbus_pim" = "yes"; then
+                    enable_dbus_pim=boost
+                fi
+                if ! test -r "$srcdir/src/dbus/server/pim/locale-factory-$enable_dbus_pim.cpp"; then
+                    AC_MSG_ERROR([invalid value '$enable_dbus_pim' for --enable-dbus-service-pim, $srcdir/src/dbus/server/pim/locale-factory-$enable_dbus_pim.cpp does not exist or is not readable])
+                fi
                 PKG_CHECK_MODULES(FOLKS, [folks])
                 AC_DEFINE(ENABLE_DBUS_PIM, 1, [org._01.pim D-Bus API enabled])
+                DBUS_PIM_PLUGIN=$enable_dbus_pim
+                AC_SUBST(DBUS_PIM_PLUGIN)
+
+                case "$enable_dbus_pim" in
+                    boost)
+                        AX_BOOST_LOCALE
+                        # AX_BOOST_LOCALE incorrectly puts -L/... into LDFLAGS.
+                        # That's broken because it then overrides the search path
+                        # for *all* libraries in a link, not just for boost. Fix
+                        # this by putting the LDFLAGS before the lib and leaving
+                        # DBUS_PIM_PLUGIN_LDFLAGS empty (for now - might have to
+                        # be revised if there ever are any boost flags which need
+                        # to go to the start of the link line).
+                        DBUS_PIM_PLUGIN_LIBS='$(BOOST_LDFLAGS) $(BOOST_LOCALE_LIB)'
+                        DBUS_PIM_PLUGIN_LDFLAGS=
+                        ;;
+                esac
+                AC_SUBST(DBUS_PIM_PLUGIN_CFLAGS)
+                AC_SUBST(DBUS_PIM_PLUGIN_LIBS)
+                AC_SUBST(DBUS_PIM_PLUGIN_LDFLAGS)
                 ;;
-         *) AC_MSG_ERROR([invalid value for --enable-dbus-service-pim: '$enable_dbus_pim']);;
     esac
 fi
 AM_CONDITIONAL([NOTIFY_COMPATIBILITY], [test "$enable_notify_compat" = "yes"])
-AM_CONDITIONAL([COND_DBUS_PIM], [test "$enable_dbus_pim" = "yes"])
+AM_CONDITIONAL([COND_DBUS_PIM], [test "$enable_dbus_pim" != "no"])
 
 AC_SUBST(DBUS_CFLAGS)
 AC_SUBST(DBUS_LIBS)
@@ -622,11 +654,6 @@ AC_SUBST(GUI_CFLAGS)
 AC_SUBST(GUI_LIBS)
 AC_SUBST(GUI_PROGRAMS)
 AC_SUBST(GUI_DESKTOP_FILES)
-
-# Boost headers: boost/foreach.hpp is needed (1.33/Debian Etch
-# doesn't have it, 1.34/Ubuntu 8.10 Hardy does). 1.35 is available
-# as Debian Etch backport.
-AX_BOOST_BASE(1.34)
 
 # C++ regular expression support is required often enough to make it
 # mandatory.
