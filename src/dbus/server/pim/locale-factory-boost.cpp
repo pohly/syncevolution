@@ -126,6 +126,100 @@ public:
     }
 };
 
+class AnyContainsBoost : public IndividualFilter
+{
+public:
+    enum Mode {
+        CASE_SENSITIVE,
+        CASE_INSENSITIVE
+    };
+
+    AnyContainsBoost(const std::locale &locale,
+                     const std::string &searchValue,
+                     Mode mode) :
+        m_locale(locale),
+        // m_collator(std::use_facet<boost::locale::collator>(locale)),
+        m_searchValue(searchValue),
+        m_mode(mode)
+    {
+        switch (mode) {
+        case CASE_SENSITIVE:
+            // Search directly, no preprocessing.
+            break;
+        case CASE_INSENSITIVE:
+            // Locale-aware conversion to fold case (= case
+            // independent) representation before search.
+            m_searchValueTransformed = boost::locale::fold_case(m_searchValue, m_locale);
+            break;
+        }
+    }
+
+    bool containsSearchText(const char *text) const
+    {
+        if (!text) {
+            return false;
+        }
+        switch (m_mode) {
+        case CASE_SENSITIVE:
+            return boost::contains(text, m_searchValue);
+            break;
+        case CASE_INSENSITIVE: {
+            std::string lower(boost::locale::fold_case(text, m_locale));
+            return boost::contains(lower, m_searchValueTransformed);
+            break;
+        }
+        }
+        // not reached
+        return false;
+    }
+
+    virtual bool matches(FolksIndividual *individual) const
+    {
+        FolksNameDetails *name = FOLKS_NAME_DETAILS(individual);
+        const char *fullname = folks_name_details_get_full_name(name);
+        if (containsSearchText(fullname)) {
+            return true;
+        }
+        const char *nickname = folks_name_details_get_nickname(name);
+        if (containsSearchText(nickname)) {
+            return true;
+        }
+        FolksStructuredName *fn =
+            folks_name_details_get_structured_name(FOLKS_NAME_DETAILS(individual));
+        if (fn) {
+            const char *given = folks_structured_name_get_given_name(fn);
+            if (containsSearchText(given)) {
+                return true;
+            }
+            const char *middle = folks_structured_name_get_additional_names(fn);
+            if (containsSearchText(middle)) {
+                return true;
+            }
+            const char *family = folks_structured_name_get_family_name(fn);
+            if (containsSearchText(family)) {
+                return true;
+            }
+        }
+        FolksEmailDetails *emailDetails = FOLKS_EMAIL_DETAILS(individual);
+        GeeSet *emails = folks_email_details_get_email_addresses(emailDetails);
+        BOOST_FOREACH (FolksEmailFieldDetails *email, GeeCollCXX<FolksEmailFieldDetails *>(emails)) {
+            const gchar *value =
+                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(email)));
+            if (containsSearchText(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    std::locale m_locale;
+    std::string m_searchValue;
+    std::string m_searchValueTransformed;
+    Mode m_mode;
+    // const bool (*m_contains)(const std::string &, const std::string &, const std::locale &);
+};
+
 class LocaleFactoryBoost : public LocaleFactory
 {
     std::locale m_locale;
@@ -165,9 +259,43 @@ public:
         return res;
     }
 
-    virtual boost::shared_ptr<IndividualFilter> createFilter(const StringMap &filter)
+    virtual boost::shared_ptr<IndividualFilter> createFilter(const Filter_t &filter)
     {
-        SE_THROW("not implemented");
+        boost::shared_ptr<IndividualFilter> res;
+        if (filter.size() != 1) {
+            SE_THROW(StringPrintf("boost locale factory: only filter with one term are supported (was given %ld)",
+                                  (long)filter.size()));
+        }
+        const Filter_t::value_type &term = filter[0];
+        if (term.empty()) {
+            SE_THROW("boost locale factory: empty search term not supported");
+        }
+        if (term[0] == "any-contains") {
+            AnyContainsBoost::Mode mode = AnyContainsBoost::CASE_INSENSITIVE;
+            if (term.size() < 2) {
+                SE_THROW("boost locale factory: any-contains search needs one parameter");
+            }
+            for (size_t i = 2; i < term.size(); i++) {
+                const std::string &flag = term[i];
+                if (flag == "case-sensitive") {
+                    mode = AnyContainsBoost::CASE_SENSITIVE;
+                } else if (flag == "case-insensitive") {
+                    mode = AnyContainsBoost::CASE_INSENSITIVE;
+                } else {
+                    SE_THROW("boost locale factory: unknown flag for any-contains: " + flag);
+                }
+            }
+            res.reset(new AnyContainsBoost(m_locale, term[1], mode));
+
+            // TODO: combine with phone number lookup
+        } else if (term[0] == "phone") {
+            // TODO
+            SE_THROW("boost locale factor: phone number lookup not implemented");
+        } else {
+            SE_THROW("boost locale factory: unknown search term: " + term[0]);
+        }
+
+        return res;
     }
 };
 
