@@ -122,7 +122,7 @@ atexit.register(os.kill, child, 9)
 bus = dbus.SessionBus()
 loop = gobject.MainLoop()
 
-# log to .dbus.log of a test
+# log to .dbus.log of a test and to stdout, if running a debugger
 class Logging(dbus.service.Object):
     def __init__(self):
         dbus.service.Object.__init__(self, bus, '/test/dbus/py')
@@ -130,6 +130,8 @@ class Logging(dbus.service.Object):
     @dbus.service.signal(dbus_interface='t.d.p',
                          signature='s')
     def log(self, str):
+        if debugger:
+            print str
         pass
 
     def printf(self, format, *args):
@@ -648,15 +650,20 @@ class DBusUtil(Timeout):
 Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         '''
         message = 'waiting for ' + state
+        printMessage = True
         while True:
-            logging.log(message)
+            # Only print it if something changed, not every 0.1 second.
+            if printMessage:
+                printMessage = False
+                logging.log(message)
             check()
             if until():
                 break
             # Don't block forever if nothing is to be processed.
             # To keep the load down, sleep for a short period.
             time.sleep(0.1)
-            self.loopIteration(None, may_block=False)
+            if self.loopIteration(None, may_block=False):
+                printMessage = True
 
     def isServerRunning(self):
         """True while the syncevo-dbus-server executable is still running"""
