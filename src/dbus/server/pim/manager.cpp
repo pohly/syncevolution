@@ -233,7 +233,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     void handleChange(const GDBusCXX::DBusClientCall0 &call,
                       int start, int count)
     {
-        SE_LOG_DEBUG(NULL, NULL, "handle change: %s, #%d + %d",
+        SE_LOG_DEBUG(NULL, NULL, "handle change %s: %s, #%d + %d",
+                     getPath(),
                      &call == &m_contactsModified ? "modified" :
                      &call == &m_contactsAdded ? "added" :
                      &call == &m_contactsRemoved ? "remove" : "???",
@@ -250,7 +251,9 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 &call == &m_contactsModified &&
                 start >= m_lastChange.m_start &&
                 start + count <= m_lastChange.m_start + m_lastChange.m_count) {
-                SE_LOG_DEBUG(NULL, NULL, "handle change: redundant 'modified' signal, ignore");
+                SE_LOG_DEBUG(NULL, NULL, "handle change %s: redundant 'modified' signal, ignore",
+                             getPath());
+
                 return;
             }
 
@@ -258,7 +261,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
             m_pendingChange.m_call = &call;
             m_pendingChange.m_start = start;
             m_pendingChange.m_count = count;
-            SE_LOG_DEBUG(NULL, NULL, "handle change: stored as pending change");
+            SE_LOG_DEBUG(NULL, NULL, "handle change %s: stored as pending change",
+                         getPath());
             return;
         }
 
@@ -275,7 +279,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 if (newCount <= m_pendingChange.m_count + count) {
                     // Okay, no unrelated individuals were included in
                     // the tentative new range, we can use it.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change: modification, #%d + %d and #%d + %d => #%d + %d",
+                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: modification, #%d + %d and #%d + %d => #%d + %d",
+                                 getPath(),
                                  m_pendingChange.m_start, m_pendingChange.m_count,
                                  start, count,
                                  newStart, newCount);
@@ -290,7 +295,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 if (start >= m_pendingChange.m_start) {
                     // Adding in the middle or at the end?
                     if (start <= m_pendingChange.m_start + m_pendingChange.m_count) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change: increase count of 'added' individuals, #%d + %d and #%d + %d new => #%d + %d",
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'added' individuals, #%d + %d and #%d + %d new => #%d + %d",
+                                     getPath(),
                                      m_pendingChange.m_start, m_pendingChange.m_count,
                                      start, count,
                                      m_pendingChange.m_start, newCount);
@@ -300,7 +306,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 } else {
                     // Adding directly before the previous start?
                     if (start + count >= m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change: reduce start and increase count of 'added' individuals, #%d + %d and #%d + %d => #%d + %d",
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'added' individuals, #%d + %d and #%d + %d => #%d + %d",
+                                     getPath(),
                                      m_pendingChange.m_start, m_pendingChange.m_count,
                                      start, count,
                                      start, newCount);
@@ -316,7 +323,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 if (start >= m_pendingChange.m_start) {
                     // Removing directly at end?
                     if (start == m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change: increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
+                                     getPath(),
                                      m_pendingChange.m_start, m_pendingChange.m_count,
                                      start, count,
                                      m_pendingChange.m_start, newCount);
@@ -326,7 +334,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 } else {
                     // Removing directly before the previous start or overlapping with it?
                     if (start + count >= m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change: reduce start and increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
+                                     getPath(),
                                      m_pendingChange.m_start, m_pendingChange.m_count,
                                      start, count,
                                      start, newCount);
@@ -357,7 +366,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     {
         int count = m_pendingChange.m_count;
         if (count) {
-            SE_LOG_DEBUG(NULL, NULL, "send change: %s, #%d + %d",
+            SE_LOG_DEBUG(NULL, NULL, "send change %s: %s, #%d + %d",
+                         getPath(),
                          m_pendingChange.m_call == &m_contactsModified ? "modified" :
                          m_pendingChange.m_call == &m_contactsAdded ? "added" :
                          m_pendingChange.m_call == &m_contactsRemoved ? "remove" : "???",
