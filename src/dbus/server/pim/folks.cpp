@@ -222,16 +222,18 @@ void FullView::individualsChanged(GeeSet *added,
                  removed ? gee_collection_get_size(GEE_COLLECTION(removed)) : 0,
                  message);
     typedef GeeCollCXX<FolksIndividual *> Coll;
+    // Remove first, to match the "remove + added = modified" change optimization
+    // in Manager::handleChange().
+    if (removed) {
+        BOOST_FOREACH (FolksIndividual *individual, Coll(removed)) {
+            removeIndividual(individual);
+        }
+    }
     if (added) {
         // TODO (?): Optimize adding many new individuals by pre-sorting them,
         // then using that information to avoid comparisons in addIndividual().
         BOOST_FOREACH (FolksIndividual *individual, Coll(added)) {
             addIndividual(individual);
-        }
-    }
-    if (removed) {
-        BOOST_FOREACH (FolksIndividual *individual, Coll(removed)) {
-            removeIndividual(individual);
         }
     }
 }

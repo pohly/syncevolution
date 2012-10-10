@@ -348,9 +348,20 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         }
 
         // More complex merging is possible. For example, "removed 1
-        // at #10" and "added 1 at #10" could be turned into "modified
-        // 1 at #10". But it is uncertain how common and useful that
-        // would be, so not implemented...
+        // at #10" and "added 1 at #10" can be turned into "modified
+        // 1 at #10". This happens when a contact gets modified and
+        // folks decides to recreate the FolksIndividual instead of
+        // modifying it.
+        if (m_pendingChange.m_call == &m_contactsRemoved &&
+            &call == &m_contactsAdded &&
+            start == m_pendingChange.m_start &&
+            count == m_pendingChange.m_count) {
+            SE_LOG_DEBUG(NULL, NULL, "handle change %s: removed individuals were re-added => #%d + %d modified",
+                         getPath(),
+                         start, count);
+            m_pendingChange.m_call = &m_contactsModified;
+            return;
+        }
 
         // Cannot merge changes.
         flushChanges();
