@@ -176,6 +176,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         int m_start, m_count;
         const GDBusCXX::DBusClientCall0 *m_call;
     } m_pendingChange, m_lastChange;
+    GDBusCXX::DBusClientCall0 m_quiesent;
     GDBusCXX::DBusClientCall0 m_contactsModified,
         m_contactsAdded,
         m_contactsRemoved;
@@ -196,6 +197,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         m_owner(owner),
 
         // use ViewAgent interface
+        m_quiesent(m_viewAgent, "Quiesent"),
         m_contactsModified(m_viewAgent, "ContactsModified"),
         m_contactsAdded(m_viewAgent, "ContactsAdded"),
         m_contactsRemoved(m_viewAgent, "ContactsRemoved")
@@ -368,6 +370,16 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         }
     }
 
+    /** Current state is stable. Flush and tell agent. */
+    void quiesent()
+    {
+        flushChanges();
+        m_quiesent.start(getObject(),
+                         boost::bind(ViewResource::sendDone,
+                                     m_self,
+                                     _1));
+    }
+
     /**
      * Used as callback for sending changes to the ViewAgent. Only
      * holds weak references and thus does not prevent deleting view
@@ -404,7 +416,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         if (size) {
             sendChange(m_contactsAdded, 0, size);
         }
-        m_view->m_quiesenceSignal.connect(IndividualView::QuiesenceSignal_t::slot_type(&ViewResource::flushChanges,
+        m_view->m_quiesenceSignal.connect(IndividualView::QuiesenceSignal_t::slot_type(&ViewResource::quiesent,
                                                                                        this).track(self));
         m_view->m_modifiedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                    this,
