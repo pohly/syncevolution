@@ -69,7 +69,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.Search() */
     GDBusCXX::DBusObject_t search(const GDBusCXX::Caller_t &ID,
                                   const boost::shared_ptr<GDBusCXX::Watch> &watch,
-                                  const StringMap &filter,
+                                  const LocaleFactory::Filter_t &filter,
                                   const GDBusCXX::DBusObject_t &agentPath);
 
     /** Manager.SetActiveAddressBooks() */

@@ -322,7 +322,8 @@ class FilteredView : public IndividualView
      * optimized to map entire ranges, but for the sake of simplicitly
      * let's use a 1:1 mapping for now.
      */
-    std::vector<int> m_local2parent;
+    typedef std::vector<int> Entries_t;
+    Entries_t m_local2parent;
 
     FilteredView(const boost::shared_ptr<IndividualView> &parent,
                  const boost::shared_ptr<IndividualFilter> &filter);

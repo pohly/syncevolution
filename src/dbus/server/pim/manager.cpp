@@ -508,7 +508,7 @@ public:
     }
 
     /** ViewControl.RefineSearch() */
-    void refineSearch(const StringMap &filter)
+    void refineSearch(const LocaleFactory::Filter_t &filter)
     {
         // TODO
         SE_THROW("not implemented");
@@ -518,7 +518,7 @@ unsigned int ViewResource::m_counter;
 
 GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
                                        const boost::shared_ptr<GDBusCXX::Watch> &watch,
-                                       const StringMap &filter,
+                                       const LocaleFactory::Filter_t &filter,
                                        const GDBusCXX::DBusObject_t &agentPath)
 {
     start();

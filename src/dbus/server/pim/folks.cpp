@@ -438,22 +438,115 @@ void FilteredView::doStart()
         addIndividual(index, m_parent->getContact(index));
     }
 
+    // No more changes expected for a while, because usually a FilteredView
+    // is a search on a stable FullView. Notify listeners. Necessary to
+    // get changes flushed.
+    m_quiesenceSignal();
+
     // Start listening to signals.
     m_parent->m_addedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::addIndividual, this, _1, _2)).track(m_self));
     m_parent->m_modifiedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::modifyIndividual, this, _1, _2)).track(m_self));
     m_parent->m_removedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::removeIndividual, this, _1, _2)).track(m_self));
 }
+
 void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)
 {
-    // TODO
+    if (!individual) {
+        // sanity check
+        return;
+    }
+
+    if (m_filter->matches(individual)) {
+        // We can use binary search to find the insertion point.
+        // Check last entry first, because that is going to be
+        // very common when adding via doStart().
+        Entries_t::iterator it;
+        if (!m_local2parent.empty() &&
+            m_local2parent.back() < parentIndex) {
+            it = m_local2parent.end();
+        } else {
+            it =
+                std::lower_bound(m_local2parent.begin(),
+                                 m_local2parent.end(),
+                                 parentIndex);
+        }
+        size_t index = it - m_local2parent.begin();
+        it = m_local2parent.insert(it, parentIndex);
+        ++it;
+        // Shift all following indices.
+        while (it != m_local2parent.end()) {
+            (*it)++;
+            ++it;
+        }
+
+        SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld", index, m_local2parent.size());
+        m_addedSignal(index, individual);
+    }
 }
+
 void FilteredView::removeIndividual(int parentIndex, FolksIndividual *individual)
 {
-    // TODO
+    if (!individual) {
+        // sanity check
+        return;
+    }
+
+    // The entries are sorted. Therefore we can use a binary search
+    // to find the parentIndex or the first entry after it.
+    Entries_t::iterator it =
+        std::lower_bound(m_local2parent.begin(),
+                         m_local2parent.end(),
+                         parentIndex);
+    if (it != m_local2parent.end()) {
+        size_t index = it - m_local2parent.begin();
+        SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld", index, m_local2parent.size());
+        it = m_local2parent.erase(it);
+        m_removedSignal(index, individual);
+    }
+
+    // Now reduce the index in our mapping for all following entries.
+    // Not particularly efficient when multiple individuals get
+    // removed.
+    while (it != m_local2parent.end()) {
+        (*it)--;
+        ++it;
+    }
 }
+
 void FilteredView::modifyIndividual(int parentIndex, FolksIndividual *individual)
 {
-    // TODO
+    if (!individual) {
+        // sanity check
+        return;
+    }
+
+    Entries_t::iterator it =
+        std::lower_bound(m_local2parent.begin(),
+                         m_local2parent.end(),
+                         parentIndex);
+    bool matches = m_filter->matches(individual);
+    if (it != m_local2parent.end() && *it == parentIndex) {
+        // Was matched before the change.
+        size_t index = it - m_local2parent.begin();
+        if (matches) {
+            // Still matched, merely pass on modification signal.
+            SE_LOG_DEBUG(NULL, NULL, "filtered view: modified at #%ld/%ld", index, m_local2parent.size());
+            m_modifiedSignal(index, individual);
+        } else {
+            // Removed.
+            SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld due to modification", index, m_local2parent.size());
+            m_local2parent.erase(it);
+            m_removedSignal(index, individual);
+        }
+    } else if (matches) {
+        // Was not matched before and is matched now => add it.
+        size_t index = it - m_local2parent.begin();
+        m_local2parent.insert(it, parentIndex);
+        SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld due to modification", index, m_local2parent.size());
+        m_addedSignal(index, individual);
+    } else {
+        // Neither matched before nor now => nothing changed.
+    }
 }
 
 IndividualAggregator::IndividualAggregator() :
