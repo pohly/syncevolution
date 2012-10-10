@@ -270,7 +270,7 @@ Methods:
 
          Returns information about all currently configured peers.
 
-    object Search(dict filter, object agent)
+    object Search(list filter, object agent)
 
          Creates a new view which contains all contacts matching the
          filter. The call returns the object path of a view object
@@ -279,8 +279,39 @@ Methods:
          can be used to control the view via the
          org._01.pim.contacts.ViewControl interface.
 
-         An empty filter matches all contacts. TODO: define other
-         searches.
+         Supported searches:
+         [ ] - An empty list matches all contacts.
+
+         [ ['phone', '<number>'] ] - Look up a valid phone number (= "caller ID").
+         The country code for the current locale is added if no country
+         code was given in the number. Phone numbers in the unified address
+         book must start with the resulting full number, after being normalized
+         the same way.
+
+         In other words:
+         - Formatting does not matter.
+         - Alpha characters are aliases for numbers on the keypad and match
+           their corresponding number.
+         - Additional digits in the address book are ignored, only
+           the prefix must match (extensions may or may not be included in
+           <number>).
+         - Phone numbers in the address book which cannot be normalized
+           cannot be matched.
+
+         [ ['any-contains', '<text>', <flags>] ] - Sub-string search for <text>
+         in the following contact values: first, middle or last name,
+         formatted name, nick name, phone number (sub-string search which ignores
+         formatting and treats alpha characters as aliases, in contrast
+         to prefix match in 'phone') or email address. Optional flags include:
+         'case-insensitive' (the default), 'case-sensitive'.
+
+         Using list will allow extending the search capabilities later,
+         for example by allowing multiple terms which all must match
+         and/or adding recursive queries like this:
+           ['and',
+            ['or', ['any-contains', 'joe'], ['any-contains', 'joan']],
+            ['phone', '1234']
+           ]
 
          Notifications for the view are sent back to the caller by
          invoking methods from the org._01.pim.contacts.ViewAgent
@@ -355,13 +386,13 @@ Methods:
              Pending ReadContacts() calls will return without any
              data and no error.
 
-        void RefineSearch(dict filter)
+        void RefineSearch(list filter)
 
              Replaces the current filter of the view with a new one.
              The new filter must be stricter than the old one. Contacts
              which were already filtered out will not be added back
              to the view when setting a less restrictive filter (simplifies
-             the implementation).
+             the implementation and improves performance).
 
 
 Service: [user of the PIM Manager]
