@@ -1849,14 +1849,17 @@ static const char *ProxyString = "http_proxy";
 
 /* Reads http_proxy from environment, if not available returns configured value */
 InitState<bool> SyncConfig::getUseProxy() const {
-    char *proxy = getenv(ProxyString);
-    if (!proxy ) {
-        return syncPropUseProxy.getPropertyValue(*getNode(syncPropUseProxy));
-    } else if (strlen(proxy)>0) {
-        return InitState<bool>(true, true);
-    } else {
-        return InitState<bool>(false, true);
+    InitState<bool> res = syncPropUseProxy.getPropertyValue(*getNode(syncPropUseProxy));
+    if (!res.wasSet()) {
+        // Not configured. Check environment.
+        char *proxy = getenv(ProxyString);
+        if (proxy && *proxy) {
+            // Environment has it. Assume that it applies to us and
+            // use it. TODO: check no_proxy against our sync URL.
+            res = InitState<bool>(true, true);
+        }
     }
+    return res;
 }
 
 void SyncConfig::setUseProxy(bool value, bool temporarily) { syncPropUseProxy.setProperty(*getNode(syncPropUseProxy), value, temporarily); }
