@@ -724,6 +724,7 @@ class DBusUtil(Timeout):
                 logging.printf("all process gone at %s",
                                time.asctime())
                 return []
+            time.sleep(0.1)
         # Force killing of remaining children. It's still possible
         # that one of them quits before we get around to sending the
         # signal.
