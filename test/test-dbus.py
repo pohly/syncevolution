@@ -3744,7 +3744,7 @@ END:VCARD''')
 
     @timeout(200)
     def testPasswordRequestTimeout(self):
-        """TestLocalSync.testPassswordRequestTimeout - let password request time out"""
+        """TestLocalSync.testPasswordRequestTimeout - let password request time out"""
         self.setUpConfigs(childPassword="-")
         self.setUpListeners(self.sessionpath)
         signal = self.setUpInfoRequest(response=None)
