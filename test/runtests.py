@@ -240,6 +240,12 @@ class Context:
         if cmd[command] in ("env", "sudo"):
             cmd.insert(0, cmd[command])
             del cmd[command + 1]
+        elif isenv.match(cmd[0]):
+            # We did not insert env or sudo before the initial
+            # variable assignment. Don't rely on the shell to
+            # handle that (breaks for 'foo="x" "y"'), instead
+            # use env.
+            cmd.insert(0, 'env')
 
         cmdstr = " ".join(map(lambda x: (' ' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x, cmd))
         if dumpCommands:
