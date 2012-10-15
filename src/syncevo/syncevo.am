@@ -62,6 +62,9 @@ src_syncevo_sources = \
   src/syncevo/util.h \
   src/syncevo/BoostHelper.h \
   \
+  src/syncevo/TmpFile.cpp \
+  src/syncevo/TmpFile.h \
+  \
   src/syncevo/Timespec.h \
   \
   src/syncevo/lcs.h \

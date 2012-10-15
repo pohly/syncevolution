@@ -36,8 +36,6 @@
 
 #include <errno.h>
 #include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 
 #include <pcrecpp.h>
 #include <algorithm>
@@ -71,7 +69,7 @@ public:
     typedef std::map<std::string, pcrecpp::StringPiece> Content;
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
-    void pullAll(Content &dst, std::string &buffer, pcrecpp::StringPiece &memRange);
+    void pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile);
     
     void shutdown(void);
 
@@ -294,47 +292,14 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
 }
 
-void PbapSession::pullAll(Content &dst, std::string &buffer, pcrecpp::StringPiece &memRange)
+void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
 {
     pcrecpp::StringPiece content;
     if (m_newobex) {
-        char *addr;
-        class TmpFileGuard {
-            int m_fd;
-            PlainGStr m_filename;
-        public:
-            /**
-             * Create temporary file. Will be closed and unlinked when
-             * this instance destructs.
-             */
-            TmpFileGuard(PbapSyncSource &parent) {
-                gchar *filename;
-                GErrorCXX gerror;
-                m_fd = g_file_open_tmp (NULL, &filename, gerror);
-                m_filename = filename;
-                if (m_fd == -1) {
-                    parent.throwError(std::string("opening temporary file for PBAP: ") +
-                                      (gerror ? gerror->message : "unknown failure"));
-                }
-            }
-            ~TmpFileGuard() {
-                // Unlink before closing to avoid race condition
-                // (close, someone else opens file, we remove it).
-                if (remove(m_filename) == -1) {
-                    // Continue despite error.
-                    SE_LOG_ERROR(NULL, NULL, "Unable to remove temporary file %s: %s",
-                                 m_filename.get(), strerror(errno));
-                }
-                close (m_fd);
-            }
-
-            const char *getFilename() const { return m_filename; }
-            int getFD() const { return m_fd; }
-        } tmpfile(m_parent);
-
-        SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", tmpfile.getFilename());
+        tmpFile.create();
+        SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", tmpFile.filename().c_str());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
-        std::pair<GDBusCXX::DBusObject_t, Params> tuple = pullall(std::string(tmpfile.getFilename()));
+        std::pair<GDBusCXX::DBusObject_t, Params> tuple = pullall(tmpFile.filename());
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
         
@@ -349,19 +314,11 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, pcrecpp::StringPiec
                                              m_transferErrorMsg.c_str()));
         }
 
-        struct stat sb;
-        if (fstat(tmpfile.getFD(), &sb) == -1) {
-            m_parent.throwError("stat on PBAP temp file", errno);
-        }
-        SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %ld", (long)sb.st_size);
+        SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %u", static_cast<unsigned> (tmpFile.size()));
 
-        addr = (char*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tmpfile.getFD(), 0);
-        if (addr == MAP_FAILED) {
-            m_parent.throwError("mmap temporary file", errno);
-        }
-        memRange.set(addr, sb.st_size);
-        content = memRange;
-
+        content = tmpFile.stringPiece();
+        // closing tmp file leaves the mapping
+        tmpFile.close();
     } else {
         GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
         buffer = pullall();
@@ -403,9 +360,6 @@ PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
 
 PbapSyncSource::~PbapSyncSource()
 {
-    if (m_memRange.data()) {
-        munmap(const_cast<char *>(m_memRange.data()), m_memRange.size());
-    }
 }
 
 std::string PbapSyncSource::getMimeType() const
@@ -430,7 +384,7 @@ void PbapSyncSource::open()
     std::string address = database.substr(prefix.size());
 
     m_session->initSession(address, getDatabaseFormat());
-    m_session->pullAll(m_content, m_buffer, m_memRange);
+    m_session->pullAll(m_content, m_buffer, m_tmpFile);
     m_session->shutdown();
 }
 

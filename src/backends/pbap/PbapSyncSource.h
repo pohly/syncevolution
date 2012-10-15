@@ -31,6 +31,7 @@
 #include <pcrecpp.h>
 
 #include <syncevo/declarations.h>
+#include <syncevo/TmpFile.h>
 SE_BEGIN_CXX
 
 class PbapSession;
@@ -68,7 +69,7 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
     Content m_content;
 
     std::string m_buffer;
-    pcrecpp::StringPiece m_memRange;
+    TmpFile m_tmpFile;
 };
 
 SE_END_CXX
