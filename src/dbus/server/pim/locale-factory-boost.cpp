@@ -24,6 +24,7 @@
 #include "locale-factory.h"
 #include "folks.h"
 
+#include <phonenumbers/phonenumberutil.h>
 #include <boost/locale.hpp>
 
 SE_BEGIN_CXX
@@ -152,6 +153,42 @@ public:
             m_searchValueTransformed = boost::locale::fold_case(m_searchValue, m_locale);
             break;
         }
+        m_searchValueTel = normalizePhoneText(m_searchValue.c_str());
+    }
+
+    /**
+     * The search text is not necessarily a full phone number,
+     * therefore we cannot parse it with libphonenumber. Instead
+     * do a sub-string search after telephone specific normalization,
+     * to let the search ignore irrelevant formatting aspects:
+     *
+     * - Map ASCII characters to the corresponding digit.
+     * - Reduce to just the digits before comparison (no spaces, no
+     *   punctuation).
+     *
+     * Example: +1-800-FOOBAR -> 1800366227
+     */
+    static std::string normalizePhoneText(const char *tel)
+    {
+        static const i18n::phonenumbers::PhoneNumberUtil &util(*i18n::phonenumbers::PhoneNumberUtil::GetInstance());
+        std::string res;
+        char c;
+        bool haveAlpha = false;
+        while ((c = *tel) != '\0') {
+            if (isdigit(c)) {
+                res += c;
+            } else if (isalpha(c)) {
+                haveAlpha = true;
+                res += c;
+            }
+            ++tel;
+        }
+        // Only scan through the string again if we really have to.
+        if (haveAlpha) {
+            util.ConvertAlphaCharactersInNumber(&res);
+        }
+
+        return res;
     }
 
     bool containsSearchText(const char *text) const
@@ -171,6 +208,12 @@ public:
         }
         // not reached
         return false;
+    }
+
+    bool containsSearchTel(const char *text) const
+    {
+        std::string tel = normalizePhoneText(text);
+        return boost::contains(tel, m_searchValueTel);
     }
 
     virtual bool matches(FolksIndividual *individual) const
@@ -209,6 +252,15 @@ public:
                 return true;
             }
         }
+        FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
+        GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
+        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones)) {
+            const gchar *value =
+                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
+            if (containsSearchTel(value)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -216,8 +268,85 @@ private:
     std::locale m_locale;
     std::string m_searchValue;
     std::string m_searchValueTransformed;
+    std::string m_searchValueTel;
     Mode m_mode;
     // const bool (*m_contains)(const std::string &, const std::string &, const std::locale &);
+};
+
+/**
+ * Search value must be a valid caller ID. The telephone numbers
+ * in the contacts may or may not be valid; only valid ones
+ * will match. The user is expected to clean up that data to get
+ * exact matches for the others.
+ */
+class PhoneStartsWith : public IndividualFilter
+{
+public:
+    PhoneStartsWith(const std::locale &m_locale,
+                    const std::string &tel) :
+        m_phoneNumberUtil(*i18n::phonenumbers::PhoneNumberUtil::GetInstance()),
+        m_country(std::use_facet<boost::locale::info>(m_locale).country())
+    {
+        i18n::phonenumbers::PhoneNumber number;
+        switch (m_phoneNumberUtil.Parse(tel, m_country, &number)) {
+        case i18n::phonenumbers::PhoneNumberUtil::NO_PARSING_ERROR:
+            // okay
+            break;
+        case i18n::phonenumbers::PhoneNumberUtil::INVALID_COUNTRY_CODE_ERROR:
+            SE_THROW("boost locale factory: invalid country code");
+            break;
+        case i18n::phonenumbers::PhoneNumberUtil::NOT_A_NUMBER:
+            SE_THROW("boost locale factory: not a caller ID: " + tel);
+            break;
+        case i18n::phonenumbers::PhoneNumberUtil::TOO_SHORT_AFTER_IDD:
+            SE_THROW("boost locale factory: too short after IDD: " + tel);
+            break;
+        case i18n::phonenumbers::PhoneNumberUtil::TOO_SHORT_NSN:
+            SE_THROW("boost locale factory: too short NSN: " + tel);
+            break;
+        case i18n::phonenumbers::PhoneNumberUtil::TOO_LONG_NSN:
+            SE_THROW("boost locale factory: too long NSN: " + tel);
+            break;
+        }
+
+        // Search based on full internal format, without formatting.
+        // For example: +41446681800
+        //
+        // A prefix match is good enough. That way a caller ID
+        // with suppressed extension still matches a contact with
+        // extension.
+        m_phoneNumberUtil.Format(number, i18n::phonenumbers::PhoneNumberUtil::E164, &m_tel);
+    }
+
+    virtual bool matches(FolksIndividual *individual) const
+    {
+        FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
+        GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
+        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones)) {
+            const gchar *value =
+                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
+            if (value) {
+                i18n::phonenumbers::PhoneNumber number;
+                i18n::phonenumbers::PhoneNumberUtil::ErrorType error =
+                    m_phoneNumberUtil.Parse(value, m_country, &number);
+                if (error == i18n::phonenumbers::PhoneNumberUtil::NO_PARSING_ERROR) {
+                    std::string tel;
+                    m_phoneNumberUtil.Format(number, i18n::phonenumbers::PhoneNumberUtil::E164, &tel);
+                    // TODO (?): cache the normalized phone number, perhaps even maintain
+                    // a lookup data structure.
+                    if (boost::starts_with(tel, m_tel)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+private:
+    const i18n::phonenumbers::PhoneNumberUtil &m_phoneNumberUtil;
+    std::string m_country;
+    std::string m_tel;
 };
 
 class LocaleFactoryBoost : public LocaleFactory
@@ -286,11 +415,13 @@ public:
                 }
             }
             res.reset(new AnyContainsBoost(m_locale, term[1], mode));
-
-            // TODO: combine with phone number lookup
         } else if (term[0] == "phone") {
-            // TODO
-            SE_THROW("boost locale factor: phone number lookup not implemented");
+            if (filter.size() != 1) {
+                SE_THROW(StringPrintf("boost locale factory: only filter with one term are supported (was given %ld)",
+                                      (long)filter.size()));
+            }
+            res.reset(new PhoneStartsWith(m_locale,
+                                          term[1]));
         } else {
             SE_THROW("boost locale factory: unknown search term: " + term[0]);
         }

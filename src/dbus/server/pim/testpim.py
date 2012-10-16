@@ -1220,12 +1220,16 @@ VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
 TEL:1234
+TEL:56/78
+TEL:+1-800-FOOBAR
+TEL:089/7888-99
 EMAIL:az@example.com
 END:VCARD''',
 
 u'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
+TEL:+1-89-7888-99
 END:VCARD''',
 
 # Chárleß has chárless as representation after folding the case.
@@ -1351,6 +1355,134 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.contacts[0] != None)
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham by his 1234 telephone number.
+        view = ContactsView(self.manager)
+        view.search([['any-contains', '1234']])
+        self.runUntil('"1234" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('1234 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham by his 1234 telephone number, as sub-string.
+        view = ContactsView(self.manager)
+        view.search([['any-contains', '23']])
+        self.runUntil('"23" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('23 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham by his 1234 telephone number, ignoring
+        # formatting.
+        view = ContactsView(self.manager)
+        view.search([['any-contains', '12/34']])
+        self.runUntil('"12/34" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('12/34 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham by his 56/78 telephone number, ignoring
+        # slash in contact.
+        view = ContactsView(self.manager)
+        view.search([['any-contains', '5678']])
+        self.runUntil('"5678" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('5678 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham via the +1-800-FOOBAR vanity number.
+        view = ContactsView(self.manager)
+        view.search([['any-contains', '+1-800-foobar']])
+        self.runUntil('"+1-800-foobar" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('+1-800-foobar data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham via the +1-800-FOOBAR vanity number, with digits
+        # instead of alpha characters.
+        view = ContactsView(self.manager)
+        view.search([['any-contains', '366227']])
+        self.runUntil('"366227" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('366227 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham via caller ID for +1-800-FOOBAR.
+        view = ContactsView(self.manager)
+        view.search([['phone', '+1800366227']])
+        self.runUntil('"+1800366227" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('+1800366227 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham via caller ID for 089/7888-99 (country is Germany).
+        view = ContactsView(self.manager)
+        view.search([['phone', '+49897888']])
+        self.runUntil('"+49897888" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('+49897888 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham via 089/7888-99 (not a full caller ID, but at least a valid phone number).
+        view = ContactsView(self.manager)
+        view.search([['phone', '0897888']])
+        self.runUntil('"0897888" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('0897888 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.contacts[0] != None)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Don't find anyone.
+        view = ContactsView(self.manager)
+        view.search([['phone', '+49897888000']])
+        self.runUntil('"+49897888000" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(0, len(view.contacts))
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")

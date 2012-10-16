@@ -65,8 +65,8 @@ nodist_src_dbus_server_libsyncevodbusserver_la_SOURCES += \
   src/dbus/server/pim/locale-factory-@DBUS_PIM_PLUGIN@.cpp
 
 src_dbus_server_libsyncevodbusserver_la_LDFLAGS += $(DBUS_PIM_PLUGIN_LDFLAGS)
-src_dbus_server_libsyncevodbusserver_la_LIBADD += $(FOLKS_LIBS) $(DBUS_PIM_PLUGIN_LIBS)
-src_dbus_server_libsyncevodbusserver_la_CXXFLAGS += $(FOLKS_CFLAGS) $(DBUS_PIM_PLUGIN_CFLAGS)
+src_dbus_server_libsyncevodbusserver_la_LIBADD += $(FOLKS_LIBS) $(DBUS_PIM_PLUGIN_LIBS) $(PHONENUMBERS_LIBS)
+src_dbus_server_libsyncevodbusserver_la_CXXFLAGS += $(FOLKS_CFLAGS) $(DBUS_PIM_PLUGIN_CFLAGS) $(PHONENUMBERS_CFLAGS)
 endif
 
 # Need to list all plugins here and not include the active one in the regular

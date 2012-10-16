@@ -559,6 +559,26 @@ if test $enable_dbus_service = "yes"; then
                 AC_SUBST(DBUS_PIM_PLUGIN_CFLAGS)
                 AC_SUBST(DBUS_PIM_PLUGIN_LIBS)
                 AC_SUBST(DBUS_PIM_PLUGIN_LDFLAGS)
+
+                # http://code.google.com/p/libphonenumber/
+                AC_LANG(C++)
+                SAVED_CPPFLAGS=$CPPFLAGS
+                CPPFLAGS="$CPPFLAGS ${PHONENUMBERS_CFLAGS}"
+                AC_CHECK_HEADERS([phonenumbers/phonenumberutil.h])
+                SAVED_LIBS=$LIBS
+                if test ! "$PHONENUMBERS_LIBS"; then
+                      PHONENUMBERS_LIBS=-lphonenumber
+                fi
+                LIBS="$LIBS $PHONENUMBERS_LIBS"
+                AC_LINK_IFELSE(
+                      [AC_LANG_PROGRAM([#include <phonenumbers/phonenumberutil.h>],
+                                       [i18n::phonenumbers::PhoneNumberUtil::GetInstance()])],
+                      [true],
+                      [AC_ERROR([libphonebook not found, set PHONENUMBERS_CFLAGS and PHONENUMBERS_LIBS.])])
+                AC_SUBST(PHONENUMBERS_CFLAGS)
+                AC_SUBST(PHONENUMBERS_LIBS)
+                LIBS=$SAVED_LIBS
+                CPPFLAGS=$SAVED_CPPFLAGS
                 ;;
     esac
 fi
