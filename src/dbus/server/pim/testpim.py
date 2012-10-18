@@ -1242,6 +1242,12 @@ END:VCARD'''
         '''TestContacts.testFilterExisting - check that filtering works when applied to static contacts'''
         self.setUpView()
 
+        # Cannot refine full view.
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     r'.*: refining the search not supported by this view$'):
+             self.view.view.RefineSearch([['any-contains', 'foo']],
+                                         timeout=self.timeout)
+
         # Override default sorting.
         self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
         self.manager.SetSortOrder("first/last",
@@ -1318,6 +1324,12 @@ END:VCARD''']):
                       until=lambda: view.contacts[0] != None)
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
 
+        # Cannot expand view.
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     r'.*: New filter is empty. It must be more restrictive than the old filter\.$'):
+             view.view.RefineSearch([],
+                                    timeout=self.timeout)
+
         # Find Charly by his FN (case insensitive explicitly).
         view = ContactsView(self.manager)
         view.search([['any-contains', 'chÁrless', 'case-insensitive']])
@@ -1365,6 +1377,26 @@ END:VCARD''']):
                       until=lambda: view.contacts[0] != None)
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
+
+        # Refine search without actually changing the result.
+        view.quiesentCount = 0
+        view.view.RefineSearch([['any-contains', 'am']],
+                               timeout=self.timeout)
+        self.runUntil('end of search refinement',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
+
+        # Restrict search to Abraham.
+        view.quiesentCount = 0
+        view.view.RefineSearch([['any-contains', 'Abraham']],
+                               timeout=self.timeout)
+        self.runUntil('end of search refinement',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiesentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his nickname.
         view = ContactsView(self.manager)
