@@ -95,6 +95,7 @@ void Manager::init()
 
     add(this, &Manager::start, "Start");
     add(this, &Manager::stop, "Stop");
+    add(this, &Manager::isRunning, "IsRunning");
     add(this, &Manager::setSortOrder, "SetSortOrder");
     add(this, &Manager::getSortOrder, "GetSortOrder");
     add(this, &Manager::search, "Search");
@@ -129,7 +130,7 @@ void Manager::initSorting(const std::string &order)
     if (!order.empty()) {
         compare = m_locale->createCompare(order);
     }
-    m_folks->getMainView()->setCompare(compare);
+    m_folks->setCompare(compare);
 }
 
 boost::shared_ptr<Manager> Manager::create(const boost::shared_ptr<Server> &server)
@@ -152,12 +153,21 @@ void Manager::start()
 
 void Manager::stop()
 {
-    // TODO: if there are no active searches, then recreate aggregator
-    if (true) {
+    // If there are no active searches, then recreate aggregator.
+    // Instead of tracking open views, use the knowledge that an
+    // idle server has only two references to the main view:
+    // one inside m_folks, one given back to us here.
+    if (m_folks->getMainView().use_count() <= 2) {
+        SE_LOG_DEBUG(NULL, NULL, "restarting due to Manager.Stop()");
         initFolks();
         initDatabases();
         initSorting(m_sortOrder);
     }
+}
+
+bool Manager::isRunning()
+{
+    return m_folks->isRunning();
 }
 
 void Manager::setSortOrder(const std::string &order)

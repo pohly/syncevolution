@@ -65,6 +65,8 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void start();
     /** Manager.Stop() */
     void stop();
+    /** Manager.IsRunning() */
+    bool isRunning();
     /** Manager.SetSortOrder() */
     void setSortOrder(const std::string &order);
     /** Manager.GetSortOrder() */

@@ -95,6 +95,11 @@ void IndividualView::start()
     }
 }
 
+bool IndividualView::isRunning() const
+{
+    return m_started;
+}
+
 void IndividualView::readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
 {
     contacts.clear();
@@ -652,10 +657,23 @@ void IndividualAggregator::setDatabases(std::set<std::string> &databases)
     }
 }
 
+void IndividualAggregator::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
+{
+    // Don't start main view. Instead rememeber the compare instance
+    // for start().
+    m_compare = compare;
+    if (m_view) {
+        m_view->setCompare(compare);
+    }
+}
+
 void IndividualAggregator::start()
 {
     if (!m_view) {
         m_view = FullView::create(m_folks);
+        if (m_compare) {
+            m_view->setCompare(m_compare);
+        }
         if (m_eds) {
             // Backend was loaded and configured, we can prepare the aggregator.
             SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
@@ -664,6 +682,11 @@ void IndividualAggregator::start()
                                     getFolks());
         }
     }
+}
+
+bool IndividualAggregator::isRunning() const
+{
+    return m_view;
 }
 
 boost::shared_ptr<FullView> IndividualAggregator::getMainView()

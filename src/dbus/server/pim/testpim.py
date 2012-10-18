@@ -1143,6 +1143,24 @@ END:VCARD
 
     @timeout(60)
     @property("snapshot", "simple-sort")
+    def testStop(self):
+        '''TestContacts.testStop - stop a started server'''
+        # Auto-start.
+        self.assertEqual(False, self.manager.IsRunning(timeout=self.timeout))
+        self.setUpView(peers=['foo'])
+        self.assertEqual(True, self.manager.IsRunning(timeout=self.timeout))
+
+        # Must not stop now.
+        self.manager.Stop(timeout=self.timeout)
+        self.view.read(0, 0)
+
+        # It may stop after closing the view.
+        self.view.view.Close(timeout=self.timeout)
+        self.manager.Stop(timeout=self.timeout)
+        self.assertEqual(False, self.manager.IsRunning(timeout=self.timeout))
+
+    @timeout(60)
+    @property("snapshot", "simple-sort")
     def testEmpty(self):
         '''TestContacts.testEmpty - start with empty view without databases'''
         self.setUpView(peers=[])

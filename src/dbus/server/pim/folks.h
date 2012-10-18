@@ -190,6 +190,11 @@ class IndividualView
      */
     void start();
 
+    /**
+     * start() was called.
+     */
+    bool isRunning() const;
+
     /** current number of entries */
     virtual int size() const = 0;
 
@@ -367,6 +372,7 @@ class IndividualAggregator
 {
     /** empty when not started yet */
     boost::shared_ptr<FullView> m_view;
+    boost::shared_ptr<IndividualCompare> m_compare;
     boost::weak_ptr<IndividualAggregator> m_self;
     FolksIndividualAggregatorCXX m_folks;
     FolksBackendStoreCXX m_backendStore;
@@ -409,6 +415,11 @@ class IndividualAggregator
     FolksIndividualAggregator *getFolks() const { return m_folks.get(); }
 
     /**
+     * Set sorting without starting the view just yet.
+     */
+    void setCompare(const boost::shared_ptr<IndividualCompare> &compare);
+
+    /**
      * Starts pulling and sorting of contacts.
      * Creates m_view and starts populating it.
      * Can be called multiple times.
@@ -416,6 +427,11 @@ class IndividualAggregator
      * See also org.01.pim.contacts.Manager.Start().
      */
     void start();
+
+    /**
+     * start() was called, or something caused it to be called.
+     */
+    bool isRunning() const;
 
     /**
      * configure active databases
