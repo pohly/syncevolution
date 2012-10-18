@@ -454,6 +454,24 @@ void FilteredView::doStart()
     m_parent->m_removedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::removeIndividual, this, _1, _2)).track(m_self));
 }
 
+void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter)
+{
+    size_t index = 0;
+    while (index < m_local2parent.size()) {
+        FolksIndividualCXX individual = m_parent->getContact(index);
+        if (individualFilter->matches(individual)) {
+            // Still matched, just skip it.
+            ++index;
+        } else {
+            // No longer matched, remove it.
+            m_removedSignal(index, individual);
+            m_local2parent.erase(m_local2parent.begin() + index);
+        }
+    }
+    m_filter = individualFilter;
+    m_quiesenceSignal();
+}
+
 void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)
 {
     if (!individual) {

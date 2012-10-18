@@ -195,6 +195,14 @@ class IndividualView
      */
     bool isRunning() const;
 
+    /**
+     * Replace filter with more specific one. Only supported by a view
+     * which is already filtered.
+     */
+    virtual void refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter) {
+        SE_THROW("refining the search not supported by this view");
+    }
+
     /** current number of entries */
     virtual int size() const = 0;
 
@@ -360,6 +368,7 @@ class FilteredView : public IndividualView
 
     // from IndividualView
     virtual void doStart();
+    virtual void refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter);
     virtual int size() const { return (int)m_local2parent.size(); }
     virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_local2parent.size()) ? m_parent->getContact(m_local2parent[index]) : FolksIndividualCXX(); }
 };

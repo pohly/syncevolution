@@ -191,6 +191,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     boost::weak_ptr<ViewResource> m_self;
     GDBusCXX::DBusRemoteObject m_viewAgent;
     boost::shared_ptr<IndividualView> m_view;
+    boost::shared_ptr<LocaleFactory> m_locale;
     boost::weak_ptr<Client> m_owner;
     struct Change {
         Change() : m_start(0), m_count(0), m_call(NULL) {}
@@ -204,6 +205,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         m_contactsRemoved;
 
     ViewResource(const boost::shared_ptr<IndividualView> view,
+                 const boost::shared_ptr<LocaleFactory> &locale,
                  const boost::shared_ptr<Client> &owner,
                  GDBusCXX::connection_type *connection,
                  const GDBusCXX::Caller_t &ID,
@@ -216,6 +218,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                     AGENT_IFACE,
                     ID),
         m_view(view),
+        m_locale(locale),
         m_owner(owner),
 
         // use ViewAgent interface
@@ -481,12 +484,15 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
 
 public:
     static boost::shared_ptr<ViewResource> create(const boost::shared_ptr<IndividualView> &view,
+                                                  const boost::shared_ptr<LocaleFactory> &locale,
                                                   const boost::shared_ptr<Client> &owner,
                                                   GDBusCXX::connection_type *connection,
                                                   const GDBusCXX::Caller_t &ID,
                                                   const GDBusCXX::DBusObject_t &agentPath)
     {
-        boost::shared_ptr<ViewResource> viewResource(new ViewResource(view, owner,
+        boost::shared_ptr<ViewResource> viewResource(new ViewResource(view,
+                                                                      locale,
+                                                                      owner,
                                                                       connection,
                                                                       ID,
                                                                       agentPath));
@@ -532,8 +538,11 @@ public:
     /** ViewControl.RefineSearch() */
     void refineSearch(const LocaleFactory::Filter_t &filter)
     {
-        // TODO
-        SE_THROW("not implemented");
+        if (filter.empty()) {
+            SE_THROW("New filter is empty. It must be more restrictive than the old filter.");
+        }
+        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
+        m_view->refineFilter(individualFilter);
     }
 };
 unsigned int ViewResource::m_counter;
@@ -556,6 +565,7 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
     }
 
     boost::shared_ptr<ViewResource> viewResource(ViewResource::create(view,
+                                                                      m_locale,
                                                                       client,
                                                                       getConnection(),
                                                                       ID,
