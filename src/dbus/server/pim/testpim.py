@@ -325,6 +325,7 @@ XDG root.
         '''returns current set of EDS sources as set of UIDs, without the .source suffix'''
         return set([os.path.splitext(x)[0] for x in os.listdir(self.sourcedir)])
 
+    @property("snapshot", "simple-sort")
     def testConfig(self):
         '''TestContacts.testConfig - set and remove peers'''
         sources = self.currentSources()
@@ -446,6 +447,7 @@ XDG root.
         time.sleep(2)
 
     @timeout(100)
+    @property("snapshot", "simple-sort")
     def testSync(self):
         '''TestContacts.testSync - test caching of a dummy peer which uses a real phone or a local directory as fallback'''
         sources = self.currentSources()
@@ -516,6 +518,7 @@ END:VCARD'''
 
     @timeout(100)
     @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=200")
+    @property("snapshot", "simple-sort")
     def testSyncAbort(self):
         '''TestContacts.testSyncAbort - test StopSync()'''
         self.setUpServer()
@@ -575,6 +578,7 @@ END:VCARD'''
         self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[1].get_dbus_name())
 
     @timeout(60)
+    @property("snapshot", "simple-sort")
     def testView(self):
         '''TestContacts.testView - test making changes to the unified address book'''
         self.setUpView()
@@ -638,6 +642,7 @@ END:VCARD'''
 
 
     @timeout(60)
+    @property("snapshot", "simple-sort")
     def testViewSorting(self):
         '''TestContacts.testViewSorting - check that sorting works when changing contacts'''
         self.setUpView()
@@ -847,19 +852,20 @@ END:VCARD''')
     # boost::locale checks LC_TYPE first, then LC_ALL, LANG. Set all, just
     # to be sure.
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
+    @property("snapshot", "first-last-sort")
     def testSortOrder(self):
         '''TestContacts.testSortOrder - check that sorting works when changing the comparison'''
         self.setUpView()
 
-        # Expect an error.
+        # Locale-aware "first/last" sorting from "first-last-sort" config.
+        self.assertEqual("first/last", self.manager.GetSortOrder(timeout=self.timeout))
+
+        # Expect an error, no change to sort order.
         with self.assertRaisesRegexp(dbus.DBusException,
                                      'sort order.*not supported'):
              self.manager.SetSortOrder('no-such-order',
                                        timeout=self.timeout)
-
-        # Enable locale-aware "first/last" sorting.
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.assertEqual("first/last", self.manager.GetSortOrder(timeout=self.timeout))
 
         # Insert new contacts.
         #
@@ -912,6 +918,13 @@ END:VCARD''']):
         # Invert sort order.
         self.manager.SetSortOrder("last/first",
                                   timeout=self.timeout)
+
+        # Check that order was adapted and stored permanently.
+        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
+        self.assertIn("sort = last/first\n",
+                      open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
+                           "r").readlines())
+
         # Contact in the middle may or may not become invalidated.
         self.runUntil('reordered',
                       check=lambda: self.assertEqual([], self.view.errors),
@@ -946,6 +959,7 @@ END:VCARD''']):
         self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
 
     @timeout(60)
+    @property("snapshot", "simple-sort")
     def testRead(self):
         '''TestContacts.testRead - check that folks and PIM Manager deliver EDS data correctly'''
         self.setUpView()
@@ -1128,6 +1142,7 @@ END:VCARD
                          sortLists=True)
 
     @timeout(60)
+    @property("snapshot", "simple-sort")
     def testEmpty(self):
         '''TestContacts.testEmpty - start with empty view without databases'''
         self.setUpView(peers=[])
@@ -1139,6 +1154,7 @@ END:VCARD
                       until=lambda: time.time() - now > 10)
 
     @timeout(60)
+    @property("snapshot", "simple-sort")
     def testMerge(self):
         '''TestContacts.testMerge - merge identical contacts from two stores'''
         self.setUpView(peers=['foo', 'bar'])
@@ -1208,6 +1224,8 @@ END:VCARD'''
         '''TestContacts.testFilterExisting - check that filtering works when applied to static contacts'''
         self.setUpView()
 
+        # Override default sorting.
+        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
         self.manager.SetSortOrder("first/last",
                                   timeout=self.timeout)
 

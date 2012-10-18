@@ -41,7 +41,10 @@ class Manager : public GDBusCXX::DBusObjectHelper
     boost::shared_ptr<Server> m_server;
     boost::shared_ptr<IndividualAggregator> m_folks;
     boost::shared_ptr<LocaleFactory> m_locale;
+    /** Stores "sort" property in XDG ~/.config/syncevolution/pim-manager.ini'. */
+    boost::shared_ptr<ConfigNode> m_configNode;
     std::string m_sortOrder;
+
     /**
      * Contains the EDS UUIDs of all address books contributing to the current
      * unified address book.
@@ -56,7 +59,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void init();
     void initFolks();
     void initDatabases();
-    void initSorting();
+    void initSorting(const std::string &order);
 
     /** Manager.Start() */
     void start();

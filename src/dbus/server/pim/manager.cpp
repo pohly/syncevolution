@@ -23,6 +23,8 @@
 #include "../client.h"
 #include "../session.h"
 
+#include <syncevo/IniConfigNode.h>
+
 #include <boost/scoped_ptr.hpp>
 
 SE_BEGIN_CXX
@@ -34,6 +36,8 @@ static const char * const MANAGER_ERROR_ABORTED = "org._01.pim.contacts.Manager.
 static const char * const MANAGER_ERROR_BAD_STATUS = "org._01.pim.contacts.Manager.BadStatus";
 static const char * const AGENT_IFACE = "org._01.pim.contacts.ViewAgent";
 static const char * const CONTROL_IFACE = "org._01.pim.contacts.ViewControl";
+
+static const char * const MANAGER_CONFIG_SORT_PROPERTY = "sort";
 
 /**
  * Prefix for peer databases ("peer-<uid>")
@@ -78,10 +82,16 @@ Manager::~Manager()
 
 void Manager::init()
 {
-    // TODO: restore sort order
-    m_sortOrder = ""; // use default sorting in FullView
+    // Restore sort order.
+    m_configNode.reset(new IniFileConfigNode(SubstEnvironment("${XDG_CONFIG_HOME}/syncevolution"),
+                                             "pim-manager.ini",
+                                             false));
+    InitStateString order = m_configNode->readProperty(MANAGER_CONFIG_SORT_PROPERTY);
+    m_sortOrder = order.wasSet() ?
+        order :
+        "last/first";
     initFolks();
-    initSorting();
+    initSorting(m_sortOrder);
 
     add(this, &Manager::start, "Start");
     add(this, &Manager::stop, "Stop");
@@ -109,15 +119,15 @@ void Manager::initFolks()
     m_folks = IndividualAggregator::create();
 }
 
-void Manager::initSorting()
+void Manager::initSorting(const std::string &order)
 {
-    // Mirror m_sortOrder in m_folks main view.
+    // Mirror sorting order in m_folks main view.
     // Empty string passes NULL pointer to setCompare(),
     // which chooses the builtin sorting in folks.cpp,
     // independent of the locale plugin.
     boost::shared_ptr<IndividualCompare> compare;
-    if (!m_sortOrder.empty()) {
-        compare = m_locale->createCompare(m_sortOrder);
+    if (!order.empty()) {
+        compare = m_locale->createCompare(order);
     }
     m_folks->getMainView()->setCompare(compare);
 }
@@ -146,16 +156,18 @@ void Manager::stop()
     if (true) {
         initFolks();
         initDatabases();
-        initSorting();
+        initSorting(m_sortOrder);
     }
 }
 
 void Manager::setSortOrder(const std::string &order)
 {
-    // TODO: check string and change order,
-    // store persistently
+    // String is checked as part of initSorting,
+    // only store if parsing succeeds.
+    initSorting(order);
+    m_configNode->writeProperty(MANAGER_CONFIG_SORT_PROPERTY, InitStateString(order, true));
+    m_configNode->flush();
     m_sortOrder = order;
-    initSorting();
 }
 
 /**
