@@ -707,8 +707,8 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish, GAsyncResult *
 /** convenience macro for picking the GAsyncReadyCXX that matches the _prepare call */
 #define SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare) \
     GAsyncReadyCXX< boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::result_type, \
-                    typeof(_prepare ## _finish), \
-                    _prepare ## _finish, \
+                    typeof(_prepare ## _finish) *, \
+                    & _prepare ## _finish, \
                     boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::arg1_type, \
                     boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::arity >
 
