@@ -1657,6 +1657,135 @@ template<class A, class B> struct dbus_traits< std::pair<A,B> > : public dbus_tr
 };
 
 /**
+ * a boost::tuple - maps to D-Bus struct
+ */
+template<class A, class B> struct dbus_traits< boost::tuple<A,B> > : public dbus_traits_base
+{
+    static std::string getContainedType()
+    {
+        return dbus_traits<A>::getType() + dbus_traits<B>::getType();
+    }
+    static std::string getType()
+    {
+        return "(" + getContainedType() + ")";
+    }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+    typedef boost::tuple<A,B> host_type;
+    typedef const boost::tuple<A,B> &arg_type;
+
+    static void get(ExtractArgs &context,
+                    GVariantIter &iter, host_type &t)
+    {
+        GVariantCXX var(g_variant_iter_next_value(&iter));
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
+            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
+        }
+
+        GVariantIter tupIter;
+        g_variant_iter_init(&tupIter, var);
+        dbus_traits<A>::get(context, tupIter, boost::tuples::get<0>(t));
+        dbus_traits<B>::get(context, tupIter, boost::tuples::get<1>(t));
+    }
+
+    static void append(GVariantBuilder &builder, arg_type t)
+    {
+        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
+        dbus_traits<A>::append(builder, boost::tuples::get<0>(t));
+        dbus_traits<B>::append(builder, boost::tuples::get<1>(t));
+        g_variant_builder_close(&builder);
+    }
+};
+
+/**
+ * a boost::tuple - maps to D-Bus struct
+ */
+template<class A, class B, class C> struct dbus_traits< boost::tuple<A,B,C> > : public dbus_traits_base
+{
+    static std::string getContainedType()
+    {
+        return dbus_traits<A>::getType() + dbus_traits<B>::getType() + dbus_traits<C>::getType();
+    }
+    static std::string getType()
+    {
+        return "(" + getContainedType() + ")";
+    }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+    typedef boost::tuple<A,B,C> host_type;
+    typedef const boost::tuple<A,B,C> &arg_type;
+
+    static void get(ExtractArgs &context,
+                    GVariantIter &iter, host_type &t)
+    {
+        GVariantCXX var(g_variant_iter_next_value(&iter));
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
+            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
+        }
+
+        GVariantIter tupIter;
+        g_variant_iter_init(&tupIter, var);
+        dbus_traits<A>::get(context, tupIter, boost::tuples::get<0>(t));
+        dbus_traits<B>::get(context, tupIter, boost::tuples::get<1>(t));
+        dbus_traits<C>::get(context, tupIter, boost::tuples::get<2>(t));
+    }
+
+    static void append(GVariantBuilder &builder, arg_type t)
+    {
+        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
+        dbus_traits<A>::append(builder, boost::tuples::get<0>(t));
+        dbus_traits<B>::append(builder, boost::tuples::get<1>(t));
+        dbus_traits<C>::append(builder, boost::tuples::get<2>(t));
+        g_variant_builder_close(&builder);
+    }
+};
+
+/**
+ * a boost::tuple - maps to D-Bus struct
+ */
+template<class A, class B, class C, class D> struct dbus_traits< boost::tuple<A,B,C,D> > : public dbus_traits_base
+{
+    static std::string getContainedType()
+    {
+        return dbus_traits<A>::getType() + dbus_traits<B>::getType() + dbus_traits<C>::getType() + dbus_traits<D>::getType();
+    }
+    static std::string getType()
+    {
+        return "(" + getContainedType() + ")";
+    }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+    typedef boost::tuple<A,B,C,D> host_type;
+    typedef const boost::tuple<A,B,C,D> &arg_type;
+
+    static void get(ExtractArgs &context,
+                    GVariantIter &iter, host_type &t)
+    {
+        GVariantCXX var(g_variant_iter_next_value(&iter));
+        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
+            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
+        }
+
+        GVariantIter tupIter;
+        g_variant_iter_init(&tupIter, var);
+        dbus_traits<A>::get(context, tupIter, boost::tuples::get<0>(t));
+        dbus_traits<B>::get(context, tupIter, boost::tuples::get<1>(t));
+        dbus_traits<C>::get(context, tupIter, boost::tuples::get<2>(t));
+        dbus_traits<D>::get(context, tupIter, boost::tuples::get<3>(t));
+    }
+
+    static void append(GVariantBuilder &builder, arg_type t)
+    {
+        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
+        dbus_traits<A>::append(builder, boost::tuples::get<0>(t));
+        dbus_traits<B>::append(builder, boost::tuples::get<1>(t));
+        dbus_traits<C>::append(builder, boost::tuples::get<2>(t));
+        dbus_traits<D>::append(builder, boost::tuples::get<3>(t));
+        g_variant_builder_close(&builder);
+    }
+};
+
+/**
  * dedicated type for chunk of data, to distinguish this case from
  * a normal std::pair of two values
  */
