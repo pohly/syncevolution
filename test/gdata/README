@@ -1,0 +1,11 @@
+This is work under construction to build a libgdata-based contact source.
+
+To test it, insert your Google API client_id to the define at the beginning
+of the test.cpp, compile and run
+./test <googleusername> <googlepassword>
+
+
+For more information, contact:
+
+	Jussi Laako <jussi.laako@linux.intel.com>
+
