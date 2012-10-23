@@ -196,7 +196,7 @@ XDG root.
             # Give EDS time to notice the removal.
             time.sleep(5)
 
-    def setUpView(self, peers = ['foo']):
+    def setUpView(self, peers = ['foo'], withSystemAddressBook=False):
         '''Set up a peers and create a view for them.'''
         # Ignore all currently existing EDS databases.
         self.sources = self.currentSources()
@@ -225,18 +225,25 @@ XDG root.
              self.assertEqual(self.peers, self.manager.GetAllPeers(timeout=self.timeout))
              self.assertEqual(self.expected, self.currentSources())
 
+             # Delete local data in the cache.
+             logging.log('deleting all items of ' + uid)
+             self.runCmdline(['--delete-items', '@' + self.managerPrefix + uid, 'local', '*'])
+
         # Limit active databases to the one we just created.
-        self.manager.SetActiveAddressBooks(['peer-' + uid for uid in self.uids])
+        addressbooks = ['peer-' + uid for uid in self.uids]
+        if withSystemAddressBook:
+             addressbooks.append('')
+             # Delete content of system address book. The check at the start of
+             # the script ensures that this is not the real one of the user.
+             logging.log('deleting all items of system address book')
+             self.runCmdline(['--delete-items', 'backend=evolution-contacts', '--luids', '*'])
+
+        self.manager.SetActiveAddressBooks(addressbooks)
 
         # Start view. We don't know the current state, so give it some time to settle.
         self.view = ContactsView(self.manager)
         self.view.search([])
         time.sleep(5)
-
-        # Delete all local data in the caches.
-        logging.log('deleting all items')
-        for uid in self.uids:
-             self.runCmdline(['--delete-items', '@' + self.managerPrefix + uid, 'local', '*'])
 
         # Run until view is empty.
         self.runUntil('empty view',
@@ -1804,6 +1811,215 @@ END:VCARD''')
                       until=lambda: len(self.view.contacts) == 0 and \
                            len(view.contacts) == 0)
 
+    @timeout(60)
+    @property("snapshot", "simple-sort")
+    def testContactWrite(self):
+        '''TestContacts.testContactWrite - add, update and remove contact'''
+        self.setUpView(peers=[], withSystemAddressBook=True)
+
+        # Use unicode strings to make the assertEqual output nicer in case
+        # of a mismatch. It's not necessary otherwise.
+        #
+        # This covers all fields which can be written by the folks EDS
+        # backend.
+        john = {
+             'full-name': 'John Doe',
+             'structured-name': {
+                  'family': 'Doe',
+                  'given': 'John',
+                  'additional': 'D.',
+                  'prefixes': 'Mr.',
+                  'suffixes': 'Sr.'
+                  },
+             # 'nickname': 'Johnny', TODO: should be stored by folks, currently not supported
+             'birthday': (2011, 12, 1),
+             # 'photo': 'file:///tmp/photo.png', TODO: test with real file, folks will store the content of it
+             # 'gender', 'male', not exposed via D-Bus
+             # 'im': ...
+             # 'is-favorite': ...
+             'emails': [
+                  ( 'john.doe@work', [ 'work' ] ),
+                  ( 'john@home', [ 'home' ] ),
+                  ],
+             'phones': [
+                  ( '1234', ['fax']),
+                  ( '5678', ['cell', 'work'] ),
+                  ( 'foobar', dbus.Array(signature="s")), # empty string list
+                  ],
+             'addresses': [
+                  (
+                       {
+                            'country': 'United States of America',
+                            'extension': 'ext',
+                            'locality': 'New York',
+                            'po-box': 'box',
+                            'region': 'NY',
+                            'street': 'Lower East Side',
+                            },
+                       ['work']
+                       ),
+                  (
+                       {
+                            'locality': 'Boston',
+                            'street': 'Main Street',
+                            },
+                       dbus.Array(signature="s") # empty string list
+                       ),
+                  ],
+             # 'web-services'
+             'roles': [
+                  {
+                       'organisation': 'ACME',
+                       'title': 'president',
+                       'role': 'decision maker',
+                       },
+                  {
+                       'organisation': 'BAR',
+                       'title': 'CEO',
+                       'role': 'spokesperson',
+                       },
+                  ],
+             'notes': [
+                  'note\n\ntext',
+                  # TODO: notes -> note (EDS only supports one NOTE)
+                  ],
+             'urls': [
+                  ('chat', ['x-video']),
+                  ('free/busy', ['x-free-busy']),
+                  ('http://john.doe.com', ['x-home-page']),
+                  ('web log', ['x-blog']),
+                  ],
+             }
+
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     r'.*: only the system address book is writable'):
+             self.manager.AddContact('no-such-address-book',
+                                     john,
+                                     timeout=self.timeout)
+
+        # Add new contact.
+        localID = self.manager.AddContact('', john,
+                                          timeout=self.timeout)
+        john['source'] = [('', unicode(localID))]
+
+        self.runUntil('view with one contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) > 0)
+        self.assertEqual(1, len(self.view.contacts))
+        self.view.read(0, 1)
+        self.runUntil('contact data',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual(john, self.view.contacts[0], sortLists=True)
+
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     r'''.*: contact with local ID 'no-such-local-id' not found in system address book'''):
+             self.manager.ModifyContact('',
+                                        'no-such-local-id',
+                                        john,
+                                        timeout=self.timeout)
+
+        # Update the contact. Modifying too many properties at once deadlocks EDS,
+        # see https://bugzilla.gnome.org/show_bug.cgi?id=652659.
+        john['full-name'] = 'John A. Doe'
+        john['phones'] = [
+                  ( '1234', ['fax'] ),
+                  ( '56789', ['work'] ),
+                  ]
+
+        # john = {
+        #      'source': [('', unicode(localID))],
+
+        #      'full-name': 'John A. Doe',
+        #      'structured-name': {
+        #           'family': 'Doe',
+        #           'given': 'John',
+        #           'additional': 'A.',
+        #           'prefixes': 'Mr.',
+        #           'suffixes': 'Sr.'
+        #           },
+        #      # 'nickname': 'Johnny', TODO: should be stored by folks, currently not supported - https://bugzilla.gnome.org/show_bug.cgi?id=686695
+        #      'birthday': (2011, 12, 24),
+        #      # 'photo': 'file:///tmp/photo.png', TODO: test with real file, folks will store the content of it
+        #      # 'gender', 'male', not exposed via D-Bus
+        #      # 'im': ...
+        #      # 'is-favorite': ...
+        #      'emails': [
+        #           ( 'john2@home', [ 'home' ] ),
+        #           ],
+        #      'phones': [
+        #           ( '1234', ['fax']),
+        #           ( '56789', ['work'] ),
+        #           ],
+        #      'addresses': [
+        #           (
+        #                {
+        #                     'country': 'United States of America',
+        #                     'extension': 'ext',
+        #                     'locality': 'New York',
+        #                     'po-box': 'box',
+        #                     'region': 'NY',
+        #                     'street': 'Upper East Side',
+        #                     },
+        #                ['work']
+        #                ),
+        #           (
+        #                {
+        #                     'country': 'United States of America',
+        #                     'locality': 'Boston',
+        #                     'street': 'Main Street',
+        #                     },
+        #                dbus.Array(signature="s") # empty string list
+        #                ),
+        #           ],
+        #      # 'web-services'
+        #      'roles': [
+        #           {
+        #                'organisation': 'ACME',
+        #                'title': 'senior president',
+        #                'role': 'scapegoat',
+        #                },
+        #           ],
+        #      'notes': [
+        #           'note\n\ntext modified',
+        #           # TODO: notes -> note (EDS only supports one NOTE)
+        #           ],
+        #      'urls': [
+        #           ('http://john.A.doe.com', ['x-home-page']),
+        #           ('web log 2', ['x-blog']),
+        #           ],
+        #      }
+        self.manager.ModifyContact('', localID, john,
+                                   timeout=self.timeout)
+        self.runUntil('modified contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 1 and self.view.contacts[0] == None)
+        # Keep asking for data: we may get "modified" signals multiple times,
+        # which invalidates data that we just read until the unified address book
+        # is stable again.
+        self.runUntil('modified contact data',
+                      check=lambda: (self.assertEqual([], self.view.errors),
+                                     self.view.read(0, 1) or True),
+                      until=lambda: self.view.contacts[0] != None)
+        self.assertEqual(john, self.view.contacts[0], sortLists=True)
+
+        # Remove the contact.
+        self.manager.RemoveContact('', localID,
+                                   timeout=self.timeout)
+        self.runUntil('empty view',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 0)
+
+    # TODO: check that deleting or modifying a contact works directly
+    # after starting the PIM manager. The problem is that FolksPersonaStore
+    # might still be loading the contacts, in which case looking up the
+    # contact would fail.
+
 
 if __name__ == '__main__':
+    xdg = (os.path.join(os.path.abspath('.'), 'temp-testpim', 'config'),
+           os.path.join(os.path.abspath('.'), 'temp-testpim', 'local', 'cache'))
+    if (os.environ.get('XDG_CONFIG_HOME', None), os.environ.get('XDG_DATA_HOME', None)) != xdg:
+         # Don't allow user of the script to erase his normal EDS data.
+         sys.exit('testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME=%s XDG_DATA_HOME=%s because it will modify system EDS databases there' % xdg)
     unittest.main()
