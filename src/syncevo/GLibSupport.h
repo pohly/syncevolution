@@ -297,17 +297,6 @@ class GLibNotify : public boost::noncopyable
 };
 
 /**
- * always throws an exception, including information from GError if available:
- * <action>: <error message>|failure
- *
- * Takes ownership of the error and frees it.
- *
- * Deprecated. Better use GErrorCXX.
- */
-void GLibErrorException(const std::string &action, GError *error);
-
-
-/**
  * Wraps GError. Where a GError** is expected, simply pass
  * a GErrorCXX instance.
  */
@@ -382,6 +371,7 @@ struct GErrorCXX {
      * <action>: <error message>|failure
      */
     void throwError(const std::string &action);
+    static void throwError(const std::string &action, const GError *err);
 };
 
 template<class T> void NoopDestructor(T *) {}

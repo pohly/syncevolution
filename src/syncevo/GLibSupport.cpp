@@ -153,30 +153,19 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
     return instance.run();
 }
 
-void GLibErrorException(const string &action, GError *gerror)
-{
-    string gerrorstr = action;
-    if (!gerrorstr.empty()) {
-        gerrorstr += ": ";
-    }
-    if (gerror) {
-        gerrorstr += gerror->message;
-        g_clear_error(&gerror);
-    } else {
-        gerrorstr = "failure";
-    }
-
-    SE_THROW(gerrorstr);
-}
-
 void GErrorCXX::throwError(const string &action)
 {
+    throwError(action, m_gerror);
+}
+
+void GErrorCXX::throwError(const string &action, const GError *err)
+{
     string gerrorstr = action;
     if (!gerrorstr.empty()) {
         gerrorstr += ": ";
     }
-    if (m_gerror) {
-        gerrorstr += m_gerror->message;
+    if (err) {
+        gerrorstr += err->message;
         // No need to clear m_error! Will be done as part of
         // destructing the GErrorCCXX.
     } else {
@@ -203,11 +192,11 @@ GLibNotify::GLibNotify(const char *file,
     m_callback(callback)
 {
     GFileCXX filecxx(g_file_new_for_path(file));
-    GError *error = NULL;
-    GFileMonitorCXX monitor(g_file_monitor_file(filecxx.get(), G_FILE_MONITOR_NONE, NULL, &error));
+    GErrorCXX gerror;
+    GFileMonitorCXX monitor(g_file_monitor_file(filecxx.get(), G_FILE_MONITOR_NONE, NULL, gerror));
     m_monitor.swap(monitor);
     if (!m_monitor) {
-        GLibErrorException(std::string("monitoring ") + file, error);
+        gerror.throwError(std::string("monitoring ") + file);
     }
     g_signal_connect_after(m_monitor.get(),
                            "changed",
