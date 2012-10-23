@@ -30,6 +30,7 @@
 
 #include <folks/folks.h>
 
+#include "../dbus-callbacks.h"
 #include "../timeout.h"
 
 #include <syncevo/GLibSupport.h>
@@ -44,11 +45,15 @@ SE_GOBJECT_TYPE(FolksIndividual)
 SE_GOBJECT_TYPE(FolksEmailFieldDetails)
 SE_GOBJECT_TYPE(FolksBackendStore)
 SE_GOBJECT_TYPE(FolksBackend)
+SE_GOBJECT_TYPE(FolksPersonaStore)
 SE_GOBJECT_TYPE(GeeCollection)
 SE_GOBJECT_TYPE(GeeHashSet)
+SE_GLIB_TYPE(GHashTable, g_hash_table)
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+class PersonaDetails;
 
 /**
  * Abstract interface for comparing two FolksIndividual instances.
@@ -390,6 +395,15 @@ class IndividualAggregator
      * Set by backendsLoaded().
      */
     FolksBackendCXX m_eds;
+    /**
+     * Set by backendsLoaded(), if possible. If m_eds != NULL
+     * and m_systemStore == NULL, no system address book is
+     * available. If m_eds == NULL, hook into m_backendsLoadedSignal
+     * to be notified.
+     */
+    FolksPersonaStoreCXX m_systemStore;
+
+    boost::signals2::signal<void()> m_backendsLoadedSignal;
 
     /**
      * The set of enabled EDS databases, referenced by the UUID.
@@ -409,6 +423,49 @@ class IndividualAggregator
      * already called.
      */
     void backendsLoaded();
+
+    /**
+     * Executes the given operation when the EDS system address book
+     * is prepared. The operation may throw an exception, which (like
+     * all other errors) is reported as failure for the asynchronous
+     * operation.
+     */
+    void runWithAddressBook(const boost::function<void ()> &operation,
+                            const ErrorCb_t &onError) throw();
+    void runWithAddressBookHaveEDS(const boost::signals2::connection &conn,
+                                   const boost::function<void ()> &operation,
+                                   const ErrorCb_t &onError) throw();
+    void runWithAddressBookPrepared(const GError *gerror,
+                                    const boost::function<void ()> &operation,
+                                    const ErrorCb_t &onError) throw();
+
+    /**
+     * Executes the given operation after looking up the FolksPersona
+     * in the system address book, which must be prepared and loaded
+     * at that point.
+     */
+    void runWithPersona(const boost::function<void (FolksPersona *)> &operation,
+                        const std::string &localID,
+                        const ErrorCb_t &onError) throw();
+    void doRunWithPersona(const boost::function<void (FolksPersona *)> &operation,
+                          const std::string &localID,
+                          const ErrorCb_t &onError) throw();
+
+    /** the operation for runWithAddressBook() */
+    void doAddContact(const Result<void (const std::string &)> &result,
+                      const PersonaDetails &details);
+    /** handle result of adding contact */
+    void addContactDone(const GError *gerror,
+                        FolksPersona *persona,
+                        const Result<void (const std::string &)> &result) throw();
+
+   void doModifyContact(const Result<void ()> &result,
+                        FolksPersona *persona,
+                        const PersonaDetails &details) throw();
+   void doRemoveContact(const Result<void ()> &result,
+                        FolksPersona *persona) throw();
+   void removeContactDone(const GError *gerror,
+                          const Result<void ()> &result) throw();
 
  public:
     /**
@@ -457,6 +514,26 @@ class IndividualAggregator
      * @return never empty, start() will be called if necessary
      */
     boost::shared_ptr<FullView> getMainView();
+
+    /**
+     * Add contact to system address book. Returns new local ID
+     * as result.
+     */
+   void addContact(const Result<void (const std::string &)> &result,
+                   const PersonaDetails &details);
+
+   /**
+    * Modify contact in system address book.
+    */
+   void modifyContact(const Result<void ()> &result,
+                      const std::string &localID,
+                      const PersonaDetails &details);
+
+   /**
+    * Remove contact in system address book.
+    */
+   void removeContact(const Result<void ()> &result,
+                      const std::string &localID);
 };
 
 

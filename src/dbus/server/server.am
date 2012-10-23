@@ -59,7 +59,8 @@ src_dbus_server_server_cpp_files += \
   src/dbus/server/pim/manager.cpp
 
 src_dbus_server_server_h_files += \
-  src/dbus/server/pim/locale-factory.h
+  src/dbus/server/pim/locale-factory.h \
+  src/dbus/server/pim/persona-details.h
 
 nodist_src_dbus_server_libsyncevodbusserver_la_SOURCES += \
   src/dbus/server/pim/locale-factory-@DBUS_PIM_PLUGIN@.cpp

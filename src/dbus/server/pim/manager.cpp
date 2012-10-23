@@ -19,6 +19,7 @@
 
 #include "manager.h"
 #include "individual-traits.h"
+#include "persona-details.h"
 #include "../resource.h"
 #include "../client.h"
 #include "../session.h"
@@ -105,6 +106,9 @@ void Manager::init()
     add(this, &Manager::syncPeer, "SyncPeer");
     add(this, &Manager::stopSync, "StopSync");
     add(this, &Manager::getAllPeers, "GetAllPeers");
+    add(this, &Manager::addContact, "AddContact");
+    add(this, &Manager::modifyContact, "ModifyContact");
+    add(this, &Manager::removeContact, "RemoveContact");
 
     // Ready, make it visible via D-Bus.
     activate();
@@ -966,6 +970,52 @@ void Manager::stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
     }
     if (!aborting) {
         result->done();
+    }
+}
+
+void Manager::addContact(const boost::shared_ptr< GDBusCXX::Result1<std::string> > &result,
+                         const std::string &addressbook,
+                         const PersonaDetails &details)
+{
+    try {
+        if (!addressbook.empty()) {
+            SE_THROW("only the system address book is writable");
+        }
+        m_folks->addContact(createDBusCb(result), details);
+    } catch (...) {
+        dbusErrorCallback(result);
+    }
+}
+
+void Manager::modifyContact(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                            const std::string &addressbook,
+                            const std::string &localID,
+                            const PersonaDetails &details)
+{
+    try {
+        if (!addressbook.empty()) {
+            SE_THROW("only the system address book is writable");
+        }
+        m_folks->modifyContact(createDBusCb(result),
+                               localID,
+                               details);
+    } catch (...) {
+        dbusErrorCallback(result);
+    }
+}
+
+void Manager::removeContact(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                            const std::string &addressbook,
+                            const std::string &localID)
+{
+    try {
+        if (!addressbook.empty()) {
+            SE_THROW("only the system address book is writable");
+        }
+        m_folks->removeContact(createDBusCb(result),
+                               localID);
+    } catch (...) {
+        dbusErrorCallback(result);
     }
 }
 

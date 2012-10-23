@@ -109,6 +109,20 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.GetAllPeers() */
     PeersMap getAllPeers();
 
+    /** Manager.AddContact() */
+    void addContact(const boost::shared_ptr< GDBusCXX::Result1<std::string> > &result,
+                    const std::string &addressbook,
+                    const PersonaDetails &details);
+    /** Manager.ModifyContact() */
+    void modifyContact(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                       const std::string &addressbook,
+                       const std::string &localID,
+                       const PersonaDetails &details);
+    /** Manager.RemoveContact() */
+    void removeContact(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                       const std::string &addressbook,
+                       const std::string &localID);
+
     /**
      * Starts a session for the given config and with the
      * given flags, then when it is active, invokes the callback.

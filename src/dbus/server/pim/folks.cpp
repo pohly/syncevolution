@@ -19,6 +19,8 @@
 
 #include <config.h>
 #include "folks.h"
+#include "individual-traits.h"
+#include "persona-details.h"
 #include <boost/bind.hpp>
 #include "test.h"
 #include <syncevo/BoostHelper.h>
@@ -645,6 +647,11 @@ void IndividualAggregator::backendsLoaded()
     m_eds =
         FolksBackendCXX::steal(folks_backend_store_dup_backend_by_name(m_backendStore, "eds"));
     if (m_eds) {
+        // Remember system store, for writing contacts.
+        GeeMap *stores = folks_backend_get_persona_stores(m_eds);
+        FolksPersonaStore *systemStore = static_cast<FolksPersonaStore *>(gee_map_get(stores, "system-address-book"));
+        m_systemStore = systemStore;
+
         // Tell the backend which databases we want.
         SE_LOG_DEBUG(NULL, NULL, "backends loaded: setting EDS persona stores: [%s]",
                      dumpDatabases().c_str());
@@ -657,6 +664,9 @@ void IndividualAggregator::backendsLoaded()
                                                 "folks_individual_aggregator_prepare"),
                                     getFolks());
         }
+
+        // Execute delayed work.
+        m_backendsLoadedSignal();
     } else {
         SE_LOG_ERROR(NULL, NULL, "EDS backend not active?!");
     }
@@ -713,6 +723,223 @@ boost::shared_ptr<FullView> IndividualAggregator::getMainView()
         start();
     }
     return m_view;
+}
+
+void IndividualAggregator::addContact(const Result<void (const std::string &)> &result,
+                                      const PersonaDetails &details)
+{
+    // Called directly by D-Bus client. Need fully functional system address book.
+    runWithAddressBook(boost::bind(&IndividualAggregator::doAddContact,
+                                   this,
+                                   result,
+                                   details),
+                       result.getOnError());
+}
+
+void IndividualAggregator::doAddContact(const Result<void (const std::string &)> &result,
+                                        const PersonaDetails &details)
+{
+    SYNCEVO_GLIB_CALL_ASYNC(folks_persona_store_add_persona_from_details,
+                            boost::bind(&IndividualAggregator::addContactDone,
+                                        this,
+                                        _1, _2,
+                                        result),
+                            m_systemStore,
+                            details.get());
+}
+
+void IndividualAggregator::addContactDone(const GError *gerror,
+                                          FolksPersona *persona,
+                                          const Result<void (const std::string &)> &result) throw()
+{
+    try {
+        // Handle result of folks_persona_store_add_persona_from_details().
+        if (gerror) {
+            GErrorCXX::throwError("add contact", gerror);
+        }
+
+        const gchar *uid = folks_persona_get_uid(persona);
+        if (uid) {
+            gchar *backend, *storeID, *personaID;
+            folks_persona_split_uid(uid, &backend, &storeID, &personaID);
+            PlainGStr tmp1(backend), tmp2(storeID), tmp3(personaID);
+            result.done(personaID);
+        } else {
+            SE_THROW("new persona has empty UID");
+        }
+    } catch (...) {
+        result.failed();
+    }
+}
+
+void IndividualAggregator::modifyContact(const Result<void ()> &result,
+                                         const std::string &localID,
+                                         const PersonaDetails &details)
+{
+    runWithPersona(boost::bind(&IndividualAggregator::doModifyContact,
+                               this,
+                               result,
+                               _1,
+                               details),
+                   localID,
+                   result.getOnError());
+}
+
+void IndividualAggregator::doModifyContact(const Result<void ()> &result,
+                                           FolksPersona *persona,
+                                           const PersonaDetails &details) throw()
+{
+    try {
+        // Asynchronously modify the persona. This will be turned into
+        // EDS updates by folks.
+        Details2Persona(result, details, persona);
+    } catch (...) {
+        result.failed();
+    }
+}
+
+void IndividualAggregator::removeContact(const Result<void ()> &result,
+                                         const std::string &localID)
+{
+    runWithPersona(boost::bind(&IndividualAggregator::doRemoveContact,
+                               this,
+                               result,
+                               _1),
+                   localID,
+                   result.getOnError());
+}
+
+void IndividualAggregator::doRemoveContact(const Result<void ()> &result,
+                                           FolksPersona *persona) throw()
+{
+    try {
+        SYNCEVO_GLIB_CALL_ASYNC(folks_persona_store_remove_persona,
+                                boost::bind(&IndividualAggregator::removeContactDone,
+                                            this,
+                                            _1,
+                                            result),
+                                m_systemStore,
+                                persona);
+    } catch (...) {
+        result.failed();
+    }
+}
+
+void IndividualAggregator::removeContactDone(const GError *gerror,
+                                             const Result<void ()> &result) throw()
+{
+    try {
+        if (gerror) {
+            GErrorCXX::throwError("remove contact", gerror);
+        }
+        result.done();
+    } catch (...) {
+        result.failed();
+    }
+}
+
+
+void IndividualAggregator::runWithAddressBook(const boost::function<void ()> &operation,
+                                              const ErrorCb_t &onError) throw()
+{
+    try {
+        if (m_eds) {
+            runWithAddressBookHaveEDS(boost::signals2::connection(),
+                                      operation,
+                                      onError);
+        } else {
+            // Do it later.
+            m_backendsLoadedSignal.connect_extended(boost::bind(&IndividualAggregator::runWithAddressBookHaveEDS,
+                                                                this,
+                                                                _1,
+                                                                operation,
+                                                                onError));
+        }
+    } catch (...) {
+        onError();
+    }
+}
+
+void IndividualAggregator::runWithAddressBookHaveEDS(const boost::signals2::connection &conn,
+                                                     const boost::function<void ()> &operation,
+                                                     const ErrorCb_t &onError) throw()
+{
+    try {
+        // Called after we obtained EDS backend. Need system store
+        // which is prepared.
+        m_backendsLoadedSignal.disconnect(conn);
+        if (!m_systemStore) {
+            SE_THROW("system address book not found");
+        }
+        if (folks_persona_store_get_is_prepared(m_systemStore)) {
+            runWithAddressBookPrepared(NULL,
+                                       operation,
+                                       onError);
+        } else {
+            SYNCEVO_GLIB_CALL_ASYNC(folks_persona_store_prepare,
+                                    boost::bind(&IndividualAggregator::runWithAddressBookPrepared,
+                                                this,
+                                                _1,
+                                                operation,
+                                                onError),
+                                    m_systemStore);
+        }
+    } catch (...) {
+        onError();
+    }
+}
+
+void IndividualAggregator::runWithAddressBookPrepared(const GError *gerror,
+                                                      const boost::function<void ()> &operation,
+                                                      const ErrorCb_t &onError) throw()
+{
+    try {
+        // Called after EDS system store is prepared, successfully or unsuccessfully.
+        if (gerror) {
+            GErrorCXX::throwError("prepare EDS system address book", gerror);
+        }
+        operation();
+    } catch (...) {
+        onError();
+    }
+}
+
+void IndividualAggregator::runWithPersona(const boost::function<void (FolksPersona *)> &operation,
+                                          const std::string &localID,
+                                          const ErrorCb_t &onError) throw()
+{
+    try {
+        runWithAddressBook(boost::bind(&IndividualAggregator::doRunWithPersona,
+                                       this,
+                                       operation,
+                                       localID,
+                                       onError),
+                           onError);
+    } catch (...) {
+        onError();
+    }
+}
+
+void IndividualAggregator::doRunWithPersona(const boost::function<void (FolksPersona *)> &operation,
+                                            const std::string &localID,
+                                            const ErrorCb_t &onError) throw()
+{
+    try {
+        GeeMap *personas = folks_persona_store_get_personas(m_systemStore);
+        typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksPersona *> > Coll;
+        BOOST_FOREACH (const Coll::value_type &entry, Coll(personas)) {
+            // key seems to be <store id>:<persona ID>
+            const gchar *key = entry.key();
+            const gchar *colon = strchr(key, ':');
+            if (colon && localID == colon + 1) {
+                operation(entry.value());
+                return;
+            }
+        }
+        SE_THROW(StringPrintf("contact with local ID '%s' not found in system address book", localID.c_str()));
+    } catch (...) {
+        onError();
+    }
 }
 
 #ifdef ENABLE_UNIT_TESTS

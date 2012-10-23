@@ -23,11 +23,19 @@
  */
 
 #include "individual-traits.h"
+#include "persona-details.h"
 #include "folks.h"
 
 SE_GLIB_TYPE(GDateTime, g_date_time)
+SE_GOBJECT_TYPE(GTimeZone)
+SE_GOBJECT_TYPE(FolksAbstractFieldDetails)
+SE_GOBJECT_TYPE(FolksRoleFieldDetails)
+SE_GOBJECT_TYPE(FolksRole)
+SE_GOBJECT_TYPE(FolksPostalAddress)
 
 SE_BEGIN_CXX
+
+typedef GValueDynTypedCXX<GDateTime *, g_date_time_get_type> GValueDateTimeCXX;
 
 static const char * const CONTACT_HASH_FULL_NAME = "full-name";
 static const char * const CONTACT_HASH_NICKNAME = "nickname";
@@ -313,9 +321,428 @@ template <> struct dbus_traits<GDateTime *> {
 
 SE_BEGIN_CXX
 
-void DBus2FolksIndividual(GDBusCXX::reader_type &iter, FolksIndividualCXX &individual)
+/**
+ * Copy from D-Bus into a type derived from FolksAbstractFieldDetails,
+ * including type flags.
+ */
+static void DBus2AbstractField(GDBusCXX::ExtractArgs &context,
+                               GVariantIter &valueIter,
+                               PersonaDetails &details,
+                               GType detailType,
+                               FolksPersonaDetail detail,
+                               FolksAbstractFieldDetails *(*fieldNew)(const gchar *, GeeMultiMap *))
 {
-    individual = FolksIndividualCXX::steal(folks_individual_new(NULL));
+    // type of emails, urls, etc.
+    typedef std::vector< std::pair< std::string, std::vector<std::string> > > Details_t;
+
+    Details_t value;
+    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GeeHashSetCXX set(gee_hash_set_new(detailType,
+                                       g_object_ref,
+                                       g_object_unref,
+                                       (GHashFunc)folks_abstract_field_details_hash,
+                                       (GEqualFunc)folks_abstract_field_details_equal),
+                      false);
+    BOOST_FOREACH (const Details_t::value_type &entry, value) {
+        const Details_t::value_type::first_type &val = entry.first;
+        const Details_t::value_type::second_type &flags = entry.second;
+        FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), false);
+        BOOST_FOREACH (const std::string &type, flags) {
+            folks_abstract_field_details_add_parameter(field.get(),
+                                                       FOLKS_ABSTRACT_FIELD_DETAILS_PARAM_TYPE,
+                                                       type.c_str());
+        }
+        gee_collection_add(GEE_COLLECTION(set.get()),
+                           field.get());
+    }
+    g_hash_table_insert(details.get(),
+                        const_cast<gchar *>(folks_persona_store_detail_key(detail)),
+                        new GValueObjectCXX(set.ref()));
+}
+
+/**
+ * Copy from D-Bus into a type derived from FolksAbstractFieldDetails,
+ * excluding type flags.
+ */
+static void DBus2SimpleAbstractField(GDBusCXX::ExtractArgs &context,
+                                     GVariantIter &valueIter,
+                                     PersonaDetails &details,
+                                     GType detailType,
+                                     FolksPersonaDetail detail,
+                                     FolksAbstractFieldDetails *(*fieldNew)(const gchar *, GeeMultiMap *))
+{
+    // type of notes
+    typedef std::vector<std::string> Details_t;
+
+    Details_t value;
+    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GeeHashSetCXX set(gee_hash_set_new(detailType,
+                                       g_object_ref,
+                                       g_object_unref,
+                                       (GHashFunc)folks_abstract_field_details_hash,
+                                       (GEqualFunc)folks_abstract_field_details_equal),
+                      false);
+    BOOST_FOREACH (const std::string &val, value) {
+        FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), false);
+        gee_collection_add(GEE_COLLECTION(set.get()),
+                           field.get());
+    }
+    g_hash_table_insert(details.get(),
+                        const_cast<gchar *>(folks_persona_store_detail_key(detail)),
+                        new GValueObjectCXX(set.ref()));
+}
+
+/**
+ * Copy from D-Bus into FolksRoleFieldDetails.
+ */
+static void DBus2Role(GDBusCXX::ExtractArgs &context,
+                      GVariantIter &valueIter,
+                      PersonaDetails &details)
+{
+    // type of role
+    typedef std::vector<StringMap> Details_t;
+
+    Details_t value;
+    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GeeHashSetCXX set(gee_hash_set_new(FOLKS_TYPE_ROLE_FIELD_DETAILS,
+                                       g_object_ref,
+                                       g_object_unref,
+                                       (GHashFunc)folks_abstract_field_details_hash,
+                                       (GEqualFunc)folks_abstract_field_details_equal),
+                      false);
+    BOOST_FOREACH (const StringMap &entry, value) {
+        FolksRoleCXX role(folks_role_new(NULL, NULL, NULL),
+                          false);
+        BOOST_FOREACH (const StringPair &aspect, entry) {
+            const std::string &k = aspect.first;
+            const std::string &v = aspect.second;
+            if (k == CONTACT_HASH_ROLES_ORGANISATION) {
+                folks_role_set_organisation_name(role, v.c_str());
+            } else if (k == CONTACT_HASH_ROLES_TITLE) {
+                folks_role_set_title(role, v.c_str());
+            } else if (k == CONTACT_HASH_ROLES_ROLE) {
+                folks_role_set_role(role, v.c_str());
+            }
+        }
+        FolksRoleFieldDetailsCXX field(folks_role_field_details_new(role.get(), NULL),
+                                       false);
+        gee_collection_add(GEE_COLLECTION(set.get()),
+                           field.get());
+    }
+    g_hash_table_insert(details.get(),
+                        const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_ROLES)),
+                        new GValueObjectCXX(set.ref()));
+}
+
+/**
+ * Copy from D-Bus into a FolksAddressFieldDetails.
+ */
+static void DBus2Addr(GDBusCXX::ExtractArgs &context,
+                      GVariantIter &valueIter,
+                      PersonaDetails &details)
+{
+    // type of CONTACT_HASH_ADDRESSES
+    typedef std::vector< std::pair< StringMap, std::vector<std::string> > > Details_t;
+
+    Details_t value;
+    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GeeHashSetCXX set(gee_hash_set_new(FOLKS_TYPE_POSTAL_ADDRESS_FIELD_DETAILS,
+                                       g_object_ref,
+                                       g_object_unref,
+                                       (GHashFunc)folks_abstract_field_details_hash,
+                                       (GEqualFunc)folks_abstract_field_details_equal),
+                      false);
+    BOOST_FOREACH (const Details_t::value_type &entry, value) {
+        const StringMap &fields = entry.first;
+        const std::vector<std::string> &flags = entry.second;
+        FolksPostalAddressCXX address(folks_postal_address_new(GetWithDef(fields, CONTACT_HASH_ADDRESSES_PO_BOX).c_str(),
+                                                               GetWithDef(fields, CONTACT_HASH_ADDRESSES_EXTENSION).c_str(),
+                                                               GetWithDef(fields, CONTACT_HASH_ADDRESSES_STREET).c_str(),
+                                                               GetWithDef(fields, CONTACT_HASH_ADDRESSES_LOCALITY).c_str(),
+                                                               GetWithDef(fields, CONTACT_HASH_ADDRESSES_REGION).c_str(),
+                                                               GetWithDef(fields, CONTACT_HASH_ADDRESSES_POSTAL_CODE).c_str(),
+                                                               GetWithDef(fields, CONTACT_HASH_ADDRESSES_COUNTRY).c_str(),
+                                                               NULL /* address format */,
+                                                               NULL /* uid */),
+                                      false);
+        FolksAbstractFieldDetailsCXX field(FOLKS_ABSTRACT_FIELD_DETAILS(folks_postal_address_field_details_new(address.get(), NULL)),
+                                           false);
+        BOOST_FOREACH (const std::string &type, flags) {
+            folks_abstract_field_details_add_parameter(field.get(),
+                                                       FOLKS_ABSTRACT_FIELD_DETAILS_PARAM_TYPE,
+                                                       type.c_str());
+        }
+        gee_collection_add(GEE_COLLECTION(set.get()),
+                           field.get());
+    }
+    g_hash_table_insert(details.get(),
+                        const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_POSTAL_ADDRESSES)),
+                        new GValueObjectCXX(set.ref()));
+}
+
+void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
+                         GDBusCXX::reader_type &iter,
+                         PersonaDetails &details)
+{
+    GDBusCXX::GVariantCXX var(g_variant_iter_next_value(&iter));
+    if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_ARRAY)) {
+        SE_THROW("D-Bus contact hash: unexpected content");
+    }
+
+    GVariantIter contIter;
+    GDBusCXX::GVariantCXX child;
+    g_variant_iter_init(&contIter, var); // array
+    while((child = g_variant_iter_next_value(&contIter)) != NULL) {
+        GVariantIter childIter;
+        g_variant_iter_init(&childIter, child); // dict entry
+        std::string key;
+        GDBusCXX::dbus_traits<std::string>::get(context, childIter, key);
+        GDBusCXX::GVariantCXX valueVarient(g_variant_iter_next_value(&childIter));
+        if (valueVarient == NULL || !g_variant_type_equal(g_variant_get_type(valueVarient), G_VARIANT_TYPE_VARIANT)) {
+            SE_THROW("D-Bus contact hash entry: value must be variant");
+        }
+
+        GVariantIter valueIter;
+        g_variant_iter_init(&valueIter, valueVarient);
+        if (key == CONTACT_HASH_FULL_NAME) {
+            std::string value;
+            GDBusCXX::dbus_traits<std::string>::get(context, valueIter, value);
+            g_hash_table_insert(details.get(),
+                                const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_FULL_NAME)),
+                                new GValueStringCXX(value.c_str()));
+        } else if (key == CONTACT_HASH_STRUCTURED_NAME) {
+            StringMap value;
+            GDBusCXX::dbus_traits<StringMap>::get(context, valueIter, value);
+            g_hash_table_insert(details.get(),
+                                const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_STRUCTURED_NAME)),
+                                new GValueObjectCXX(folks_structured_name_new(GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_FAMILY).c_str(),
+                                                                              GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_GIVEN).c_str(),
+                                                                              GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_ADDITIONAL).c_str(),
+                                                                              GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_PREFIXES).c_str(),
+                                                                              GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_SUFFIXES).c_str())));
+        } else if (key == CONTACT_HASH_PHOTO) {
+            std::string value;
+            GDBusCXX::dbus_traits<std::string>::get(context, valueIter, value);
+            GFileCXX file(g_file_new_for_uri(value.c_str()),
+                          false);
+            g_hash_table_insert(details.get(),
+                                const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_AVATAR)),
+                                new GValueObjectCXX(g_file_icon_new(file.get())));
+        } else if (key == CONTACT_HASH_BIRTHDAY) {
+            boost::tuple<int, int, int> value;
+            GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+            GDateTimeCXX local(g_date_time_new_local(value.get<0>(),
+                                                     value.get<1>(),
+                                                     value.get<2>(),
+                                                     0, 0, 0),
+                               false);
+            g_hash_table_insert(details.get(),
+                                const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)),
+                                new GValueDateTimeCXX(g_date_time_to_utc(local.get())));
+        } else if (key == CONTACT_HASH_EMAILS) {
+            DBus2AbstractField(context, valueIter, details,
+                               FOLKS_TYPE_EMAIL_FIELD_DETAILS,
+                               FOLKS_PERSONA_DETAIL_EMAIL_ADDRESSES,
+                               reinterpret_cast<FolksAbstractFieldDetails *(*)(const gchar *, GeeMultiMap *)>(folks_email_field_details_new));
+        } else if (key == CONTACT_HASH_PHONES) {
+            DBus2AbstractField(context, valueIter, details,
+                               FOLKS_TYPE_PHONE_FIELD_DETAILS,
+                               FOLKS_PERSONA_DETAIL_PHONE_NUMBERS,
+                               reinterpret_cast<FolksAbstractFieldDetails *(*)(const gchar *, GeeMultiMap *)>(folks_phone_field_details_new));
+        } else if (key == CONTACT_HASH_URLS) {
+            DBus2AbstractField(context, valueIter, details,
+                               FOLKS_TYPE_URL_FIELD_DETAILS,
+                               FOLKS_PERSONA_DETAIL_URLS,
+                               reinterpret_cast<FolksAbstractFieldDetails *(*)(const gchar *, GeeMultiMap *)>(folks_url_field_details_new));
+        } else if (key == CONTACT_HASH_NOTES) {
+            DBus2SimpleAbstractField(context, valueIter, details,
+                                     FOLKS_TYPE_NOTE_FIELD_DETAILS,
+                                     FOLKS_PERSONA_DETAIL_NOTES,
+                                     reinterpret_cast<FolksAbstractFieldDetails *(*)(const gchar *, GeeMultiMap *)>(folks_note_field_details_new));
+        } else if (key == CONTACT_HASH_ROLES) {
+            DBus2Role(context, valueIter, details);
+        } else if (key == CONTACT_HASH_ADDRESSES) {
+            DBus2Addr(context, valueIter, details);
+        }
+    }
+}
+
+// The caller must be notified when all property modifications
+// are done. Track the number of pending requests in a class.
+// Start counting at one and decrement at the end, to avoid
+// reaching zero while still analyzing the PersonaDetails.
+class PropertiesPending
+{
+    Result<void ()> m_result;
+    int m_pending;
+    std::list<std::string> m_errors;
+public:
+    PropertiesPending(const Result<void ()> &result) :
+        m_result(result),
+        m_pending(1)
+    {
+    }
+
+    void completed(const GError *gerror,
+                   const gchar *key)
+    {
+        if (gerror) {
+            m_errors.push_back(StringPrintf("%s: %s", key, gerror->message));
+        }
+        --m_pending;
+        SE_LOG_DEBUG(NULL, NULL, "pending property changes %d, done %s: %s",
+                     m_pending,
+                     key,
+                     gerror ? gerror->message : "<<success>>");
+        if (m_pending <= 0) {
+            if (m_errors.empty()) {
+                m_result.done();
+            } else {
+                // TODO: allow passing negative result without depending
+                // on exceptions.
+                try {
+                    SE_THROW("updating contact failed for some (or all) properties:\n" +
+                             boost::join(m_errors, "\n"));
+                } catch (...) {
+                    m_result.failed();
+                }
+            }
+        }
+    }
+
+    /**
+     * @param key    property name, not copied, use result from folks_persona_store_detail_key()
+     */
+    static boost::function<void (const GError *)> start(const boost::shared_ptr<PropertiesPending> &me,
+                                                        const gchar *key) {
+        ++me->m_pending;
+        SE_LOG_DEBUG(NULL, NULL, "pending property changes %d, starting %s",
+                     me->m_pending,
+                     key);
+        return boost::bind(&PropertiesPending::completed,
+                           me,
+                           _1,
+                           key);
+    }
+};
+
+static bool GeeCollectionEqual(GeeCollection *a, GeeCollection *b)
+{
+    return gee_collection_get_size(a) == gee_collection_get_size(b) &&
+        gee_collection_contains_all(a, b);
+}
+
+void Details2Persona(const Result<void ()> &result, const PersonaDetails &details, FolksPersona *persona)
+{
+    boost::shared_ptr<PropertiesPending> pending(new PropertiesPending(result));
+
+    const gchar *fkey;
+    GHashTableIter iter;
+    g_hash_table_iter_init(&iter, details.get());
+    gpointer k, v;
+    while (g_hash_table_iter_next(&iter, &k, &v)) {
+        const gchar *key = static_cast<const gchar *>(k);
+        const GValue *gvalue = static_cast<const GValue *>(v);
+
+        if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_FULL_NAME)))) {
+            const gchar *value = g_value_get_string(gvalue);
+            FolksNameDetails *details = FOLKS_NAME_DETAILS(persona);
+            if (g_strcmp0(value, folks_name_details_get_full_name(details))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_name_details_change_full_name,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_STRUCTURED_NAME)))) {
+            FolksStructuredName *value = FOLKS_STRUCTURED_NAME(g_value_get_object(gvalue));
+            FolksNameDetails *details = FOLKS_NAME_DETAILS(persona);
+            if (!folks_structured_name_equal(value, folks_name_details_get_structured_name(details))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_name_details_change_structured_name,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_AVATAR)))) {
+#if 0
+            // TODO: enable this once https://bugzilla.gnome.org/show_bug.cgi?id=652659 is fixed
+            GLoadableIcon *value = G_LOADABLE_ICON(g_value_get_object(gvalue));
+            SYNCEVO_GLIB_CALL_ASYNC(folks_avatar_details_change_avatar,
+                                    pending->start(pending, fkey),
+                                    FOLKS_AVATAR_DETAILS(persona),
+                                    value);
+#endif
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)))) {
+            GDateTime *value = static_cast<GDateTime *>(g_value_get_boxed(gvalue));
+            FolksBirthdayDetails *details = FOLKS_BIRTHDAY_DETAILS(persona);
+            if (!g_date_time_equal(value, folks_birthday_details_get_birthday(details))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_birthday_details_change_birthday,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_EMAIL_ADDRESSES)))) {
+            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
+            FolksEmailDetails *details = FOLKS_EMAIL_DETAILS(persona);
+            if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                    GEE_COLLECTION(folks_email_details_get_email_addresses(details)))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_email_details_change_email_addresses,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_PHONE_NUMBERS)))) {
+            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
+            FolksPhoneDetails *details = FOLKS_PHONE_DETAILS(persona);
+            if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                    GEE_COLLECTION(folks_phone_details_get_phone_numbers(details)))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_phone_details_change_phone_numbers,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_URLS)))) {
+            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
+            FolksUrlDetails *details = FOLKS_URL_DETAILS(persona);
+            if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                    GEE_COLLECTION(folks_url_details_get_urls(details)))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_url_details_change_urls,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_NOTES)))) {
+            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
+            FolksNoteDetails *details = FOLKS_NOTE_DETAILS(persona);
+            if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                    GEE_COLLECTION(folks_note_details_get_notes(details)))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_note_details_change_notes,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_ROLES)))) {
+            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
+            FolksRoleDetails *details = FOLKS_ROLE_DETAILS(persona);
+            if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                    GEE_COLLECTION(folks_role_details_get_roles(details)))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_role_details_change_roles,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_POSTAL_ADDRESSES)))) {
+            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
+            FolksPostalAddressDetails *details = FOLKS_POSTAL_ADDRESS_DETAILS(persona);
+            if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                    GEE_COLLECTION(folks_postal_address_details_get_postal_addresses(details)))) {
+                SYNCEVO_GLIB_CALL_ASYNC(folks_postal_address_details_change_postal_addresses,
+                                        pending->start(pending, fkey),
+                                        details,
+                                        value);
+            }
+        }
+    }
+    pending->completed(NULL, "setup");
 }
 
 void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builder_type &builder)

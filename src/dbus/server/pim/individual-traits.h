@@ -25,14 +25,19 @@
 #ifndef INCL_SYNCEVO_DBUS_SERVER_INDIVIDUAL_TRAITS
 #define INCL_SYNCEVO_DBUS_SERVER_INDIVIDUAL_TRAITS
 
+#include <folks/folks.h>
+
 #include "gdbus-cxx-bridge.h"
+#include "../dbus-callbacks.h"
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+class PersonaDetails;
 class FolksIndividualCXX;
-void DBus2FolksIndividual(GDBusCXX::reader_type &iter, FolksIndividualCXX &individual);
+void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context, GDBusCXX::reader_type &iter, PersonaDetails &details);
 void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builder_type &builder);
+void Details2Persona(const Result<void ()> &result, const PersonaDetails &details, FolksPersona *persona);
 
 SE_END_CXX
 
@@ -59,15 +64,28 @@ namespace GDBusCXX {
         typedef FolksIndividualCXX host_type;
         typedef const FolksIndividualCXX &arg_type;
 
-        static void get(GDBusCXX::connection_type *conn, GDBusCXX::message_type *msg,
-                        GDBusCXX::reader_type &iter, host_type &individual)
-        {
-            DBus2FolksIndividual(iter, individual);
-        }
-
         static void append(GDBusCXX::builder_type &builder, arg_type individual)
         {
             FolksIndividual2DBus(individual, builder);
+        }
+    };
+
+    /**
+     * The corresponding mapping from D-Bus to a GeeMap for add_persona_from_details.
+     * See http://telepathy.freedesktop.org/doc/folks/vala/Folks.PersonaStore.add_persona_from_details.html
+     * and http://telepathy.freedesktop.org/doc/folks-eds/vala/Edsf.PersonaStore.add_persona_from_details.html
+     */
+    template <> struct dbus_traits<PersonaDetails> :
+        public dbus_traits< std::map<std::string, boost::variant<std::string> >  >
+    {
+        typedef PersonaDetails host_type;
+        typedef const PersonaDetails &arg_type;
+
+        static void get(ExtractArgs &context,
+                        GDBusCXX::reader_type &iter,
+                        host_type &individual)
+        {
+            DBus2PersonaDetails(context, iter, individual);
         }
     };
 }
