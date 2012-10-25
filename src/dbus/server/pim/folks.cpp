@@ -24,6 +24,7 @@
 #include <boost/bind.hpp>
 #include "test.h"
 #include <syncevo/BoostHelper.h>
+#include <syncevo/LogRedirect.h>
 
 #include <boost/ptr_container/ptr_vector.hpp>
 
@@ -584,6 +585,10 @@ void IndividualAggregator::init(boost::shared_ptr<IndividualAggregator> &self)
     m_self = self;
     m_backendStore =
         FolksBackendStoreCXX::steal(folks_backend_store_dup());
+
+    // Ignore some known harmless messages from folks.
+    LogRedirect::addIgnoreError("Error preparing Backend 'ofono'");
+    LogRedirect::addIgnoreError("Error preparing Backend 'telepathy'");
 
     // Have to hard-code the list of known backends that we don't want.
     SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
