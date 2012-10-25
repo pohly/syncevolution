@@ -1,3 +1,92 @@
+SyncEvolution 1.3.99.1, 25.10.2012
+==================================
+
+Development snapshot. The PIM Manager API implementation is fully
+implemented, see src/dbus/server/pim/README for an introduction.  The
+PBAP backend together with a new one-way caching sync mode provides an
+efficient way of keeping a local database in sync via Bluetooth with a
+phone which does not implement SyncML.
+
+Other changes:
+
+* workarounds for warnings from g++ 4.5
+
+* engine: : local cache sync mode
+
+  This patch  introduces support for true one-way syncing ("caching"):
+  the local datastore is meant to be an exact copy of the data on the
+  remote side. The assumption is that no modifications are ever made
+  locally outside of syncing. This is different from one-way sync modes,
+  which allows local changes and only temporarily disables sending them
+  to the remote side.
+
+  Another goal of the new mode is to avoid data writes as much as
+  possible.
+
+  This new mode only works on the server side of a sync, where the
+  engine has enough control over the data flow. Setting "sync" to:
+  - "local-cache-incremental" will do an incremental sync (if possible)
+    or a slow sync (otherwise). This is usually the right mode to use,
+    and thus has "local-cache" as alias.
+  - "local-cache-slow" will always do a slow sync. Useful for
+    debugging or after (accidentally) making changes on the local side.
+    An incremental sync will ignore such changes because they are not
+    meant to happen, aren't checked for to improve performance and
+    thus will leave client and server out-of-sync!
+
+  Both modes are recorded in the sync report of the local side. The
+  target side is the client and records the normal "two-way" or "slow"
+  sync modes.
+
+  With the current SyncEvolution contact field list, first, middle and
+  last name are used to find matches for contacts. For events, tasks
+  and memos, time, summary and description are used.
+
+* HTTP proxy: useProxy=0 overrides http_* env variables
+
+  Previously, if http_proxy was set, a proxy was used even if
+  explicitly disabled. This prevented disabling the use of a proxy
+  which only made sense in some cases, like accessing something
+  that runs locally. Explicitly telling SyncEvolution to ignore
+  http_proxy is necessary because it doesn't support no_proxy.
+
+* WebDAV: auto-discovery fix
+
+  With Google Contact + CardDAV the auto-discovery failed after
+  finding the default address book, without reporting that result.
+
+* command line: implement --create/remove-database
+
+  Creating a database is only possible with a chosen name. The UID is
+  chosen automatically by the storage. Only implemented in the EDS
+  backend.
+
+* file backend: sub-second mod time stamps
+
+  Change tracking in the file backend used to be based on the
+  modification time in seconds. When running many syncs quickly (as in
+  testing), that can lead to changes not being detected when they happen
+  within a second. Now the file backend also includes the sub-second part of the
+  modification time stamp, if available.
+
+  This change is relevant when upgrading SyncEvolution: most of the
+  items will be considered "updated" once during the first sync after
+  the upgrade (or a downgrade) because the revision strings get
+  calculated differently.
+
+* D-Bus server: avoid progress outside of 0-100% range
+
+  For example in the new TestLocalCache.testItemDelete100, the
+  percentage value in the ProgressChanged signal become larger
+  than 100 and then revert to 100 at the end of the sync.
+
+  Seems the underlying calculation is faulty or simply inaccurate.
+  This is not fixed. Instead the result is just clipped to the valid
+  range.
+
+* code cleanup + improvements in testing
+
+
 SyncEvolution 1.3 -> 1.3.1, 05.10.2012
 ======================================
 

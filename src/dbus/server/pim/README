@@ -1,3 +1,6 @@
+Overview
+========
+
 The code in this directory only gets compiled when SyncEvolution is
 configured with --enable-dbus-service-pim. It uses libfolks and the
 PBAP backend to implement a unified address book. This additional
@@ -16,10 +19,145 @@ and the core Server class:
   * direct access to SyncEvolution instead having to go through
     the http://api.syncevolution.org D-Bus API
 
+Compilation
+===========
+
+Use --enable-dbus-service-pim --enable-pbap --enable-ebook.
+
+--enable-ebook is already the default at the moment. It must not be
+  disabled.
+
+The PBAP backend can be disabled. However, then fetching data from
+phones via PBAP obviously does not work.
 
 
+More information
+================
+
+Public discussion started here, comments can be sent via the gmane
+"reply" feature:
+http://comments.gmane.org/gmane.comp.mobile.syncevolution/4009
+
+Issues specific to PIM Manager can be found in this graph:
+https://bugs.freedesktop.org/showdependencygraph.cgi?id=55916&display=web&rankdir=TB
 
 
+Dependencies
+============
+
+A fairly recent libfolks > 0.7.4 is required. The 837a88 commit
+is required and several other pending changes are recommended:
+
+https://bugzilla.gnome.org/show_bug.cgi?id=686693
+writing birthday lacks conversion from UTC
+
+https://bugzilla.gnome.org/show_bug.cgi?id=685401
+linking by email
+
+https://bugzilla.gnome.org/show_bug.cgi?id=686695
+support nickname in add_persona_from_details
+
+Other requirements:
+* Evolution Data Server >= 3.6
+* boost::locale and libphonenumber (when using the default
+  sorting and searching)
+* glib >= 2.30
+* Python >= 2.7 (only for testing)
 
 
+Known issues
+============
 
+https://bugzilla.gnome.org/show_bug.cgi?id=652659
+Modifying many properties in a contact is inefficient and can deadlock in EDS.
+
+
+Extending the implementation
+============================
+
+Sorting and searching can be replaced with a different implementation
+at compile time via --enable-dbus-service-pim[=<locale>]: it uses the
+file src/dbus/server/pim/locale-factory-<locale>.cpp to implement
+sorting and searching.
+
+Any additional library dependencies for that file need to be added to
+the main configure.ac.
+
+
+Sorting + Searching
+===================
+
+The default implementation is based on boost::locale and libphonenumber.
+It is documented in pim-manager-api.txt.
+
+Lookup and search are different: the former is based on a valid
+number, the later on user input.
+
+A 'phone' lookup can compare normalized numbers including the country
+code, to ensure that the lookup is exact and does not mismatch numbers
+from different countries. Heuristics like suffix matching do not do
+this correctly in all cases.
+
+An 'any-contains' search is based on user input, which might contain
+just some digits in the middle of the phone number. The search ignores
+formatting in both input and address book.
+
+In both cases, alpha characters are treated as aliases for their
+corresponding digit on a keypad when matching phone numbers.
+
+In addition, an empty string as sort order picks a simple, ASCII-based
+"last/first" sorting. This is used for testing.
+
+
+Configuration and data handling
+===============================
+
+The configuration of peers is mapped to normal SyncEvolution
+configurations. Every peer gets its own context, which contains both
+the local source definition for the peer and sync plus target configs.
+The special name space prefix "pim-manager-" used to identify them and
+avoid potential conflicts with normal SyncEvolution configurations.
+
+Look in ~/.config/syncevolution/pim-manager-* to find the
+configuration files.
+
+Local EDS databases are created with a fixed UID and name that also
+have that prefix. One could go one step further than it is currently
+done and set these databases to "disabled" in the ESourceRegistry,
+which would hide them in Evolution.
+
+The SyncEvolution command line can be used to view or manipulate
+these databases:
+https://syncevolution.org/wiki/item-operations
+
+The persistent configuration of the sort order is stored in
+~/.config/syncevolution/pim-manager.ini as the "sort" property. It's
+values are the same string as in the API.
+
+
+Testing
+=======
+
+Tests are mostly written in Python. See test/test-dbus.py (base
+classes and testing of the normal SyncEvolution D-Bus API) and
+src/dbus/server/pim/testpim.py.
+
+These operations manipulate the system address book. To avoid
+unexpected data loss when a developer runs the script in his
+normal environment, check that testpim.py gets run like this:
+
+  XDG_CONFIG_HOME=`pwd`/temp-testpim/config \
+  XDG_DATA_HOME=`pwd`/temp-testpim/local/cache \
+  PATH=<SyncEvolution install path>/bin:<SyncEvolution install path>/libexec:$PATH \
+       <path to SyncEvolution source>/test/dbus-session.sh \
+       <path to SyncEvolution source>/src/dbus/server/pim/testpim.py
+
+This will use temp-testpim in addition to temp-testdbus in the current
+directory for temporary files.
+
+If TEST_DBUS_PBAP_PHONE is set to the Bluetooth MAC address (like
+A0:4E:04:1E:AD:30) of a phone, PBAP syncing with that phone is tested.
+
+The phone must be paired, connected and support SyncML in addition to
+PBAP. The test hard-codes Nokia SyncML settings to keep it simpe and
+because Nokia phones are most likely to be used.
