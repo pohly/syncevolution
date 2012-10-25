@@ -4984,3 +4984,159 @@
    ...
    fun:g_thread_proxy
 }
+
+### folks ###
+
+# ==14458== 56 (16 direct, 40 indirect) bytes in 1 blocks are definitely lost in loss record 2,853 of 5,224
+# ==14458==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==14458==    by 0xA91BD50: g_malloc (gmem.c:159)
+# ==14458==    by 0xA930C92: g_slice_alloc (gslice.c:1003)
+# ==14458==    by 0xA8EB059: g_static_rec_mutex_get_rec_mutex_impl.isra.1 (gthread-deprecated.c:685)
+# ==14458==    by 0xA8EB328: g_static_rec_mutex_lock (gthread-deprecated.c:711)
+# ==14458==    by 0x4E72371: folks_debug_dup (debug.vala:199)
+# ==14458==    by 0x4E72422: folks_debug_dup_with_flags (debug.vala:235)
+# ==14458==    by 0x4E49195: folks_backend_store_constructor (backend-store.vala:140)
+# ==14458==    by 0xA695460: g_object_newv (gobject.c:1637)
+# ==14458==    by 0xA695AAB: g_object_new (gobject.c:1547)
+# ==14458==    by 0x4E49640: folks_backend_store_dup (backend-store.vala:133)
+# ==14458==    by 0x865524: SyncEvo::IndividualAggregator::init(boost::shared_ptr<SyncEvo::IndividualAggregator>&) (fol
+# ks.cpp:586)
+# ==14458==    by 0x866E0C: SyncEvo::IndividualAggregator::create() (folks.cpp:627)
+# ==14458==    by 0x8040EF: SyncEvo::Manager::initFolks() (manager.cpp:123)
+# ==14458==    by 0x8088DC: SyncEvo::Manager::init() (manager.cpp:93)
+# ==14458==    by 0x808EDB: SyncEvo::Manager::create(boost::shared_ptr<SyncEvo::Server> const&) (manager.cpp:143)
+# ==14458==    by 0x808F30: SyncEvo::CreateContactManager(boost::shared_ptr<SyncEvo::Server> const&) (manager.cpp:149)
+# ==14458==    by 0x767398: main (main.cpp:150)
+# ==14458== 
+{
+   folks mutex
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_static_rec_mutex_lock
+   fun:folks_debug_dup
+   fun:folks_debug_dup_with_flags
+   fun:folks_backend_store_constructor
+}
+
+# ==14458== 64 (32 direct, 32 indirect) bytes in 1 blocks are definitely lost in loss record 3,122 of 5,224
+# ==14458==    at 0x4C286E7: operator new(unsigned long) (vg_replace_malloc.c:287)
+# ==14458==    by 0x890E9A: SyncEvo::EvolutionSyncSource::getSourceRegistry() (EvolutionSyncSource.cpp:68)
+# ==14458==    by 0x891B47: SyncEvo::EvolutionSyncSource::getDatabasesFromRegistry(std::vector<SyncEvo::SyncSource::Dat
+# abase, std::allocator<SyncEvo::SyncSource::Database> >&, char const*, _ESource* (*)(_ESourceRegistry*)) (EvolutionSyn
+# cSource.cpp:37)
+# ==14458==    by 0x88C58C: SyncEvo::EvolutionContactSource::getDatabases() (EvolutionContactSource.cpp:93)
+# ==14458==    by 0x806516: SyncEvo::Manager::doSetPeer(boost::shared_ptr<SyncEvo::Session> const&, boost::shared_ptr<G
+# DBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocat
+# or<std::pair<std::string const, std::string> > > const&) (manager.cpp:743)
+# ==14458==    by 0x811A37: boost::function1<void, boost::shared_ptr<SyncEvo::Session> const&>::operator()(boost::share
+# d_ptr<SyncEvo::Session> const&) const (function_template.hpp:760)
+# ==14458==    by 0x805D3B: SyncEvo::Manager::doSession(boost::weak_ptr<SyncEvo::Session> const&, boost::shared_ptr<GDBusCXX::Result> const&, boost::function<void ()(boost::shared_ptr<SyncEvo::Session> const&)> const&) (manager.cpp:620)
+# ==14458==    by 0x7C1BC7: boost::function1<void, boost::weak_ptr<SyncEvo::Session> const&>::operator()(boost::weak_ptr<SyncEvo::Session> const&) const (function_template.hpp:760)
+# ==14458==    by 0x7FF57D: boost::signals2::detail::signal0_impl<void, boost::signals2::optional_last_value<void>, int, std::less<int>, boost::function<void ()()>, boost::function<void ()(boost::signals2::connection const&)>, boost::signals2::mutex>::operator()() (function_template.hpp:760)
+# ==14458==    by 0x7D2D5F: SyncEvo::Session::activateSession() (signal_template.hpp:695)
+# ==14458==    by 0x79C026: SyncEvo::Server::checkQueue() (server.cpp:643)
+# ==14458==    by 0x7A0894: SyncEvo::Server::enqueue(boost::shared_ptr<SyncEvo::Session> const&) (server.cpp:500)
+# ==14458==    by 0x7A0ECA: SyncEvo::Server::startInternalSession(std::string const&, SyncEvo::Server::SessionFlags, boost::function<void ()(boost::weak_ptr<SyncEvo::Session> const&)> const&) (server.cpp:235)
+# ==14458==    by 0x80524D: SyncEvo::Manager::runInSession(std::string const&, SyncEvo::Server::SessionFlags, boost::shared_ptr<GDBusCXX::Result> const&, boost::function<void ()(boost::shared_ptr<SyncEvo::Session> const&)> const&) (manager.cpp:594)
+# ==14458==    by 0x809102: SyncEvo::Manager::setPeer(boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&) (manager.cpp:664)
+# ==14458==    by 0x811C17: boost::function3<void, boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&>::operator()(boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&) const (function_template.hpp:760)
+# ==14458==    by 0x81B846: GDBusCXX::MakeMethodEntry<boost::function<void ()(boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&)> >::methodFunction(_GDBusConnection*, _GDBusMessage*, void*) (gdbus-cxx-bridge.h:3926)
+# ==14458==    by 0x7ABA33: GDBusCXX::MethodHandler::handler(_GDBusConnection*, char const*, char const*, char const*, char const*, _GVariant*, _GDBusMethodInvocation*, void*) (gdbus-cxx-bridge.h:1062)
+# ==14458==    by 0xA3E93E4: call_in_idle_cb (gdbusconnection.c:4737)
+# ==14458==    by 0xA916114: g_main_context_dispatch (gmain.c:2715)
+# ==14458==    by 0xA916447: g_main_context_iterate.isra.24 (gmain.c:3290)
+# ==14458==    by 0xA916841: g_main_loop_run (gmain.c:3484)
+# ==14458==    by 0x79DC71: SyncEvo::Server::run() (server.cpp:439)
+# ==14458==    by 0x7673CA: main (main.cpp:158)
+# ==14458== 
+{
+   SyncEvo registry
+   Memcheck:Leak
+   fun:_Znwm
+   fun:_ZN7SyncEvo19EvolutionSyncSource17getSourceRegistryEv
+   fun:_ZN7SyncEvo19EvolutionSyncSource24getDatabasesFromRegistryERSt6vectorINS_10SyncSource8DatabaseESaIS3_EEPKcPFP8_ESourceP16_ESourceRegistryE
+}
+{
+   registry leak 2
+   Memcheck:Leak
+   fun:_Znwm
+   fun:_ZN7SyncEvo19EvolutionSyncSource17getSourceRegistryEv
+   fun:_ZN7SyncEvo19EvolutionSyncSource11openESourceEPKcPFP8_ESourceP16_ESourceRegistryERKN5boost8functionIFP8_EClientS4_PP7_GErrorEEE
+}
+
+# ==14458== 492 (184 direct, 308 indirect) bytes in 1 blocks are definitely lost in loss record 5,028 of 5,224
+# ==14458==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==14458==    by 0xA91BD50: g_malloc (gmem.c:159)
+# ==14458==    by 0xA930C92: g_slice_alloc (gslice.c:1003)
+# ==14458==    by 0xA9311E5: g_slice_alloc0 (gslice.c:1029)
+# ==14458==    by 0x4E450AA: _folks_backend_store_save_key_file (backend-store.vala:38)
+# ==14458==    by 0x4E4732B: folks_backend_store_enable_backend_co (backend-store.vala:548)
+# ==14458==    by 0x86580F: SyncEvo::IndividualAggregator::init(boost::shared_ptr<SyncEvo::IndividualAggregator>&) (folks.cpp:613)
+# ==14458==    by 0x866E0C: SyncEvo::IndividualAggregator::create() (folks.cpp:627)
+# ==14458==    by 0x8040EF: SyncEvo::Manager::initFolks() (manager.cpp:123)
+# ==14458==    by 0x8088DC: SyncEvo::Manager::init() (manager.cpp:93)
+# ==14458==    by 0x808EDB: SyncEvo::Manager::create(boost::shared_ptr<SyncEvo::Server> const&) (manager.cpp:143)
+# ==14458==    by 0x808F30: SyncEvo::CreateContactManager(boost::shared_ptr<SyncEvo::Server> const&) (manager.cpp:149)
+# ==14458==    by 0x767398: main (main.cpp:150)
+# ==14458== 
+{
+   folks keyfile
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_slice_alloc
+   fun:g_slice_alloc0
+   fun:_folks_backend_store_save_key_file
+}
+
+# ==19483== 9 bytes in 2 blocks are definitely lost in loss record 424 of 7,448
+# ==19483==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==19483==    by 0xA91BD50: g_malloc (gmem.c:159)
+# ==19483==    by 0xA9323CB: g_strdup (gstrfuncs.c:364)
+# ==19483==    by 0x88746D: SyncEvo::GeeCollCXX<char const*>::Iterator::operator++() (GeeSupport.h:86)
+# ==19483==    by 0x88CF46: SyncEvo::GeeCollCXX<char const*>::begin() const (GeeSupport.h:122)
+# ==19483==    by 0x88A744: boost::range_iterator<SyncEvo::GeeCollCXX<char const*> const>::type boost::range_detail::ra
+# nge_begin<SyncEvo::GeeCollCXX<char const*> const>(SyncEvo::GeeCollCXX<char const*> const&) (begin.hpp:49)
+# ==19483==    by 0x887372: boost::range_iterator<SyncEvo::GeeCollCXX<char const*> const>::type boost::range_adl_barrie
+# r::begin<SyncEvo::GeeCollCXX<char const*> >(SyncEvo::GeeCollCXX<char const*> const&) (begin.hpp:119)
+# ==19483==    by 0x88254A: boost::foreach_detail_::auto_any<boost::foreach_detail_::foreach_iterator<SyncEvo::GeeCollC
+# XX<char const*>, mpl_::bool_<true> >::type> boost::foreach_detail_::begin<SyncEvo::GeeCollCXX<char const*> >(boost::f
+# oreach_detail_::auto_any_base const&, boost::foreach_detail_::type2type<SyncEvo::GeeCollCXX<char const*>, mpl_::bool_
+# <true> >*, bool*) (foreach.hpp:679)
+# ==19483==    by 0x8805ED: GDBusCXX::dbus_traits<_FolksAbstractFieldDetails*>::append(_GVariantBuilder&, _FolksAbstrac
+# tFieldDetails*) (individual-traits.cpp:236)
+# ==19483==    by 0x8892BC: GDBusCXX::dbus_traits<SyncEvo::GeeCollCXX<_FolksAbstractFieldDetails*> >::append(_GVariantB
+# uilder&, SyncEvo::GeeCollCXX<_FolksAbstractFieldDetails*> const&) (individual-traits.cpp:287)
+# ==19483==    by 0x885E9E: void SyncEvo::SerializeFolks<_FolksPhoneDetails, _GeeSet*, SyncEvo::GeeCollCXX<_FolksAbstra
+# ctFieldDetails*> >(_GVariantBuilder&, _FolksPhoneDetails*, _GeeSet* (*)(_FolksPhoneDetails*), SyncEvo::GeeCollCXX<_Fo
+# lksAbstractFieldDetails*>*, char const*) (individual-traits.cpp:129)
+# ==19483==    by 0x87F0FD: SyncEvo::FolksIndividual2DBus(SyncEvo::FolksIndividualCXX const&, _GVariantBuilder&) (indiv
+# idual-traits.cpp:788)
+# ==19483==    by 0x83998E: GDBusCXX::dbus_traits<std::vector<SyncEvo::FolksIndividualCXX, std::allocator<SyncEvo::Folk
+# sIndividualCXX> > >::append(_GVariantBuilder&, std::vector<SyncEvo::FolksIndividualCXX, std::allocator<SyncEvo::Folks
+# IndividualCXX> > const&) (individual-traits.h:71)
+# ==19483==    by 0x83A74D: GDBusCXX::MakeMethodEntry<boost::function<void ()(int, int, std::vector<SyncEvo::FolksIndiv
+# idualCXX, std::allocator<SyncEvo::FolksIndividualCXX> >&)> >::methodFunction(_GDBusConnection*, _GDBusMessage*, void*
+# ) (gdbus-cxx-bridge.h:455)
+# ==19483==    by 0x7CC5E3: GDBusCXX::MethodHandler::handler(_GDBusConnection*, char const*, char const*, char const*, 
+# char const*, _GVariant*, _GDBusMethodInvocation*, void*) (gdbus-cxx-bridge.h:1062)
+# ==19483==    by 0xA3E93E4: call_in_idle_cb (gdbusconnection.c:4737)
+# ==19483==    by 0xA916114: g_main_context_dispatch (gmain.c:2715)
+# ==19483==    by 0xA916447: g_main_context_iterate.isra.24 (gmain.c:3290)
+# ==19483==    by 0xA916841: g_main_loop_run (gmain.c:3484)
+# ==19483==    by 0x7BE821: SyncEvo::Server::run() (server.cpp:439)
+# ==19483==    by 0x787FAA: main (main.cpp:158)
+# ==19483== 
+#
+# Apparently gee_iterator_get can (sometimes?) transfer ownership of the result
+# to the caller. Need to check!
+{
+   gee_iterator_get leak in SyncEvolution
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_strdup
+   ...
+   fun:*GeeCollCXX*
+}
