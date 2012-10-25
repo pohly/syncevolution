@@ -795,7 +795,7 @@ bool Cmdline::run() {
                             auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
                             (this->*operation)(source.get(), header);
                         } catch (...) {
-                            SE_LOG_ERROR(NULL, NULL, "%s:\nacessing databases failed", header.c_str());
+                            SE_LOG_ERROR(NULL, NULL, "%s:\naccessing databases failed", header.c_str());
                             Exception::handle();
                         }
                     }
