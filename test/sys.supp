@@ -1446,3 +1446,40 @@
    fun:call_init
    fun:_dl_init
 }
+
+# ==25464== 24 bytes in 1 blocks are definitely lost in loss record 1,967 of 5,019
+# ==25464==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==25464==    by 0xA91BD50: g_malloc (gmem.c:159)
+# ==25464==    by 0xA930C92: g_slice_alloc (gslice.c:1003)
+# ==25464==    by 0xA9311E5: g_slice_alloc0 (gslice.c:1029)
+# ==25464==    by 0xA925622: g_queue_copy (gqueue.c:222)
+# ==25464==    by 0x1A8851D3: tp_proxy_poll_features (proxy.c:2202)
+# ==25464==    by 0x1A885974: tp_proxy_emit_invalidated (proxy.c:618)
+# ==25464==    by 0x1A78D92A: _tp_account_manager_got_all_cb (account-manager.c:482)
+# ==25464==    by 0x1A880F32: _tp_cli_dbus_properties_invoke_callback_get_all (tp-cli-generic-body.h:1204)
+# ==25464==    by 0x1A88714F: tp_proxy_pending_call_idle_invoke (proxy-methods.c:155)
+# ==25464==    by 0xA916114: g_main_context_dispatch (gmain.c:2715)
+# ==25464==    by 0xA916447: g_main_context_iterate.isra.24 (gmain.c:3290)
+# ==25464==    by 0xA916841: g_main_loop_run (gmain.c:3484)
+# ==25464==    by 0x781A01: SyncEvo::Server::run() (server.cpp:439)
+# ==25464==    by 0x74B15A: main (main.cpp:158)
+# ==25464== 
+{
+   tp_proxy_pending_call_idle_invoke
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_slice_alloc
+   fun:g_slice_alloc0
+   fun:g_queue_copy
+   fun:tp_proxy_poll_features
+   fun:tp_proxy_emit_invalidated
+   fun:_tp_account_manager_got_all_cb
+   fun:_tp_cli_dbus_properties_invoke_callback_get_all
+   fun:tp_proxy_pending_call_idle_invoke
+   fun:g_main_context_dispatch
+   ...
+   fun:g_main_loop_run
+   fun:_ZN7SyncEvo6Server3runEv
+   fun:main
+}
