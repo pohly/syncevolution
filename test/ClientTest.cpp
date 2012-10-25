@@ -747,7 +747,7 @@ bool LocalTests::compareDatabases(const char *refFile, TestingSyncSource &copy, 
     simplifyFilename(copyFile);
     SOURCE_ASSERT_EQUAL(&copy, 0, config.m_dump(client, copy, copyFile));
 
-    bool equal;
+    bool equal = false;
     CT_ASSERT_NO_THROW(equal = config.m_compare(client, sourceFile, copyFile));
     CT_ASSERT(!raiseAssert || equal);
 
@@ -2009,7 +2009,7 @@ void LocalTests::testLinkedItemsRemoveNormal() {
         SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
         SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
         // parent might have been updated
-        int updated;
+        int updated = false;
         CT_ASSERT_NO_THROW(updated = countUpdatedItems(copy.get()));
         SOURCE_ASSERT(copy.get(), 0 <= updated && updated <= 1);
         SOURCE_ASSERT_EQUAL(copy.get(), 1, countDeletedItems(copy.get()));

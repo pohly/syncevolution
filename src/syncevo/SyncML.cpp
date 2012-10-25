@@ -1141,12 +1141,12 @@ ConfigNode &operator >> (ConfigNode &node, SyncReport &report)
                         source.setRestarts(value);
                     }
                 } else if (key == "first") {
-                    bool value;
+                    bool value = false;
                     if (node.getProperty(prop.first, value)) {
                         source.recordFirstSync(value);
                     }
                 } else if (key == "resume") {
-                    bool value;
+                    bool value = false;
                     if (node.getProperty(prop.first, value)) {
                         source.recordResumeSync(value);
                     }
