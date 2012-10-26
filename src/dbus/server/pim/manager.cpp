@@ -100,6 +100,7 @@ void Manager::init()
     add(this, &Manager::setSortOrder, "SetSortOrder");
     add(this, &Manager::getSortOrder, "GetSortOrder");
     add(this, &Manager::search, "Search");
+    add(this, &Manager::getActiveAddressBooks, "GetActiveAddressBooks");
     add(this, &Manager::setActiveAddressBooks, "SetActiveAddressBooks");
     add(this, &Manager::setPeer, "SetPeer");
     add(this, &Manager::removePeer, "RemovePeer");
@@ -622,6 +623,17 @@ void Manager::doSession(const boost::weak_ptr<Session> &weakSession,
     } catch (...) {
         // Tell caller about specific error.
         dbusErrorCallback(result);
+    }
+}
+
+void Manager::getActiveAddressBooks(std::vector<std::string> &dbIDs)
+{
+    BOOST_FOREACH (const std::string &uuid, m_enabledEBooks) {
+        if (uuid == "system-address-book") {
+            dbIDs.push_back("");
+        } else {
+            dbIDs.push_back(DB_PEER_PREFIX + uuid.substr(strlen(MANAGER_PREFIX)));
+        }
     }
 }
 

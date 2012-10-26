@@ -77,6 +77,9 @@ class Manager : public GDBusCXX::DBusObjectHelper
                                   const LocaleFactory::Filter_t &filter,
                                   const GDBusCXX::DBusObject_t &agentPath);
 
+    /** Manager.GetActiveAddressBooks() */
+    void getActiveAddressBooks(std::vector<std::string> &dbIDs);
+
     /** Manager.SetActiveAddressBooks() */
     void setActiveAddressBooks(const std::vector<std::string> &dbIDs);
 
