@@ -238,7 +238,9 @@ XDG root.
              logging.log('deleting all items of system address book')
              self.runCmdline(['--delete-items', 'backend=evolution-contacts', '--luids', '*'])
 
-        self.manager.SetActiveAddressBooks(addressbooks)
+        self.manager.SetActiveAddressBooks(addressbooks, timeout=self.timeout)
+        self.assertEqual(addressbooks, self.manager.GetActiveAddressBooks(timeout=self.timeout),
+                         sortLists=True)
 
         # Start view. We don't know the current state, so give it some time to settle.
         self.view = ContactsView(self.manager)
