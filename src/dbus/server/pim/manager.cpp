@@ -739,6 +739,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_LOCAL_CONFIG + context));
         config->setDefaults();
         config->prepareConfigForWrite();
+        config->setPreventSlowSync(false);
         config->setSyncURL("local://" + context);
         config->setPeerIsClient(true);
         boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
@@ -769,6 +770,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         config.reset(new SyncConfig(MANAGER_REMOTE_CONFIG + context));
         config->setDefaults();
         config->prepareConfigForWrite();
+        config->setPreventSlowSync(false);
         source = config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE);
         if (protocol == PEER_PBAP_PROTOCOL) {
             // PBAP
