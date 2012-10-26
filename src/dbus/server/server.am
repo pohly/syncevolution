@@ -127,8 +127,13 @@ src_dbus_server_service_files_in = src/dbus/server/org.syncevolution.service.in
 src_dbus_server_service_files = $(src_dbus_server_service_files_in:.service.in=.service)
 src_dbus_server_servicedir = $(DBUS_SERVICES_DIR)
 src_dbus_server_service_DATA = $(src_dbus_server_service_files)
-$(src_dbus_server_service_files): $(src_dbus_server_service_files_in)
+src/dbus/server/%.service: src/dbus/server/%.service.in
 	@sed -e "s|\@libexecdir\@|$(libexecdir)|" $< >$@
+
+if COND_DBUS_PIM
+src_dbus_server_service_files_in += \
+  src/dbus/server/pim/org._01.pim.contacts.service.in
+endif
 
 dist_noinst_DATA += \
   $(src_dbus_server_service_files_in) \
