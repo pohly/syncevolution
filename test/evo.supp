@@ -4984,3 +4984,37 @@
    ...
    fun:g_thread_proxy
 }
+
+### folks ###
+
+# ==14458== 56 (16 direct, 40 indirect) bytes in 1 blocks are definitely lost in loss record 2,853 of 5,224
+# ==14458==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==14458==    by 0xA91BD50: g_malloc (gmem.c:159)
+# ==14458==    by 0xA930C92: g_slice_alloc (gslice.c:1003)
+# ==14458==    by 0xA8EB059: g_static_rec_mutex_get_rec_mutex_impl.isra.1 (gthread-deprecated.c:685)
+# ==14458==    by 0xA8EB328: g_static_rec_mutex_lock (gthread-deprecated.c:711)
+# ==14458==    by 0x4E72371: folks_debug_dup (debug.vala:199)
+# ==14458==    by 0x4E72422: folks_debug_dup_with_flags (debug.vala:235)
+# ==14458==    by 0x4E49195: folks_backend_store_constructor (backend-store.vala:140)
+# ==14458==    by 0xA695460: g_object_newv (gobject.c:1637)
+# ==14458==    by 0xA695AAB: g_object_new (gobject.c:1547)
+# ==14458==    by 0x4E49640: folks_backend_store_dup (backend-store.vala:133)
+# ==14458==    by 0x865524: SyncEvo::IndividualAggregator::init(boost::shared_ptr<SyncEvo::IndividualAggregator>&) (fol
+# ks.cpp:586)
+# ==14458==    by 0x866E0C: SyncEvo::IndividualAggregator::create() (folks.cpp:627)
+# ==14458==    by 0x8040EF: SyncEvo::Manager::initFolks() (manager.cpp:123)
+# ==14458==    by 0x8088DC: SyncEvo::Manager::init() (manager.cpp:93)
+# ==14458==    by 0x808EDB: SyncEvo::Manager::create(boost::shared_ptr<SyncEvo::Server> const&) (manager.cpp:143)
+# ==14458==    by 0x808F30: SyncEvo::CreateContactManager(boost::shared_ptr<SyncEvo::Server> const&) (manager.cpp:149)
+# ==14458==    by 0x767398: main (main.cpp:150)
+# ==14458== 
+{
+   folks mutex
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_static_rec_mutex_lock
+   fun:folks_debug_dup
+   fun:folks_debug_dup_with_flags
+   fun:folks_backend_store_constructor
+}
