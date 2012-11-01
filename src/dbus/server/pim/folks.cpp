@@ -633,7 +633,7 @@ std::string IndividualAggregator::dumpDatabases()
 {
     std::string res;
 
-    BOOST_FOREACH (const gchar *tmp, GeeCollCXX<const gchar *>(GEE_COLLECTION(m_databases.get()))) {
+    BOOST_FOREACH (const gchar *tmp, GeeStringCollection(GEE_COLLECTION(m_databases.get()))) {
         if (!res.empty()) {
             res += ", ";
         }
