@@ -496,7 +496,8 @@ XDG root.
         # Throw away data that might have been in the local database.
         self.configurePhone(phone, uid, contacts)
         self.syncPhone(phone, uid)
-        self.manager.SyncPeer(uid)
+        self.manager.SyncPeer(uid,
+                              timeout=self.timeout)
         # TODO: check that syncPhone() really used PBAP - but how?
 
         # Export data from local database into a file via the --export
@@ -521,7 +522,8 @@ END:VCARD'''
         output.write(john)
         output.close()
         self.syncPhone(phone, uid)
-        self.manager.SyncPeer(uid)
+        self.manager.SyncPeer(uid,
+                              timeout=self.timeout)
         self.exportCache(uid, export)
         self.compareDBs(contacts, export)
 
@@ -570,10 +572,12 @@ END:VCARD'''
         try:
              self.manager.SyncPeer(uid,
                                    reply_handler=lambda: result(0, True),
-                                   error_handler=lambda x: result(0, x))
+                                   error_handler=lambda x: result(0, x),
+                                   timeout=self.timeout)
              self.manager.SyncPeer(uid,
                                    reply_handler=lambda: result(1, True),
-                                   error_handler=lambda x: result(1, x))
+                                   error_handler=lambda x: result(1, x),
+                                   timeout=self.timeout)
              self.runUntil('both syncs done',
                            check=lambda: True,
                            until=lambda: not False in syncCompleted)
