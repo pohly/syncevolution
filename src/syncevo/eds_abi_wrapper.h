@@ -55,7 +55,9 @@
 #if defined(USE_EDS_CLIENT)
 #include <libedataserver/libedataserver.h>
 #else
+#ifdef HAVE_LIBEDATASERVER_EDS_VERSION_H
 #include <libedataserver/eds-version.h>
+#endif
 #include <libedataserver/e-source.h>
 #include <libedataserver/e-source-list.h>
 #endif

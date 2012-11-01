@@ -36,6 +36,8 @@
 #include <QContactLocalIdFilter>
 #include <QContactThumbnail>
 #include <QContactAvatar>
+#include <QContactSyncTarget>
+#include <QContactDetailFilter>
 
 #include <QVersitContactExporter>
 #include <QVersitContactImporter>
@@ -422,16 +424,41 @@ QtContactsSource::Databases QtContactsSource::getDatabases()
 {
     Databases result;
     QStringList availableManagers = QContactManager::availableManagers();
+    bool isDefault = true;
 
+#if 0
     result.push_back(Database("select database via QtContacts Manager URL",
                               "qtcontacts:tracker:"));
+#endif
+
+    foreach (QString manager, availableManagers) {
+        QMap<QString, QString> params;
+        QString uri = QContactManager::buildUri(manager, params);
+        result.push_back(Database(manager.toStdString(),
+                                  uri.toStdString(),
+                                  isDefault));
+        isDefault = false;
+    }
     return result;
 }
 
 void QtContactsSource::listAllItems(RevisionMap_t &revisions)
 {
+#ifdef ENABLE_MAEMO
+    QContactLocalId self_id = m_data->m_manager->selfContactId();
+#endif
+
     QContactFetchRequest fetch;
     fetch.setManager(m_data->m_manager.get());
+
+#ifdef ENABLE_MAEMO
+    // only sync contacts from addressbook, not from Telepathy or wherever
+    QContactDetailFilter filter;
+    filter.setDetailDefinitionName(QContactSyncTarget::DefinitionName, QContactSyncTarget::FieldSyncTarget);
+    filter.setValue("addressbook");
+    filter.setMatchFlags(QContactFilter::MatchExactly);
+    fetch.setFilter(filter);
+#endif
 
     // only need ID and time stamps
     QContactFetchHint hint;
@@ -443,6 +470,13 @@ void QtContactsSource::listAllItems(RevisionMap_t &revisions)
     fetch.waitForFinished();
     m_data->checkError("read all items", fetch);
     foreach (const QContact &contact, fetch.contacts()) {
+#ifdef ENABLE_MAEMO
+        if (contact.localId() == self_id) {
+            // Do not synchronize "self" contact
+            continue;
+        }
+#endif
+
         string revision = QtContactsData::getRev(contact);
         string luid = QtContactsData::getLUID(contact);
         if (luid == "2147483647" &&
@@ -478,6 +512,10 @@ void QtContactsSource::readItem(const string &uid, std::string &item, bool raw)
             thumbnail.setThumbnail(image);
             contact.saveDetail(&thumbnail);
         }
+
+//        foreach (const QContactSyncTarget &target, contact.details<QContactSyncTarget>()) {
+//            std::cout << " Sync Target: " << target.syncTarget().toUtf8().data() << std::endl;
+//        }
     }
 
     QStringList profiles;
@@ -559,7 +597,7 @@ TrackingSyncSource::InsertItemResult QtContactsSource::insertItem(const string &
 
     return InsertItemResult(QtContactsData::getLUID(savedContact),
                             QtContactsData::getRev(finalContact),
-                            false);
+                            ITEM_OKAY);
 }
 
 

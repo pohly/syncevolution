@@ -2815,6 +2815,9 @@ void SyncContext::initEngine(bool logXML)
     }
 }
 
+// This is just the declaration. The actual function pointer instance
+// is inside libsynthesis, which, for historic purposes, doesn't define
+// it in its header files (yet).
 extern "C" int (*SySync_ConsolePrintf)(FILE *stream, const char *format, ...);
 
 static int nopPrintf(FILE *stream, const char *format, ...) { return 0; }

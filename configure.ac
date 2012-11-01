@@ -55,7 +55,8 @@ dnl Specify git revisions/branches without prefix, i.e., without 'origin'.
 dnl We'll sort that out below.
 define([SYNTHESISSRC_REVISION], [syncevolution-0.9])
 AC_CONFIG_HEADERS(config.h)
-LT_INIT([dlopen])
+AC_LIBTOOL_DLOPEN
+AC_PROG_LIBTOOL
 
 dnl check for programs.
 AC_PROG_CXX
@@ -677,7 +678,11 @@ AC_SUBST(GUI_DESKTOP_FILES)
 
 # C++ regular expression support is required often enough to make it
 # mandatory.
-PKG_CHECK_MODULES(PCRECPP, libpcrecpp)
+PKG_CHECK_MODULES(PCRECPP, libpcrecpp,,
+AC_CHECK_LIB(pcrecpp,main,
+AC_SUBST(PCRECPP_LIBS,-lpcrecpp),
+AC_MSG_ERROR([pcrecpp not found])
+))
 
 # need rst2man for man pages
 AC_ARG_WITH(rst2man,

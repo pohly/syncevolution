@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/sh
 #
 # Copyright (C) 2011 Intel Corporation
 #
@@ -49,7 +49,7 @@ trap "[ -s $LOG ] && ( echo $0 failed to find '$TYPE $DOMAIN':; cat $LOG >&2 ); 
 
 # find one of the supported tools for DNS queries
 TOOL=
-ALTERNATIVES="adnshost host nslookup"
+ALTERNATIVES="adnshost host /usr/lib/syncevolution/host nslookup"
 for i in $ALTERNATIVES; do
     if which $i >/dev/null; then
         TOOL=$i
@@ -89,11 +89,12 @@ for type in ${TYPE}s ${TYPE}; do
                 PORT=`echo $res | sed -e 's;.*service = [^ ]* [^ ]* \([^ ]*\) \([^ ]*\)\.;\1;'`
                 HOSTNAME=`echo $res | sed -e 's;.*service = [^ ]* [^ ]* \([^ ]*\) \([^ ]*\)\.;\2;'`
                 ;;
-            host)
-                res=`$TOOL -t srv _$type._tcp.$DOMAIN | tee -a $LOG | grep "has SRV record" | head -1`
+            host|*/host)
+                res=`$TOOL -t srv _$type._tcp.$DOMAIN | tee -a $LOG | grep "\<SRV\>" | head -1`
                 # _caldavs._tcp.yahoo.com has SRV record 1 1 443 caldav.calendar.yahoo.com.
-                PORT=`echo $res | sed -e 's;.* \([^ ]*\) \([^ ]*\)\.;\1;'`
-                HOSTNAME=`echo $res | sed -e 's;.* \([^ ]*\) \([^ ]*\)\.;\2;'`
+                # _caldavs._tcp.yahoo.com SRV 1 1 443 caldav.calendar.yahoo.com
+                PORT=`echo $res | sed -e 's;.* \([^ ]*\) \([^. ]\+\(\.[^. ]\+\)*\)\.\?;\1;'`
+                HOSTNAME=`echo $res | sed -e 's;.* \([^ ]*\) \([^. ]\+\(\.[^. ]\+\)*\)\.\?;\2;'`
                 ;;
             *)
                 echo "unsupported tool $TOOL"

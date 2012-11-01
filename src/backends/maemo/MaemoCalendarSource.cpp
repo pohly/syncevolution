@@ -46,6 +46,26 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
     TrackingSyncSource(params),
     entry_type(EntryType), entry_format(EntryFormat)
 {
+    switch (EntryType) {
+    case EVENT:
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY") + "LOCATION",
+                                ", ",
+                                m_operations);
+        break;
+    case TODO:
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY"),
+                                ", ",
+                                m_operations);
+        break;
+    case JOURNAL:
+        SyncSourceLogging::init(InitList<std::string>("SUBJECT"),
+                                ", ",
+                                m_operations);
+        break;
+    default:
+        throwError("invalid calendar type");
+        break;
+    }
     mc = CMulticalendar::MCInstance();
     cal = NULL;
     if (!mc) {
@@ -53,17 +73,19 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
     }
 }
 
-const char *MaemoCalendarSource::getMimeType() const
+std::string MaemoCalendarSource::getMimeType() const
 {
     switch (entry_format) {
     case -1: return "text/plain";
-    case ICAL_TYPE: return "text/calendar";
+    case ICAL_TYPE: return entry_type == JOURNAL ?
+                           "text/calendar+plain" :
+                           "text/calendar";
     case VCAL_TYPE: return "text/x-calendar";
     default: return NULL;
     }
 }
 
-const char *MaemoCalendarSource::getMimeVersion() const
+std::string MaemoCalendarSource::getMimeVersion() const
 {
     switch (entry_format) {
     case -1: return "1.0";
@@ -113,10 +135,13 @@ void MaemoCalendarSource::open()
 
 bool MaemoCalendarSource::isEmpty()
 {
-    // TODO: provide a real implementation. Always returning false
-    // here disables the "allow slow sync when no local data" heuristic
-    // for preventSlowSync=1.
-    return false;
+    int id = cal->getCalendarId(), err;
+    switch (entry_type) {
+    case EVENT:   return !mc->getEventCount(id, err);
+    case TODO:    return !mc->getTodoCount(id, err);
+    case JOURNAL: return !mc->getNoteCount(id, err);
+    default:      return true;
+    }
 }
 
 void MaemoCalendarSource::close()
@@ -125,9 +150,6 @@ void MaemoCalendarSource::close()
     conv = NULL;
     delete cal;
     cal = NULL;
-    // since timestamps are rounded down to nearest second,
-    // sleep until next second, just in case
-    sleep(1);
 }
 
 MaemoCalendarSource::Databases MaemoCalendarSource::getDatabases()
@@ -159,7 +181,9 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
 #if 0 /* this code exposes a bug in calendar-backend, https://bugs.maemo.org/show_bug.cgi?id=8277 */
     // I've found no way to query the last modified time of a component
     // without getting the whole component.
-    // This limit should hopefully reduce memory usage of that a bit
+    // This limit should hopefully reduce memory usage of that a bit,
+    // though it could be bad if the database happens to change
+    // between getComponents() calls.
     static const int limit = 1024;
     int ofs = 0, err;
     vector< CComponent * > comps;
@@ -180,14 +204,20 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
         }
     }
 #else
-    // this avoids the calendar-backend bug, but may use unlimited memory;
-    // hopefully the users aren't saving their entire life here!
+    // Instead, get a full list of IDs from getIdList(), then
+    // load each entry from the calendar one by one. The
+    // alternative would be to load the whole calendar into
+    // memory all at once, but that's probably not all that
+    // desirable, given the N900's limited memory.
     int err;
-    vector< CComponent * > comps;
-
-    comps = cal->getComponents(entry_type, -1, -1, err);
-    BOOST_FOREACH(CComponent * c, comps) {
-        revisions[c->getId()] = get_revision(c);
+    vector< string > ids = cal->getIdList(entry_type, err);
+    BOOST_FOREACH(std::string& id, ids) {
+        CComponent *c = cal->getEntry(id, entry_type, err);
+        if (!c)
+        {
+            throwError(string("retrieving item: ") + id);
+        }
+        revisions[id] = get_revision(c);
         delete c;
     }
 #endif
@@ -201,7 +231,7 @@ void MaemoCalendarSource::readItem(const string &uid, std::string &item, bool ra
         throwError(string("retrieving item: ") + uid);
     }
     if (entry_format == -1) {
-        item = c->getDescription();
+        item = c->getSummary();
         err = CALENDAR_OPERATION_SUCCESSFUL;
     } else {
         item = conv->localToIcalVcal(c, FileType(entry_format), err);
@@ -216,7 +246,8 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
 {
     int err;
     CComponent *c;
-    bool r, u = false;
+    bool r;
+    InsertItemResultState u = ITEM_OKAY;
     TrackingSyncSource::InsertItemResult result;
 
     if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
@@ -275,7 +306,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
             throwError(string("creating item "));
         }
         if (err == CALENDAR_ENTRY_DUPLICATED) {
-            u = true;
+            u = ITEM_REPLACED;
         }
     }
 
@@ -288,6 +319,12 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
 void MaemoCalendarSource::removeItem(const string &uid)
 {
     int err;
+
+    if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
+        // stubbornly refuse to try this
+        throwError(string("can't sync smart calendar ") + cal->getCalendarName());
+    }
+
     cal->deleteComponent(uid, err);
     if (err != CALENDAR_OPERATION_SUCCESSFUL) {
         throwError(string("deleting item: ") + uid);
@@ -302,6 +339,31 @@ string MaemoCalendarSource::get_revision(CComponent * c)
     revision << mtime;
 
     return revision.str();
+}
+
+std::string MaemoCalendarSource::getDescription(const string &uid)
+{
+    string ret;
+    int err;
+    CComponent * c = cal->getEntry(uid, entry_type, err);
+    if (c) {
+        list<string> parts;
+        string str;
+        str = c->getSummary();
+        if (!str.empty()) {
+            parts.push_back(str);
+        }
+        if (entry_type == EVENT)
+        {
+            str = c->getLocation();
+            if (!str.empty()) {
+                parts.push_back(str);
+            }
+        }
+        ret = boost::join(parts, ", ");
+		delete c;
+    }
+    return ret;
 }
 
 SE_END_CXX

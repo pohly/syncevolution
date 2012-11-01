@@ -35,13 +35,13 @@ SE_BEGIN_CXX
 
 /**
  * Implement access to Maemo calendar.
- * Change tracking is done by using the last-modified time.
- * It might be possible to improve on it by taking the last sync time
- * and calling the getAllAdded/Modified/Deleted(...) methods provided by
- * the CCalendar class, instead of comparing every single record in
- * the database like TrackingSyncSource probably needs to do otherwise.
+ * Change tracking is done by using the last-modified time
+ * as TrackingSyncSource revisions. While it might be possible
+ * to improve performance by using the getAllAdded/Modified
+ * etc methods, it would make the change tracking less robust,
+ * so it doesn't seem worth it.
  */
-class MaemoCalendarSource : public TrackingSyncSource, private boost::noncopyable
+class MaemoCalendarSource : public TrackingSyncSource, public SyncSourceLogging, private boost::noncopyable
 {
   public:
     MaemoCalendarSource(int EntryType, int EntryFormat,
@@ -54,8 +54,8 @@ class MaemoCalendarSource : public TrackingSyncSource, private boost::noncopyabl
     virtual bool isEmpty();
     virtual void close();
     virtual Databases getDatabases();
-    virtual const char *getMimeType() const;
-    virtual const char *getMimeVersion() const;
+    virtual std::string getMimeType() const;
+    virtual std::string getMimeVersion() const;
     virtual void getSynthesisInfo(SynthesisInfo &info,
                                   XMLConfigFragments &fragments);
 
@@ -63,8 +63,11 @@ class MaemoCalendarSource : public TrackingSyncSource, private boost::noncopyabl
     virtual void listAllItems(RevisionMap_t &revisions);
     virtual InsertItemResult insertItem(const string &luid, const std::string &item, bool raw);
     void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual void removeItem(const string &uid);
+    virtual void removeItem(const string &luid);
 
+    /* implementation of SyncSourceLogging interface */
+    virtual std::string getDescription(const string &luid);
+ 
  private:
     CMulticalendar *mc; /**< multicalendar */
     CCalendar *cal;   /**< calendar */

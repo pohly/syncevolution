@@ -27,7 +27,7 @@ SE_BEGIN_CXX
 static SyncSource *createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
-    bool isMe = sourceType.m_backend == "mkcal";
+    bool isMe = sourceType.m_backend == "mkcal-events";
     bool maybeMe = sourceType.m_backend == "calendar";
 
     if (isMe || maybeMe) {
@@ -37,11 +37,44 @@ static SyncSource *createSource(const SyncSourceParams &params)
             sourceType.m_format == "text/calendar") {
             return
 #ifdef ENABLE_KCALEXTENDED
-                true ? new KCalExtendedSource(params) :
+                true ? new KCalExtendedSource(params, KCalExtendedSource::Event) :
 #endif
                 isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
         }
     }
+
+    isMe = sourceType.m_backend == "mkcal-todos";
+    maybeMe = sourceType.m_backend == "todo";
+
+    if (isMe || maybeMe) {
+        if (sourceType.m_format == "" ||
+            sourceType.m_format == "text/x-vcalendar" ||
+            sourceType.m_format == "text/x-calendar" ||
+            sourceType.m_format == "text/calendar") {
+            return
+#ifdef ENABLE_KCALEXTENDED
+                true ? new KCalExtendedSource(params, KCalExtendedSource::Todo) :
+#endif
+                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+        }
+    }
+
+    isMe = sourceType.m_backend == "mkcal-notes";
+    maybeMe = sourceType.m_backend == "memo";
+
+    if (isMe || maybeMe) {
+        if (sourceType.m_format == "" ||
+            sourceType.m_format == "text/x-vcalendar" ||
+            sourceType.m_format == "text/x-calendar" ||
+            sourceType.m_format == "text/calendar") {
+            return
+#ifdef ENABLE_KCALEXTENDED
+                true ? new KCalExtendedSource(params, KCalExtendedSource::Journal) :
+#endif
+                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+        }
+    }
+
     return NULL;
 }
 
@@ -52,16 +85,36 @@ static RegisterSyncSource registerMe("KCalExtended",
                                      false,
 #endif
                                      createSource,
-                                     "mkcal = KCalExtended = calendar\n"
+                                     "mkcal-events = mkcal = KCalExtended = calendar\n"
                                      "   'database' normally is the name of a calendar\n"
                                      "   inside the default calendar storage. If it starts\n" 
                                      "   with the 'SyncEvolution_Test_' prefix, it will be\n"
                                      "   created as needed, otherwise it must exist.\n"
+#ifdef ENABLE_MAEMO
+                                     "   If it starts with the 'uid:' prefix, the specified\n"
+                                     "   calendar in the default SQLite storage file will\n"
+                                     "   be used. It must exist.\n"
+#endif
                                      "   If it starts with the 'file://' prefix, the default\n"
                                      "   calendar in the specified SQLite storage file will\n"
-                                     "   created (if needed) and used.\n",
+                                     "   created (if needed) and used.\n"
+                                     "mkcal-todos = todo\n"
+                                     "   Same as above.\n"
+                                     "mkcal-notes = memo\n"
+#ifdef ENABLE_MAEMO
+                                     "   Same as above. Keep in mind that, by default, notes\n"
+                                     "   are stored in their own database, separate from\n"
+                                     "   events and todos. The name of this database is\n"
+                                     "   hardcoded into the device's builtin Notes app.\n"
+                                     "   Don't override the default unless you know what\n"
+                                     "   you are doing.\n",
+#else
+                                     "   Same as above.\n",
+#endif
                                      Values() +
-                                     (Aliases("mkcal") + "KCalExtended" + "MeeGo Calendar"));
+                                     (Aliases("mkcal-events") + "mkcal" + "KCalExtended" + "MeeGo Calendar") +
+                                     (Aliases("mkcal-todos") + "MeeGo Tasks") +
+                                     (Aliases("mkcal-notes") + "MeeGo Notes"));
 
 #ifdef ENABLE_KCALEXTENDED
 #ifdef ENABLE_UNIT_TESTS

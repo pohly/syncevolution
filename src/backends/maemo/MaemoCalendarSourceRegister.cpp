@@ -68,12 +68,12 @@ static SyncSource *createSource(const SyncSourceParams &params)
     maybeMe = sourceType.m_backend == "memo";
 
     if (isMe || maybeMe) {
-        if (sourceType.m_format == "" || sourceType.m_format == "text/plain") {
-            return new MaemoCalendarSource(JOURNAL, -1, params);
-        } else if (sourceType.m_format == "text/calendar") {
+        if (sourceType.m_format == "" || sourceType.m_format == "text/calendar") {
             return new MaemoCalendarSource(JOURNAL, ICAL_TYPE, params);
         } else if (sourceType.m_format == "text/x-vcalendar") {
             return new MaemoCalendarSource(JOURNAL, VCAL_TYPE, params);
+        } else if (sourceType.m_format == "text/plain") {
+            return new MaemoCalendarSource(JOURNAL, -1, params);
         } else {
             return NULL;
         }

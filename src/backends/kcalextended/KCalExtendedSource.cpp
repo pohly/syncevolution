@@ -65,12 +65,26 @@ class KCalExtendedData
 public:
     KCalExtendedData(KCalExtendedSource *parent,
                      const QString &notebook,
-                     const KCalCore::IncidenceBase::IncidenceType &type) :
+                     const KCalExtendedSource::Type &type) :
         m_parent(parent),
         m_modified(false),
-        m_notebook(notebook),
-        m_type(type)
+        m_notebook(notebook)
     {
+        switch (type)
+        {
+        case KCalExtendedSource::Event:
+            m_type = KCalCore::IncidenceBase::TypeEvent;
+            break;
+        case KCalExtendedSource::Todo:
+            m_type = KCalCore::IncidenceBase::TypeTodo;
+            break;
+        case KCalExtendedSource::Journal:
+            m_type = KCalCore::IncidenceBase::TypeJournal;
+            break;
+        default:
+            m_type = KCalCore::IncidenceBase::TypeUnknown;
+            break;
+        }
         if (!qApp) {
             static const char *argv[] = { "SyncEvolution" };
             static int argc = 1;
@@ -176,30 +190,53 @@ KCalExtendedData::ItemID KCalExtendedData::getItemID(const KCalCore::Incidence::
     return ItemID(qstring2std(uid), ridStr);
 }
 
-KCalExtendedSource::KCalExtendedSource(const SyncSourceParams &params) :
+KCalExtendedSource::KCalExtendedSource(const SyncSourceParams &params, Type type) :
     TestingSyncSource(params)
 {
     SyncSourceRevisions::init(this, this, 0, m_operations);
-    SyncSourceLogging::init(InitList<std::string>("SUMMARY") + "LOCATION",
-                            ", ",
-                            m_operations);
-#if 0
-    // VTODO
-    SyncSourceLogging::init(InitList<std::string>("SUMMARY"),
-                            ", ",
-                            m_operations);
-    // VJOURNAL
-    SyncSourceLogging::init(InitList<std::string>("SUBJECT"),
-                            ", ",
-                            m_operations);
-#endif
+    switch (type)
+    {
+    case Event:
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY") + "LOCATION",
+                                ", ",
+                                m_operations);
+        break;
+    case Todo:
+        SyncSourceLogging::init(InitList<std::string>("SUMMARY"),
+                                ", ",
+                                m_operations);
+        break;
+    case Journal:
+        SyncSourceLogging::init(InitList<std::string>("SUBJECT"),
+                                ", ",
+                                m_operations);
+        break;
+    default:
+        throwError("invalid calendar type");
+        break;
+    }
 
     m_data = NULL;
+    m_type = type;
+    m_delete_run = 0;
+    m_insert_run = 0;
 }
 
 KCalExtendedSource::~KCalExtendedSource()
 {
     delete m_data;
+}
+
+std::string KCalExtendedSource::getMimeType() const
+{
+    return m_type == Journal ?
+           "text/calendar+plain" :
+           "text/calendar";
+}
+
+std::string KCalExtendedSource::getMimeVersion() const
+{
+    return "2.0";
 }
 
 void KCalExtendedSource::open()
@@ -208,8 +245,7 @@ void KCalExtendedSource::open()
     std::string databaseID = getDatabaseID();
 
     // TODO: also support todoType
-    m_data = new KCalExtendedData(this, databaseID.c_str(),
-                                  KCalCore::IncidenceBase::TypeEvent);
+    m_data = new KCalExtendedData(this, databaseID.c_str(), m_type);
     m_data->m_calendar = mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
 
     if (databaseID.empty() || boost::starts_with(databaseID, "file://") ) {
@@ -227,11 +263,40 @@ void KCalExtendedSource::open()
         if (!m_data->m_storage->open()) {
             throwError("failed to open storage");
         }
+#ifdef ENABLE_MAEMO
+        mKCal::Notebook::Ptr defaultNotebook;
+        // For notes, we need a different default database:
+        //   Notes (uid:66666666-7777-8888-9999-000000000000)
+        if (databaseID.empty() && m_type == Journal)
+        {
+            defaultNotebook = m_data->m_storage->notebook("66666666-7777-8888-9999-000000000000");
+        }
+        else
+        {
+            defaultNotebook = m_data->m_storage->defaultNotebook();
+        }
+#else
         mKCal::Notebook::Ptr defaultNotebook = m_data->m_storage->defaultNotebook();
+#endif
         if (!defaultNotebook) {
             throwError("no default Notebook");
         }
         m_data->m_notebookUID = defaultNotebook->uid();
+#ifdef ENABLE_MAEMO
+    } else if (boost::starts_with(databaseID, "uid:")) {
+        // if databaseID has a "uid:" prefix, open existing notebook with given ID in default storage
+        m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
+        if (!m_data->m_storage->open()) {
+            throwError("failed to open storage");
+        }
+        QString uid = databaseID.c_str() + strlen("uid:");
+        mKCal::Notebook::Ptr notebook = m_data->m_storage->notebook(uid);
+
+        if ( !notebook ) {
+            throwError(string("no such notebook with UID \"") + uid.toStdString() + string("\" in default storage"));
+        }
+        m_data->m_notebookUID = notebook->uid();
+#endif
     } else {
         // use databaseID as notebook name to search for an existing notebook
         // if found use it, otherwise:
@@ -270,14 +335,24 @@ void KCalExtendedSource::open()
     // we are not currently using partial loading because there were
     // issues with it (BMC #6061); the load() calls elsewhere in this
     // file are commented out
-    if (!m_data->m_storage->load()) {
+    if (!m_data->m_storage->loadNotebookIncidences(m_data->m_notebookUID)) {
         throwError("failed to load calendar");
     }
 }
 
 bool KCalExtendedSource::isEmpty()
 {
-    return false;
+    switch (m_data->m_type)
+    {
+    case KCalCore::IncidenceBase::TypeEvent:
+        return !m_data->m_calendar->eventCount();
+    case KCalCore::IncidenceBase::TypeTodo:
+        return !m_data->m_calendar->todoCount();
+    case KCalCore::IncidenceBase::TypeJournal:
+        return !m_data->m_calendar->journalCount();
+    default:
+        return true;
+    }
 }
 
 void KCalExtendedSource::close()
@@ -305,8 +380,7 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
 {
     Databases result;
 
-    m_data = new KCalExtendedData(this, getDatabaseID().c_str(),
-                                  KCalCore::IncidenceBase::TypeEvent);
+    m_data = new KCalExtendedData(this, getDatabaseID().c_str(), m_type);
     m_data->m_calendar = mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
     m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
     if (!m_data->m_storage->open()) {
@@ -315,10 +389,21 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
     mKCal::Notebook::List notebookList = m_data->m_storage->notebooks();
     mKCal::Notebook::List::Iterator it;
     for ( it = notebookList.begin(); it != notebookList.end(); ++it ) {
+#ifdef ENABLE_MAEMO
+        string name = (*it)->name().toStdString();
+        string uid = (*it)->uid().toStdString();
+        // For notes, we need a different default database:
+        //   Notes (uid:66666666-7777-8888-9999-000000000000)
+        bool isDefault = (m_type != Journal) ?
+                         (*it)->isDefault() :
+                         (uid == "66666666-7777-8888-9999-000000000000");
+        result.push_back(Database( name, "uid:" + uid, isDefault ));
+#else
         bool isDefault = (*it)->isDefault();
         result.push_back(Database( (*it)->name().toStdString(), 
                                    (m_data->m_storage).staticCast<mKCal::SqliteStorage>()->databaseName().toStdString(), 
                                    isDefault));
+#endif
     }
     m_data->m_storage->close();
     m_data->m_calendar->close();
@@ -330,9 +415,10 @@ void KCalExtendedSource::beginSync(const std::string &lastToken, const std::stri
     const char *anchor = resumeToken.empty() ? lastToken.c_str() : resumeToken.c_str();
     KCalCore::Incidence::List incidences;
     // return all items
-    if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
-        throwError("allIncidences() failed");
-    }
+    incidences = m_data->m_calendar->incidences();
+    // if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
+    //     throwError("allIncidences() failed");
+    // }
     m_data->extractIncidences(incidences, SyncSourceChanges::ANY, *this);
     if (*anchor) {
         SE_LOG_DEBUG(NULL, NULL, "checking for changes since %s UTC", anchor);
@@ -372,6 +458,8 @@ std::string KCalExtendedSource::endSync(bool success)
             sleep(1 - (current - modtime));
             current = time(NULL);
         } while (current - modtime < 1);
+        m_delete_run = 0;
+        m_insert_run = 0;
     }
 
     QDateTime now = QDateTime::currentDateTime().toUTC();
@@ -393,6 +481,21 @@ void KCalExtendedSource::readItem(const string &uid, std::string &item)
 
 TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string &uid, const std::string &item)
 {
+    if (m_delete_run > 0)
+    {
+        // Since the storage's save() might do deletes *after* inserts,
+        // the final save() could fail if we're doing a refresh-from-peer
+        // (where everything is first deleted and then reinserted), as
+        // the inserts will fail due to the existing entries not being
+        // deleted yet. To avoid the problem, make sure we save between
+        // the deletes and the inserts.
+        if (!m_data->m_storage->save()) {
+            throwError("could not save calendar");
+        }
+        m_delete_run = 0;
+        m_insert_run = 0;
+    }
+
     KCalCore::Calendar::Ptr calendar(new KCalCore::MemoryCalendar(KDateTime::Spec::LocalZone()));
     KCalCore::ICalFormat parser;
     if (!parser.fromString(calendar, std2qstring(item))) {
@@ -402,7 +505,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     if (incidences.empty()) {
         throwError("iCalendar 2.0 item empty?!");
     }
-    bool updated;
+    InsertItemResultState updated;
     string newUID;
     string oldUID = uid;
 
@@ -437,7 +540,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     if (oldUID.empty()) {
         KCalCore::Incidence::Ptr incidence = incidences[0];
 
-        updated = false;
+        updated = ITEM_OKAY;
         if (!m_data->m_calendar->addIncidence(incidence)) {
             throwError("could not add incidence");
         }
@@ -445,7 +548,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         newUID = m_data->getItemID(incidence).getLUID();
     } else {
         KCalCore::Incidence::Ptr incidence = incidences[0];
-        updated = true;
+        updated = uid.empty() ? ITEM_REPLACED : ITEM_OKAY;
         newUID = oldUID;
         KCalCore::Incidence::Ptr original = m_data->findIncidence(oldUID);
         if (!original) {
@@ -475,6 +578,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     }
 
     m_data->m_modified = true;
+    m_insert_run++;
 
     return InsertItemResult(newUID,
                             "",
@@ -495,14 +599,16 @@ void KCalExtendedSource::deleteItem(const string &uid)
         throwError(string("could not delete incidence") + uid);
     }
     m_data->m_modified = true;
+    m_delete_run++;
 }
 
 void KCalExtendedSource::listAllItems(RevisionMap_t &revisions)
 {
     KCalCore::Incidence::List incidences;
-    if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
-        throwError("allIncidences() failed");
-    }
+    incidences = m_data->m_calendar->incidences();
+    // if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
+    //     throwError("allIncidences() failed");
+    // }
     foreach (KCalCore::Incidence::Ptr incidence, incidences) {
         if (incidence->type() == m_data->m_type) {
             revisions[m_data->getItemID(incidence).getLUID()] = "1";

@@ -45,8 +45,14 @@ class KCalExtendedData;
  */
 class KCalExtendedSource : public TestingSyncSource, private SyncSourceAdmin, private SyncSourceBlob, private SyncSourceRevisions, public SyncSourceLogging, private boost::noncopyable
 {
-  public:
-    KCalExtendedSource(const SyncSourceParams &params);
+ public:
+    enum Type {
+        Event   = 0,
+        Todo    = 1,
+        Journal = 2
+    };
+ 
+    KCalExtendedSource(const SyncSourceParams &params, Type type);
     ~KCalExtendedSource();
 
  protected:
@@ -57,7 +63,7 @@ class KCalExtendedSource : public TestingSyncSource, private SyncSourceAdmin, pr
     virtual Databases getDatabases();
     virtual void enableServerMode();
     virtual bool serverModeEnabled() const;
-    virtual std::string getPeerMimeType() const { return "text/calendar"; }
+    virtual std::string getPeerMimeType() const { return getMimeType(); }
 
     /* implementation of SyncSourceSession interface */
     virtual void beginSync(const std::string &lastToken, const std::string &resumeToken);
@@ -67,8 +73,8 @@ class KCalExtendedSource : public TestingSyncSource, private SyncSourceAdmin, pr
     virtual void deleteItem(const string &luid);
 
     /* implementation of SyncSourceSerialize interface */
-    virtual std::string getMimeType() const { return "text/calendar"; }
-    virtual std::string getMimeVersion() const { return "2.0"; }
+    virtual std::string getMimeType() const;
+    virtual std::string getMimeVersion() const;
     virtual InsertItemResult insertItem(const std::string &luid, const std::string &item);
     virtual void readItem(const std::string &luid, std::string &item);
 
@@ -84,6 +90,9 @@ class KCalExtendedSource : public TestingSyncSource, private SyncSourceAdmin, pr
 
  private:
     KCalExtendedData *m_data;
+    Type m_type;
+    unsigned m_delete_run;
+    unsigned m_insert_run;
 };
 
 SE_END_CXX
