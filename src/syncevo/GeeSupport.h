@@ -169,6 +169,9 @@ template<class Entry> class GeeCollCXX
     typedef Entry value_type;
 };
 
+/** A collection of gchar * strings. */
+typedef GeeCollCXX<const gchar *> GeeStringCollection;
+
 template <class Entry> std::forward_iterator_tag iterator_category(const typename GeeCollCXX<Entry>::Iterator &) { return std::forward_iterator_tag(); }
 
 template<class Key, class Value> class GeeMapEntryWrapper  {
