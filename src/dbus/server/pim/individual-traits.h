@@ -29,12 +29,11 @@
 
 #include "gdbus-cxx-bridge.h"
 #include "../dbus-callbacks.h"
+#include "folks.h"
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-class PersonaDetails;
-class FolksIndividualCXX;
 void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context, GDBusCXX::reader_type &iter, PersonaDetails &details);
 void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builder_type &builder);
 void Details2Persona(const Result<void ()> &result, const PersonaDetails &details, FolksPersona *persona);

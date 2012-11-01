@@ -74,90 +74,6 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
 
 #ifdef HAVE_GLIB
 
-/**
- * Defines a shared pointer for a GObject-based type, with intrusive
- * reference counting. Use *outside* of SyncEvolution namespace
- * (i.e. outside of SE_BEGIN/END_CXX. This is necessary because some
- * functions must be put into the boost namespace. The type itself is
- * *inside* the SyncEvolution namespace.
- *
- * connectSignal() connects a GObject signal to a boost::function with
- * the function signature S. Returns the handler ID, which can be
- * passed to g_signal_handler_disconnect() to remove the connection.
- *
- * Example:
- * SE_GOBJECT_TYPE(GFile)
- * SE_GOBJECT_TYPE(GObject)
- * SE_BEGIN_CXX
- * {
- *   // reference normally increased during construction,
- *   // steal() avoids that
- *   GFileCXX filecxx = GFileCXX::steal(g_file_new_for_path("foo"));
- *   GFile *filec = filecxx.get(); // does not increase reference count
- *   // file freed here as filecxx gets destroyed
- * }
- *
- * GObjectCXX object(...);
- * // Define signature explicitly because it cannot be guessed from
- * // boost::bind() result.
- * object.connectSignal<void (GObject *gobject, GParamSpec *pspec)>("notify",
- *                                                                  boost::bind(...));
- * // Signature is taken from boost::function parameter.
- * guint handlerID =
- *     object.connectSignal("notify",
- *                          boost::function<void (GObject *, GParamSpec *)>(boost::bind(...)));
- * object.disconnectSignal(handlerID);
- * SE_END_CXX
- */
-#define SE_GOBJECT_TYPE(_x) \
-    void inline intrusive_ptr_add_ref(_x *ptr) { g_object_ref(ptr); } \
-    void inline intrusive_ptr_release(_x *ptr) { g_object_unref(ptr); } \
-    SE_BEGIN_CXX \
-    class _x ## CXX : public boost::intrusive_ptr<_x> { \
-    public: \
-         _x ## CXX(_x *ptr, bool add_ref = true) : boost::intrusive_ptr<_x>(ptr, add_ref) {} \
-         _x ## CXX() {} \
-         _x ## CXX(const _x ## CXX &other) : boost::intrusive_ptr<_x>(other) {} \
-         operator _x * () { return get(); } \
-         _x * ref() const { return static_cast<_x *>(g_object_ref(get())); } \
-\
-         static  _x ## CXX steal(_x *ptr) { return _x ## CXX(ptr, false); } \
-\
-         template<class S> guint connectSignal(const char *signal, \
-                                               const boost::function<S> &callback) \
-         { \
-             return ConnectGObjectSignal(static_cast<gpointer>(get()), signal, callback); \
-         } \
-         void disconnectSignal(guint handlerID) { \
-             g_signal_handler_disconnect(static_cast<gpointer>(get()), \
-                                         handlerID); \
-         } \
-    }; \
-    SE_END_CXX \
-
-/**
- * Defines a CXX smart pointer similar to SE_GOBJECT_TYPE,
- * but for types which have their own _ref and _unref
- * calls.
- *
- * Example:
- * SE_GLIB_TYPE(GMainLoop, g_main_loop)
- */
-#define SE_GLIB_TYPE(_type, _func_prefix) \
-    void inline intrusive_ptr_add_ref(_type *ptr) { _func_prefix ## _ref(ptr); } \
-    void inline intrusive_ptr_release(_type *ptr) { _func_prefix ## _unref(ptr); } \
-    SE_BEGIN_CXX \
-        typedef boost::intrusive_ptr<_type> _type ## CXX; \
-    SE_END_CXX
-
-SE_END_CXX
-
-SE_GOBJECT_TYPE(GFile)
-SE_GOBJECT_TYPE(GFileMonitor)
-SE_GLIB_TYPE(GMainLoop, g_main_loop)
-
-SE_BEGIN_CXX
-
 // Signal callback. Specializations will handle varying number of parameters.
 template<class S> struct GObjectSignalHandler {
     // static void handler();
@@ -255,30 +171,115 @@ template<class A1, class A2, class A3, class A4, class A5, class A6, class A7, c
     }
 };
 
-// Frees the instance of boost::function which was allocated
-// by ConnectGObjectSignal.
-template<class S> void GObjectSignalDestroy(gpointer data, GClosure *closure) throw ()
-{
-    try {
-        delete reinterpret_cast< boost::function<void ()> *>(data);
-    } catch (...) {
-        Exception::handle(HANDLE_EXCEPTION_FATAL);
+template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
+    typedef boost::intrusive_ptr<C> Base_t;
+
+    // Frees the instance of boost::function which was allocated
+    // by connectSignal.
+    template<class S> static void signalDestroy(gpointer data, GClosure *closure) throw () {
+        try {
+            delete reinterpret_cast< boost::function<void ()> *>(data);
+        } catch (...) {
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
     }
-}
+
+ public:
+    TrackGObject(C *ptr, bool add_ref = true) : Base_t(ptr, add_ref) {}
+    TrackGObject() {}
+    TrackGObject(const TrackGObject &other) : Base_t(other) {}
+    operator C * () { return Base_t::get(); }
+    C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
+
+    static  TrackGObject steal(C *ptr) { return TrackGObject(ptr, false); }
+
+    template<class S> guint connectSignal(const char *signal,
+                                          const boost::function<S> &callback) {
+        return g_signal_connect_data(Base_t::get(), signal,
+                                     G_CALLBACK(&GObjectSignalHandler<S>::handler),
+                                     new boost::function<S>(callback),
+                                     &signalDestroy<S>,
+                                     GConnectFlags(0));
+    }
+    void disconnectSignal(guint handlerID) {
+        g_signal_handler_disconnect(static_cast<gpointer>(Base_t::get()),
+                                    handlerID);
+    }
+};
+
+template<class C> class StealGObject : public TrackGObject<C> {
+ public:
+    StealGObject(C *ptr) : TrackGObject<C>(ptr, false) {}
+    StealGObject() {}
+    StealGObject(const StealGObject &other) : TrackGObject<C>(other) {}
+};
+
 
 /**
- * implements SE_GOBJECT_TYPE() connectSignal()
+ * Defines a shared pointer for a GObject-based type, with intrusive
+ * reference counting. Use *outside* of SyncEvolution namespace
+ * (i.e. outside of SE_BEGIN/END_CXX. This is necessary because some
+ * functions must be put into the boost namespace. The type itself is
+ * *inside* the SyncEvolution namespace.
+ *
+ * connectSignal() connects a GObject signal to a boost::function with
+ * the function signature S. Returns the handler ID, which can be
+ * passed to g_signal_handler_disconnect() to remove the connection.
+ *
+ * Example:
+ * SE_GOBJECT_TYPE(GFile)
+ * SE_GOBJECT_TYPE(GObject)
+ * SE_BEGIN_CXX
+ * {
+ *   // reference normally increased during construction,
+ *   // steal() avoids that
+ *   GFileCXX filecxx = GFileCXX::steal(g_file_new_for_path("foo"));
+ *   GFile *filec = filecxx.get(); // does not increase reference count
+ *   // file freed here as filecxx gets destroyed
+ * }
+ *
+ * GObjectCXX object(...);
+ * // Define signature explicitly because it cannot be guessed from
+ * // boost::bind() result.
+ * object.connectSignal<void (GObject *gobject, GParamSpec *pspec)>("notify",
+ *                                                                  boost::bind(...));
+ * // Signature is taken from boost::function parameter.
+ * guint handlerID =
+ *     object.connectSignal("notify",
+ *                          boost::function<void (GObject *, GParamSpec *)>(boost::bind(...)));
+ * object.disconnectSignal(handlerID);
+ * SE_END_CXX
  */
-template<class S> guint ConnectGObjectSignal(gpointer instance,
-                                             const char *signal,
-                                             const boost::function<S> &callback)
-{
-    return g_signal_connect_data(instance, signal,
-                                 G_CALLBACK(&GObjectSignalHandler<S>::handler),
-                                 new boost::function<S>(callback),
-                                 &GObjectSignalDestroy<S>,
-                                 GConnectFlags(0));
-}
+#define SE_GOBJECT_TYPE(_x) \
+    void inline intrusive_ptr_add_ref(_x *ptr) { g_object_ref(ptr); } \
+    void inline intrusive_ptr_release(_x *ptr) { g_object_unref(ptr); } \
+    SE_BEGIN_CXX \
+    typedef TrackGObject<_x> _x ## CXX; \
+    typedef StealGObject<_x> _x ## StealCXX; \
+    SE_END_CXX \
+
+/**
+ * Defines a CXX smart pointer similar to SE_GOBJECT_TYPE,
+ * but for types which have their own _ref and _unref
+ * calls.
+ *
+ * Example:
+ * SE_GLIB_TYPE(GMainLoop, g_main_loop)
+ */
+#define SE_GLIB_TYPE(_type, _func_prefix) \
+    void inline intrusive_ptr_add_ref(_type *ptr) { _func_prefix ## _ref(ptr); } \
+    void inline intrusive_ptr_release(_type *ptr) { _func_prefix ## _unref(ptr); } \
+    SE_BEGIN_CXX \
+        typedef boost::intrusive_ptr<_type> _type ## CXX; \
+    SE_END_CXX
+
+SE_END_CXX
+
+SE_GOBJECT_TYPE(GFile)
+SE_GOBJECT_TYPE(GFileMonitor)
+SE_GLIB_TYPE(GMainLoop, g_main_loop)
+
+SE_BEGIN_CXX
 
 /**
  * Wrapper around g_file_monitor_file().
