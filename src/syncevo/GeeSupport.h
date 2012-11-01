@@ -34,6 +34,29 @@ SE_GOBJECT_TYPE(GeeIterator)
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+namespace GeeSupport {
+    /** Used for GeeMapEntryWrapper. */
+    template<class E> struct traits {
+        typedef E Wrapper_t;
+        typedef typename E::Cast_t Cast_t;
+        static E get(Wrapper_t &wrapper) { return wrapper; }
+    };
+
+    /** Default is for types which have a corresponding SE_GOBJECT_TYPE. */
+    template<class E> struct traits<E *> {
+        typedef StealGObject<E> Wrapper_t;
+        typedef E * Cast_t;
+        static E * get(Wrapper_t &wrapper) { return wrapper.get(); }
+    };
+
+    /** Dynamically allocated plain C strings also work. */
+    template<> struct traits<const gchar *> {
+        typedef PlainGStr Wrapper_t;
+        typedef gchar * Cast_t;
+        static const gchar * get(Wrapper_t &wrapper) { return wrapper; }
+    };
+}
+
 /**
  * A wrapper class for some kind of Gee collection (like List or Map)
  * which provides standard const forward iterators. Main use case
@@ -53,8 +76,12 @@ SE_BEGIN_CXX
  *    }
  * }
  *
- * @param E     the C++ type that corresponds to the entries in the collection,
- *              must be copyable and constructable from a gpointer.
+ * @param Entry The C++ type that corresponds to the entries in the collection,
+ *              must be copyable and constructable from a gpointer (default) or
+ *              intermediate type Cast (when given). Must own the content
+ *              pointed to by the gpointer. Plain pointers are not good enough,
+ *              they lead to memory leaks!
+ * @param Cast  Used to cast gpointer into something that Entry's constructor accepts.
  */
 template<class Entry> class GeeCollCXX
 {
@@ -67,9 +94,16 @@ template<class Entry> class GeeCollCXX
 
     class Iterator
     {
+        /** Defines how to handle the gpointer result of gee_iterator_get(). */
+        typedef GeeSupport::traits<Entry> Traits_t;
+
         mutable GeeIteratorCXX m_it;
         bool m_valid;
+        /** A smart pointer which owns the value returned by gee_iterator_get(). */
+        typename Traits_t::Wrapper_t m_wrapper;
+        /** A copy of the wrapped value, needed because the * operator must return a reference to it. */
         Entry m_entry;
+        
 
     public:
         /**
@@ -83,9 +117,12 @@ template<class Entry> class GeeCollCXX
         Iterator & operator ++ () {
             m_valid = gee_iterator_next(m_it);
             if (m_valid) {
-                m_entry = Entry(gee_iterator_get(m_it));
+                // First cast gpointer into something which is accepted by the wrapper. */
+                m_wrapper = typename Traits_t::Wrapper_t(static_cast<typename Traits_t::Cast_t>((gee_iterator_get(m_it))));
+                m_entry = Traits_t::get(m_wrapper);
             } else {
-                m_entry = Entry(NULL);
+                m_wrapper = typename Traits_t::Wrapper_t(NULL);
+                m_entry = NULL;
             }
             return *this;
         }
@@ -137,9 +174,11 @@ template <class Entry> std::forward_iterator_tag iterator_category(const typenam
 template<class Key, class Value> class GeeMapEntryWrapper  {
     mutable GeeMapEntryCXX m_entry;
  public:
+    typedef GeeMapEntry *Cast_t;
+
     /** take ownership of entry instance */
-    GeeMapEntryWrapper(gpointer entry = NULL) :
-        m_entry(reinterpret_cast<GeeMapEntry *>(entry), false)
+    GeeMapEntryWrapper(GeeMapEntry *entry = NULL) :
+        m_entry(entry, false)
     {}
     GeeMapEntryWrapper(const GeeMapEntryWrapper &other):
         m_entry(other.m_entry)

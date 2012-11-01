@@ -28,10 +28,6 @@
 
 SE_GLIB_TYPE(GDateTime, g_date_time)
 SE_GOBJECT_TYPE(GTimeZone)
-SE_GOBJECT_TYPE(FolksAbstractFieldDetails)
-SE_GOBJECT_TYPE(FolksRoleFieldDetails)
-SE_GOBJECT_TYPE(FolksRole)
-SE_GOBJECT_TYPE(FolksPostalAddress)
 
 SE_BEGIN_CXX
 
