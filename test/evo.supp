@@ -83,6 +83,49 @@
 
 ##### common #####
 
+# ==8596== 24 bytes in 1 blocks are definitely lost in loss record 2,027 of 5,220
+# ==8596==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==8596==    by 0xA91BD50: g_malloc (gmem.c:159)
+# ==8596==    by 0xA930C92: g_slice_alloc (gslice.c:1003)
+# ==8596==    by 0xA9311E5: g_slice_alloc0 (gslice.c:1029)
+# ==8596==    by 0xA925622: g_queue_copy (gqueue.c:222)
+# ==8596==    by 0x1B0861D3: tp_proxy_poll_features (proxy.c:2202)
+# ==8596==    by 0x1B086974: tp_proxy_emit_invalidated (proxy.c:618)
+# ==8596==    by 0x1AF8E92A: _tp_account_manager_got_all_cb (account-manager.c:482)
+# ==8596==    by 0x1B081F32: _tp_cli_dbus_properties_invoke_callback_get_all (tp-cli-generic-body.h:1204)
+# ==8596==    by 0x1B08814F: tp_proxy_pending_call_idle_invoke (proxy-methods.c:155)
+# ==8596==    by 0xA916114: g_main_context_dispatch (gmain.c:2715)
+# ==8596==    by 0xA916447: g_main_context_iterate.isra.24 (gmain.c:3290)
+# ==8596==    by 0xA916503: g_main_context_iteration (gmain.c:3351)
+# ==8596==    by 0x7C7003: SyncEvo::EvolutionSyncSource::getSourceRegistry() (EvolutionSyncSource.cpp:68)
+# ==8596==    by 0x7C8665: SyncEvo::EvolutionSyncSource::getDatabasesFromRegistry(std::vector<SyncEvo::SyncSource::Database, std::allocator<SyncEvo::SyncSource::Database> >&, char const*, _ESource* (*)(_ESourceRegistry*)) (EvolutionSyncSource.cpp:37)
+# ==8596==    by 0x7C1FC3: SyncEvo::EvolutionContactSource::getDatabases() (EvolutionContactSource.cpp:93)
+# ==8596==    by 0x720BD7: SyncEvo::Manager::doSetPeer(boost::shared_ptr<SyncEvo::Session> const&, boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&) (manager.cpp:757)
+# ==8596==    by 0x71D89B: SyncEvo::Manager::doSession(boost::weak_ptr<SyncEvo::Session> const&, boost::shared_ptr<GDBusCXX::Result> const&, boost::function<void ()(boost::shared_ptr<SyncEvo::Session> const&)> const&) (function_template.hpp:760)
+# ==8596==    by 0x6C21FE: boost::detail::function::void_function_obj_invoker0<boost::_bi::bind_t<boost::_bi::unspecified, boost::function<void ()(boost::weak_ptr<SyncEvo::Session> const&)>, boost::_bi::list1<boost::_bi::value<boost::weak_ptr<SyncEvo::Session> > > >, void>::invoke(boost::detail::function::function_buffer&) (function_template.hpp:760)
+# ==8596==    by 0x7191F9: boost::signals2::detail::signal0_impl<void, boost::signals2::optional_last_value<void>, int, std::less<int>, boost::function<void ()()>, boost::function<void ()(boost::signals2::connection const&)>, boost::signals2::mutex>::operator()() (function_template.hpp:760)
+# ==8596==    by 0x6E6A17: SyncEvo::Session::activateSession() (signal_template.hpp:695)
+# ==8596==    by 0x6B3904: SyncEvo::Server::checkQueue() (server.cpp:643)
+# ==8596==    by 0x6B688D: SyncEvo::Server::enqueue(boost::shared_ptr<SyncEvo::Session> const&) (server.cpp:500)
+# ==8596==    by 0x6B7759: SyncEvo::Server::startInternalSession(std::string const&, SyncEvo::Server::SessionFlags, boost::function<void ()(boost::weak_ptr<SyncEvo::Session> const&)> const&) (server.cpp:235)
+# ==8596==    by 0x71EF92: SyncEvo::Manager::runInSession(std::string const&, SyncEvo::Server::SessionFlags, boost::shared_ptr<GDBusCXX::Result> const&, boost::function<void ()(boost::shared_ptr<SyncEvo::Session> const&)> const&) (manager.cpp:596)
+# ==8596==    by 0x72007C: SyncEvo::Manager::setPeer(boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&) (manager.cpp:677)
+# ==8596==    by 0x734E6C: GDBusCXX::MakeMethodEntry<boost::function<void ()(boost::shared_ptr<GDBusCXX::Result0> const&, std::string const&, std::map<std::string, std::string, std::less<std::string>, std::allocator<std::pair<std::string const, std::string> > > const&)> >::methodFunction(_GDBusConnection*, _GDBusMessage*, void*) (function_template.hpp:760)
+# ==8596==    by 0x6C23EA: GDBusCXX::MethodHandler::handler(_GDBusConnection*, char const*, char const*, char const*, char const*, _GVariant*, _GDBusMethodInvocation*, void*) (gdbus-cxx-bridge.h:1062)
+# ==8596==    by 0xA3E93E4: call_in_idle_cb (gdbusconnection.c:4737)
+# ==8596==    by 0xA916114: g_main_context_dispatch (gmain.c:2715)
+# ==8596== 
+{
+   getSourceRegistry inside libedata
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:_tp_account_manager_got_all_cb
+   ...
+   fun:g_main_context_iteration
+   fun:_ZN7SyncEvo19EvolutionSyncSource17getSourceRegistryEv
+}
+
 # ==8468== Use of uninitialised value of size 8
 # ==8468==    at 0x70F826E: g_utf8_offset_to_pointer (in /usr/lib/libglib-2.0.so.0.1400.1)
 # ==8468==    by 0x50A2C7B: e_vcard_to_string (e-vcard.c:905)
