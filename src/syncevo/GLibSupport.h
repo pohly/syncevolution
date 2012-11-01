@@ -43,6 +43,7 @@ typedef void *GMainLoop;
 #include <boost/type_traits/function_traits.hpp>
 
 #include <iterator>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -581,7 +582,7 @@ template<class T, class F, F finish, class A1, int arity> class GAsyncReadyCXX {
             GErrorCXX gerror;
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, gerror);
-            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(gerror, t);
         } catch (...) {
             // called from C, must not let exception escape
@@ -602,7 +603,7 @@ template<class T, class F, F finish, class A1> class GAsyncReadyCXX<T, F, finish
         try {
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result);
-            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t);
         } catch (...) {
             // called from C, must not let exception escape
@@ -623,7 +624,7 @@ template<class T, class F, F finish> class GAsyncReadyCXX<T, F, finish, GAsyncRe
         try {
             GErrorCXX gerror;
             T t = finish(result, gerror);
-            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
+            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(gerror, t);
         } catch (...) {
             // called from C, must not let exception escape
@@ -644,14 +645,8 @@ template<class F, F finish, class A1> class GAsyncReadyCXX<void, F, finish, A1, 
             GErrorCXX gerror;
             finish(reinterpret_cast<A1>(sourceObject),
                    result, gerror);
-            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
-            try {
-                (*cb)(gerror);
-            } catch (...) {
-                delete cb;
-                throw;
-            }
-            delete cb;
+            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            (*cb)(gerror);
         } catch (...) {
             // called from C, must not let exception escape
             Exception::handle(HANDLE_EXCEPTION_FATAL);
@@ -671,14 +666,8 @@ template<class F, F finish, class A1> class GAsyncReadyCXX<void, F, finish, A1, 
         try {
             finish(reinterpret_cast<A1>(sourceObject),
                    result);
-            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
-            try {
-                (*cb)();
-            } catch (...) {
-                delete cb;
-                throw;
-            }
-            delete cb;
+            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            (*cb)();
         } catch (...) {
             // called from C, must not let exception escape
             Exception::handle(HANDLE_EXCEPTION_FATAL);
@@ -698,14 +687,8 @@ template<class F, F finish> class GAsyncReadyCXX<void, F, finish, GAsyncResult *
         try {
             GErrorCXX gerror;
             finish(result, gerror);
-            CXXFunctionCB_t *cb = static_cast<CXXFunctionCB_t *>(userData);
-            try {
-                (*cb)(gerror);
-            } catch (...) {
-                delete cb;
-                throw;
-            }
-            delete cb;
+            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            (*cb)(gerror);
         } catch (...) {
             // called from C, must not let exception escape
             Exception::handle(HANDLE_EXCEPTION_FATAL);
