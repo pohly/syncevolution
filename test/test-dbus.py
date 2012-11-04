@@ -2805,7 +2805,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorQuiet - test that auto-sync is triggered for local sync, fails due to permanent config error here, with no notification"""
         self.doAutoSyncLocalConfigError(0)
 
-    def doAutoSyncLocalSuccess(self, notifyLevel):
+    def doAutoSyncLocalSuccess(self, notifyLevel, repeat=False):
         # create @foobar config
         self.session.Detach()
         self.setUpSession("target-config@foobar")
@@ -2856,20 +2856,26 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.session.Detach()
 
         # wait for start and end of auto-sync session
-        loop.run()
-        loop.run()
-        self.assertEqual(DBusUtil.quit_events, ["session " + self.auto_sync_session_path + " ready",
-                                                "session " + self.auto_sync_session_path + " done"])
-        session = dbus.Interface(bus.get_object(self.server.bus_name,
-                                                self.auto_sync_session_path),
-                                 'org.syncevolution.Session')
-        reports = session.GetReports(0, 100, utf8_strings=True)
-        self.assertEqual(len(reports), 1)
-        self.assertEqual(reports[0]["status"], "200")
-        name = session.GetConfigName()
-        self.assertEqual(name, "dummy-test")
-        flags = session.GetFlags()
-        self.assertEqual(flags, [])
+        def run(operation, numSyncs):
+            logging.log(operation)
+            loop.run()
+            loop.run()
+            self.assertEqual(DBusUtil.quit_events, ["session " + self.auto_sync_session_path + " ready",
+                                                    "session " + self.auto_sync_session_path + " done"])
+            session = dbus.Interface(bus.get_object(self.server.bus_name,
+                                                    self.auto_sync_session_path),
+                                     'org.syncevolution.Session')
+            reports = session.GetReports(0, 100, utf8_strings=True)
+            self.assertEqual(len(reports), numSyncs)
+            self.assertEqual(reports[0]["status"], "200")
+            name = session.GetConfigName()
+            self.assertEqual(name, "dummy-test")
+            flags = session.GetFlags()
+            self.assertEqual(flags, [])
+            DBusUtil.quit_events = []
+            self.auto_sync_session_path = None
+
+        run('waiting for first auto sync', 1)
 
         # check that org.freedesktop.Notifications.Notify was called
         # when starting and completing the sync
@@ -2908,8 +2914,12 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                               '   int32 -1\n']
                              or [])
 
-        # done as part of post-processing in runTest()
-        self.runTestDBusCheck = checkDBusLog
+        if repeat:
+            for i in range(1,3):
+                run('waiting for auto sync #%d' % i, i + 1)
+        else:
+            # done as part of post-processing in runTest()
+            self.runTestDBusCheck = checkDBusLog
 
     @timeout(120)
     def testAutoSyncLocalSuccess(self):
@@ -2920,6 +2930,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     def testAutoSyncLocalSuccessQuiet(self):
         """TestSessionAPIsDummy.testAutoSyncLocalSuccessQuiet - test that auto-sync is done successfully for local sync between file backends, without notifications"""
         self.doAutoSyncLocalSuccess(1)
+
+    @timeout(240)
+    def testAutoSyncLocalMultiple(self):
+        """TestSessionAPIsDummy.testAutoSyncLocalMultiple - test that auto-sync is done successfully for local sync between file backends, several times"""
+        self.doAutoSyncLocalSuccess(1, repeat=True)
 
 class TestSessionAPIsReal(DBusUtil, unittest.TestCase):
     """ This class is used to test those unit tests of session APIs, depending on doing sync.
