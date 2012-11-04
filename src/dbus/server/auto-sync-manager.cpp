@@ -507,7 +507,7 @@ void AutoSyncManager::autoSyncDone(AutoSyncTask *task, SyncMLStatus status)
 void AutoSyncManager::anySyncDone(AutoSyncTask *task, SyncMLStatus status)
 {
     // set "permanently failed" flag according to most recent result
-    task->m_permanentFailure = !ErrorIsTemporary(status);
+    task->m_permanentFailure = status != STATUS_OK && !ErrorIsTemporary(status);
     SE_LOG_DEBUG(NULL, NULL, "auto sync: sync session %s done, result %d %s",
                  task->m_configName.c_str(),
                  status,
