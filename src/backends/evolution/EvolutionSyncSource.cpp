@@ -154,8 +154,11 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
 SyncSource::Database EvolutionSyncSource::createDatabase(const Database &database)
 {
     GErrorCXX gerror;
-    ESourceCXX source(e_source_new_with_uid(database.m_uri.empty() ? NULL : database.m_uri.c_str(),
-                                            NULL, gerror), false);
+    ESourceCXX source(database.m_uri.empty() ?
+                      e_source_new(NULL, NULL, gerror) :
+                      e_source_new_with_uid(database.m_uri.c_str(),
+                                            NULL, gerror),
+                      false);
     if (!source) {
         gerror.throwError("e_source_new()");
     }
