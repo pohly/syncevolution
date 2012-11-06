@@ -324,6 +324,33 @@ Details:
   are timed separately, with duration printed to stdout. In addition,
   tools like "perf" can be started for the duration of one phase.
 
+* SyncML: workarounds for broken peers
+
+  Some peers have problems with meta data (CtCap, old Nokia phones) and
+  the sync mode extensions required for advertising the restart
+  capability (Oracle Beehive).
+
+  Because the problem occurs when SyncEvolution contacts the peers
+  before it gets the device information from the peer, dynamic rules
+  based on the peer identifiers cannot be used. Instead the local config
+  must already disable these extra features in advance.
+
+  The "SyncMLVersion" property gets extended for this. Instead of just
+  "SyncMLVersion = 1.0" (as before) it now becomes possible to say
+  "SyncMLVersion = 1.0, noctcap, norestart".
+
+  "noctcap" disables sending CtCap. "norestart" disables the sync mode
+  extensions and thus doing multiple sync cycles in the same session
+  (used between SyncEvolution instances in some cases to get client and
+  server into sync in one session).
+
+  Both keywords are case-insensitive. There's no error checking for
+  typos, so beware!
+
+  The "SyncMLVersion" property was chosen because it was already in use
+  for configuring SyncML compatibility aspects and adding a new property
+  would have been harder.
+
 * EDS: fix creating databases
 
   --create-database was broken in combination with the final code in EDS
