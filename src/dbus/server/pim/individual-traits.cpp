@@ -711,6 +711,9 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
                                         value);
             }
         } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_NOTES)))) {
+#if 0
+            // TODO: enable this once https://bugzilla.gnome.org/show_bug.cgi?id=652659 is fixed
+            // At the moment the comparison fails and tiggers a write on each update.
             GeeSet *value = GEE_SET(g_value_get_object(gvalue));
             FolksNoteDetails *details = FOLKS_NOTE_DETAILS(persona);
             if (!GeeCollectionEqual(GEE_COLLECTION(value),
@@ -720,6 +723,7 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
                                         details,
                                         value);
             }
+#endif
         } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_ROLES)))) {
             GeeSet *value = GEE_SET(g_value_get_object(gvalue));
             FolksRoleDetails *details = FOLKS_ROLE_DETAILS(persona);
