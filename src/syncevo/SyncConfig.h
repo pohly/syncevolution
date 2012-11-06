@@ -1492,8 +1492,12 @@ class SyncConfig {
     virtual void setRemoteIdentifier (const std::string &value, bool temporaritly = false);
     virtual InitState<bool> getPeerIsClient () const;
     virtual void setPeerIsClient (bool value, bool temporarily = false);
+
+    /** the 1.0/1.1/1.2 part of the SyncMLVersion property */
     virtual InitStateString getSyncMLVersion() const;
-    virtual void setSyncMLVersion (const std::string &value, bool temporarily = false);
+
+    /** all flags that are set in the SyncMLVersion property, including the 1.0/1.1/1.2 versions */
+    virtual InitState< std::set<std::string> > getSyncMLFlags() const;
 
     /**
      * An arbitrary name assigned to the peer configuration,

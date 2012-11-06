@@ -2340,7 +2340,9 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     unsigned long hash = 0;
 
 
-    const char *noctcap = getenv("SYNCEVOLUTION_NOCTCAP");
+    std::set<std::string> flags = getSyncMLFlags();
+    bool noctcap = flags.find("noctcap") != flags.end();
+    bool norestart = flags.find("norestart") != flags.end();
     const char *sessioninitscript =
         "    <sessioninitscript><![CDATA[\n"
         "      // these variables are possibly modified by rule scripts\n"
@@ -2400,6 +2402,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
                  <<syncMLVersion.c_str()<<"</defaultsyncmlversion>\n";
          }
 
+         clientorserver << "    <syncmodeextensions>" << (norestart ? "no" : "yes" ) << "</syncmodeextensions>\n";
          if (noctcap) {
              clientorserver << "    <showctcapproperties>no</showctcapproperties>\n"
                  "\n";

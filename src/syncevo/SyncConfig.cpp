@@ -1335,21 +1335,28 @@ static SafeConfigProperty syncPropPeerName("PeerName",
                                            "An arbitrary name for the peer referenced by this config.\n"
                                            "Might be used by a GUI. The command line tool always uses the\n"
                                            "the configuration name.");
-static StringConfigProperty syncPropSyncMLVersion("SyncMLVersion",
-                                           "On a client, the latest commonly supported SyncML version \n"
-                                           "is used when contacting a server. one of '1.0/1.1/1.2' can\n"
-                                           "be used to pick a specific version explicitly.\n"
-                                           "\n"
-                                           "On a server, this option controls what kind of Server Alerted \n"
-                                           "Notification is sent to the client to start a synchronization.\n"
-                                           "By default, first the format from 1.2 is tried, then in case \n"
-                                           "of failure, the older one from 1.1. 1.2/1.1 can be choosen \n"
-                                           "explictely which disables the automatism\n",
-                                           "",
-                                           "",
-                                           Values() +
-                                           Aliases("") + Aliases("1.0") + Aliases ("1.1") + Aliases ("1.2")
-                                           );
+static ConfigProperty syncPropSyncMLVersion("SyncMLVersion",
+                                            "On a client, the latest commonly supported SyncML version\n"
+                                            "is used when contacting a server. One of '1.0/1.1/1.2' can\n"
+                                            "be used to pick a specific version explicitly.\n"
+                                            "\n"
+                                            "On a server, this option controls what kind of Server Alerted\n"
+                                            "Notification is sent to the client to start a synchronization.\n"
+                                            "By default, first the format from 1.2 is tried, then in case\n"
+                                            "of failure, the older one from 1.1. 1.2/1.1 can be set\n"
+                                            "explicitly, which disables the automatism.\n"
+                                            "\n"
+                                            "Instead or in adddition to the version, several keywords can\n"
+                                            "be set in this property (separated by spaces or commas):\n"
+                                            "\n"
+                                            "- NOCTCAP = avoid sending CtCap meta information\n"
+                                            "- NORESTART = disable the sync mode extension that SyncEvolution\n"
+                                            "  client and server use to negotiate whether both sides support\n"
+                                            "  running multiple sync iterations in the same session\n"
+                                            "\n"
+                                            "Setting these flags should only be necessary as workaround for\n"
+                                            "broken peers.\n"
+                                            );
 
 static ConfigProperty syncPropRemoteIdentifier("remoteIdentifier",
                                       "the identifier sent to the remote peer for a server initiated sync.\n"
@@ -1937,8 +1944,27 @@ void SyncConfig::setRemoteIdentifier (const string &value, bool temporarily) { r
 InitState<bool> SyncConfig::getPeerIsClient() const { return syncPropPeerIsClient.getPropertyValue(*getNode(syncPropPeerIsClient)); }
 void SyncConfig::setPeerIsClient(bool value, bool temporarily) { syncPropPeerIsClient.setProperty(*getNode(syncPropPeerIsClient), value, temporarily); }
 
-InitStateString SyncConfig::getSyncMLVersion() const { return syncPropSyncMLVersion.getProperty(*getNode(syncPropSyncMLVersion)); }
-void SyncConfig::setSyncMLVersion(const string &value, bool temporarily) { syncPropSyncMLVersion.setProperty(*getNode(syncPropSyncMLVersion), value, temporarily); }
+InitStateString SyncConfig::getSyncMLVersion() const {
+    InitState< std::set<std::string> > flags = getSyncMLFlags();
+    static const char * const versions[] = { "1.2", "1.1", "1.0" };
+    BOOST_FOREACH (const char *version, versions) {
+        if (flags.find(version) != flags.end()) {
+            return InitStateString(version, flags.wasSet());
+        }
+    }
+    return InitStateString("", flags.wasSet());
+}
+InitState< std::set<std::string> > SyncConfig::getSyncMLFlags() const {
+    InitStateString value = syncPropSyncMLVersion.getProperty(*getNode(syncPropSyncMLVersion));
+    std::list<std::string> keywords;
+    boost::split(keywords, value, boost::is_any_of(" ,"));
+    std::set<std::string> flags;
+    BOOST_FOREACH (std::string &keyword, keywords) {
+        boost::to_lower(keyword);
+        flags.insert(keyword);
+    }
+    return InitState< std::set<std::string> >(flags, value.wasSet());
+}
 
 InitStateString SyncConfig::getUserPeerName() const { return syncPropPeerName.getProperty(*getNode(syncPropPeerName)); }
 void SyncConfig::setUserPeerName(const InitStateString &name) { syncPropPeerName.setProperty(*getNode(syncPropPeerName), name); }
