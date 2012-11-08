@@ -523,7 +523,7 @@ void FilteredView::removeIndividual(int parentIndex, FolksIndividual *individual
         std::lower_bound(m_local2parent.begin(),
                          m_local2parent.end(),
                          parentIndex);
-    if (it != m_local2parent.end()) {
+    if (it != m_local2parent.end() && *it == parentIndex) {
         size_t index = it - m_local2parent.begin();
         SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld", index, m_local2parent.size());
         it = m_local2parent.erase(it);
