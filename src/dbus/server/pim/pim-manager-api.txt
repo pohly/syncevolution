@@ -89,6 +89,8 @@ FolksIndividual:
 - "source" = list of string pairs, where each pair is a combination
   of address book ID and local contact ID inside that address book
   (not necessarily the same as the vCard UID of a contact!)
+- "id" = an opaque string which identifies the contact while it
+  exists inside any PIM Manager view. See ContactsAdded and ReadContacts.
 
 Property values which are large (like photos) are not sent via
 D-Bus. Instead a link to a local file is sent.
@@ -359,20 +361,26 @@ Interface: org._01.pim.contacts.ViewControl
 Object path: [variable prefix]/{view0,view1,....}
 Methods:
 
-        list of contact dicts ReadContacts(int start, int count)
+        list of (int index, contact dicts) pairs ReadContacts(array ids)
 
-             Requests at most "count" contacts in the view, starting
-             with the one at "start" (numbered starting with 1). May
-             return less (or no) contacts if the request range is
-             beyond the end of the view at the time when the call is
-             processed.
+             Requests the data of the contacts idenfified via their IDs.
+             Only the data of contacts that are still part of the view
+             can be returned.
 
-             Note that the caller must process the call response
-             after all events via the ViewAgent interface if it wants
-             to keep in sync with the view. Doing this call asynchronously
-             and dealing with the response as part of the main event
-             loop will do the right thing automatically, because D-Bus
-             guarantees ordering of messages.
+             The returned list contains the current index of the
+             requested contact plus its data. -1 and an empty
+             dictionary are returned for contacts which can no longer
+             be read, for example because they were removed from the
+             view in the meantime or because the ID was simply
+             invalid.
+
+             Note that the caller must process the call response after
+             all events via the ViewAgent interface. Otherwise the
+             index numbers are potentially out of sync and thus
+             unreliable. Doing this call asynchronously and dealing
+             with the response as part of the main event loop will do
+             the right thing automatically, because D-Bus guarantees
+             ordering of messages.
 
              Making this explicit by returning data via another
              org._01.pim.contacts.ViewAgent method was considered and
@@ -401,23 +409,40 @@ Object path: [as chosen by user of PIM Manager]
 
 Methods:
 
-        void ContactsModified(object view, int start, int count)
+        void ContactsModified(object view, int start, array ids)
 
              Contacts #start till #start + count (inclusive) have
              changed. Data that the recipient of the call might have
-             cached became invalid and should be reloaded. In cases
-             where changing a contact changes its position in the
-             sorted list, "contact removed" and "contact added"
-             notifications will be triggered instead of a "contact
-             changed".
+             cached became invalid and should be reloaded.
 
-        void ContactsAdded(object view, int start, int count)
+             It is possible that a contact gets replaced by another
+             with a single "contact modified" signal. In other words,
+             the ID at each position may change and thus the IDs
+             are sent as part of the signal.
 
-             New contacts were added to the view.
+             In cases where a contact changes its position in the
+             view, both a combination of "contact removed" + "contact
+             added" (single contact changes) as well as several
+             "contact modified" signals are possible (contacts swap
+             position, for example when reordering).
+
+             In the later case, a contact will temporarily appear
+             at two different positions.
+
+        void ContactsAdded(object view, int start, array ids)
+
+             New contacts were added to the view. The number
+             of new contacts is given via the size of the ids array.
+             The ID of each new contact is guaranteed to be the same
+             in all views. IDs may get reused after their contact got
+             removed from the last view it was contained in. In
+             particular there is no guarantee that it is persistent
+             across restarts of the PIM manager.
+
              The contact which previously had index #start now
              has index #start + count, etc.
 
-        void ContactsRemoved(object view, int start, int count)
+        void ContactsRemoved(object view, int start, array ids)
 
              Some contacts were removed from the view.
              The contact which previous had index #start + count
