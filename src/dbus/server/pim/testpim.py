@@ -53,6 +53,7 @@ if testFolder not in sys.path:
 from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, loop
 import testdbus
 
+@unittest.skip("not a real test")
 class ContactsView(dbus.service.Object, unittest.TestCase):
      '''Implements ViewAgent, starts a search and mirrors the remote state locally.'''
 
@@ -68,6 +69,7 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           # List of encountered errors in ViewAgent, should always be empty.
           self.errors = []
           # Currently known contact data, size matches view.
+          # Entry is a string (just the ID is known) or a dictionary (actual content known).
           self.contacts = []
           # Change events, as list of ("modified/added/removed", start, count).
           self.events = []
@@ -75,6 +77,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           self.quiesentCount = 0
 
           dbus.service.Object.__init__(self, dbus.SessionBus(), self.path)
+          unittest.TestCase.__init__(self)
+
+     def runTest(self):
+          pass
 
      def search(self, filter):
           '''Start a search.'''
@@ -84,59 +90,89 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                                                     self.viewPath),
                                      'org._01.pim.contacts.ViewControl')
 
+     def getIDs(self, start, count):
+          '''Return just the IDs for a range of contacts in the current view.'''
+          return [isinstance(x, dict) and x['id'] or x for x in self.contacts[start:start + count]]
+
+     def countData(self, start, count):
+          '''Number of contacts with data in the given range.'''
+          total = 0
+          for contact in self.contacts[start:start + count]:
+               if isinstance(contact, dict):
+                    total = total + 1
+          return total
+
+     def haveData(self, start, count = 1):
+          '''True if all contacts in the range have data.'''
+          return count == self.countData(start, count)
+
+     def haveNoData(self, start, count = 1):
+          '''True if all contacts in the range have no data.'''
+          return 0 == self.countData(start, count)
+
      # A function decorator for the boiler-plate code would be nice...
      # Or perhaps the D-Bus API should merge the three different callbacks
      # into one?
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
-                          in_signature='oii', out_signature='')
-     def ContactsModified(self, view, start, count):
+                          in_signature='oias', out_signature='')
+     def ContactsModified(self, view, start, ids):
           try:
-               logging.log('contacts modified: %s, start %d, count %d' %
-                           (view, start, count))
+               count = len(ids)
+               logging.log('contacts modified: %s, start %d, ids %s' %
+                           (view, start, ids))
                self.events.append(('modified', start, count))
-               assert view == self.viewPath
-               assert start >= 0
-               assert count >= 0
-               assert start + count <= len(self.contacts)
-               self.contacts[start:start + count] = itertools.repeat(None, count)
+               self.assertEqual(view, self.viewPath)
+               self.assertGreaterEqual(start, 0)
+               self.assertGreater(count, 0)
+               self.assertLessEqual(start + count, len(self.contacts))
+               # Overwrite valid data with just the (possibly modified) ID.
+               self.contacts[start:start + count] = ids
                logging.printf('contacts modified => %s', self.contacts)
           except:
-               self.errors.append(traceback.format_exc())
+               error = traceback.format_exc()
+               logging.printf('contacts modified: error: %s' % error)
+               self.errors.append(error)
 
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
-                          in_signature='oii', out_signature='')
-     def ContactsAdded(self, view, start, count):
+                          in_signature='oias', out_signature='')
+     def ContactsAdded(self, view, start, ids):
           try:
-               logging.log('contacts added: %s, start %d, count %d' %
-                           (view, start, count))
+               count = len(ids)
+               logging.log('contacts added: %s, start %d, ids %s' %
+                           (view, start, ids))
                self.events.append(('added', start, count))
-               assert view == self.viewPath
-               assert start >= 0
-               assert count >= 0
-               assert start <= len(self.contacts)
-               for i in range(0, count):
-                    self.contacts.insert(start, None)
+               self.assertEqual(view, self.viewPath)
+               self.assertGreaterEqual(start, 0)
+               self.assertGreater(count, 0)
+               self.assertLessEqual(start, len(self.contacts))
+               self.contacts[start:start] = ids
                logging.printf('contacts added => %s', self.contacts)
           except:
-               self.errors.append(traceback.format_exc())
+               error = traceback.format_exc()
+               logging.printf('contacts added: error: %s' % error)
+               self.errors.append(error)
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
-                          in_signature='oii', out_signature='')
-     def ContactsRemoved(self, view, start, count):
+                          in_signature='oias', out_signature='')
+     def ContactsRemoved(self, view, start, ids):
           try:
-               logging.log('contacts removed: %s, start %d, count %d' %
-                           (view, start, count))
+               count = len(ids)
+               logging.log('contacts removed: %s, start %d, ids %s' %
+                           (view, start, ids))
                self.events.append(('removed', start, count))
-               assert view == self.viewPath
-               assert start >= 0
-               assert count >= 0
-               assert start + count <= len(self.contacts)
+               self.assertEqual(view, self.viewPath)
+               self.assertGreaterEqual(start, 0)
+               self.assertGreater(count, 0)
+               self.assertLessEqual(start + count, len(self.contacts))
+               self.assertEqual(self.getIDs(start, count), ids)
                del self.contacts[start:start + count]
                logging.printf('contacts removed => %s', self.contacts)
           except:
-               self.errors.append(traceback.format_exc())
+               error = traceback.format_exc()
+               logging.printf('contacts removed: error: %s' % error)
+               self.errors.append(error)
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='o', out_signature='')
@@ -624,7 +660,7 @@ END:VCARD'''
         self.view.read(0)
         self.runUntil('contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual('John Doe', self.view.contacts[0]['full-name'])
 
         # Update contacts.
@@ -641,7 +677,7 @@ END:VCARD'''
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luid])
         self.runUntil('view with changed contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] == None)
+                      until=lambda: self.view.haveNoData(0))
         self.assertEqual([('modified', 0, 1)], self.view.events)
         self.view.events = []
 
@@ -706,7 +742,7 @@ END:VCARD''']):
         self.view.read(0, 3)
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
@@ -724,14 +760,14 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[2] == None)
+                      until=lambda: self.view.haveNoData(2))
         self.assertEqual([('modified', 2, 1)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(2, 1)
         self.runUntil('updated contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[2] != None)
+                      until=lambda: self.view.haveData(2))
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
@@ -749,14 +785,14 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[2] == None)
+                      until=lambda: self.view.haveNoData(2))
         self.assertEqual([('modified', 2, 1)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(2, 1)
         self.runUntil('updated contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[2] != None)
+                      until=lambda: self.view.haveData(2))
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
@@ -773,14 +809,14 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[1]])
         self.runUntil('view with changed contact #1',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[1] == None)
+                      until=lambda: self.view.haveNoData(1))
         self.assertEqual([('modified', 1, 1)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(1, 1)
         self.runUntil('updated contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[1] != None)
+                      until=lambda: self.view.haveData(1))
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
@@ -797,14 +833,14 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[2]])
         self.runUntil('view with changed contact #0',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] == None)
+                      until=lambda: self.view.haveNoData(0))
         self.assertEqual([('modified', 0, 1)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(0, 1)
         self.runUntil('updated contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
@@ -822,7 +858,7 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #0',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] == None)
+                      until=lambda: self.view.haveNoData(0))
         self.assertEqual([('removed', 2, 1),
                           ('added', 0, 1)], self.view.events)
         self.view.events = []
@@ -830,7 +866,7 @@ END:VCARD''')
         self.view.read(0, 1)
         self.runUntil('updated contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual('Abraham Ace', self.view.contacts[0]['full-name'])
         self.assertEqual('Charly Xing', self.view.contacts[1]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[2]['full-name'])
@@ -848,7 +884,7 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[2] == None)
+                      until=lambda: self.view.haveNoData(2))
         self.assertEqual([('removed', 0, 1),
                           ('added', 2, 1)], self.view.events)
         self.view.events = []
@@ -856,7 +892,7 @@ END:VCARD''')
         self.view.read(2, 1)
         self.runUntil('updated contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[2] != None)
+                      until=lambda: self.view.haveData(2))
         self.assertEqual('Charly Xing', self.view.contacts[0]['full-name'])
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
@@ -923,7 +959,7 @@ END:VCARD''']):
         self.view.read(0, 3)
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual(u'Äbraham', self.view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Bénjamin', self.view.contacts[1]['structured-name']['given'])
         self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
@@ -942,14 +978,14 @@ END:VCARD''']):
         self.runUntil('reordered',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 3 and \
-                           self.view.contacts[0] == None and \
-                           self.view.contacts[2] == None)
+                           self.view.haveNoData(0) and \
+                           self.view.haveNoData(2))
         # Read contacts.
         logging.log('reading contacts')
         self.view.read(0, 3)
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual('Xing', self.view.contacts[0]['structured-name']['family'])
         self.assertEqual('Yeah', self.view.contacts[1]['structured-name']['family'])
         self.assertEqual('Zoo', self.view.contacts[2]['structured-name']['family'])
@@ -960,13 +996,13 @@ END:VCARD''']):
         self.runUntil('reordered',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 3 and \
-                           self.view.contacts[0] == None and \
-                           self.view.contacts[2] == None)
+                           self.view.haveNoData(0) and \
+                           self.view.haveNoData(2))
         logging.log('reading contacts')
         self.view.read(0, 3)
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual(u'Äbraham', self.view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Bénjamin', self.view.contacts[1]['structured-name']['given'])
         self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
@@ -1079,12 +1115,14 @@ END:VCARD
         self.view.read(0, len(testcases))
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         contact = copy.deepcopy(self.view.contacts[0])
         # Simplify the photo URI, if there was one. Avoid any assumptions
         # about the filename, except that it is a file:/// uri.
         if contact.has_key('photo'):
              contact['photo'] = re.sub('^file:///.*', 'file:///<stripped>', contact['photo'])
+        if contact.has_key('id'):
+             contact['id'] = '<stripped>'
         self.assertEqual({'full-name': 'John Doe',
                           'nickname': 'user1',
                           'structured-name': {'given': 'John', 'family': 'Doe'},
@@ -1100,6 +1138,7 @@ END:VCARD
                           'source': [
                        ('test-dbus-foo', luids[0])
                        ],
+                          'id': '<stripped>',
                           'notes': [
                        'This is a test case which uses almost all Evolution fields.',
                        ],
@@ -1231,13 +1270,14 @@ END:VCARD'''
         self.view.read(0, 1)
         self.runUntil('contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         contact = copy.deepcopy(self.view.contacts[0])
         self.assertEqual({'full-name': 'John Doe',
                           'structured-name': {'given': 'John', 'family': 'Doe'},
                           'emails': [('john.doe@example.com', [])],
                           'phones': [('1234-5678', [])],
                           'urls': [('http://john.doe.com', ['x-home-page'])],
+                          'id': contact.get('id', '<???>'),
                           'source': [
                        ('test-dbus-bar', luids[self.uidPrefix + 'bar'][0]),
                        ('test-dbus-foo', luids[self.uidPrefix + 'foo'][0])
@@ -1319,7 +1359,7 @@ END:VCARD''']):
         self.view.read(0, 3)
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0, 3))
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
         self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
@@ -1334,7 +1374,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('charles',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
 
         # Cannot expand view.
@@ -1353,7 +1393,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('charles',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
 
         # Find Charly by his FN (case sensitive explicitly).
@@ -1366,7 +1406,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('charles',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
 
         # Do not find Charly by his FN (case sensitive explicitly).
@@ -1387,7 +1427,7 @@ END:VCARD''']):
         view.read(0, 2)
         self.runUntil('two contacts',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
 
@@ -1421,7 +1461,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('two contacts',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his email.
@@ -1434,7 +1474,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('two contacts',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 1234 telephone number.
@@ -1447,7 +1487,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('1234 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 1234 telephone number, as sub-string.
@@ -1460,7 +1500,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('23 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 1234 telephone number, ignoring
@@ -1474,7 +1514,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('12/34 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 56/78 telephone number, ignoring
@@ -1488,7 +1528,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('5678 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via the +1-800-FOOBAR vanity number.
@@ -1501,7 +1541,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('+1-800-foobar data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via the +1-800-FOOBAR vanity number, with digits
@@ -1515,7 +1555,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('366227 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via caller ID for +1-800-FOOBAR.
@@ -1528,7 +1568,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('+1800366227 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via caller ID for 089/7888-99 (country is Germany).
@@ -1541,7 +1581,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('+49897888 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via 089/7888-99 (not a full caller ID, but at least a valid phone number).
@@ -1554,7 +1594,7 @@ END:VCARD''']):
         view.read(0, 1)
         self.runUntil('0897888 data',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.contacts[0] != None)
+                      until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Don't find anyone.
@@ -1632,8 +1672,8 @@ END:VCARD''']):
         self.runUntil('contacts',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: view.contacts[0] != None and \
-                                          not None in self.view.contacts)
+                      until=lambda: view.haveData(0) and \
+                           self.view.haveData(0, 3))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
@@ -1655,16 +1695,16 @@ END:VCARD''')
         self.runUntil('Abraham nickname changed',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual(1, len(view.contacts)),
-                                     self.assertNotEqual(None, view.contacts[0]),
+                                     self.assertIsInstance(view.contacts[0], dict),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] == None)
+                      until=lambda: self.view.haveNoData(0))
         self.view.read(0, 1)
         self.runUntil('Abraham nickname read',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual(1, len(view.contacts)),
-                                     self.assertNotEqual(None, view.contacts[0]),
+                                     self.assertIsInstance(view.contacts[0], dict),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
 
@@ -1684,16 +1724,16 @@ END:VCARD''')
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual(1, len(view.contacts)),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[2] == None and \
-                           view.contacts[0] == None)
+                      until=lambda: self.view.haveNoData(2) and \
+                           view.haveNoData(0))
         view.read(0, 1)
         self.view.read(2, 1)
         self.runUntil('Charly nickname read',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual(1, len(view.contacts)),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[2] != None and \
-                           view.contacts[0] != None)
+                      until=lambda: self.view.haveData(2) and \
+                           view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
 
@@ -1714,18 +1754,18 @@ END:VCARD''')
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertLess(0, len(view.contacts)),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] == None and \
+                      until=lambda: self.view.haveNoData(0) and \
                            len(view.contacts) == 2)
-        self.assertEqual(None, view.contacts[0])
-        self.assertNotEqual(None, view.contacts[1])
+        self.assertNotIsInstance(view.contacts[0], dict)
+        self.assertIsInstance(view.contacts[1], dict)
         view.read(0, 1)
         self.view.read(0, 1)
         self.runUntil('Abraham nickname read, II',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual(2, len(view.contacts)),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] != None and \
-                           not None in view.contacts)
+                      until=lambda: self.view.haveData(0) and \
+                           view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Charly', view.contacts[1]['structured-name']['given'])
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
@@ -1736,16 +1776,16 @@ END:VCARD''')
         self.runUntil('reordering',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] == None and \
-                           self.view.contacts[2] == None and \
-                           view.contacts == [None, None])
+                      until=lambda: self.view.haveNoData(0) and \
+                           self.view.haveNoData(2) and \
+                           view.haveNoData(0, 2))
         view.read(0, 2)
         self.view.read(0, 3)
         self.runUntil('read reordered contacts',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: not None in self.view.contacts and \
-                           not None in view.contacts)
+                      until=lambda: self.view.haveData(0, 3) and \
+                           view.haveData(0, 2))
         self.assertEqual(2, len(view.contacts))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abraham', view.contacts[1]['structured-name']['given'])
@@ -1760,16 +1800,16 @@ END:VCARD''')
         self.runUntil('reordering, II',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] == None and \
-                           self.view.contacts[2] == None and \
-                           view.contacts == [None, None])
+                      until=lambda: self.view.haveNoData(0) and \
+                           self.view.haveNoData(2) and \
+                           view.haveNoData(0, 2))
         view.read(0, 2)
         self.view.read(0, 3)
         self.runUntil('read reordered contacts, II',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: not None in self.view.contacts and \
-                           not None in view.contacts)
+                      until=lambda: self.view.haveData(0, 3) and \
+                           view.haveData(0, 2))
         self.assertEqual(2, len(view.contacts))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Charly', view.contacts[1]['structured-name']['given'])
@@ -1795,16 +1835,16 @@ END:VCARD''')
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertLess(0, len(view.contacts)),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] == None and \
+                      until=lambda: self.view.haveNoData(0) and \
                            len(view.contacts) == 1)
-        self.assertNotEqual(None, view.contacts[0])
+        self.assertIsInstance(view.contacts[0], dict)
         self.view.read(0, 1)
         self.runUntil('Abraham nickname read, None',
                       check=lambda: (self.assertEqual([], view.errors),
                                      self.assertEqual(1, len(view.contacts)),
+                                     self.assertIsInstance(view.contacts[0], dict),
                                      self.assertEqual([], self.view.errors)),
-                      until=lambda: self.view.contacts[0] != None and \
-                           not None in view.contacts)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
 
@@ -1915,8 +1955,10 @@ END:VCARD''')
         self.view.read(0, 1)
         self.runUntil('contact data',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.contacts[0] != None)
-        self.assertEqual(john, self.view.contacts[0], sortLists=True)
+                      until=lambda: self.view.haveData(0))
+        contact = self.view.contacts[0]
+        john['id'] = contact.get('id', '<???>')
+        self.assertEqual(john, contact, sortLists=True)
 
         with self.assertRaisesRegexp(dbus.DBusException,
                                      r'''.*: contact with local ID 'no-such-local-id' not found in system address book'''):
@@ -1999,14 +2041,14 @@ END:VCARD''')
                                    timeout=self.timeout)
         self.runUntil('modified contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: len(self.view.contacts) == 1 and self.view.contacts[0] == None)
+                      until=lambda: len(self.view.contacts) == 1 and self.view.haveNoData(0))
         # Keep asking for data: we may get "modified" signals multiple times,
         # which invalidates data that we just read until the unified address book
         # is stable again.
         self.runUntil('modified contact data',
                       check=lambda: (self.assertEqual([], self.view.errors),
                                      self.view.read(0, 1) or True),
-                      until=lambda: self.view.contacts[0] != None)
+                      until=lambda: self.view.haveData(0))
         self.assertEqual(john, self.view.contacts[0], sortLists=True)
 
         # Remove the contact.

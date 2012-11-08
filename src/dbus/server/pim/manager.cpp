@@ -27,6 +27,7 @@
 #include <syncevo/IniConfigNode.h>
 
 #include <boost/scoped_ptr.hpp>
+#include <deque>
 
 SE_BEGIN_CXX
 
@@ -199,9 +200,10 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     boost::shared_ptr<LocaleFactory> m_locale;
     boost::weak_ptr<Client> m_owner;
     struct Change {
-        Change() : m_start(0), m_count(0), m_call(NULL) {}
+        Change() : m_start(0), m_call(NULL) {}
 
-        int m_start, m_count;
+        int m_start;
+        std::deque<std::string> m_ids;
         const GDBusCXX::DBusClientCall0 *m_call;
     } m_pendingChange, m_lastChange;
     GDBusCXX::DBusClientCall0 m_quiesent;
@@ -238,15 +240,14 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
      * the asynchronous call indicates that the client is dead and
      * that its view can be purged.
      */
-    void sendChange(const GDBusCXX::DBusClientCall0 &call,
-                    int start, int count)
+    template<class V> void sendChange(const GDBusCXX::DBusClientCall0 &call,
+                                      int start,
+                                      const V &ids)
     {
-        // Changes get aggregated inside sendChange().
-
-
+        // Changes get aggregated inside handleChange().
         call.start(getObject(),
                    start,
-                   count,
+                   ids,
                    boost::bind(ViewResource::sendDone,
                                m_self,
                                _1));
@@ -261,26 +262,28 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
      * an up-to-date view when the requested data arrives.
      */
     void handleChange(const GDBusCXX::DBusClientCall0 &call,
-                      int start, int count)
+                      int start, FolksIndividual *individual)
     {
-        SE_LOG_DEBUG(NULL, NULL, "handle change %s: %s, #%d + %d",
+        const char *id = folks_individual_get_id(individual);
+        SE_LOG_DEBUG(NULL, NULL, "handle change %s: %s, #%d, %s = %s",
                      getPath(),
                      &call == &m_contactsModified ? "modified" :
                      &call == &m_contactsAdded ? "added" :
                      &call == &m_contactsRemoved ? "remove" : "???",
-                     start, count);
-        if (!count) {
-            // Nothing changed.
-            SE_LOG_DEBUG(NULL, NULL, "handle change: no change");
-            return;
-        }
+                     start,
+                     id,
+                     folks_name_details_get_full_name(FOLKS_NAME_DETAILS(individual))
+                     );
 
-        if (m_pendingChange.m_count == 0) {
+        int pendingCount = m_pendingChange.m_ids.size();
+        if (pendingCount == 0) {
             // Sending a "contact modified" twice for the same range is redundant.
+            // If the recipient read the data since the last signal, m_lastChange
+            // got cleared and we don't do this optimization.
             if (m_lastChange.m_call == &m_contactsModified &&
                 &call == &m_contactsModified &&
                 start >= m_lastChange.m_start &&
-                start + count <= m_lastChange.m_start + m_lastChange.m_count) {
+                start < m_lastChange.m_start + m_lastChange.m_ids.size()) {
                 SE_LOG_DEBUG(NULL, NULL, "handle change %s: redundant 'modified' signal, ignore",
                              getPath());
 
@@ -290,7 +293,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
             // Nothing pending, delay sending.
             m_pendingChange.m_call = &call;
             m_pendingChange.m_start = start;
-            m_pendingChange.m_count = count;
+            m_pendingChange.m_ids.push_back(id);
             SE_LOG_DEBUG(NULL, NULL, "handle change %s: stored as pending change",
                          getPath());
             return;
@@ -299,96 +302,115 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         if (m_pendingChange.m_call == &call) {
             // Same operation. Can we extend it?
             if (&call == &m_contactsModified) {
-                // Modification, indices are unchanged. The union of
-                // old and new range must not have a gap between the
-                // original ranges, which can be checked by looking at
-                // the number of items.
-                int newStart = std::min(m_pendingChange.m_start, start);
-                int newEnd = std::max(m_pendingChange.m_start + m_pendingChange.m_count, start + count);
-                int newCount = newEnd - newStart;
-                if (newCount <= m_pendingChange.m_count + count) {
-                    // Okay, no unrelated individuals were included in
-                    // the tentative new range, we can use it.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: modification, #%d + %d and #%d + %d => #%d + %d",
+                // Modification, indices are unchanged.
+                if (start + 1 == m_pendingChange.m_start) {
+                    // New modified element at the front.
+                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: insert modification, #%d + %d and #%d => #%d + %d",
                                  getPath(),
-                                 m_pendingChange.m_start, m_pendingChange.m_count,
-                                 start, count,
-                                 newStart, newCount);
-                    m_pendingChange.m_start = newStart;
-                    m_pendingChange.m_count = newCount;
+                                 m_pendingChange.m_start, pendingCount,
+                                 start,
+                                 m_pendingChange.m_start - 1, pendingCount + 1);
+                    m_pendingChange.m_ids.push_front(id);
+                    m_pendingChange.m_start--;
+                    return;
+                } else if (start == m_pendingChange.m_start + pendingCount) {
+                    // New modified element at the end.
+                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: append modification, #%d + %d and #%d => #%d + %d",
+                                 getPath(),
+                                 m_pendingChange.m_start, pendingCount,
+                                 start,
+                                 m_pendingChange.m_start, pendingCount + 1);
+                    m_pendingChange.m_ids.push_back(id);
+                    return;
+                } else if (start >= m_pendingChange.m_start &&
+                           start < m_pendingChange.m_start + pendingCount) {
+                    // Element modified again => no change, except perhaps for the ID.
+                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: modification of already modified contact, #%d + %d and #%d => #%d + %d",
+                                 getPath(),
+                                 m_pendingChange.m_start, pendingCount,
+                                 start,
+                                 m_pendingChange.m_start, pendingCount);
+                    m_pendingChange.m_ids[start - m_pendingChange.m_start] = id;
                     return;
                 }
             } else if (&call == &m_contactsAdded) {
                 // Added individuals. The new start index already includes
                 // the previously added individuals.
-                int newCount = m_pendingChange.m_count + count;
+                int newCount = m_pendingChange.m_ids.size() + 1;
                 if (start >= m_pendingChange.m_start) {
                     // Adding in the middle or at the end?
-                    if (start <= m_pendingChange.m_start + m_pendingChange.m_count) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'added' individuals, #%d + %d and #%d + %d new => #%d + %d",
+                    int end = m_pendingChange.m_start + pendingCount;
+                    if (start == end) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'added' individuals at end, #%d + %d and #%d new => #%d + %d",
                                      getPath(),
-                                     m_pendingChange.m_start, m_pendingChange.m_count,
-                                     start, count,
+                                     m_pendingChange.m_start, pendingCount,
+                                     start,
                                      m_pendingChange.m_start, newCount);
-                        m_pendingChange.m_count = newCount;
+                        m_pendingChange.m_ids.push_back(id);
+                        return;
+                    } else if (start < end) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'added' individuals in the middle, #%d + %d and #%d new => #%d + %d",
+                                     getPath(),
+                                     m_pendingChange.m_start, pendingCount,
+                                     start,
+                                     m_pendingChange.m_start, newCount);
+                        m_pendingChange.m_ids.insert(m_pendingChange.m_ids.begin() + (start - m_pendingChange.m_start),
+                                                     id);
                         return;
                     }
                 } else {
                     // Adding directly before the previous start?
-                    if (start + count >= m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'added' individuals, #%d + %d and #%d + %d => #%d + %d",
+                    if (start + 1 == m_pendingChange.m_start) {
+                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'added' individuals, #%d + %d and #%d => #%d + %d",
                                      getPath(),
-                                     m_pendingChange.m_start, m_pendingChange.m_count,
-                                     start, count,
+                                     m_pendingChange.m_start, pendingCount,
+                                     start,
                                      start, newCount);
                         m_pendingChange.m_start = start;
-                        m_pendingChange.m_count = newCount;
+                        m_pendingChange.m_ids.push_front(id);
                         return;
                     }
                 }
             } else {
                 // Removed individuals. The new start was already reduced by
                 // previously removed individuals.
-                int newCount = m_pendingChange.m_count + count;
-                if (start >= m_pendingChange.m_start) {
-                    // Removing directly at end?
-                    if (start == m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
-                                     getPath(),
-                                     m_pendingChange.m_start, m_pendingChange.m_count,
-                                     start, count,
-                                     m_pendingChange.m_start, newCount);
-                        m_pendingChange.m_count = newCount;
-                        return;
-                    }
-                } else {
-                    // Removing directly before the previous start or overlapping with it?
-                    if (start + count >= m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'removed' individuals, #%d + %d and #%d + %d => #%d + %d",
-                                     getPath(),
-                                     m_pendingChange.m_start, m_pendingChange.m_count,
-                                     start, count,
-                                     start, newCount);
-                        m_pendingChange.m_start = start;
-                        m_pendingChange.m_count = newCount;
-                        return;
-                    }
+                int newCount = m_pendingChange.m_ids.size() + 1;
+                if (start == m_pendingChange.m_start) {
+                    // Removing directly at end.
+                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'removed' individuals, #%d + %d and #%d => #%d + %d",
+                                 getPath(),
+                                 m_pendingChange.m_start, pendingCount,
+                                 start,
+                                 m_pendingChange.m_start, newCount);
+                    m_pendingChange.m_ids.push_back(id);
+                    return;
+                } else if (start + 1 == m_pendingChange.m_start) {
+                    // Removing directly before the previous start.
+                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'removed' individuals, #%d + %d and #%d => #%d + %d",
+                                 getPath(),
+                                 m_pendingChange.m_start, pendingCount,
+                                 start,
+                                 start, newCount);
+                    m_pendingChange.m_start = start;
+                    m_pendingChange.m_ids.push_front(id);
+                    return;
                 }
             }
         }
 
         // More complex merging is possible. For example, "removed 1
-        // at #10" and "added 1 at #10" can be turned into "modified
-        // 1 at #10". This happens when a contact gets modified and
-        // folks decides to recreate the FolksIndividual instead of
-        // modifying it.
+        // at #10" and "added 1 at #10" can be turned into "modified 1
+        // at #10", if the ID is the same. This happens when a contact
+        // gets modified and folks decides to recreate the
+        // FolksIndividual instead of modifying it.
         if (m_pendingChange.m_call == &m_contactsRemoved &&
             &call == &m_contactsAdded &&
             start == m_pendingChange.m_start &&
-            count == m_pendingChange.m_count) {
-            SE_LOG_DEBUG(NULL, NULL, "handle change %s: removed individuals were re-added => #%d + %d modified",
+            1 == m_pendingChange.m_ids.size() &&
+            m_pendingChange.m_ids.front() == id) {
+            SE_LOG_DEBUG(NULL, NULL, "handle change %s: removed individual was re-added => #%d modified",
                          getPath(),
-                         start, count);
+                         start);
             m_pendingChange.m_call = &m_contactsModified;
             return;
         }
@@ -399,13 +421,14 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         // Now remember requested change.
         m_pendingChange.m_call = &call;
         m_pendingChange.m_start = start;
-        m_pendingChange.m_count = count;
+        m_pendingChange.m_ids.clear();
+        m_pendingChange.m_ids.push_back(id);
     }
 
     /** Clear pending state and flush. */
     void flushChanges()
     {
-        int count = m_pendingChange.m_count;
+        int count = m_pendingChange.m_ids.size();
         if (count) {
             SE_LOG_DEBUG(NULL, NULL, "send change %s: %s, #%d + %d",
                          getPath(),
@@ -414,10 +437,10 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                          m_pendingChange.m_call == &m_contactsRemoved ? "remove" : "???",
                          m_pendingChange.m_start, count);
             m_lastChange = m_pendingChange;
-            m_pendingChange.m_count = 0;
-            sendChange(*m_pendingChange.m_call,
-                       m_pendingChange.m_start,
-                       count);
+            m_pendingChange.m_ids.clear();
+            sendChange(*m_lastChange.m_call,
+                       m_lastChange.m_start,
+                       m_lastChange.m_ids);
         }
     }
 
@@ -465,7 +488,14 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         // starting, then connect to signals, and finally start.
         int size = m_view->size();
         if (size) {
-            sendChange(m_contactsAdded, 0, size);
+            std::vector<std::string> ids;
+            ids.reserve(size);
+            FolksIndividualCXX individual;
+            for (int i = 0; i < size; i++) {
+                individual = m_view->getContact(i);
+                ids.push_back(folks_individual_get_id(individual.get()));
+            }
+            sendChange(m_contactsAdded, 0, ids);
         }
         m_view->m_quiesenceSignal.connect(IndividualView::QuiesenceSignal_t::slot_type(&ViewResource::quiesent,
                                                                                        this).track(self));
@@ -473,17 +503,17 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                                                                                    this,
                                                                                    boost::cref(m_contactsModified),
                                                                                    _1,
-                                                                                   1).track(self));
+                                                                                   _2).track(self));
         m_view->m_addedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                 this,
                                                                                 boost::cref(m_contactsAdded),
                                                                                 _1,
-                                                                                1).track(self));
+                                                                                _2).track(self));
         m_view->m_removedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                   this,
                                                                                   boost::cref(m_contactsRemoved),
                                                                                   _1,
-                                                                                  1).track(self));
+                                                                                  _2).track(self));
         m_view->start();
     }
 
@@ -517,11 +547,12 @@ public:
             // if the client now has data in that range. Necessary because
             // otherwise future 'modified' signals for that range might get
             // suppressed in handleChange().
+            int modifiedCount = m_lastChange.m_ids.size();
             if (m_lastChange.m_call == &m_contactsModified &&
-                m_lastChange.m_count &&
+                modifiedCount &&
                 ((m_lastChange.m_start >= start && m_lastChange.m_start < start + count) ||
-                 (start >= m_lastChange.m_start && start < m_lastChange.m_start + m_lastChange.m_count))) {
-                m_lastChange.m_count = 0;
+                 (start >= m_lastChange.m_start && start < m_lastChange.m_start + modifiedCount))) {
+                m_lastChange.m_ids.clear();
             }
         }
     }

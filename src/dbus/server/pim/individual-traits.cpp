@@ -61,6 +61,7 @@ static const char * const CONTACT_HASH_ROLES_ORGANISATION = "organisation";
 static const char * const CONTACT_HASH_ROLES_TITLE = "title";
 static const char * const CONTACT_HASH_ROLES_ROLE = "role";
 static const char * const CONTACT_HASH_SOURCE = "source";
+static const char * const CONTACT_HASH_ID = "id";
 
 static const char * const INDIVIDUAL_DICT = "a{sv}";
 static const char * const INDIVIDUAL_DICT_ENTRY = "{sv}";
@@ -811,6 +812,9 @@ void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builde
     SerializeFolks(builder, individual.get(), folks_individual_get_personas,
                    (GeeCollCXX<FolksPersona *>*)NULL,
                    CONTACT_HASH_SOURCE);
+
+    SerializeFolks(builder, individual.get(), folks_individual_get_id,
+                   CONTACT_HASH_ID);
 
 #if 0
     // Not exposed via D-Bus.

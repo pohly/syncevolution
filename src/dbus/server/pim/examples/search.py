@@ -178,7 +178,7 @@ class ContactsView(dbus.service.Object):
              print '%s %03d %s' % \
                  (start != None and index >= start and index < start + count and '*' or ' ',
                   index,
-                  contact == None and '<<reading...>>' or contact.get('full-name', '<<unnamed>>'))
+                  isinstance(contact, dict) and contact.get('full-name', '<<unnamed>>') or '<<reading...>>')
              print '    ', strip_dbus(contact)
 
      @nothrow
@@ -194,33 +194,32 @@ class ContactsView(dbus.service.Object):
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
-                          in_signature='oii', out_signature='')
-     def ContactsModified(self, view, start, count):
-         print 'contacts modified: %s, start %d, count %d' % \
-             (view, start, count)
-         self.contacts[start:start + count] = itertools.repeat(None, count)
-         self.dump(start, count)
-         self.read(start, count)
+                          in_signature='oias', out_signature='')
+     def ContactsModified(self, view, start, ids):
+         print 'contacts modified: %s, start %d, count %d, ids %s' % \
+             (view, start, len(ids), strip_dbus(ids))
+         self.contacts[start:start + len(ids)] = ids
+         self.dump(start, len(ids))
+         self.read(start, len(ids))
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
-                          in_signature='oii', out_signature='')
-     def ContactsAdded(self, view, start, count):
-         print 'contacts added: %s, start %d, count %d' % \
-             (view, start, count)
-         for i in range(0, count):
-             self.contacts.insert(start, None)
-         self.dump(start, count)
-         self.read(start, count)
+                          in_signature='oias', out_signature='')
+     def ContactsAdded(self, view, start, ids):
+         print 'contacts added: %s, start %d, count %d, ids %s' % \
+             (view, start, len(ids), strip_dbus(ids))
+         self.contacts[start:start] = ids
+         self.dump(start, len(ids))
+         self.read(start, len(ids))
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oii', out_signature='')
      def ContactsRemoved(self, view, start, count):
-         print 'contacts removed: %s, start %d, count %d' % \
-             (view, start, count)
+         print 'contacts removed: %s, start %d, count %d, ids %s' % \
+             (view, start, len(ids), strip_dbus(ids))
          # Remove obsolete entries.
-         del self.contacts[start:start + count]
+         del self.contacts[start:start + len(ids)]
          self.dump(start, 0)
 
      @nothrow
