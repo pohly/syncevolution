@@ -63,6 +63,7 @@
 #include <map>
 #include <list>
 #include <vector>
+#include <deque>
 #include <utility>
 
 #include <boost/bind.hpp>
@@ -1915,10 +1916,11 @@ template<class K, class V, class C> struct dbus_traits< std::map<K, V, C> > : pu
 };
 
 /**
- * a std::vector - maps to D-Bus array, but with inefficient marshaling
- * because we cannot get a base pointer for the whole array
+ * A collection of items (works for std::list, std::vector, std::deque, ...).
+ * Maps to D-Bus array, but with inefficient marshaling
+ * because we cannot get a base pointer for the whole array.
  */
-template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
+template<class C, class V> struct dbus_traits_collection : public dbus_traits_base
 {
     static std::string getContainedType()
     {
@@ -1931,8 +1933,8 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
     }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
-    typedef std::vector<V> host_type;
-    typedef const std::vector<V> &arg_type;
+    typedef C host_type;
+    typedef const C &arg_type;
 
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &array)
@@ -1965,6 +1967,10 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_base
         g_variant_builder_close(&builder);
     }
 };
+
+template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_collection<std::vector<V>, V> {};
+template<class V> struct dbus_traits< std::list<V> > : public dbus_traits_collection<std::list<V>, V> {};
+template<class V> struct dbus_traits< std::deque<V> > : public dbus_traits_collection<std::deque<V>, V> {};
 
 /**
  * Helper class to append variant values into a builder
