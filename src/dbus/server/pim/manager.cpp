@@ -536,23 +536,27 @@ public:
     }
 
     /** ViewControl.ReadContacts() */
-    void readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
+    void readContacts(const std::vector<std::string> &ids, IndividualView::Contacts &contacts)
     {
-        if (count) {
+        if (!ids.empty()) {
             // Ensure that client's view is up-to-date, then prepare the
             // data for it.
             flushChanges();
-            m_view->readContacts(start, count, contacts);
+            m_view->readContacts(ids, contacts);
             // Discard the information about the previous 'modified' signal
             // if the client now has data in that range. Necessary because
             // otherwise future 'modified' signals for that range might get
             // suppressed in handleChange().
             int modifiedCount = m_lastChange.m_ids.size();
             if (m_lastChange.m_call == &m_contactsModified &&
-                modifiedCount &&
-                ((m_lastChange.m_start >= start && m_lastChange.m_start < start + count) ||
-                 (start >= m_lastChange.m_start && start < m_lastChange.m_start + modifiedCount))) {
-                m_lastChange.m_ids.clear();
+                modifiedCount) {
+                BOOST_FOREACH (const IndividualView::Contacts::value_type &entry, contacts) {
+                    int index = entry.first;
+                    if (index >= m_lastChange.m_start && index < m_lastChange.m_start + modifiedCount) {
+                        m_lastChange.m_ids.clear();
+                        break;
+                    }
+                }
             }
         }
     }

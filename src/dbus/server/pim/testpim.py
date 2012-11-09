@@ -179,11 +179,15 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
      def Quiesent(self, view):
           self.quiesentCount = self.quiesentCount + 1
 
-     def read(self, index, count=1):
+     def read(self, start, count=1):
           '''Read the specified range of contact data.'''
-          self.view.ReadContacts(index, count,
+          def storeContacts(contacts):
+               for index, contact in contacts:
+                    if index >= 0:
+                         self.contacts[index] = contact
+          self.view.ReadContacts([x for x in self.contacts[start:start+count] if not isinstance(x, dict)],
                                  timeout=100000,
-                                 reply_handler=lambda x: self.contacts.__setslice__(index, index+len(x), x),
+                                 reply_handler=storeContacts,
                                  error_handler=lambda x: self.errors.append(x))
 
 class TestContacts(DBusUtil, unittest.TestCase):

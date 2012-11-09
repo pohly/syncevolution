@@ -160,12 +160,12 @@ class ContactsView(dbus.service.Object):
                                                     self.viewPath),
                                      'org._01.pim.contacts.ViewControl')
 
-     def read(self, start, count):
+     def read(self, ids):
          '''Read contact data which was modified or added.'''
-         self.view.ReadContacts(start, count,
+         self.view.ReadContacts(ids,
                                 timeout=100000,
-                                reply_handler=lambda x: self.ContactsRead(start, x),
-                                error_handler=lambda x: self.ReadFailed(start, count, x))
+                                reply_handler=lambda x: self.ContactsRead(ids, x),
+                                error_handler=lambda x: self.ReadFailed(ids, x))
 
      def dump(self, start, count):
          '''Show content of view. Highlight the contacts in the given range.'''
@@ -182,15 +182,24 @@ class ContactsView(dbus.service.Object):
              print '    ', strip_dbus(contact)
 
      @nothrow
-     def ContactsRead(self, start, contacts):
-         print 'got contact data [%d, %d)' % (start, start + len(contacts))
-         self.contacts[start : start + len(contacts)] = contacts
-         self.dump(start, len(contacts))
+     def ContactsRead(self, ids, contacts):
+         print 'got contact data %s => %s ' % (ids, strip_dbus(contacts))
+         min = len(contacts)
+         max = -1
+         for index, contact in contacts:
+             if index >= 0:
+                 self.contacts[index] = contact
+                 if min > index:
+                     min = index
+                 if max < index:
+                     max = index
+         if max > 0:
+             self.dump(min, max - min + 1)
 
      @nothrow
-     def ReadFailed(self, start, count, error):
-         print 'request for contact data [%d, %d) failed: %s' % \
-             (start, start + count, error)
+     def ReadFailed(self, ids, error):
+         print 'request for contact data %s failed: %s' % \
+             (ids, error)
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -200,7 +209,7 @@ class ContactsView(dbus.service.Object):
              (view, start, len(ids), strip_dbus(ids))
          self.contacts[start:start + len(ids)] = ids
          self.dump(start, len(ids))
-         self.read(start, len(ids))
+         self.read(ids)
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -210,7 +219,7 @@ class ContactsView(dbus.service.Object):
              (view, start, len(ids), strip_dbus(ids))
          self.contacts[start:start] = ids
          self.dump(start, len(ids))
-         self.read(start, len(ids))
+         self.read(ids)
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',

@@ -218,8 +218,10 @@ class IndividualView
     /** current number of entries */
     virtual int size() const = 0;
 
-    /** read a range of contacts - see org.01.pim.contacts.ViewControl.ReadContacts() */
-    virtual void readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts);
+    typedef std::vector< std::pair<int, FolksIndividualCXX> > Contacts;
+
+    /** read a set of contacts - see org.01.pim.contacts.ViewControl.ReadContacts() */
+    virtual void readContacts(const std::vector<std::string> &ids, Contacts &contacts);
 
     /** returns access to one individual or an empty pointer if outside of the current range */
     virtual FolksIndividualCXX getContact(int index) = 0;
@@ -229,6 +231,8 @@ class IndividualView
      * Start filling the view. Will only be called once by start().
      */
     virtual void doStart() = 0;
+
+    void findContact(const std::string &id, int hint, int &index, FolksIndividualCXX &individual);
 };
 
 /**

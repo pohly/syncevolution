@@ -103,17 +103,52 @@ bool IndividualView::isRunning() const
     return m_started;
 }
 
-void IndividualView::readContacts(int start, int count, std::vector<FolksIndividualCXX> &contacts)
+void IndividualView::findContact(const std::string &id, int hint, int &index, FolksIndividualCXX &individual)
+{
+    int i;
+    int count = size();
+    // Start searching at the hint.
+    for (i = hint; i < count; i++) {
+        individual = getContact(i);
+        if (id == folks_individual_get_id(individual.get())) {
+            index = i;
+            return;
+        }
+    }
+    // Finish search before the hint.
+    for (i = 0; i < hint; i++) {
+        individual = getContact(i);
+        if (id == folks_individual_get_id(individual.get())) {
+            index = i;
+            return;
+        }
+    }
+
+    // Nothing found.
+    index = -1;
+    individual.reset();
+}
+
+void IndividualView::readContacts(const std::vector<std::string> &ids, Contacts &contacts)
 {
     contacts.clear();
-    if (start < size()) {
-        int actualCount = size() - start;
-        if (actualCount > count) {
-            actualCount = count;
-        }
-        contacts.reserve(actualCount);
-        for (int i = start; i < start + actualCount; i++) {
-            contacts.push_back(getContact(i));
+    contacts.reserve(ids.size());
+
+    // The search is optimized for the case where many consecutive
+    // contacts in increasing order are requested. For that case, a
+    // linear search is needed for the first contact and then the
+    // following ones are found in constant time.
+    //
+    // Randomly requesting contacts performs poorly, due to the O(n)
+    // lookup complexity.
+    int hint = 0;
+    BOOST_FOREACH (const std::string &id, ids) {
+        int index;
+        FolksIndividualCXX individual;
+        findContact(id, hint, index, individual);
+        contacts.push_back(std::make_pair(index, individual));
+        if (index >= 0) {
+            hint = index;
         }
     }
 }
