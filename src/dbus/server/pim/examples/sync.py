@@ -43,6 +43,9 @@ parser.add_option("-b", "--bt-mac", dest="mac",
                   default=None,
                   help="Set the Bluetooth MAC address and thus UID of the phone peer.",
                   metavar="aa:bb:cc:dd:ee:ff")
+parser.add_option("-d", "--debug",
+                  action="store_true", default=False,
+                  help="Print debug output coming from SyncEvolution server.")
 parser.add_option("-c", "--configure",
                   action="store_true", default=False,
                   help="Enable configuring the peer.")
@@ -65,16 +68,20 @@ DBusGMainLoop(set_as_default=True)
 bus = dbus.SessionBus()
 loop = gobject.MainLoop()
 
-# The example does all calls to D-Bus with a very long timeout.  A
-# real app should instead either never time out (because all of the
-# calls can, in theory, take arbitrarily long to complete) or be
-# prepared to deal with timeouts.
-timeout = 100000
-
 # Contact PIM Manager.
 manager = dbus.Interface(bus.get_object('org._01.pim.contacts',
                                         '/org/01/pim/contacts'),
                          'org._01.pim.contacts.Manager')
+
+# Capture and print debug output.
+def log_output(path, level, output, component):
+    print '%s %s: %s' % (level, (component or 'sync'), output)
+if options.debug:
+    bus.add_signal_receiver(log_output,
+                            "LogOutput",
+                            "org.syncevolution.Server",
+                            "org.syncevolution",
+                            None)
 
 # Simplify the output of values returned via D-Bus by replacing
 # types like dbus.Dictionary with a normal Python dictionary
@@ -119,22 +126,56 @@ def strip_dbus(instance):
             pass
     return base(instance)
 
+# Call all methods asynchronously, to avoid timeouts and
+# to capture debug output while the methods run.
+error = None
+result = None
+def failed(err):
+    global error
+    error = err
+    loop.quit()
+def done(*args):
+    global result
+    loop.quit()
+    if len(args) == 1:
+        result = args[0]
+    elif len(args) > 1:
+        result = args
+def run():
+    global result
+    result = None
+    loop.run()
+    if error:
+        print
+        print error
+        print
+    return result
 
-peers = strip_dbus(manager.GetAllPeers())
+manager.GetAllPeers(reply_handler=done, error_handler=failed)
+peers = strip_dbus(run())
 print 'peers: %s' % peers
 print 'available databases: %s' % ([''] + ['peer-' + uid for uid in peers.keys()])
 
-if options.configure:
+if not error and options.configure:
     peer = {'protocol': 'PBAP',
             'address': options.mac}
     print 'adding peer config %s = %s' % (uid, peer)
-    manager.SetPeer(uid, peer)
+    manager.SetPeer(uid, peer,
+                    reply_handler=done, error_handler=failed)
+    run()
 
-if options.sync:
-    # Give the operation plenty of time to complete...
+if not error and options.sync:
     print 'syncing peer %s' % uid
-    manager.SyncPeer(uid, timeout=100000)
+    manager.SyncPeer(uid,
+                     reply_handler=done, error_handler=failed)
+    run()
 
-if options.remove:
+if not error and options.remove:
     print 'removing peer %s' % uid
-    manager.RemovePeer(uid)
+    manager.RemovePeer(uid,
+                       reply_handler=done, error_handler=failed)
+    run()
+
+if options.debug:
+    print "waiting for further debug output, press CTRL-C to stop"
+    loop.run()
