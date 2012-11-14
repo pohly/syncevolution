@@ -22,6 +22,8 @@
 #endif
 
 #include <iostream>
+#include <locale.h>
+#include <glib/gi18n.h>
 
 #include "server.h"
 #include "restart.h"
@@ -69,6 +71,13 @@ int main(int argc, char **argv, char **envp)
     // remember environment for restart
     boost::shared_ptr<Restart> restart;
     restart.reset(new Restart(argv, envp));
+
+    // Internationalization for auto sync messages.
+    setlocale(LC_ALL, "");
+    bindtextdomain(GETTEXT_PACKAGE,
+                   getEnv("SYNCEVOLUTION_LOCALE_DIR", SYNCEVOLUTION_LOCALEDIR));
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+    textdomain(GETTEXT_PACKAGE);
 
     int duration = 600;
     int opt = 1;

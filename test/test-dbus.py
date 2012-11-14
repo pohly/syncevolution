@@ -2679,18 +2679,35 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.runTestDBusCheck = checkDBusLog
 
     @timeout(60)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncNetworkFailure(self):
         """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
         self.doAutoSyncNetworkFailure()
 
     @timeout(60)
-    @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=session")
+    @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=session "
+                     "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncNoNetworkManager(self):
         """TestSessionAPIsDummy.testAutoSyncNoNetworkManager - test that auto-sync is triggered despite having neither NetworkManager nor Connman, fails due to (temporary?!) network error here"""
         self.doAutoSyncNetworkFailure()
 
     @timeout(60)
-    def doAutoSyncLocalConfigError(self, notifyLevel):
+    def doAutoSyncLocalConfigError(self, notifyLevel,
+                                   notification=
+                                   '   string "SyncEvolution"\n'
+                                   '   uint32 0\n'
+                                   '   string ""\n'
+                                   '   string "Sync problem."\n'
+                                   '   string "Sorry, there\'s a problem with your sync that you need to attend to."\n'
+                                   '   array [\n'
+                                   '      string "view"\n'
+                                   '      string "View"\n'
+                                   '      string "default"\n'
+                                   '      string "Dismiss"\n'
+                                   '   ]\n'
+                                   '   array [\n'
+                                   '   ]\n'
+                                   '   int32 -1\n'):
         self.setupConfig()
         # enable auto-sync
         config = copy.deepcopy(self.config)
@@ -2743,21 +2760,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         def checkDBusLog(self, content):
             notifications = GrepNotifications(content)
             self.assertEqual(notifications,
-                             notifyLevel >= 1 and
-                             ['   string "SyncEvolution"\n'
-                              '   uint32 0\n'
-                              '   string ""\n'
-                              '   string "Sync problem."\n'
-                              '   string "Sorry, there\'s a problem with your sync that you need to attend to."\n'
-                              '   array [\n'
-                              '      string "view"\n'
-                              '      string "View"\n'
-                              '      string "default"\n'
-                              '      string "Dismiss"\n'
-                              '   ]\n'
-                              '   array [\n'
-                              '   ]\n'
-                              '   int32 -1\n']
+                             notifyLevel >= 1 and [notification]
                              or [])
 
         # check that no other session is started at the time of
@@ -2791,16 +2794,39 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.runTestDBusCheck = checkDBusLog
 
     @timeout(60)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalConfigError(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigError - test that auto-sync is triggered for local sync, fails due to permanent config error here"""
         self.doAutoSyncLocalConfigError(3)
 
     @timeout(60)
+    @property("ENV", "LC_ALL=de_DE.UTF-8 LANGUAGE=de_DE:de")
+    def testAutoSyncLocalConfigErrorGerman(self):
+        """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorGerman - test that auto-sync is triggered for local sync, fails due to permanent config error here"""
+        self.doAutoSyncLocalConfigError(3,
+                                        '   string "SyncEvolution"\n'
+                                        '   uint32 0\n'
+                                        '   string ""\n'
+                                        '   string "Sync-Problem"\n'
+                                        '   string "Ein Problem mit der Synchronisation bedarf deiner Aufmerksamkeit."\n'
+                                        '   array [\n'
+                                        '      string "view"\n'
+                                        '      string "Anzeigen"\n'
+                                        '      string "default"\n'
+                                        '      string "Ignorieren"\n'
+                                        '   ]\n'
+                                        '   array [\n'
+                                        '   ]\n'
+                                        '   int32 -1\n')
+
+    @timeout(60)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalConfigErrorEssential(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorEssential - test that auto-sync is triggered for local sync, fails due to permanent config error here, with only the essential error notification"""
         self.doAutoSyncLocalConfigError(1)
 
     @timeout(60)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalConfigErrorQuiet(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorQuiet - test that auto-sync is triggered for local sync, fails due to permanent config error here, with no notification"""
         self.doAutoSyncLocalConfigError(0)
@@ -2922,16 +2948,19 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.runTestDBusCheck = checkDBusLog
 
     @timeout(120)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalSuccess(self):
         """TestSessionAPIsDummy.testAutoSyncLocalSuccess - test that auto-sync is done successfully for local sync between file backends, with notifications"""
         self.doAutoSyncLocalSuccess(3)
 
     @timeout(120)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalSuccessQuiet(self):
         """TestSessionAPIsDummy.testAutoSyncLocalSuccessQuiet - test that auto-sync is done successfully for local sync between file backends, without notifications"""
         self.doAutoSyncLocalSuccess(1)
 
     @timeout(240)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalMultiple(self):
         """TestSessionAPIsDummy.testAutoSyncLocalMultiple - test that auto-sync is done successfully for local sync between file backends, several times"""
         self.doAutoSyncLocalSuccess(1, repeat=True)

@@ -1100,6 +1100,10 @@ SYNCEVOLUTION_LIBEXEC_DIR
    Overrides the path where additional helper executables are found, normally
    `/usr/libexec`.
 
+SYNCEVOLUTION_LOCALE_DIR
+   Overrides the path to directories with the different translations,
+   normally `/usr/share/locale`.
+
 SYNCEVOLUTION_TEMPLATE_DIR
    Overrides the default path to template files, normally
    `/usr/share/syncevolution/templates`.
