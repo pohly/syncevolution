@@ -24,10 +24,11 @@ src_gdbus_libgdbussyncevo_la_LDFLAGS = $(src_gdbus_version_info) -export-symbols
 src_gdbus_libgdbussyncevo_la_LIBADD = @GLIB_LIBS@ @DBUS_LIBS@
 src_gdbus_libgdbussyncevo_la_CFLAGS = @GLIB_CFLAGS@ @DBUS_CFLAGS@ $(SYNCEVO_WFLAGS)
 src_gdbus_libgdbussyncevo_la_CXXFLAGS = @GLIB_CFLAGS@ @DBUS_CFLAGS@ $(SYNCEVO_WFLAGS)
+src_gdbus_libgdbussyncevo_la_CPPFLAGS = $(BOOST_CPPFLAGS)
 
 # include_HEADERS = src/gdbus/gdbus-cxx-bridge.h src/gdbus/gdbus-cxx.h
 noinst_PROGRAMS += src/gdbus/example
 src_gdbus_example_SOURCES = src/gdbus/test/example.cpp
 src_gdbus_example_CXXFLAGS = @GLIB_CFLAGS@ @DBUS_CFLAGS@ $(SYNCEVO_WFLAGS)
 src_gdbus_example_LDADD = src/gdbus/libgdbussyncevo.la @GLIB_LIBS@ @DBUS_LIBS@
-src_gdbus_example_CPPFLAGS = -I$(top_srcdir)/src/gdbus
+src_gdbus_example_CPPFLAGS = -I$(top_srcdir)/src/gdbus $(BOOST_CPPFLAGS)
