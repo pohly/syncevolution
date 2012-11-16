@@ -43,6 +43,12 @@ import traceback
 import itertools
 from optparse import OptionParser
 
+VERBOSITY_INFO = 0
+VERBOSITY_NOTIFICATIONS = 1
+VERBOSITY_DATA_SUMMARY = 2
+VERBOSITY_DATA_FULL = 3
+VERBOSITY_DEBUG = 4
+
 parser = OptionParser()
 parser.add_option("-a", "--active-address-book", dest="address_books",
                   action="append", default=[],
@@ -58,6 +64,16 @@ parser.add_option("-o", "--order", dest="order",
                   default=None,
                   help="Set new global sort order. Default is to use the existing one.",
                   metavar="ORDER-NAME")
+parser.add_option("--verbosity",
+                  default=VERBOSITY_DATA_FULL,
+                  type="int",
+                  help="Determine what is printed. "
+                  "0 = only minimal progress messages. "
+                  "1 = also summary of view notifications. "
+                  "2 = also a one-line entry per contact. "
+                  "3 = also a dump of the contact. "
+                  "4 = also debug output for the script itself. "
+                  )
 (options, args) = parser.parse_args()
 
 DBusGMainLoop(set_as_default=True)
@@ -170,20 +186,25 @@ class ContactsView(dbus.service.Object):
      def dump(self, start, count):
          '''Show content of view. Highlight the contacts in the given range.'''
 
+         if options.verbosity < VERBOSITY_DATA_SUMMARY:
+             return
+
          for index, contact in enumerate(self.contacts):
-             print
              if start == index:
                  # empty line with marker where range starts
-                 print '* '
+                 print '=> '
              print '%s %03d %s' % \
                  (start != None and index >= start and index < start + count and '*' or ' ',
                   index,
                   isinstance(contact, dict) and contact.get('full-name', '<<unnamed>>') or '<<reading...>>')
-             print '    ', strip_dbus(contact)
+             if options.verbosity >= VERBOSITY_DATA_FULL:
+                 print '    ', strip_dbus(contact)
+                 print
 
      @nothrow
      def ContactsRead(self, ids, contacts):
-         print 'got contact data %s => %s ' % (ids, strip_dbus(contacts))
+         if options.verbosity >= VERBOSITY_DATA_FULL:
+             print 'got contact data %s => %s ' % (ids, strip_dbus(contacts))
          min = len(contacts)
          max = -1
          for index, contact in contacts:
@@ -205,8 +226,10 @@ class ContactsView(dbus.service.Object):
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oias', out_signature='')
      def ContactsModified(self, view, start, ids):
-         print 'contacts modified: %s, start %d, count %d, ids %s' % \
-             (view, start, len(ids), strip_dbus(ids))
+         if options.verbosity >= VERBOSITY_NOTIFICATIONS:
+             print 'contacts modified: %s, start %d, count %d, ids %s' % \
+                 (view, start, len(ids),
+                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
          self.contacts[start:start + len(ids)] = ids
          self.dump(start, len(ids))
          self.read(ids)
@@ -215,8 +238,10 @@ class ContactsView(dbus.service.Object):
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oias', out_signature='')
      def ContactsAdded(self, view, start, ids):
-         print 'contacts added: %s, start %d, count %d, ids %s' % \
-             (view, start, len(ids), strip_dbus(ids))
+         if options.verbosity >= VERBOSITY_NOTIFICATIONS:
+             print 'contacts added: %s, start %d, count %d, ids %s' % \
+                 (view, start, len(ids),
+                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
          self.contacts[start:start] = ids
          self.dump(start, len(ids))
          self.read(ids)
@@ -225,8 +250,10 @@ class ContactsView(dbus.service.Object):
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oii', out_signature='')
      def ContactsRemoved(self, view, start, count):
-         print 'contacts removed: %s, start %d, count %d, ids %s' % \
-             (view, start, len(ids), strip_dbus(ids))
+         if options.verbosity >= VERBOSITY_NOTIFICATIONS:
+             print 'contacts removed: %s, start %d, count %d, ids %s' % \
+                 (view, start, len(ids),
+                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
          # Remove obsolete entries.
          del self.contacts[start:start + len(ids)]
          self.dump(start, 0)
@@ -235,7 +262,8 @@ class ContactsView(dbus.service.Object):
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='o', out_signature='')
      def Quiesent(self, view):
-         print 'view is stable'
+         if options.verbosity >= VERBOSITY_NOTIFICATIONS:
+             print 'view is stable'
 
 peers = strip_dbus(manager.GetAllPeers())
 print 'peers: %s' % peers
