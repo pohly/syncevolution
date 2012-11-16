@@ -167,13 +167,13 @@ class IndividualView
 
  public:
     typedef boost::signals2::signal<void (int, FolksIndividual *)> ChangeSignal_t;
-    typedef boost::signals2::signal<void (void)> QuiesenceSignal_t;
+    typedef boost::signals2::signal<void (void)> QuiescenceSignal_t;
 
     /**
-     * Triggered each time the view reaches a quiesence state, meaning
+     * Triggered each time the view reaches a quiescence state, meaning
      * that its current content is stable, at least for now.
      */
-    QuiesenceSignal_t m_quiesenceSignal;
+    QuiescenceSignal_t m_quiescenceSignal;
 
     /**
      * A new FolksIndividual was added at a specific index. This
@@ -292,18 +292,18 @@ class FullView : public IndividualView
                             GParamSpec *pspec);
 
     /**
-     * FolksIndividualAggregator "is-quiesent" property change slot.
+     * FolksIndividualAggregator "is-quiescent" property change slot.
      *
-     * It turned out that "quiesence" is only set to true once in
+     * It turned out that "quiescence" is only set to true once in
      * FolksIndividualAggregator. The code which watches that signal
      * is still in place, but it will only get invoked once.
      *
-     * Therefore the main mechanism for emitting m_quiesenceSignal in
+     * Therefore the main mechanism for emitting m_quiescenceSignal in
      * FullView is an idle callback which gets invoked each time the
      * daemon has nothing to do, which implies that (at least for now)
      * libfolks has no pending work to do.
      */
-    void quiesenceChanged();
+    void quiescenceChanged();
 
     /**
      * Add a FolksIndividual. Starts monitoring it for changes.

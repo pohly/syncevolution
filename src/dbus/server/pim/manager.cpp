@@ -206,7 +206,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         std::deque<std::string> m_ids;
         const GDBusCXX::DBusClientCall0 *m_call;
     } m_pendingChange, m_lastChange;
-    GDBusCXX::DBusClientCall0 m_quiesent;
+    GDBusCXX::DBusClientCall0 m_quiescent;
     GDBusCXX::DBusClientCall0 m_contactsModified,
         m_contactsAdded,
         m_contactsRemoved;
@@ -229,7 +229,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         m_owner(owner),
 
         // use ViewAgent interface
-        m_quiesent(m_viewAgent, "Quiesent"),
+        m_quiescent(m_viewAgent, "Quiescent"),
         m_contactsModified(m_viewAgent, "ContactsModified"),
         m_contactsAdded(m_viewAgent, "ContactsAdded"),
         m_contactsRemoved(m_viewAgent, "ContactsRemoved")
@@ -445,13 +445,13 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     }
 
     /** Current state is stable. Flush and tell agent. */
-    void quiesent()
+    void quiescent()
     {
         flushChanges();
-        m_quiesent.start(getObject(),
-                         boost::bind(ViewResource::sendDone,
-                                     m_self,
-                                     _1));
+        m_quiescent.start(getObject(),
+                          boost::bind(ViewResource::sendDone,
+                                      m_self,
+                                      _1));
     }
 
     /**
@@ -497,8 +497,8 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
             }
             sendChange(m_contactsAdded, 0, ids);
         }
-        m_view->m_quiesenceSignal.connect(IndividualView::QuiesenceSignal_t::slot_type(&ViewResource::quiesent,
-                                                                                       this).track(self));
+        m_view->m_quiescenceSignal.connect(IndividualView::QuiescenceSignal_t::slot_type(&ViewResource::quiescent,
+                                                                                         this).track(self));
         m_view->m_modifiedSignal.connect(IndividualView::ChangeSignal_t::slot_type(&ViewResource::handleChange,
                                                                                    this,
                                                                                    boost::cref(m_contactsModified),

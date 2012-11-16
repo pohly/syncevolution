@@ -240,7 +240,7 @@ void FullView::doStart()
                                                                                    _2, _3, _4, _5, _6));
     m_folks.connectSignal<void (GObject *gobject,
                                 GParamSpec *pspec)>("notify::is-quiescent",
-                                                    boost::bind(&FullView::quiesenceChanged,
+                                                    boost::bind(&FullView::quiescenceChanged,
                                                                 m_self));
 
 
@@ -297,15 +297,15 @@ void FullView::individualModified(gpointer gobject,
     waitForIdle();
 }
 
-void FullView::quiesenceChanged()
+void FullView::quiescenceChanged()
 {
-    bool quiesent = folks_individual_aggregator_get_is_quiescent(m_folks);
-    SE_LOG_DEBUG(NULL, NULL, "aggregator is %s", quiesent ? "quiesent" : "busy");
-    // In practice, libfolks only switches from "busy" to "quiesent"
+    bool quiescent = folks_individual_aggregator_get_is_quiescent(m_folks);
+    SE_LOG_DEBUG(NULL, NULL, "aggregator is %s", quiescent ? "quiescent" : "busy");
+    // In practice, libfolks only switches from "busy" to "quiescent"
     // once. See https://bugzilla.gnome.org/show_bug.cgi?id=684766
-    // "enter and leave quiesence state".
-    if (quiesent) {
-        m_quiesenceSignal();
+    // "enter and leave quiescence state".
+    if (quiescent) {
+        m_quiescenceSignal();
     }
 }
 
@@ -404,7 +404,7 @@ void FullView::onIdle()
     }
     m_pendingModifications.clear();
 
-    m_quiesenceSignal();
+    m_quiescenceSignal();
     m_waitForIdle.deactivate();
 }
 
@@ -448,7 +448,7 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
     }
 
     // Current status is stable again, send out all modifications.
-    m_quiesenceSignal();
+    m_quiescenceSignal();
 }
 
 FilteredView::FilteredView(const boost::shared_ptr<IndividualView> &parent,
@@ -461,7 +461,7 @@ FilteredView::FilteredView(const boost::shared_ptr<IndividualView> &parent,
 void FilteredView::init(const boost::shared_ptr<FilteredView> &self)
 {
     m_self = self;
-    m_parent->m_quiesenceSignal.connect(QuiesenceSignal_t::slot_type(boost::bind(boost::cref(m_quiesenceSignal))).track(m_self));
+    m_parent->m_quiescenceSignal.connect(QuiescenceSignal_t::slot_type(boost::bind(boost::cref(m_quiescenceSignal))).track(m_self));
 }
 
 boost::shared_ptr<FilteredView> FilteredView::create(const boost::shared_ptr<IndividualView> &parent,
@@ -484,7 +484,7 @@ void FilteredView::doStart()
     // No more changes expected for a while, because usually a FilteredView
     // is a search on a stable FullView. Notify listeners. Necessary to
     // get changes flushed.
-    m_quiesenceSignal();
+    m_quiescenceSignal();
 
     // Start listening to signals.
     m_parent->m_addedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::addIndividual, this, _1, _2)).track(m_self));
@@ -507,7 +507,7 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
         }
     }
     m_filter = individualFilter;
-    m_quiesenceSignal();
+    m_quiescenceSignal();
 }
 
 void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)

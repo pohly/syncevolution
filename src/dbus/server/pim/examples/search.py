@@ -261,7 +261,7 @@ class ContactsView(dbus.service.Object):
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='o', out_signature='')
-     def Quiesent(self, view):
+     def Quiescent(self, view):
          if options.verbosity >= VERBOSITY_NOTIFICATIONS:
              print 'view is stable'
 

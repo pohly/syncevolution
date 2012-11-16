@@ -73,8 +73,8 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           self.contacts = []
           # Change events, as list of ("modified/added/removed", start, count).
           self.events = []
-          # Number of times that ViewAgent.Quiesent() was called.
-          self.quiesentCount = 0
+          # Number of times that ViewAgent.Quiescent() was called.
+          self.quiescentCount = 0
 
           dbus.service.Object.__init__(self, dbus.SessionBus(), self.path)
           unittest.TestCase.__init__(self)
@@ -176,8 +176,8 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='o', out_signature='')
-     def Quiesent(self, view):
-          self.quiesentCount = self.quiesentCount + 1
+     def Quiescent(self, view):
+          self.quiescentCount = self.quiescentCount + 1
 
      def read(self, start, count=1):
           '''Read the specified range of contact data.'''
@@ -1373,7 +1373,7 @@ END:VCARD''']):
         view.search([['any-contains', 'chÁrles']])
         self.runUntil('charles search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('charles',
@@ -1392,7 +1392,7 @@ END:VCARD''']):
         view.search([['any-contains', 'chÁrless', 'case-insensitive']])
         self.runUntil('charles search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('charles',
@@ -1405,7 +1405,7 @@ END:VCARD''']):
         view.search([['any-contains', 'Chárleß', 'case-sensitive']])
         self.runUntil('charles search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('charles',
@@ -1418,7 +1418,7 @@ END:VCARD''']):
         view.search([['any-contains', 'charles', 'case-sensitive']])
         self.runUntil('charles search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
 
         # Find Abraham and Benjamin.
@@ -1426,7 +1426,7 @@ END:VCARD''']):
         view.search([['any-contains', 'am']])
         self.runUntil('"am" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(2, len(view.contacts))
         view.read(0, 2)
         self.runUntil('two contacts',
@@ -1436,22 +1436,22 @@ END:VCARD''']):
         self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Refine search without actually changing the result.
-        view.quiesentCount = 0
+        view.quiescentCount = 0
         view.view.RefineSearch([['any-contains', 'am']],
                                timeout=self.timeout)
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Restrict search to Abraham.
-        view.quiesentCount = 0
+        view.quiescentCount = 0
         view.view.RefineSearch([['any-contains', 'Abraham']],
                                timeout=self.timeout)
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
@@ -1460,7 +1460,7 @@ END:VCARD''']):
         view.search([['any-contains', 'ace']])
         self.runUntil('"ace" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('two contacts',
@@ -1473,7 +1473,7 @@ END:VCARD''']):
         view.search([['any-contains', 'az@']])
         self.runUntil('"az@" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('two contacts',
@@ -1486,7 +1486,7 @@ END:VCARD''']):
         view.search([['any-contains', '1234']])
         self.runUntil('"1234" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('1234 data',
@@ -1499,7 +1499,7 @@ END:VCARD''']):
         view.search([['any-contains', '23']])
         self.runUntil('"23" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('23 data',
@@ -1513,7 +1513,7 @@ END:VCARD''']):
         view.search([['any-contains', '12/34']])
         self.runUntil('"12/34" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('12/34 data',
@@ -1527,7 +1527,7 @@ END:VCARD''']):
         view.search([['any-contains', '5678']])
         self.runUntil('"5678" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('5678 data',
@@ -1540,7 +1540,7 @@ END:VCARD''']):
         view.search([['any-contains', '+1-800-foobar']])
         self.runUntil('"+1-800-foobar" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('+1-800-foobar data',
@@ -1554,7 +1554,7 @@ END:VCARD''']):
         view.search([['any-contains', '366227']])
         self.runUntil('"366227" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('366227 data',
@@ -1567,7 +1567,7 @@ END:VCARD''']):
         view.search([['phone', '+1800366227']])
         self.runUntil('"+1800366227" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('+1800366227 data',
@@ -1580,7 +1580,7 @@ END:VCARD''']):
         view.search([['phone', '+49897888']])
         self.runUntil('"+49897888" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('+49897888 data',
@@ -1593,7 +1593,7 @@ END:VCARD''']):
         view.search([['phone', '0897888']])
         self.runUntil('"0897888" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
         self.runUntil('0897888 data',
@@ -1606,7 +1606,7 @@ END:VCARD''']):
         view.search([['phone', '+49897888000']])
         self.runUntil('"+49897888000" search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
 
     @timeout(60)
@@ -1623,7 +1623,7 @@ END:VCARD''']):
         view.search([['any-contains', 'chÁrles']])
         self.runUntil('charles search results',
                       check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiesentCount > 0)
+                      until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
 
         # Insert new contacts.
