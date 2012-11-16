@@ -4816,7 +4816,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
 
     @timeout(100)
     def testSession2(self):
-        """TestFileNotify.testSession2 - create session, shut down after quiesence period after closing it"""
+        """TestFileNotify.testSession2 - create session, shut down after quiescence period after closing it"""
         self.assertTrue(self.isServerRunning())
         self.setUpSession("")
         self.modifyServerFile()
@@ -4832,7 +4832,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
 
     @timeout(100)
     def testSession3(self):
-        """TestFileNotify.testSession3 - shut down after quiesence period without activating a pending session request"""
+        """TestFileNotify.testSession3 - shut down after quiescence period without activating a pending session request"""
         self.assertTrue(self.isServerRunning())
         self.modifyServerFile()
         self.assertTrue(self.isServerRunning())
