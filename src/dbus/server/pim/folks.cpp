@@ -184,6 +184,7 @@ bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const
 
 FullView::FullView(const FolksIndividualAggregatorCXX &folks) :
     m_folks(folks),
+    m_isQuiescent(false),
     // Ensure that there is a sort criteria.
     m_compare(new CompareFormattedName())
 {
@@ -238,12 +239,15 @@ void FullView::doStart()
                                                                        boost::bind(&FullView::individualsChanged,
                                                                                    m_self,
                                                                                    _2, _3, _4, _5, _6));
+    // Track state as part of normal event processing. Don't check the
+    // state directly, because then we might get into an inconsistent
+    // state (changes still pending in our queue, function call
+    // already returns true).
+    m_isQuiescent = folks_individual_aggregator_get_is_quiescent(m_folks.get());
     m_folks.connectSignal<void (GObject *gobject,
                                 GParamSpec *pspec)>("notify::is-quiescent",
                                                     boost::bind(&FullView::quiescenceChanged,
                                                                 m_self));
-
-
 }
 
 boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX &folks)
@@ -305,6 +309,7 @@ void FullView::quiescenceChanged()
     // once. See https://bugzilla.gnome.org/show_bug.cgi?id=684766
     // "enter and leave quiescence state".
     if (quiescent) {
+        m_isQuiescent = true;
         m_quiescenceSignal();
     }
 }
@@ -404,7 +409,11 @@ void FullView::onIdle()
     }
     m_pendingModifications.clear();
 
-    m_quiescenceSignal();
+    // If not quiescent at the moment, then we can rely on getting
+    // that signal triggered by folks and don't need to send it now.
+    if (isQuiescent()) {
+        m_quiescenceSignal();
+    }
     m_waitForIdle.deactivate();
 }
 
@@ -447,8 +456,10 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
         std::swap(previous, current);
     }
 
-    // Current status is stable again, send out all modifications.
-    m_quiescenceSignal();
+    // Current status is stable again (?), send out all modifications.
+    if (isQuiescent()) {
+        m_quiescenceSignal();
+    }
 }
 
 FilteredView::FilteredView(const boost::shared_ptr<IndividualView> &parent,
@@ -483,11 +494,6 @@ void FilteredView::doStart()
         addIndividual(index, m_parent->getContact(index));
     }
 
-    // No more changes expected for a while, because usually a FilteredView
-    // is a search on a stable FullView. Notify listeners. Necessary to
-    // get changes flushed.
-    m_quiescenceSignal();
-
     // Start listening to signals.
     m_parent->m_addedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::addIndividual, this, _1, _2)).track(m_self));
     m_parent->m_modifiedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::modifyIndividual, this, _1, _2)).track(m_self));
@@ -509,7 +515,11 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
         }
     }
     m_filter = individualFilter;
-    m_quiescenceSignal();
+    // If the parent is currently busy, then we can delay sending the
+    // signal until it is no longer busy.
+    if (isQuiescent()) {
+        m_quiescenceSignal();
+    }
 }
 
 void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)
@@ -723,7 +733,12 @@ void IndividualAggregator::setDatabases(std::set<std::string> &databases)
 
     if (m_eds) {
         // Backend is loaded, tell it about the change.
+        SE_LOG_DEBUG(NULL, NULL, "backends already loaded: setting EDS persona stores directly: [%s]",
+                     dumpDatabases().c_str());
         folks_backend_set_persona_stores(m_eds, GEE_SET(m_databases.get()));
+    } else {
+        SE_LOG_DEBUG(NULL, NULL, "backends not loaded yet: setting EDS persona stores delayed: [%s]",
+                     dumpDatabases().c_str());
     }
 }
 

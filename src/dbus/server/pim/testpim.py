@@ -236,8 +236,8 @@ XDG root.
             # Give EDS time to notice the removal.
             time.sleep(5)
 
-    def setUpView(self, peers = ['foo'], withSystemAddressBook=False):
-        '''Set up a peers and create a view for them.'''
+    def setUpView(self, peers=['foo'], withSystemAddressBook=False, search=[]):
+        '''Set up peers and create a view for them.'''
         # Ignore all currently existing EDS databases.
         self.sources = self.currentSources()
         self.expected = self.sources.copy()
@@ -284,13 +284,13 @@ XDG root.
 
         # Start view. We don't know the current state, so give it some time to settle.
         self.view = ContactsView(self.manager)
-        self.view.search([])
-        time.sleep(5)
+        self.view.search(search)
 
-        # Run until view is empty.
+        # Run until view is empty and five seconds have passed.
+        now = time.time()
         self.runUntil('empty view',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: len(self.view.contacts) == 0)
+                      until=lambda: len(self.view.contacts) == 0 and time.time() - now > 5)
 
         # Clear unknown sequence of events.
         self.view.events = []
@@ -1608,6 +1608,20 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
+    def testFilterQuiescence(self):
+        '''TestContacts.testFilterQuiescence - check that starting server via filter leads to quiescence signal'''
+        self.setUpView(peers=[], withSystemAddressBook=True, search=[('any-contains', 'foo')])
+        self.assertEqual(1, self.view.quiescentCount)
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
+    def testFullQuiescence(self):
+        '''TestContacts.testFullQuiescence - check that starting server via filter leads to quiescence signal'''
+        self.setUpView(peers=[], withSystemAddressBook=True, search=[])
+        self.assertEqual(1, self.view.quiescentCount)
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")

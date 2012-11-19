@@ -176,6 +176,11 @@ class IndividualView
     QuiescenceSignal_t m_quiescenceSignal;
 
     /**
+     * False when more changes are known to come.
+     */
+    virtual bool isQuiescent() = 0;
+
+    /**
      * A new FolksIndividual was added at a specific index. This
      * increased the index of all individuals it was inserted in front
      * off by one.
@@ -242,6 +247,7 @@ class IndividualView
 class FullView : public IndividualView
 {
     FolksIndividualAggregatorCXX m_folks;
+    bool m_isQuiescent;
     boost::weak_ptr<FullView> m_self;
     Timeout m_waitForIdle;
     std::set<FolksIndividualCXX> m_pendingModifications;
@@ -306,6 +312,12 @@ class FullView : public IndividualView
     void quiescenceChanged();
 
     /**
+     * Mirrors the FolksIndividualAggregator "is-quiesent" state:
+     * false initially, then true for the rest of the run.
+     */
+    bool isQuiescent() { return m_isQuiescent; }
+
+    /**
      * Add a FolksIndividual. Starts monitoring it for changes.
      */
     void addIndividual(FolksIndividual *individual);
@@ -365,6 +377,11 @@ class FilteredView : public IndividualView
      */
     static boost::shared_ptr<FilteredView> create(const boost::shared_ptr<IndividualView> &parent,
                                                   const boost::shared_ptr<IndividualFilter> &filter);
+
+    /**
+     * Mirrors the quiesent state of the underlying view.
+     */
+    bool isQuiescent() { return m_parent->isQuiescent(); }
 
     /**
      * Add a FolksIndividual if it matches the filter. Tracking of

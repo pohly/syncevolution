@@ -515,6 +515,12 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                                                                                   _1,
                                                                                   _2).track(self));
         m_view->start();
+
+        // start() did all the initial work, no further changes expected
+        // if state is considered stable => tell users.
+        if (m_view->isQuiescent()) {
+            quiescent();
+        }
     }
 
 public:
