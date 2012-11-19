@@ -474,6 +474,8 @@ boost::shared_ptr<FilteredView> FilteredView::create(const boost::shared_ptr<Ind
 
 void FilteredView::doStart()
 {
+    m_parent->start();
+
     // Add initial content. Our processing of the new contact must not
     // cause changes to the parent view, otherwise the result will not
     // be inconsistent.
