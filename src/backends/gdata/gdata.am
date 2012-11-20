@@ -1,0 +1,32 @@
+dist_noinst_DATA += \
+  src/backends/gdata/configure-sub.in
+
+src_backends_gdata_lib = src/backends/gdata/syncgdata.la
+MOSTLYCLEANFILES += $(src_backends_gdata_lib)
+if ENABLE_MODULES
+src_backends_gdata_backenddir = $(BACKENDS_DIRECTORY)
+src_backends_gdata_backend_LTLIBRARIES = $(src_backends_gdata_lib)
+else
+noinst_LTLIBRARIES += $(src_backends_gdata_lib)
+endif
+
+src_backends_gdata_src = \
+  src/backends/gdata/GDataSyncSource.h \
+  src/backends/gdata/GDataSyncSource.cpp \
+  src/backends/gdata/GoogleAuthService.h \
+  src/backends/gdata/GoogleAuthService.cpp \
+  src/backends/gdata/GoogleContact.h \
+  src/backends/gdata/GoogleContact.cpp \
+  src/backends/gdata/GoogleContactService.h \
+  src/backends/gdata/GoogleContactService.cpp \
+  src/backends/gdata/GoogleException.h \
+  src/backends/gdata/GoogleVCard.h \
+  src/backends/gdata/GoogleVCard.cpp
+
+src_backends_gdata_syncgdata_la_SOURCES = $(src_backends_gdata_src)
+src_backends_gdata_syncgdata_la_LIBADD = $(LIBGDATA_LIBS) $(SYNCEVOLUTION_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS)
+src_backends_gdata_syncgdata_la_LDFLAGS = -no-undefined -module -avoid-version
+src_backends_gdata_syncgdata_la_CPPFLAGS = $(SYNCEVOLUTION_CFLAGS) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
+src_backends_gdata_syncgdata_la_CXXFLAGS = $(LIBGDATA_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS)
+src_backends_gdata_syncgdata_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS)
+
