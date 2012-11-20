@@ -1,0 +1,27 @@
+dnl -*- mode: Autoconf; -*-
+dnl Invoke autogen.sh to produce a configure script.
+
+PKG_CHECK_MODULES(LIBGDATA, libgdata, LIBGDATAFOUND=yes, [LIBGDATAFOUND=no])
+AC_SUBST(LIBGDATA_CFLAGS)
+AC_SUBST(LIBGDATA_LIBS)
+
+BACKEND_CPPFLAGS="$BACKEND_CPPFLAGS $GDATA_CFLAGS -std=c++11"
+
+dnl name of backend library (there could be more than one per directory),
+dnl name of the directory,
+dnl help string,
+dnl --enable/disable chosen explicitly
+dnl default, may depend on availability of prerequisites in more complex backends
+SE_ARG_ENABLE_BACKEND(gdata,
+                      gdata,
+                      [AS_HELP_STRING([--enable-gdata],
+                                      [enable GData protocol based backend (default off)])],
+                      [enable_gdata="$enableval"],
+                      [enable_gdata="no"]
+                     )
+
+if test "$enable_gdata" = "yes"; then
+        dnl It's good to check the prerequisites here, in case --enable-gdata was used.
+        AC_DEFINE(ENABLE_GDATA, 1, [gdata available])
+        need_glib="yes"
+fi
