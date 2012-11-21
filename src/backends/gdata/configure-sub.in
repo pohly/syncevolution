@@ -5,7 +5,7 @@ PKG_CHECK_MODULES(LIBGDATA, libgdata, LIBGDATAFOUND=yes, [LIBGDATAFOUND=no])
 AC_SUBST(LIBGDATA_CFLAGS)
 AC_SUBST(LIBGDATA_LIBS)
 
-BACKEND_CPPFLAGS="$BACKEND_CPPFLAGS $GDATA_CFLAGS -std=c++11"
+BACKEND_CPPFLAGS="$BACKEND_CPPFLAGS $GDATA_CFLAGS -std=gnu++11"
 
 dnl name of backend library (there could be more than one per directory),
 dnl name of the directory,

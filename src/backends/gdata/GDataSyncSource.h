@@ -38,7 +38,7 @@ SE_BEGIN_CXX
 class GDataSyncSource : public TrackingSyncSource
 {
     protected:
-        typedef std::map<std::string, google_contact_ptr_t> GContactCache_t;
+        typedef std::map<std::string, GoogleContact *> GContactCache_t;
 
         GoogleAuthService auth;
         GoogleContactService *service;

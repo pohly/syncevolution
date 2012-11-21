@@ -29,7 +29,7 @@ SE_BEGIN_CXX
 GDataSyncSource::GDataSyncSource (const SyncSourceParams &params,
                                   int granularitySeconds) :
     TrackingSyncSource(params, granularitySeconds),
-    auth(GOOGLE_CLIENT_ID, GoogleContactService::ServiceType),
+    auth(GOOGLE_CLIENT_ID, GoogleContactService::ServiceType()),
     service(0)
 {
 }
@@ -71,8 +71,8 @@ void GDataSyncSource::listAllItems (
     for (google_contact_vector_t::iterator iter = list.begin();
          iter != list.end();
          iter++) {
-        contacts[iter->id] = *iter;
-        revisions[iter->id] = iter->etag;
+        contacts[(*iter)->id] = iter->get();
+        revisions[(*iter)->id] = (*iter)->etag;
     }
 }
 
@@ -91,7 +91,7 @@ void GDataSyncSource::readItem (const std::string &luid, std::string &item,
 {
     GContactCache_t::iterator iter = contacts.find(luid);
     if (iter == contacts.end()) return;
-    GoogleVCard vcard(iter->second);
+    GoogleVCard vcard(*(iter->second));
     item = vcard.card;
     raw = false;
 }
@@ -115,13 +115,13 @@ void GDataSyncSource::close ()
 }
 
 
-std::string GDataSyncSource::getMimeType ()
+std::string GDataSyncSource::getMimeType () const
 {
     return "text/vcard";
 }
 
 
-std::string GDataSynCsource::getMimeVersion ()
+std::string GDataSyncSource::getMimeVersion () const
 {
     return "4.0";
 }
