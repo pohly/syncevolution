@@ -314,13 +314,13 @@ void FullView::quiescenceChanged()
     }
 }
 
-void FullView::doAddIndividual(const IndividualData &data)
+void FullView::doAddIndividual(std::auto_ptr<IndividualData> &data)
 {
     // Binary search to find insertion point.
     Entries_t::iterator it =
         std::lower_bound(m_entries.begin(),
                          m_entries.end(),
-                         data,
+                         *data,
                          IndividualDataCompare(m_compare));
     size_t index = it - m_entries.begin();
     it = m_entries.insert(it, data);
@@ -338,8 +338,8 @@ void FullView::doAddIndividual(const IndividualData &data)
 
 void FullView::addIndividual(FolksIndividual *individual)
 {
-    IndividualData data;
-    data.init(m_compare, individual);
+    std::auto_ptr<IndividualData> data(new IndividualData);
+    data->init(m_compare, individual);
     doAddIndividual(data);
 }
 
@@ -354,11 +354,11 @@ void FullView::modifyIndividual(FolksIndividual *individual)
         if (it->m_individual.get() == individual) {
             size_t index = it - m_entries.begin();
 
-            IndividualData data;
-            data.init(m_compare, individual);
-            if (data.m_criteria != it->m_criteria &&
-                ((it != m_entries.begin() && !m_compare->compare((it - 1)->m_criteria, data.m_criteria)) ||
-                 (it + 1 != m_entries.end() && !m_compare->compare(data.m_criteria, (it + 1)->m_criteria)))) {
+            std::auto_ptr<IndividualData> data(new IndividualData);
+            data->init(m_compare, individual);
+            if (data->m_criteria != it->m_criteria &&
+                ((it != m_entries.begin() && !m_compare->compare((it - 1)->m_criteria, data->m_criteria)) ||
+                 (it + 1 != m_entries.end() && !m_compare->compare(data->m_criteria, (it + 1)->m_criteria)))) {
                 // Sort criteria changed in such a way that the old
                 // sorting became invalid => move the entry. Do it
                 // as simple as possible, because this is not expected
@@ -433,17 +433,21 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
         m_compare = compare;
     }
 
-    // Reorder a copy of the current data.
-    Entries_t entries(m_entries);
-    BOOST_FOREACH (IndividualData &data, entries) {
+    // Make a copy of the original order. The actual instances
+    // continue to be owned by m_entries.
+    boost::scoped_array<IndividualData *> old(new IndividualData *[m_entries.size()]);
+    memcpy(old.get(), m_entries.c_array(), sizeof(IndividualData *) * m_entries.size());
+
+    // Change sort criteria and sort.
+    BOOST_FOREACH (IndividualData &data, m_entries) {
         data.init(m_compare, data.m_individual);
     }
-    std::sort(entries.begin(), entries.end(), IndividualDataCompare(m_compare));
+    m_entries.sort(IndividualDataCompare(m_compare));
 
-    // Now update real array.
-    for (size_t index = 0; index < entries.size(); index++) {
-        IndividualData &previous = m_entries[index],
-            &current = entries[index];
+    // Now check for changes.
+    for (size_t index = 0; index < m_entries.size(); index++) {
+        IndividualData &previous = *old[index],
+            &current = m_entries[index];
         if (previous.m_individual != current.m_individual) {
             // Contact at the index changed. Don't try to find out
             // where it came from now. The effect is that temporarily
@@ -451,9 +455,6 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
             // indices.
             m_modifiedSignal(index, current.m_individual);
         }
-        // Ensure that m_entries is up-to-date, whatever the change
-        // may have been.
-        std::swap(previous, current);
     }
 
     // Current status is stable again (?), send out all modifications.

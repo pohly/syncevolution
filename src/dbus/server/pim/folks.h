@@ -38,6 +38,7 @@
 #include <syncevo/GValueSupport.h>
 
 #include <boost/shared_ptr.hpp>
+#include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/signals2.hpp>
 
 SE_GOBJECT_TYPE(FolksIndividualAggregator)
@@ -255,7 +256,7 @@ class FullView : public IndividualView
     /**
      * Sorted vector. Sort order is maintained by this class.
      */
-    typedef std::vector<IndividualData> Entries_t;
+    typedef boost::ptr_vector<IndividualData> Entries_t;
     Entries_t m_entries;
 
     /**
@@ -277,7 +278,11 @@ class FullView : public IndividualView
      */
     void waitForIdle();
 
-    void doAddIndividual(const IndividualData &data);
+    /**
+     * Adds the new individual to m_entries, transfers ownership
+     * (data == NULL afterwards).
+     */
+    void doAddIndividual(std::auto_ptr<IndividualData> &data);
 
  public:
     /**
