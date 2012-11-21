@@ -178,6 +178,11 @@ bool Manager::isRunning()
 
 void Manager::setSortOrder(const std::string &order)
 {
+    if (order == getSortOrder()) {
+        // Nothing to do.
+        return;
+    }
+
     // String is checked as part of initSorting,
     // only store if parsing succeeds.
     initSorting(order);
