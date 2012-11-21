@@ -30,15 +30,29 @@
 # search.py --search "[('any-contains', 'Joe')]"
 # search.py --search "[('phone', '+49891234')]"
 #
-# When searching, the script will print the results as they come in,
-# then continue waiting for changes until interrupted via CTRL-C.
+# Use perf to analyze startup and reading all data, using a populated
+# system address book:
+# search.py -a 'peer-aa_bb_cc_dd_ee_ff' \
+#           -o first/last \
+#           -s '[]' \
+#           --verbosity 1 \
+#           --read-all \
+#           --start-operation 'set -x; sudo perf record -a -o %(operation)s.perf & sleep 2 && pidof perf' \
+#           --end-operation 'set -x; sudo killall -INT perf && sleep 2'
+# sudo perf report -i search.perf
+#
+# When searching, the script will print the results as they come in.
+# To continue waiting for changes until interrupted via CTRL-C, use
+# --monitor.
 
 import dbus
 import dbus.service
 import gobject
 from dbus.mainloop.glib import DBusGMainLoop
 import functools
+import subprocess
 import sys
+import time
 import traceback
 import itertools
 from optparse import OptionParser
@@ -60,10 +74,30 @@ parser.add_option("-s", "--search", dest="search",
                   help="Search expression in Python syntax. "
                   "Default is to not search at all.",
                   metavar="SEARCH-EXPRESSION")
+parser.add_option("-m", "--monitor",
+                  default=False,
+                  action="store_true",
+                  help="Keep running after receiving initial set of search results.")
 parser.add_option("-o", "--order", dest="order",
                   default=None,
                   help="Set new global sort order. Default is to use the existing one.",
                   metavar="ORDER-NAME")
+parser.add_option("-r", "--read-all",
+                  default=False,
+                  action="store_true",
+                  help="Read entire view content each time the view is stable. "
+                  "If false, then modified or added contacts are requested right away.")
+parser.add_option("--start-operation",
+                  default=None,
+                  help="A shell command which gets invoked when the script enters a new phase. "
+                  "%(operation) gets replaced by a single word which describes that phase. "
+                  "See checkpoint() calls in the source for details. "
+                  "For benchmarking it is recommended to combine this with --read-all. "
+                  "Example value: set -x; sudo perf record -a -o %(operation)s.perf & sleep 2 && pidof perf")
+parser.add_option("--end-operation",
+                  default=None,
+                  help="A shell command which gets invoked when the script exits a phase. "
+                  "Example value: set -x; sudo killall -INT perf && sleep 2")
 parser.add_option("--verbosity",
                   default=VERBOSITY_DATA_FULL,
                   type="int",
@@ -134,6 +168,27 @@ def strip_dbus(instance):
             pass
     return base(instance)
 
+begin = time.time()
+starttime = begin
+running = None
+def checkpoint(operation):
+    global starttime, running
+    if running:
+        now = time.time()
+        print "+%04.3fs %s stopping '%s', duration %fs" % (now - begin, time.ctime(now), running, now - starttime)
+        if options.end_operation:
+            subprocess.check_call(options.end_operation % {'operation': running},
+                                  shell=True)
+        running = None
+    if operation:
+        if options.end_operation:
+            subprocess.check_call(options.start_operation % {'operation': operation},
+                                  shell=True)
+        now = time.time()
+        print "+%04.3fs %s starting '%s'" % (now - begin, time.ctime(now), operation)
+        starttime = now
+        running = operation
+
 def nothrow(fn):
     '''Function decorator which dumps exceptions to stdout. Use for callbacks.'''
 
@@ -159,6 +214,10 @@ class ContactsView(dbus.service.Object):
           self.contacts = []
 
           dbus.service.Object.__init__(self, dbus.SessionBus(), self.path)
+
+     def getIDs(self, start, count):
+          '''Return just the IDs for a range of contacts in the current view.'''
+          return [isinstance(x, dict) and x['id'] or x for x in self.contacts[start:start + count]]
 
      def search(self, filter):
           '''Start a search.'''
@@ -216,6 +275,8 @@ class ContactsView(dbus.service.Object):
                      max = index
          if max > 0:
              self.dump(min, max - min + 1)
+         if options.read_all and not options.monitor:
+             loop.quit()
 
      @nothrow
      def ReadFailed(self, ids, error):
@@ -232,7 +293,8 @@ class ContactsView(dbus.service.Object):
                   options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
          self.contacts[start:start + len(ids)] = ids
          self.dump(start, len(ids))
-         self.read(ids)
+         if not options.read_all:
+             self.read(ids)
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -244,7 +306,8 @@ class ContactsView(dbus.service.Object):
                   options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
          self.contacts[start:start] = ids
          self.dump(start, len(ids))
-         self.read(ids)
+         if not options.read_all:
+             self.read(ids)
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -264,28 +327,43 @@ class ContactsView(dbus.service.Object):
      def Quiescent(self, view):
          if options.verbosity >= VERBOSITY_NOTIFICATIONS:
              print 'view is stable'
+         if options.read_all:
+             # Avoid reading in parallel, if quiescence signal repeats.
+             if running != 'read':
+                 checkpoint('read')
+                 self.read(self.getIDs(0, len(self.contacts)))
+         elif not options.monitor:
+             loop.quit()
 
+checkpoint('getallpeers')
 peers = strip_dbus(manager.GetAllPeers())
 print 'peers: %s' % peers
 print 'available databases: %s' % ([''] + ['peer-' + uid for uid in peers.keys()])
 
+checkpoint('getactiveaddressbooks')
 address_books = strip_dbus(manager.GetActiveAddressBooks())
 if options.address_books:
     print 'active address books %s -> %s' % (address_books, options.address_books)
+    checkpoint('setactiveaddressbooks')
     manager.SetActiveAddressBooks(options.address_books)
 else:
     print 'active address books: %s' % options.address_books
 
+checkpoint('getsortorder')
 order = strip_dbus(manager.GetSortOrder())
 if options.order:
     print 'active sort order %s -> %s' % (order, options.order)
+    checkpoint('setsortorder')
     manager.SetSortOrder(options.order)
 else:
     print 'active sort order: %s' % order
 
 if options.search != None:
+    checkpoint('search')
     view = ContactsView()
     view.search(eval(options.search))
     loop.run()
 else:
     print 'no search expression given, quitting'
+
+checkpoint(None)
