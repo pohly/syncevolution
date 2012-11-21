@@ -33,6 +33,22 @@ namespace GDBusCXX {
 MethodHandler::MethodMap MethodHandler::m_methodMap;
 boost::function<void (void)> MethodHandler::m_callback;
 
+void appendArgInfo(GPtrArray *pa, const std::string &type)
+{
+    // Empty if not used in the current direction (in or out),
+    // ignore then.
+    if (type.empty()) {
+        // TODO: replace runtime check with compile-time check
+        // via type specialization... not terribly important, though.
+        return;
+    }
+
+    GDBusArgInfo *argInfo = g_new0(GDBusArgInfo, 1);
+    argInfo->signature = g_strdup(type.c_str());
+    argInfo->ref_count = 1;
+    g_ptr_array_add(pa, argInfo);
+}
+
 struct OwnNameAsyncData
 {
     enum State {

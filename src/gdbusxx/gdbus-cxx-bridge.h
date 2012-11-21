@@ -681,32 +681,27 @@ template<bool optional = false> class EmitSignal0Template : private EmitSignalHe
 
 typedef EmitSignal0Template<false> EmitSignal0;
 
+void appendArgInfo(GPtrArray *pa, const std::string &type);
+
 template <typename Arg>
 void appendNewArg(GPtrArray *pa)
 {
-    // Only append argument if there is a signature.
-    if (dbus_traits<Arg>::getSignature().empty()) {
-        return;
-    }
-
-    GDBusArgInfo *argInfo = g_new0(GDBusArgInfo, 1);
-    argInfo->signature = g_strdup(dbus_traits<Arg>::getSignature().c_str());
-    argInfo->ref_count = 1;
-    g_ptr_array_add(pa, argInfo);
+    // "in" direction
+    appendArgInfo(pa, dbus_traits<Arg>::getSignature());
 }
 
 template <typename Arg>
 void appendNewArgForReply(GPtrArray *pa)
 {
-    // Only append argument if there is a reply signature.
-    if (dbus_traits<Arg>::getReply().empty()) {
-        return;
-    }
+    // "out" direction
+    appendArgInfo(pa, dbus_traits<Arg>::getReply());
+}
 
-    GDBusArgInfo *argInfo = g_new0(GDBusArgInfo, 1);
-    argInfo->signature = g_strdup(dbus_traits<Arg>::getReply().c_str());
-    argInfo->ref_count = 1;
-    g_ptr_array_add(pa, argInfo);
+template <typename Arg>
+void appendNewArgForReturn(GPtrArray *pa)
+{
+    // "out" direction, type must not be skipped
+    appendArgInfo(pa, dbus_traits<Arg>::getType());
 }
 
 template <typename A1, bool optional = false>
@@ -2949,6 +2944,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -3123,6 +3119,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -3291,6 +3288,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -3453,6 +3451,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -3608,6 +3607,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -3754,6 +3754,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -3892,6 +3893,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         appendNewArgForReply<A3>(outArgs);
@@ -4024,6 +4026,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         appendNewArgForReply<A2>(outArgs);
         g_ptr_array_add(outArgs, NULL);
@@ -4150,6 +4153,7 @@ struct MakeMethodEntry< boost::function<R (A1)> >
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
         appendNewArgForReply<A1>(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
@@ -4257,9 +4261,13 @@ struct MakeMethodEntry< boost::function<R ()> >
     {
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
 
+        GPtrArray *outArgs = g_ptr_array_new();
+        appendNewArgForReturn<R>(outArgs);
+        g_ptr_array_add(outArgs, NULL);
+
         entry->name     = g_strdup(name);
         entry->in_args  = NULL;
-        entry->out_args = NULL;
+        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
 
         entry->ref_count = 1;
         return entry;
