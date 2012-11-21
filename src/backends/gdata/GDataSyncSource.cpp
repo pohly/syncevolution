@@ -53,7 +53,7 @@ void GDataSyncSource::open ()
 {
     close();
 
-    auth.Authenticate("osso.rtcom@gmail.com", "ossochavo");
+    auth.Authenticate("", "");
     service = new GoogleContactService(auth);
 }
 
