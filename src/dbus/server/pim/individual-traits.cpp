@@ -66,24 +66,54 @@ static const char * const CONTACT_HASH_ID = "id";
 static const char * const INDIVIDUAL_DICT = "a{sv}";
 static const char * const INDIVIDUAL_DICT_ENTRY = "{sv}";
 
-template <class V> bool IsNonDefault(V value)
+/**
+ * Checks whether a certain value is the default value and thus
+ * can be skipped when converting to D-Bus.
+ *
+ * class B provides additional type information, which is necessary
+ * to check a GeeSet containing FolksRoleFieldDetails differently
+ * than other GeeSets.
+ */
+template <class B> struct IsNonDefault
 {
-    // Default version uses normal C/C++ rules, for example pointer non-NULL.
-    // For bool and integer, the value will only be sent if true or non-zero.
-    return value;
-}
+    template<class V> static bool check(V value)
+    {
+        // Default version uses normal C/C++ rules, for example pointer non-NULL.
+        // For bool and integer, the value will only be sent if true or non-zero.
+        return value;
+    }
 
-template <> bool IsNonDefault<const gchar *>(const gchar *value)
-{
-    // Don't send empty strings.
-    return value && value[0];
-}
+    static bool check(const gchar *value)
+    {
+        // Don't send empty strings.
+        return value && value[0];
+    }
 
-template <> bool IsNonDefault<GeeSet *>(GeeSet *value)
+    static bool check(GeeSet *value)
+    {
+        // Don't send empty sets.
+        return value && gee_collection_get_size(GEE_COLLECTION(value));
+    }
+};
+
+template <> struct IsNonDefault< GeeCollCXX<FolksRoleFieldDetails *> >
 {
-    // Don't send empty sets.
-    return value && gee_collection_get_size(GEE_COLLECTION(value));
-}
+    static bool check(GeeSet *value)
+    {
+        // Don't send empty set and set which contains only empty roles.
+        if (value) {
+            BOOST_FOREACH (FolksRoleFieldDetails *value, GeeCollCXX<FolksRoleFieldDetails *>(value)) {
+                FolksRole *role = static_cast<FolksRole *>(const_cast<gpointer>((folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(value)))));
+                if (IsNonDefault<const gchar *>::check(folks_role_get_organisation_name(role)) ||
+                    IsNonDefault<const gchar *>::check(folks_role_get_title(role)) ||
+                    IsNonDefault<const gchar *>::check(folks_role_get_role(role))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+};
 
 /**
  * Adds a dict entry to the builder, with 'key' as string key and the
@@ -99,7 +129,7 @@ template <class O, class V> void SerializeFolks(GDBusCXX::builder_type &builder,
     }
     V value = get(obj);
 
-    if (IsNonDefault(value)) {
+    if (IsNonDefault<V>::check(value)) {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(INDIVIDUAL_DICT_ENTRY)); // dict entry
         GDBusCXX::dbus_traits<std::string>::append(builder, key);
         g_variant_builder_open(&builder, G_VARIANT_TYPE("v")); // variant
@@ -120,7 +150,7 @@ template <class O, class V, class B> void SerializeFolks(GDBusCXX::builder_type 
     }
     V value = get(obj);
 
-    if (IsNonDefault(value)) {
+    if (IsNonDefault<B>::check(value)) {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(INDIVIDUAL_DICT_ENTRY)); // dict entry
         GDBusCXX::dbus_traits<std::string>::append(builder, key);
         g_variant_builder_open(&builder, G_VARIANT_TYPE("v")); // variant
