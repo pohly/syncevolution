@@ -28,6 +28,7 @@
 
 SE_GLIB_TYPE(GDateTime, g_date_time)
 SE_GOBJECT_TYPE(GTimeZone)
+SE_GOBJECT_TYPE(GObject)
 
 SE_BEGIN_CXX
 
@@ -176,21 +177,30 @@ template <> struct dbus_traits<FolksStructuredName *> {
     }
 };
 
+/** Path to icon (the expected case) or uninitialized string (not set or not a file). */
+static InitStateString ExtractFilePath(GLoadableIcon *value)
+{
+    if (value &&
+        G_IS_FILE_ICON(value)) {
+        GFileIcon *fileIcon = G_FILE_ICON(value);
+        GFile *file = g_file_icon_get_file(fileIcon);
+        if (file) {
+            PlainGStr uri(g_file_get_uri(file));
+            // Have a path.
+            return InitStateString(uri.get(), true);
+        }
+    }
+    // No path.
+    return InitStateString();
+}
+
 template <> struct dbus_traits<GLoadableIcon *> {
     static void append(builder_type &builder, GLoadableIcon *value) {
-        if (G_IS_FILE_ICON(value)) {
-            GFileIcon *fileIcon = G_FILE_ICON(value);
-            GFile *file = g_file_icon_get_file(fileIcon);
-            if (file) {
-                PlainGStr uri(g_file_get_uri(file));
-                GDBusCXX::dbus_traits<const char *>::append(builder, uri);
-                return;
-            }
-        }
+        InitStateString path = ExtractFilePath(value);
         // EDS is expected to only work with URIs for the PHOTO
-        // property, therefore we shouldn't get here. If we do, we
-        // need to store something.
-        GDBusCXX::dbus_traits<const char *>::append(builder, "");
+        // property, therefore we shouldn't get here without a valid
+        // path. Either way, we need to store something.
+        GDBusCXX::dbus_traits<const char *>::append(builder, path.c_str());
     }
 };
 
@@ -594,63 +604,24 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
     }
 }
 
-// The caller must be notified when all property modifications
-// are done. Track the number of pending requests in a class.
-// Start counting at one and decrement at the end, to avoid
-// reaching zero while still analyzing the PersonaDetails.
-class PropertiesPending
+struct Pending
 {
-    Result<void ()> m_result;
-    int m_pending;
-    std::list<std::string> m_errors;
-public:
-    PropertiesPending(const Result<void ()> &result) :
+    Pending(const Result<void ()> &result,
+            FolksPersona *persona) :
         m_result(result),
-        m_pending(1)
-    {
-    }
+        m_persona(persona),
+        m_current(0)
+    {}
 
-    void completed(const GError *gerror,
-                   const gchar *key)
-    {
-        if (gerror) {
-            m_errors.push_back(StringPrintf("%s: %s", key, gerror->message));
-        }
-        --m_pending;
-        SE_LOG_DEBUG(NULL, NULL, "pending property changes %d, done %s: %s",
-                     m_pending,
-                     key,
-                     gerror ? gerror->message : "<<success>>");
-        if (m_pending <= 0) {
-            if (m_errors.empty()) {
-                m_result.done();
-            } else {
-                // TODO: allow passing negative result without depending
-                // on exceptions.
-                try {
-                    SE_THROW("updating contact failed for some (or all) properties:\n" +
-                             boost::join(m_errors, "\n"));
-                } catch (...) {
-                    m_result.failed();
-                }
-            }
-        }
-    }
-
-    /**
-     * @param key    property name, not copied, use result from folks_persona_store_detail_key()
-     */
-    static boost::function<void (const GError *)> start(const boost::shared_ptr<PropertiesPending> &me,
-                                                        const gchar *key) {
-        ++me->m_pending;
-        SE_LOG_DEBUG(NULL, NULL, "pending property changes %d, starting %s",
-                     me->m_pending,
-                     key);
-        return boost::bind(&PropertiesPending::completed,
-                           me,
-                           _1,
-                           key);
-    }
+    Result<void ()> m_result;
+    FolksPersonaCXX m_persona;
+    typedef boost::function<void (const GError *)> AsyncDone;
+    typedef boost::function<void (AsyncDone *)> Prepare;
+    typedef boost::tuple<Prepare,
+                         boost::shared_ptr<void> > Change;
+    typedef std::vector<Change> Changes;
+    Changes m_changes;
+    size_t m_current;
 };
 
 static bool GeeCollectionEqual(GeeCollection *a, GeeCollection *b)
@@ -659,121 +630,248 @@ static bool GeeCollectionEqual(GeeCollection *a, GeeCollection *b)
         gee_collection_contains_all(a, b);
 }
 
+/**
+ * Gets called by event loop. All errors must be reported back to the caller.
+ */
+static void Details2PersonaStep(const GError *gerror, const boost::shared_ptr<Pending> &pending) throw ()
+{
+    try {
+        if (gerror) {
+            GErrorCXX::throwError("modifying property", gerror);
+        }
+        size_t current = pending->m_current++;
+        if (current < pending->m_changes.size()) {
+            // send next change, as determined earlier
+            Pending::Change &change = pending->m_changes[current];
+            boost::get<0>(change)(new Pending::AsyncDone(boost::bind(Details2PersonaStep, _1, pending)));
+        } else {
+            pending->m_result.done();
+        }
+    } catch (...) {
+        // Tell caller about specific error.
+        pending->m_result.failed();
+    }
+}
+
 void Details2Persona(const Result<void ()> &result, const PersonaDetails &details, FolksPersona *persona)
 {
-    boost::shared_ptr<PropertiesPending> pending(new PropertiesPending(result));
+    boost::shared_ptr<Pending> pending(new Pending(result, persona));
 
-    const gchar *fkey;
-    GHashTableIter iter;
-    g_hash_table_iter_init(&iter, details.get());
-    gpointer k, v;
-    while (g_hash_table_iter_next(&iter, &k, &v)) {
-        const gchar *key = static_cast<const gchar *>(k);
-        const GValue *gvalue = static_cast<const GValue *>(v);
+#define PUSH_CHANGE(_prepare) \
+        pending->m_changes.push_back(Pending::Change(boost::bind(_prepare, \
+                                                                 details, \
+                                                                 value, \
+                                                                 SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare)::handleGLibResult, \
+                                                                 _1), \
+                                                     tracker))
 
-        if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_FULL_NAME)))) {
-            const gchar *value = g_value_get_string(gvalue);
-            FolksNameDetails *details = FOLKS_NAME_DETAILS(persona);
-            if (g_strcmp0(value, folks_name_details_get_full_name(details))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_name_details_change_full_name,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_STRUCTURED_NAME)))) {
-            FolksStructuredName *value = FOLKS_STRUCTURED_NAME(g_value_get_object(gvalue));
-            FolksNameDetails *details = FOLKS_NAME_DETAILS(persona);
-            if (!folks_structured_name_equal(value, folks_name_details_get_structured_name(details))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_name_details_change_structured_name,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_AVATAR)))) {
-#if 0
-            // TODO: enable this once https://bugzilla.gnome.org/show_bug.cgi?id=652659 is fixed
-            GLoadableIcon *value = G_LOADABLE_ICON(g_value_get_object(gvalue));
-            SYNCEVO_GLIB_CALL_ASYNC(folks_avatar_details_change_avatar,
-                                    pending->start(pending, fkey),
-                                    FOLKS_AVATAR_DETAILS(persona),
-                                    value);
-#endif
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)))) {
-            GDateTime *value = static_cast<GDateTime *>(g_value_get_boxed(gvalue));
-            FolksBirthdayDetails *details = FOLKS_BIRTHDAY_DETAILS(persona);
-            if (!g_date_time_equal(value, folks_birthday_details_get_birthday(details))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_birthday_details_change_birthday,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_EMAIL_ADDRESSES)))) {
-            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
-            FolksEmailDetails *details = FOLKS_EMAIL_DETAILS(persona);
-            if (!GeeCollectionEqual(GEE_COLLECTION(value),
-                                    GEE_COLLECTION(folks_email_details_get_email_addresses(details)))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_email_details_change_email_addresses,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_PHONE_NUMBERS)))) {
-            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
-            FolksPhoneDetails *details = FOLKS_PHONE_DETAILS(persona);
-            if (!GeeCollectionEqual(GEE_COLLECTION(value),
-                                    GEE_COLLECTION(folks_phone_details_get_phone_numbers(details)))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_phone_details_change_phone_numbers,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_URLS)))) {
-            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
-            FolksUrlDetails *details = FOLKS_URL_DETAILS(persona);
-            if (!GeeCollectionEqual(GEE_COLLECTION(value),
-                                    GEE_COLLECTION(folks_url_details_get_urls(details)))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_url_details_change_urls,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_NOTES)))) {
-#if 0
-            // TODO: enable this once https://bugzilla.gnome.org/show_bug.cgi?id=652659 is fixed
-            // At the moment the comparison fails and tiggers a write on each update.
-            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
-            FolksNoteDetails *details = FOLKS_NOTE_DETAILS(persona);
-            if (!GeeCollectionEqual(GEE_COLLECTION(value),
-                                    GEE_COLLECTION(folks_note_details_get_notes(details)))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_note_details_change_notes,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-#endif
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_ROLES)))) {
-            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
-            FolksRoleDetails *details = FOLKS_ROLE_DETAILS(persona);
-            if (!GeeCollectionEqual(GEE_COLLECTION(value),
-                                    GEE_COLLECTION(folks_role_details_get_roles(details)))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_role_details_change_roles,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
-        } else if (!strcmp(key, (fkey = folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_POSTAL_ADDRESSES)))) {
-            GeeSet *value = GEE_SET(g_value_get_object(gvalue));
-            FolksPostalAddressDetails *details = FOLKS_POSTAL_ADDRESS_DETAILS(persona);
-            if (!GeeCollectionEqual(GEE_COLLECTION(value),
-                                    GEE_COLLECTION(folks_postal_address_details_get_postal_addresses(details)))) {
-                SYNCEVO_GLIB_CALL_ASYNC(folks_postal_address_details_change_postal_addresses,
-                                        pending->start(pending, fkey),
-                                        details,
-                                        value);
-            }
+    const GValue *gvalue;
+    boost::shared_ptr<void> tracker;
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(),
+                                                             folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_FULL_NAME)));
+    {
+        const gchar *value;
+        if (gvalue) {
+            value = g_value_get_string(gvalue);
+            tracker = boost::shared_ptr<void>(g_strdup(value), g_free);
+        } else {
+            value = NULL;
+        }
+        FolksNameDetails *details = FOLKS_NAME_DETAILS(persona);
+        if (g_strcmp0(value, folks_name_details_get_full_name(details))) {
+            PUSH_CHANGE(folks_name_details_change_full_name);
         }
     }
-    pending->completed(NULL, "setup");
+
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_STRUCTURED_NAME)));
+    {
+        FolksStructuredName *value;
+        if (gvalue) {
+            value = FOLKS_STRUCTURED_NAME(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(folks_structured_name_new("", "", "", "", ""), g_object_unref);
+            value = static_cast<FolksStructuredName *>(tracker.get());
+        }
+        FolksNameDetails *details = FOLKS_NAME_DETAILS(persona);
+        if (!folks_structured_name_equal(value, folks_name_details_get_structured_name(details))) {
+            PUSH_CHANGE(folks_name_details_change_structured_name);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_AVATAR)));
+    {
+        FolksAvatarDetails *details = FOLKS_AVATAR_DETAILS(persona);
+        GLoadableIcon *value;
+        if (gvalue) {
+            value = G_LOADABLE_ICON(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(g_file_icon_new(NULL), g_object_unref);
+            value = static_cast<GLoadableIcon *>(tracker.get());
+        }
+        InitStateString newPath = GDBusCXX::ExtractFilePath(value);
+        InitStateString oldPath = GDBusCXX::ExtractFilePath(folks_avatar_details_get_avatar(details));
+        if (newPath.wasSet() != oldPath.wasSet() ||
+            newPath != oldPath) {
+            PUSH_CHANGE(folks_avatar_details_change_avatar);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)));
+    {
+        GDateTime *value;
+        if (gvalue) {
+            value = static_cast<GDateTime *>(g_value_get_boxed(gvalue));
+            tracker = boost::shared_ptr<void>(g_date_time_ref(value), g_date_time_unref);
+        } else {
+            tracker = boost::shared_ptr<void>();
+            value = NULL;
+        }
+        FolksBirthdayDetails *details = FOLKS_BIRTHDAY_DETAILS(persona);
+        GDateTime *old = folks_birthday_details_get_birthday(details);
+        if ((value == NULL && old != NULL) ||
+            (value != NULL && old == NULL) ||
+            !g_date_time_equal(value, old)) {
+            PUSH_CHANGE(folks_birthday_details_change_birthday);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_EMAIL_ADDRESSES)));
+    {
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_EMAIL_FIELD_DETAILS,
+                                                               g_object_ref,
+                                                               g_object_unref,
+                                                               (GHashFunc)folks_abstract_field_details_hash,
+                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksEmailDetails *details = FOLKS_EMAIL_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_email_details_get_email_addresses(details)))) {
+            PUSH_CHANGE(folks_email_details_change_email_addresses);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_PHONE_NUMBERS)));
+    {
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_PHONE_FIELD_DETAILS,
+                                                               g_object_ref,
+                                                               g_object_unref,
+                                                               (GHashFunc)folks_abstract_field_details_hash,
+                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksPhoneDetails *details = FOLKS_PHONE_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_phone_details_get_phone_numbers(details)))) {
+            PUSH_CHANGE(folks_phone_details_change_phone_numbers);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_URLS)));
+    {
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_URL_FIELD_DETAILS,
+                                                               g_object_ref,
+                                                               g_object_unref,
+                                                               (GHashFunc)folks_abstract_field_details_hash,
+                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksUrlDetails *details = FOLKS_URL_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_url_details_get_urls(details)))) {
+            PUSH_CHANGE(folks_url_details_change_urls);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_NOTES)));
+    {
+        // At the moment the comparison fails and tiggers a write on each update?!
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_NOTE_FIELD_DETAILS,
+                                                               g_object_ref,
+                                                               g_object_unref,
+                                                               (GHashFunc)folks_abstract_field_details_hash,
+                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksNoteDetails *details = FOLKS_NOTE_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_note_details_get_notes(details)))) {
+            PUSH_CHANGE(folks_note_details_change_notes);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_ROLES)));
+    {
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_ROLE_FIELD_DETAILS,
+                                                               g_object_ref,
+                                                               g_object_unref,
+                                                               (GHashFunc)folks_abstract_field_details_hash,
+                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksRoleDetails *details = FOLKS_ROLE_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_role_details_get_roles(details)))) {
+            PUSH_CHANGE(folks_role_details_change_roles);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_POSTAL_ADDRESSES)));
+    {
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_POSTAL_ADDRESS_FIELD_DETAILS,
+                                                               g_object_ref,
+                                                               g_object_unref,
+                                                               (GHashFunc)folks_abstract_field_details_hash,
+                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksPostalAddressDetails *details = FOLKS_POSTAL_ADDRESS_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_postal_address_details_get_postal_addresses(details)))) {
+            PUSH_CHANGE(folks_postal_address_details_change_postal_addresses);
+        }
+    }
+
+    Details2PersonaStep(NULL, pending);
 }
 
 void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builder_type &builder)

@@ -68,8 +68,7 @@ Other requirements:
 Known issues
 ============
 
-https://bugzilla.gnome.org/show_bug.cgi?id=652659
-Modifying many properties in a contact is inefficient and can deadlock in EDS.
+None at the moment.
 
 
 Extending the implementation

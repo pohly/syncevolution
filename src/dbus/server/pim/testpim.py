@@ -1985,88 +1985,106 @@ END:VCARD''')
                                         john,
                                         timeout=self.timeout)
 
-        # Update the contact. Modifying too many properties at once deadlocks EDS,
-        # see https://bugzilla.gnome.org/show_bug.cgi?id=652659.
-        john['full-name'] = 'John A. Doe'
-        john['phones'] = [
-                  ( '1234', ['fax'] ),
+        # Update the contact.
+        john = {
+             'source': [('', localID)],
+             'id': contact.get('id', '<???>'),
+
+             'full-name': 'John A. Doe',
+             'structured-name': {
+                  'family': 'Doe',
+                  'given': 'John',
+                  'additional': 'A.',
+                  'prefixes': 'Mr.',
+                  'suffixes': 'Sr.'
+                  },
+             # 'nickname': 'Johnny', TODO: should be stored by folks, currently not supported - https://bugzilla.gnome.org/show_bug.cgi?id=686695
+             'birthday': (2011, 12, 24),
+             # 'photo': 'file:///tmp/photo.png', TODO: test with real file, folks will store the content of it
+             # 'gender', 'male', not exposed via D-Bus
+             # 'im': ...
+             # 'is-favorite': ...
+             'emails': [
+                  ( 'john2@home', [ 'home' ] ),
+                  ],
+             'phones': [
+                  ( '1234', ['fax']),
                   ( '56789', ['work'] ),
-                  ]
-
-        # john = {
-        #      'source': [('', unicode(localID))],
-
-        #      'full-name': 'John A. Doe',
-        #      'structured-name': {
-        #           'family': 'Doe',
-        #           'given': 'John',
-        #           'additional': 'A.',
-        #           'prefixes': 'Mr.',
-        #           'suffixes': 'Sr.'
-        #           },
-        #      # 'nickname': 'Johnny', TODO: should be stored by folks, currently not supported - https://bugzilla.gnome.org/show_bug.cgi?id=686695
-        #      'birthday': (2011, 12, 24),
-        #      # 'photo': 'file:///tmp/photo.png', TODO: test with real file, folks will store the content of it
-        #      # 'gender', 'male', not exposed via D-Bus
-        #      # 'im': ...
-        #      # 'is-favorite': ...
-        #      'emails': [
-        #           ( 'john2@home', [ 'home' ] ),
-        #           ],
-        #      'phones': [
-        #           ( '1234', ['fax']),
-        #           ( '56789', ['work'] ),
-        #           ],
-        #      'addresses': [
-        #           (
-        #                {
-        #                     'country': 'United States of America',
-        #                     'extension': 'ext',
-        #                     'locality': 'New York',
-        #                     'po-box': 'box',
-        #                     'region': 'NY',
-        #                     'street': 'Upper East Side',
-        #                     },
-        #                ['work']
-        #                ),
-        #           (
-        #                {
-        #                     'country': 'United States of America',
-        #                     'locality': 'Boston',
-        #                     'street': 'Main Street',
-        #                     },
-        #                dbus.Array(signature="s") # empty string list
-        #                ),
-        #           ],
-        #      # 'web-services'
-        #      'roles': [
-        #           {
-        #                'organisation': 'ACME',
-        #                'title': 'senior president',
-        #                'role': 'scapegoat',
-        #                },
-        #           ],
-        #      'notes': [
-        #           'note\n\ntext modified',
-        #           # TODO: notes -> note (EDS only supports one NOTE)
-        #           ],
-        #      'urls': [
-        #           ('http://john.A.doe.com', ['x-home-page']),
-        #           ('web log 2', ['x-blog']),
-        #           ],
-        #      }
+                  ],
+             'addresses': [
+                  (
+                       {
+                            'country': 'United States of America',
+                            'extension': 'ext',
+                            'locality': 'New York',
+                            'po-box': 'box',
+                            'region': 'NY',
+                            'street': 'Upper East Side',
+                            },
+                       ['work']
+                       ),
+                  (
+                       {
+                            'country': 'United States of America',
+                            'locality': 'Boston',
+                            'street': 'Main Street',
+                            },
+                       dbus.Array(signature="s") # empty string list
+                       ),
+                  ],
+             # 'web-services'
+             'roles': [
+                  {
+                       'organisation': 'ACME',
+                       'title': 'senior president',
+                       'role': 'scapegoat',
+                       },
+                  ],
+             'notes': [
+                  'note\n\ntext modified',
+                  # TODO: notes -> note (EDS only supports one NOTE)
+                  ],
+             'urls': [
+                  ('http://john.A.doe.com', ['x-home-page']),
+                  ('web log 2', ['x-blog']),
+                  ],
+             }
         self.manager.ModifyContact('', localID, john,
                                    timeout=self.timeout)
         self.runUntil('modified contact',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 1 and self.view.haveNoData(0))
-        # Keep asking for data: we may get "modified" signals multiple times,
+        # Keep asking for data for a while: we may get "modified" signals multiple times,
         # which invalidates data that we just read until the unified address book
         # is stable again.
+        start = time.time()
         self.runUntil('modified contact data',
                       check=lambda: (self.assertEqual([], self.view.errors),
-                                     self.view.read(0, 1) or True),
-                      until=lambda: self.view.haveData(0))
+                                     self.view.haveData(0) or self.view.read(0, 1) or True),
+                      until=lambda: self.view.haveData(0) and time.time() - start > 5)
+        self.assertEqual(john, self.view.contacts[0], sortLists=True)
+
+        # Remove all properties, except for a minimal name.
+        # Entirely emtpy contacts make no sense.
+        john = {
+             'source': [('', localID)],
+             'id': contact.get('id', '<???>'),
+
+             'full-name': 'nobody',
+             'structured-name': {
+                  'given': 'nobody',
+                  },
+             }
+        self.manager.ModifyContact('', localID, john,
+                                   timeout=self.timeout)
+        self.runUntil('modified contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 1 and self.view.haveNoData(0))
+        start = time.time()
+        self.runUntil('modified contact data',
+                      check=lambda: (self.assertEqual([], self.view.errors),
+                                     self.view.haveData(0) or self.view.read(0, 1) or True),
+                      until=lambda: self.view.haveData(0) and time.time() - start > 5)
         self.assertEqual(john, self.view.contacts[0], sortLists=True)
 
         # Remove the contact.
