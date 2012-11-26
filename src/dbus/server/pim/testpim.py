@@ -90,6 +90,9 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                                                     self.viewPath),
                                      'org._01.pim.contacts.ViewControl')
 
+     def close(self):
+          self.view.Close(timeout=100000)
+
      def getIDs(self, start, count):
           '''Return just the IDs for a range of contacts in the current view.'''
           return [isinstance(x, dict) and x['id'] or x for x in self.contacts[start:start + count]]
@@ -1683,6 +1686,14 @@ END:VCARD''']):
         # they do, we'll notice it below.
         self.assertEqual(1, len(view.contacts))
 
+        # Search for telephone number.
+        phone = ContactsView(self.manager)
+        phone.search([['phone', '1234']])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], phone.errors),
+                      until=lambda: phone.quiescentCount > 0)
+        self.assertEqual(1, len(phone.contacts))
+
         # Read contacts.
         logging.log('reading contacts')
         view.read(0, 1)
@@ -1698,13 +1709,14 @@ END:VCARD''']):
         self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Unmatched contact remains unmatched.
+        # Modified phone number no longer matched.
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
         output.write(u'''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:King
-TEL:1234
+TEL:123
 EMAIL:az@example.com
 END:VCARD''')
         output.close()
@@ -1725,6 +1737,12 @@ END:VCARD''')
                       until=lambda: self.view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+
+        # No longer part of the telephone search view.
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], phone.errors),
+                      until=lambda: len(phone.contacts) == 0)
+        phone.close()
 
         # Matched contact remains matched.
         item = os.path.join(self.contacts, 'contact%d.vcf' % 2)
@@ -2064,6 +2082,14 @@ END:VCARD''')
                       until=lambda: self.view.haveData(0) and time.time() - start > 5)
         self.assertEqual(john, self.view.contacts[0], sortLists=True)
 
+        # Search for modified telephone number.
+        view = ContactsView(self.manager)
+        view.search([['phone', '56789']])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiescentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+
         # Remove all properties, except for a minimal name.
         # Entirely emtpy contacts make no sense.
         john = {
@@ -2086,6 +2112,11 @@ END:VCARD''')
                                      self.view.haveData(0) or self.view.read(0, 1) or True),
                       until=lambda: self.view.haveData(0) and time.time() - start > 5)
         self.assertEqual(john, self.view.contacts[0], sortLists=True)
+
+        # No longer part of the telephone search view.
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: len(view.contacts) == 0)
 
         # Remove the contact.
         self.manager.RemoveContact('', localID,
