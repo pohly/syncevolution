@@ -82,12 +82,18 @@ public:
     }
 };
 
-void IndividualData::init(const boost::shared_ptr<IndividualCompare> &compare,
+void IndividualData::init(const IndividualCompare *compare,
+                          const LocaleFactory *locale,
                           FolksIndividual *individual)
 {
     m_individual = individual;
-    m_criteria.clear();
-    compare->createCriteria(individual, m_criteria);
+    if (compare) {
+        m_criteria.clear();
+        compare->createCriteria(individual, m_criteria);
+    }
+    if (locale) {
+        locale->precompute(individual, m_precomputed);
+    }
 }
 
 void IndividualView::start()
@@ -109,7 +115,7 @@ void IndividualView::findContact(const std::string &id, int hint, int &index, Fo
     int count = size();
     // Start searching at the hint.
     for (i = hint; i < count; i++) {
-        individual = getContact(i);
+        individual = getContact(i)->m_individual;
         if (id == folks_individual_get_id(individual.get())) {
             index = i;
             return;
@@ -117,7 +123,7 @@ void IndividualView::findContact(const std::string &id, int hint, int &index, Fo
     }
     // Finish search before the hint.
     for (i = 0; i < hint; i++) {
-        individual = getContact(i);
+        individual = getContact(i)->m_individual;
         if (id == folks_individual_get_id(individual.get())) {
             index = i;
             return;
@@ -182,8 +188,10 @@ bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const
     return false;
 }
 
-FullView::FullView(const FolksIndividualAggregatorCXX &folks) :
+FullView::FullView(const FolksIndividualAggregatorCXX &folks,
+                   const boost::shared_ptr<LocaleFactory> &locale) :
     m_folks(folks),
+    m_locale(locale),
     m_isQuiescent(false),
     // Ensure that there is a sort criteria.
     m_compare(new CompareFormattedName())
@@ -214,7 +222,8 @@ void FullView::doStart()
     individuals.reserve(size);
     SE_LOG_DEBUG(NULL, NULL, "starting with %u individuals", size);
     BOOST_FOREACH (const Coll::value_type &entry, coll) {
-        data.init(m_compare, entry.value());
+        FolksIndividual *individual = entry.value();
+        data.init(m_compare.get(), m_locale.get(), individual);
         individuals.push_back(new IndividualData(data));
     }
     individuals.sort(IndividualDataCompare(m_compare));
@@ -224,7 +233,7 @@ void FullView::doStart()
     // Avoid loop if no-one is listening.
     if (!m_addedSignal.empty()) {
         for (size_t index = 0; index < m_entries.size(); index++) {
-            m_addedSignal(index, m_entries[index].m_individual);
+            m_addedSignal(index, m_entries[index]);
         }
     }
 
@@ -250,9 +259,10 @@ void FullView::doStart()
                                                                 m_self));
 }
 
-boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX &folks)
+boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX &folks,
+                                             const boost::shared_ptr<LocaleFactory> &locale)
 {
-    boost::shared_ptr<FullView> view(new FullView(folks));
+    boost::shared_ptr<FullView> view(new FullView(folks, locale));
     view->init(view);
     return view;
 }
@@ -314,7 +324,7 @@ void FullView::quiescenceChanged()
     }
 }
 
-void FullView::doAddIndividual(std::auto_ptr<IndividualData> &data)
+void FullView::doAddIndividual(Entries_t::auto_type &data)
 {
     // Binary search to find insertion point.
     Entries_t::iterator it =
@@ -323,9 +333,9 @@ void FullView::doAddIndividual(std::auto_ptr<IndividualData> &data)
                          *data,
                          IndividualDataCompare(m_compare));
     size_t index = it - m_entries.begin();
-    it = m_entries.insert(it, data);
+    it = m_entries.insert(it, data.release());
     SE_LOG_DEBUG(NULL, NULL, "full view: added at #%ld/%ld", index, m_entries.size());
-    m_addedSignal(index, it->m_individual);
+    m_addedSignal(index, *it);
     waitForIdle();
 
     // Monitor individual for changes.
@@ -338,8 +348,8 @@ void FullView::doAddIndividual(std::auto_ptr<IndividualData> &data)
 
 void FullView::addIndividual(FolksIndividual *individual)
 {
-    std::auto_ptr<IndividualData> data(new IndividualData);
-    data->init(m_compare, individual);
+    Entries_t::auto_type data(new IndividualData);
+    data->init(m_compare.get(), m_locale.get(), individual);
     doAddIndividual(data);
 }
 
@@ -354,8 +364,8 @@ void FullView::modifyIndividual(FolksIndividual *individual)
         if (it->m_individual.get() == individual) {
             size_t index = it - m_entries.begin();
 
-            std::auto_ptr<IndividualData> data(new IndividualData);
-            data->init(m_compare, individual);
+            Entries_t::auto_type data(new IndividualData);
+            data->init(m_compare.get(), m_locale.get(), individual);
             if (data->m_criteria != it->m_criteria &&
                 ((it != m_entries.begin() && !m_compare->compare((it - 1)->m_criteria, data->m_criteria)) ||
                  (it + 1 != m_entries.end() && !m_compare->compare(data->m_criteria, (it + 1)->m_criteria)))) {
@@ -364,12 +374,14 @@ void FullView::modifyIndividual(FolksIndividual *individual)
                 // as simple as possible, because this is not expected
                 // to happen often.
                 SE_LOG_DEBUG(NULL, NULL, "full view: temporarily removed at #%ld/%ld", index, m_entries.size());
-                m_entries.erase(it);
-                m_removedSignal(index, individual);
+                Entries_t::auto_type old = m_entries.release(it);
+                m_removedSignal(index, *old);
                 doAddIndividual(data);
             } else {
                 SE_LOG_DEBUG(NULL, NULL, "full view: modified at #%ld/%ld", index, m_entries.size());
-                m_modifiedSignal(index, individual);
+                // Use potentially modified pre-computed data.
+                m_entries.replace(it, data.release());
+                m_modifiedSignal(index, *it);
                 waitForIdle();
             }
             return;
@@ -388,8 +400,8 @@ void FullView::removeIndividual(FolksIndividual *individual)
         if (it->m_individual.get() == individual) {
             size_t index = it - m_entries.begin();
             SE_LOG_DEBUG(NULL, NULL, "full view: removed at #%ld/%ld", index, m_entries.size());
-            m_entries.erase(it);
-            m_removedSignal(index, individual);
+            Entries_t::auto_type data = m_entries.release(it);
+            m_removedSignal(index, *data);
             waitForIdle();
             return;
         }
@@ -440,7 +452,7 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
 
     // Change sort criteria and sort.
     BOOST_FOREACH (IndividualData &data, m_entries) {
-        data.init(m_compare, data.m_individual);
+        data.init(m_compare.get(), NULL, data.m_individual);
     }
     m_entries.sort(IndividualDataCompare(m_compare));
 
@@ -453,7 +465,7 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
             // where it came from now. The effect is that temporarily
             // the same contact might be shown at two different
             // indices.
-            m_modifiedSignal(index, current.m_individual);
+            m_modifiedSignal(index, current);
         }
     }
 
@@ -492,7 +504,7 @@ void FilteredView::doStart()
     // cause changes to the parent view, otherwise the result will not
     // be inconsistent.
     for (int index = 0; index < m_parent->size(); index++) {
-        addIndividual(index, m_parent->getContact(index));
+        addIndividual(index, *m_parent->getContact(index));
     }
 
     // Start listening to signals.
@@ -505,13 +517,13 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
 {
     size_t index = 0;
     while (index < m_local2parent.size()) {
-        FolksIndividualCXX individual = m_parent->getContact(index);
-        if (individualFilter->matches(individual)) {
+        const IndividualData *data = m_parent->getContact(index);
+        if (individualFilter->matches(*data)) {
             // Still matched, just skip it.
             ++index;
         } else {
             // No longer matched, remove it.
-            m_removedSignal(index, individual);
+            m_removedSignal(index, *data);
             m_local2parent.erase(m_local2parent.begin() + index);
         }
     }
@@ -523,14 +535,9 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
     }
 }
 
-void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)
+void FilteredView::addIndividual(int parentIndex, const IndividualData &data)
 {
-    if (!individual) {
-        // sanity check
-        return;
-    }
-
-    if (m_filter->matches(individual)) {
+    if (m_filter->matches(data)) {
         // We can use binary search to find the insertion point.
         // Check last entry first, because that is going to be
         // very common when adding via doStart().
@@ -554,17 +561,12 @@ void FilteredView::addIndividual(int parentIndex, FolksIndividual *individual)
         }
 
         SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld", index, m_local2parent.size());
-        m_addedSignal(index, individual);
+        m_addedSignal(index, data);
     }
 }
 
-void FilteredView::removeIndividual(int parentIndex, FolksIndividual *individual)
+void FilteredView::removeIndividual(int parentIndex, const IndividualData &data)
 {
-    if (!individual) {
-        // sanity check
-        return;
-    }
-
     // The entries are sorted. Therefore we can use a binary search
     // to find the parentIndex or the first entry after it.
     Entries_t::iterator it =
@@ -575,7 +577,7 @@ void FilteredView::removeIndividual(int parentIndex, FolksIndividual *individual
         size_t index = it - m_local2parent.begin();
         SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld", index, m_local2parent.size());
         it = m_local2parent.erase(it);
-        m_removedSignal(index, individual);
+        m_removedSignal(index, data);
     }
 
     // Now reduce the index in our mapping for all following entries.
@@ -587,43 +589,39 @@ void FilteredView::removeIndividual(int parentIndex, FolksIndividual *individual
     }
 }
 
-void FilteredView::modifyIndividual(int parentIndex, FolksIndividual *individual)
+void FilteredView::modifyIndividual(int parentIndex, const IndividualData &data)
 {
-    if (!individual) {
-        // sanity check
-        return;
-    }
-
     Entries_t::iterator it =
         std::lower_bound(m_local2parent.begin(),
                          m_local2parent.end(),
                          parentIndex);
-    bool matches = m_filter->matches(individual);
+    bool matches = m_filter->matches(data);
     if (it != m_local2parent.end() && *it == parentIndex) {
         // Was matched before the change.
         size_t index = it - m_local2parent.begin();
         if (matches) {
             // Still matched, merely pass on modification signal.
             SE_LOG_DEBUG(NULL, NULL, "filtered view: modified at #%ld/%ld", index, m_local2parent.size());
-            m_modifiedSignal(index, individual);
+            m_modifiedSignal(index, data);
         } else {
             // Removed.
             SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld due to modification", index, m_local2parent.size());
             m_local2parent.erase(it);
-            m_removedSignal(index, individual);
+            m_removedSignal(index, data);
         }
     } else if (matches) {
         // Was not matched before and is matched now => add it.
         size_t index = it - m_local2parent.begin();
         m_local2parent.insert(it, parentIndex);
         SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld due to modification", index, m_local2parent.size());
-        m_addedSignal(index, individual);
+        m_addedSignal(index, data);
     } else {
         // Neither matched before nor now => nothing changed.
     }
 }
 
-IndividualAggregator::IndividualAggregator() :
+IndividualAggregator::IndividualAggregator(const boost::shared_ptr<LocaleFactory> &locale) :
+    m_locale(locale),
     m_databases(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc) g_strdup, g_free, NULL, NULL), false)
 {
 }
@@ -670,9 +668,9 @@ void IndividualAggregator::init(boost::shared_ptr<IndividualAggregator> &self)
         FolksIndividualAggregatorCXX::steal(folks_individual_aggregator_new_with_backend_store(m_backendStore));
 }
 
-boost::shared_ptr<IndividualAggregator> IndividualAggregator::create()
+boost::shared_ptr<IndividualAggregator> IndividualAggregator::create(const boost::shared_ptr<LocaleFactory> &locale)
 {
-    boost::shared_ptr<IndividualAggregator> aggregator(new IndividualAggregator);
+    boost::shared_ptr<IndividualAggregator> aggregator(new IndividualAggregator(locale));
     aggregator->init(aggregator);
     return aggregator;
 }
@@ -756,7 +754,7 @@ void IndividualAggregator::setCompare(const boost::shared_ptr<IndividualCompare>
 void IndividualAggregator::start()
 {
     if (!m_view) {
-        m_view = FullView::create(m_folks);
+        m_view = FullView::create(m_folks, m_locale);
         if (m_compare) {
             m_view->setCompare(m_compare);
         }
@@ -1163,9 +1161,9 @@ private:
     static void individualSignal(std::ostringstream &out,
                                  const char *action,
                                  int index,
-                                 FolksIndividual *individual) {
+                                 const IndividualData &data) {
         out << action << ": " << index << " " <<
-            folks_name_details_get_full_name(FOLKS_NAME_DETAILS(individual)) <<
+            folks_name_details_get_full_name(FOLKS_NAME_DETAILS(data.m_individual.get())) <<
             std::endl;
     }
 

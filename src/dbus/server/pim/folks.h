@@ -30,6 +30,7 @@
 
 #include <folks/folks.h>
 
+#include "locale-factory.h"
 #include "../dbus-callbacks.h"
 #include "../timeout.h"
 
@@ -105,19 +106,22 @@ class IndividualCompare
 };
 
 /**
- * A FolksIndividual plus its sort criteria.
+ * A FolksIndividual plus its sort criteria and search cache.
  */
 struct IndividualData
 {
     /**
      * Sets all members to match the given individual, using the
-     * compare instance to compute values.
+     * compare instance to compute values. Both compare and locale may
+     * be NULL.
      */
-    void init(const boost::shared_ptr<IndividualCompare> &compare,
+    void init(const IndividualCompare *compare,
+              const LocaleFactory *locale,
               FolksIndividual *individual);
 
     FolksIndividualCXX m_individual;
     IndividualCompare::Criteria_t m_criteria;
+    LocaleFactory::Precomputed m_precomputed;
 };
 
 /**
@@ -151,7 +155,7 @@ class IndividualFilter
     virtual ~IndividualFilter() {}
 
     /** true if the contact matches the filter */
-    virtual bool matches(FolksIndividual *individual) const = 0;
+    virtual bool matches(const IndividualData &data) const = 0;
 };
 
 class IndividualAggregator;
@@ -167,7 +171,7 @@ class IndividualView
     Bool m_started;
 
  public:
-    typedef boost::signals2::signal<void (int, FolksIndividual *)> ChangeSignal_t;
+    typedef boost::signals2::signal<void (int, const IndividualData &)> ChangeSignal_t;
     typedef boost::signals2::signal<void (void)> QuiescenceSignal_t;
 
     /**
@@ -230,7 +234,7 @@ class IndividualView
     virtual void readContacts(const std::vector<std::string> &ids, Contacts &contacts);
 
     /** returns access to one individual or an empty pointer if outside of the current range */
-    virtual FolksIndividualCXX getContact(int index) = 0;
+    virtual const IndividualData *getContact(int index) = 0;
 
  protected:
     /**
@@ -248,6 +252,7 @@ class IndividualView
 class FullView : public IndividualView
 {
     FolksIndividualAggregatorCXX m_folks;
+    boost::shared_ptr<LocaleFactory> m_locale;
     bool m_isQuiescent;
     boost::weak_ptr<FullView> m_self;
     Timeout m_waitForIdle;
@@ -264,7 +269,8 @@ class FullView : public IndividualView
      */
     boost::shared_ptr<IndividualCompare> m_compare;
 
-    FullView(const FolksIndividualAggregatorCXX &folks);
+    FullView(const FolksIndividualAggregatorCXX &folks,
+             const boost::shared_ptr<LocaleFactory> &locale);
     void init(const boost::shared_ptr<FullView> &self);
 
     /**
@@ -282,14 +288,14 @@ class FullView : public IndividualView
      * Adds the new individual to m_entries, transfers ownership
      * (data == NULL afterwards).
      */
-    void doAddIndividual(std::auto_ptr<IndividualData> &data);
+    void doAddIndividual(Entries_t::auto_type &data);
 
  public:
     /**
-     * @param folks     the aggregator to use, may be empty for testing
+     * @param folks     the aggregator to use
      */
-    static boost::shared_ptr<FullView> create(const FolksIndividualAggregatorCXX &folks =
-                                              FolksIndividualAggregatorCXX());
+    static boost::shared_ptr<FullView> create(const FolksIndividualAggregatorCXX &folks,
+                                              const boost::shared_ptr<LocaleFactory> &locale);
 
     /** FolksIndividualAggregator "individuals-changed" slot */
     void individualsChanged(GeeSet *added,
@@ -349,7 +355,7 @@ class FullView : public IndividualView
     // from IndividualView
     virtual void doStart();
     virtual int size() const { return (int)m_entries.size(); }
-    virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_entries.size()) ? m_entries[index].m_individual : FolksIndividualCXX(); }
+    virtual const IndividualData *getContact(int index) { return (index >= 0 && (unsigned)index < m_entries.size()) ? &m_entries[index] : NULL; }
 };
 
 /**
@@ -392,23 +398,23 @@ class FilteredView : public IndividualView
      * Add a FolksIndividual if it matches the filter. Tracking of
      * changes to individuals is done in parent view.
      */
-    void addIndividual(int parentIndex, FolksIndividual *individual);
+    void addIndividual(int parentIndex, const IndividualData &data);
 
     /**
      * Removes a FolksIndividual. Might not have been added at all.
      */
-    void removeIndividual(int parentIndex, FolksIndividual *individual);
+    void removeIndividual(int parentIndex, const IndividualData &data);
 
     /**
      * Check whether a changed individual still belongs into the view.
      */
-    void modifyIndividual(int parentIndex, FolksIndividual *individual);
+    void modifyIndividual(int parentIndex, const IndividualData &data);
 
     // from IndividualView
     virtual void doStart();
     virtual void refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter);
     virtual int size() const { return (int)m_local2parent.size(); }
-    virtual FolksIndividualCXX getContact(int index) { return (index >= 0 && (unsigned)index < m_local2parent.size()) ? m_parent->getContact(m_local2parent[index]) : FolksIndividualCXX(); }
+    virtual const IndividualData *getContact(int index) { return (index >= 0 && (unsigned)index < m_local2parent.size()) ? m_parent->getContact(m_local2parent[index]) : NULL; }
 };
 
 /**
@@ -420,6 +426,7 @@ class IndividualAggregator
     /** empty when not started yet */
     boost::shared_ptr<FullView> m_view;
     boost::shared_ptr<IndividualCompare> m_compare;
+    boost::shared_ptr<LocaleFactory> m_locale;
     boost::weak_ptr<IndividualAggregator> m_self;
     FolksIndividualAggregatorCXX m_folks;
     FolksBackendStoreCXX m_backendStore;
@@ -446,7 +453,7 @@ class IndividualAggregator
     /** string representation for debugging */
     std::string dumpDatabases();
 
-    IndividualAggregator();
+    IndividualAggregator(const boost::shared_ptr<LocaleFactory> &locale);
     void init(boost::shared_ptr<IndividualAggregator> &self);
 
     /**
@@ -505,7 +512,7 @@ class IndividualAggregator
      * Creates an idle IndividualAggregator. Configure it and
      * subscribe to signals, then call start().
      */
-    static boost::shared_ptr<IndividualAggregator> create();
+    static boost::shared_ptr<IndividualAggregator> create(const boost::shared_ptr<LocaleFactory> &locale);
 
     /**
      * Access to FolksIndividualAggregator which is owned by

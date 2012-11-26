@@ -123,7 +123,7 @@ void Manager::init()
 
 void Manager::initFolks()
 {
-    m_folks = IndividualAggregator::create();
+    m_folks = IndividualAggregator::create(m_locale);
 }
 
 void Manager::initSorting(const std::string &order)
@@ -267,8 +267,9 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
      * an up-to-date view when the requested data arrives.
      */
     void handleChange(const GDBusCXX::DBusClientCall0 &call,
-                      int start, FolksIndividual *individual)
+                      int start, const IndividualData &data)
     {
+        FolksIndividual *individual = data.m_individual.get();
         const char *id = folks_individual_get_id(individual);
         SE_LOG_DEBUG(NULL, NULL, "handle change %s: %s, #%d, %s = %s",
                      getPath(),
@@ -495,10 +496,10 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         if (size) {
             std::vector<std::string> ids;
             ids.reserve(size);
-            FolksIndividualCXX individual;
+            const IndividualData *data;
             for (int i = 0; i < size; i++) {
-                individual = m_view->getContact(i);
-                ids.push_back(folks_individual_get_id(individual.get()));
+                data = m_view->getContact(i);
+                ids.push_back(folks_individual_get_id(data->m_individual.get()));
             }
             sendChange(m_contactsAdded, 0, ids);
         }

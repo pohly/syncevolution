@@ -28,6 +28,8 @@
 
 #include <boost/shared_ptr.hpp>
 
+#include <folks/folks.h>
+
 #include <syncevo/util.h>
 
 #include <syncevo/declarations.h>
@@ -35,6 +37,7 @@ SE_BEGIN_CXX
 
 class IndividualCompare;
 class IndividualFilter;
+
 
 /**
  * Factory for everything related to the current locale: sorting and
@@ -75,6 +78,28 @@ class LocaleFactory
      * @return a valid instance, must not be NULL
      */
     virtual boost::shared_ptr<IndividualFilter> createFilter(const Filter_t &filter) = 0;
+
+    /**
+     * Pre-computed data for a single FolksIndividual which will be needed
+     * for searching. Strictly speaking, this should be an opaque pointer
+     * whose content is entirely owned by the implementation of LocaleFactory.
+     * For the sake of performance and simplicity, we define a struct instead
+     * which can be embedded inside IndividualData. Leads to better memory
+     * locality and reduces overall memory consumption/usage.
+     */
+    struct Precomputed
+    {
+        /**
+         * Normalized phone numbers (E164). Contains only + and digits.
+         * TODO (?): store in more compact format.
+         */
+        std::vector<std::string> m_phoneNumbers;
+    };
+
+    /**
+     * (Re)set pre-computed data for an individual.
+     */
+    virtual void precompute(FolksIndividual *individual, Precomputed &precomputed) const = 0;
 };
 
 SE_END_CXX

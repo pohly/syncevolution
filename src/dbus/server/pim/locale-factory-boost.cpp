@@ -216,8 +216,9 @@ public:
         return boost::contains(tel, m_searchValueTel);
     }
 
-    virtual bool matches(FolksIndividual *individual) const
+    virtual bool matches(const IndividualData &data) const
     {
+        FolksIndividual *individual = data.m_individual.get();
         FolksNameDetails *name = FOLKS_NAME_DETAILS(individual);
         const char *fullname = folks_name_details_get_full_name(name);
         if (containsSearchText(fullname)) {
@@ -318,26 +319,11 @@ public:
         m_phoneNumberUtil.Format(number, i18n::phonenumbers::PhoneNumberUtil::E164, &m_tel);
     }
 
-    virtual bool matches(FolksIndividual *individual) const
+    virtual bool matches(const IndividualData &data) const
     {
-        FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
-        GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
-        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones)) {
-            const gchar *value =
-                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
-            if (value) {
-                i18n::phonenumbers::PhoneNumber number;
-                i18n::phonenumbers::PhoneNumberUtil::ErrorType error =
-                    m_phoneNumberUtil.Parse(value, m_country, &number);
-                if (error == i18n::phonenumbers::PhoneNumberUtil::NO_PARSING_ERROR) {
-                    std::string tel;
-                    m_phoneNumberUtil.Format(number, i18n::phonenumbers::PhoneNumberUtil::E164, &tel);
-                    // TODO (?): cache the normalized phone number, perhaps even maintain
-                    // a lookup data structure.
-                    if (boost::starts_with(tel, m_tel)) {
-                        return true;
-                    }
-                }
+        BOOST_FOREACH(const std::string &tel, data.m_precomputed.m_phoneNumbers) {
+            if (boost::starts_with(tel, m_tel)) {
+                return true;
             }
         }
         return false;
@@ -351,11 +337,15 @@ private:
 
 class LocaleFactoryBoost : public LocaleFactory
 {
+    const i18n::phonenumbers::PhoneNumberUtil &m_phoneNumberUtil;
     std::locale m_locale;
+    std::string m_country;
 
 public:
     LocaleFactoryBoost() :
-        m_locale(genLocale())
+        m_phoneNumberUtil(*i18n::phonenumbers::PhoneNumberUtil::GetInstance()),
+        m_locale(genLocale()),
+        m_country(std::use_facet<boost::locale::info>(m_locale).country())
     {}
 
     static std::locale genLocale()
@@ -427,6 +417,30 @@ public:
         }
 
         return res;
+    }
+
+    virtual void precompute(FolksIndividual *individual, Precomputed &precomputed) const
+    {
+        precomputed.m_phoneNumbers.clear();
+
+        FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
+        GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
+        precomputed.m_phoneNumbers.reserve(gee_collection_get_size(GEE_COLLECTION(phones)));
+        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones)) {
+            const gchar *value =
+                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
+            if (value) {
+                i18n::phonenumbers::PhoneNumber number;
+                // TODO
+                i18n::phonenumbers::PhoneNumberUtil::ErrorType error =
+                    m_phoneNumberUtil.Parse(value, m_country, &number);
+                if (error == i18n::phonenumbers::PhoneNumberUtil::NO_PARSING_ERROR) {
+                    std::string tel;
+                    m_phoneNumberUtil.Format(number, i18n::phonenumbers::PhoneNumberUtil::E164, &tel);
+                    precomputed.m_phoneNumbers.push_back(tel);
+                }
+            }
+        }
     }
 };
 
