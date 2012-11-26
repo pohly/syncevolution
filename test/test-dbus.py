@@ -469,7 +469,7 @@ class DBusUtil(Timeout):
         # set additional environment variables for the test run,
         # as defined by @property("ENV", "foo=bar x=y")
         for assignment in self.getTestProperty("ENV", "").split():
-            var, value = assignment.split("=")
+            var, value = assignment.split("=", 1)
             env[var] = value
 
         # always print all debug output directly (no output redirection),
