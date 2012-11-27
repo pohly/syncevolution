@@ -517,7 +517,7 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
 {
     size_t index = 0;
     while (index < m_local2parent.size()) {
-        const IndividualData *data = m_parent->getContact(index);
+        const IndividualData *data = m_parent->getContact(m_local2parent[index]);
         if (individualFilter->matches(*data)) {
             // Still matched, just skip it.
             ++index;

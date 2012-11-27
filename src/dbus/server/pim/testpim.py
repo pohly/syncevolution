@@ -1536,15 +1536,35 @@ END:VCARD''']):
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
 
-        # Restrict search to Abraham.
+        # Restrict search to Benjamin. The result is a view
+        # which has different indices than the full view.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'Abraham']],
+        view.view.RefineSearch([['any-contains', 'Benjamin']],
                                timeout=self.timeout)
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+
+        # Refine again, without changes.
+        view.quiescentCount = 0
+        view.view.RefineSearch([['any-contains', 'Benjamin']],
+                               timeout=self.timeout)
+        self.runUntil('end of search refinement',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiescentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+
+        # Refine to empty view.
+        view.quiescentCount = 0
+        view.view.RefineSearch([['any-contains', 'XXXBenjamin']],
+                               timeout=self.timeout)
+        self.runUntil('end of search refinement',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiescentCount > 0)
+        self.assertEqual(0, len(view.contacts))
 
         # Find Abraham by his nickname.
         view = ContactsView(self.manager)
