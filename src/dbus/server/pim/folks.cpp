@@ -523,8 +523,8 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
             ++index;
         } else {
             // No longer matched, remove it.
-            m_removedSignal(index, *data);
             m_local2parent.erase(m_local2parent.begin() + index);
+            m_removedSignal(index, *data);
         }
     }
     m_filter = individualFilter;
@@ -537,28 +537,32 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
 
 void FilteredView::addIndividual(int parentIndex, const IndividualData &data)
 {
+    // We can use binary search to find the insertion point.
+    // Check last entry first, because that is going to be
+    // very common when adding via doStart().
+    Entries_t::iterator it;
+    if (!m_local2parent.empty() &&
+        m_local2parent.back() < parentIndex) {
+        it = m_local2parent.end();
+    } else {
+        it =
+            std::lower_bound(m_local2parent.begin(),
+                             m_local2parent.end(),
+                             parentIndex);
+    }
+
+    // Adding a contact in the parent changes values in our
+    // mapping array, regardless whether the new contact also
+    // gets and entry in it. Shift all following indices.
+    for (Entries_t::iterator it2 = it;
+         it2 != m_local2parent.end();
+         ++it2) {
+        (*it2)++;
+    }
+
     if (m_filter->matches(data)) {
-        // We can use binary search to find the insertion point.
-        // Check last entry first, because that is going to be
-        // very common when adding via doStart().
-        Entries_t::iterator it;
-        if (!m_local2parent.empty() &&
-            m_local2parent.back() < parentIndex) {
-            it = m_local2parent.end();
-        } else {
-            it =
-                std::lower_bound(m_local2parent.begin(),
-                                 m_local2parent.end(),
-                                 parentIndex);
-        }
         size_t index = it - m_local2parent.begin();
         it = m_local2parent.insert(it, parentIndex);
-        ++it;
-        // Shift all following indices.
-        while (it != m_local2parent.end()) {
-            (*it)++;
-            ++it;
-        }
 
         SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld", index, m_local2parent.size());
         m_addedSignal(index, data);
@@ -573,19 +577,22 @@ void FilteredView::removeIndividual(int parentIndex, const IndividualData &data)
         std::lower_bound(m_local2parent.begin(),
                          m_local2parent.end(),
                          parentIndex);
-    if (it != m_local2parent.end() && *it == parentIndex) {
-        size_t index = it - m_local2parent.begin();
-        SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld", index, m_local2parent.size());
-        it = m_local2parent.erase(it);
-        m_removedSignal(index, data);
+    // Removing a contact in the parent changes values in our mapping
+    // array, regardless whether the removed contact is part of our
+    // view. Shift all following indices, including the removed entry
+    // if it is part of the view.
+    bool found = it != m_local2parent.end() && *it == parentIndex;
+    for (Entries_t::iterator it2 = it;
+         it2 != m_local2parent.end();
+         ++it2) {
+        (*it2)--;
     }
 
-    // Now reduce the index in our mapping for all following entries.
-    // Not particularly efficient when multiple individuals get
-    // removed.
-    while (it != m_local2parent.end()) {
-        (*it)--;
-        ++it;
+    if (found) {
+        size_t index = it - m_local2parent.begin();
+        SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld", index, m_local2parent.size());
+        m_local2parent.erase(it);
+        m_removedSignal(index, data);
     }
 }
 
