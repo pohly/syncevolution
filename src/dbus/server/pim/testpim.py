@@ -1301,11 +1301,11 @@ END:VCARD'''
     def testActive(self):
         '''TestContacts.testActive - reconfigure active address books several times'''
         peers = ['a', 'b', 'c']
-        self.setUpView(peers=peers)
-        active = peers
+        self.setUpView(peers=peers, withSystemAddressBook=True)
+        active = [''] + peers
 
         contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 100))
-        for peer in peers:
+        for peer in active:
              for index in range(0, contactsPerPeer):
                   item = os.path.join(self.contacts, 'john%d.vcf' % index)
                   output = open(item, "w")
@@ -1318,7 +1318,10 @@ END:VCARD''' % {'peer': peer, 'index': index})
 
              uid = self.uidPrefix + peer
              logging.log('inserting data into ' + uid)
-             out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + uid, 'local'])
+             if peer != '':
+                  out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + uid, 'local'])
+             else:
+                  out, err, returncode = self.runCmdline(['--import', self.contacts, 'database=', 'backend=evolution-contacts'])
 
         # Run until the view has adapted.
         self.runUntil('view with contacts',
@@ -1370,11 +1373,12 @@ END:VCARD''' % {'peer': peer, 'index': index})
 
         # Now test all subsets until we are back at 'all active'.
         for active in [filter(lambda x: x != None,
-                              [a, b, c])
+                              [s, a, b, c])
+                       for s in [None, '']
                        for a in [None, 'a']
                        for b in [None, 'b']
                        for c in [None, 'c']]:
-             self.manager.SetActiveAddressBooks(['peer-' + self.uidPrefix + x for x in active],
+             self.manager.SetActiveAddressBooks([x != '' and 'peer-' + self.uidPrefix + x or x for x in active],
                                                 timeout=self.timeout)
              self.runUntil('contacts %s' % str(active),
                            check=lambda: self.assertEqual([], self.view.errors),
