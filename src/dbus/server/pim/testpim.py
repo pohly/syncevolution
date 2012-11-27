@@ -1296,6 +1296,90 @@ END:VCARD'''
                          contact,
                          sortLists=True)
 
+    @timeout(240)
+    @property("snapshot", "simple-sort")
+    def testActive(self):
+        '''TestContacts.testActive - reconfigure active address books several times'''
+        peers = ['a', 'b', 'c']
+        self.setUpView(peers=peers)
+        active = peers
+
+        contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 100))
+        for peer in peers:
+             for index in range(0, contactsPerPeer):
+                  item = os.path.join(self.contacts, 'john%d.vcf' % index)
+                  output = open(item, "w")
+                  output.write('''BEGIN:VCARD
+VERSION:3.0
+FN:John_%(peer)s%(index)03d Doe
+N:Doe;John_%(peer)s%(index)03d
+END:VCARD''' % {'peer': peer, 'index': index})
+                  output.close()
+
+             uid = self.uidPrefix + peer
+             logging.log('inserting data into ' + uid)
+             out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + uid, 'local'])
+
+        # Run until the view has adapted.
+        self.runUntil('view with contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == contactsPerPeer * len(active))
+
+        def checkContacts():
+             contacts = copy.deepcopy(self.view.contacts)
+             for contact in contacts:
+                  del contact['id']
+                  del contact['source']
+             expected = [{'full-name': first + ' Doe',
+                                'structured-name': {'given': first, 'family': 'Doe'}} for \
+                                    first in ['John_%(peer)s%(index)03d' % {'peer': peer,
+                                                                            'index': index} \
+                                                   for peer in active \
+                                                   for index in range(0, contactsPerPeer)] ]
+             return (expected, contacts)
+
+        def assertHaveContacts():
+             expected, contacts = checkContacts()
+             self.assertEqual(expected, contacts)
+
+        # Read contacts.
+        logging.log('reading contacts')
+        self.view.read(0, contactsPerPeer * len(active))
+        self.runUntil('contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, contactsPerPeer * len(active)))
+        assertHaveContacts()
+
+        def haveExpectedView():
+             if len(self.view.contacts) == contactsPerPeer * len(active):
+                  if self.view.haveData(0, contactsPerPeer * len(active)):
+                       expected, contacts = checkContacts()
+                       if expected == contacts:
+                            logging.log('got expected data')
+                            return True
+                       else:
+                            logging.printf('data mismatch, keep waiting; currently have: %s', contacts)
+                  else:
+                       self.view.read(0, len(self.view.contacts))
+                       logging.log('still waiting for all data')
+             else:
+                  logging.printf('wrong contact count, keep waiting: have %d, want %d',
+                                 len(self.view.contacts),
+                                 contactsPerPeer * len(active))
+             return False
+
+        # Now test all subsets until we are back at 'all active'.
+        for active in [filter(lambda x: x != None,
+                              [a, b, c])
+                       for a in [None, 'a']
+                       for b in [None, 'b']
+                       for c in [None, 'c']]:
+             self.manager.SetActiveAddressBooks(['peer-' + self.uidPrefix + x for x in active],
+                                                timeout=self.timeout)
+             self.runUntil('contacts %s' % str(active),
+                           check=lambda: self.assertEqual([], self.view.errors),
+                           until=haveExpectedView)
+
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
     def testFilterExisting(self):
