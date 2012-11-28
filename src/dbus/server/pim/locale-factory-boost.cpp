@@ -26,6 +26,7 @@
 
 #include <phonenumbers/phonenumberutil.h>
 #include <boost/locale.hpp>
+#include <boost/lexical_cast.hpp>
 
 SE_BEGIN_CXX
 
@@ -380,42 +381,63 @@ public:
 
     virtual boost::shared_ptr<IndividualFilter> createFilter(const Filter_t &filter)
     {
+        int maxResults = -1;
         boost::shared_ptr<IndividualFilter> res;
-        if (filter.size() != 1) {
-            SE_THROW(StringPrintf("boost locale factory: only filter with one term are supported (was given %ld)",
-                                  (long)filter.size()));
-        }
-        const Filter_t::value_type &term = filter[0];
-        if (term.empty()) {
-            SE_THROW("boost locale factory: empty search term not supported");
-        }
-        if (term[0] == "any-contains") {
-            AnyContainsBoost::Mode mode = AnyContainsBoost::CASE_INSENSITIVE;
-            if (term.size() < 2) {
-                SE_THROW("boost locale factory: any-contains search needs one parameter");
+        BOOST_FOREACH (const Filter_t::value_type &term, filter) {
+            if (term.empty()) {
+                SE_THROW("boost locale factory: empty search term not supported");
             }
-            for (size_t i = 2; i < term.size(); i++) {
-                const std::string &flag = term[i];
-                if (flag == "case-sensitive") {
-                    mode = AnyContainsBoost::CASE_SENSITIVE;
-                } else if (flag == "case-insensitive") {
-                    mode = AnyContainsBoost::CASE_INSENSITIVE;
-                } else {
-                    SE_THROW("boost locale factory: unknown flag for any-contains: " + flag);
+            // Check for flags.
+            if (term[0] == "limit") {
+                if (term.size() != 2) {
+                    SE_THROW("boost locale factory: 'limit' needs exactly one parameter");
                 }
+                maxResults = boost::lexical_cast<int>(term[1]);
+            } else if (term[0] == "any-contains") {
+                if (res) {
+                    SE_THROW("boost locale factory: already have a search filter, 'any-contains' not valid");
+                }
+
+                AnyContainsBoost::Mode mode = AnyContainsBoost::CASE_INSENSITIVE;
+                if (term.size() < 2) {
+                    SE_THROW("boost locale factory: any-contains search needs one parameter");
+                }
+                for (size_t i = 2; i < term.size(); i++) {
+                    const std::string &flag = term[i];
+                    if (flag == "case-sensitive") {
+                        mode = AnyContainsBoost::CASE_SENSITIVE;
+                    } else if (flag == "case-insensitive") {
+                        mode = AnyContainsBoost::CASE_INSENSITIVE;
+                    } else {
+                        SE_THROW("boost locale factory: unknown flag for any-contains: " + flag);
+                    }
+                }
+                res.reset(new AnyContainsBoost(m_locale, term[1], mode));
+            } else if (term[0] == "phone") {
+                if (res) {
+                    SE_THROW("boost locale factory: already have a search filter, 'phone' not valid");
+                }
+
+                if (filter.size() != 1) {
+                    SE_THROW(StringPrintf("boost locale factory: only filter with one term are supported (was given %ld)",
+                                          (long)filter.size()));
+                }
+                res.reset(new PhoneStartsWith(m_locale,
+                                              term[1]));
+            } else {
+                SE_THROW("boost locale factory: unknown search term: " + term[0]);
             }
-            res.reset(new AnyContainsBoost(m_locale, term[1], mode));
-        } else if (term[0] == "phone") {
-            if (filter.size() != 1) {
-                SE_THROW(StringPrintf("boost locale factory: only filter with one term are supported (was given %ld)",
-                                      (long)filter.size()));
-            }
-            res.reset(new PhoneStartsWith(m_locale,
-                                          term[1]));
-        } else {
-            SE_THROW("boost locale factory: unknown search term: " + term[0]);
         }
 
+        // May be empty (unfiltered). If a limit was given, then
+        // we have to create a filter which matches everything, because
+        // the FullView cannot apply a limit.
+        if (maxResults != -1) {
+            if (!res) {
+                res.reset(new MatchAll());
+            }
+            res->setMaxResults(maxResults);
+        }
         return res;
     }
 

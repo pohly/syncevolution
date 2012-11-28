@@ -503,7 +503,7 @@ void FilteredView::doStart()
     // Add initial content. Our processing of the new contact must not
     // cause changes to the parent view, otherwise the result will not
     // be inconsistent.
-    for (int index = 0; index < m_parent->size(); index++) {
+    for (int index = 0; !isFull() && index < m_parent->size(); index++) {
         addIndividual(index, *m_parent->getContact(index));
     }
 
@@ -513,8 +513,36 @@ void FilteredView::doStart()
     m_parent->m_removedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::removeIndividual, this, _1, _2)).track(m_self));
 }
 
+bool FilteredView::isFull()
+{
+    size_t newEndIndex = m_local2parent.end() - m_local2parent.begin();
+    return !m_filter->isIncluded(newEndIndex);
+}
+
+void FilteredView::fillView(int candidate)
+{
+    // Can we add back contacts which were excluded because of the
+    // maximum number of results?
+    while (!isFull() &&
+           candidate < m_parent->size()) {
+        const IndividualData *data = m_parent->getContact(candidate);
+        addIndividual(candidate, *data);
+        candidate++;
+    }
+}
+
 void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter)
 {
+    // Keep number of results the same, to avoid additional corner
+    // cases.
+    if (individualFilter->getMaxResults() != -1 &&
+        individualFilter->getMaxResults() != m_filter->getMaxResults()) {
+        SE_THROW("refining the search must not change the maximum number of results");
+    }
+    individualFilter->setMaxResults(m_filter->getMaxResults());
+
+    int candidate = m_local2parent.empty() ? 0 : m_local2parent.back() + 1;
+    bool removed = false;
     size_t index = 0;
     while (index < m_local2parent.size()) {
         const IndividualData *data = m_parent->getContact(m_local2parent[index]);
@@ -525,9 +553,15 @@ void FilteredView::refineFilter(const boost::shared_ptr<IndividualFilter> &indiv
             // No longer matched, remove it.
             m_local2parent.erase(m_local2parent.begin() + index);
             m_removedSignal(index, *data);
+            removed = true;
         }
     }
     m_filter = individualFilter;
+
+    if (removed) {
+        fillView(candidate);
+    }
+
     // If the parent is currently busy, then we can delay sending the
     // signal until it is no longer busy.
     if (isQuiescent()) {
@@ -562,10 +596,27 @@ void FilteredView::addIndividual(int parentIndex, const IndividualData &data)
 
     if (m_filter->matches(data)) {
         size_t index = it - m_local2parent.begin();
-        it = m_local2parent.insert(it, parentIndex);
+        if (m_filter->isIncluded(index)) {
+            // Remove first if necessary, to ensure that recipient
+            // never has more entries in its view than requested.
+            size_t newEndIndex = m_local2parent.end() - m_local2parent.begin();
+            if (newEndIndex > index &&
+                !m_filter->isIncluded(newEndIndex)) {
+                const IndividualData *data = m_parent->getContact(m_local2parent.back());
+                SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld to make room for new entry", newEndIndex - 1, m_local2parent.size());
+                m_local2parent.pop_back();
+                m_removedSignal(newEndIndex - 1, *data);
+                // Iterator might have pointed to removed entry, which may have
+                // invalidated it. Get fresh iterator based on index.
+                it = m_local2parent.begin() + index;
+            }
 
-        SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld", index, m_local2parent.size());
-        m_addedSignal(index, data);
+            m_local2parent.insert(it, parentIndex);
+            SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld", index, m_local2parent.size());
+            m_addedSignal(index, data);
+        } else {
+            SE_LOG_DEBUG(NULL, NULL, "filtered view: not added at #%ld/%ld because outside of result range", index, m_local2parent.size());
+        }
     }
 }
 
@@ -593,6 +644,8 @@ void FilteredView::removeIndividual(int parentIndex, const IndividualData &data)
         SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld", index, m_local2parent.size());
         m_local2parent.erase(it);
         m_removedSignal(index, data);
+        // Try adding more contacts from the parent if there is room now.
+        fillView(parentIndex);
     }
 }
 
@@ -613,15 +666,19 @@ void FilteredView::modifyIndividual(int parentIndex, const IndividualData &data)
         } else {
             // Removed.
             SE_LOG_DEBUG(NULL, NULL, "filtered view: removed at #%ld/%ld due to modification", index, m_local2parent.size());
+            int candidate = m_local2parent.back() + 1;
             m_local2parent.erase(it);
             m_removedSignal(index, data);
+            fillView(candidate);
         }
     } else if (matches) {
         // Was not matched before and is matched now => add it.
         size_t index = it - m_local2parent.begin();
-        m_local2parent.insert(it, parentIndex);
-        SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld due to modification", index, m_local2parent.size());
-        m_addedSignal(index, data);
+        if (m_filter->isIncluded(index)) {
+            m_local2parent.insert(it, parentIndex);
+            SE_LOG_DEBUG(NULL, NULL, "filtered view: added at #%ld/%ld due to modification", index, m_local2parent.size());
+            m_addedSignal(index, data);
+        }
     } else {
         // Neither matched before nor now => nothing changed.
     }

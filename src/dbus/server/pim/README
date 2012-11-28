@@ -107,6 +107,21 @@ corresponding digit on a keypad when matching phone numbers.
 In addition, an empty string as sort order picks a simple, ASCII-based
 "last/first" sorting. This is used for testing.
 
+A 'limit' search term with a number as parameter (formatted as string)
+can be added to a 'phone' or 'any-contains' search term to truncate the
+search results after a certain number of contacts. Example:
+  Search([['any-contains', 'Joe'], ['limit', '10']])
+  => return the first 10 Joes.
+
+As with any other search, the resulting view will be updated if
+contact data changes.
+
+The limit must not be changed in a RefineSearch(). A 'limit' term may
+(but doesn't have to) be given. If it is given, its value must match
+the value set when creating the search. This limitation simplifies the
+implementation and its testing. The limitation could be removed if
+there is sufficient demand.
+
 
 Configuration and data handling
 ===============================

@@ -151,11 +151,33 @@ class IndividualDataCompare : public std::binary_function<IndividualData, Indivi
  */
 class IndividualFilter
 {
+    int m_maxResults;
+
  public:
+    IndividualFilter() : m_maxResults(-1) {}
     virtual ~IndividualFilter() {}
+
+    /** Maximum number of results. -1 for unlimited. */
+    int getMaxResults() const { return m_maxResults; }
+    void setMaxResults(int maxResults) { m_maxResults = maxResults; }
+
+    /**
+     * True if within the number of expected results.
+     */
+    bool isIncluded(size_t index) const { return m_maxResults == -1 || index < (size_t)m_maxResults; }
 
     /** true if the contact matches the filter */
     virtual bool matches(const IndividualData &data) const = 0;
+};
+
+/**
+ * A filter which just enforces a maximum number of results,
+ * something that FullView cannot do.
+ */
+class MatchAll : public IndividualFilter
+{
+ public:
+    virtual bool matches(const IndividualData &data) const { return true; }
 };
 
 class IndividualAggregator;
@@ -380,6 +402,9 @@ class FilteredView : public IndividualView
     FilteredView(const boost::shared_ptr<IndividualView> &parent,
                  const boost::shared_ptr<IndividualFilter> &filter);
     void init(const boost::shared_ptr<FilteredView> &self);
+
+    bool isFull();
+    void fillView(int candidate);
 
  public:
     /**
