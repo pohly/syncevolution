@@ -168,6 +168,13 @@ class IndividualFilter
      */
     bool isIncluded(size_t index) const { return m_maxResults == -1 || index < (size_t)m_maxResults; }
 
+    /**
+     * The corresponding EBook query string
+     * (http://developer.gnome.org/libebook/stable/libebook-e-book-query.html#e-book-query-to-string)
+     * for the filter, if there is one. Empty if not.
+     */
+    virtual std::string getEBookFilter() const { return ""; }
+
     /** true if the contact matches the filter */
     virtual bool matches(const IndividualData &data) const = 0;
 };

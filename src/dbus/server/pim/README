@@ -123,6 +123,34 @@ implementation and its testing. The limitation could be removed if
 there is sufficient demand.
 
 
+Phone number lookup
+===================
+
+A "phone" search must return results quickly (<30ms with 10000
+contacts) under all circumstances, including the period of time where
+the unified address book is still getting assembled in memory. To
+achieve this, SyncEvolution searches directly in the active address
+books and presents these results until the ones from the unified
+address book are ready.
+
+A quiescence signal will be sent when:
+1. results from EDS are complete before the ones from the unified
+   address book
+2. results from the unified address book are complete.
+
+The first signal will be skipped and the EDS results discarded if EDS
+turns out to be slower than the unified address book.
+
+Results from different EDS address books are not unified, for the sake
+of simplicity. They get sorted according to the sort order that was
+active when starting the search. Changing the sort order while the
+search runs will only affect the final results from the unified
+address book.
+
+Refining such a search is not supported because refining a phone
+number lookup is not useful.
+
+
 Configuration and data handling
 ===============================
 

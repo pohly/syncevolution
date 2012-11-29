@@ -24,9 +24,13 @@
 #include "locale-factory.h"
 #include "folks.h"
 
+#include <libebook/libebook.h>
+
 #include <phonenumbers/phonenumberutil.h>
 #include <boost/locale.hpp>
 #include <boost/lexical_cast.hpp>
+
+SE_GLIB_TYPE(EBookQuery, e_book_query)
 
 SE_BEGIN_CXX
 
@@ -328,6 +332,18 @@ public:
             }
         }
         return false;
+    }
+
+    virtual std::string getEBookFilter() const
+    {
+        // A suffix match with a limited number of digits is most
+        // likely to find the right contacts.
+        size_t len = std::min((size_t)4, m_tel.size());
+        EBookQueryCXX query(e_book_query_field_test(E_CONTACT_TEL, E_BOOK_QUERY_ENDS_WITH,
+                                                    m_tel.substr(m_tel.size() - len, len).c_str()),
+                            false);
+        PlainGStr filter(e_book_query_to_string(query.get()));
+        return filter.get();
     }
 
 private:

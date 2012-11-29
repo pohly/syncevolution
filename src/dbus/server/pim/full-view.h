@@ -37,6 +37,7 @@ class FullView : public IndividualView
     boost::weak_ptr<FullView> m_self;
     Timeout m_waitForIdle;
     std::set<FolksIndividualCXX> m_pendingModifications;
+    Timeout m_quiescenceDelay;
 
     /**
      * Sorted vector. Sort order is maintained by this class.

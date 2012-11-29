@@ -65,6 +65,8 @@ src_dbus_server_server_cpp_files += \
   src/dbus/server/pim/view.cpp \
   src/dbus/server/pim/full-view.cpp \
   src/dbus/server/pim/filtered-view.cpp \
+  src/dbus/server/pim/edsf-view.cpp \
+  src/dbus/server/pim/merge-view.cpp \
   src/dbus/server/pim/individual-traits.cpp \
   src/dbus/server/pim/folks.cpp \
   src/dbus/server/pim/manager.cpp

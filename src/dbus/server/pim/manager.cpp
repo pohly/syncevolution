@@ -22,6 +22,8 @@
 #include "persona-details.h"
 #include "filtered-view.h"
 #include "full-view.h"
+#include "merge-view.h"
+#include "edsf-view.h"
 #include "../resource.h"
 #include "../client.h"
 #include "../session.h"
@@ -616,10 +618,57 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
 
     boost::shared_ptr<IndividualView> view;
     view = m_folks->getMainView();
+    bool quiescent = view->isQuiescent();
+    std::string ebookFilter;
     if (!filter.empty()) {
         boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
+        ebookFilter = individualFilter->getEBookFilter();
+        if (quiescent) {
+            // Don't search via EDS directly because the unified
+            // address book is ready.
+            ebookFilter.clear();
+        }
         view = FilteredView::create(view, individualFilter);
         view->setName(StringPrintf("filtered view%u", ViewResource::getNextViewNumber()));
+    }
+
+    SE_LOG_DEBUG(NULL, NULL, "preparing %s: EDS search term is '%s', active address books %s",
+                 view->getName(),
+                 ebookFilter.c_str(),
+                 boost::join(m_enabledEBooks, " ").c_str());
+    if (!ebookFilter.empty() && !m_enabledEBooks.empty()) {
+        // Set up direct searching in all active address books.
+        // These searches are done once, so don't bother to deal
+        // with future changes to the active address books or
+        // the sort order.
+        MergeView::Searches searches;
+        searches.reserve(m_enabledEBooks.size());
+        boost::shared_ptr<IndividualCompare> compare =
+            m_sortOrder.empty() ?
+            IndividualCompare::defaultCompare() :
+            m_locale->createCompare(m_sortOrder);
+
+        // TODO: use global registry
+        ESourceRegistryCXX registry;
+        GErrorCXX gerror;
+        SYNCEVO_GLIB_CALL_SYNC(registry, gerror,
+                               e_source_registry_new,
+                               NULL);
+        if (!registry) {
+            gerror.throwError("unable to access databases registry");
+        }
+        BOOST_FOREACH (const std::string &uuid, m_enabledEBooks) {
+            searches.push_back(EDSFView::create(registry,
+                                                uuid,
+                                                ebookFilter));
+            searches.back()->setName(StringPrintf("eds view %s %s", uuid.c_str(), ebookFilter.c_str()));
+        }
+        boost::shared_ptr<MergeView> merge(MergeView::create(view,
+                                                             searches,
+                                                             m_locale,
+                                                             compare));
+        merge->setName(StringPrintf("merge view%u", ViewResource::getNextViewNumber()));
+        view = merge;
     }
 
     boost::shared_ptr<ViewResource> viewResource(ViewResource::create(view,

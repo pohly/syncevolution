@@ -538,7 +538,7 @@ if test $enable_dbus_service = "yes"; then
                 if ! test -r "$srcdir/src/dbus/server/pim/locale-factory-$enable_dbus_pim.cpp"; then
                     AC_MSG_ERROR([invalid value '$enable_dbus_pim' for --enable-dbus-service-pim, $srcdir/src/dbus/server/pim/locale-factory-$enable_dbus_pim.cpp does not exist or is not readable])
                 fi
-                PKG_CHECK_MODULES(FOLKS, [folks])
+                PKG_CHECK_MODULES(FOLKS, [folks folks-eds])
                 AC_DEFINE(ENABLE_DBUS_PIM, 1, [org._01.pim D-Bus API enabled])
                 DBUS_PIM_PLUGIN=$enable_dbus_pim
                 AC_SUBST(DBUS_PIM_PLUGIN)

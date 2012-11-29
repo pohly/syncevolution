@@ -156,6 +156,17 @@ void FullView::quiescenceChanged()
     // once. See https://bugzilla.gnome.org/show_bug.cgi?id=684766
     // "enter and leave quiescence state".
     if (quiescent) {
+        int seconds = atoi(getEnv("SYNCEVOLUTION_PIM_DELAY_FOLKS", "0"));
+        if (seconds > 0) {
+            // Delay the quiescent state change as requested.
+            SE_LOG_DEBUG(NULL, NULL, "delay aggregrator quiescence by %d seconds", seconds);
+            m_quiescenceDelay.runOnce(seconds,
+                                      boost::bind(&FullView::quiescenceChanged,
+                                                  this));
+            unsetenv("SYNCEVOLUTION_PIM_DELAY_FOLKS");
+            return;
+        }
+
         m_isQuiescent = true;
         m_quiescenceSignal();
     }

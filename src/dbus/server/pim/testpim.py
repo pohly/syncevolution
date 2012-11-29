@@ -2775,7 +2775,246 @@ END:VCARD''']):
     # might still be loading the contacts, in which case looking up the
     # contact would fail.
 
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5")
+    def testFilterStartup(self):
+        '''TestContacts.testFilterStartup - phone number lookup while folks still loads'''
+        self.setUpView(search=None)
 
+        # Override default sorting.
+        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
+        self.manager.SetSortOrder("first/last",
+                                  timeout=self.timeout)
+
+        # Insert new contacts.
+        #
+        # The names are chosen so that sorting by first name and sorting by last name needs to
+        # reverse the list.
+        for i, contact in enumerate([u'''BEGIN:VCARD
+VERSION:3.0
+N:Zoo;Abraham
+NICKNAME:Ace
+TEL:1234
+TEL:56/78
+TEL:+1-800-FOOBAR
+TEL:089/788899
+EMAIL:az@example.com
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+N:Yeah;Benjamin
+TEL:+49-89-788899
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+FN:Charly 'Chárleß' Xing
+N:Xing;Charly
+END:VCARD''']):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = codecs.open(item, "w", "utf-8")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+
+        # Now start with a phone number search which must look
+        # directly in EDS because the unified address book is not
+        # ready (delayed via env variable).
+        self.view.search([['phone', '089/788899']])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 0)
+        self.assertEqual(2, len(self.view.contacts))
+        self.view.read(0, 2)
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 2))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+
+        # Wait for final results from folks. The same in this case.
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 1)
+        self.assertEqual(2, len(self.view.contacts))
+        self.view.read(0, 2)
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 2))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+
+        # Nothing changed when folks became active.
+        self.assertEqual([
+                  ('added', 0, 2),
+                  ('quiescent',),
+                  ('quiescent',),
+                  ],
+                         self.view.events)
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5")
+    def testFilterStartupRefine(self):
+        '''TestContacts.testFilterStartupRefine - phone number lookup while folks still loads, with folks finding more contacts'''
+        self.setUpView(search=None)
+
+        # Override default sorting.
+        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
+        self.manager.SetSortOrder("first/last",
+                                  timeout=self.timeout)
+
+        # Insert new contacts.
+        #
+        # The names are chosen so that sorting by first name and sorting by last name needs to
+        # reverse the list.
+        for i, contact in enumerate([u'''BEGIN:VCARD
+VERSION:3.0
+N:Zoo;Abraham
+NICKNAME:Ace
+TEL:1234
+TEL:56/78
+TEL:+1-800-FOOBAR
+TEL:089/788899
+EMAIL:az@example.com
+END:VCARD''',
+
+# Extra space, breaks suffix match in EDS.
+# A more intelligent phone number search in EDS
+# will find this again.
+u'''BEGIN:VCARD
+VERSION:3.0
+N:Yeah;Benjamin
+TEL:+49-89-7888 99
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+FN:Charly 'Chárleß' Xing
+N:Xing;Charly
+END:VCARD''']):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = codecs.open(item, "w", "utf-8")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+
+        # Now start with a phone number search which must look
+        # directly in EDS because the unified address book is not
+        # ready (delayed via env variable).
+        self.view.search([['phone', '089/788899']])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 0)
+        self.assertEqual(1, len(self.view.contacts))
+        self.view.read(0, 1)
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 1))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+
+        # Wait for final results from folks. Also finds Benjamin.
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 1)
+        self.assertEqual(2, len(self.view.contacts))
+        self.view.read(0, 2)
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 2))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+
+        # One contact added by folks.
+        self.assertEqual([
+                  ('added', 0, 1),
+                  ('quiescent',),
+                  ('added', 1, 1),
+                  ('quiescent',),
+                  ],
+                         self.view.events)
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5")
+    def testFilterStartupMany(self):
+        '''TestContacts.testFilterStartupMany - phone number lookup in many address books'''
+        self.setUpView(search=None, peers=['0', '1', '2'])
+
+        # Override default sorting.
+        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
+        self.manager.SetSortOrder("first/last",
+                                  timeout=self.timeout)
+
+        # Insert new contacts.
+        #
+        # The names are chosen so that sorting by first name and sorting by last name needs to
+        # reverse the list.
+        for i, contact in enumerate([u'''BEGIN:VCARD
+VERSION:3.0
+N:Zoo;Abraham
+NICKNAME:Ace
+TEL:1234
+TEL:56/78
+TEL:+1-800-FOOBAR
+TEL:089/788899
+EMAIL:az@example.com
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+N:Yeah;Benjamin
+TEL:+49-89-788899
+END:VCARD''',
+
+u'''BEGIN:VCARD
+VERSION:3.0
+FN:Charly 'Chárleß' Xing
+N:Xing;Charly
+END:VCARD''']):
+             item = os.path.join(self.contacts, 'contact.vcf')
+             output = codecs.open(item, "w", "utf-8")
+             output.write(contact)
+             output.close()
+             logging.printf('inserting contact %d', i)
+             uid = self.uidPrefix + str(i)
+             out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + uid, 'local'])
+
+        # Now start with a phone number search which must look
+        # directly in EDS because the unified address book is not
+        # ready (delayed via env variable).
+        self.view.search([['phone', '089/788899']])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 0)
+        self.assertEqual(2, len(self.view.contacts))
+        self.view.read(0, 2)
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 2))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+
+        # Wait for final results from folks. The same in this case.
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 1)
+        self.assertEqual(2, len(self.view.contacts))
+        self.view.read(0, 2)
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 2))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+
+        # Nothing changed when folks became active.
+        self.assertEqual([
+                  ('added', 0, 2),
+                  ('quiescent',),
+                  ('quiescent',),
+                  ],
+                         self.view.events)
 if __name__ == '__main__':
     xdg = (os.path.join(os.path.abspath('.'), 'temp-testpim', 'config'),
            os.path.join(os.path.abspath('.'), 'temp-testpim', 'local', 'cache'))
