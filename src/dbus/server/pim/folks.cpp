@@ -862,7 +862,7 @@ void IndividualAggregator::doAddContact(const Result<void (const std::string &)>
     SYNCEVO_GLIB_CALL_ASYNC(folks_persona_store_add_persona_from_details,
                             boost::bind(&IndividualAggregator::addContactDone,
                                         this,
-                                        _1, _2,
+                                        _2, _1,
                                         result),
                             m_systemStore,
                             details.get());
@@ -874,7 +874,7 @@ void IndividualAggregator::addContactDone(const GError *gerror,
 {
     try {
         // Handle result of folks_persona_store_add_persona_from_details().
-        if (gerror) {
+        if (!gerror) {
             GErrorCXX::throwError("add contact", gerror);
         }
 
