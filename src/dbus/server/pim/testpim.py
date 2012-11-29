@@ -113,18 +113,17 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           '''True if all contacts in the range have no data.'''
           return 0 == self.countData(start, count)
 
-     # A function decorator for the boiler-plate code would be nice...
-     # Or perhaps the D-Bus API should merge the three different callbacks
-     # into one?
+     def processEvent(self, message, event):
+          logging.log(message)
+          self.events.append(event)
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oias', out_signature='')
      def ContactsModified(self, view, start, ids):
+          count = len(ids)
+          self.processEvent('contacts modified: %s, start %d, ids %s' % (view, start, ids),
+                            ('modified', start, count))
           try:
-               count = len(ids)
-               logging.log('contacts modified: %s, start %d, ids %s' %
-                           (view, start, ids))
-               self.events.append(('modified', start, count))
                self.assertEqual(view, self.viewPath)
                self.assertGreaterEqual(start, 0)
                self.assertGreater(count, 0)
@@ -141,11 +140,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oias', out_signature='')
      def ContactsAdded(self, view, start, ids):
+          count = len(ids)
+          self.processEvent('contacts added: %s, start %d, ids %s' % (view, start, ids),
+                            ('added', start, count))
           try:
-               count = len(ids)
-               logging.log('contacts added: %s, start %d, ids %s' %
-                           (view, start, ids))
-               self.events.append(('added', start, count))
                self.assertEqual(view, self.viewPath)
                self.assertGreaterEqual(start, 0)
                self.assertGreater(count, 0)
@@ -160,11 +158,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oias', out_signature='')
      def ContactsRemoved(self, view, start, ids):
+          count = len(ids)
+          self.processEvent('contacts removed: %s, start %d, ids %s' % (view, start, ids),
+                            ('removed', start, count))
           try:
-               count = len(ids)
-               logging.log('contacts removed: %s, start %d, ids %s' %
-                           (view, start, ids))
-               self.events.append(('removed', start, count))
                self.assertEqual(view, self.viewPath)
                self.assertGreaterEqual(start, 0)
                self.assertGreater(count, 0)
@@ -181,6 +178,8 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                           in_signature='o', out_signature='')
      def Quiescent(self, view):
           self.quiescentCount = self.quiescentCount + 1
+          self.processEvent('quiescent: %s' % view,
+                            ('quiescent',))
 
      def read(self, start, count=1):
           '''Read the specified range of contact data.'''
@@ -285,15 +284,15 @@ XDG root.
         self.assertEqual(addressbooks, self.manager.GetActiveAddressBooks(timeout=self.timeout),
                          sortLists=True)
 
-        # Start view. We don't know the current state, so give it some time to settle.
+        # Start view.
         self.view = ContactsView(self.manager)
-        self.view.search(search)
 
-        # Run until view is empty and five seconds have passed.
-        now = time.time()
-        self.runUntil('empty view',
-                      check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: len(self.view.contacts) == 0 and time.time() - now > 5)
+        # Optional: search and wait for it to be stable.
+        if search != None:
+             self.view.search(search)
+             self.runUntil('empty view',
+                           check=lambda: self.assertEqual([], self.view.errors),
+                           until=lambda: self.view.quiescentCount > 0)
 
         # Clear unknown sequence of events.
         self.view.events = []
@@ -659,7 +658,7 @@ END:VCARD'''
                       until=lambda: len(self.view.contacts) == 1)
 
         # Check for the one expected event.
-        self.assertEqual([('added', 0, 1)], self.view.events)
+        self.assertEqual([('added', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
 
         # Read contact.
@@ -685,7 +684,7 @@ END:VCARD'''
         self.runUntil('view with changed contact',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(0))
-        self.assertEqual([('modified', 0, 1)], self.view.events)
+        self.assertEqual([('modified', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
 
         # Remove contact.
@@ -693,7 +692,7 @@ END:VCARD'''
         self.runUntil('view without contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 0)
-        self.assertEqual([('removed', 0, 1)], self.view.events)
+        self.assertEqual([('removed', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
 
 
@@ -768,7 +767,7 @@ END:VCARD''')
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(2))
-        self.assertEqual([('modified', 2, 1)], self.view.events)
+        self.assertEqual([('modified', 2, 1), ('quiescent',)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(2, 1)
@@ -793,7 +792,7 @@ END:VCARD''')
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(2))
-        self.assertEqual([('modified', 2, 1)], self.view.events)
+        self.assertEqual([('modified', 2, 1), ('quiescent',)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(2, 1)
@@ -817,7 +816,7 @@ END:VCARD''')
         self.runUntil('view with changed contact #1',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(1))
-        self.assertEqual([('modified', 1, 1)], self.view.events)
+        self.assertEqual([('modified', 1, 1), ('quiescent',)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(1, 1)
@@ -841,7 +840,7 @@ END:VCARD''')
         self.runUntil('view with changed contact #0',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(0))
-        self.assertEqual([('modified', 0, 1)], self.view.events)
+        self.assertEqual([('modified', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(0, 1)
@@ -867,7 +866,8 @@ END:VCARD''')
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(0))
         self.assertEqual([('removed', 2, 1),
-                          ('added', 0, 1)], self.view.events)
+                          ('added', 0, 1),
+                          ('quiescent',)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(0, 1)
@@ -893,7 +893,8 @@ END:VCARD''')
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveNoData(2))
         self.assertEqual([('removed', 0, 1),
-                          ('added', 2, 1)], self.view.events)
+                          ('added', 2, 1),
+                          ('quiescent',)], self.view.events)
         self.view.events = []
         logging.log('reading updated contact')
         self.view.read(2, 1)
