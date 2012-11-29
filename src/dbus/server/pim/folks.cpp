@@ -874,7 +874,7 @@ void IndividualAggregator::addContactDone(const GError *gerror,
 {
     try {
         // Handle result of folks_persona_store_add_persona_from_details().
-        if (!gerror) {
+        if (!persona || gerror) {
             GErrorCXX::throwError("add contact", gerror);
         }
 
