@@ -29,10 +29,7 @@
 
 #if defined(HAVE_EDS)
 # if defined(USE_EDS_CLIENT)
-typedef SyncEvo::GListCXX<ESource, GList, SyncEvo::GObjectDestructor> ESourceListCXX;
-SE_GOBJECT_TYPE(ESourceRegistry)
-SE_GOBJECT_TYPE(ESource)
-SE_GOBJECT_TYPE(EClient)
+#  include <syncevo/EDSClient.h>
 # else
 SE_GOBJECT_TYPE(ESourceList)
 #endif
