@@ -463,6 +463,12 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
     /** free list */
     ~GListCXX() { clear(); }
 
+    /** free old content, take owership of new one */
+    void reset(L *list = NULL) {
+        clear();
+        m_list = list;
+    }
+
     bool empty() { return m_list == NULL; }
 
     /** clear error if any is set */
