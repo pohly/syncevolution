@@ -20,6 +20,8 @@
 #include "manager.h"
 #include "individual-traits.h"
 #include "persona-details.h"
+#include "filtered-view.h"
+#include "full-view.h"
 #include "../resource.h"
 #include "../client.h"
 #include "../session.h"
@@ -132,10 +134,10 @@ void Manager::initSorting(const std::string &order)
     // Empty string passes NULL pointer to setCompare(),
     // which chooses the builtin sorting in folks.cpp,
     // independent of the locale plugin.
-    boost::shared_ptr<IndividualCompare> compare;
-    if (!order.empty()) {
-        compare = m_locale->createCompare(order);
-    }
+    boost::shared_ptr<IndividualCompare> compare =
+        order.empty() ?
+        IndividualCompare::defaultCompare() :
+        m_locale->createCompare(order);
     m_folks->setCompare(compare);
 }
 
@@ -530,6 +532,9 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     }
 
 public:
+    /** returns the integer number that will be used for the next view resource */
+    static unsigned getNextViewNumber() { return m_counter; }
+
     static boost::shared_ptr<ViewResource> create(const boost::shared_ptr<IndividualView> &view,
                                                   const boost::shared_ptr<LocaleFactory> &locale,
                                                   const boost::shared_ptr<Client> &owner,
@@ -614,6 +619,7 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
     if (!filter.empty()) {
         boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
         view = FilteredView::create(view, individualFilter);
+        view->setName(StringPrintf("filtered view%u", ViewResource::getNextViewNumber()));
     }
 
     boost::shared_ptr<ViewResource> viewResource(ViewResource::create(view,
