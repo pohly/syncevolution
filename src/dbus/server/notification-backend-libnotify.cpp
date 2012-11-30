@@ -96,10 +96,6 @@ void NotificationBackendLibnotify::notifyAction(
 
 bool NotificationBackendLibnotify::init()
 {
-    bindtextdomain (GETTEXT_PACKAGE, SYNCEVOLUTION_LOCALEDIR);
-    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-    textdomain (GETTEXT_PACKAGE);
-
 #ifdef NOTIFY_COMPATIBILITY
     void *dlhandle = NULL;
     int i;

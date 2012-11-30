@@ -638,6 +638,16 @@ class SyncEvolutionTest(Action):
                 "SYNCEVOLUTION_BACKEND_DIR=%s " \
                 % ( datadir, templatedir, confdir, backenddir )
 
+            # Translations have no fallback, they must be installed. Leave unset
+            # if not found.
+            localedir = os.path.join(self.build.installdir, "usr/share/locale")
+            print localedir
+            if os.access(localedir, os.F_OK):
+                installenv = installenv + \
+                    ("SYNCEVOLUTION_LOCALE_DIR=%s " % localedir)
+            else:
+                print 'locale dir not found'
+
             cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
             context.runCommand(cmd)
 
@@ -647,7 +657,7 @@ class SyncEvolutionTest(Action):
                       "CLIENT_TEST_SOURCES=%(sources)s " \
                       "SYNC_EVOLUTION_EVO_CALENDAR_DELAY=1 " \
                       "CLIENT_TEST_ALARM=%(alarm)d " \
-                      "%(env)s %(installenv)s" \
+                      "%(env)s %(installenv)s " \
                       "CLIENT_TEST_LOG=%(log)s " \
                       "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
                       "%(runner)s " \

@@ -1320,6 +1320,8 @@ static const ne_propname getetag[] = {
 
 void WebDAVSource::listAllItems(RevisionMap_t &revisions)
 {
+    contactServer();
+
     if (!getContentMixed()) {
         // Can use simple PROPFIND because we do not have to
         // double-check that each item really contains the right data.
