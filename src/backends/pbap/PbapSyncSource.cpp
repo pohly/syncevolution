@@ -255,6 +255,8 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     // get filter list so that we can continue validating our format specifier
     std::vector<std::string> filterFields =
         GDBusCXX::DBusClientCall1< std::vector<std::string> >(*m_session, "ListFilterFields")();
+    SE_LOG_DEBUG(NULL, NULL, "supported PBAP filter fields:\n    %s",
+                 boost::join(filterFields, "\n    ").c_str());
 
     std::list<std::string> filter;
     if (negated) {
