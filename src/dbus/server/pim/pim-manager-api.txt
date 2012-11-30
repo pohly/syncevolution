@@ -34,9 +34,10 @@ that supports CardDAV or a phone with SyncML support.
 
 Peers are identified by a unique string ID. That ID needs to be
 assigned by the user of this API. The string must not be empty and may
-only contain characters a-z, 0-9, hyphen and colon. No other
-assumptions about its content are made. For example, the phone's
-Bluetooth MAC address could be used.
+only contain characters a-z, 0-9 and hyphen. No other assumptions
+about its content are made. For example, the phone's Bluetooth MAC
+address could be used after removing or replacing the colon and using
+lower case hex characters.
 
 For an entity that has more than one address book, multiple peers must
 be configured.

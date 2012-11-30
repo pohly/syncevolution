@@ -33,6 +33,8 @@
 #include <boost/scoped_ptr.hpp>
 #include <deque>
 
+#include <pcrecpp.h>
+
 SE_BEGIN_CXX
 
 static const char * const MANAGER_SERVICE = "org._01.pim.contacts";
@@ -776,9 +778,18 @@ void Manager::initDatabases()
     m_folks->setDatabases(m_enabledEBooks);
 }
 
+static void checkPeerUID(const std::string &uid)
+{
+    const pcrecpp::RE re("[-a-z0-9]*");
+    if (!re.FullMatch(uid)) {
+        SE_THROW(StringPrintf("invalid peer uid: %s", uid.c_str()));
+    }
+}
+
 void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                       const std::string &uid, const StringMap &properties)
 {
+    checkPeerUID(uid);
     runInSession(StringPrintf("@%s%s",
                               MANAGER_PREFIX,
                               uid.c_str()),
@@ -959,6 +970,7 @@ Manager::PeersMap Manager::getAllPeers()
 void Manager::removePeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                          const std::string &uid)
 {
+    checkPeerUID(uid);
     runInSession(StringPrintf("@%s%s",
                               MANAGER_PREFIX,
                               uid.c_str()),
@@ -1023,6 +1035,7 @@ void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
 void Manager::syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                        const std::string &uid)
 {
+    checkPeerUID(uid);
     runInSession(StringPrintf("%s@%s%s",
                               MANAGER_LOCAL_CONFIG,
                               MANAGER_PREFIX,
@@ -1060,6 +1073,8 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
 void Manager::stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
                        const std::string &uid)
 {
+    checkPeerUID(uid);
+
     // Fully qualified peer config name. Only used for sync sessions
     // and thus good enough to identify them.
     std::string syncConfigName = StringPrintf("%s@%s%s",
