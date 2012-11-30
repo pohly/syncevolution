@@ -3015,6 +3015,71 @@ END:VCARD''']):
                   ('quiescent',),
                   ],
                          self.view.events)
+
+    @timeout(60)
+    def testDeadAgent(self):
+        '''TestContacts.testDeadAgent - an error from the agent kills the view'''
+        self.setUpView(search=None, peers=[], withSystemAddressBook=True)
+
+        # Insert new contact.
+        #
+        # The names are chosen so that sorting by first name and sorting by last name needs to
+        # reverse the list.
+        for i, contact in enumerate([u'''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+END:VCARD''',
+]):
+             item = os.path.join(self.contacts, 'contact.vcf')
+             output = codecs.open(item, "w", "utf-8")
+             output.write(contact)
+             output.close()
+             logging.printf('inserting contact %d', i)
+
+        out, err, returncode = self.runCmdline(['--import', self.contacts, 'backend=evolution-contacts'])
+
+        # Plug into "ContactsAdded" method so that it throws an error.
+        original = self.view.processEvent
+        def intercept(message, event):
+             original(message, event)
+             if event[0] == 'added':
+                  raise Exception('fake error')
+        self.view.processEvent = intercept
+        self.view.search([])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 0)
+        self.assertEqual([('added', 0, 1),
+                          ('quiescent',)],
+                         self.view.events)
+
+        # Expect an error, view should have been closed already.
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     "org.freedesktop.DBus.Error.UnknownMethod: No such interface `org._01.pim.contacts.ViewControl' on object at path .*"):
+             self.view.close()
+
+    @timeout(60)
+    def testQuiescentOptional(self):
+        '''TestContacts.testQuiescentOptional - the Quiescent() method is allowed to fail'''
+        self.setUpView(search=None, peers=[], withSystemAddressBook=True)
+
+        # Plug into "Quiescent" method so that it throws an error.
+        original = self.view.processEvent
+        def intercept(message, event):
+             original(message, event)
+             if event[0] == 'quiescent':
+                  raise Exception('fake error')
+        self.view.processEvent = intercept
+        self.view.search([])
+        self.runUntil('phone results',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.quiescentCount > 0)
+        self.assertEqual([('quiescent',)],
+                         self.view.events)
+        self.view.close()
+
+
 if __name__ == '__main__':
     xdg = (os.path.join(os.path.abspath('.'), 'temp-testpim', 'config'),
            os.path.join(os.path.abspath('.'), 'temp-testpim', 'local', 'cache'))

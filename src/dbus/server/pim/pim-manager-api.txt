@@ -447,3 +447,21 @@ Methods:
              Some contacts were removed from the view.
              The contact which previous had index #start + count
              (if there was one) now has index #start, etc.
+
+        void Quiescent(object view)
+
+             The current content of the view is complete. No further
+             updates are expected until something changes again
+             (underlying data, ordering, active address books,
+             filter).
+
+             Changing data (directly or via syncing) can trigger
+             multiple "Quiescent" signals, depending on when these
+             changes are reported by the underlying storage.
+
+             Changing multiple settings will trigger one "Quiescent"
+             per change.
+
+             Implementing the Quiescent() method in a ViewAgent
+             is optional.
+

@@ -259,7 +259,11 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                    ids,
                    boost::bind(ViewResource::sendDone,
                                m_self,
-                               _1));
+                               _1,
+                               &call == &m_contactsModified ? "ContactsModified()" :
+                               &call == &m_contactsAdded ? "ContactsAdded()" :
+                               &call == &m_contactsRemoved ? "ContactsRemoved()" : "???",
+                               true));
     }
 
     /**
@@ -461,7 +465,9 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         m_quiescent.start(getObject(),
                           boost::bind(ViewResource::sendDone,
                                       m_self,
-                                      _1));
+                                      _1,
+                                      "Quiescent()",
+                                      false));
     }
 
     /**
@@ -470,11 +476,13 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
      * or client.
      */
     static void sendDone(const boost::weak_ptr<ViewResource> &self,
-                         const std::string &error)
+                         const std::string &error,
+                         const char *method,
+                         bool required)
     {
-        if (!error.empty()) {
+        if (required && !error.empty()) {
             // remove view because it is no longer needed
-            SE_LOG_DEBUG(NULL, NULL, "ViewAgent method call failed, deleting view: %s", error.c_str());
+            SE_LOG_DEBUG(NULL, NULL, "ViewAgent %s method call failed, deleting view: %s", method, error.c_str());
             boost::shared_ptr<ViewResource> r = self.lock();
             if (r) {
                 r->close();
