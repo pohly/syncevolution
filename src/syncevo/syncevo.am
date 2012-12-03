@@ -20,6 +20,7 @@ src_syncevo_sources = \
   src/syncevo/GeeSupport.h \
   src/syncevo/GValueSupport.h \
   src/syncevo/EDSClient.h \
+  src/syncevo/EDSClient.cpp \
   \
   src/syncevo/ConfigTree.h \
   src/syncevo/ConfigFilter.h \
