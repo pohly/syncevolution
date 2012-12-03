@@ -33,11 +33,7 @@ void EvolutionSyncSource::getDatabasesFromRegistry(SyncSource::Databases &result
                                                    const char *extension,
                                                    ESource *(*refDef)(ESourceRegistry *))
 {
-    GErrorCXX gerror;
-    ESourceRegistryCXX registry = getSourceRegistry();
-    if (!registry) {
-        throwError("unable to access databases registry", gerror);
-    }
+    ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceListCXX sources(e_source_registry_list_sources(registry, extension));
     ESourceCXX def(refDef ? refDef(registry) : NULL,
                    false);
@@ -46,34 +42,6 @@ void EvolutionSyncSource::getDatabasesFromRegistry(SyncSource::Databases &result
                                   e_source_get_uid(source),
                                   e_source_equal(def, source)));
     }
-}
-
-ESourceRegistryCXX EvolutionSyncSource::getSourceRegistry()
-{
-    // Keep the instance forever. This is a bit more efficient. But
-    // primarily it avoids a file and memory descriptor leak in EDS
-    // 3.5.x when the registry is created and freed over and over
-    // again.
-    static ESourceRegistryCXX registry;
-    if (!registry) {
-        GErrorCXX gerror;
-        // A workaround for
-        // https://bugzilla.gnome.org/show_bug.cgi?id=683519:
-        // e_source_registry_new_sync() hangs randomly in 3.5 because
-        // of a glib bug and it is unclear whether the workaround
-        // suggested in the bug will be added to it.
-        //
-        // e_source_registry_new() doesn't have the problem and
-        // (with the helper macro) isn't harder to use either.
-        SYNCEVO_GLIB_CALL_SYNC(registry, gerror,
-                               e_source_registry_new,
-                               NULL);
-        // registry = ESourceRegistryCXX::steal(e_source_registry_new_sync(NULL, gerror));
-        if (!registry) {
-            throwError("unable to access databases registry", gerror);
-        }
-    }
-    return registry;
 }
 
 static void handleErrorCB(EClient */*client*/, const gchar *error_msg, gpointer user_data)
@@ -88,10 +56,7 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
 {
     EClientCXX client;
     GErrorCXX gerror;
-    ESourceRegistryCXX registry = getSourceRegistry();
-    if (!registry) {
-        throwError("unable to access databases registry", gerror);
-    }
+    ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceListCXX sources(e_source_registry_list_sources(registry, extension));
     string id = getDatabaseID();
     ESource *source = findSource(sources, id);
@@ -171,7 +136,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     ESourceBackend *backend = static_cast<ESourceBackend *>(e_source_get_extension(source, sourceExtension()));
     e_source_backend_set_backend_name(backend, "local");
 
-    ESourceRegistryCXX registry = getSourceRegistry();
+    ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceListCXX sources;
     sources.push_back(source.ref()); // ESourceListCXX unrefs sources it points to
     if (!e_source_registry_create_sources_sync(registry,
@@ -191,7 +156,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
 
 void EvolutionSyncSource::deleteDatabase(const std::string &uri)
 {
-    ESourceRegistryCXX registry = getSourceRegistry();
+    ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceCXX source(e_source_registry_ref_source(registry, uri.c_str()), false);
     if (!source) {
         throwError(StringPrintf("EDS database with URI '%s' cannot be deleted, does not exist",

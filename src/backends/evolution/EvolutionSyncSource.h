@@ -72,7 +72,6 @@ class EvolutionSyncSource : public TrackingSyncSource
     EClientCXX openESource(const char *extension,
                            ESource *(*refBuiltin)(ESourceRegistry *),
                            const boost::function<EClient *(ESource *, GError **gerror)> &newClient);
-    ESourceRegistryCXX getSourceRegistry();
 
     // Implementation of SyncSource calls which only works when using EDS Client API
     // and EDS > 3.4. Older EDS has no way of creating sources easily (or at all).
