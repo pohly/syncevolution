@@ -33,6 +33,7 @@
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/LogSyslog.h>
+#include <syncevo/GLibSupport.h>
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
@@ -79,26 +80,25 @@ int main(int argc, char **argv, char **envp)
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
     textdomain(GETTEXT_PACKAGE);
 
-    int duration = 600;
-    int opt = 1;
-    while(opt < argc) {
-        if(argv[opt][0] != '-') {
-            break;
-        }
-        if (boost::iequals(argv[opt], "--duration") ||
-            boost::iequals(argv[opt], "-d")) {
-            opt++;
-            if(!parseDuration(duration, opt== argc ? NULL : argv[opt])) {
-                std::cout << argv[opt-1] << ": unknown parameter value or not set" << std::endl;
-                return false;
-            }
-        } else {
-            std::cout << argv[opt] << ": unknown parameter" << std::endl;
-            return false;
-        }
-        opt++;
-    }
     try {
+        gchar *durationString = NULL;
+        int duration = 600;
+        static GOptionEntry entries[] = {
+            { "duration", 'd', 0, G_OPTION_ARG_STRING, &durationString, "Shut down automatically when idle for this duration", "seconds/'unlimited'" },
+            { NULL }
+        };
+        GErrorCXX gerror;
+        static GOptionContext *context = g_option_context_new("- SyncEvolution D-Bus Server");
+        g_option_context_add_main_entries(context, entries, GETTEXT_PACKAGE);
+        bool success = g_option_context_parse(context, &argc, &argv, gerror);
+        PlainGStr durationOwner(durationString);
+        if (!success) {
+            gerror.throwError("parsing command line options");
+        }
+        if (durationString && !parseDuration(duration, durationString)) {
+            SE_THROW(StringPrintf("invalid parameter value '%s' for --duration/-d: must be positive number of seconds or 'unlimited'", durationString));
+        }
+
         // Temporarily set G_DBUS_DEBUG. Hopefully GIO will read and
         // remember it, because we don't want to keep it set
         // permanently, lest it gets passed on to other processes.
