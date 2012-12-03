@@ -79,6 +79,11 @@ class Logger
      */
     typedef enum {
         /**
+         * no error messages printed
+         */
+        NONE = -1,
+
+        /**
          * only error messages printed
          */
         ERROR,

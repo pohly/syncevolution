@@ -83,8 +83,18 @@ int main(int argc, char **argv, char **envp)
     try {
         gchar *durationString = NULL;
         int duration = 600;
+        int logLevel = 1;
+        gboolean stdoutEnabled = false;
+        gboolean syslogEnabled = true;
         static GOptionEntry entries[] = {
             { "duration", 'd', 0, G_OPTION_ARG_STRING, &durationString, "Shut down automatically when idle for this duration", "seconds/'unlimited'" },
+            { "verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevel,
+              "Choose amount of output, 0 = no output, 1 = errors, 2 = info, 3 = debug; default is 1.",
+              "level" },
+            { "stdout", 'o', 0, G_OPTION_ARG_NONE, &stdoutEnabled,
+              "Enable printing to stdout (result of operations) and stderr (errors/info/debug).",
+              NULL },
+            { "no-syslog", 's', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &syslogEnabled, "Disable printing to syslog.", NULL },
             { NULL }
         };
         GErrorCXX gerror;
@@ -97,6 +107,23 @@ int main(int argc, char **argv, char **envp)
         }
         if (durationString && !parseDuration(duration, durationString)) {
             SE_THROW(StringPrintf("invalid parameter value '%s' for --duration/-d: must be positive number of seconds or 'unlimited'", durationString));
+        }
+        Logger::Level level;
+        switch (logLevel) {
+        case 0:
+            level = Logger::NONE;
+            break;
+        case 1:
+            level = Logger::ERROR;
+            break;
+        case 2:
+            level = Logger::INFO;
+            break;
+        case 3:
+            level = Logger::DEBUG;
+            break;
+        default:
+            SE_THROW(StringPrintf("invalid parameter value %d for --debug: must be one of 0, 1, 2 or 3", logLevel));
         }
 
         // Temporarily set G_DBUS_DEBUG. Hopefully GIO will read and
@@ -114,21 +141,14 @@ int main(int argc, char **argv, char **envp)
         setvbuf(stderr, NULL, _IONBF, 0);
         setvbuf(stdout, NULL, _IONBF, 0);
 
-        const char *debugVar(getenv(debugEnv));
-        const bool debugEnabled(debugVar && *debugVar);
-
-        // TODO: redirect output *and* log it via syslog?!
-        boost::shared_ptr<LoggerBase> logger;
-        if (!gdbus) {
-            logger.reset((true ||  debugEnabled) ?
-                         static_cast<LoggerBase *>(new LogRedirect(true)) :
-                         static_cast<LoggerBase *>(new LoggerSyslog(execName)));
+        // Redirect output and optionally log to syslog.
+        LogRedirect redirect(true);
+        redirect.setLevel(stdoutEnabled ? level : Logger::NONE);
+        std::auto_ptr<LoggerBase> syslogger;
+        if (syslogEnabled && level > Logger::NONE) {
+            syslogger.reset(new LoggerSyslog(execName));
+            syslogger->setLevel(level);
         }
-
-        // make daemon less chatty - long term this should be a command line option
-        LoggerBase::instance().setLevel(debugEnabled ?
-                                        LoggerBase::DEBUG :
-                                        LoggerBase::INFO);
 
         // syncevo-dbus-server should hardly ever produce output that
         // is relevant for end users, so include the somewhat cryptic

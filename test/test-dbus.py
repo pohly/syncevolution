@@ -57,7 +57,7 @@ except ImportError:
 DBusGMainLoop(set_as_default=True)
 
 debugger = os.environ.get("TEST_DBUS_GDB", None) and "gdb" or ""
-server = ["syncevo-dbus-server"]
+server = "syncevo-dbus-server --no-syslog --stdout --verbosity=3".split()
 monitor = ["dbus-monitor"]
 # primarily for XDG files, but also other temporary files
 xdg_root = "temp-test-dbus"
@@ -506,7 +506,7 @@ class DBusUtil(Timeout):
                 gdbinit = ['-x', os.path.join(os.environ.get("HOME"), ".gdbinit")]
             else:
                 gdbinit = []
-            DBusUtil.pserver = subprocess.Popen([debugger] + gdbinit + server,
+            DBusUtil.pserver = subprocess.Popen([debugger] + gdbinit + ['--args'] + server,
                                                 env=env)
 
             while not bus.name_has_owner('org.syncevolution'):
@@ -1422,7 +1422,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
 
     def testSingleton(self):
         """TestDBusServerTerm.testSingleton - a second instance of syncevo-dbus-server must terminate right away"""
-        dbus = subprocess.Popen([ 'syncevo-dbus-server' ],
+        dbus = subprocess.Popen('syncevo-dbus-server --no-syslog --stdout'.split(),
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
         (out, err) = dbus.communicate()
