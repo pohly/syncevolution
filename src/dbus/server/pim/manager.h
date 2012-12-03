@@ -28,6 +28,7 @@
 #include "folks.h"
 #include "locale-factory.h"
 #include "../server.h"
+#include <syncevo/EDSClient.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -72,10 +73,24 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.GetSortOrder() */
     std::string getSortOrder() { return m_sortOrder; }
     /** Manager.Search() */
-    GDBusCXX::DBusObject_t search(const GDBusCXX::Caller_t &ID,
-                                  const boost::shared_ptr<GDBusCXX::Watch> &watch,
-                                  const LocaleFactory::Filter_t &filter,
-                                  const GDBusCXX::DBusObject_t &agentPath);
+    void search(const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
+                const GDBusCXX::Caller_t &ID,
+                const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                const LocaleFactory::Filter_t &filter,
+                const GDBusCXX::DBusObject_t &agentPath);
+    void searchWithRegistry(const ESourceRegistryCXX &registry,
+                            const GError *gerror,
+                            const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
+                            const GDBusCXX::Caller_t &ID,
+                            const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                            const LocaleFactory::Filter_t &filter,
+                            const GDBusCXX::DBusObject_t &agentPath) throw();
+    void doSearch(const ESourceRegistryCXX &registry,
+                  const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
+                  const GDBusCXX::Caller_t &ID,
+                  const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                  const LocaleFactory::Filter_t &filter,
+                  const GDBusCXX::DBusObject_t &agentPath);
 
     /** Manager.GetActiveAddressBooks() */
     void getActiveAddressBooks(std::vector<std::string> &dbIDs);

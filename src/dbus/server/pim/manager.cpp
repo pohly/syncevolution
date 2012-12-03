@@ -29,6 +29,7 @@
 #include "../session.h"
 
 #include <syncevo/IniConfigNode.h>
+#include <syncevo/BoostHelper.h>
 
 #include <boost/scoped_ptr.hpp>
 #include <deque>
@@ -616,13 +617,60 @@ public:
 };
 unsigned int ViewResource::m_counter;
 
-GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
-                                       const boost::shared_ptr<GDBusCXX::Watch> &watch,
-                                       const LocaleFactory::Filter_t &filter,
-                                       const GDBusCXX::DBusObject_t &agentPath)
+void Manager::search(const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
+                     const GDBusCXX::Caller_t &ID,
+                     const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                     const LocaleFactory::Filter_t &filter,
+                     const GDBusCXX::DBusObject_t &agentPath)
 {
+    // Start folks in parallel with asking for an ESourceRegistry.
     start();
 
+    // We don't know for sure whether we'll need the ESourceRegistry.
+    // Ask for it, just to be sure. If we need to hurry because we are
+    // doing a caller ID lookup during startup, then we'll need it.
+    EDSRegistryLoader::getESourceRegistryAsync(boost::bind(&Manager::searchWithRegistry,
+                                                           m_self,
+                                                           _1,
+                                                           _2,
+                                                           result,
+                                                           ID,
+                                                           watch,
+                                                           filter,
+                                                           agentPath));
+}
+
+void Manager::searchWithRegistry(const ESourceRegistryCXX &registry,
+                                 const GError *gerror,
+                                 const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
+                                 const GDBusCXX::Caller_t &ID,
+                                 const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                                 const LocaleFactory::Filter_t &filter,
+                                 const GDBusCXX::DBusObject_t &agentPath) throw()
+{
+    try {
+        if (!registry) {
+            GErrorCXX::throwError("create ESourceRegistry", gerror);
+        }
+        doSearch(registry,
+                 result,
+                 ID,
+                 watch,
+                 filter,
+                 agentPath);
+    } catch (...) {
+        // Tell caller about specific error.
+        dbusErrorCallback(result);
+    }
+}
+
+void Manager::doSearch(const ESourceRegistryCXX &registry,
+                       const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
+                       const GDBusCXX::Caller_t &ID,
+                       const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                       const LocaleFactory::Filter_t &filter,
+                       const GDBusCXX::DBusObject_t &agentPath)
+{
     // Create and track view which is owned by the caller.
     boost::shared_ptr<Client> client = m_server->addClient(ID, watch);
 
@@ -658,15 +706,6 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
             IndividualCompare::defaultCompare() :
             m_locale->createCompare(m_sortOrder);
 
-        // TODO: use global registry
-        ESourceRegistryCXX registry;
-        GErrorCXX gerror;
-        SYNCEVO_GLIB_CALL_SYNC(registry, gerror,
-                               e_source_registry_new,
-                               NULL);
-        if (!registry) {
-            gerror.throwError("unable to access databases registry");
-        }
         BOOST_FOREACH (const std::string &uuid, m_enabledEBooks) {
             searches.push_back(EDSFView::create(registry,
                                                 uuid,
@@ -690,7 +729,7 @@ GDBusCXX::DBusObject_t Manager::search(const GDBusCXX::Caller_t &ID,
     client->attach(boost::shared_ptr<Resource>(viewResource));
 
     // created local resource
-    return viewResource->getPath();
+    result->done(viewResource->getPath());
 }
 
 void Manager::runInSession(const std::string &config,
