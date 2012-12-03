@@ -32,6 +32,7 @@
 #include <syncevo/BoostHelper.h>
 
 #include <boost/scoped_ptr.hpp>
+#include <boost/tokenizer.hpp>
 #include <deque>
 
 #include <pcrecpp.h>
@@ -47,6 +48,7 @@ static const char * const AGENT_IFACE = "org._01.pim.contacts.ViewAgent";
 static const char * const CONTROL_IFACE = "org._01.pim.contacts.ViewControl";
 
 static const char * const MANAGER_CONFIG_SORT_PROPERTY = "sort";
+static const char * const MANAGER_CONFIG_ACTIVE_ADDRESS_BOOKS_PROPERTY = "active";
 
 /**
  * Prefix for peer databases ("peer-<uid>")
@@ -91,7 +93,7 @@ Manager::~Manager()
 
 void Manager::init()
 {
-    // Restore sort order.
+    // Restore sort order and active databases.
     m_configNode.reset(new IniFileConfigNode(SubstEnvironment("${XDG_CONFIG_HOME}/syncevolution"),
                                              "pim-manager.ini",
                                              false));
@@ -99,8 +101,18 @@ void Manager::init()
     m_sortOrder = order.wasSet() ?
         order :
         "last/first";
+    InitStateString active = m_configNode->readProperty(MANAGER_CONFIG_ACTIVE_ADDRESS_BOOKS_PROPERTY);
+    m_enabledEBooks.clear();
+    typedef boost::split_iterator<string::iterator> string_split_iterator;
+    BOOST_FOREACH(const std::string &entry,
+                  boost::tokenizer< boost::char_separator<char> >(active, boost::char_separator<char>(", \t"))) {
+        if (!entry.empty()) {
+            m_enabledEBooks.insert(entry);
+        }
+    }
     initFolks();
     initSorting(m_sortOrder);
+    initDatabases();
 
     add(this, &Manager::start, "Start");
     add(this, &Manager::stop, "Stop");
@@ -810,6 +822,9 @@ void Manager::setActiveAddressBooks(const std::vector<std::string> &dbIDs)
     // Swap and set in aggregator.
     std::swap(uuids, m_enabledEBooks);
     initDatabases();
+    m_configNode->writeProperty(MANAGER_CONFIG_ACTIVE_ADDRESS_BOOKS_PROPERTY,
+                                InitStateString(boost::join(m_enabledEBooks, " "), true));
+    m_configNode->flush();
 }
 
 void Manager::initDatabases()
@@ -1030,6 +1045,9 @@ void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
     // doing so doesn't hurt.
     m_enabledEBooks.erase(localDatabaseName);
     initDatabases();
+    m_configNode->writeProperty(MANAGER_CONFIG_SORT_PROPERTY,
+                                InitStateString(boost::join(m_enabledEBooks, " "), true));
+    m_configNode->flush();
 
     // Access config via context (includes sync and target config).
     boost::shared_ptr<SyncConfig> config(new SyncConfig(context));

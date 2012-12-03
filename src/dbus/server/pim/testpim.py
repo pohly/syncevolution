@@ -1298,12 +1298,28 @@ END:VCARD'''
                          sortLists=True)
 
     @timeout(240)
-    @property("snapshot", "simple-sort")
+    @property("snapshot", "db-active")
     def testActive(self):
         '''TestContacts.testActive - reconfigure active address books several times'''
+
+        self.assertEqual(['', 'peer-test-dbus-a', 'peer-test-dbus-c'],
+                         self.manager.GetActiveAddressBooks(timeout=self.timeout),
+                         sortLists=True)
+
         peers = ['a', 'b', 'c']
         self.setUpView(peers=peers, withSystemAddressBook=True)
         active = [''] + peers
+
+        # Check that active databases were adapted and stored permanently.
+        self.assertEqual(['', 'peer-test-dbus-a', 'peer-test-dbus-b', 'peer-test-dbus-c'],
+                         self.manager.GetActiveAddressBooks(timeout=self.timeout),
+                         sortLists=True)
+        # Order mirrors the one of SetActiveAddressBooks() in setUpView(),
+        # assuming that the PIM Manager preserves that order (not really guaranteed
+        # by the API, but is how it is implemented).
+        self.assertIn("active = pim-manager-test-dbus-a pim-manager-test-dbus-b pim-manager-test-dbus-c system-address-book\n",
+                      open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
+                           "r").readlines())
 
         contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 100))
         for peer in active:

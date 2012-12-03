@@ -3,6 +3,7 @@ EXTRA_DIST += \
   src/dbus/server/pim/examples/search.py \
   src/dbus/server/pim/examples/sync.py \
   src/dbus/server/pim/testpim.py \
+  src/dbus/server/pim/test-dbus/db-active/config/syncevolution/pim-manager.ini \
   src/dbus/server/pim/test-dbus/simple-sort/config/syncevolution/pim-manager.ini \
   src/dbus/server/pim/test-dbus/first-last-sort/config/syncevolution/pim-manager.ini
 
