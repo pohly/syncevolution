@@ -62,6 +62,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void initDatabases();
     void initSorting(const std::string &order);
 
+ public:
     /** Manager.Start() */
     void start();
     /** Manager.Stop() */
@@ -78,6 +79,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
                 const boost::shared_ptr<GDBusCXX::Watch> &watch,
                 const LocaleFactory::Filter_t &filter,
                 const GDBusCXX::DBusObject_t &agentPath);
+ private:
     void searchWithRegistry(const ESourceRegistryCXX &registry,
                             const GError *gerror,
                             const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
@@ -92,6 +94,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
                   const LocaleFactory::Filter_t &filter,
                   const GDBusCXX::DBusObject_t &agentPath);
 
+ public:
     /** Manager.GetActiveAddressBooks() */
     void getActiveAddressBooks(std::vector<std::string> &dbIDs);
 
@@ -101,24 +104,31 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.SetPeer() */
     void setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                  const std::string &uid, const StringMap &properties);
+ private:
     void doSetPeer(const boost::shared_ptr<Session> &session,
                    const boost::shared_ptr<GDBusCXX::Result0> &result,
                    const std::string &uid, const StringMap &properties);
 
+ public:
     /** Manager.RemovePeer() */
     void removePeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                     const std::string &uid);
+
+ private:
     void doRemovePeer(const boost::shared_ptr<Session> &session,
                       const boost::shared_ptr<GDBusCXX::Result0> &result,
                       const std::string &uid);
 
+ public:
     /** Manager.SyncPeer() */
     void syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                   const std::string &uid);
+ private:
     void doSyncPeer(const boost::shared_ptr<Session> &session,
                     const boost::shared_ptr<GDBusCXX::Result0> &result,
                     const std::string &uid);
 
+ public:
     /** Manager.StopSync() */
     void stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
                   const std::string &uid);
@@ -141,6 +151,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
                        const std::string &addressbook,
                        const std::string &localID);
 
+ private:
     /**
      * Starts a session for the given config and with the
      * given flags, then when it is active, invokes the callback.
