@@ -34,12 +34,7 @@ SE_BEGIN_CXX
  */
 class LoggerSyslog : public LoggerBase
 {
-    /**
-     * Set before writing the first message if log level is debugging,
-     * together with printing a message that gives the local time.
-     */
-    Timespec m_startTime;
-    const std::string m_processName;
+    LoggerBase &m_parentLogger;
 
 public:
     /**

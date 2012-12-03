@@ -28,10 +28,10 @@
 using namespace std;
 SE_BEGIN_CXX
 
-LoggerSyslog::LoggerSyslog(const std::string &processName)
-  : m_processName(processName)
+LoggerSyslog::LoggerSyslog(const std::string &processName) :
+    m_parentLogger(LoggerBase::instance())
 {
-    openlog(m_processName.c_str(), LOG_CONS | LOG_NDELAY | LOG_PID, LOG_USER);
+    openlog(processName.c_str(), LOG_CONS | LOG_NDELAY | LOG_PID, LOG_USER);
     LoggerBase::pushLogger(this);
 }
 
@@ -71,6 +71,16 @@ void LoggerSyslog::messagev(Level level,
                             const char *format,
                             va_list args)
 {
+    // always to parent first (usually stdout):
+    // if the parent is a LogRedirect instance, then
+    // it'll flush its own output first, which ensures
+    // that the new output comes later (as desired)
+    {
+        va_list argscopy;
+        va_copy(argscopy, args);
+        m_parentLogger.messagev(level, prefix, file, line, function, format, argscopy);
+        va_end(argscopy);
+    }
 
     if (level <= getLevel()) {
         formatLines(level, getLevel(),
