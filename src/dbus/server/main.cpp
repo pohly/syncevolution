@@ -86,6 +86,9 @@ int main(int argc, char **argv, char **envp)
         int logLevel = 1;
         gboolean stdoutEnabled = false;
         gboolean syslogEnabled = true;
+#ifdef ENABLE_DBUS_PIM
+        gboolean startPIM = false;
+#endif
         static GOptionEntry entries[] = {
             { "duration", 'd', 0, G_OPTION_ARG_STRING, &durationString, "Shut down automatically when idle for this duration", "seconds/'unlimited'" },
             { "verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevel,
@@ -95,6 +98,11 @@ int main(int argc, char **argv, char **envp)
               "Enable printing to stdout (result of operations) and stderr (errors/info/debug).",
               NULL },
             { "no-syslog", 's', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &syslogEnabled, "Disable printing to syslog.", NULL },
+#ifdef ENABLE_DBUS_PIM
+            { "start-pim", 'p', 0, G_OPTION_ARG_NONE, &startPIM,
+              "Activate the PIM Manager (= unified address book) immediately.",
+              NULL },
+#endif
             { NULL }
         };
         GErrorCXX gerror;
@@ -176,7 +184,7 @@ int main(int argc, char **argv, char **envp)
         server->activate();
 
 #ifdef ENABLE_DBUS_PIM
-        boost::shared_ptr<GDBusCXX::DBusObjectHelper> manager(SyncEvo::CreateContactManager(server));
+        boost::shared_ptr<GDBusCXX::DBusObjectHelper> manager(SyncEvo::CreateContactManager(server, startPIM));
 #endif
 
         if (gdbus) {

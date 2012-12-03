@@ -166,9 +166,13 @@ boost::shared_ptr<Manager> Manager::create(const boost::shared_ptr<Server> &serv
     return manager;
 }
 
-boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::shared_ptr<Server> &server)
+boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::shared_ptr<Server> &server, bool start)
 {
-    return Manager::create(server);
+    boost::shared_ptr<Manager> manager = Manager::create(server);
+    if (start) {
+        manager->start();
+    }
+    return manager;
 }
 
 void Manager::start()

@@ -673,7 +673,7 @@ public:
 
 // extensions to the D-Bus server, created dynamically by main()
 #ifdef ENABLE_DBUS_PIM
-boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::shared_ptr<Server> &server);
+boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::shared_ptr<Server> &server, bool start);
 #endif
 
 SE_END_CXX
