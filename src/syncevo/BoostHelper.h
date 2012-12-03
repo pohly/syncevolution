@@ -106,6 +106,38 @@ class WeakPtrInvoker
         }
     }
 
+    template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6>
+        void operator()(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6) const
+    {
+        if (m_ptr) {
+            (boost::get_pointer(m_ptr)->*m_member)(a1, a2, a3, a4, a5, a6);
+        }
+    }
+
+    template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7>
+        void operator()(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7) const
+    {
+        if (m_ptr) {
+            (boost::get_pointer(m_ptr)->*m_member)(a1, a2, a3, a4, a5, a6, a7);
+        }
+    }
+
+    template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7, typename A8>
+        void operator()(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8) const
+    {
+        if (m_ptr) {
+            (boost::get_pointer(m_ptr)->*m_member)(a1, a2, a3, a4, a5, a6, a7, a8);
+        }
+    }
+
+    template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, typename A7, typename A8, typename A9>
+        void operator()(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9) const
+    {
+        if (m_ptr) {
+            (boost::get_pointer(m_ptr)->*m_member)(a1, a2, a3, a4, a5, a6, a7, a8, a9);
+        }
+    }
+
  private:
     P m_ptr;
     M m_member;
