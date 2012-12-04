@@ -57,6 +57,15 @@ string-to-string dict, with the following keys:
   format (for transport=Bluetooth)
 - "database" - empty or unset for the internal address book
   (protocol=PBAP), the URI (protocol=SyncML)
+- "logdir" - a directory in which directories are created with
+             debug information about sync session
+- "maxsessions" - number of sessions that are allowed to exist
+                  after a sync (>= 0): 0 is special and means unlimited,
+                  1 for just the latest, etc.;
+                  old sessions are pruned heuristically (for example,
+                  keep sessions where something changed instead of
+                  some where nothing changed), so there is no hard
+                  guarantee that the last n sessions are present.
 
 Address books
 -------------

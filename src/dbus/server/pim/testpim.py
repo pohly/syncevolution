@@ -539,7 +539,7 @@ XDG root.
         self.configurePhone(phone, uid, contacts)
         self.syncPhone(phone, uid)
 
-        def listall(dirs, exclude):
+        def listall(dirs, exclude=[]):
              result = {}
              def append(dirname, entry):
                   fullname = os.path.join(dirname, entry)
@@ -608,9 +608,61 @@ END:VCARD'''
         # Also exclude modified database files.
         self.assertEqual(files, listsyncevo(exclude=exclude))
 
-
         self.exportCache(uid, export)
         self.compareDBs(contacts, export)
+
+        # Keep one session directory in a non-default location.
+        logdir = xdg_root + '/pim-logdir'
+        peers[uid]['logdir'] = logdir
+        peers[uid]['maxsessions'] = '1'
+        self.manager.SetPeer(uid,
+                             peers[uid],
+                             timeout=self.timeout)
+        files = listsyncevo(exclude=exclude)
+        self.manager.SyncPeer(uid,
+                              timeout=self.timeout)
+        exclude.append(logdir + '(/$)')
+        self.assertEqual(files, listsyncevo(exclude=exclude))
+
+        self.assertEqual(2, len(os.listdir(logdir)))
+
+        # At most one!
+        self.manager.SyncPeer(uid,
+                              timeout=self.timeout)
+        exclude.append(logdir + '(/$)')
+        self.assertEqual(files, listsyncevo(exclude=exclude))
+        self.assertEqual(2, len(os.listdir(logdir)))
+
+        # And now prune none.
+        peers[uid]['maxsessions'] = '0'
+        self.manager.SetPeer(uid,
+                             peers[uid],
+                             timeout=self.timeout)
+        files = listsyncevo(exclude=exclude)
+        self.manager.SyncPeer(uid,
+                              timeout=self.timeout)
+        exclude.append(logdir + '(/$)')
+        self.assertEqual(files, listsyncevo(exclude=exclude))
+        self.assertEqual(4, len(os.listdir(logdir)))
+
+        # Test invalid maxsession values.
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     "negative 'maxsessions' not allowed: -1"):
+             self.manager.SetPeer(uid,
+                                  {'protocol': 'PBAP',
+                                   'address': 'foo',
+                                   'maxsessions': '-1'},
+                                  timeout=self.timeout)
+        self.assertEqual(files, listsyncevo(exclude=exclude))
+
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     'bad lexical cast: source type value could not be interpreted as target'):
+             self.manager.SetPeer(uid,
+                                  {'protocol': 'PBAP',
+                                   'address': 'foo',
+                                   'maxsessions': '1000000000000000000000000000000000000000000000'},
+                                  timeout=self.timeout)
+        self.assertEqual(files, listsyncevo(exclude=exclude))
 
     @timeout(100)
     @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=200")

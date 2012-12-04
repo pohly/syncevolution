@@ -31,6 +31,7 @@
 #include <syncevo/IniConfigNode.h>
 #include <syncevo/BoostHelper.h>
 
+#include <boost/lexical_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/tokenizer.hpp>
 #include <deque>
@@ -866,6 +867,8 @@ static const char * const PEER_IP_TRANSPORT = "IP";
 static const char * const PEER_DEF_TRANSPORT = PEER_BLUETOOTH_TRANSPORT;
 static const char * const PEER_KEY_ADDRESS = "address";
 static const char * const PEER_KEY_DATABASE = "database";
+static const char * const PEER_KEY_LOGDIR = "logdir";
+static const char * const PEER_KEY_MAXSESSIONS = "maxsessions";
 
 static std::string GetEssential(const StringMap &properties, const char *key,
                                 bool allowEmpty = false)
@@ -890,9 +893,20 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     std::string transport = GetWithDef(properties, PEER_KEY_TRANSPORT, PEER_DEF_TRANSPORT);
     std::string address = GetEssential(properties, PEER_KEY_ADDRESS);
     std::string database = GetWithDef(properties, PEER_KEY_DATABASE);
+    std::string logdir = GetWithDef(properties, PEER_KEY_LOGDIR);
+    std::string maxsessions = GetWithDef(properties, PEER_KEY_MAXSESSIONS);
+    unsigned maxLogDirs = 0;
+    if (!maxsessions.empty()) {
+        // https://svn.boost.org/trac/boost/ticket/5494
+        if (boost::starts_with(maxsessions, "-")) {
+            SE_THROW(StringPrintf("negative 'maxsessions' not allowed: %s", maxsessions.c_str()));
+        }
+        maxLogDirs = boost::lexical_cast<unsigned>(maxsessions);
+    }
 
     std::string localDatabaseName = MANAGER_PREFIX + uid;
     std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
+
 
     SE_LOG_DEBUG(NULL, NULL, "%s: creating config for protocol %s",
                  uid.c_str(),
@@ -923,6 +937,12 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         config->setPeerIsClient(true);
         config->setDumpData(false);
         config->setPrintChanges(false);
+        if (!logdir.empty()) {
+            config->setLogDir(logdir);
+        }
+        if (!maxsessions.empty()) {
+            config->setMaxLogDirs(maxLogDirs);
+        }
         boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
         source->setBackend("evolution-contacts");
         source->setDatabaseID(localDatabaseName);
@@ -954,6 +974,12 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         config->setPreventSlowSync(false);
         config->setDumpData(false);
         config->setPrintChanges(false);
+        if (!logdir.empty()) {
+            config->setLogDir(logdir);
+        }
+        if (!maxsessions.empty()) {
+            config->setMaxLogDirs(maxLogDirs);
+        }
         source = config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE);
         if (protocol == PEER_PBAP_PROTOCOL) {
             // PBAP
