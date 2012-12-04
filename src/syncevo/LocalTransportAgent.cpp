@@ -206,6 +206,8 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
     }
     m_child->m_startSync.start(m_clientContext,
                                StringPair(m_server->getConfigName(),
+                                          m_server->isEphemeral() ?
+                                          "ephemeral" :
                                           m_server->getRootPath()),
                                static_cast<std::string>(m_server->getLogDir()),
                                m_server->getDoLogging(),
@@ -700,9 +702,14 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
         // initialize sync context
         m_client.reset(new SyncContext(std::string("target-config") + clientContext,
                                        serverConfig.first,
+                                       serverConfig.second == "ephemeral" ?
+                                       serverConfig.second :
                                        serverConfig.second + "/." + clientContext,
                                        boost::shared_ptr<TransportAgent>(this, NoopAgentDestructor()),
                                        serverDoLogging));
+        if (serverConfig.second == "ephemeral") {
+            m_client->makeEphemeral();
+        }
         boost::shared_ptr<UserInterface> ui(new LocalTransportUI(m_parent));
         m_client->setUserInterface(ui);
 

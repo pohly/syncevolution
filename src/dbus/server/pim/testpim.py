@@ -535,12 +535,50 @@ XDG root.
         self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
         self.assertEqual(expected, self.currentSources())
 
-        # Throw away data that might have been in the local database.
+        # Clear data in the phone.
         self.configurePhone(phone, uid, contacts)
         self.syncPhone(phone, uid)
+
+        def listall(dirs, exclude):
+             result = {}
+             def append(dirname, entry):
+                  fullname = os.path.join(dirname, entry)
+                  for pattern in exclude:
+                       if re.match(pattern, fullname):
+                            return
+                  result[fullname] = os.stat(fullname).st_mtime
+             for dir in dirs:
+                  for dirname, dirnames, filenames in os.walk(dir):
+                       for subdirname in dirnames:
+                            append(dirname, subdirname)
+                       for filename in filenames:
+                            append(dirname, filename)
+             return result
+
+        def listsyncevo(exclude=[]):
+             return listall([os.path.join(xdg_root, x) for x in ['config/syncevolution', 'cache/syncevolution']],
+                            exclude)
+
+        # Remember current list of files and modification time stamp.
+        files = listsyncevo()
+
+        # Remove all data locally.
         self.manager.SyncPeer(uid,
                               timeout=self.timeout)
         # TODO: check that syncPhone() really used PBAP - but how?
+
+        # Should not have written files, except for specific exceptions:
+        exclude = []
+        # - directories in which we need to create files
+        exclude.extend([xdg_root + '/cache/syncevolution/eds@[^/]*$',
+                        xdg_root + '/cache/syncevolution/target_.config@[^/]*$'])
+        # - some files which are allowed to be written
+        exclude.extend([xdg_root + '/cache/syncevolution/[^/]*/(status.ini|syncevolution-log.html)$'])
+        # - synthesis client files (should not be written at all, but that's harder - redirect into cache for now)
+        exclude.extend([xdg_root + '/cache/syncevolution/[^/]*/synthesis(/|$)'])
+
+        # Now compare files and their modification time stamp.
+        self.assertEqual(files, listsyncevo(exclude=exclude))
 
         # Export data from local database into a file via the --export
         # operation in the syncevo-dbus-server. Depends on (and tests)
@@ -566,6 +604,11 @@ END:VCARD'''
         self.syncPhone(phone, uid)
         self.manager.SyncPeer(uid,
                               timeout=self.timeout)
+
+        # Also exclude modified database files.
+        self.assertEqual(files, listsyncevo(exclude=exclude))
+
+
         self.exportCache(uid, export)
         self.compareDBs(contacts, export)
 

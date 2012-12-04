@@ -3915,7 +3915,9 @@ SyncMLStatus SyncContext::doSync()
 
 string SyncContext::getSynthesisDatadir()
 {
-    if (m_localSync && !m_serverMode) {
+    if (isEphemeral() && m_sourceListPtr) {
+        return m_sourceListPtr->getLogdir() + "/synthesis";
+    } else if (m_localSync && !m_serverMode) {
         return m_localClientRootPath + "/.synthesis";
     } else {
         return getRootPath() + "/.synthesis";

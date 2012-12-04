@@ -931,6 +931,21 @@ class SyncConfig {
     virtual ~SyncConfig() {}
 
     /**
+     * Discard all changes made to config files.
+     * Makes it impossible to do incremental syncs!
+     *
+     * Not 100% reliable, but works in practice:
+     * - Source nodes for change tracking are replaced
+     *   with volatile nodes (reliable).
+     * - Flushing nodes is skipped, which covers peer and global
+     *   nodes. They need to provide the real content and therefore
+     *   cannot be replaced. Could be circumvented by flushing them
+     *   directly.
+     */
+    void makeEphemeral();
+    bool isEphemeral() const { return m_ephemeral; }
+
+    /**
      * determines whether the need to migrate a config causes a
      * STATUS_MIGRATION_NEEDED error or does the migration
      * automatically; default is to migrate automatically in
@@ -1630,6 +1645,7 @@ private:
     std::string m_cachedPassword;
     std::string m_cachedProxyPassword;
     ConfigWriteMode m_configWriteMode;
+    Bool m_ephemeral;
 
     /** holds all config nodes relative to the root that we found */
     boost::shared_ptr<ConfigTree> m_tree;

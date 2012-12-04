@@ -921,6 +921,8 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         config->setPreventSlowSync(false);
         config->setSyncURL("local://" + context);
         config->setPeerIsClient(true);
+        config->setDumpData(false);
+        config->setPrintChanges(false);
         boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
         source->setBackend("evolution-contacts");
         source->setDatabaseID(localDatabaseName);
@@ -950,6 +952,8 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         config->setDefaults();
         config->prepareConfigForWrite();
         config->setPreventSlowSync(false);
+        config->setDumpData(false);
+        config->setPrintChanges(false);
         source = config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE);
         if (protocol == PEER_PBAP_PROTOCOL) {
             // PBAP
@@ -1126,7 +1130,7 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
     // After sync(), the session is tracked as the active sync session
     // by the server. It was removed from our own m_pending list by
     // doSession().
-    session->sync("", SessionCommon::SourceModes_t());
+    session->sync("ephemeral", SessionCommon::SourceModes_t());
     // Relay result to caller when done.
     session->m_doneSignal.connect(boost::bind(doneSyncPeer, result, _1));
 }

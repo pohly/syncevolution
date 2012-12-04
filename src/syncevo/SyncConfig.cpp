@@ -303,6 +303,13 @@ void SyncConfig::makeVolatile()
     m_props[true] = m_peerNode;
 }
 
+void SyncConfig::makeEphemeral()
+{
+    m_ephemeral = true;
+    // m_hiddenPeerNode.reset(new VolatileConfigNode());
+    // m_contextHiddenNode = m_hiddenPeerNode;
+}
+
 SyncConfig::SyncConfig(const string &peer,
                        boost::shared_ptr<ConfigTree> tree,
                        const string &redirectPeerRootPath) :
@@ -921,7 +928,9 @@ void SyncConfig::preFlush(UserInterface &ui)
 
 void SyncConfig::flush()
 {
-    m_tree->flush();
+    if (!isEphemeral()) {
+        m_tree->flush();
+    }
 }
 
 void SyncConfig::remove()
@@ -1080,7 +1089,12 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         serverNode = m_tree->open(peerPath, ConfigTree::server, changeId);
     }
 
-    if (!m_redirectPeerRootPath.empty()) {
+    if (isEphemeral()) {
+        // Throw away meta data.
+        trackingNode.reset(new VolatileConfigNode);
+        hiddenPeerNode.reset(new VolatileConfigNode);
+        serverNode.reset(new VolatileConfigNode);
+    } else if (!m_redirectPeerRootPath.empty()) {
         // Local sync: overwrite per-peer nodes with nodes inside the
         // parents tree. Otherwise different configs syncing locally
         // against the same context end up sharing .internal.ini and

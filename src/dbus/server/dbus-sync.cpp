@@ -61,7 +61,11 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
     FilterConfigNode::ConfigFilter filter;
     filter = params.m_sourceFilter;
     if (!params.m_mode.empty()) {
-        filter["sync"] = params.m_mode;
+        if (params.m_mode == "ephemeral") {
+            makeEphemeral();
+        } else {
+            filter["sync"] = params.m_mode;
+        }
     }
     setConfigFilter(false, "", filter);
     BOOST_FOREACH(const std::string &source,
