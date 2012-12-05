@@ -190,6 +190,7 @@ template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
     TrackGObject() {}
     TrackGObject(const TrackGObject &other) : Base_t(other) {}
     operator C * () const { return Base_t::get(); }
+    operator bool () const { return Base_t::get() != NULL; }
     C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
 
     static  TrackGObject steal(C *ptr) { return TrackGObject(ptr, false); }
