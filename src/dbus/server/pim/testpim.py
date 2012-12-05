@@ -2651,6 +2651,7 @@ END:VCARD''']):
 
     @timeout(60)
     @property("snapshot", "simple-sort")
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
     def testContactWrite(self):
         '''TestContacts.testContactWrite - add, update and remove contact'''
         self.setUpView(peers=[], withSystemAddressBook=True)
@@ -2839,6 +2840,7 @@ END:VCARD''']):
         self.assertEqual(john, self.view.contacts[0], sortLists=True)
 
         # Search for modified telephone number.
+        # Depends on having a valid country set via env variables.
         view = ContactsView(self.manager)
         view.search([['phone', '56789']])
         self.runUntil('phone results',
