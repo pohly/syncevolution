@@ -1971,7 +1971,9 @@ InitStateString SyncConfig::getSyncMLVersion() const {
 InitState< std::set<std::string> > SyncConfig::getSyncMLFlags() const {
     InitStateString value = syncPropSyncMLVersion.getProperty(*getNode(syncPropSyncMLVersion));
     std::list<std::string> keywords;
-    boost::split(keywords, value, boost::is_any_of(" ,"));
+    // Work around g++ 4.4 + "array out of bounds" when using is_any_of() on plain string.
+    static const std::string delim(" ,");
+    boost::split(keywords, value, boost::is_any_of(delim));
     std::set<std::string> flags;
     BOOST_FOREACH (std::string &keyword, keywords) {
         boost::to_lower(keyword);
