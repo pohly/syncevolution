@@ -317,7 +317,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
             if (m_lastChange.m_call == &m_contactsModified &&
                 &call == &m_contactsModified &&
                 start >= m_lastChange.m_start &&
-                start < m_lastChange.m_start + m_lastChange.m_ids.size()) {
+                start < m_lastChange.m_start + (int)m_lastChange.m_ids.size()) {
                 SE_LOG_DEBUG(NULL, NULL, "handle change %s: redundant 'modified' signal, ignore",
                              getPath());
 
