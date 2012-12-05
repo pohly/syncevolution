@@ -56,7 +56,15 @@ void EDSFView::doStart()
     }
     m_store = EdsfPersonaStoreCXX::steal(edsf_persona_store_new_with_source_registry(m_registry, source));
     GErrorCXX gerror;
-    m_ebook = EBookClientCXX::steal(e_book_client_new(source.get(), gerror));
+    m_ebook = EBookClientCXX::steal(
+#ifdef HAVE_E_BOOK_CLIENT_NEW_DIRECT
+                                    getenv("SYNCEVOLUTION_NO_PIM_EDS_DIRECT") ?
+                                    e_book_client_new(source, gerror) :
+                                    e_book_client_new_direct(m_registry, source, gerror)
+#else
+                                    e_book_client_new(source, gerror)
+#endif
+                                    );
     if (!m_ebook) {
         SE_LOG_DEBUG(NULL, NULL, "edfs %s: no client for address book: %s", m_uuid.c_str(), gerror->message);
         return;
