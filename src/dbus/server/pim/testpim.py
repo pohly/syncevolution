@@ -497,7 +497,7 @@ XDG root.
         # EDS workaround
         time.sleep(2)
 
-    @timeout(100)
+    @timeout(300)
     @property("snapshot", "simple-sort")
     def testSync(self):
         '''TestContacts.testSync - test caching of a dummy peer which uses a real phone or a local directory as fallback'''
@@ -1392,7 +1392,7 @@ END:VCARD'''
                          contact,
                          sortLists=True)
 
-    @timeout(240)
+    @timeout(int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 10)) * (usingValgrind() and 15 or 6))
     @property("snapshot", "db-active")
     def testActive(self):
         '''TestContacts.testActive - reconfigure active address books several times'''
@@ -1416,7 +1416,7 @@ END:VCARD'''
                       open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
                            "r").readlines())
 
-        contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 100))
+        contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 10))
         for peer in active:
              for index in range(0, contactsPerPeer):
                   item = os.path.join(self.contacts, 'john%d.vcf' % index)
