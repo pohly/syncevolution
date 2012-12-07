@@ -125,6 +125,17 @@
    fun:g_main_context_iteration
    fun:_ZN7SyncEvo19EvolutionSyncSource17getSourceRegistryEv
 }
+{
+   getSourceRegistry inside libedata, using EDSRegistryLoader
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:_tp_account_manager_got_all_cb
+   ...
+   fun:g_main_context_iteration
+   fun:*EDSRegistryLoader*
+}
+
 
 # ==8468== Use of uninitialised value of size 8
 # ==8468==    at 0x70F826E: g_utf8_offset_to_pointer (in /usr/lib/libglib-2.0.so.0.1400.1)
