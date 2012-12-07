@@ -1,11 +1,8 @@
 Preamble
 ========
 
-This text describes a D-Bus API. It might get copied into XML API definitions
-in future revisions.
-
-The API implements in-vehicle infotainment (IVI) use cases around
-contacts:
+This text describes a D-Bus API. The API implements in-vehicle infotainment (IVI)
+use cases around contacts:
 - cache address books from peers (primarily phones connected via Bluetooth)
   in local address books
 - provide a unified address book that combines a configurable (and changing)
@@ -20,6 +17,13 @@ Tasks that are expected to be done by the user of this API:
 
 In other words, the API provides the mechanisms and the user the
 policy.
+
+Several aspects of this API may differ depending on the
+implementation. For example, searching for contacts and syncing with
+peers are not described in the API. Consult the documentation of the
+API implementation to learn what it supports. For SyncEvolution, that
+documentation is the src/dbus/server/pim/README file.
+
 
 Datatypes
 =========
@@ -44,28 +48,8 @@ be configured.
 
 For each peer, enough information must be provided to access its
 address book. That information is passed via D-Bus as a
-string-to-string dict, with the following keys:
-
-- "protocol" - defines how to access the address book. Currently
-  only "PBAP" is implemented. "SyncML", "CardDAV" are documented
-  to illustrate how the API would work for them.
-- "transport" - defines how to establish
-  the connection. Currently only "Bluetooth" is allowed
-  (for protocol=PBAP or SyncML) and taken as default when
-  "transport" is not set.
-- "address" - the Bluetooth MAC address in the aa:bb:cc:dd:ee:ff
-  format (for transport=Bluetooth)
-- "database" - empty or unset for the internal address book
-  (protocol=PBAP), the URI (protocol=SyncML)
-- "logdir" - a directory in which directories are created with
-             debug information about sync session
-- "maxsessions" - number of sessions that are allowed to exist
-                  after a sync (>= 0): 0 is special and means unlimited,
-                  1 for just the latest, etc.;
-                  old sessions are pruned heuristically (for example,
-                  keep sessions where something changed instead of
-                  some where nothing changed), so there is no hard
-                  guarantee that the last n sessions are present.
+string-to-string dict, with keys and their values being defined by the
+implementation.
 
 Address books
 -------------
@@ -105,7 +89,8 @@ FolksIndividual:
 Property values which are large (like photos) are not sent via
 D-Bus. Instead a link to a local file is sent.
 
-TODO: document all properties and their types.
+For a full definition of contact properties see the implementation
+documentation.
 
 Search results
 --------------
@@ -126,12 +111,11 @@ simplify generating views.
 
 The view is the subset of the data that a user of the API has
 requested. In the most extreme case, all contacts are part of the
-view. Therefore contact data has to be requested explicitly. To
-support requesting data in batches, contacts are numbered 0 to n-1 in
-each view, where n is the number of contacts in the view. Sort order
-is the same as in the underlying model. Change notifications with
-these index numbers are sent as contacts are added, modified or
-removed.
+view. Therefore contact data has to be requested explicitly. Contacts
+are numbered 0 to n-1 in each view, where n is the number of contacts
+in the view. Sort order is the same as in the underlying model. Change
+notifications with these index numbers are sent as contacts are added,
+modified or removed.
 
 The controller is the part of the API which allows changing contacts
 in the system address book, changing the sort order, enabling or disabling
@@ -143,10 +127,7 @@ other contacts. Example:
 - A view containing 10 contacts is created.
 - A notification about "contacts #0 to #9 added" is sent
   (given as pair of first index and count, not list of numbers).
-- Data for contacts #5 to #19 gets requested, five contacts #5 to #9
-  are returned. It's okay to ask for more contacts than exist,
-  because the caller cannot be sure anyway how many contacts
-  still exist at the time when the request gets processed.
+- The five contacts starting with #5 to are read via their ID.
 - Contact #4 gets removed. The user needs to remember that
   the data that it has now corresponds to contacts #4 to #8.
 - Contact #5 gets added, before the contact which had that
@@ -219,25 +200,7 @@ Methods:
 
     void SetSortOrder(string mode)
 
-         "mode" must be one of "first/last", "last/first", "full name".
-         "first/last" sorts based on the first name stored in the "name"
-         property, with the last name used to break ties between equal first
-         names.
-
-         "last/first" reverts that comparison.
-
-         "full name" sorts based on the full name chosen for the
-         contact if there is such a string, otherwise it uses the
-         concatenation of the individual name componts without prefix
-         (= "[<first name>] [<middle name>] [<last name>] [<suffix>])"
-         as fallback. In other words, it sorts correctly when either
-         all contacts have a full name explicitly set or the full
-         names that were set following the same pattern as the
-         fallback.
-
-         Sorting is case-insensitive.
-
-         The sort order is stored persistently. The default is "last/first".
+         "mode" must be one of the values supported by the implementation.
 
     string GetSortOrder()
 
@@ -291,39 +254,7 @@ Methods:
          can be used to control the view via the
          org._01.pim.contacts.ViewControl interface.
 
-         Supported searches:
-         [ ] - An empty list matches all contacts.
-
-         [ ['phone', '<number>'] ] - Look up a valid phone number (= "caller ID").
-         The country code for the current locale is added if no country
-         code was given in the number. Phone numbers in the unified address
-         book must start with the resulting full number, after being normalized
-         the same way.
-
-         In other words:
-         - Formatting does not matter.
-         - Alpha characters are aliases for numbers on the keypad and match
-           their corresponding number.
-         - Additional digits in the address book are ignored, only
-           the prefix must match (extensions may or may not be included in
-           <number>).
-         - Phone numbers in the address book which cannot be normalized
-           cannot be matched.
-
-         [ ['any-contains', '<text>', <flags>] ] - Sub-string search for <text>
-         in the following contact values: first, middle or last name,
-         formatted name, nick name, phone number (sub-string search which ignores
-         formatting and treats alpha characters as aliases, in contrast
-         to prefix match in 'phone') or email address. Optional flags include:
-         'case-insensitive' (the default), 'case-sensitive'.
-
-         Using list will allow extending the search capabilities later,
-         for example by allowing multiple terms which all must match
-         and/or adding recursive queries like this:
-           ['and',
-            ['or', ['any-contains', 'joe'], ['any-contains', 'joan']],
-            ['phone', '1234']
-           ]
+         The content of the filter is defined by the implementation.
 
          Notifications for the view are sent back to the caller by
          invoking methods from the org._01.pim.contacts.ViewAgent

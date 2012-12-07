@@ -82,12 +82,71 @@ sorting and searching.
 Any additional library dependencies for that file need to be added to
 the main configure.ac.
 
+The default implementation is based on boost::locale and
+libphonenumber and is described below.
 
-Sorting + Searching
-===================
 
-The default implementation is based on boost::locale and libphonenumber.
-It is documented in pim-manager-api.txt.
+Sorting
+=======
+
+The sort order can be "first/last", "last/first", "full name".
+
+    "first/last" sorts based on the first name stored in the "name"
+    property, with the last name used to break ties between equal
+    first names.
+
+    "last/first" reverts that comparison.
+
+    "full name" sorts based on the full name chosen for the contact if
+    there is such a string, otherwise it uses the concatenation of the
+    individual name componts without prefix (= "[<first name>]
+    [<middle name>] [<last name>] [<suffix>])" as fallback. In other
+    words, it sorts correctly when either all contacts have a full
+    name explicitly set or the full names that were set following the
+    same pattern as the fallback.
+
+Sorting is case-insensitive. The default is "last/first" if not set
+earlier.
+
+
+Searching
+=========
+
+Supported searches:
+
+    [ ] - An empty list matches all contacts.
+
+    [ ['phone', '<number>'] ] - Look up a valid phone number (= "caller ID").
+    The country code for the current locale is added if no country
+    code was given in the number. Phone numbers in the unified address
+    book must start with the resulting full number, after being normalized
+    the same way.
+
+    In other words:
+    - Formatting does not matter.
+    - Alpha characters are aliases for numbers on the keypad and match
+      their corresponding number.
+    - Additional digits in the address book are ignored, only
+      the prefix must match (extensions may or may not be included in
+      <number>).
+    - Phone numbers in the address book which cannot be normalized
+      cannot be matched.
+
+    [ ['any-contains', '<text>', <flags>] ] - Sub-string search for <text>
+    in the following contact values: first, middle or last name,
+    formatted name, nick name, phone number (sub-string search which ignores
+    formatting and treats alpha characters as aliases, in contrast
+    to prefix match in 'phone') or email address. Optional flags include:
+    'case-insensitive' (the default), 'case-sensitive'.
+
+    Using a list will allow extending the search capabilities later,
+    for example by allowing multiple terms which all must match
+    and/or adding recursive queries like this:
+      ['and',
+       ['or', ['any-contains', 'joe'], ['any-contains', 'joan']],
+       ['phone', '1234']
+      ]
+
 
 Lookup and search are different: the former is based on a valid
 number, the later on user input.
@@ -151,6 +210,194 @@ Refining such a search is not supported because refining a phone
 number lookup is not useful.
 
 
+Peers
+=====
+
+The following keys are supported for the configuration of a peer:
+
+- "protocol" - defines how to access the address book. "PBAB" (phone
+               book access protocol) and "file" (read vCard files from
+               directory) are implemented. "SyncML" and "CardDAV"
+               could be added easily.
+
+- "transport" - defines how to establish the connection. The only
+                supported value is "Bluetooth" (for protocol=PBAP or
+                SyncML), which is also the default if not given
+                explicitly.
+
+- "address" - the Bluetooth MAC address in the aa:bb:cc:dd:ee:ff
+              format (for transport=Bluetooth).
+
+- "database" - empty or unset for the internal address book
+               (protocol=PBAP), or the path to the directory
+               (protocol=file).
+
+- "logdir" - a directory in which directories are created with debug
+             information about sync session.
+
+- "maxsessions" - number of sessions that are allowed to exist
+                  after a sync (>= 0): 0 is special and means unlimited,
+                  1 for just the latest, etc.;
+                  old sessions are pruned heuristically (for example,
+                  keep sessions where something changed instead of
+                  some where nothing changed), so there is no hard
+                  guarantee that the last n sessions are present.
+
+Not supported via the API at the moment:
+- selecting a specific phone address book
+- selecting which vCard properties get cached
+
+
+Contact Data
+============
+
+A contact dictionary has the following key/value pairs. More properties
+may be added later.
+
+contact dictionary:
+"id" - string, see API description
+"source" - string, see API description
+"full-name" - string, formatted by the user or automatically (vCard FN)
+"nickname" - string
+"structured-name" - name dictionary (vCard N)
+"photo" - string, the URL (usually of a local file; EDS strips all inline photo
+          data in vCards and puts them into local files, leading to URLs like:
+          file:///home/user/.local/share/evolution/addressbook/system/photos/pas_id_5012983E0000065A_photo-file0.image%2Fjpeg)
+"birthday" - birthday tuple
+"emails" - value list with strings as value
+"phones" - value list with strings as value
+"urls" - value list with strings as value
+"notes" - list of strings; in practice only one entry is supported
+"addresses" - value list with an address dictionary as value
+"roles" - list of role dictionaries
+
+
+name dictionary:
+"family" - string, the last name
+"given" - string, the fist name
+"additional" - string, middle names
+"prefixes" - string, name prefix like "Mr."
+"suffixes" - string, name suffix like "Sr."
+
+birthday tuple:
+(yy, mm, dd) - integer values for year, month, and day
+
+role dictionary:
+"organisation" - main organization ("Foo ACME")
+"title" - title inside that organization ("vice president")
+"role" - role as part of that origanization ("adviser")
+
+value list:
+[ (value, [parameter, ...]), (value, ...) ]
+value - depends on the property
+parameter - a string, with values again depending on the property;
+            a value may have zero to n different parameters
+
+phone parameters:
+"voice"
+"fax"
+"car"
+"cell"
+"pager"
+"pref"
+"home"
+"work"
+"other" (might not be set explicitly)
+
+address parameters:
+"home"
+"work"
+"other" (might not be set explicitly)
+
+url parameters:
+"x-home-page"
+"x-blog"
+"x-free-busy" - public calendar free/busy URL
+"x-video" - video chat URL
+
+address dictionary:
+"po-box" - string, post office box
+"extension" - string, address extension
+"street" - string, street name
+"locality" - string, city name
+"region" - string, area name
+"postal-code" - string
+"country" - string
+
+Note: all of the strings and values above are defined by SyncEvolution
+in individual-traits.cpp, except for parameter strings. Those come
+directly from folks, more specifically AbstractFieldDetails:
+http://telepathy.freedesktop.org/doc/folks/vala/Folks.AbstractFieldDetails.html
+
+Here is an example contact dictionary, using Python syntax:
+    {
+          'full-name': 'John Doe',
+          'nickname': 'Johnny',
+          'structured-name': {'given': 'John', 'family': 'Doe'},
+          'birthday': (2006, 1, 8),
+          'photo': 'file:///home/user/file.png',
+          'roles': [
+       {
+        'organisation': 'Test Inc.',
+        'role': 'professional test case',
+        'title': 'Senior Tester',
+        },
+       ],
+          'source': [
+       ('test-dbus-foo', luids[0])
+       ],
+          'id': 'xyz',
+          'notes': [
+       'This is a test case which uses almost all Evolution fields.',
+       ],
+          'emails': [
+       ('john.doe@home.priv', ['home']),
+       ('john.doe@other.world', ['other']),
+       ('john.doe@work.com', ['work']),
+       ('john.doe@yet.another.world', ['other']),
+       ],
+          'phones': [
+       ('business 1', ['voice', 'work']),
+       ('businessfax 4', ['fax', 'work']),
+       ('car 7', ['car']),
+       ('home 2', ['home', 'voice']),
+       ('homefax 5', ['fax', 'home']),
+       ('mobile 3', ['cell']),
+       ('pager 6', ['pager']),
+       ('primary 8', ['pref']),
+       ],
+          'addresses': [
+       ({'country': 'New Testonia',
+         'locality': 'Test Megacity',
+         'po-box': 'Test Box #3',
+         'postal-code': '12347',
+         'region': 'Test County',
+         'street': 'Test Drive 3'},
+        []),
+       ({'country': 'Old Testovia',
+         'locality': 'Test Town',
+         'po-box': 'Test Box #2',
+         'postal-code': '12346',
+         'region': 'Upper Test County',
+         'street': 'Test Drive 2'},
+        ['work']),
+       ({'country': 'Testovia',
+         'locality': 'Test Village',
+         'po-box': 'Test Box #1',
+         'postal-code': '12345',
+         'region': 'Lower Test County',
+         'street': 'Test Drive 1'},
+        ['home']),
+       ],
+          'urls': [
+       ('chat', ['x-video']),
+       ('free/busy', ['x-free-busy']),
+       ('http://john.doe.com', ['x-home-page']),
+       ('web log', ['x-blog']),
+       ],
+    }
+
+
 Configuration and data handling
 ===============================
 
@@ -172,9 +419,142 @@ The SyncEvolution command line can be used to view or manipulate
 these databases:
 https://syncevolution.org/wiki/item-operations
 
-The persistent configuration of the sort order is stored in
-~/.config/syncevolution/pim-manager.ini as the "sort" property. It's
-values are the same string as in the API.
+The sort order and set of active address books are stored persistently
+in ~/.config/syncevolution/pim-manager.ini as:
+- "sort" = same value as in the API
+- "active" = space, comma or tab separated EDS source UUIDs
+
+
+Usage
+=====
+
+The PIM manager is part of the syncevo-dbus-server. It can be started
+automatically via D-Bus or explicitly. When started automatically, it
+logs error messages to syslog.
+
+The PIM manager starts as idle and needs to be started via the D-Bus
+Start() API before it begins assembling the unified address book.
+
+SyncEvolution installs an XDG autostart file
+(/etc/xdg/autostart/syncevo-dbus-server.desktop) which, on systems
+supporting that mechanism, ensures that syncevo-dbus-server is started
+once. This is used for automatic syncing, which is not active when
+using only the PIM Manager. Therefore syncevo-dbus-server will
+terminate again after some idle period.
+
+It's recommended to disable this mechanism or patch
+syncevo-dbus-server.desktop to start the server with different
+options. In particular the "--start-pim" option may be useful to
+start up the UI and the server in parallel.
+
+Here is a list of supported options:
+
+Help Options:
+  -h, --help                          Show help options
+
+Application Options:
+  -d, --duration=seconds/'unlimited'    Shut down automatically
+                                        when idle for this duration (default 300 seconds)
+  -v, --verbosity=level                 Choose amount of output, 0 = no output,
+                                        1 = errors, 2 = info, 3 = debug; default is 1.
+  -o, --stdout                          Enable printing to stdout (result of operations)
+                                        and stderr (errors/info/debug).
+  -s, --no-syslog                       Disable printing to syslog.
+  -p, --start-pim                       Activate the PIM Manager (= unified address book)
+                                        immediately.
+
+Limitations
+===========
+
+There are no hard-coded limits. In practice the number of contacts,
+parallel searches, peers, etc. is limited by CPU performance, amount
+of RAM and disk space.
+
+
+Functionality
+=============
+
+Caching
+-------
+
+Caching of contacts is done roughly like this:
+1. The PBAP backend reads all contact data. See src/backends/pbap.
+2. As part of a local sync (see main SyncEvolution README), a local-cache-slow
+   sync is done. In that mode all local data is compared against the incoming
+   data. Matches are found according to the properties that are defined
+   as compare="always" or compare="slowsync" in src/syncevo/configs/datatypes/00vcard-fieldlist.xml.
+   In the default file, these are the first, middle and last name and the organization.
+3. Local entries which have a match are updated with data from that match,
+   unmatched local entries are removed and unmatched incoming ones are
+   created.
+
+This means that changing "less important" properties will be turned
+into local updates. This has the desirable effect of not changing the
+local ID of the existing contact, which might become important when
+attaching local meta data to that contact via its local ID (not
+supported at the moment; folks itself has a favorite flag which is
+stored like that). It also reduces disk IO.
+
+If matching fails, a contact will get deleted and recreated. The end result
+in the unified address book is still the same, because folks does not
+rely on the ID for linking.
+
+Supported fields
+----------------
+
+The PBAP backend always downloads the entire vCard. It supports restricting
+the vCard to specific properties, see src/backend/pbap/README. However, this
+is not used by the PIM Manager.
+
+In particular, PHOTO data is always included in the download right
+away. A mode where caching only works without PHOTO in the initial
+pass and then adds that in a second step could be added.
+
+Internally a vCard is represented as a Synthesis field list (again,
+see 00vcard-fieldlist.xml). X- extensions in the incoming vCard are
+preserved.
+
+Unified address book
+--------------------
+
+The unified address book is assembled by folks based on properties
+that it considers "linkable". Linkable properties must be unique for a
+person. A phone number is not linkable, because different persons
+living at the same place might share a phone. For EDS, the linkable
+properties are defined in folk's backends/eds/lib/edsf-persona.vala
+and currently are:
+- instant messaging handles
+- email addresses
+- local IDs (not used in this context)
+- web service addresses (not used in this context)
+
+folks supports heuristics for identifying persons which are likely to
+be the same. This is not used by the PIM Manager. If it was, then links
+would have to be established based on the local IDs and keeping those
+stable became more important.
+
+Localization
+------------
+
+The usual environment variables are used to determine the locale:
+LC_CTYPE, LC_ALL, and LANG in that order (i.e. LC_CTYPE first and LANG
+last). There is no support for changing that once syncevo-dbus-server
+runs.
+
+boost::locale is used for collation while sorting contacts. The
+secondary collation level is used, which means that case, punctuation
+are ignored while accents are relevant. This is hard-coded in
+locale-factory-boost.cpp as DEFAULT_COLLATION_LEVEL.
+
+Searching is either done with a strict text comparison (case
+sensitive) or after using case folding (case insensitive, see
+http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding).
+
+A 'phone' lookup uses libphonenumber to compare the free-form text
+field for telephone numbers against a caller ID. The text field must
+be in a format that libphonenumber understands, otherwise it will be
+ignored. A country code is optional. If missing, the country code of
+the current locale will be added before the comparison.
 
 
 Testing
