@@ -79,9 +79,6 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
     m_server(server),
     m_locale(LocaleFactory::createFactory())
 {
-    // Prevent automatic shut down during idle times, because we need
-    // to keep our unified address book available.
-    m_server->autoTermRef();
 }
 
 Manager::~Manager()
@@ -89,7 +86,9 @@ Manager::~Manager()
     // Clear the pending queue before self-desctructing, because the
     // entries hold pointers to this instance.
     m_pending.clear();
-    m_server->autoTermUnref();
+    if (m_preventingAutoTerm) {
+        m_server->autoTermUnref();
+    }
 }
 
 void Manager::init()
@@ -178,6 +177,12 @@ boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::
 
 void Manager::start()
 {
+    if (!m_preventingAutoTerm) {
+        // Prevent automatic shut down during idle times, because we need
+        // to keep our unified address book available.
+        m_server->autoTermRef();
+        m_preventingAutoTerm = true;
+    }
     m_folks->start();
 }
 
@@ -192,6 +197,12 @@ void Manager::stop()
         initFolks();
         initDatabases();
         initSorting(m_sortOrder);
+
+        if (m_preventingAutoTerm) {
+            // Allow auto shutdown again.
+            m_server->autoTermUnref();
+            m_preventingAutoTerm = false;
+        }
     }
 }
 

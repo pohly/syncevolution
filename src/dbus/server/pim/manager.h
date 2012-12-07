@@ -45,6 +45,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Stores "sort" property in XDG ~/.config/syncevolution/pim-manager.ini'. */
     boost::shared_ptr<ConfigNode> m_configNode;
     std::string m_sortOrder;
+    Bool m_preventingAutoTerm;
 
     /**
      * Contains the EDS UUIDs of all address books contributing to the current
