@@ -82,7 +82,7 @@ void MergeView::addEDSIndividual(const FolksIndividualCXX &individual) throw ()
                              IndividualDataCompare(m_compare));
         size_t index = it - m_entries.begin();
         it = m_entries.insert(it, data.release());
-        SE_LOG_DEBUG(NULL, NULL, "%s: added at #%ld/%ld", getName(), index, m_entries.size());
+        SE_LOG_DEBUG(NULL, NULL, "%s: added at #%ld/%ld", getName(), (long)index, (long)m_entries.size());
         m_addedSignal(index, *it);
     } catch (...) {
         Exception::handle(HANDLE_EXCEPTION_NO_ERROR);

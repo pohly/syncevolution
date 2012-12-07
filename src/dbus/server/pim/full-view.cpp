@@ -182,7 +182,7 @@ void FullView::doAddIndividual(Entries_t::auto_type &data)
                          IndividualDataCompare(m_compare));
     size_t index = it - m_entries.begin();
     it = m_entries.insert(it, data.release());
-    SE_LOG_DEBUG(NULL, NULL, "full view: added at #%ld/%ld", index, m_entries.size());
+    SE_LOG_DEBUG(NULL, NULL, "full view: added at #%ld/%ld", (long)index, (long)m_entries.size());
     m_addedSignal(index, *it);
     waitForIdle();
 
@@ -221,12 +221,12 @@ void FullView::modifyIndividual(FolksIndividual *individual)
                 // sorting became invalid => move the entry. Do it
                 // as simple as possible, because this is not expected
                 // to happen often.
-                SE_LOG_DEBUG(NULL, NULL, "full view: temporarily removed at #%ld/%ld", index, m_entries.size());
+                SE_LOG_DEBUG(NULL, NULL, "full view: temporarily removed at #%ld/%ld", (long)index, (long)m_entries.size());
                 Entries_t::auto_type old = m_entries.release(it);
                 m_removedSignal(index, *old);
                 doAddIndividual(data);
             } else {
-                SE_LOG_DEBUG(NULL, NULL, "full view: modified at #%ld/%ld", index, m_entries.size());
+                SE_LOG_DEBUG(NULL, NULL, "full view: modified at #%ld/%ld", (long)index, (long)m_entries.size());
                 // Use potentially modified pre-computed data.
                 m_entries.replace(it, data.release());
                 m_modifiedSignal(index, *it);
@@ -247,7 +247,7 @@ void FullView::removeIndividual(FolksIndividual *individual)
          ++it) {
         if (it->m_individual.get() == individual) {
             size_t index = it - m_entries.begin();
-            SE_LOG_DEBUG(NULL, NULL, "full view: removed at #%ld/%ld", index, m_entries.size());
+            SE_LOG_DEBUG(NULL, NULL, "full view: removed at #%ld/%ld", (long)index, (long)m_entries.size());
             Entries_t::auto_type data = m_entries.release(it);
             m_removedSignal(index, *data);
             waitForIdle();
