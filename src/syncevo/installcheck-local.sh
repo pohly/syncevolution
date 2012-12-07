@@ -51,4 +51,4 @@ done
 # must take DESTDIR into account by adding -L<libdir> (skipped when equal to /usr/lib)
 # and modifying any additional paths including that
 pkg-config --libs syncevolution
-env LD_LIBRARY_PATH=$3:$3/syncevolution $LD_LIBRARY_PATH $CXX -v $TMPFILE_O -o $TMPFILE "-L$3" `pkg-config --libs syncevolution | sed -e "s;/usr/lib;$3;g"`
+env LD_LIBRARY_PATH=$3:$3/syncevolution:$LD_LIBRARY_PATH $CXX -v $TMPFILE_O -o $TMPFILE "-L$3" `pkg-config --libs syncevolution | sed -e "s;/usr/lib;$3;g"`
