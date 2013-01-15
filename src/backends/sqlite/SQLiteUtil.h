@@ -26,6 +26,7 @@
 #include <syncevo/SmartPtr.h>
 
 #include <string>
+#include <stdio.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
