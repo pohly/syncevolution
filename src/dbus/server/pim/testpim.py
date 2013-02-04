@@ -229,11 +229,12 @@ XDG root.
 
         # Remove all sources and configs which were created by us
         # before running the test.
-        removed = False;
-        for source in os.listdir(self.sourcedir):
-            if source.startswith(self.managerPrefix + self.uidPrefix):
-                os.unlink(os.path.join(self.sourcedir, source))
-                removed = True
+        removed = False
+        if os.path.exists(self.sourcedir):
+             for source in os.listdir(self.sourcedir):
+                  if source.startswith(self.managerPrefix + self.uidPrefix):
+                       os.unlink(os.path.join(self.sourcedir, source))
+                       removed = True
         if removed:
             # Give EDS time to notice the removal.
             time.sleep(5)
@@ -374,7 +375,7 @@ XDG root.
 
     def currentSources(self):
         '''returns current set of EDS sources as set of UIDs, without the .source suffix'''
-        return set([os.path.splitext(x)[0] for x in os.listdir(self.sourcedir)])
+        return set([os.path.splitext(x)[0] for x in (os.path.exists(self.sourcedir) and os.listdir(self.sourcedir) or [])])
 
     @property("snapshot", "simple-sort")
     def testConfig(self):
