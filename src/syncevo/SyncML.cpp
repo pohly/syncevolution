@@ -999,7 +999,7 @@ std::string SyncReport::slowSyncExplanation(const std::string &peer,
                      "Analyzing the current state:\n"
                      "    syncevolution --status %s %s\n\n"
                      "Running with one of the three modes:\n"
-                     "    syncevolution --sync [slow|refresh-from-server|refresh-from-client] %s %s\n",
+                     "    syncevolution --sync [slow|refresh-from-remote|refresh-from-local] %s %s\n",
                      peer.c_str(), sourceparam.c_str(),
                      peer.c_str(), sourceparam.c_str());
     return explanation;
