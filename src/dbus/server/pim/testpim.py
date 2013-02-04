@@ -319,6 +319,20 @@ XDG root.
     def exportCache(self, uid, filename):
         '''dump local cache content into file'''
         self.runCmdline(['--export', filename, '@' + self.managerPrefix + uid, 'local'])
+        contacts = open(filename, 'r').read()
+        # Ignore one empty vcard because the Nokia N97 always sends such a vcard,
+        # despite having deleted everything via SyncML. The ordering of properties
+        # comes from our own vcard profile (UID/PRODID/REV first).
+        contacts = re.sub(r'''BEGIN:VCARD\r?
+VERSION:3.0\r?
+((UID|PRODID|REV):.*\r?
+)*N:;;;;\r?
+FN:\r?
+END:VCARD(\r|\n)*''',
+                          '',
+                          contacts,
+                          1)
+        open(filename, 'w').write(contacts)
 
     def extractLUIDs(self, out):
          '''Extract the LUIDs from syncevolution --import/update output.'''
@@ -334,6 +348,7 @@ XDG root.
             # Allow the phone to add extensions like X-CLASS=private
             # (seen with Nokia N97 mini - FWIW, the phone should have
             # use CLASS=PRIVATE, because it was using vCard 3.0).
+            # Also removes X-EVOLUTION-FILE-AS.
             env['CLIENT_TEST_STRIP_PROPERTIES'] = 'X-[-_a-zA-Z0-9]*'
         sub = subprocess.Popen(['synccompare', expected, real],
                                env=env,
@@ -341,7 +356,11 @@ XDG root.
                                stderr=subprocess.STDOUT)
         stdout, stderr = sub.communicate()
         self.assertEqual(0, sub.returncode,
-                         msg=stdout)
+                         msg="env 'CLIENT_TEST_STRIP_PROPERTIES=%s' synccompare %s %s\n%s" %
+                         (env.get('CLIENT_TEST_STRIP_PROPERTIES', ''),
+                          expected,
+                          real,
+                          stdout))
 
     def configurePhone(self, phone, uid, contacts):
         '''set up SyncML for copying all vCard 3.0 files in 'contacts' to the phone, if phone was set'''
@@ -557,8 +576,9 @@ XDG root.
              return result
 
         def listsyncevo(exclude=[]):
+             '''find all files owned by SyncEvolution, excluding the logs for syncing with a real phone'''
              return listall([os.path.join(xdg_root, x) for x in ['config/syncevolution', 'cache/syncevolution']],
-                            exclude)
+                            exclude + ['.*/phone@.*', '.*/peers/phone.*'])
 
         # Remember current list of files and modification time stamp.
         files = listsyncevo()
@@ -589,7 +609,7 @@ XDG root.
         export = os.path.join(xdg_root, 'local.vcf')
         self.exportCache(uid, export)
 
-        # Server item should be the simple one now, as in the client.
+        # Must be empty now.
         self.compareDBs(contacts, export)
 
         # Add a contact.
