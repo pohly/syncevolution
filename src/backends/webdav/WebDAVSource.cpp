@@ -843,6 +843,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             m_settings->getCredentials("", user, pw);
             m_session->forceAuthorization(user, pw);
             m_davProps.clear();
+            // Avoid asking for CardDAV properties when only using CalDAV
+            // and vice versa, to avoid breaking both when the server is only
+            // broken for one of them (like Google, which (temporarily?) sent
+            // invalid CardDAV properties).
             static const ne_propname caldav[] = {
                 // WebDAV ACL
                 { "DAV:", "alternate-URI-set" },
@@ -863,6 +867,17 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 { "urn:ietf:params:xml:ns:caldav", "max-date-time" },
                 { "urn:ietf:params:xml:ns:caldav", "max-instances" },
                 { "urn:ietf:params:xml:ns:caldav", "max-attendees-per-instance" },
+                { NULL, NULL }
+            };
+            static const ne_propname carddav[] = {
+                // WebDAV ACL
+                { "DAV:", "alternate-URI-set" },
+                { "DAV:", "principal-URL" },
+                { "DAV:", "current-user-principal" },
+                { "DAV:", "group-member-set" },
+                { "DAV:", "group-membership" },
+                { "DAV:", "displayname" },
+                { "DAV:", "resourcetype" },
                 // CardDAV
                 { "urn:ietf:params:xml:ns:carddav", "addressbook-home-set" },
                 { "urn:ietf:params:xml:ns:carddav", "principal-address" },
@@ -872,7 +887,9 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 { NULL, NULL }
             };
             SE_LOG_DEBUG(NULL, NULL, "read relevant properties of %s", path.c_str());
-            m_session->propfindProp(path, 0, caldav, callback, deadline);
+            m_session->propfindProp(path, 0,
+                                    getContent() == "VCARD" ? carddav : caldav,
+                                    callback, deadline);
             success = true;
         } catch (const Neon::RedirectException &ex) {
             // follow to new location
@@ -1021,20 +1038,29 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     // Yahoo! Calendar does not return resources contained in /dav/<user>/Calendar/
                     // if <allprops> is used. Properties must be requested explicitly.
                     SE_LOG_DEBUG(NULL, NULL, "list items in %s", path.c_str());
-                    static const ne_propname props[] = {
+                    // See findCollections() for the reason why we are not mixing CalDAV and CardDAV
+                    // properties.
+                    static const ne_propname caldav[] = {
                         { "DAV:", "displayname" },
                         { "DAV:", "resourcetype" },
                         { "urn:ietf:params:xml:ns:caldav", "calendar-home-set" },
                         { "urn:ietf:params:xml:ns:caldav", "calendar-description" },
                         { "urn:ietf:params:xml:ns:caldav", "calendar-timezone" },
                         { "urn:ietf:params:xml:ns:caldav", "supported-calendar-component-set" },
+                        { NULL, NULL }
+                    };
+                    static const ne_propname carddav[] = {
+                        { "DAV:", "displayname" },
+                        { "DAV:", "resourcetype" },
                         { "urn:ietf:params:xml:ns:carddav", "addressbook-home-set" },
                         { "urn:ietf:params:xml:ns:carddav", "addressbook-description" },
                         { "urn:ietf:params:xml:ns:carddav", "supported-address-data" },
                         { NULL, NULL }
                     };
                     m_davProps.clear();
-                    m_session->propfindProp(path, 1, props, callback, finalDeadline);
+                    m_session->propfindProp(path, 1,
+                                            getContent() == "VCARD" ? carddav : caldav,
+                                            callback, finalDeadline);
                     std::set<std::string> subs;
                     BOOST_FOREACH(Props_t::value_type &entry, m_davProps) {
                         const std::string &sub = entry.first;
