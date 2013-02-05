@@ -174,18 +174,48 @@ ActiveSyncSource::Databases ActiveSyncSource::getDatabases()
     return result;
 }
 
+std::string ActiveSyncSource::lookupFolder(std::string folder) {
+    // If folder matches a collectionId, use that
+    if (m_collections.find(folder) != m_collections.end()) return folder;
+
+    // If folder begins with /, drop it
+    if (folder[0] == '/') folder.erase(0,1);
+
+    // Lookup folder name
+    if (m_folderPaths.find(folder) != m_folderPaths.end()) return m_folderPaths[folder];
+
+    // Not found
+    return "";
+}
 
 void ActiveSyncSource::open()
 {
     // extract account ID and throw error if missing
     std::string username = m_context->getSyncUsername();
+    std::string folder = getDatabaseID();
     SE_LOG_DEBUG(NULL, NULL,
-                 "using eas sync account %s from config %s",
+                 "using eas sync account %s from config %s with folder %s",
                  username.c_str(),
-                 m_context->getConfigName().c_str());
+                 m_context->getConfigName().c_str(),
+		 folder.c_str());
+
+    if (folder.empty()) { // Most common case is empty string
+	m_folder = folder;
+    } else { // Lookup folder name
+	// Try using cached folder list
+	findCollections(username, false);
+	m_folder = lookupFolder(folder);
+	if (m_folder.empty()) {
+	    // Fetch latest folder list and try again
+	    findCollections(username, true);
+	    m_folder = lookupFolder(folder);
+	}
+	if (m_folder.empty()) {
+	    throwError("could not find folder: "+folder);
+	}
+    }
 
     m_account = username;
-    m_folder = getDatabaseID();
 
     // create handler
     m_handler.set(eas_sync_handler_new(m_account.c_str()), "EAS handler");
