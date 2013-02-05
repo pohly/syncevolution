@@ -216,6 +216,26 @@ template<class C> class StealGObject : public TrackGObject<C> {
     StealGObject(const StealGObject &other) : TrackGObject<C>(other) {}
 };
 
+template<class C> class TrackGLib : public boost::intrusive_ptr<C> {
+    typedef boost::intrusive_ptr<C> Base_t;
+
+ public:
+    TrackGLib(C *ptr, bool add_ref = true) : Base_t(ptr, add_ref) {}
+    TrackGLib() {}
+    TrackGLib(const TrackGLib &other) : Base_t(other) {}
+    operator C * () const { return Base_t::get(); }
+    operator bool () const { return Base_t::get() != NULL; }
+    C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
+
+    static  TrackGLib steal(C *ptr) { return TrackGLib(ptr, false); }
+};
+
+template<class C> class StealGLib : public TrackGLib<C> {
+ public:
+    StealGLib(C *ptr) : TrackGLib<C>(ptr, false) {}
+    StealGLib() {}
+    StealGLib(const StealGLib &other) : TrackGLib<C>(other) {}
+};
 
 /**
  * Defines a shared pointer for a GObject-based type, with intrusive
@@ -268,11 +288,12 @@ template<class C> class StealGObject : public TrackGObject<C> {
  * Example:
  * SE_GLIB_TYPE(GMainLoop, g_main_loop)
  */
-#define SE_GLIB_TYPE(_type, _func_prefix) \
-    void inline intrusive_ptr_add_ref(_type *ptr) { _func_prefix ## _ref(ptr); } \
-    void inline intrusive_ptr_release(_type *ptr) { _func_prefix ## _unref(ptr); } \
+#define SE_GLIB_TYPE(_x, _func_prefix) \
+    void inline intrusive_ptr_add_ref(_x *ptr) { _func_prefix ## _ref(ptr); } \
+    void inline intrusive_ptr_release(_x *ptr) { _func_prefix ## _unref(ptr); } \
     SE_BEGIN_CXX \
-        typedef boost::intrusive_ptr<_type> _type ## CXX; \
+    typedef TrackGLib<_x> _x ## CXX; \
+    typedef StealGLib<_x> _x ## StealCXX; \
     SE_END_CXX
 
 SE_END_CXX
