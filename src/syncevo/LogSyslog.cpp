@@ -29,9 +29,12 @@ using namespace std;
 SE_BEGIN_CXX
 
 LoggerSyslog::LoggerSyslog(const std::string &processName) :
+    m_processName(processName),
     m_parentLogger(LoggerBase::instance())
 {
-    openlog(processName.c_str(), LOG_CONS | LOG_NDELAY | LOG_PID, LOG_USER);
+    // valgrind tells us that openlog() does not copy the string.
+    // Must provide pointer to a permanent copy.
+    openlog(m_processName.c_str(), LOG_CONS | LOG_NDELAY | LOG_PID, LOG_USER);
     LoggerBase::pushLogger(this);
 }
 
