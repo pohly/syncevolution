@@ -301,6 +301,7 @@ SE_END_CXX
 SE_GOBJECT_TYPE(GFile)
 SE_GOBJECT_TYPE(GFileMonitor)
 SE_GLIB_TYPE(GMainLoop, g_main_loop)
+SE_GLIB_TYPE(GAsyncQueue, g_async_queue)
 
 SE_BEGIN_CXX
 

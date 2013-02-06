@@ -76,6 +76,8 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
     DBusObjectHelper(server->getConnection(),
                      MANAGER_PATH,
                      MANAGER_IFACE),
+    m_mainThread(g_thread_self()),
+    m_taskQueue(GAsyncQueueStealCXX(g_async_queue_new())),
     m_server(server),
     m_locale(LocaleFactory::createFactory())
 {
@@ -93,6 +95,8 @@ Manager::~Manager()
 
 void Manager::init()
 {
+    m_taskQueueFlush.activate(-1, boost::bind(&Manager::checkTaskQueueOnIdle, this));
+
     // Restore sort order and active databases.
     m_configNode.reset(new IniFileConfigNode(SubstEnvironment("${XDG_CONFIG_HOME}/syncevolution"),
                                              "pim-manager.ini",
@@ -140,6 +144,89 @@ void Manager::init()
                                                               boost::function<void (bool)>());
 }
 
+struct TaskForMain
+{
+    GMutex m_mutex;
+    GCond m_cond;
+    bool m_done;
+    boost::function<void ()> m_operation;
+    boost::function<void ()> m_rethrow;
+};
+
+template <class R> void AssignResult(const boost::function<R ()> &operation,
+                                     R &res)
+{
+    res = operation();
+}
+
+template <class R> R Manager::runInMainRes(const boost::function<R ()> &operation)
+{
+    // Prepare task.
+    R res;
+    TaskForMain task;
+    g_mutex_init(&task.m_mutex);
+    g_cond_init(&task.m_cond);
+    task.m_done = false;
+    task.m_operation = boost::bind(&AssignResult<R>, boost::cref(operation), boost::ref(res));
+
+    // Run in main.
+    g_async_queue_push(m_taskQueue, &task);
+    g_main_context_wakeup(NULL);
+    g_mutex_lock(&task.m_mutex);
+    while (!task.m_done) {
+        g_cond_wait(&task.m_cond, &task.m_mutex);
+    }
+    g_mutex_unlock(&task.m_mutex);
+
+    // Rethrow exceptions (optional) and return result.
+    g_cond_clear(&task.m_cond);
+    g_mutex_clear(&task.m_mutex);
+    if (task.m_rethrow) {
+        task.m_rethrow();
+    }
+    return res;
+}
+
+static int Return1(const boost::function<void ()> &operation)
+{
+    operation();
+    return 1;
+}
+
+void Manager::runInMainVoid(const boost::function<void ()> &operation)
+{
+    runInMainRes<int>(boost::bind(Return1, boost::cref(operation)));
+}
+
+bool Manager::checkTaskQueueOnIdle()
+{
+    TaskForMain *task;
+
+    while ((task = static_cast<TaskForMain *>(g_async_queue_try_pop(m_taskQueue))) != NULL) {
+        g_mutex_lock(&task->m_mutex);
+
+        // Exceptions must be reported back to the original thread.
+        // This is done by serializing them as string, then using the
+        // existing Exception::tryRethrow() to turn that string back
+        // into an instance of the right class.
+        try {
+            task->m_operation();
+        } catch (...) {
+            std::string explanation;
+            Exception::handle(explanation);
+            task->m_rethrow = boost::bind(Exception::tryRethrow, explanation, true);
+        }
+
+        // Wake up task.
+        task->m_done = true;
+        g_cond_signal(&task->m_cond);
+        g_mutex_unlock(&task->m_mutex);
+    }
+
+    // Keep checking.
+    return true;
+}
+
 void Manager::initFolks()
 {
     m_folks = IndividualAggregator::create(m_locale);
@@ -177,6 +264,11 @@ boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::
 
 void Manager::start()
 {
+    if (!isMain()) {
+        runInMainV(&Manager::start);
+        return;
+    }
+
     if (!m_preventingAutoTerm) {
         // Prevent automatic shut down during idle times, because we need
         // to keep our unified address book available.
@@ -188,6 +280,11 @@ void Manager::start()
 
 void Manager::stop()
 {
+    if (!isMain()) {
+        runInMainV(&Manager::stop);
+        return;
+    }
+
     // If there are no active searches, then recreate aggregator.
     // Instead of tracking open views, use the knowledge that an
     // idle server has only two references to the main view:
@@ -208,11 +305,20 @@ void Manager::stop()
 
 bool Manager::isRunning()
 {
+    if (!isMain()) {
+        return runInMainR(&Manager::isRunning);
+    }
+
     return m_folks->isRunning();
 }
 
 void Manager::setSortOrder(const std::string &order)
 {
+    if (!isMain()) {
+        runInMainV(&Manager::setSortOrder, order);
+        return;
+    }
+
     if (order == getSortOrder()) {
         // Nothing to do.
         return;
@@ -224,6 +330,15 @@ void Manager::setSortOrder(const std::string &order)
     m_configNode->writeProperty(MANAGER_CONFIG_SORT_PROPERTY, InitStateString(order, true));
     m_configNode->flush();
     m_sortOrder = order;
+}
+
+std::string Manager::getSortOrder()
+{
+    if (!isMain()) {
+        return runInMainR(&Manager::getSortOrder);
+    }
+
+    return m_sortOrder;
 }
 
 /**
@@ -651,6 +766,8 @@ void Manager::search(const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusOb
                      const LocaleFactory::Filter_t &filter,
                      const GDBusCXX::DBusObject_t &agentPath)
 {
+    // TODO: figure out a native, thread-safe API for this.
+
     // Start folks in parallel with asking for an ESourceRegistry.
     start();
 

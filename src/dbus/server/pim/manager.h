@@ -38,6 +38,9 @@ SE_BEGIN_CXX
  */
 class Manager : public GDBusCXX::DBusObjectHelper
 {
+    GThread *m_mainThread;
+    GAsyncQueueCXX m_taskQueue;
+    Timeout m_taskQueueFlush;
     boost::weak_ptr<Manager> m_self;
     boost::shared_ptr<Server> m_server;
     boost::shared_ptr<IndividualAggregator> m_folks;
@@ -73,7 +76,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.SetSortOrder() */
     void setSortOrder(const std::string &order);
     /** Manager.GetSortOrder() */
-    std::string getSortOrder() { return m_sortOrder; }
+    std::string getSortOrder();
     /** Manager.Search() */
     void search(const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
                 const GDBusCXX::Caller_t &ID,
@@ -172,6 +175,28 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void doSession(const boost::weak_ptr<Session> &session,
                    const boost::shared_ptr<GDBusCXX::Result> &result,
                    const boost::function<void (const boost::shared_ptr<Session> &session)> &callback);
+
+    /** true if the current thread is the one handling the event loop and running all operations */
+    bool isMain() { return g_thread_self() == m_mainThread; }
+
+    /**
+     * Runs the operation inside the main thread and returns once the
+     * main thread is done with it.
+     */
+    void runInMainVoid(const boost::function<void ()> &operation);
+    template <class R> R runInMainRes(const boost::function<R ()> &operation);
+
+    void runInMainV(void (Manager::*method)()) { runInMainVoid(boost::bind(method, this)); }
+    template <class R> R runInMainR(R (Manager::*method)()) { return runInMainRes<R>(boost::bind(method, this)); }
+    template <class A1, class B1> void runInMainV(void (Manager::*method)(B1), A1 a1) { runInMainVoid(boost::bind(method, this, a1)); }
+    template <class R, class A1, class B1> R runInMainR(R (Manager::*method)(B1), A1 a1) { return runInMainRes<R>(boost::bind(method, this, a1)); }
+
+    /**
+     * An idle callback which checks the task queue. runInMainV()
+     * wakes up the context to ensure that the idle callback is
+     * invoked.
+     */
+    bool checkTaskQueueOnIdle();
 
  public:
     /**
