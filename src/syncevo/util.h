@@ -534,9 +534,12 @@ class Exception : public std::runtime_error
     /**
      * Tries to identify exception class based on explanation string created by
      * handle(). If successful, that exception is throw with the same
-     * attributes as in the original exception. Otherwise parse() returns.
+     * attributes as in the original exception.
+     *
+     * If not, tryRethrow() returns (mustThrow false) or throws a std::runtime_error
+     * with the explanation as text.
      */
-    static void tryRethrow(const std::string &explanation);
+    static void tryRethrow(const std::string &explanation, bool mustThrow = false);
 
     /**
      * Same as tryRethrow() for strings with a 'org.syncevolution.xxxx:' prefix,

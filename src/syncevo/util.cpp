@@ -882,7 +882,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     return status ? *status : new_status;
 }
 
-void Exception::tryRethrow(const std::string &explanation)
+void Exception::tryRethrow(const std::string &explanation, bool mustThrow)
 {
     static const std::string statusre = ".* \\((?:local|remote), status (\\d+)\\)";
     int status;
@@ -901,6 +901,10 @@ void Exception::tryRethrow(const std::string &explanation)
         if (re.FullMatch(explanation.substr(strlen(SYNCEVOLUTION_PROBLEM)), &status, &details)) {
             SE_THROW_EXCEPTION_STATUS(StatusException, details, (SyncMLStatus)status);
         }
+    }
+
+    if (mustThrow) {
+        throw std::runtime_error(explanation);
     }
 }
 
