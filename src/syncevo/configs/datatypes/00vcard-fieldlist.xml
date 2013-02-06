@@ -111,6 +111,10 @@
       <field name="PHOTO_TYPE" type="string" compare="never" merge="fillempty"/>
       <field name="PHOTO_VALUE" type="string" compare="never" merge="fillempty"/>
 
+      <!-- Location -->
+      <field name="GEO_LAT" type="string" compare="never"/>
+      <field name="GEO_LONG" type="string" compare="never"/>
+
       <!-- Crypto fields for KAddressbook -->
       <field name="CRYPTOENCRYPTPREF" type="string" compare="conflict"/>
       <field name="CRYPTOPROTOPREF" array="yes" type="string" compare="conflict"/>

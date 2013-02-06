@@ -16,7 +16,7 @@
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
-@@ -198,14 +198,14 @@
+@@ -199,14 +199,14 @@
  TEL;TYPE=WORK;TYPE=FAX;X-EVOLUTION-UI-SLOT=4:businessfax 4
  TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
  TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6

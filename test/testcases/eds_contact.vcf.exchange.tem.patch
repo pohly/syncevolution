@@ -111,7 +111,7 @@
  LABEL;TYPE=HOME:Address Line 1\nAddress Line 2\nAddress Line 3
  UID:pas-id-43C15DFB000001AB
  END:VCARD
-@@ -167,48 +156,31 @@
+@@ -167,49 +156,32 @@
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
@@ -120,6 +120,7 @@
  X-EVOLUTION-FILE-AS:Doe\, John
  CATEGORIES:TEST
 -X-EVOLUTION-BLOG-URL:web log
+ GEO:30.12;-130.34
 -CALURI:calender
 -FBURL:free/busy
 -X-EVOLUTION-VIDEO-URL:chat
@@ -175,7 +176,7 @@
  END:VCARD
  
  BEGIN:VCARD
-@@ -221,8 +193,7 @@
+@@ -222,8 +194,7 @@
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
  NOTE:image in JPG format
@@ -185,7 +186,7 @@
  X-EVOLUTION-FILE-AS:JPG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -257,8 +228,7 @@
+@@ -258,8 +229,7 @@
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
  NOTE:image in PNG format
@@ -195,7 +196,7 @@
  X-EVOLUTION-FILE-AS:PNG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -288,8 +258,7 @@
+@@ -289,8 +259,7 @@
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
@@ -205,7 +206,7 @@
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -309,8 +278,7 @@
+@@ -310,8 +279,7 @@
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
  NOTE:image in GIF format
@@ -215,7 +216,7 @@
  X-EVOLUTION-FILE-AS:GIF
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -429,7 +397,6 @@
+@@ -430,7 +398,6 @@
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <

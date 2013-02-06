@@ -422,6 +422,11 @@
           </parameter>
         </property>
 
+        <property name="GEO" values="2">
+          <value index="0" field="GEO_LAT"/>
+          <value index="1" field="GEO_LONG"/>
+        </property>
+
         <property name="X-*" suppressempty="yes" show="false">
           <value field="XPROPS"/>
           <position field="XPROPS" repeat="array" increment="1" minshow="0"/>
