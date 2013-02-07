@@ -1228,7 +1228,7 @@ NOTE:This is a test case which uses almost all Evolution fields.
 FN:John Doe
 N:Doe;John;;;
 X-EVOLUTION-FILE-AS:Doe\, John
-CATEGORIES:TEST
+CATEGORIES:TEST1,TEST2
 X-EVOLUTION-BLOG-URL:web log
 CALURI:calender
 FBURL:free/busy
@@ -1318,6 +1318,7 @@ END:VCARD
         if contact.has_key('id'):
              contact['id'] = '<stripped>'
         self.assertEqual({'full-name': 'John Doe',
+                          'groups': ['TEST1', 'TEST2'],
                           'nickname': 'user1',
                           'structured-name': {'given': 'John', 'family': 'Doe'},
                           'birthday': (2006, 1, 8),
@@ -2754,6 +2755,7 @@ END:VCARD''']):
         # backend.
         john = {
              'full-name': 'John Doe',
+             'groups': ['Foo', 'Bar'],
              'structured-name': {
                   'family': 'Doe',
                   'given': 'John',
@@ -2857,6 +2859,7 @@ END:VCARD''']):
              'id': contact.get('id', '<???>'),
 
              'full-name': 'John A. Doe',
+             'groups': ['Foo', 'Bar'],
              'structured-name': {
                   'family': 'Doe',
                   'given': 'John',

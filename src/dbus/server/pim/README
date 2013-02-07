@@ -270,6 +270,7 @@ contact dictionary:
 "notes" - list of strings; in practice only one entry is supported
 "addresses" - value list with an address dictionary as value
 "roles" - list of role dictionaries
+"groups" - list strings representing the names of groups the contact belongs to (CATEGORIES in vCard)
 
 
 name dictionary:
@@ -333,6 +334,7 @@ Here is an example contact dictionary, using Python syntax:
     {
           'full-name': 'John Doe',
           'nickname': 'Johnny',
+          'groups': ['friends', 'soccer'],
           'structured-name': {'given': 'John', 'family': 'Doe'},
           'birthday': (2006, 1, 8),
           'photo': 'file:///home/user/file.png',

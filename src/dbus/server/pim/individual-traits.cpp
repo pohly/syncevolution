@@ -61,6 +61,7 @@ static const char * const CONTACT_HASH_ROLES = "roles";
 static const char * const CONTACT_HASH_ROLES_ORGANISATION = "organisation";
 static const char * const CONTACT_HASH_ROLES_TITLE = "title";
 static const char * const CONTACT_HASH_ROLES_ROLE = "role";
+static const char * const CONTACT_HASH_GROUPS = "groups";
 static const char * const CONTACT_HASH_SOURCE = "source";
 static const char * const CONTACT_HASH_ID = "id";
 
@@ -472,6 +473,25 @@ static void DBus2Role(GDBusCXX::ExtractArgs &context,
 }
 
 /**
+ * Copy from D-Bus into a set of strings.
+ */
+static void DBus2Groups(GDBusCXX::ExtractArgs &context,
+                        GVariantIter &valueIter,
+                        PersonaDetails &details)
+{
+    std::list<std::string> value;
+    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GeeHashSetCXX set(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc)g_strdup, g_free, NULL, NULL), false);
+    BOOST_FOREACH(const std::string &entry, value) {
+        gee_collection_add(GEE_COLLECTION(set.get()),
+                           entry.c_str());
+    }
+    g_hash_table_insert(details.get(),
+                        const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_GROUPS)),
+                        new GValueObjectCXX(set.get()));
+}
+
+/**
  * Copy from D-Bus into a FolksAddressFieldDetails.
  */
 static void DBus2Addr(GDBusCXX::ExtractArgs &context,
@@ -599,6 +619,8 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                      reinterpret_cast<FolksAbstractFieldDetails *(*)(const gchar *, GeeMultiMap *)>(folks_note_field_details_new));
         } else if (key == CONTACT_HASH_ROLES) {
             DBus2Role(context, valueIter, details);
+        } else if (key == CONTACT_HASH_GROUPS) {
+            DBus2Groups(context, valueIter, details);
         } else if (key == CONTACT_HASH_ADDRESSES) {
             DBus2Addr(context, valueIter, details);
         }
@@ -850,6 +872,28 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
         }
     }
 
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_GROUPS)));
+    {
+        GeeSet *value;
+        if (gvalue) {
+            value = GEE_SET(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>(gee_hash_set_new(G_TYPE_STRING,
+                                                               (GBoxedCopyFunc)g_strdup,
+                                                               g_free,
+                                                               NULL,
+                                                               NULL),
+                                              g_object_unref);
+            value = static_cast<GeeSet *>(tracker.get());
+        }
+        FolksGroupDetails *details = FOLKS_GROUP_DETAILS(persona);
+        if (!GeeCollectionEqual(GEE_COLLECTION(value),
+                                GEE_COLLECTION(folks_group_details_get_groups(details)))) {
+            PUSH_CHANGE(folks_group_details_change_groups);
+        }
+    }
+
     gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_POSTAL_ADDRESSES)));
     {
         GeeSet *value;
@@ -938,6 +982,11 @@ void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builde
                    (GeeCollCXX<FolksRoleFieldDetails *>*)NULL,
                    CONTACT_HASH_ROLES);
 
+    FolksGroupDetails *groups = FOLKS_GROUP_DETAILS(individual.get());
+    SerializeFolks(builder, groups, folks_group_details_get_groups,
+                   (GeeStringCollection*)NULL,
+                   CONTACT_HASH_GROUPS);
+
     SerializeFolks(builder, individual.get(), folks_individual_get_personas,
                    (GeeCollCXX<FolksPersona *>*)NULL,
                    CONTACT_HASH_SOURCE);
@@ -948,7 +997,6 @@ void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builde
 #if 0
     // Not exposed via D-Bus.
 FolksGender folks_gender_details_get_gender (FolksGenderDetails* self);
-GeeSet* folks_group_details_get_groups (FolksGroupDetails* self);
 GeeMultiMap* folks_web_service_details_get_web_service_addresses (FolksWebServiceDetails* self);
 guint folks_interaction_details_get_im_interaction_count (FolksInteractionDetails* self);
 GDateTime* folks_interaction_details_get_last_im_interaction_datetime (FolksInteractionDetails* self);
