@@ -394,7 +394,7 @@ static void DBus2AbstractField(GDBusCXX::ExtractArgs &context,
     }
     g_hash_table_insert(details.get(),
                         const_cast<gchar *>(folks_persona_store_detail_key(detail)),
-                        new GValueObjectCXX(set.ref()));
+                        new GValueObjectCXX(set.get()));
 }
 
 /**
@@ -426,7 +426,7 @@ static void DBus2SimpleAbstractField(GDBusCXX::ExtractArgs &context,
     }
     g_hash_table_insert(details.get(),
                         const_cast<gchar *>(folks_persona_store_detail_key(detail)),
-                        new GValueObjectCXX(set.ref()));
+                        new GValueObjectCXX(set.get()));
 }
 
 /**
@@ -468,7 +468,7 @@ static void DBus2Role(GDBusCXX::ExtractArgs &context,
     }
     g_hash_table_insert(details.get(),
                         const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_ROLES)),
-                        new GValueObjectCXX(set.ref()));
+                        new GValueObjectCXX(set.get()));
 }
 
 /**
@@ -514,7 +514,7 @@ static void DBus2Addr(GDBusCXX::ExtractArgs &context,
     }
     g_hash_table_insert(details.get(),
                         const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_POSTAL_ADDRESSES)),
-                        new GValueObjectCXX(set.ref()));
+                        new GValueObjectCXX(set.get()));
 }
 
 void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
@@ -556,7 +556,8 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                                                               GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_GIVEN).c_str(),
                                                                               GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_ADDITIONAL).c_str(),
                                                                               GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_PREFIXES).c_str(),
-                                                                              GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_SUFFIXES).c_str())));
+                                                                              GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_SUFFIXES).c_str()),
+                                                    false));
         } else if (key == CONTACT_HASH_PHOTO) {
             std::string value;
             GDBusCXX::dbus_traits<std::string>::get(context, valueIter, value);
@@ -564,7 +565,7 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                           false);
             g_hash_table_insert(details.get(),
                                 const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_AVATAR)),
-                                new GValueObjectCXX(g_file_icon_new(file.get())));
+                                new GValueObjectCXX(g_file_icon_new(file.get()), false));
         } else if (key == CONTACT_HASH_BIRTHDAY) {
             boost::tuple<int, int, int> value;
             GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
@@ -575,7 +576,7 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                false);
             g_hash_table_insert(details.get(),
                                 const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)),
-                                new GValueDateTimeCXX(g_date_time_to_utc(local.get())));
+                                new GValueDateTimeCXX(g_date_time_to_utc(local.get()), false));
         } else if (key == CONTACT_HASH_EMAILS) {
             DBus2AbstractField(context, valueIter, details,
                                FOLKS_TYPE_EMAIL_FIELD_DETAILS,
