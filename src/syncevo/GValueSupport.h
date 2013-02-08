@@ -90,7 +90,7 @@ template<
         init(gType);
     }
     /**
-     * copy other value
+     * copy other value, referencing (GObject) or duplicating (string) it
      */
     GValueTypedCXX(const value_type &other) {
         init(gType);
@@ -98,11 +98,23 @@ template<
     }
 
     /**
-     * copy value
+     * copy value, referencing (GObject) or duplicating (string) it
      */
     GValueTypedCXX(constNativeType value) {
         init(gType);
         set(value);
+    }
+
+    /**
+     * copy (addRef = true) or take ownership of value during construction
+     */
+    GValueTypedCXX(nativeType value, bool addRef) {
+        init(gType);
+        if (addRef) {
+            set(value);
+        } else {
+            take(value);
+        }
     }
 
     /** copy other value */
@@ -177,11 +189,23 @@ template<
     }
 
     /**
-     * copy value
+     * copy value, referencing (GObject) or duplicating (string) it
      */
     GValueDynTypedCXX(const nativeType value) {
         init(gTypeFactory());
         set(value);
+    }
+
+    /**
+     * copy (addRef = true) or take ownership of value during construction
+     */
+    GValueDynTypedCXX(nativeType value, bool addRef) {
+        init(gTypeFactory());
+        if (addRef) {
+            set(value);
+        } else {
+            take(value);
+        }
     }
 
     /** copy other value */
@@ -192,7 +216,7 @@ template<
         return *this;
     }
 
-    /** copy other value */
+    /** copy other value, referencing (GObject) or duplicating (string) it */
     value_type &operator = (const nativeType other) {
         set(other);
         return *this;
