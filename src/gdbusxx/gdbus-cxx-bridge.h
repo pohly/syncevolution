@@ -1402,6 +1402,13 @@ template<> struct dbus_traits<uint32_t> :
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
+template<> struct dbus_traits<double> :
+    public basic_marshal< double, VariantTypeDouble >
+{
+    static std::string getType() { return "d"; }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+};
 
 template<> struct dbus_traits<bool> : public dbus_traits_base
 // cannot use basic_marshal because VariantTypeBoolean packs/unpacks

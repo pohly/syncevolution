@@ -45,6 +45,7 @@ static const char * const CONTACT_HASH_STRUCTURED_NAME_SUFFIXES = "suffixes";
 static const char * const CONTACT_HASH_ALIAS = "alias";
 static const char * const CONTACT_HASH_PHOTO = "photo";
 static const char * const CONTACT_HASH_BIRTHDAY = "birthday";
+static const char * const CONTACT_HASH_LOCATION = "location";
 static const char * const CONTACT_HASH_EMAILS = "emails";
 static const char * const CONTACT_HASH_PHONES = "phones";
 static const char * const CONTACT_HASH_URLS = "urls";
@@ -354,6 +355,14 @@ template <> struct dbus_traits<GDateTime *> {
     }
 };
 
+template <> struct dbus_traits<FolksLocation *> {
+    static void append(builder_type &builder, FolksLocation *value) {
+        g_variant_builder_open(&builder, G_VARIANT_TYPE("(dd)")); // tuple with latitude + longitude
+        GDBusCXX::dbus_traits<double>::append(builder, value->latitude);
+        GDBusCXX::dbus_traits<double>::append(builder, value->longitude);
+        g_variant_builder_close(&builder); // tuple
+    }
+};
 
 } // namespace GDBusCXX
 
@@ -597,6 +606,15 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
             g_hash_table_insert(details.get(),
                                 const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)),
                                 new GValueDateTimeCXX(g_date_time_to_utc(local.get()), false));
+        } else if (key == CONTACT_HASH_LOCATION) {
+            boost::tuple<double, double> value;
+            GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+            FolksLocationCXX location(folks_location_new(value.get<0>(),
+                                                         value.get<1>()),
+                                      false);
+            g_hash_table_insert(details.get(),
+                                const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_LOCATION)),
+                                new GValueObjectCXX(location.get()));
         } else if (key == CONTACT_HASH_EMAILS) {
             DBus2AbstractField(context, valueIter, details,
                                FOLKS_TYPE_EMAIL_FIELD_DETAILS,
@@ -758,6 +776,27 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             (value != NULL && old == NULL) ||
             !g_date_time_equal(value, old)) {
             PUSH_CHANGE(folks_birthday_details_change_birthday);
+        }
+    }
+
+    gvalue = static_cast<const GValue *>(g_hash_table_lookup(details.get(), folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_LOCATION)));
+    {
+        FolksLocation *value;
+        if (gvalue) {
+            value = static_cast<FolksLocation *>(g_value_get_object(gvalue));
+            tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
+        } else {
+            tracker = boost::shared_ptr<void>();
+            value = NULL;
+        }
+        FolksLocationDetails *details = FOLKS_LOCATION_DETAILS(persona);
+        FolksLocation *old = folks_location_details_get_location(details);
+        if ((value == NULL && old != NULL) ||
+            (value != NULL && old == NULL) ||
+            (value && old &&
+             (value->latitude != old->latitude ||
+              value->longitude != old->longitude))) {
+            PUSH_CHANGE(folks_location_details_change_location);
         }
     }
 
@@ -945,6 +984,10 @@ void FolksIndividual2DBus(const FolksIndividualCXX &individual, GDBusCXX::builde
     SerializeFolks(builder, birthday, folks_birthday_details_get_birthday,
                    CONTACT_HASH_BIRTHDAY);
     // const gchar* folks_birthday_details_get_calendar_event_id (FolksBirthdayDetails* self);
+
+    FolksLocationDetails *location = FOLKS_LOCATION_DETAILS(individual.get());
+    SerializeFolks(builder, location, folks_location_details_get_location,
+                   CONTACT_HASH_LOCATION);
 
     FolksEmailDetails *emails = FOLKS_EMAIL_DETAILS(individual.get());
     SerializeFolks(builder, emails, folks_email_details_get_email_addresses,

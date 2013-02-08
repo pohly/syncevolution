@@ -1229,6 +1229,7 @@ FN:John Doe
 N:Doe;John;;;
 X-EVOLUTION-FILE-AS:Doe\, John
 CATEGORIES:TEST1,TEST2
+GEO:30.12;-130.34
 X-EVOLUTION-BLOG-URL:web log
 CALURI:calender
 FBURL:free/busy
@@ -1319,6 +1320,7 @@ END:VCARD
              contact['id'] = '<stripped>'
         self.assertEqual({'full-name': 'John Doe',
                           'groups': ['TEST1', 'TEST2'],
+                          'location': (30.12, -130.34),
                           'nickname': 'user1',
                           'structured-name': {'given': 'John', 'family': 'Doe'},
                           'birthday': (2006, 1, 8),
@@ -2756,6 +2758,7 @@ END:VCARD''']):
         john = {
              'full-name': 'John Doe',
              'groups': ['Foo', 'Bar'],
+             'location': (30.12, -130.34),
              'structured-name': {
                   'family': 'Doe',
                   'given': 'John',
@@ -2860,6 +2863,7 @@ END:VCARD''']):
 
              'full-name': 'John A. Doe',
              'groups': ['Foo', 'Bar'],
+             'location': (30.12, -130.34),
              'structured-name': {
                   'family': 'Doe',
                   'given': 'John',

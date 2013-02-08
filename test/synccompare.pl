@@ -422,7 +422,7 @@ sub NormalizeItem {
       # Not support car type in telephone
       s!^TEL\;TYPE=CAR(.*)\n!TEL$1\n!mg;
       # some properties are lost
-      s/^(X-EVOLUTION-FILE-AS|NICKNAME|BDAY|CATEGORIES|CALURI|FBURL|ROLE|URL|X-AIM|X-EVOLUTION-UI-SLOT|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-MOZILLA-HTML|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(X-EVOLUTION-FILE-AS|NICKNAME|BDAY|CATEGORIES|CALURI|FBURL|GEO|ROLE|URL|X-AIM|X-EVOLUTION-UI-SLOT|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-MOZILLA-HTML|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
    }
 
    if ($googlecaldav) {
@@ -484,7 +484,7 @@ sub NormalizeItem {
 
     if ($synthesis) {
       # does not preserve certain properties
-      s/^(FN|BDAY|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-AIM|NICKNAME|UID|PHOTO|CALURI|SEQUENCE|TRANSP|ORGANIZER|ROLE|FBURL|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-GROUPWISE|X-ICQ|X-JABBER|X-MANAGER|X-MSN|X-SIP|X-SKYPE|X-SPOUSE|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(FN|GEO|BDAY|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-AIM|NICKNAME|UID|PHOTO|CALURI|SEQUENCE|TRANSP|ORGANIZER|ROLE|FBURL|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-GROUPWISE|X-ICQ|X-JABBER|X-MANAGER|X-MSN|X-SIP|X-SKYPE|X-SPOUSE|X-YAHOO)(;[^:;\n]*)*:.*\r?\n?//gm;
       # default ADR is HOME
       s/^ADR;TYPE=HOME/ADR/gm;
       # only some parts of N are preserved
@@ -510,7 +510,7 @@ sub NormalizeItem {
 
     if ($funambol) {
       # several properties are not preserved
-      s/^(CALURI|FBURL|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-AIM|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-YAHOO|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-ASSISTANT)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(CALURI|FBURL|GEO|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-AIM|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-YAHOO|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-ASSISTANT)(;[^:;\n]*)*:.*\r?\n?//gm;
 
       # quoted-printable line breaks are =0D=0A, not just single =0A
       s/(?<!=0D)=0A/=0D=0A/g;
@@ -620,7 +620,7 @@ sub NormalizeItem {
     }
     if ($memotoo) {
       if (/^BEGIN:VCARD/m ) {
-        s/^(FN|FBURL|CALURI|ROLE|X-MOZILLA-HTML|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-GROUPWISE)(;[^:;\n]*)*:.*\r?\n?//gm;
+        s/^(FN|FBURL|GEO|CALURI|ROLE|X-MOZILLA-HTML|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-GROUPWISE)(;[^:;\n]*)*:.*\r?\n?//gm;
         # s/^(FN|FBURL|CALURI|CATEGORIES|ROLE|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-GROUPWISE)(;[^:;\n]*)*:.*\r?\n?//gm;
         # strip 'TYPE=HOME' 
         s/^URL([^\n:]*);TYPE=HOME/URL$1/mg;
@@ -645,7 +645,7 @@ sub NormalizeItem {
       }
     }
     if ($mobical) {
-      s/^(CALURI|CATEGORIES|FBURL|NICKNAME|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-YAHOO|X-AIM)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(CALURI|CATEGORIES|FBURL|GEO|NICKNAME|X-MOZILLA-HTML|X-EVOLUTION-FILE-AS|X-ANNIVERSARY|X-ASSISTANT|X-EVOLUTION-BLOG-URL|X-EVOLUTION-VIDEO-URL|X-GROUPWISE|X-ICQ|X-GADUGADU|X-JABBER|X-MSN|X-SIP|X-SKYPE|X-MANAGER|X-SPOUSE|X-YAHOO|X-AIM)(;[^:;\n]*)*:.*\r?\n?//gm;
 
       # some workrounds here for mobical's bug 
       s/^(FN|BDAY)(;[^:;\n]*)*:.*\r?\n?//gm;
@@ -685,6 +685,11 @@ sub NormalizeItem {
     if ($googleeas || $exchange) {
         # properties not supported by ActiveSync
         s/^(FN)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($googleeas || $exchange) {
+        # properties not supported by ActiveSync and/or activesyncd
+        s/^(GEO)(;[^:;\n]*)*:.*\r?\n?//gm;
     }
 
     if ($googleeas || $exchange) {
