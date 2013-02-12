@@ -130,7 +130,7 @@ class Logging(dbus.service.Object):
     @dbus.service.signal(dbus_interface='t.d.p',
                          signature='s')
     def log(self, str):
-        if debugger:
+        if debugger or os.environ.get("TEST_DBUS_VERBOSE", False):
             print str
         pass
 
