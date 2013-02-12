@@ -770,7 +770,8 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         # Force killing of remaining children. It's still possible
         # that one of them quits before we get around to sending the
         # signal.
-        logging.printf("starting to kill unresponsive processes at %s", time.asctime())
+        if children:
+            logging.printf("starting to kill unresponsive processes at %s: %s", time.asctime(), str(children))
         killed = []
         for pid, name in children.iteritems():
             if TryKill(pid, signal.SIGKILL):
