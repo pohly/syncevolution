@@ -45,6 +45,8 @@ static const char * const MANAGER_PATH = "/org/01/pim/contacts";
 static const char * const MANAGER_IFACE = "org._01.pim.contacts.Manager";
 static const char * const MANAGER_ERROR_ABORTED = "org._01.pim.contacts.Manager.Aborted";
 static const char * const MANAGER_ERROR_BAD_STATUS = "org._01.pim.contacts.Manager.BadStatus";
+static const char * const MANAGER_ERROR_ALREADY_EXISTS = "org._01.pim.contacts.Manager.AlreadyExists";
+static const char * const MANAGER_ERROR_NOT_FOUND = "org._01.pim.contacts.Manager.NotFound";
 static const char * const AGENT_IFACE = "org._01.pim.contacts.ViewAgent";
 static const char * const CONTROL_IFACE = "org._01.pim.contacts.ViewControl";
 
@@ -132,7 +134,8 @@ void Manager::init()
     add(this, &Manager::search, "Search");
     add(this, &Manager::getActiveAddressBooks, "GetActiveAddressBooks");
     add(this, &Manager::setActiveAddressBooks, "SetActiveAddressBooks");
-    add(this, &Manager::setPeer, "SetPeer");
+    add(this, &Manager::modifyPeer, "SetPeer"); // The original method name, keep it for backwards compatibility.
+    add(this, &Manager::createPeer, "CreatePeer"); // Strict version: uid must be new.
     add(this, &Manager::removePeer, "RemovePeer");
     add(this, &Manager::syncPeer, "SyncPeer");
     add(this, &Manager::stopSync, "StopSync");
@@ -980,8 +983,21 @@ static void checkPeerUID(const std::string &uid)
     }
 }
 
+void Manager::createPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                         const std::string &uid, const StringMap &properties)
+{
+    setPeer(result, uid, properties, CREATE_PEER);
+}
+
+void Manager::modifyPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                         const std::string &uid, const StringMap &properties)
+{
+    setPeer(result, uid, properties, SET_PEER);
+}
+
 void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
-                      const std::string &uid, const StringMap &properties)
+                      const std::string &uid, const StringMap &properties,
+                      ConfigureMode mode)
 {
     checkPeerUID(uid);
     runInSession(StringPrintf("@%s%s",
@@ -989,7 +1005,7 @@ void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                               uid.c_str()),
                  Server::SESSION_FLAG_NO_SYNC,
                  result,
-                 boost::bind(&Manager::doSetPeer, this, _1, result, uid, properties));
+                 boost::bind(&Manager::doSetPeer, this, _1, result, uid, properties, mode));
 }
 
 static const char * const PEER_KEY_PROTOCOL = "protocol";
@@ -1020,7 +1036,8 @@ static std::string GetEssential(const StringMap &properties, const char *key,
 
 void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
                         const boost::shared_ptr<GDBusCXX::Result0> &result,
-                        const std::string &uid, const StringMap &properties)
+                        const std::string &uid, const StringMap &properties,
+                        ConfigureMode mode)
 {
     // The session is active now, we have exclusive control over the
     // databases and the config. Create or update config.
@@ -1063,8 +1080,28 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
 
     if (protocol == PEER_PBAP_PROTOCOL ||
         protocol == PEER_FILES_PROTOCOL) {
-        // Create or set local config.
+        // Create, modify or set local config.
         boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_LOCAL_CONFIG + context));
+        switch (mode) {
+        case CREATE_PEER:
+            if (config->exists()) {
+                // When creating a config, the uid must not be in use already.
+                result->failed(GDBusCXX::dbus_error(MANAGER_ERROR_ALREADY_EXISTS, StringPrintf("uid %s is already in use", uid.c_str())));
+                return;
+            }
+            break;
+        case MODIFY_PEER:
+            if (!config->exists()) {
+                // Modifying expects the config to exist already.
+                result->failed(GDBusCXX::dbus_error(MANAGER_ERROR_NOT_FOUND, StringPrintf("uid %s is not in use", uid.c_str())));
+                return;
+            }
+            break;
+        case SET_PEER:
+            // May or may not exist, doesn't matter.
+            break;
+        }
+
         config->setDefaults();
         config->prepareConfigForWrite();
         config->setPreventSlowSync(false);

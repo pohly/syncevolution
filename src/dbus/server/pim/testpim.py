@@ -414,6 +414,15 @@ END:VCARD(\r|\n)*''',
         self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
         self.assertEqual(expected, self.currentSources())
 
+        # PIM Manager must not allow overwriting an existing config.
+        # Uses the new name for SetPeer().
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     'org._01.pim.contacts.Manager.AlreadyExists: uid ' + uid + ' is already in use') as cm:
+             self.manager.CreatePeer(uid,
+                                     peers[uid],
+                                     timeout=self.timeout)
+        self.assertEqual('org._01.pim.contacts.Manager.AlreadyExists', cm.exception.get_dbus_name())
+
         # TODO: work around EDS bug: e_source_remove_sync() quickly after
         # e_source_registry_create_sources_sync() leads to an empty .source file:
         # [Data Source]

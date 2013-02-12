@@ -216,10 +216,21 @@ Methods:
          Sets the address books which contribute to the unified
          address book.
 
-    void SetPeer(string uid, dict properties)
+    void CreatePeer(string uid, dict properties)
 
-         Adds or modifies a peer. Modifying a peer does *not* affect
-         any contact data which might be cached for it.
+         Creates a peer. Will fail with a
+         org._01.pim.contacts.Manager.AlreadyExists error if the uid
+         is already in use. To change the configuration of a peer,
+         remove and recreate it. This ensures that its data gets
+         removed, too.
+
+         [A ModifyPeer() might get added if there is demand for it
+         and the desired behavior (remove cached data or keep it?)
+         is better understood.]
+
+         As a backwards compatibility measure this method is
+         also available as SetPeer() with the semantic that the
+         config is created or modified automatically as needed.
 
     void RemovePeer(string uid)
 

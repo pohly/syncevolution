@@ -103,13 +103,26 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.SetActiveAddressBooks() */
     void setActiveAddressBooks(const std::vector<std::string> &dbIDs);
 
-    /** Manager.SetPeer() */
-    void setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
-                 const std::string &uid, const StringMap &properties);
+    /** Manager.CreatePeer() */
+    void createPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                    const std::string &uid, const StringMap &properties);
+    /** Manager.ModifyPeer() */
+    void modifyPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                    const std::string &uid, const StringMap &properties);
  private:
+    enum ConfigureMode {
+        SET_PEER,
+        CREATE_PEER,
+        MODIFY_PEER
+    };
+
+    void setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+                 const std::string &uid, const StringMap &properties,
+                 ConfigureMode mode);
     void doSetPeer(const boost::shared_ptr<Session> &session,
                    const boost::shared_ptr<GDBusCXX::Result0> &result,
-                   const std::string &uid, const StringMap &properties);
+                   const std::string &uid, const StringMap &properties,
+                   ConfigureMode mode);
 
  public:
     /** Manager.RemovePeer() */
