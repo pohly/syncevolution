@@ -92,6 +92,15 @@ Manager::~Manager()
     }
 }
 
+#ifdef PIM_MANAGER_TEST_THREADING
+static gpointer StartManager(gpointer data)
+{
+    Manager *manager = static_cast<Manager *>(data);
+    manager->start();
+    return NULL;
+}
+#endif
+
 void Manager::init()
 {
     // Restore sort order and active databases.
@@ -139,6 +148,13 @@ void Manager::init()
     // We don't care about the result.
     GDBusCXX::DBusConnectionPtr(getConnection()).ownNameAsync(MANAGER_SERVICE,
                                                               boost::function<void (bool)>());
+
+#ifdef PIM_MANAGER_TEST_THREADING
+    GThread *thread = g_thread_new("start",
+                                   StartManager,
+                                   this);
+    g_thread_unref(thread);
+#endif
 }
 
 struct TaskForMain
