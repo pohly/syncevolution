@@ -39,8 +39,6 @@ SE_BEGIN_CXX
 class Manager : public GDBusCXX::DBusObjectHelper
 {
     GThread *m_mainThread;
-    GAsyncQueueCXX m_taskQueue;
-    Timeout m_taskQueueFlush;
     boost::weak_ptr<Manager> m_self;
     boost::shared_ptr<Server> m_server;
     boost::shared_ptr<IndividualAggregator> m_folks;
@@ -190,13 +188,6 @@ class Manager : public GDBusCXX::DBusObjectHelper
     template <class R> R runInMainR(R (Manager::*method)()) { return runInMainRes<R>(boost::bind(method, this)); }
     template <class A1, class B1> void runInMainV(void (Manager::*method)(B1), A1 a1) { runInMainVoid(boost::bind(method, this, a1)); }
     template <class R, class A1, class B1> R runInMainR(R (Manager::*method)(B1), A1 a1) { return runInMainRes<R>(boost::bind(method, this, a1)); }
-
-    /**
-     * An idle callback which checks the task queue. runInMainV()
-     * wakes up the context to ensure that the idle callback is
-     * invoked.
-     */
-    bool checkTaskQueueOnIdle();
 
  public:
     /**

@@ -36,6 +36,11 @@ SE_BEGIN_CXX
  * the timeout. Destructing this class will automatically remove
  * the timeout and thus ensure that it doesn't trigger without
  * valid parameters.
+ *
+ * This class is thread-safe. If called by a thread different from the
+ * main thread, the callback will happen inside the main thread. Use
+ * g_main_context_wakeup() to ensure that the main thread notices the
+ * new callback right away.
  */
 class Timeout : boost::noncopyable
 {
