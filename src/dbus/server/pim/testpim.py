@@ -69,7 +69,9 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           # List of encountered errors in ViewAgent, should always be empty.
           self.errors = []
           # Currently known contact data, size matches view.
-          # Entry is a string (just the ID is known) or a dictionary (actual content known).
+          # Entry is a string (just the ID is known),
+          # a tuple (ID + time when reading started), or
+          # a dictionary (actual content known).
           self.contacts = []
           # Change events, as list of ("modified/added/removed", start, count).
           self.events = []
@@ -95,7 +97,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
 
      def getIDs(self, start, count):
           '''Return just the IDs for a range of contacts in the current view.'''
-          return [isinstance(x, dict) and x['id'] or x for x in self.contacts[start:start + count]]
+          return [isinstance(x, dict) and x['id'] or \
+                       isinstance(x, tuple) and x[0] or \
+                       x \
+                       for x in self.contacts[start:start + count]]
 
      def countData(self, start, count):
           '''Number of contacts with data in the given range.'''
@@ -129,7 +134,7 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                self.assertGreater(count, 0)
                self.assertLessEqual(start + count, len(self.contacts))
                # Overwrite valid data with just the (possibly modified) ID.
-               self.contacts[start:start + count] = ids
+               self.contacts[start:start + count] = [str(x) for x in ids]
                logging.printf('contacts modified => %s', self.contacts)
           except:
                error = traceback.format_exc()
@@ -148,7 +153,7 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                self.assertGreaterEqual(start, 0)
                self.assertGreater(count, 0)
                self.assertLessEqual(start, len(self.contacts))
-               self.contacts[start:start] = ids
+               self.contacts[start:start] = [str(x) for x in ids]
                logging.printf('contacts added => %s', self.contacts)
           except:
                error = traceback.format_exc()
@@ -187,7 +192,13 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                for index, contact in contacts:
                     if index >= 0:
                          self.contacts[index] = contact
-          self.view.ReadContacts([x for x in self.contacts[start:start+count] if not isinstance(x, dict)],
+          starttime = time.time()
+          ids = []
+          for index, entry in enumerate(self.contacts[start:start+count]):
+               if isinstance(entry, str):
+                    ids.append(entry)
+                    self.contacts[start + index] = (entry, starttime)
+          self.view.ReadContacts(ids,
                                  timeout=100000,
                                  reply_handler=storeContacts,
                                  error_handler=lambda x: self.errors.append(x))
