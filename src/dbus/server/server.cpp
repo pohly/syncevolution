@@ -279,8 +279,9 @@ Server::Server(GMainLoop *loop,
     templatesChanged(*this, "TemplatesChanged"),
     configChanged(*this, "ConfigChanged"),
     infoRequest(*this, "InfoRequest"),
-    logOutput(*this, "LogOutput"),
+    m_logOutputSignal(*this, "LogOutput"),
     m_autoTerm(m_loop, m_shutdownRequested, duration),
+    m_dbusLogLevel(Logger::INFO),
     m_parentLogger(LoggerBase::instance())
 {
     struct timeval tv;
@@ -309,7 +310,7 @@ Server::Server(GMainLoop *loop,
     add(configChanged);
     add(presence);
     add(infoRequest);
-    add(logOutput);
+    add(m_logOutputSignal);
 
     // log entering and leaving idle state
     m_idleSignal.connect(boost::bind(logIdle, _1));
@@ -918,14 +919,25 @@ void Server::messagev(Level level,
     va_list argsCopy;
     va_copy(argsCopy, args);
     m_parentLogger.messagev(level, prefix, file, line, function, format, args);
-    string log = StringPrintfV(format, argsCopy);
-    va_end(argsCopy);
-
     // prefix is used to set session path
     // for general server output, the object path field is dbus server
     // the object path can't be empty for object paths prevent using empty string.
-    string strLevel = Logger::levelToStr(level);
-    logOutput(dbusPath, strLevel, log, procname);
+    if (level <= m_dbusLogLevel) {
+        string log = StringPrintfV(format, argsCopy);
+        logOutput(dbusPath, level, log, procname);
+    }
+    va_end(argsCopy);
+}
+
+void Server::logOutput(const GDBusCXX::DBusObject_t &path,
+                       Logger::Level level,
+                       const std::string &explanation,
+                       const std::string &procname)
+{
+    if (level <= m_dbusLogLevel) {
+        string strLevel = Logger::levelToStr(level);
+        m_logOutputSignal(path, strLevel, explanation, procname);
+    }
 }
 
 SE_END_CXX

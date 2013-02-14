@@ -351,13 +351,22 @@ class Server : public GDBusCXX::DBusObjectHelper,
                           const std::string &,
                           const std::map<string, string> &> infoRequest;
 
+    /** wrapper around Server.LogOutput, filters  by DBusLogLevel */
+    void logOutput(const GDBusCXX::DBusObject_t &path,
+                   Logger::Level level,
+                   const std::string &explanation,
+                   const std::string &procname);
+
+    void setDBusLogLevel(Logger::Level level) { m_dbusLogLevel = level; }
+    Logger::Level getDBusLogLevel() const { return m_dbusLogLevel; }
+
+ private:
     /** Server.LogOutput */
     GDBusCXX::EmitSignal4<const GDBusCXX::DBusObject_t &,
                           const std::string &,
                           const std::string &,
-                          const std::string &> logOutput;
+                          const std::string &> m_logOutputSignal;
 
- private:
     friend class InfoReq;
 
     /** emit InfoRequest */
@@ -378,6 +387,9 @@ class Server : public GDBusCXX::DBusObjectHelper,
 
     //automatic termination
     AutoTerm m_autoTerm;
+
+    // The level of detail for D-Bus logging signals.
+    Logger::Level m_dbusLogLevel;
 
     //records the parent logger, dbus server acts as logger to
     //send signals to clients and put logs in the parent logger.

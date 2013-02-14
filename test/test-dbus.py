@@ -57,8 +57,11 @@ except ImportError:
 DBusGMainLoop(set_as_default=True)
 
 debugger = os.environ.get("TEST_DBUS_GDB", None) and "gdb" or ""
-server = "syncevo-dbus-server --no-syslog --stdout --verbosity=3".split()
-monitor = ["dbus-monitor"]
+# Verbosity must at least include INFO messages, the "ready to run" we
+# wait for is not printed otherwise. Default is DEBUG.
+level = os.environ.get("TEST_DBUS_QUIET", False) and 2 or 3
+server = ("syncevo-dbus-server --no-syslog --stdout --verbosity=%d --dbus-verbosity=%d" % (level, level)).split()
+
 # primarily for XDG files, but also other temporary files
 xdg_root = "temp-test-dbus"
 configName = "dbus_unittest"

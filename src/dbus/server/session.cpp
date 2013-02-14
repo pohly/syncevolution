@@ -633,7 +633,7 @@ void Session::failureCb() throw()
             std::string explanation;
             Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
             m_server.logOutput(getPath(),
-                               Logger::levelToStr(Logger::ERROR),
+                               Logger::ERROR,
                                explanation,
                                "");
         } else {
@@ -646,7 +646,7 @@ void Session::failureCb() throw()
                 std::string explanation;
                 error = Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
                 m_server.logOutput(getPath(),
-                                   Logger::levelToStr(Logger::ERROR),
+                                   Logger::ERROR,
                                    explanation,
                                    "");
             }
@@ -820,6 +820,18 @@ void Session::messagev(Level level,
                       getPath(), "");
 }
 
+static void Logging2Server(Server &server,
+                           const GDBusCXX::DBusObject_t &path,
+                           const std::string &strLevel,
+                           const std::string &explanation,
+                           const std::string &procname)
+{
+    server.logOutput(path,
+                     Logger::strToLevel(strLevel.c_str()),
+                     explanation,
+                     procname);
+}
+
 void Session::useHelper2(const SimpleResult &result, const boost::signals2::connection &c)
 {
     Session::LoggingGuard guard(this);
@@ -845,7 +857,8 @@ void Session::useHelper2(const SimpleResult &result, const boost::signals2::conn
             // The downside is that unrelated output (like
             // book-keeping messages about other clients) will also be
             // captured.
-            m_helper->m_logOutput.activate(boost::bind(boost::ref(m_server.logOutput),
+            m_helper->m_logOutput.activate(boost::bind(Logging2Server,
+                                                       boost::ref(m_server),
                                                        getPath(),
                                                        _1,
                                                        _2,

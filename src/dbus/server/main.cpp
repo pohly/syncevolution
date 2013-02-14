@@ -67,6 +67,19 @@ bool parseDuration(int &duration, const char* value)
 
 } // anonymous namespace
 
+static Logger::Level checkLogLevel(const char *option, int logLevel)
+{
+    switch (logLevel) {
+    case 0: return Logger::NONE;
+    case 1: return Logger::ERROR;
+    case 2: return Logger::INFO;
+    case 3: return Logger::DEBUG;
+    default:
+        SE_THROW(StringPrintf("invalid parameter value %d for %s: must be one of 0, 1, 2 or 3", logLevel, option));
+        return Logger::NONE;
+    }
+}
+
 int main(int argc, char **argv, char **envp)
 {
     // remember environment for restart
@@ -84,6 +97,7 @@ int main(int argc, char **argv, char **envp)
         gchar *durationString = NULL;
         int duration = 600;
         int logLevel = 1;
+        int logLevelDBus = 2;
         gboolean stdoutEnabled = false;
         gboolean syslogEnabled = true;
 #ifdef ENABLE_DBUS_PIM
@@ -93,6 +107,9 @@ int main(int argc, char **argv, char **envp)
             { "duration", 'd', 0, G_OPTION_ARG_STRING, &durationString, "Shut down automatically when idle for this duration", "seconds/'unlimited'" },
             { "verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevel,
               "Choose amount of output, 0 = no output, 1 = errors, 2 = info, 3 = debug; default is 1.",
+              "level" },
+            { "dbus-verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevelDBus,
+              "Choose amount of output via D-Bus signals, 0 = no output, 1 = errors, 2 = info, 3 = debug; default is 2.",
               "level" },
             { "stdout", 'o', 0, G_OPTION_ARG_NONE, &stdoutEnabled,
               "Enable printing to stdout (result of operations) and stderr (errors/info/debug).",
@@ -116,23 +133,8 @@ int main(int argc, char **argv, char **envp)
         if (durationString && !parseDuration(duration, durationString)) {
             SE_THROW(StringPrintf("invalid parameter value '%s' for --duration/-d: must be positive number of seconds or 'unlimited'", durationString));
         }
-        Logger::Level level;
-        switch (logLevel) {
-        case 0:
-            level = Logger::NONE;
-            break;
-        case 1:
-            level = Logger::ERROR;
-            break;
-        case 2:
-            level = Logger::INFO;
-            break;
-        case 3:
-            level = Logger::DEBUG;
-            break;
-        default:
-            SE_THROW(StringPrintf("invalid parameter value %d for --debug: must be one of 0, 1, 2 or 3", logLevel));
-        }
+        Logger::Level level = checkLogLevel("--debug", logLevel);
+        Logger::Level levelDBus = checkLogLevel("--dbus-debug", logLevelDBus);
 
         // Temporarily set G_DBUS_DEBUG. Hopefully GIO will read and
         // remember it, because we don't want to keep it set
@@ -181,6 +183,7 @@ int main(int argc, char **argv, char **envp)
         boost::scoped_ptr<DBusObject> obj(new DBusObject(conn, "foo", "bar", true));
 
         boost::shared_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
+        server->setDBusLogLevel(levelDBus);
         server->activate();
 
 #ifdef ENABLE_DBUS_PIM
