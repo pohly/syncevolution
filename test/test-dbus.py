@@ -40,6 +40,7 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 import dbus.service
 import gobject
+import glib
 import sys
 import traceback
 import re
@@ -648,25 +649,42 @@ class DBusUtil(Timeout):
             logging.log(message)
         loop.get_context().iteration(may_block)
 
-    def runUntil(self, state, check, until):
+    def runUntil(self, state, check, until, may_block=False):
         '''Loop until 'check' throws an exception or 'until' returns True.
 Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         '''
         message = 'waiting for ' + state
-        printMessage = True
-        while True:
-            # Only print it if something changed, not every 0.1 second.
-            if printMessage:
-                printMessage = False
-                logging.log(message)
-            check()
-            if until():
-                break
-            # Don't block forever if nothing is to be processed.
-            # To keep the load down, sleep for a short period.
-            time.sleep(0.1)
-            if self.loopIteration(None, may_block=False):
-                printMessage = True
+        if may_block:
+            # Allow process to get stuck for a while.
+            # Return from the loop every half second to
+            # check status.
+            logging.log(message)
+            t = glib.Timeout(500)
+            try:
+                t.set_callback(lambda: loop.quit() or True)
+                t.attach(loop.get_context())
+                while True:
+                    check()
+                    if until():
+                        break
+                    loop.run()
+            finally:
+                t.destroy()
+        else:
+            progress = True
+            while True:
+                # Only print it if something changed, not every 0.1 second.
+                if progress:
+                    logging.log(message)
+                check()
+                if until():
+                    break
+                if not progress and not may_block:
+                    # Don't block forever if nothing is to be processed.
+                    # To keep the load down, sleep for a short period.
+                    time.sleep(0.1)
+                progress = self.loopIteration(None, may_block=False)
+        logging.log('succeeded waiting for ' + state)
 
     def isServerRunning(self):
         """True while the syncevo-dbus-server executable is still running"""
