@@ -131,17 +131,28 @@ loop = gobject.MainLoop()
 class Logging(dbus.service.Object):
     def __init__(self):
         dbus.service.Object.__init__(self, bus, '/test/dbus/py')
+        self.start = time.time()
 
     @dbus.service.signal(dbus_interface='t.d.p',
                          signature='s')
-    def log(self, str):
+    def log2(self, str):
         if debugger or os.environ.get("TEST_DBUS_VERBOSE", False):
             print str
         pass
 
+    def log(self, str):
+        now = time.time()
+        self.log2(('%.3fs: ' % (now - self.start)) + str)
+
     def printf(self, format, *args):
         self.log(format % args)
 logging = Logging()
+
+class NullLogging:
+    def log(self, str):
+        pass
+    def printf(self, format, *args):
+        pass
 
 # Bluez default adapter
 bt_adaptor = "/org/bluez/1036/hci0"
