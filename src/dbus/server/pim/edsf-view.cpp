@@ -111,7 +111,7 @@ void EDSFView::read(gboolean success, GSList *contactslist, const GError *gerror
 
         BOOST_FOREACH (EContact *contact, contacts) {
             EdsfPersonaCXX persona(edsf_persona_new(m_store, contact), false);
-            GeeHashSetCXX personas(gee_hash_set_new(G_TYPE_OBJECT, g_object_ref, g_object_unref, NULL, NULL), false);
+            GeeHashSetCXX personas(gee_hash_set_new(G_TYPE_OBJECT, g_object_ref, g_object_unref, NULL, NULL, NULL, NULL, NULL, NULL), false);
             gee_collection_add(GEE_COLLECTION(personas.get()), persona.get());
             FolksIndividualCXX individual(folks_individual_new(GEE_SET(personas.get())), false);
             m_addedSignal(individual);

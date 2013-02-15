@@ -135,7 +135,7 @@ bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const
 
 IndividualAggregator::IndividualAggregator(const boost::shared_ptr<LocaleFactory> &locale) :
     m_locale(locale),
-    m_databases(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc) g_strdup, g_free, NULL, NULL), false)
+    m_databases(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc) g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), false)
 {
 }
 

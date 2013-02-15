@@ -368,6 +368,16 @@ template <> struct dbus_traits<FolksLocation *> {
 
 SE_BEGIN_CXX
 
+static guint FolksAbstractFieldDetailsHash(gconstpointer v, void *d)
+{
+    return folks_abstract_field_details_hash((FolksAbstractFieldDetails *)v);
+}
+static gboolean FolksAbstractFieldDetailsEqual(gconstpointer a, gconstpointer b, void *d)
+{
+    return folks_abstract_field_details_equal((FolksAbstractFieldDetails *)a,
+                                              (FolksAbstractFieldDetails *)b);
+}
+
 /**
  * Copy from D-Bus into a type derived from FolksAbstractFieldDetails,
  * including type flags.
@@ -387,8 +397,8 @@ static void DBus2AbstractField(GDBusCXX::ExtractArgs &context,
     GeeHashSetCXX set(gee_hash_set_new(detailType,
                                        g_object_ref,
                                        g_object_unref,
-                                       (GHashFunc)folks_abstract_field_details_hash,
-                                       (GEqualFunc)folks_abstract_field_details_equal),
+                                       FolksAbstractFieldDetailsHash, NULL, NULL,
+                                       FolksAbstractFieldDetailsEqual, NULL, NULL),
                       false);
     BOOST_FOREACH (const Details_t::value_type &entry, value) {
         const Details_t::value_type::first_type &val = entry.first;
@@ -426,8 +436,8 @@ static void DBus2SimpleAbstractField(GDBusCXX::ExtractArgs &context,
     GeeHashSetCXX set(gee_hash_set_new(detailType,
                                        g_object_ref,
                                        g_object_unref,
-                                       (GHashFunc)folks_abstract_field_details_hash,
-                                       (GEqualFunc)folks_abstract_field_details_equal),
+                                       FolksAbstractFieldDetailsHash, NULL, NULL,
+                                       FolksAbstractFieldDetailsEqual, NULL, NULL),
                       false);
     BOOST_FOREACH (const std::string &val, value) {
         FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), false);
@@ -454,8 +464,8 @@ static void DBus2Role(GDBusCXX::ExtractArgs &context,
     GeeHashSetCXX set(gee_hash_set_new(FOLKS_TYPE_ROLE_FIELD_DETAILS,
                                        g_object_ref,
                                        g_object_unref,
-                                       (GHashFunc)folks_abstract_field_details_hash,
-                                       (GEqualFunc)folks_abstract_field_details_equal),
+                                       FolksAbstractFieldDetailsHash, NULL, NULL,
+                                       FolksAbstractFieldDetailsEqual, NULL, NULL),
                       false);
     BOOST_FOREACH (const StringMap &entry, value) {
         FolksRoleCXX role(folks_role_new(NULL, NULL, NULL),
@@ -490,7 +500,7 @@ static void DBus2Groups(GDBusCXX::ExtractArgs &context,
 {
     std::list<std::string> value;
     GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
-    GeeHashSetCXX set(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc)g_strdup, g_free, NULL, NULL), false);
+    GeeHashSetCXX set(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc)g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), false);
     BOOST_FOREACH(const std::string &entry, value) {
         gee_collection_add(GEE_COLLECTION(set.get()),
                            entry.c_str());
@@ -515,8 +525,8 @@ static void DBus2Addr(GDBusCXX::ExtractArgs &context,
     GeeHashSetCXX set(gee_hash_set_new(FOLKS_TYPE_POSTAL_ADDRESS_FIELD_DETAILS,
                                        g_object_ref,
                                        g_object_unref,
-                                       (GHashFunc)folks_abstract_field_details_hash,
-                                       (GEqualFunc)folks_abstract_field_details_equal),
+                                       FolksAbstractFieldDetailsHash, NULL, NULL,
+                                       FolksAbstractFieldDetailsEqual, NULL, NULL),
                       false);
     BOOST_FOREACH (const Details_t::value_type &entry, value) {
         const StringMap &fields = entry.first;
@@ -810,8 +820,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_EMAIL_FIELD_DETAILS,
                                                                g_object_ref,
                                                                g_object_unref,
-                                                               (GHashFunc)folks_abstract_field_details_hash,
-                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                                               FolksAbstractFieldDetailsHash, NULL, NULL,
+                                                               FolksAbstractFieldDetailsEqual, NULL, NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
@@ -832,8 +842,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_PHONE_FIELD_DETAILS,
                                                                g_object_ref,
                                                                g_object_unref,
-                                                               (GHashFunc)folks_abstract_field_details_hash,
-                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                                               FolksAbstractFieldDetailsHash, NULL, NULL,
+                                                               FolksAbstractFieldDetailsEqual, NULL, NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
@@ -854,8 +864,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_URL_FIELD_DETAILS,
                                                                g_object_ref,
                                                                g_object_unref,
-                                                               (GHashFunc)folks_abstract_field_details_hash,
-                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                                               FolksAbstractFieldDetailsHash, NULL, NULL,
+                                                               FolksAbstractFieldDetailsEqual, NULL, NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
@@ -877,8 +887,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_NOTE_FIELD_DETAILS,
                                                                g_object_ref,
                                                                g_object_unref,
-                                                               (GHashFunc)folks_abstract_field_details_hash,
-                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                                               FolksAbstractFieldDetailsHash, NULL, NULL,
+                                                               FolksAbstractFieldDetailsEqual, NULL, NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
@@ -899,8 +909,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_ROLE_FIELD_DETAILS,
                                                                g_object_ref,
                                                                g_object_unref,
-                                                               (GHashFunc)folks_abstract_field_details_hash,
-                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                                               FolksAbstractFieldDetailsHash, NULL, NULL,
+                                                               FolksAbstractFieldDetailsEqual, NULL, NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
@@ -922,7 +932,11 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
                                                                (GBoxedCopyFunc)g_strdup,
                                                                g_free,
                                                                NULL,
-                                                               NULL),
+                                                               NULL,
+							       NULL,
+							       NULL,
+							       NULL,
+							       NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
@@ -943,8 +957,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             tracker = boost::shared_ptr<void>(gee_hash_set_new(FOLKS_TYPE_POSTAL_ADDRESS_FIELD_DETAILS,
                                                                g_object_ref,
                                                                g_object_unref,
-                                                               (GHashFunc)folks_abstract_field_details_hash,
-                                                               (GEqualFunc)folks_abstract_field_details_equal),
+                                                               FolksAbstractFieldDetailsHash, NULL, NULL,
+                                                               FolksAbstractFieldDetailsEqual, NULL, NULL),
                                               g_object_unref);
             value = static_cast<GeeSet *>(tracker.get());
         }
