@@ -35,6 +35,7 @@ import traceback
 import ConfigParser
 import io
 import inspect
+import gzip
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -494,15 +495,21 @@ class DBusUtil(Timeout):
         # of the D-Bus log
         self.runTestDBusCheck = None
 
+        # Compress dbus log with gzip. Warning, can lead to truncated logs
+        # when gzip doesn't flush everything in time.
+        useGZip = os.environ.get("TEST_DBUS_GZIP", False)
+
         # testAutoSyncFailure (__main__.TestSessionAPIsDummy) => testAutoSyncFailure_TestSessionAPIsDummy
         testname = str(self).replace(" ", "_").replace("__main__.", "").replace("(", "").replace(")", "")
         dbuslog = testname + ".dbus.log"
+        if useGZip:
+            dbuslog = dbuslog + ".gz"
         syncevolog = testname + ".syncevo.log"
 
-        self.pmonitor = subprocess.Popen(monitor,
+        self.pmonitor = subprocess.Popen(useGZip and ['sh', '-c', 'dbus-monitor | gzip'] or ['dbus-monitor'],
                                          stdout=open(dbuslog, "w"),
                                          stderr=subprocess.STDOUT)
-        
+
         if debugger:
             print "\n%s: %s\n" % (self.id(), self.shortDescription())
             if env.get("HOME") != os.environ.get("HOME") and \
@@ -610,10 +617,14 @@ class DBusUtil(Timeout):
             print "   dbus-monitor had to be killed with SIGKILL"
             result.errors.append((self,
                                   "dbus-monitor had to be killed with SIGKILL"))
+
+        dbusLogLimit = 1000 * 80 # roughly 1000 lines as limit
         if debugger:
             monitorout = '<see %s>' % dbuslog
+        elif useGZip:
+            monitorout = dbuslog + ':\n' + gzip.GzipFile(dbuslog).read(dbusLogLimit)
         else:
-            monitorout = open(dbuslog).read()
+            monitorout = dbuslog + ':\n' + open(dbuslog).read(dbusLogLimit)
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
         if self.runTestDBusCheck:
