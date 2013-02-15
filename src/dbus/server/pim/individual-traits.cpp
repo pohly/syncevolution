@@ -669,6 +669,7 @@ struct Pending
     typedef boost::function<void (const GError *)> AsyncDone;
     typedef boost::function<void (AsyncDone *)> Prepare;
     typedef boost::tuple<Prepare,
+                         const char *,
                          boost::shared_ptr<void> > Change;
     typedef std::vector<Change> Changes;
     Changes m_changes;
@@ -694,6 +695,10 @@ static void Details2PersonaStep(const GError *gerror, const boost::shared_ptr<Pe
         if (current < pending->m_changes.size()) {
             // send next change, as determined earlier
             Pending::Change &change = pending->m_changes[current];
+            SE_LOG_DEBUG(NULL, NULL, "modification step %d/%d: %s",
+                         (int)current,
+                         (int)pending->m_changes.size(),
+                         boost::get<1>(change));
             boost::get<0>(change)(new Pending::AsyncDone(boost::bind(Details2PersonaStep, _1, pending)));
         } else {
             pending->m_result.done();
@@ -709,11 +714,13 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
     boost::shared_ptr<Pending> pending(new Pending(result, persona));
 
 #define PUSH_CHANGE(_prepare) \
+        SE_LOG_DEBUG(NULL, NULL, "queueing new change: %s", #_prepare); \
         pending->m_changes.push_back(Pending::Change(boost::bind(_prepare, \
                                                                  details, \
                                                                  value, \
                                                                  SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare)::handleGLibResult, \
                                                                  _1), \
+                                                     #_prepare, \
                                                      tracker))
 
     const GValue *gvalue;
