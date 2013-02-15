@@ -50,7 +50,7 @@ testFolder = os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect
 if testFolder not in sys.path:
     sys.path.insert(0, testFolder)
 
-from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, loop
+from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, NullLogging, loop
 import testdbus
 
 @unittest.skip("not a real test")
@@ -77,6 +77,8 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           self.events = []
           # Number of times that ViewAgent.Quiescent() was called.
           self.quiescentCount = 0
+
+          self.logging = logging
 
           dbus.service.Object.__init__(self, dbus.SessionBus(), self.path)
           unittest.TestCase.__init__(self)
@@ -119,7 +121,7 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
           return 0 == self.countData(start, count)
 
      def processEvent(self, message, event):
-          logging.log(message)
+          self.logging.log(message)
           self.events.append(event)
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -135,10 +137,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                self.assertLessEqual(start + count, len(self.contacts))
                # Overwrite valid data with just the (possibly modified) ID.
                self.contacts[start:start + count] = [str(x) for x in ids]
-               logging.printf('contacts modified => %s', self.contacts)
+               self.logging.printf('contacts modified => %s', self.contacts)
           except:
                error = traceback.format_exc()
-               logging.printf('contacts modified: error: %s' % error)
+               self.logging.printf('contacts modified: error: %s' % error)
                self.errors.append(error)
 
 
@@ -154,10 +156,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                self.assertGreater(count, 0)
                self.assertLessEqual(start, len(self.contacts))
                self.contacts[start:start] = [str(x) for x in ids]
-               logging.printf('contacts added => %s', self.contacts)
+               self.logging.printf('contacts added => %s', self.contacts)
           except:
                error = traceback.format_exc()
-               logging.printf('contacts added: error: %s' % error)
+               self.logging.printf('contacts added: error: %s' % error)
                self.errors.append(error)
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -173,10 +175,10 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                self.assertLessEqual(start + count, len(self.contacts))
                self.assertEqual(self.getIDs(start, count), ids)
                del self.contacts[start:start + count]
-               logging.printf('contacts removed => %s', self.contacts)
+               self.logging.printf('contacts removed => %s', self.contacts)
           except:
                error = traceback.format_exc()
-               logging.printf('contacts removed: error: %s' % error)
+               self.logging.printf('contacts removed: error: %s' % error)
                self.errors.append(error)
 
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
@@ -250,7 +252,7 @@ XDG root.
             # Give EDS time to notice the removal.
             time.sleep(5)
 
-    def setUpView(self, peers=['foo'], withSystemAddressBook=False, search=[]):
+    def setUpView(self, peers=['foo'], withSystemAddressBook=False, search=[], withLogging=True):
         '''Set up peers and create a view for them.'''
         # Ignore all currently existing EDS databases.
         self.sources = self.currentSources()
@@ -298,6 +300,9 @@ XDG root.
 
         # Start view.
         self.view = ContactsView(self.manager)
+        if not withLogging:
+             self.view.processEvent = lambda message, event: True
+             self.view.logging = NullLogging()
 
         # Optional: search and wait for it to be stable.
         if search != None:
