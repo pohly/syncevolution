@@ -1516,12 +1516,16 @@ END:VCARD'''
     def testActive(self):
         '''TestContacts.testActive - reconfigure active address books several times'''
 
+        contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 10))
+
         self.assertEqual(['', 'peer-test-dbus-a', 'peer-test-dbus-c'],
                          self.manager.GetActiveAddressBooks(timeout=self.timeout),
                          sortLists=True)
 
         peers = ['a', 'b', 'c']
-        self.setUpView(peers=peers, withSystemAddressBook=True)
+        withLogging = (contactsPerPeer <= 10)
+        self.setUpView(peers=peers, withSystemAddressBook=True,
+                       withLogging=withLogging)
         active = [''] + peers
 
         # Check that active databases were adapted and stored permanently.
@@ -1535,7 +1539,6 @@ END:VCARD'''
                       open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
                            "r").readlines())
 
-        contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 10))
         for peer in active:
              for index in range(0, contactsPerPeer):
                   item = os.path.join(self.contacts, 'john%d.vcf' % index)
@@ -1557,7 +1560,8 @@ END:VCARD''' % {'peer': peer, 'index': index})
         # Run until the view has adapted.
         self.runUntil('view with contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: len(self.view.contacts) == contactsPerPeer * len(active))
+                      until=lambda: len(self.view.contacts) == contactsPerPeer * len(active),
+                      may_block=not withLogging)
 
         def checkContacts():
              contacts = copy.deepcopy(self.view.contacts)
@@ -1581,10 +1585,13 @@ END:VCARD''' % {'peer': peer, 'index': index})
         self.view.read(0, contactsPerPeer * len(active))
         self.runUntil('contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveData(0, contactsPerPeer * len(active)))
+                      until=lambda: self.view.haveData(0, contactsPerPeer * len(active)),
+                      may_block=not withLogging)
         assertHaveContacts()
 
         def haveExpectedView():
+             current = time.time()
+             logNow = withLogging or current - haveExpectedView.last > 1
              if len(self.view.contacts) == contactsPerPeer * len(active):
                   if self.view.haveData(0, contactsPerPeer * len(active)):
                        expected, contacts = checkContacts()
@@ -1592,15 +1599,21 @@ END:VCARD''' % {'peer': peer, 'index': index})
                             logging.log('got expected data')
                             return True
                        else:
-                            logging.printf('data mismatch, keep waiting; currently have: %s', contacts)
+                            if withLogging:
+                                 logging.printf('data mismatch, keep waiting; currently have: %s', contacts)
+                            elif logNow:
+                                 logging.printf('data mismatch, keep waiting')
                   else:
                        self.view.read(0, len(self.view.contacts))
-                       logging.log('still waiting for all data')
-             else:
+                       if logNow:
+                            logging.log('still waiting for all data')
+             elif logNow:
                   logging.printf('wrong contact count, keep waiting: have %d, want %d',
                                  len(self.view.contacts),
                                  contactsPerPeer * len(active))
+             haveExpectedView.last = current
              return False
+        haveExpectedView.last = time.time()
 
         # Now test all subsets until we are back at 'all active'.
         for active in [filter(lambda x: x != None,
@@ -1613,7 +1626,9 @@ END:VCARD''' % {'peer': peer, 'index': index})
                                                 timeout=self.timeout)
              self.runUntil('contacts %s' % str(active),
                            check=lambda: self.assertEqual([], self.view.errors),
-                           until=haveExpectedView)
+                           until=haveExpectedView,
+                           may_block=not withLogging)
+
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
