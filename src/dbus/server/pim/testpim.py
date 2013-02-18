@@ -41,6 +41,7 @@ import traceback
 import re
 import itertools
 import codecs
+import glib
 
 # Update path so that testdbus.py can be found.
 pimFolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
@@ -211,6 +212,66 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                                            error_handler=lambda error: self.errors.append(x))
           step([], 0)
 
+class Watchdog():
+     '''Send D-Bus queries regularly to the daemon and measure response time.'''
+     def __init__(self, test, manager, threshold=0.1, interval=0.2):
+          self.test = test
+          self.manager = manager
+          self.started = None
+          self.results = [] # tuples of start time + duration
+          self.threshold = threshold
+          self.interval = interval
+          self.timeout = None
+
+     def start(self):
+          self.timeout = glib.Timeout(int(self.interval * 1000))
+          self.timeout.set_callback(self._ping)
+          self.timeout.attach(loop.get_context())
+
+     def stop(self):
+          if self.timeout:
+               self.timeout.destroy()
+          self.started = None
+
+     def check(self):
+          '''Assert that all queries were served quickly enough.'''
+          tooslow = [x for x in self.results if x[1] > self.threshold]
+          self.test.assertEqual([], tooslow)
+          if self.started:
+               self.test.assertLess(time.time() - self.started, self.threshold)
+
+     def reset(self):
+          self.results = []
+          self.started = None
+
+     def checkpoint(self, name):
+          self.check()
+          logging.printf('ping results for %s: %s', name, self.results)
+          self.reset()
+
+     def _ping(self):
+          if not self.started:
+               # Run with a long timeout. We want to know how long it
+               # takes to reply, even if it is too long.
+               self.started = time.time()
+               self.manager.GetAllPeers(timeout=1000,
+                                        reply_handler=lambda peers: self._done(self.started, self.results, None),
+                                        error_handler=lambda error: self._done(self.started, self.results, error))
+          return True
+
+     def _done(self, started, results, error):
+          '''Record result. Intentionally uses the results array from the time when the call started,
+          to handle intermittent checkpoints.'''
+          duration = time.time() - started
+          if duration > self.threshold or error:
+               logging.printf('ping failure: duration %fs, error %s', duration, error)
+          if error:
+               results.append((started, duration, error))
+          else:
+               results.append((started, duration))
+          if self.started == started:
+               self.started = None
+
 class TestContacts(DBusUtil, unittest.TestCase):
     """Tests for org._01.pim.contacts API.
 
@@ -222,6 +283,7 @@ XDG root.
 """
 
     def setUp(self):
+        self.cleanup = []
         self.manager = dbus.Interface(bus.get_object('org._01.pim.contacts',
                                                      '/org/01/pim/contacts'),
                                       'org._01.pim.contacts.Manager')
@@ -257,6 +319,10 @@ XDG root.
         if removed:
             # Give EDS time to notice the removal.
             time.sleep(5)
+
+    def tearDown(self):
+         for x in self.cleanup:
+              x()
 
     def setUpView(self, peers=['foo'], withSystemAddressBook=False, search=[], withLogging=True):
         '''Set up peers and create a view for them.'''
