@@ -1235,7 +1235,7 @@ END:VCARD''']):
         # Insert new contacts.
         #
         # Not all of the vCard properties need to be available via PIM Manager.
-        testcases = ['''BEGIN:VCARD
+        testcases = [r'''BEGIN:VCARD
 VERSION:3.0
 URL:http://john.doe.com
 TITLE:Senior Tester
