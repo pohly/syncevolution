@@ -190,20 +190,26 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
 
      def read(self, start, count=1):
           '''Read the specified range of contact data.'''
-          def storeContacts(contacts):
-               for index, contact in contacts:
-                    if index >= 0:
-                         self.contacts[index] = contact
           starttime = time.time()
           ids = []
           for index, entry in enumerate(self.contacts[start:start+count]):
                if isinstance(entry, str):
                     ids.append(entry)
                     self.contacts[start + index] = (entry, starttime)
-          self.view.ReadContacts(ids,
-                                 timeout=100000,
-                                 reply_handler=storeContacts,
-                                 error_handler=lambda x: self.errors.append(x))
+          # Avoid composing too large requests because they make the
+          # server unresponsive and trigger our Watchdog. Instead chop up
+          # into pieces and ask for more once we get the response.
+          def step(contacts, start):
+               for index, contact in contacts:
+                    if index >= 0:
+                         self.contacts[index] = contact
+               if start < len(ids):
+                    end = min(start + 50, len(ids))
+                    self.view.ReadContacts(ids[start:end],
+                                           timeout=100000,
+                                           reply_handler=lambda contacts: step(contacts, end),
+                                           error_handler=lambda error: self.errors.append(x))
+          step([], 0)
 
 class TestContacts(DBusUtil, unittest.TestCase):
     """Tests for org._01.pim.contacts API.
