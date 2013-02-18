@@ -1594,9 +1594,36 @@ END:VCARD'''
                          self.manager.GetActiveAddressBooks(timeout=self.timeout),
                          sortLists=True)
 
-        peers = ['a', 'b', 'c']
         withLogging = (contactsPerPeer <= 10)
+        checkPerformance = os.environ.get('TESTPIM_TEST_ACTIVE_RESPONSE', None)
+        threshold = 0
+        if checkPerformance:
+             threshold = float(checkPerformance)
+
+        # When starting the search right away and then add more
+        # contact data later, we test the situation where new data
+        # comes in because of a sync.
+        #
+        # When adding data first and then searching, we cover the
+        # startup situation with already populated caches.
+        #
+        # Both are relevant scenarios. The first one stresses folks
+        # more, because SyncEvolution adds contacts one at a time,
+        # which then leads to many D-Bus messages containing a single
+        # "contact added" notification that need to be processed by
+        # folks. Testing this is the default.
+        if os.environ.get('TESTPIM_TEST_ACTIVE_LOAD', False):
+             # Delay starting the PIM Manager until data is ready to be read.
+             # More realistic that way; otherwise folks must process new
+             # contacts one-by-one.
+             search=None
+        else:
+             # Start folks right away.
+             search=''
+
+        peers = ['a', 'b', 'c']
         self.setUpView(peers=peers, withSystemAddressBook=True,
+                       search=search,
                        withLogging=withLogging)
         active = [''] + peers
 
@@ -1629,11 +1656,22 @@ END:VCARD''' % {'peer': peer, 'index': index})
              else:
                   out, err, returncode = self.runCmdline(['--import', self.contacts, 'database=', 'backend=evolution-contacts'])
 
-        # Run until the view has adapted.
+        # Ping server regularly and check that it remains responsive.
+        # Depends on processing all D-Bus replies with minimum
+        # delay, because delays caused by us would lead to false negatives.
+        w = Watchdog(self, self.manager, threshold=threshold)
+        if checkPerformance:
+             w.start()
+             self.cleanup.append(w.stop)
+
+        # Start the view if not done yet and run until the view has adapted.
+        if search == None:
+             self.view.search('')
         self.runUntil('view with contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == contactsPerPeer * len(active),
-                      may_block=not withLogging)
+                      may_block=checkPerformance)
+        w.checkpoint('full view')
 
         def checkContacts():
              contacts = copy.deepcopy(self.view.contacts)
@@ -1660,13 +1698,14 @@ END:VCARD''' % {'peer': peer, 'index': index})
                       until=lambda: self.view.haveData(0, contactsPerPeer * len(active)),
                       may_block=not withLogging)
         assertHaveContacts()
+        w.checkpoint('contact data')
 
         def haveExpectedView():
              current = time.time()
              logNow = withLogging or current - haveExpectedView.last > 1
              if len(self.view.contacts) == contactsPerPeer * len(active):
                   if self.view.haveData(0, contactsPerPeer * len(active)):
-                       expected, contacts = checkContacts()
+                       expected, contacts = checkContacts() # TODO: avoid calling this
                        if expected == contacts:
                             logging.log('got expected data')
                             return True
@@ -1688,18 +1727,22 @@ END:VCARD''' % {'peer': peer, 'index': index})
         haveExpectedView.last = time.time()
 
         # Now test all subsets until we are back at 'all active'.
+        current = ['', 'a', 'b', 'c']
         for active in [filter(lambda x: x != None,
                               [s, a, b, c])
                        for s in [None, '']
                        for a in [None, 'a']
                        for b in [None, 'b']
                        for c in [None, 'c']]:
+             logging.printf('changing address books %s -> %s', current, active)
              self.manager.SetActiveAddressBooks([x != '' and 'peer-' + self.uidPrefix + x or x for x in active],
                                                 timeout=self.timeout)
              self.runUntil('contacts %s' % str(active),
                            check=lambda: self.assertEqual([], self.view.errors),
                            until=haveExpectedView,
                            may_block=not withLogging)
+             w.checkpoint('%s -> %s' % (current, active))
+             current = active
 
 
     @timeout(60)
