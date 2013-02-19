@@ -1067,6 +1067,7 @@ fi
 # When adding something here, remember to also update syncevolution.pc.in.
 # -lrt is for clock_gettime() in the Timespec.h inline functions.
 SYNCEVOLUTION_CFLAGS=-I`cd $srcdir && pwd`/src
+# Linker flags including libsyncevolution.la and some libs.
 SYNCEVOLUTION_LIBS="src/syncevo/libsyncevolution.la -lrt"
 AC_SUBST(SYNCEVOLUTION_CFLAGS)
 AC_SUBST(SYNCEVOLUTION_LIBS)

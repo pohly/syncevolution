@@ -18,7 +18,7 @@ src_backends_pbap_syncpbap_la_LIBADD = $(PBAP_LIBS) $(PCRECPP_LIBS) $(SYNCEVOLUT
 src_backends_pbap_syncpbap_la_LDFLAGS = -module -avoid-version $(DBUS_LIBS)
 src_backends_pbap_syncpbap_la_CXXFLAGS = $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS) $(DBUS_CFLAGS)
 src_backends_pbap_syncpbap_la_CPPFLAGS = $(SYNCEVOLUTION_CFLAGS) -I$(gdbus_dir) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
-src_backends_pbap_syncpbap_la_DEPENDENCIES = $(SYNCEVOLUTION_LIBS) $(gdbus_build_dir)/libgdbussyncevo.la
+src_backends_pbap_syncpbap_la_DEPENDENCIES = src/syncevo/libsyncevolution.la $(gdbus_build_dir)/libgdbussyncevo.la
 
 # If you need special test cases for your sync source, then
 # install them here. Here's how the sqlite backend does that:
