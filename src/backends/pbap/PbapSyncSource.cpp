@@ -55,10 +55,15 @@ SE_BEGIN_CXX
 
 #define OBC_SERVICE "org.openobex.client"
 #define OBC_SERVICE_NEW "org.bluez.obex.client"
+#define OBC_SERVICE_NEW5 "org.bluez.obex"
 #define OBC_CLIENT_INTERFACE "org.openobex.Client"
 #define OBC_CLIENT_INTERFACE_NEW "org.bluez.obex.Client"
+#define OBC_CLIENT_INTERFACE_NEW5 "org.bluez.obex.Client1"
 #define OBC_PBAP_INTERFACE "org.openobex.PhonebookAccess"
 #define OBC_PBAP_INTERFACE_NEW "org.bluez.obex.PhonebookAccess"
+#define OBC_PBAP_INTERFACE_NEW5 "org.bluez.obex.PhonebookAccess1"
+#define OBC_TRANSFER_INTERFACE_NEW "org.bluez.obex.Transfer"
+#define OBC_TRANSFER_INTERFACE_NEW5 "org.bluez.obex.Transfer1"
 
 class PbapSession : private boost::noncopyable {
 public:
@@ -79,7 +84,16 @@ private:
     PbapSyncSource &m_parent;
     boost::weak_ptr<PbapSession> m_self;
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
-    bool m_newobex;
+    enum {
+        OBEXD_OLD,
+        OBEXD_NEW,
+        BLUEZ5
+    } m_obexAPI;
+
+    /** filter parameters for BLUEZ5 PullAll */
+    typedef boost::variant< std::string, std::list<std::string> > Bluez5Values;
+    std::map<std::string, Bluez5Values> m_filter5;
+
     /**
      * m_transferComplete will be set to true when observing a
      * "Complete" signal on a transfer object path which has the
@@ -96,10 +110,20 @@ private:
     std::string m_transferErrorCode;
     std::string m_transferErrorMsg;
     
-    std::auto_ptr<GDBusCXX::SignalWatch1<GDBusCXX::Path_t> > m_completeSignal;
     std::auto_ptr<GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> >
         m_errorSignal;
-    
+
+    // Bluez 5
+    typedef GDBusCXX::SignalWatch4<GDBusCXX::Path_t, std::string, Params, std::vector<std::string> > PropChangedSignal_t;
+    std::auto_ptr<PropChangedSignal_t> m_propChangedSignal;
+    void propChangedCb(const GDBusCXX::Path_t &path,
+                       const std::string &interface,
+                       const Params &changed,
+                       const std::vector<std::string> &invalidated);
+
+    // new obexd API
+    typedef GDBusCXX::SignalWatch1<GDBusCXX::Path_t> CompleteSignal_t;
+    std::auto_ptr<CompleteSignal_t> m_completeSignal;
     void completeCb(const GDBusCXX::Path_t &path);
     void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
                  const std::string &msg);
@@ -118,6 +142,31 @@ boost::shared_ptr<PbapSession> PbapSession::create(PbapSyncSource &parent)
     boost::shared_ptr<PbapSession> session(new PbapSession(parent));
     session->m_self = session;
     return session;
+}
+
+void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
+                                const std::string &interface,
+                                const Params &changed,
+                                const std::vector<std::string> &invalidated)
+{
+    // Called for a path which matches the current session, so we know
+    // that the signal is for our transfer. Only need to check the status.
+    Params::const_iterator it = changed.find("Status");
+    if (it != changed.end()) {
+        std::string status = boost::get<std::string>(it->second);
+        SE_LOG_DEBUG(NULL, NULL, "OBEXD transfer %s: %s",
+                     path.c_str(), status.c_str());
+        if (status == "complete") {
+            SE_LOG_DEBUG(NULL, NULL, "obexd transfer completed");
+            m_transferComplete = true;
+        } else if (status == "error") {
+            m_transferComplete = true;
+            // We have to make up some error descriptions. The Bluez
+            // 5 API no longer seems to provide that.
+            m_transferErrorCode = "transfer failed";
+            m_transferErrorMsg = "reason unknown";
+        }
+    }
 }
 
 void PbapSession::completeCb(const GDBusCXX::Path_t &path)
@@ -176,13 +225,15 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     std::string session;
     GDBusCXX::DBusConnectionPtr conn = GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL);
 
-    // We must attempt to use the new interface, otherwise we won't know whether
+    // We must attempt to use the new interface(s), otherwise we won't know whether
     // the daemon exists or can be started.
-    m_newobex = true;
-    m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE_NEW, 
-                                                  OBC_SERVICE_NEW, true));
+    m_obexAPI = BLUEZ5;
+    m_client.reset(new GDBusCXX::DBusRemoteObject(conn,
+                                                  "/org/bluez/obex",
+                                                  OBC_CLIENT_INTERFACE_NEW5,
+                                                  OBC_SERVICE_NEW5, true));
     try {
-        SE_LOG_DEBUG(NULL, NULL, "trying to use new obexd service %s", OBC_SERVICE_NEW);
+        SE_LOG_DEBUG(NULL, NULL, "trying to use bluez 5 obexd service %s", OBC_SERVICE_NEW5);
         session =
             GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
     } catch (const std::exception &error) {
@@ -190,13 +241,32 @@ void PbapSession::initSession(const std::string &address, const std::string &for
             throw;
         }
         // Fall back to old interface.
-        SE_LOG_DEBUG(NULL, NULL, "new obexd service not available (%s), falling back to old one %s",
+        SE_LOG_DEBUG(NULL, NULL, "bluez obex service not available (%s), falling back to previous obexd one %s",
                      error.what(),
-                     OBC_SERVICE);
-        m_newobex = false;
+                     OBC_SERVICE_NEW);
+        m_obexAPI = OBEXD_NEW;
     }
 
-    if (!m_newobex) {
+    if (session.empty()) {
+        m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE_NEW,
+                                                      OBC_SERVICE_NEW, true));
+        try {
+            SE_LOG_DEBUG(NULL, NULL, "trying to use new obexd service %s", OBC_SERVICE_NEW);
+            session =
+                GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
+        } catch (const std::exception &error) {
+            if (!strstr(error.what(), "org.freedesktop.DBus.Error.ServiceUnknown")) {
+                throw;
+            }
+            // Fall back to old interface.
+            SE_LOG_DEBUG(NULL, NULL, "new obexd service(s) not available (%s), falling back to old one %s",
+                         error.what(),
+                         OBC_SERVICE);
+            m_obexAPI = OBEXD_OLD;
+        }
+    }
+
+    if (session.empty()) {
         m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE,
                                                       OBC_SERVICE, true));
         params["Destination"] = std::string(address);
@@ -204,15 +274,15 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     }
 
     if (session.empty()) {
-        m_parent.throwError("PBAP: got empty session from CreateSession()");
+        m_parent.throwError("PBAP: failed to create session");
     }
 
-    if (m_newobex) {
+    if (m_obexAPI != OBEXD_OLD) {
         m_session.reset(new GDBusCXX::DBusRemoteObject(m_client->getConnection(),
-                        session,
-                        OBC_PBAP_INTERFACE_NEW,
-                        OBC_SERVICE_NEW,
-                        true));
+                                                       session,
+                                                       m_obexAPI == BLUEZ5 ? OBC_PBAP_INTERFACE_NEW5 : OBC_PBAP_INTERFACE_NEW,
+                                                       m_obexAPI == BLUEZ5 ? OBC_SERVICE_NEW5 : OBC_SERVICE_NEW,
+                                                       true));
         
         // Filter Transfer signals via path prefix. Discussions on Bluez
         // list showed that this is meant to be possible, even though the
@@ -220,28 +290,38 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         // make it clear:
         // "[PATCH obexd v0] client-doc: Guarantee prefix in transfer paths"
         // http://www.spinics.net/lists/linux-bluetooth/msg28409.html
-        m_completeSignal.reset(new GDBusCXX::SignalWatch1<GDBusCXX::Path_t>
-                               (GDBusCXX::SignalFilter(m_client->getConnection(),
-                               session,
-                               "org.bluez.obex.Transfer",
-                               "Complete",
-                               GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+        //
         // Be extra careful with asynchronous callbacks: bind to weak
         // pointer and ignore callback when the instance is already gone.
         // Should not happen with signals (destructing the class unregisters
         // the watch), but very well may happen in asynchronous method
         // calls. Therefore maintain m_self and show how to use it here.
-        m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
+        if (m_obexAPI == BLUEZ5) {
+            m_propChangedSignal.reset(new PropChangedSignal_t
+                                      (GDBusCXX::SignalFilter(m_client->getConnection(),
+                                                              session,
+                                                              "org.freedesktop.DBus.Properties",
+                                                              "PropertiesChanged",
+                                                              GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+            m_propChangedSignal->activate(boost::bind(&PbapSession::propChangedCb, m_self, _1, _2, _3, _4));
+        } else {
+            m_completeSignal.reset(new CompleteSignal_t
+                                   (GDBusCXX::SignalFilter(m_client->getConnection(),
+                                                           session,
+                                                           m_obexAPI == BLUEZ5 ? OBC_TRANSFER_INTERFACE_NEW5 : OBC_TRANSFER_INTERFACE_NEW,
+                                                           "Complete",
+                                                           GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+            m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
 
-        // same for error
-        m_errorSignal.reset(new GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string>
-                            (GDBusCXX::SignalFilter(m_client->getConnection(),
-                            session,
-                            "org.bluez.obex.Transfer",
-                            "Error",
-                            GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
-        m_errorSignal->activate(boost::bind(&PbapSession::errorCb, m_self, _1, _2, _3));
-
+            // same for error
+            m_errorSignal.reset(new GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string>
+                                (GDBusCXX::SignalFilter(m_client->getConnection(),
+                                                        session,
+                                                        m_obexAPI == BLUEZ5 ? OBC_TRANSFER_INTERFACE_NEW5 : OBC_TRANSFER_INTERFACE_NEW,
+                                                        "Error",
+                                                        GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+            m_errorSignal->activate(boost::bind(&PbapSession::errorCb, m_self, _1, _2, _3));
+        }
     } else {
         m_session.reset(new GDBusCXX::DBusRemoteObject(m_client->getConnection(),
                                                    session,
@@ -288,8 +368,14 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     }
 
     GDBusCXX::DBusClientCall0(*m_session, "Select")(std::string("int"), std::string("PB"));
-    GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(std::vector<std::string>(filter.begin(), filter.end()));
-    GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
+
+    if (m_obexAPI == BLUEZ5) {
+        m_filter5["Format"] = version == "2.1" ? "vcard21" : "vcard30";
+        m_filter5["Fields"] = filter;
+    } else {
+        GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(std::vector<std::string>(filter.begin(), filter.end()));
+        GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
+    }
 
     SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
 }
@@ -297,14 +383,17 @@ void PbapSession::initSession(const std::string &address, const std::string &for
 void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
 {
     pcrecpp::StringPiece content;
-    if (m_newobex) {
+    if (m_obexAPI != OBEXD_OLD) {
         tmpFile.create();
         SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", tmpFile.filename().c_str());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
-        std::pair<GDBusCXX::DBusObject_t, Params> tuple = pullall(tmpFile.filename());
+        std::pair<GDBusCXX::DBusObject_t, Params> tuple =
+            m_obexAPI == BLUEZ5 ?
+            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(tmpFile.filename(), m_filter5) :
+            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(tmpFile.filename());
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
-        
+
         SE_LOG_DEBUG(NULL, NULL, "pullall transfer path %s, %ld properties", transfer.c_str(), (long)properties.size());
 
         while (!m_transferComplete) {
