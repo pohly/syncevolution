@@ -310,30 +310,30 @@ class LoggerBase : public Logger
 #define SE_LOG(_level, _instance, _prefix, _format, _args...) \
     do { \
         if (_instance) { \
-            static_cast<Logger *>(_instance)->message(_level, \
-                                                                     _prefix, \
-                                                                     __FILE__, \
-                                                                     __LINE__, \
-                                                                     0, \
-                                                                     _format, \
-                                                                     ##_args); \
+            static_cast<SyncEvo::Logger *>(_instance)->message(_level,  \
+                                                               _prefix, \
+                                                               __FILE__, \
+                                                               __LINE__, \
+                                                               0,       \
+                                                               _format, \
+                                                               ##_args); \
         } else { \
-            LoggerBase::instance().message(_level, \
-                                                          _prefix, \
-                                                          __FILE__, \
-                                                          __LINE__, \
-                                                          0, \
-                                                          _format, \
-                                                          ##_args); \
+            SyncEvo::LoggerBase::instance().message(_level, \
+                                                    _prefix, \
+                                                    __FILE__, \
+                                                    __LINE__, \
+                                                    0, \
+                                                    _format, \
+                                                    ##_args); \
         } \
     } while(false)
 
-#define SE_LOG_SHOW(_instance, _prefix, _format, _args...) SE_LOG(Logger::SHOW, _instance, _prefix, _format, ##_args)
-#define SE_LOG_ERROR(_instance, _prefix, _format, _args...) SE_LOG(Logger::ERROR, _instance, _prefix, _format, ##_args)
-#define SE_LOG_WARNING(_instance, _prefix, _format, _args...) SE_LOG(Logger::WARNING, _instance, _prefix, _format, ##_args)
-#define SE_LOG_INFO(_instance, _prefix, _format, _args...) SE_LOG(Logger::INFO, _instance, _prefix, _format, ##_args)
-#define SE_LOG_DEV(_instance, _prefix, _format, _args...) SE_LOG(Logger::DEV, _instance, _prefix, _format, ##_args)
-#define SE_LOG_DEBUG(_instance, _prefix, _format, _args...) SE_LOG(Logger::DEBUG, _instance, _prefix, _format, ##_args)
+#define SE_LOG_SHOW(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::SHOW, _instance, _prefix, _format, ##_args)
+#define SE_LOG_ERROR(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::ERROR, _instance, _prefix, _format, ##_args)
+#define SE_LOG_WARNING(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::WARNING, _instance, _prefix, _format, ##_args)
+#define SE_LOG_INFO(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::INFO, _instance, _prefix, _format, ##_args)
+#define SE_LOG_DEV(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::DEV, _instance, _prefix, _format, ##_args)
+#define SE_LOG_DEBUG(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::DEBUG, _instance, _prefix, _format, ##_args)
  
 SE_END_CXX
 #endif // INCL_LOGGING
