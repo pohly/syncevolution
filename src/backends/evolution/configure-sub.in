@@ -72,6 +72,10 @@ if test "$enable_evo" = "yes"; then
                                         [AC_DEFINE(HAVE_E_BOOK_CLIENT_NEW_DIRECT, 1, [use e_book_client_new_direct])],
                                         [true],
                                         [$EDS_VERSION_LIBS])
+                           AC_CHECK_LIB(ebook-1.2, e_book_client_connect_direct_sync,
+                                        [AC_DEFINE(HAVE_E_BOOK_CLIENT_CONNECT_DIRECT_SYNC, 1, [use e_book_client_connect_direct_sync])],
+                                        [true],
+                                        [$EDS_VERSION_LIBS])
                           ],
         [CFLAGS_old="$CFLAGS"
         CFLAGS="$CFLAGS $EPACKAGE_CFLAGS"

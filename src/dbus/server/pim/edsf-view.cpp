@@ -61,6 +61,10 @@ void EDSFView::doStart()
                                     getenv("SYNCEVOLUTION_NO_PIM_EDS_DIRECT") ?
                                     e_book_client_new(source, gerror) :
                                     e_book_client_new_direct(m_registry, source, gerror)
+#elif defined(HAVE_E_BOOK_CLIENT_CONNECT_DIRECT_SYNC)
+                                    getenv("SYNCEVOLUTION_NO_PIM_EDS_DIRECT") ?
+                                    e_book_client_new(source, gerror) :
+                                    E_BOOK_CLIENT(e_book_client_connect_direct_sync(m_registry, source, NULL, gerror))
 #else
                                     e_book_client_new(source, gerror)
 #endif
