@@ -502,9 +502,13 @@ class DBusUtil(Timeout):
 
         self.storedenv = env
 
-        # can be set by a test to run additional tests on the content
-        # of the D-Bus log
-        self.runTestDBusCheck = None
+        # Can be set by a test to run additional tests on the content
+        # of the D-Bus log. May be set before calling runTest() or
+        # in the test method itself.
+        # self.runTestDBusCheck = lambda test, log: test.assertNotIn('ERROR', log)
+        #
+        # And for stdout.
+        # self.runTestOutputCheck = None
 
         # Compress dbus log with gzip. Warning, can lead to truncated logs
         # when gzip doesn't flush everything in time.
@@ -638,13 +642,22 @@ class DBusUtil(Timeout):
             monitorout = dbuslog + ':\n' + open(dbuslog).read(dbusLogLimit)
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
-        if self.runTestDBusCheck:
+        runTestDBusCheck = getattr(self, 'runTestDBusCheck', None)
+        if runTestDBusCheck:
             try:
-                self.runTestDBusCheck(self, monitorout)
+                runTestDBusCheck(self, monitorout)
             except:
                 # only append report if not part of some other error below
                 result.errors.append((self,
                                       "D-Bus log failed check: %s\n%s" % (sys.exc_info()[1], (not hasfailed and report) or "")))
+        runTestOutputCheck = getattr(self, 'runTestOutputCheck', None)
+        if runTestOutputCheck:
+            try:
+                runTestOutputCheck(self, serverout)
+            except:
+                # only append report if not part of some other error below
+                result.errors.append((self,
+                                      "server stdout failed check: %s\n%s" % (sys.exc_info()[1], (not hasfailed and report) or "")))
         # detect the expected "killed by signal TERM" both when
         # running syncevo-dbus-server directly (negative value) and
         # when valgrindcheck.sh returns the error code 128 + 15 = 143
