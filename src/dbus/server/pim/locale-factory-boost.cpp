@@ -27,6 +27,7 @@
 #include <libebook/libebook.h>
 
 #include <phonenumbers/phonenumberutil.h>
+#include <phonenumbers/logger.h>
 #include <boost/locale.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -352,18 +353,58 @@ private:
     std::string m_tel;
 };
 
+class PhoneNumberLogger : public i18n::phonenumbers::Logger
+{
+    const char *getPrefix()
+    {
+        switch (level()) {
+        case i18n::phonenumbers::LOG_FATAL:
+            return "phonenumber fatal";
+            break;
+        case i18n::phonenumbers::LOG_ERROR:
+            return "phonenumber error";
+            break;
+        case i18n::phonenumbers::LOG_WARNING:
+            return "phonenumber warning";
+            break;
+        case i18n::phonenumbers::LOG_INFO:
+            return "phonenumber info";
+            break;
+        case i18n::phonenumbers::LOG_DEBUG:
+            return "phonenumber debug";
+            break;
+        default:
+            return "phonenumber ???";
+            break;
+        }
+    }
+
+public:
+    virtual void WriteMessage(const std::string &msg)
+    {
+        SE_LOG(level() == i18n::phonenumbers::LOG_FATAL ? SyncEvo::Logger::ERROR : SyncEvo::Logger::DEBUG,
+               NULL, getPrefix(), "%s", msg.c_str());
+    }
+};
+
 class LocaleFactoryBoost : public LocaleFactory
 {
     const i18n::phonenumbers::PhoneNumberUtil &m_phoneNumberUtil;
     std::locale m_locale;
     std::string m_country;
+    PhoneNumberLogger m_logger;
 
 public:
     LocaleFactoryBoost() :
         m_phoneNumberUtil(*i18n::phonenumbers::PhoneNumberUtil::GetInstance()),
         m_locale(genLocale()),
         m_country(std::use_facet<boost::locale::info>(m_locale).country())
-    {}
+    {
+        // Redirect output of libphonenumber and make it a bit quieter
+        // than it is by default. We map fatal libphonenumber errors
+        // to ERROR and everything else to DEBUG.
+        i18n::phonenumbers::PhoneNumberUtil::SetLogger(&m_logger);
+    }
 
     static std::locale genLocale()
     {
