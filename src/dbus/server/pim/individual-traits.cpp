@@ -766,8 +766,8 @@ void Details2Persona(const Result<void ()> &result, const PersonaDetails &detail
             value = G_LOADABLE_ICON(g_value_get_object(gvalue));
             tracker = boost::shared_ptr<void>(g_object_ref(value), g_object_unref);
         } else {
-            tracker = boost::shared_ptr<void>(g_file_icon_new(NULL), g_object_unref);
-            value = static_cast<GLoadableIcon *>(tracker.get());
+            tracker = boost::shared_ptr<void>();
+            value = NULL;
         }
         InitStateString newPath = GDBusCXX::ExtractFilePath(value);
         InitStateString oldPath = GDBusCXX::ExtractFilePath(folks_avatar_details_get_avatar(details));
