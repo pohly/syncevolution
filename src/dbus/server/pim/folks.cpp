@@ -149,32 +149,9 @@ void IndividualAggregator::init(boost::shared_ptr<IndividualAggregator> &self)
     LogRedirect::addIgnoreError("Error preparing Backend 'ofono'");
     LogRedirect::addIgnoreError("Error preparing Backend 'telepathy'");
 
-    // Have to hard-code the list of known backends that we don't want.
-    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
-                            boost::bind(logResult, (const GError *)NULL,
-                                        "folks_backend_store_disable_backend"),
-                            m_backendStore, "telepathy");
-    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
-                            boost::bind(logResult, (const GError *)NULL,
-                                        "folks_backend_store_disable_backend"),
-                            m_backendStore, "tracker");
-    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
-                            boost::bind(logResult, (const GError *)NULL,
-                                        "folks_backend_store_disable_backend"),
-                            m_backendStore, "key-file");
-    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
-                            boost::bind(logResult, (const GError *)NULL,
-                                        "folks_backend_store_disable_backend"),
-                            m_backendStore, "libsocialweb");
-    // Explicitly enable EDS, just to be sure.
-    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_enable_backend,
-                            boost::bind(logResult, (const GError *)NULL,
-                                        "folks_backend_store_enable_backend"),
-                            m_backendStore, "eds");
-
-    // Start loading backends right away.
-    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_load_backends,
-                            boost::bind(&IndividualAggregator::backendsLoaded, m_self),
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_prepare,
+                            boost::bind(&IndividualAggregator::storePrepared,
+                                        m_self),
                             m_backendStore);
 
     m_folks =
@@ -199,6 +176,40 @@ std::string IndividualAggregator::dumpDatabases()
         res += tmp;
     }
     return res;
+}
+
+void IndividualAggregator::storePrepared()
+{
+    SE_LOG_DEBUG(NULL, NULL, "backend store is prepared");
+
+    // Have to hard-code the list of known backends that we don't want.
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "telepathy");
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "tracker");
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "key-file");
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_disable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_disable_backend"),
+                            m_backendStore, "libsocialweb");
+    // Explicitly enable EDS, just to be sure.
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_enable_backend,
+                            boost::bind(logResult, (const GError *)NULL,
+                                        "folks_backend_store_enable_backend"),
+                            m_backendStore, "eds");
+
+    // Start loading backends right away. Assumes that the
+    // asynchronous operations above will be done first.
+    SYNCEVO_GLIB_CALL_ASYNC(folks_backend_store_load_backends,
+                            boost::bind(&IndividualAggregator::backendsLoaded, m_self),
+                            m_backendStore);
 }
 
 void IndividualAggregator::backendsLoaded()

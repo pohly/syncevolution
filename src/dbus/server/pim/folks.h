@@ -232,6 +232,12 @@ class IndividualAggregator
     void init(boost::shared_ptr<IndividualAggregator> &self);
 
     /**
+     * Called when backend store is prepared. At that point, backends
+     * can be disabled or enabled and loading them can be kicked of.
+     */
+    void storePrepared();
+
+    /**
      * Called when all Folks backends are loaded, before the
      * aggregator does its work. Now is the right time to initialize
      * the set of databases and prepare the aggregator, if start() was
