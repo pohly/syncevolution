@@ -474,6 +474,16 @@ END:VCARD(\r|\n)*''',
                               'addressbook'])
 
     def run(self, result):
+        # No errors must be logged. During testRead, libphonenumber used to print
+        #   [ERROR] Number too short to be viable: 8
+        #   [ERROR] The string supplied did not seem to be a phone number.
+        # to stdout until we reduced the log level.
+        #
+        # We check both D-Bus messages (which did not contain that
+        # text, but some other error messages) and the servers stdout.
+        self.runTestDBusCheck = lambda test, log: test.assertNotIn('ERROR', log)
+        self.runTestOutputCheck = self.runTestDBusCheck
+
         # Runtime varies a lot when using valgrind, because
         # of the need to check an additional process. Allow
         # a lot more time when running under valgrind.
@@ -861,6 +871,11 @@ END:VCARD
         sources = self.currentSources()
         expected = sources.copy()
         peers = {}
+
+        # Disable the default checking because
+        # we trigger one ERROR message.
+        self.runTestDBusCheck = None
+        self.runTestOutputCheck = None
 
         # dummy peer directory
         contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
