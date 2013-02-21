@@ -520,16 +520,18 @@ public:
      *
      * @param relaxed   if true, then disable some of the additional checks after adding the item
      * @retval inserted    actual data that was inserted, optional
+     * @param uniqueUIDSuffix    gets added to UID of the inserted item if unique UIDs are necessary
      * @return the LUID of the inserted item
      */
-    virtual std::string insert(CreateSource createSource, const std::string &data, bool relaxed = false, std::string *inserted = NULL);
+    virtual std::string insert(CreateSource createSource, const std::string &data, bool relaxed = false, std::string *inserted = NULL, const std::string &uniqueUIDSuffix = "");
 
     /**
      * assumes that exactly one element is currently inserted and updates it with the given item
      *
      * @param check     if true, then reopen the source and verify that the reported items are as expected
+     * @param uniqueUIDSuffix    same UID suffix as when creating the item
      */
-    virtual void update(CreateSource createSource, const std::string &data, bool check = true);
+    virtual void update(CreateSource createSource, const std::string &data, bool check = true, const std::string &uniqueUIDSuffix = "");
 
     /**
      * updates one item identified by its LUID with the given item

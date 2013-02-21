@@ -1107,7 +1107,7 @@ test = SyncEvolutionTest("googlecalendar", compile,
                          "CLIENT_TEST_WEBDAV='google caldav testcases=testcases/google_event.ics' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
                          "CLIENT_TEST_SIMPLE_UID=1 " # server gets confused by UID with special characters
-                         "CLIENT_TEST_UNIQUE_UID=1 " # server keeps backups and restores old data unless UID is unieque
+                         "CLIENT_TEST_UNIQUE_UID=2 " # server keeps backups and complains with 409 about not increasing SEQUENCE number even after deleting old data
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          "CLIENT_TEST_FAILURES="
                          # http://code.google.com/p/google-caldav-issues/issues/detail?id=61 "cannot remove detached recurrence"

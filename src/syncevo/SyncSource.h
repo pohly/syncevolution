@@ -276,8 +276,11 @@ struct ClientTestConfig {
      *
      * @param update     modify item content so that it can be
      *                   used as an update of the old data
+     * @param uniqueUIDSuffix   beyond not reusing UIDs between tests, also embed this suffix
+     *                          in test items inside the running test to avoid reuse
+     *                          if necessary (Google CalDAV + UID/SEQUENCE => 409 error)
      */
-    boost::function<std::string (const std::string &, bool)> m_mangleItem;
+    boost::function<std::string (const std::string &data, bool update, const std::string &uniqueUIDSuffix)> m_mangleItem;
 
     /**
      * A very simple item that is inserted during basic tests. Ideally

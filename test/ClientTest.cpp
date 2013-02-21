@@ -392,7 +392,7 @@ static std::string importItem(TestingSyncSource *source, const ClientTestConfig 
     CT_ASSERT(source);
     if (data.size()) {
         SyncSourceRaw::InsertItemResult res;
-        SOURCE_ASSERT_NO_FAILURE(source, res = source->insertItemRaw("", config.m_mangleItem(data, false)));
+        SOURCE_ASSERT_NO_FAILURE(source, res = source->insertItemRaw("", config.m_mangleItem(data, false, "")));
         CT_ASSERT(!res.m_luid.empty());
         return res.m_luid;
     } else {
@@ -547,7 +547,7 @@ void LocalTests::addTests() {
     }
 }
 
-std::string LocalTests::insert(CreateSource createSource, const std::string &data, bool relaxed, std::string *inserted) {
+std::string LocalTests::insert(CreateSource createSource, const std::string &data, bool relaxed, std::string *inserted, const std::string &uniqueUIDSuffix) {
     restoreStorage(config, client);
 
     // create source
@@ -558,7 +558,7 @@ std::string LocalTests::insert(CreateSource createSource, const std::string &dat
     int numItems = 0;
     CT_ASSERT_NO_THROW(numItems = countItems(source.get()));
     SyncSourceRaw::InsertItemResult res;
-    std::string mangled = config.m_mangleItem(data, false);
+    std::string mangled = config.m_mangleItem(data, false, uniqueUIDSuffix);
     if (inserted) {
         *inserted = mangled;
     }
@@ -607,7 +607,7 @@ static std::string updateItem(CreateSource createSource, const ClientTestConfig 
     // insert item
     SyncSourceRaw::InsertItemResult res;
     std::string mangled;
-    CT_ASSERT_NO_THROW(mangled = config.m_mangleItem(data, true));
+    CT_ASSERT_NO_THROW(mangled = config.m_mangleItem(data, true, ""));
     if (updated) {
         *updated = mangled;
     }
@@ -630,7 +630,7 @@ static void removeItem(CreateSource createSource, const std::string &luid)
     SOURCE_ASSERT_NO_FAILURE(source.get(), source->deleteItem(luid));
 }
 
-void LocalTests::update(CreateSource createSource, const std::string &data, bool check) {
+void LocalTests::update(CreateSource createSource, const std::string &data, bool check, const std::string &uniqueUIDSuffix) {
     CT_ASSERT(createSource.createSource);
 
     restoreStorage(config, client);
@@ -645,7 +645,8 @@ void LocalTests::update(CreateSource createSource, const std::string &data, bool
     CT_ASSERT(it != source->getAllItems().end());
     string luid = *it;
     SyncSourceRaw::InsertItemResult res;
-    SOURCE_ASSERT_NO_FAILURE(source.get(), res = source->insertItemRaw(luid, config.m_mangleItem(data, true)));
+    std::string mangled = config.m_mangleItem(data, true, uniqueUIDSuffix);
+    SOURCE_ASSERT_NO_FAILURE(source.get(), res = source->insertItemRaw(luid, mangled));
     CT_ASSERT_NO_THROW(source.reset());
     CT_ASSERT_EQUAL(luid, res.m_luid);
     CT_ASSERT_EQUAL(ITEM_OKAY, res.m_state);
@@ -677,7 +678,7 @@ void LocalTests::update(CreateSource createSource, const std::string &data, cons
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSource()));
 
     // update it
-    SOURCE_ASSERT_NO_FAILURE(source.get(), source->insertItemRaw(luid, config.m_mangleItem(data, true)));
+    SOURCE_ASSERT_NO_FAILURE(source.get(), source->insertItemRaw(luid, config.m_mangleItem(data, true, "")));
 
     backupStorage(config, client);
 }
@@ -790,7 +791,7 @@ void LocalTests::compareDatabasesRef(TestingSyncSource &copy,
 
 std::string LocalTests::createItem(int item, const std::string &revision, int size)
 {
-    std::string data = config.m_mangleItem(config.m_templateItem, false);
+    std::string data = config.m_mangleItem(config.m_templateItem, false, "");
     std::stringstream prefix;
 
     // string to be inserted at start of unique properties;
@@ -1108,7 +1109,7 @@ void LocalTests::testInsertTwice() {
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
 
     // mangle data once
-    std::string data = config.m_mangleItem(config.m_insertItem, false);
+    std::string data = config.m_mangleItem(config.m_insertItem, false, "");
 
     // insert new item
     SyncSourceRaw::InsertItemResult first;
@@ -1201,11 +1202,12 @@ void LocalTests::doChanges(bool restart) {
     CT_ASSERT_EQUAL(luid, *it);
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
-    // now make changes via source B directly: these changes are not to be
-    // reported back
+    // Now make changes via source B directly: these changes are not to be
+    // reported back. Google CalDAV is very strict about UID/SEQUENCE,
+    // work around that by not reusing a UID inside this test.
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     // add
-    std::string mangled = config.m_mangleItem(config.m_insertItem, false);
+    std::string mangled = config.m_mangleItem(config.m_insertItem, false, "-B");
     SyncSourceRaw::InsertItemResult res;
     SOURCE_ASSERT_NO_FAILURE(source.get(), res = source->insertItemRaw("", mangled));
     CT_ASSERT(!res.m_luid.empty());
@@ -1216,7 +1218,7 @@ void LocalTests::doChanges(bool restart) {
     SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
     SOURCE_ASSERT_EQUAL(source.get(), 0, countDeletedItems(source.get()));
-    mangled = config.m_mangleItem(config.m_updateItem, false);
+    mangled = config.m_mangleItem(config.m_updateItem, false, "-B");
     SOURCE_ASSERT_NO_FAILURE(source.get(), res = source->insertItemRaw(res.m_luid, mangled));
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     // delete
@@ -1235,7 +1237,7 @@ void LocalTests::doChanges(bool restart) {
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("insert another item via source A");
-    CT_ASSERT_NO_THROW(doInsert());
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-C"));
     CLIENT_TEST_LOG("check for new item via source B");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
@@ -1254,7 +1256,7 @@ void LocalTests::doChanges(bool restart) {
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("update item via source A");
-    CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
+    CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem, "-C"));
     CLIENT_TEST_LOG("check for updated item via source B");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
@@ -1281,8 +1283,10 @@ void LocalTests::doChanges(bool restart) {
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create and update an item in source A");
-    CT_ASSERT_NO_THROW(doInsert());
-    CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem));
+    // Must use a UID different than the one used before despite that data being gone,
+    // to keep Google CalDAV server happy.
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-D"));
+    CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem, "-D"));
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, but not both");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
@@ -1295,9 +1299,9 @@ void LocalTests::doChanges(bool restart) {
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create, delete and recreate an item in source A");
-    CT_ASSERT_NO_THROW(doInsert());
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-E"));
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
-    CT_ASSERT_NO_THROW(doInsert());
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-F"));
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, even if\n "
                     "(as for calendar with UID) the same LUID gets reused");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
@@ -6375,7 +6379,7 @@ void ClientTest::postSync(int res, const std::string &logname)
 #endif
 }
 
-static string mangleGeneric(const std::string &data, bool update)
+static string mangleGeneric(const std::string &data, bool update, const std::string &uniqueUIDSuffix)
 {
     std::string item = data;
     if (update) {
@@ -6384,7 +6388,7 @@ static string mangleGeneric(const std::string &data, bool update)
     return item;
 }
 
-static string mangleICalendar20(const std::string &data, bool update)
+static string mangleICalendar20(const std::string &data, bool update, const std::string &uniqueUIDSuffix)
 {
     std::string item = data;
     std::string type;
@@ -6420,6 +6424,13 @@ static string mangleICalendar20(const std::string &data, bool update)
         }
         std::string unique = StringPrintf("UID:UNIQUE-UID-%llu-", (long long unsigned)start);
         boost::replace_all(item, "UID:", unique);
+        if (atoi(getenv("CLIENT_TEST_UNIQUE_UID")) > 1) {
+            // Also avoid reusing the same UID inside the same test.
+            // Required by Google CalDAV in calendar testChanges, because
+            // they keep even deleted items around and check the SEQUENCE
+            // number against their old data.
+            boost::replace_all(item, "UNIQUE-UID", "UNIQUE-UID" + uniqueUIDSuffix);
+        }
     } else if (getenv("CLIENT_TEST_LONG_UID")) {
         boost::replace_all(item, "UID:", "UID:this-is-a-ridiculously-long-uid-");
     }
