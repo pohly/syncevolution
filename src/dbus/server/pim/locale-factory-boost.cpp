@@ -390,15 +390,19 @@ public:
 class LocaleFactoryBoost : public LocaleFactory
 {
     const i18n::phonenumbers::PhoneNumberUtil &m_phoneNumberUtil;
+    bool m_edsSupportsPhoneNumbers;
     std::locale m_locale;
     std::string m_country;
+    std::string m_defaultCountryCode;
     PhoneNumberLogger m_logger;
 
 public:
     LocaleFactoryBoost() :
         m_phoneNumberUtil(*i18n::phonenumbers::PhoneNumberUtil::GetInstance()),
+        m_edsSupportsPhoneNumbers(e_phone_number_is_supported()),
         m_locale(genLocale()),
-        m_country(std::use_facet<boost::locale::info>(m_locale).country())
+        m_country(std::use_facet<boost::locale::info>(m_locale).country()),
+        m_defaultCountryCode(StringPrintf("+%d", m_phoneNumberUtil.GetCountryCodeForRegion(m_country)))
     {
         // Redirect output of libphonenumber and make it a bit quieter
         // than it is by default. We map fatal libphonenumber errors
@@ -509,8 +513,46 @@ public:
             const gchar *value =
                 reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
             if (value) {
+                if (m_edsSupportsPhoneNumbers) {
+                    // TODO: check X-EVOLUTION-E164 (made lowercase by folks!).
+                    // It has the format <local number>,<country code>,
+                    // where <country code> happens to be in quotation marks.
+                    // This ends up being split into individual values which
+                    // are returned in random order by folks (a bug?!).
+                    //
+                    // Example: TEL;X-EVOLUTION-E164=891234,"+49":+49-89-1234
+                    // => value '+49-89-1234', params [ '+49', '891234' ].
+                    //
+                    // We restore the right order by sorting, which puts the
+                    // country code first, and then joining.
+                    GeeCollection *coll = folks_abstract_field_details_get_parameter_values(phone, "x-evolution-e164");
+                    if (coll) {
+                        std::vector<std::string> components;
+                        components.reserve(2);
+                        BOOST_FOREACH (const gchar *component, GeeStringCollection(coll)) {
+                            // Empty component represents an unset
+                            // country code. Replace with the current
+                            // country code to form the full number.
+                            // Note that it is not certain whether we
+                            // get to see the empty component. At the
+                            // moment (EDS 3.7, folks 0.9.1), someone
+                            // swallows it.
+                            components.push_back(component[0] ? component : m_defaultCountryCode);
+                        }
+                        // Only one component? We must still miss the country code.
+                        if (components.size() == 1) {
+                            components.push_back(m_defaultCountryCode);
+                        }
+                        std::sort(components.begin(), components.end());
+                        std::string normal = boost::join(components, "");
+                        precomputed.m_phoneNumbers.push_back(normal);
+                    }
+                    // Either EDS had a normalized value or there is none because
+                    // the value is not a phone number. No need to try parsing again.
+                    continue;
+                }
+
                 i18n::phonenumbers::PhoneNumber number;
-                // TODO
                 i18n::phonenumbers::PhoneNumberUtil::ErrorType error =
                     m_phoneNumberUtil.Parse(value, m_country, &number);
                 if (error == i18n::phonenumbers::PhoneNumberUtil::NO_PARSING_ERROR) {

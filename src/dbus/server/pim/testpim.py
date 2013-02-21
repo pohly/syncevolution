@@ -3437,7 +3437,7 @@ END:VCARD''',
 
         # Expect an error, view should have been closed already.
         with self.assertRaisesRegexp(dbus.DBusException,
-                                     "org.freedesktop.DBus.Error.UnknownMethod: No such interface `org._01.pim.contacts.ViewControl' on object at path .*"):
+                                     "org.freedesktop.DBus.Error.UnknownMethod: .*"):
              self.view.close()
 
     @timeout(60)
@@ -3464,7 +3464,12 @@ END:VCARD''',
 if __name__ == '__main__':
     xdg = (os.path.join(os.path.abspath('.'), 'temp-testpim', 'config'),
            os.path.join(os.path.abspath('.'), 'temp-testpim', 'local', 'cache'))
+    error = ''
     if (os.environ.get('XDG_CONFIG_HOME', None), os.environ.get('XDG_DATA_HOME', None)) != xdg:
          # Don't allow user of the script to erase his normal EDS data.
-         sys.exit('testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME=%s XDG_DATA_HOME=%s because it will modify system EDS databases there' % xdg)
+         error = error + 'testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME=%s XDG_DATA_HOME=%s because it will modify system EDS databases there.\n' % xdg
+    if os.environ.get('LANG', '') != 'de_DE.utf-8':
+         error = error + 'EDS daemon must use the same LANG=de_DE.utf-8 as tests to get phone number normalization right.\n'
+    if error:
+         sys.exit(error)
     unittest.main()
