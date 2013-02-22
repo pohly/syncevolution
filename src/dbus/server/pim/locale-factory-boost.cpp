@@ -292,6 +292,7 @@ public:
     PhoneStartsWith(const std::locale &m_locale,
                     const std::string &tel) :
         m_phoneNumberUtil(*i18n::phonenumbers::PhoneNumberUtil::GetInstance()),
+        m_simpleEDSSearch(getenv("SYNCEVOLUTION_PIM_EDS_SUBSTRING") || !e_phone_number_is_supported()),
         m_country(std::use_facet<boost::locale::info>(m_locale).country())
     {
         i18n::phonenumbers::PhoneNumber number;
@@ -337,11 +338,38 @@ public:
 
     virtual std::string getEBookFilter() const
     {
-        // A suffix match with a limited number of digits is most
-        // likely to find the right contacts.
         size_t len = std::min((size_t)4, m_tel.size());
-        EBookQueryCXX query(e_book_query_field_test(E_CONTACT_TEL, E_BOOK_QUERY_ENDS_WITH,
-                                                    m_tel.substr(m_tel.size() - len, len).c_str()),
+        EBookQueryCXX query(m_simpleEDSSearch ?
+                            // A suffix match with a limited number of digits is most
+                            // likely to find the right contacts.
+                            e_book_query_field_test(E_CONTACT_TEL, E_BOOK_QUERY_ENDS_WITH,
+                                                    m_tel.substr(m_tel.size() - len, len).c_str()) :
+                            // We use EQUALS_NATIONAL_PHONE_NUMBER
+                            // instead of EQUALS_PHONE_NUMBER here,
+                            // because it will also match contacts
+                            // were the country code was not set
+                            // explicitly. EQUALS_PHONE_NUMBER would
+                            // do a stricter comparison and not match
+                            // those.
+                            //
+                            // If the contact has a country code set,
+                            // then EQUALS_NATIONAL_PHONE_NUMBER will
+                            // check that and not return a false match
+                            // if the country code is different.
+                            //
+                            // At the moment, we pass the E164
+                            // formatted search term with a country
+                            // code here. The country code is the
+                            // current default one.  We could think
+                            // about passing the original search term
+                            // instead, to allow matches where contact
+                            // and search term have no country code,
+                            // but it is uncertain whether EDS
+                            // currently works that way. It looks like
+                            // it always adds the default country code
+                            // to the search term.
+                            e_book_query_field_test(E_CONTACT_TEL, E_BOOK_QUERY_EQUALS_NATIONAL_PHONE_NUMBER,
+                                                    m_tel.c_str()),
                             false);
         PlainGStr filter(e_book_query_to_string(query.get()));
         return filter.get();
@@ -349,6 +377,7 @@ public:
 
 private:
     const i18n::phonenumbers::PhoneNumberUtil &m_phoneNumberUtil;
+    bool m_simpleEDSSearch;
     std::string m_country;
     std::string m_tel;
 };

@@ -3235,10 +3235,8 @@ END:VCARD''']):
                   ],
                          self.view.events)
 
-    @timeout(60)
-    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5")
-    def testFilterStartupRefine(self):
-        '''TestContacts.testFilterStartupRefine - phone number lookup while folks still loads, with folks finding more contacts'''
+    def doFilterStartupRefine(self, simpleSearch=True):
+        '''TestContacts.testFilterStartupRefine - phone number lookup while folks still loads, with folks finding more contacts (simple search in EDS) or the same contacts (intelligent search)'''
         self.setUpView(search=None)
 
         # Override default sorting.
@@ -3289,12 +3287,19 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.quiescentCount > 0)
-        self.assertEqual(1, len(self.view.contacts))
-        self.view.read(0, 1)
+        if simpleSearch:
+             self.assertEqual(1, len(self.view.contacts))
+             self.view.read(0, 1)
+        else:
+             self.assertEqual(2, len(self.view.contacts))
+             self.view.read(0, 2)
+
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveData(0, 1))
+                      until=lambda: self.view.haveData(0, simpleSearch and 1 or 2))
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        if not simpleSearch:
+             self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         # Wait for final results from folks. Also finds Benjamin.
         self.runUntil('phone results',
@@ -3308,14 +3313,37 @@ END:VCARD''']):
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
 
-        # One contact added by folks.
-        self.assertEqual([
-                  ('added', 0, 1),
-                  ('quiescent',),
-                  ('added', 1, 1),
-                  ('quiescent',),
-                  ],
-                         self.view.events)
+        if simpleSearch:
+             # One contact added by folks.
+             self.assertEqual([
+                       ('added', 0, 1),
+                       ('quiescent',),
+                       ('added', 1, 1),
+                       ('quiescent',),
+                       ],
+                              self.view.events)
+        else:
+             # Two contacts added initially, not updated by folks.
+             self.assertEqual([
+                       ('added', 0, 2),
+                       ('quiescent',),
+                       ('quiescent',),
+                       ],
+                              self.view.events)
+
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5 SYNCEVOLUTION_PIM_EDS_SUBSTRING=1")
+    def testFilterStartupRefine(self):
+        '''TestContacts.testFilterStartupRefine - phone number lookup while folks still loads, with folks finding more contacts because we use substring search in EDS'''
+        self.doFilterStartupRefine()
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5")
+    def testFilterStartupRefineSmart(self):
+        '''TestContacts.testFilterStartupRefine - phone number lookup while folks still loads, with folks finding the same contacts because we use smart search in EDS'''
+        # This test depends on libphonenumber support in EDS!
+        self.doFilterStartupRefine(simpleSearch=False)
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 SYNCEVOLUTION_PIM_DELAY_FOLKS=5")
