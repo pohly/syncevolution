@@ -633,13 +633,15 @@ class DBusUtil(Timeout):
             result.errors.append((self,
                                   "dbus-monitor had to be killed with SIGKILL"))
 
-        dbusLogLimit = 1000 * 80 # roughly 1000 lines as limit
+        # If reading the dbus-monitor output, then read it completely.
+        # The runTestDBusCheck callbacks expect that and it is confusing
+        # when the report printed as part of a test failure is incomplete.
         if debugger:
             monitorout = '<see %s>' % dbuslog
         elif useGZip:
-            monitorout = dbuslog + ':\n' + gzip.GzipFile(dbuslog).read(dbusLogLimit)
+            monitorout = dbuslog + ':\n' + gzip.GzipFile(dbuslog).read()
         else:
-            monitorout = dbuslog + ':\n' + open(dbuslog).read(dbusLogLimit)
+            monitorout = dbuslog + ':\n' + open(dbuslog).read()
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
         runTestDBusCheck = getattr(self, 'runTestDBusCheck', None)
