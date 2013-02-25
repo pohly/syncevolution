@@ -123,11 +123,12 @@ class IndividualView : public View
     ChangeSignal_t m_modifiedSignal;
 
     /**
-     * Replace filter with more specific one. Only supported by a view
-     * which is already filtered.
+     * Replace filter with more specific one (refine = true) or redo
+     * search without limitations.
      */
-    virtual void refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter) {
-        SE_THROW("refining the search not supported by this view");
+    virtual void replaceFilter(const boost::shared_ptr<IndividualFilter> &individualFilter,
+                               bool refine) {
+        SE_THROW("adding a search not supported by this view");
     }
 
     /** current number of entries */

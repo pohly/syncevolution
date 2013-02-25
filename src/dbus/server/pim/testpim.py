@@ -1766,11 +1766,9 @@ END:VCARD''' % {'peer': peer, 'index': index})
         '''TestContacts.testFilterExisting - check that filtering works when applied to static contacts'''
         self.setUpView()
 
-        # Cannot refine full view.
-        with self.assertRaisesRegexp(dbus.DBusException,
-                                     r'.*: refining the search not supported by this view$'):
-             self.view.view.RefineSearch([['any-contains', 'foo']],
-                                         timeout=self.timeout)
+        # Can refine full view. Doesn't change anything here.
+        self.view.view.RefineSearch([],
+                                    timeout=self.timeout)
 
         # Override default sorting.
         self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
@@ -1848,11 +1846,19 @@ END:VCARD''']):
                       until=lambda: view.haveData(0))
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
 
-        # Cannot expand view.
-        with self.assertRaisesRegexp(dbus.DBusException,
-                                     r'.*: New filter is empty. It must be more restrictive than the old filter\.$'):
-             view.view.RefineSearch([],
-                                    timeout=self.timeout)
+        # We can expand the search with ReplaceSearch().
+        view.view.ReplaceSearch([], False,
+                                timeout=self.timeout)
+        self.runUntil('expanded view with three contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) == 3)
+        self.view.read(0, 3)
+        self.runUntil('expanded contacts',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: self.view.haveData(0, 3))
+        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Find Charly by his FN (case insensitive explicitly).
         view = ContactsView(self.manager)
@@ -1903,14 +1909,15 @@ END:VCARD''']):
         self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Refine search without actually changing the result.
-        view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'am']],
-                               timeout=self.timeout)
-        self.runUntil('end of search refinement',
-                      check=lambda: self.assertEqual([], view.errors),
-                      until=lambda: view.quiescentCount > 0)
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
+        for refine in [True, False]:
+             view.quiescentCount = 0
+             view.view.ReplaceSearch([['any-contains', 'am']], refine,
+                                     timeout=self.timeout)
+             self.runUntil('end of search refinement',
+                           check=lambda: self.assertEqual([], view.errors),
+                           until=lambda: view.quiescentCount > 0)
+             self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+             self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Restrict search to Benjamin. The result is a view
         # which has different indices than the full view.
@@ -2525,6 +2532,20 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
+
+        # Expand back to view with Benjamin.
+        view.quiescentCount = 0
+        view.view.ReplaceSearch([['any-contains', 'Benjamin']], False,
+                                timeout=self.timeout)
+        self.runUntil('end of search replacement',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiescentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('Benjamin',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.haveData(0))
+        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")

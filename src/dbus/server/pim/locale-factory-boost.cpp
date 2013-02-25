@@ -519,15 +519,14 @@ public:
             }
         }
 
-        // May be empty (unfiltered). If a limit was given, then
-        // we have to create a filter which matches everything, because
-        // the FullView cannot apply a limit.
-        if (maxResults != -1) {
-            if (!res) {
-                res.reset(new MatchAll());
-            }
-            res->setMaxResults(maxResults);
+        // May be empty (unfiltered). Create a filter which matches
+        // everything, because otherwise we end up using the FullView,
+        // which cannot apply a limit or later switch to a different
+        // search.
+        if (!res) {
+            res.reset(new MatchAll());
         }
+        res->setMaxResults(maxResults);
         return res;
     }
 

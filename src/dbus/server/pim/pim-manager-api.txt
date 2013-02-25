@@ -354,6 +354,13 @@ Methods:
              to the view when setting a less restrictive filter (simplifies
              the implementation and improves performance).
 
+        void ReplaceSearch(list filter, bool refine)
+
+             Same as RefineSearch() if refine is true. If refine is false,
+             the new filter can be less restrictive and contacts which
+             did not match the old filter will be added back to the list
+             of matching contacts.
+
 
 Service: [user of the PIM Manager]
 Interface: org._01.pim.contacts.ViewAgent

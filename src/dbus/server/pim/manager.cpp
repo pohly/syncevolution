@@ -654,6 +654,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         add(this, &ViewResource::readContacts, "ReadContacts");
         add(this, &ViewResource::close, "Close");
         add(this, &ViewResource::refineSearch, "RefineSearch");
+        add(this, &ViewResource::replaceSearch, "ReplaceSearch");
         activate();
 
         // The view might have been started already, for example when
@@ -761,11 +762,13 @@ public:
     /** ViewControl.RefineSearch() */
     void refineSearch(const LocaleFactory::Filter_t &filter)
     {
-        if (filter.empty()) {
-            SE_THROW("New filter is empty. It must be more restrictive than the old filter.");
-        }
+        replaceSearch(filter, true);
+    }
+
+    void replaceSearch(const LocaleFactory::Filter_t &filter, bool refine)
+    {
         boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
-        m_view->refineFilter(individualFilter);
+        m_view->replaceFilter(individualFilter, refine);
     }
 };
 unsigned int ViewResource::m_counter;
@@ -833,17 +836,17 @@ void Manager::doSearch(const ESourceRegistryCXX &registry,
     view = m_folks->getMainView();
     bool quiescent = view->isQuiescent();
     std::string ebookFilter;
-    if (!filter.empty()) {
-        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
-        ebookFilter = individualFilter->getEBookFilter();
-        if (quiescent) {
-            // Don't search via EDS directly because the unified
-            // address book is ready.
-            ebookFilter.clear();
-        }
-        view = FilteredView::create(view, individualFilter);
-        view->setName(StringPrintf("filtered view%u", ViewResource::getNextViewNumber()));
+    // Always use a filtered view. That way we can implement ReplaceView or RefineView
+    // without having to switch from a FullView to a FilteredView.
+    boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
+    ebookFilter = individualFilter->getEBookFilter();
+    if (quiescent) {
+        // Don't search via EDS directly because the unified
+        // address book is ready.
+        ebookFilter.clear();
     }
+    view = FilteredView::create(view, individualFilter);
+    view->setName(StringPrintf("filtered view%u", ViewResource::getNextViewNumber()));
 
     SE_LOG_DEBUG(NULL, NULL, "preparing %s: EDS search term is '%s', active address books %s",
                  view->getName(),

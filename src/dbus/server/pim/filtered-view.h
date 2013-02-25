@@ -48,8 +48,21 @@ class FilteredView : public IndividualView
                  const boost::shared_ptr<IndividualFilter> &filter);
     void init(const boost::shared_ptr<FilteredView> &self);
 
-    bool isFull();
-    void fillView(int candidate);
+    bool isFull() const { return isFull(m_local2parent, m_filter); }
+    static bool isFull(const Entries_t local2parent,
+                       const boost::shared_ptr<IndividualFilter> &filter);
+
+    /**
+     * Request filling up the filtered view once things are stable again.
+     */
+    void fillView();
+
+    /**
+     * internal helper for fillView(), do not call directly
+     */
+    void fillViewCb();
+    Timeout m_fillViewOnIdle;
+    void parentQuiescent();
 
  public:
     /**
@@ -82,7 +95,8 @@ class FilteredView : public IndividualView
 
     // from IndividualView
     virtual void doStart();
-    virtual void refineFilter(const boost::shared_ptr<IndividualFilter> &individualFilter);
+    virtual void replaceFilter(const boost::shared_ptr<IndividualFilter> &individualFilter,
+                               bool refine);
     virtual int size() const { return (int)m_local2parent.size(); }
     virtual const IndividualData *getContact(int index) { return (index >= 0 && (unsigned)index < m_local2parent.size()) ? m_parent->getContact(m_local2parent[index]) : NULL; }
 };
