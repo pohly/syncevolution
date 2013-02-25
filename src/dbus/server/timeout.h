@@ -48,6 +48,14 @@ class Timeout : boost::noncopyable
     boost::function<bool ()> m_callback;
 
 public:
+    enum {
+        PRIORITY_HIGH = G_PRIORITY_HIGH,
+        PRIORITY_DEFAULT = G_PRIORITY_DEFAULT,
+        PRIORITY_HIGH_IDLE = G_PRIORITY_HIGH_IDLE,
+        PRIORITY_DEFAULT_IDLE = G_PRIORITY_DEFAULT_IDLE,
+        PRIORITY_LOW = G_PRIORITY_LOW
+    };
+
     Timeout() :
         m_tag(0)
     {
@@ -67,7 +75,8 @@ public:
      *                  otherwise in the specified amount of time
      */
     void activate(int seconds,
-                  const boost::function<bool ()> &callback)
+                  const boost::function<bool ()> &callback,
+                  int priority = G_PRIORITY_DEFAULT)
     {
         deactivate();
 
@@ -80,13 +89,25 @@ public:
         }
     }
 
+    void activate(const boost::function<bool ()> &idleCallback,
+                  int priority = G_PRIORITY_DEFAULT_IDLE)
+    {
+        activate(-1, idleCallback, priority);
+    }
+
     /**
      * invoke the callback once
      */
     void runOnce(int seconds,
-                 const boost::function<void ()> &callback)
+                 const boost::function<void ()> &callback,
+                 int priority = G_PRIORITY_DEFAULT)
     {
-        activate(seconds, boost::bind(&Timeout::once, callback));
+        activate(seconds, boost::bind(&Timeout::once, callback), priority);
+    }
+    void runOnce(const boost::function<void ()> &idleCallback,
+                 int priority = G_PRIORITY_DEFAULT)
+    {
+        runOnce(-1, idleCallback, priority);
     }
 
     /**
@@ -107,14 +128,21 @@ public:
 private:
     static gboolean triggered(gpointer data) throw ()
     {
+        Timeout *me = static_cast<Timeout *>(data);
+        bool runAgain = false;
         try {
-            Timeout *me = static_cast<Timeout *>(data);
-            return me->m_callback();
+            runAgain = me->m_callback();
         } catch (...) {
             // Something unexpected went wrong, can only shut down.
             Exception::handle(HANDLE_EXCEPTION_FATAL);
         }
-        return false;
+        if (!runAgain) {
+            // Returning false will automatically deactivate the source,
+            // remember that.
+            me->m_tag = 0;
+            me->m_callback = 0;
+        }
+        return runAgain;
     }
 
     static bool once(const boost::function<void ()> &callback) {

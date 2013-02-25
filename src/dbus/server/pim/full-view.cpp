@@ -274,7 +274,6 @@ void FullView::onIdle()
     if (isQuiescent()) {
         m_quiescenceSignal();
     }
-    m_waitForIdle.deactivate();
 }
 
 void FullView::waitForIdle()

@@ -739,6 +739,10 @@ void Server::passwordResponse(const InfoReq::InfoMap &response,
 bool Server::callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<void ()> &callback)
 {
     callback();
+    // We are executing the timeout, don't invalidate the instance
+    // until later when our caller is no longer using the instance to
+    // call us.
+    delayDeletion(timeout);
     m_timeouts.remove(timeout);
     return false;
 }
