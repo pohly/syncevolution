@@ -5039,6 +5039,38 @@
    fun:g_thread_proxy
 }
 
+# ==18552== 25 bytes in 1 blocks are definitely lost in loss record 2,353 of 6,616
+# ==18552==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==18552==    by 0xADC3D40: g_malloc (gmem.c:159)
+# ==18552==    by 0xADDA3BB: g_strdup (gstrfuncs.c:364)
+# ==18552==    by 0x1146400B: get_string_cb (e-book-backend-sqlitedb.c:255)
+# ==18552==    by 0x854F1CE: sqlite3_exec (in /usr/lib/x86_64-linux-gnu/libsqlite3.so.0.8.6)
+# ==18552==    by 0x114665A2: book_backend_sql_exec_real (e-book-backend-sqlitedb.c:301)
+# ==18552==    by 0x1146666F: book_backend_sql_exec (e-book-backend-sqlitedb.c:391)
+# ==18552==    by 0x11469FC6: e_book_backend_sqlitedb_get_revision (e-book-backend-sqlitedb.c:3995)
+# ==18552==    by 0x1F90480E: e_book_backend_file_open (e-book-backend-file.c:656)
+# ==18552==    by 0x1146C229: book_backend_open (e-book-backend-sync.c:397)
+# ==18552==    by 0x11473F26: operation_thread (e-data-book.c:292)
+# ==18552==    by 0xADE2181: g_thread_pool_thread_proxy (gthreadpool.c:309)
+# ==18552==    by 0xADE1964: g_thread_proxy (gthread.c:797)
+# ==18552==    by 0x8E34B4F: start_thread (pthread_create.c:304)
+# ==18552==    by 0xB90F70C: clone (clone.S:112)
+# ==18552== 
+# See https://bugzilla.gnome.org/show_bug.cgi?id=694730
+{
+   EDS DRA sqlite leak
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_strdup
+   fun:get_string_cb
+   fun:sqlite3_exec
+   fun:book_backend_sql_exec_real
+   fun:book_backend_sql_exec
+   fun:e_book_backend_sqlitedb_get_revision
+   fun:e_book_backend_file_open
+}
+
 ### folks ###
 
 # ==14458== 56 (16 direct, 40 indirect) bytes in 1 blocks are definitely lost in loss record 2,853 of 5,224
