@@ -182,7 +182,6 @@ class ActiveSyncSource :
     void setCurrentSyncKey(const std::string &currentSyncKey) { m_currentSyncKey = currentSyncKey; }
     void findCollections(const std::string account, bool force_update);
     std::string getCollectionPath(const std::string parentId, const std::string name);
-    std::string lookupFolder(std::string folder);
 
     boost::shared_ptr<ConfigNode> m_itemNode;
 
