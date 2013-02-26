@@ -1,4 +1,159 @@
-SyncEvolution 1.3.99.2, xxxxxxxxxx
+SyncEvolution 1.3.99.3, xxxxxxxxxx
+==================================
+
+Another development snapshot, with a particular focus on enhancing
+(and in some cases, fixing) searching in the PIM Manager. The PIM
+Manager in this snapshot depends on folks 0.9.x and thus gee
+0.8. Support for Bluez 5 was added. The PIM Manager API was extended
+by addding CreatePeer and ReplaceSearch. The previous methods,
+SetPeer and RefineSearch, are still supported.
+
+
+Details:
+
+* PIM Manager: add ReplaceSearch, always allow it
+
+  The new ReplaceSearch is more flexible than RefineSearch. It can
+  handle both tightening the search and relaxing it. The downside of it
+  is the more expensive implementation (must check all contacts again,
+  then find minimal set of change signals to update view).
+
+  Previously, a search which had no filter set at all at the begining
+  could not be refined. This limitation of the implementation gets
+  removed by always using a FilteredView, even if the initial filter is
+  empty.
+
+* PIM Manager: introduce CreateConfig()
+
+  That SetPeer() allows modifying and creating a config leads to race
+  conditions when multiple clients want to create a config. The new
+  CreateConfig() avoids that by atomically checking that a config does
+  not exist yet and creating it.
+
+  SetPeer() is still available for backwards compatibility. It continues
+  to be used for modifying an existing config in TestContacts.testSync
+  to check the effect of the logging settings.
+
+* PIM Manager: fix double entries in filtered search with limit
+
+  Stressing the FilteredView by using it in tests originally written
+  for the FullView showed that the filling up a view may have
+  used data while it was inconsistent internally, leading to
+  contacts being present multiple times.
+
+* PIM Manager and sync: support location = GEO property (FDO #60373)
+
+  Exposed as "location" -> (lat, long) in the D-Bus bindings.
+  Reading, writing and updating are supported.
+
+* PIM Manager: support groups = CATEGORIES (FDO #60380)
+
+  Allow reading and writing of groups (folks terminology), aka
+  CATEGORIES in vCard.
+
+* PIM Manager: intelligent phone search in EDS (part of FDO #59571)
+
+  If phone number search is enabled in EDS, then the direct search in
+  EDS now uses the more accurate
+  E_BOOK_QUERY_EQUALS_NATIONAL_PHONE_NUMBER comparison, with the E164
+  formatted caller ID as value to compare against. This gives
+  semantically correct results. The previous solution (now the
+  fallback) had to use substring searches, which did not match if the
+  contact's phone number was not formatted according to E164 and
+  which may have matched the wrong contacts if the trailing numbers
+  are the same.
+
+* PIM Manager : use pre-computed normalized phone numbers from EDS (part of FDO #59571)
+
+  When available, the pre-computed E164 number from EDS will be used
+  instead of doing one libphonebook parser run for each telephone
+  number while reading. Benchmarking showed that this parsing was the
+  number one hotspot, so this is a considerable improvement.
+
+* PIM Manager: fix error messages
+
+  Ensure and check that no unnecessary ERROR messages are printed.
+  libfolks was used slightly incorrectly, leading to several
+  harmless error messages (glib asserts). libphonenumber printed
+  its error messages to stdout.
+
+* PIM Manager: fix memory leaks during writing of contacts
+
+  Constructing the GValues created additional references instead
+  of taking over ownership as intended.
+
+* D-Bus server: fix read-after-free bug when using syslog
+
+  openlog() expects the string to remain valid. Must ensure that in
+  LoggerSyslog by making a copy. Found with valgrind.
+
+* PIM Manager: make implementation of some of the D-Bus methods thread-safe
+
+  The goal is to make it easier to extend syncevo-dbus-server
+  with other IPC mechanisms, which then can call the native C++
+  code directly.
+
+  That code was not prepared to handle calls in threads other than the
+  main one. Now this is checked when entering the methods and work is
+  shifted to the main thread if necessary. In the meantime the calling
+  thread waits for completion.
+
+* PIM Manager: check responsiveness (part of FDO #60851)
+
+  Enhanced the testActive test so that it can detect when the D-Bus
+  server stops responding for too long. One major reason for that was
+  event processing in folks, which got improved as part of
+  https://bugzilla.gnome.org/show_bug.cgi?id=694385
+
+* PIM Manager: adapt to gee 0.8
+
+  Changed the code to compile with gee 0.8, as used by folks 0.9.x.
+  Older versions of folks are no longer supported.
+
+* PBAP: support Bluez 5
+
+  The new Bluez 5 API is the third supported API for doing PBAP
+  transfers. It gets checked first, then the PBAB backend falls back to
+  new-style obexd (file based, similar to Bluez 5, but not quite the
+  same) and finally old-style obexd (data transfer via D-Bus).
+
+  In contrast to previous APIs, Bluez 5 does not report the reason for a
+  failed PBAP transfer. SyncEvolution then throws a generic "transfer
+  failed" error with "reason unknown" as message.
+
+* command line: recover from slow sync with new sync modes
+
+  The error message for an unexpected slow sync still mentioned
+  the old and obsolete "refresh-from-client/server" sync modes.
+  Better mention "refresh-from-local/remote".
+
+* CalDAV: more workarounds for Google CalDAV + unique IDs
+
+  Google became even more strict about checking REV. Tests which
+  reused a UID after deleting the original item started to fail sometime
+  since middle of December 2012.
+
+* CalDAV: work around Google server regression (undeclared namespace prefix in XML)
+
+  Google CalDAV for a while (December 2012 till January 2013) sent
+  invalid XML back when asked to include CardDAV properties in a
+  PROPFIND. This got rejected in the XML parser, which prevents
+  syncing calendar data:
+
+     Neon error code 1: XML parse error at line 55: undeclared namespace prefix
+
+  In the meantime Google fixed the issue in response to a bug report
+  via email. But the workaround, only asking for the properties which
+  are really needed, still makes sense and thus is kept.
+
+* build fixes
+
+  Avoid -lrt in make dependencies. Add missing pcre libs to
+  syncevo-dbus-server. sqlite backend needs "#include <stdio.h>"
+  (patch from Mario Kicherer).
+
+
+SyncEvolution 1.3.99.2, 13.12.2012
 ==================================
 
 Another development snapshot. Includes all fixes that went into 1.3.2
