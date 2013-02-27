@@ -1199,7 +1199,9 @@ bool Cmdline::run() {
                                 disable = "no database to synchronize";
                             }
                         } catch (...) {
-                            disable = "backend failed";
+                            std::string explanation;
+                            Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
+                            disable = "backend failed: " + explanation;
                         }
                     }
                     s.checkForNormal();
