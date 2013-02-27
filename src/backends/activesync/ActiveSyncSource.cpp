@@ -34,6 +34,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/range/adaptors.hpp>
 
+SE_GOBJECT_TYPE(EasSyncHandler)
+
 /* #include <eas-connection-errors.h> */
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -69,7 +71,7 @@ std::string ActiveSyncSource::Collection::fullPath() {
 void ActiveSyncSource::findCollections(const std::string account, const bool force_update)
 {
     GErrorCXX gerror;
-    EasSyncHandler *handler;
+    EasSyncHandlerCXX handler;
     EASFoldersCXX folders;
     
     if (!m_collections.empty()) {
@@ -79,7 +81,7 @@ void ActiveSyncSource::findCollections(const std::string account, const bool for
     }
     
     /* Fetch the folders */
-    handler = eas_sync_handler_new(account.c_str());
+    handler = EasSyncHandlerCXX::steal(eas_sync_handler_new(account.c_str()));
     if (!handler) throwError("findCollections cannot allocate sync handler");
     
     if (!eas_sync_handler_get_folder_list (handler,
@@ -87,10 +89,8 @@ void ActiveSyncSource::findCollections(const std::string account, const bool for
 					   folders,
 					   NULL,
 					   gerror)) {
-	g_object_unref(handler);
 	gerror.throwError("fetching folder list");
     }
-    g_object_unref(handler);
     
     /* Save the Collections */
     BOOST_FOREACH(EasFolder *folder, folders) {
