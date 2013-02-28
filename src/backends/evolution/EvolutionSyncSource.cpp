@@ -136,6 +136,22 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     ESourceBackend *backend = static_cast<ESourceBackend *>(e_source_get_extension(source, sourceExtension()));
     e_source_backend_set_backend_name(backend, "local");
 
+    // hack: detect databases requested by the PIM Manager and create
+    // them with a special summary. Long-term we need a better way of
+    // selecting extensions, for example with a new
+    // e_source_new_from_string().
+    if (boost::starts_with(database.m_uri, "pim-manager-")) {
+        g_type_ensure (E_TYPE_SOURCE_BACKEND_SUMMARY_SETUP);
+	ESourceBackendSummarySetup *setup =
+            static_cast<ESourceBackendSummarySetup *>(e_source_get_extension(source, E_SOURCE_EXTENSION_BACKEND_SUMMARY_SETUP));
+	e_source_backend_summary_setup_set_summary_fields(setup,
+                                                          E_CONTACT_TEL,
+                                                          0);
+	e_source_backend_summary_setup_set_indexed_fields(setup,
+                                                          E_CONTACT_TEL, E_BOOK_INDEX_PHONE,
+                                                          0);
+    }
+
     ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceListCXX sources;
     sources.push_back(source.ref()); // ESourceListCXX unrefs sources it points to
