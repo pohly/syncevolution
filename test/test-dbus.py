@@ -564,7 +564,13 @@ class DBusUtil(Timeout):
 
         # pserver.pid is not necessarily the pid of syncevo-dbus-server.
         # It might be the child of the pserver process.
-        self.pserverpid = self.serverPid()
+        try:
+            self.pserverpid = self.serverPid()
+            self.running = True
+        except:
+            result.errors.append((self,
+                                  "server startup failed: %s\nchildren: %s" % (traceback.format_exc(), self.getChildren())))
+            self.running = False
 
         numerrors = len(result.errors)
         numfailures = len(result.failures)
@@ -587,8 +593,8 @@ class DBusUtil(Timeout):
         else:
             logging.printf('killing test disabled')
         try:
-            self.running = True
-            unittest.TestCase.run(self, result)
+            if self.running:
+                unittest.TestCase.run(self, result)
         except KeyboardInterrupt, ex:
             # somehow this happens when timedout() above raises the exception
             # while inside glib main loop
