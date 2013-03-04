@@ -1439,7 +1439,7 @@ Exec=%s
         # that syncevo-dbus-server. Uses a dbus-session.sh from the
         # same dir as test-dbus.py itself.
         env = copy.deepcopy(os.environ)
-        env['XDG_DATA_DIRS'] = os.path.abspath(os.path.join(xdg_root, "share"))
+        env['XDG_DATA_DIRS'] = env.get('XDG_DATA_DIRS', '') + ':' + os.path.abspath(os.path.join(xdg_root, "share"))
 
         # Avoid running EDS and Akonadi. They are not needed for this test
         # and can cause false failures, for example when the daemons
