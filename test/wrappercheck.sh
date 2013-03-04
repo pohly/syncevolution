@@ -60,8 +60,14 @@ kill -INT $BACKGROUND_PID && kill -TERM $BACKGROUND_PID || true
 KILL_PID=$!
 set +e
 wait $BACKGROUND_PID
-kill -KILL $KILL_PID
+msg=$(kill -KILL $KILL_PID 2>&1)
 SUBRET=$?
+if echo "$msg" | grep -q 'No such process'; then
+    # Consider this a success.
+    SUBRET=0
+else
+    echo "$msg"
+fi
 set -e
 if [ $RET = 0 ]; then
     RET=$SUBRET
