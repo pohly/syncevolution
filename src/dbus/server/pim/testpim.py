@@ -479,9 +479,18 @@ END:VCARD(\r|\n)*''',
         #   [ERROR] The string supplied did not seem to be a phone number.
         # to stdout until we reduced the log level.
         #
+        # ==4039== ERROR SUMMARY: 2 errors from 2 contexts (suppressed: 185 from 175)
+        # as printed by valgrind is okay, so don't match that.
+        #
         # We check both D-Bus messages (which did not contain that
         # text, but some other error messages) and the servers stdout.
-        self.runTestDBusCheck = lambda test, log: test.assertNotIn('ERROR', log)
+        def unicodeLog(test, log):
+             open('/tmp/out', 'wb').write(log)
+             print re.match(r'ERROR(?! SUMMARY:)', log)
+        # Using assertNotRegexMatches with a negative lookahead led to unicode errors?!
+        # Therefore stick to plain text checks and avoid false matches against valgind's
+        # 'ERROR SUMMARY' by replacing that first.
+        self.runTestDBusCheck = lambda test, log: test.assertNotIn('ERROR', log.replace('ERROR SUMMARY:', 'error summary:'))
         self.runTestOutputCheck = self.runTestDBusCheck
 
         # Runtime varies a lot when using valgrind, because
