@@ -6212,6 +6212,7 @@ std::string ClientTest::import(ClientTest &client, TestingSyncSource &source, co
 {
     list<string> items;
     getItems(file, items, realfile);
+    SE_LOG_DEBUG(NULL, NULL, "importing %d test cases from file %s", (int)items.size(), realfile.c_str());
     std::string failures;
     bool doImport = !luids || luids->empty();
     std::list<std::string>::const_iterator it;
