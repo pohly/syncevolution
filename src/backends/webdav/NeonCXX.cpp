@@ -341,17 +341,21 @@ void Session::preSend(ne_request *req, ne_buffer *header)
         // only do this once
         m_forceAuthorizationOnce = false;
 
-        // append "Authorization: Basic" header if not present already
-        if (!boost::starts_with(header->data, "Authorization:") &&
-            !strstr(header->data, "\nAuthorization:")) {
-            std::string credentials = m_forceUsername + ":" + m_forcePassword;
-            SmartPtr<char *> blob(ne_base64((const unsigned char *)credentials.c_str(), credentials.size()));
-            ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", NULL);
-        }
+        if (m_uri.m_scheme == "https") {
+            // append "Authorization: Basic" header if not present already
+            if (!boost::starts_with(header->data, "Authorization:") &&
+                !strstr(header->data, "\nAuthorization:")) {
+                std::string credentials = m_forceUsername + ":" + m_forcePassword;
+                SmartPtr<char *> blob(ne_base64((const unsigned char *)credentials.c_str(), credentials.size()));
+                ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", NULL);
+            }
 
-        // check for acceptance of credentials later
-        m_credentialsSent = true;
-        SE_LOG_DEBUG(NULL, NULL, "forced sending credentials");
+            // check for acceptance of credentials later
+            m_credentialsSent = true;
+            SE_LOG_DEBUG(NULL, NULL, "forced sending credentials");
+        } else {
+            SE_LOG_DEBUG(NULL, NULL, "skipping forced sending credentials because not using https");
+        }
     }
 }
 
