@@ -1450,18 +1450,20 @@ Exec=%s
                 del env[key]
 
         # First run something which just starts the daemon.
-        dbus = subprocess.Popen((os.path.join(os.path.dirname(sys.argv[0]), 'dbus-session.sh'),
-                                 'dbus-send',
-                                 '--print-reply',
-                                 '--dest=org.syncevolution',
-                                 '/',
-                                 'org.freedesktop.DBus.Introspectable.Introspect'),
+        cmd = (os.path.join(os.path.dirname(sys.argv[0]), 'dbus-session.sh'),
+               'dbus-send',
+               '--print-reply',
+               '--dest=org.syncevolution',
+               '/',
+               'org.freedesktop.DBus.Introspectable.Introspect')
+        dbus = subprocess.Popen(cmd,
                                 env=env,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
         (out, err) = dbus.communicate()
         self.assertEqual(0, dbus.returncode,
-                         msg='introspection of syncevo-dbus-server failed:\n' + out)
+                         msg='introspection of syncevo-dbus-server failed:\nenv = %s\ncmd = %s:\output:\n%s' %
+                         (env, cmd, out))
 
         # Now try some real command.
         dbus = subprocess.Popen((os.path.join(os.path.dirname(sys.argv[0]), 'dbus-session.sh'),
