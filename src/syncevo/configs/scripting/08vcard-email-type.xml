@@ -1,0 +1,12 @@
+    <macro name="VCARD_OUTGOING_EMAILTYPE_SCRIPT"><![CDATA[
+        if (SESSIONVAR("addInternetEmail")) {
+            INTEGER i;
+            i = 0;
+            while (i < SIZE(EMAIL)) {
+                if (EMAIL[i]) {
+                    EMAIL_FLAGS[i] = EMAIL_FLAGS[i] | 8; // INTERNET = B3 in vCard profile
+                }
+                i = i + 1;
+            }
+        }
+    ]]></macro>

@@ -2354,6 +2354,8 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         "      delayedabort = FALSE;\n"
         "      INTEGER alarmTimeToUTC;\n"
         "      alarmTimeToUTC = FALSE;\n"
+        "      INTEGER addInternetEmail;\n"
+        "      addInternetEmail = FALSE;\n"
         "      INTEGER stripUID;\n"
         "      stripUID = FALSE;\n"
         "    ]]></sessioninitscript>\n";

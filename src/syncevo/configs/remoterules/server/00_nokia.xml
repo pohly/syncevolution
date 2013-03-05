@@ -4,11 +4,16 @@
       <finalrule>no</finalrule>
 
       <!-- At least the Nokia E55 is only able to deal with alarm times in UTC,
-           later confirmed for other Nokia models. BMC #1657 -->
+           later confirmed for other Nokia models. BMC #1657.
+           Nokia E51 only handles EMAIL with TYPE=INTERNET. Assume that this
+           is needed for all Nokia phones - doesn't hurt with a N97, anyway.
+           FDO #61784.
+      -->
       <rulescript><![CDATA[
         // no dates before 1980
         mindate=(TIMESTAMP)"19800101T000000Z";
         alarmTimeToUTC = TRUE;
+        addInternetEmail = TRUE;
       ]]></rulescript>
       
       <!-- 5800 and N97mini are confirmed to report bogus maximum size
