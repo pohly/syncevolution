@@ -786,10 +786,27 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         logging.printf("found children: %s", children)
         return children
 
+    def killPending(self, pending):
+        '''Ensure that all processes listed with their pid are not running.'''
+        while True:
+            again = []
+            for pid in pending:
+                logging.printf("sending SIGKILL to pending proccess %d" % pid)
+                if not TryKill(pid, signal.SIGKILL):
+                    logging.printf("pending process %d is gone" % pid)
+                else:
+                    again.append(pid)
+            if again:
+                time.sleep(0.1)
+                pending = again
+            else:
+                break
+
     def killChildren(self, delay):
         '''Find all children of the current process and kill them. First send SIGTERM,
         then after a grace period SIGKILL.'''
         children = self.getChildren()
+        pending = []
         # First pass with SIGTERM?
         if delay:
             for pid, (name, cmdline) in children.iteritems():
@@ -819,9 +836,24 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                         del children[pid]
                 except OSError, ex:
                     if ex.errno == errno.ECHILD:
-                        # someone else must have been faster, also okay
+                        # Process might have transferred to init as parent:
+                        #
+                        #   PID  PPID   TID NLWP CMD                         COMMAND
+                        # 20617     1     -    2 [memcheck-amd64-] <defunct> [memcheck-amd64-] <defunct>
+                        #     -     - 20617    - -                           -
+                        #     -     - 21012    - -                           -
+                        #
+                        # This was observed for syncevo-dbus-server when running under
+                        # valgrind despite apparently having terminated normally
+                        # (valgrindcheck.sh sees the exist status, log output confirms
+                        # normal shutdown). Not sure why process shutdown did not
+                        # terminate all threads.
+                        #
+                        # Remember to kill the remaining threads with SIGKILL,
+                        # as a workaround.
                         logging.printf("process %d %s gone at %s",
                                        pid, name, time.asctime())
+                        pending.append(pid)
                         del children[pid]
                     else:
                         raise ex
@@ -829,6 +861,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                 # All children quit normally.
                 logging.printf("all process gone at %s",
                                time.asctime())
+                self.killPending(pending)
                 return []
             time.sleep(0.1)
         # Force killing of remaining children. It's still possible
@@ -841,6 +874,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
             if TryKill(pid, signal.SIGKILL):
                 logging.printf("killed %d %s", pid, name)
                 killed.append("%d %s" % (pid, name))
+        self.killPending(pending)
         return killed
 
     def serverExecutableHelper(self, pid):
