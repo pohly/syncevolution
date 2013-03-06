@@ -1,4 +1,4 @@
-SyncEvolution 1.3.99.3, xxxxxxxxxx
+SyncEvolution 1.3.99.3, 06.03.2013
 ==================================
 
 Another development snapshot, with a particular focus on enhancing
@@ -8,6 +8,10 @@ Manager in this snapshot depends on folks 0.9.x and thus gee
 by addding CreatePeer and ReplaceSearch. The previous methods,
 SetPeer and RefineSearch, are still supported.
 
+Some issues in CalDAV, WebDAV and SyncML were fixed.
+
+Graham R. Cobb contributed several patches for enhancing ActiveSync
+support and making it work with Exchange 2010.
 
 Details:
 
@@ -145,6 +149,111 @@ Details:
   In the meantime Google fixed the issue in response to a bug report
   via email. But the workaround, only asking for the properties which
   are really needed, still makes sense and thus is kept.
+
+* WebDAV: don't send Basic Auth via http proactively (FDO #57248)
+
+  Sending basic authentication headers via http is insecure. Only do
+  it proactively when the connection is encrypted and thus protects
+  the information or when the server explicitly asks for it.
+
+* Nokia: always add TYPE=INTERNET to EMAIL (FDO #61784)
+
+  Without the explicit TYPE=INTERNET, email addresses sent to a Nokia
+  e51 were not shown by the phone and even got lost eventually (when
+  syncing back).
+
+  This commit ensures that the type is set for all emails sent to any
+  Nokia phone, because there may be other phones which need it and
+  phones which don't, shouldn't mind. This was spot-checked with a N97
+  mini, which works fine with and without the INTERNET type.
+
+  This behavior can be disabled again for specific Nokia phones by
+  adding a remote rule which sets the addInternetEmail session variable
+  to FALSE again.
+
+  Non-Nokia phones can enable the feature in a similar way, by setting
+  the variable to TRUE.
+
+* SyncML: config option for broken peers
+
+  Some peers have problems with meta data (CtCap, old Nokia phones)
+  and the sync mode extensions required for advertising the restart
+  capability (Oracle Beehive). The default in SyncEvolution is to
+  advertise the capability, so manual configuration is necessary when
+  working with a peer that fails in that mode.
+
+  Because the problem occurs when SyncEvolution contacts the peers
+  before it gets the device information from the peer, dynamic rules
+  based on the peer identifiers cannot be used. Instead the local config
+  must already disable these extra features in advance.
+
+  The "SyncMLVersion" property gets extended for this. Instead of just
+  "SyncMLVersion = 1.0" (as before) it now becomes possible to say
+  "SyncMLVersion = 1.0, noctcap, norestart".
+
+  "noctcap" disables sending CtCap. "norestart" disables the sync mode
+  extensions and thus doing multiple sync cycles in the same session
+  (used between SyncEvolution instances in some cases to get client and
+  server into sync in one session).
+
+  Both keywords are case-insensitive. There's no error checking for
+  typos, so beware!
+
+  The "SyncMLVersion" property was chosen because it was already in use
+  for configuring SyncML compatibility aspects and adding a new property
+  would have been harder.
+
+* ActiveSync: added support for specifying folder names
+
+  Previously, the database field was interpreted as a Collection ID.  This adds
+  logic to allow the database to be interpreted as a folder path.  The logic is:
+
+  1) If the database is an empty string, pass it through (this is the most
+  common case as it is interpreted as "use the default folder for the
+  source type").
+  2) If the database matches a Collection ID, use the ID (this is the same as
+  the previous behaviour).
+  3) If the database matches a folder path name, with an optional leading "/",
+  use the Collection ID for the matching folder.
+  4) Otherwise, force a FolderSync to get the latest folder changes from the
+  server and repeat steps 2 and 3
+  5) If still no match, throw an error.
+
+* ActiveSync: support for listing databases
+
+  Now --print-databases scans folders on the ActiveSync server and
+  shows suitable folders for the ActiveSync backends instead of the
+  previous, hard-coded help text.
+
+  Invoking --print-databases can be used as a workaround for
+  "SyncFolder error: Invalid synchronization key" errors. A better
+  solution would be to do that automatically, but there was no time
+  to implement that. See FDO #61869 and "[SyncEvolution] Activesync server losing state"
+  http://thread.gmane.org/gmane.comp.mobile.syncevolution/4295
+
+* command line: show backend error when listing databases fails
+
+  The command line swallowed errors thrown by the backend while listing
+  databases. Instead it just showed "<backend name>: backend failed". The goal
+  was to not distract users who accidentally access a non-functional backend.
+  But the result is that operations like --configure or --print-databases could
+  fail without giving the user any hint about the root cause of the issue.
+
+  Now the error explanation in all its gory details is included.
+
+  For example, not having activesyncd running leads to:
+  INFO] eas_contact: backend failed: fetching folder list:
+  GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name
+  org.meego.activesyncd was not provided by any .service files
+
+  And running activesyncd without the necessary gconf keys shows up as:
+  [INFO] eas_contact: backend failed: fetching folder list:
+  GDBus.Error:org.meego.activesyncd.Error.AccountNotFound: Failed to find
+  account [syncevolution@lists.intel.com]
+
+* Minor memory leak fix when using GDBus GIO: GDBusMethodInfo
+
+  Also depends on a glib fix, see https://bugzilla.gnome.org/show_bug.cgi?id=695376
 
 * build fixes
 
