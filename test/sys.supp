@@ -1483,3 +1483,46 @@
    fun:_ZN7SyncEvo6Server3runEv
    fun:main
 }
+
+# ==4782== 2,048 bytes in 1 blocks are definitely lost in loss record 2,395 of 2,503
+# ==4782==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==4782==    by 0x4C28D6F: realloc (vg_replace_malloc.c:632)
+# ==4782==    by 0x10955415: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.26.22.4)
+# ==4782==    by 0x109480DD: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.26.22.4)
+# ==4782==    by 0x10944048: gnutls_session_get_data2 (in /usr/lib/x86_64-linux-gnu/libgnutls.so.26.22.4)
+# ==4782==    by 0x6E4D666: ne_sock_connect_ssl (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==4782==    by 0x6E572DE: ??? (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==4782==    by 0x6E454F9: ??? (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==4782==    by 0x6E45D1B: ne_begin_request (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==4782==    by 0x6E453AC: ne_request_dispatch (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==4782==    by 0x6E52BCC: ??? (in /usr/lib/libneon-gnutls.so.27.2.6)
+# ==4782==    by 0x8ECB01: SyncEvo::Neon::Session::propfindURI(std::string const&, int, ne_propname const*, boost::function<void ()(SyncEvo::Neon::URI const&, ne_prop_result_set_s const*)> const&, SyncEvo::Timespec const&) (NeonCXX.cpp:426)
+# ==4782==    by 0x8ECE4E: SyncEvo::Neon::Session::propfindProp(std::string const&, int, ne_propname const*, boost::function<void ()(SyncEvo::Neon::URI const&, ne_propname const*, char const*, ne_status const*)> const&, SyncEvo::Timespec const&) (NeonCXX.cpp:461)
+# ==4782==    by 0x8E1539: SyncEvo::WebDAVSource::databaseRevision() (WebDAVSource.cpp:1332)
+# ==4782==    by 0x8CF30C: SyncEvo::CalDAVSource::subDatabaseRevision() (CalDAVSource.h:37)
+# ==4782==    by 0xA56FCC: SyncEvo::MapSyncSource::endSync(bool) (MapSyncSource.cpp:252)
+# ==4782==    by 0x86FCEB: SyncEvo::TestingSyncSourcePtr::stopAccess() (ClientTest.cpp:349)
+# ==4782==    by 0x870424: SyncEvo::TestingSyncSourcePtr::reset(SyncEvo::TestingSyncSource*, SyncEvo::TestingSyncSourcePtr::Flags) (ClientTest.cpp:294)
+# ==4782==    by 0x7A3188: SyncEvo::LocalTests::testImport() (ClientTest.cpp:1473)
+# ==4782==    by 0x7546B50: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x753CBB4: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x7543B71: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x754C6F4: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::string const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x754676E: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x754C679: CppUnit::TestResult::runTest(CppUnit::Test*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x754EB38: CppUnit::TestRunner::run(CppUnit::TestResult&, std::string const&) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x7550DA5: CppUnit::TextTestRunner::run(std::string, bool, bool, bool) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==4782==    by 0x6B921A: main (client-test-main.cpp:349)
+# ==4782== 
+#
+# Started to appear on testing-amd64 after switching Apple CalDAV testing to https.
+# FDO #61851
+# 
+{
+   neon + gnutls
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:gnutls_session_get_data2
+   fun:ne_sock_connect_ssl
+}
