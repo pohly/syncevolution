@@ -1088,15 +1088,35 @@ struct MakeMethodEntry
     // static GDBusMethodEntry make(const char *name)
 };
 
+// Wrapper around g_dbus_method_info_unref or g_dbus_signal_info_unref
+// with additional NULL check. The methods themselves crash on NULL,
+// which happens when appending the terminating NULL to m_methods/m_signals
+// below.
+template<class I, void (*f)(I *)> void InfoDestroy(gpointer ptr)
+{
+    if (ptr) {
+        I *info = static_cast<I *>(ptr);
+        f(info);
+    }
+}
+
+
 /**
  * utility class for registering an interface
  */
 class DBusObjectHelper : public DBusObject
 {
+    // 0 when not registered (= activated).
     guint m_connId;
-    bool m_activated;
+    GDBusInterfaceInfo m_ifInfo;
+    GDBusInterfaceVTable m_ifVTable;
+
+    // These arrays must stay valid as long as we are active,
+    // because our GDBusInterfaceInfo points to it without
+    // ever freeing the memory.
     GPtrArray *m_methods;
     GPtrArray *m_signals;
+
 
  public:
     typedef boost::function<void (void)> Callback_t;
@@ -1107,10 +1127,12 @@ class DBusObjectHelper : public DBusObject
                      const Callback_t &callback = Callback_t(),
                      bool closeConnection = false) :
         DBusObject(conn, path, interface, closeConnection),
-        m_activated(false),
-        m_methods(g_ptr_array_new_with_free_func((GDestroyNotify)g_dbus_method_info_unref)),
-        m_signals(g_ptr_array_new_with_free_func((GDestroyNotify)g_dbus_signal_info_unref))
+        m_connId(0),
+        m_methods(g_ptr_array_new_with_free_func(InfoDestroy<GDBusMethodInfo, g_dbus_method_info_unref>)),
+        m_signals(g_ptr_array_new_with_free_func(InfoDestroy<GDBusSignalInfo, g_dbus_signal_info_unref>))
     {
+        memset(&m_ifInfo, 0, sizeof(m_ifInfo));
+        memset(&m_ifVTable, 0, sizeof(m_ifVTable));
         if (!MethodHandler::m_callback) {
             MethodHandler::m_callback = callback;
         }
@@ -1141,13 +1163,8 @@ class DBusObjectHelper : public DBusObject
             MethodHandler::m_methodMap.erase(first_to_erase, last_to_erase);
         }
 
-        // free entries, necessary if activate() was never called
-        if (m_methods) {
-            g_ptr_array_free(m_methods, TRUE);
-        }
-        if (m_signals) {
-            g_ptr_array_free(m_signals, TRUE);
-        }
+        g_ptr_array_free(m_methods, TRUE);
+        g_ptr_array_free(m_signals, TRUE);
     }
 
     /**
@@ -1156,7 +1173,7 @@ class DBusObjectHelper : public DBusObject
      */
     template <class A1, class C, class M> void add(A1 instance, M C::*method, const char *name)
     {
-        if (!m_methods) {
+        if (m_connId) {
             throw std::logic_error("You can't add new methods after registration!");
         }
 
@@ -1177,7 +1194,7 @@ class DBusObjectHelper : public DBusObject
      */
     template <class M> void add(M *function, const char *name)
     {
-        if (!m_methods) {
+        if (m_connId) {
             throw std::logic_error("You can't add new functions after registration!");
         }
 
@@ -1198,45 +1215,16 @@ class DBusObjectHelper : public DBusObject
      */
     template <class S> void add(const S &s)
     {
-        if (!m_signals) {
+        if (m_connId) {
             throw std::logic_error("You can't add new signals after registration!");
         }
 
         g_ptr_array_add(m_signals, s.makeSignalEntry());
     }
 
-    void activate(GDBusMethodInfo   **methods,
-                  GDBusSignalInfo   **signals,
-                  GDBusPropertyInfo **properties,
-                  const Callback_t &callback)
-    {
-        GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
-        ifInfo->name       = g_strdup(getInterface());
-        ifInfo->methods    = methods;
-        ifInfo->signals    = signals;
-        ifInfo->properties = properties;
-
-        GDBusInterfaceVTable ifVTable;
-        ifVTable.method_call = MethodHandler::handler;
-        ifVTable.get_property = NULL;
-        ifVTable.set_property = NULL;
-
-        if ((m_connId = g_dbus_connection_register_object(getConnection(),
-                                                          getPath(),
-                                                          ifInfo,
-                                                          &ifVTable,
-                                                          this,
-                                                          NULL,
-                                                          NULL)) == 0) {
-            throw std::runtime_error(std::string("g_dbus_connection_register_object() failed for ") +
-                                     getPath() + " " + getInterface());
-        }
-        m_activated = true;
-    }
-
     void activate() {
         // method and signal array must be NULL-terminated.
-        if (!m_methods || !m_signals) {
+        if (m_connId) {
             throw std::logic_error("This object was already activated.");
         }
         if (m_methods->len &&
@@ -1247,44 +1235,38 @@ class DBusObjectHelper : public DBusObject
             m_signals->pdata[m_signals->len - 1] != NULL) {
             g_ptr_array_add(m_signals, NULL);
         }
-        GDBusInterfaceInfo *ifInfo = g_new0(GDBusInterfaceInfo, 1);
-        ifInfo->ref_count = 1;
-        ifInfo->name      = g_strdup(getInterface());
-        ifInfo->methods   = (GDBusMethodInfo **)g_ptr_array_free(m_methods, FALSE);
-        ifInfo->signals   = (GDBusSignalInfo **)g_ptr_array_free(m_signals, FALSE);
-        m_signals = NULL;
-        m_methods = NULL;
-
-        GDBusInterfaceVTable ifVTable;
-        ifVTable.method_call = MethodHandler::handler;
-        ifVTable.get_property = NULL;
-        ifVTable.set_property = NULL;
+        // Meta data is owned by this instance, not GDBus.
+        // This is what most examples do and deviating from that
+        // can (did!) lead to memory leaks. For example,
+        // the ownership of the method array cannot be transferred
+        // to GDBusInterfaceInfo.
+        m_ifInfo.ref_count = -1;
+        m_ifInfo.name      = const_cast<char *>(getInterface()); // Due to ref_count == -1, m_ifInfo.name is not going to get freed despite the missing const.
+        m_ifInfo.methods   = (GDBusMethodInfo **)m_methods->pdata;
+        m_ifInfo.signals   = (GDBusSignalInfo **)m_signals->pdata;
+        m_ifVTable.method_call = MethodHandler::handler;
 
         m_connId = g_dbus_connection_register_object(getConnection(),
                                                      getPath(),
-                                                     ifInfo,
-                                                     &ifVTable,
+                                                     &m_ifInfo,
+                                                     &m_ifVTable,
                                                      this,
                                                      NULL,
                                                      NULL);
-        // This will free the struct if register_object didn't take a ref,
-        // as in case of an error.
-        g_dbus_interface_info_unref(ifInfo);
         if (m_connId == 0) {
             throw std::runtime_error(std::string("g_dbus_connection_register_object() failed for ") +
                                      getPath() + " " + getInterface());
         }
-        m_activated = true;
     }
 
     void deactivate()
     {
-        if (m_activated) {
+        if (m_connId) {
             if (!g_dbus_connection_unregister_object(getConnection(), m_connId)) {
                 throw std::runtime_error(std::string("g_dbus_connection_unregister_object() failed for ") +
                                          getPath() + " " + getInterface());
             }
-            m_activated = false;
+            m_connId = 0;
         }
     }
 };
