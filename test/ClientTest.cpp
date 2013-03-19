@@ -6413,7 +6413,8 @@ static string mangleICalendar20(const std::string &data, bool update, const std:
         boost::replace_all(item, "UID:1234567890!@#$%^&*()<>@dummy", "UID:1234567890@dummy");
     }
 
-    if (getenv("CLIENT_TEST_UNIQUE_UID")) {
+    const char *uniqueUID = getenv("CLIENT_TEST_UNIQUE_UID");
+    if (uniqueUID) {
         // Making UID unique per test to avoid issues
         // when the source already holds older copies.
         // Might still be an issue in real life?!
@@ -6425,7 +6426,7 @@ static string mangleICalendar20(const std::string &data, bool update, const std:
         }
         std::string unique = StringPrintf("UID:UNIQUE-UID-%llu-", (long long unsigned)start);
         boost::replace_all(item, "UID:", unique);
-        if (atoi(getenv("CLIENT_TEST_UNIQUE_UID")) > 1) {
+        if (atoi(uniqueUID) > 1) {
             // Also avoid reusing the same UID inside the same test.
             // Required by Google CalDAV in calendar testChanges, because
             // they keep even deleted items around and check the SEQUENCE
