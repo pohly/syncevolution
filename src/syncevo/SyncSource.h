@@ -2514,8 +2514,8 @@ class SyncSourceBlob : public virtual SyncSourceBase
         sysync::memSize blksize = aBlkSize ? static_cast<sysync::memSize>(*aBlkSize) : 0,
             totsize = aTotSize ? static_cast<sysync::memSize>(*aTotSize) : 0;
         sysync::TSyError err = m_blob.ReadBlob(aID, aBlobID, aBlkPtr,
-                                               aBlkSize ? &blksize : NULL,
-                                               aTotSize ? &totsize : NULL,
+                                               &blksize,
+                                               &totsize,
                                                aFirst, aLast);
         if (aBlkSize) {
             *aBlkSize = blksize;
