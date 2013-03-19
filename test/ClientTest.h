@@ -45,6 +45,8 @@
 #include <syncevo/Logging.h>
 #include <syncevo/util.h>
 
+#include <boost/utility.hpp>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -236,7 +238,7 @@ class SyncTests;
  * properties (like available sync sources) and then creates several
  * tests.
  */
-class ClientTest {
+class ClientTest : private boost::noncopyable {
   public:
     ClientTest(int serverSleepSec = 0, const std::string &serverLog= "");
     virtual ~ClientTest();
