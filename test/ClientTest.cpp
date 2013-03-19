@@ -6348,7 +6348,7 @@ void ClientTest::postSync(int res, const std::string &logname)
 
         if (fd >= 0) {
             int out = open((logname + ".server.log").c_str(), O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
-            if (out) {
+            if (out >= 0) {
                 char buffer[4096];
                 bool cont = true;
                 ssize_t len;
