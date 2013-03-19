@@ -255,13 +255,13 @@ class DBusErrorCXX
         }
     }
 
-    DBusErrorCXX operator=(const DBusErrorCXX &dbus_error)
+    DBusErrorCXX & operator=(const DBusErrorCXX &dbus_error)
     {
-        DBusErrorCXX temp_error(dbus_error);
-        GError* temp_c_error = temp_error.m_error;
-
-        temp_error.m_error = m_error;
-        m_error = temp_c_error;
+        if (this != &dbus_error) {
+            set(dbus_error.m_error ?
+                g_error_copy(dbus_error.m_error) :
+                NULL);
+        }
         return *this;
     }
 
