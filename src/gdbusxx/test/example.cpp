@@ -33,6 +33,8 @@
 #include <memory>
 #include <iostream>
 
+#include <boost/noncopyable.hpp>
+
 namespace GDBusCXX {
 
 struct args {
@@ -45,7 +47,7 @@ static void hello_global() {}
 
 class Test {
     typedef boost::shared_ptr< Result1<const std::string&> > string_result;
-    struct async
+    struct async : private boost::noncopyable
     {
         async(const boost::shared_ptr<Watch> &watch, Watch *watch2, const string_result &result):
             m_watch(watch),
