@@ -967,9 +967,14 @@ std::string SyncReport::formatSyncTimes() const
     if (!m_start) {
         out << "unknown";
     } else {
-        char buffer[160];
-        strftime(buffer, sizeof(buffer), "%c", localtime(&m_start));
-        out << buffer;
+        struct tm tmbuffer, *tm = localtime_r(&m_start, &tmbuffer);
+        if (tm) {
+            char buffer[160];
+            strftime(buffer, sizeof(buffer), "%c", tm);
+            out << buffer;
+        } else {
+            out << "???";
+        }
         if (!m_end) {
             out << ", unknown duration (crashed?!)";
         } else {

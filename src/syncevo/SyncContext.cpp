@@ -445,7 +445,11 @@ public:
             if (mode == SESSION_CREATE) {
                 // create unique directory name in the given directory
                 time_t ts = time(NULL);
-                struct tm *tm = localtime(&ts);
+                struct tm tmbuffer;
+                struct tm *tm = localtime_r(&ts, &tmbuffer);
+                if (!tm) {
+                    SE_THROW("localtime_r() failed");
+                }
                 stringstream base;
                 base << "-"
                      << setfill('0')
@@ -912,9 +916,16 @@ private:
     void writeTimestamp(const string &key, time_t val, bool flush = true) {
         if (m_info) {
             char buffer[160];
-            struct tm tm;
+            struct tm tmbuffer, *tm;
             // be nice and store a human-readable date in addition the seconds since the epoch
-            strftime(buffer, sizeof(buffer), "%s, %Y-%m-%d %H:%M:%S %z", localtime_r(&val, &tm));
+            tm = localtime_r(&val, &tmbuffer);
+            if (tm) {
+                strftime(buffer, sizeof(buffer), "%s, %Y-%m-%d %H:%M:%S %z", tm);
+            } else {
+                // Less suitable fallback. Won't work correctly for 32
+                // bit long beyond 2038.
+                sprintf(buffer, "%lu", (long unsigned)val);
+            }
             m_info->setProperty(key, buffer);
             if (flush) {
                 m_info->flush();
