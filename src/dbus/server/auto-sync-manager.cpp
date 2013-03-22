@@ -311,7 +311,7 @@ void AutoSyncManager::schedule(const std::string &reason)
                 SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: ready to run via %s (transport present for %lds > %ds auto sync delay)",
                              configName.c_str(),
                              urlinfo.second.c_str(),
-                             (long)(*starttime - now).seconds(),
+                             starttime ? (long)(*starttime - now).seconds() : -1,
                              task->m_delay);
                 readyURL = urlinfo.second;
                 break;
