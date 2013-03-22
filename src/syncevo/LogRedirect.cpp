@@ -34,6 +34,7 @@
 #include <signal.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/noncopyable.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -626,7 +627,7 @@ class LogRedirectTest : public CppUnit::TestFixture {
      * redirect stdout/stderr, then intercept the log messages and
      * store them for inspection
      */
-    class LogBuffer : public LoggerBase
+    class LogBuffer : public LoggerBase, private boost::noncopyable
     {
     public:
         std::stringstream m_streams[DEBUG + 1];
