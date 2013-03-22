@@ -2872,7 +2872,7 @@ void SyncContext::initMain(const char *appname)
     // pulls it into the process by loading libecal.
     EDSAbiWrapperInit();
 
-    if (getenv("SYNCEVOLUTION_GNUTLS_DEBUG")) {
+    if (const char *gnutlsdbg = getenv("SYNCEVOLUTION_GNUTLS_DEBUG")) {
         // Enable libgnutls debugging without creating a hard dependency on it,
         // because we don't call it directly and might not even be linked against
         // it. Therefore check for the relevant symbols via dlsym().
@@ -2884,7 +2884,7 @@ void SyncContext::initMain(const char *appname)
         set_log_function = (typeof(set_log_function))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_function");
 
         if (set_log_level && set_log_function) {
-            set_log_level(atoi(getenv("SYNCEVOLUTION_GNUTLS_DEBUG")));
+            set_log_level(atoi(gnutlsdbg));
             set_log_function(GnutlsLogFunction);
         } else {
             SE_LOG_ERROR(NULL, NULL, "SYNCEVOLUTION_GNUTLS_DEBUG debugging not possible, log functions not found");
