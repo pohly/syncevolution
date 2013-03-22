@@ -25,6 +25,8 @@
 
 #include <errno.h>
 
+#include <boost/scoped_array.hpp>
+
 #include <syncevo/LogRedirect.h>
 
 #include <syncevo/declarations.h>
@@ -67,10 +69,10 @@ public:
 
     void restart()
     {
-        const char **argv = createArray(m_argv);
-        const char **env = createArray(m_env);
+        boost::scoped_array<const char *> argv(createArray(m_argv));
+        boost::scoped_array<const char *> env(createArray(m_env));
         LogRedirect::reset();
-        if (execve(argv[0], (char *const *)argv, (char *const *)env)) {
+        if (execve(argv[0], (char *const *)argv.get(), (char *const *)env.get())) {
             SE_THROW(StringPrintf("restarting syncevo-dbus-server failed: %s", strerror(errno)));
         }
     }
