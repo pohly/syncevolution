@@ -353,8 +353,8 @@ bool LogRedirect::process(FDs &fds) throw()
         return data_read;
     }
 
+    ssize_t available = 0;
     do {
-        ssize_t available = 0;
         have_message = false;
 
         // keep peeking at the data with increasing buffer sizes until
@@ -363,11 +363,26 @@ bool LogRedirect::process(FDs &fds) throw()
         while (true) {
             // increase buffer?
             if (newlen > m_len) {
-                m_buffer = (char *)realloc(m_buffer, newlen);
-                if (!m_buffer) {
-                    m_len = 0;
-                    break;
+                void *buffer = realloc(m_buffer, newlen);
+                if (!buffer) {
+                    // Nothing changed.
+                    if (available) {
+                        // We already read some data of a
+                        // datagram. Give up on the rest of the data,
+                        // process what we have below.
+                        if ((size_t)available == m_len) {
+                            // Need the byte for nul termination.
+                            available--;
+                        }
+                        have_message = true;
+                        break;
+                    } else {
+                        // Give up.
+                        SyncContext::throwError("out of memory");
+                        return false;
+                    }
                 } else {
+                    m_buffer = (char *)buffer;
                     m_len = newlen;
                 }
             }
@@ -403,8 +418,10 @@ bool LogRedirect::process(FDs &fds) throw()
             }
         }
         if (have_message) {
-            // swallow packet, even if empty or we couldn't receive it
-            recv(fds.m_read, NULL, 0, MSG_DONTWAIT);
+            if (USE_UNIX_DOMAIN_DGRAM || !m_streams) {
+                // swallow packet, even if empty or we couldn't receive it
+                recv(fds.m_read, NULL, 0, MSG_DONTWAIT);
+            }
             data_read = true;
         }
 
@@ -492,6 +509,7 @@ bool LogRedirect::process(FDs &fds) throw()
             LoggerBase::instance().message(level, prefix,
                                            NULL, 0, NULL,
                                            "%s", text);
+            available = 0;
         }
     } while(have_message);
 
