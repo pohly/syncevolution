@@ -430,6 +430,9 @@ int main( int argc, char **argv )
     // Expand PATH to cover the directory we were started from?
     // This might be needed to find normalize_vcard.
     char *exe = strdup(argv[0]);
+    if (!exe) {
+        SE_THROW("out of memory");
+    }
     if (strchr(exe, '/') ) {
         char *dir = dirname(exe);
         string path;
