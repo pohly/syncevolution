@@ -116,8 +116,8 @@ public:
      * can be instantiated as client A with id == "1" and client B with id == "2"
      */
     TestEvolution(const string &id) :
-        ClientTest(getenv("CLIENT_TEST_DELAY") ? atoi(getenv("CLIENT_TEST_DELAY")) : 0,
-                   getenv("CLIENT_TEST_LOG") ? getenv("CLIENT_TEST_LOG") : ""),
+        ClientTest(atoi(getEnv("CLIENT_TEST_DELAY", "0")),
+                   getEnv("CLIENT_TEST_LOG", "")),
         m_initialized(false),
         m_clientID(id),
         m_configs(SyncSource::getTestRegistry())
