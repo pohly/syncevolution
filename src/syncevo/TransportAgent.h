@@ -46,6 +46,8 @@ class SyncConfig;
 class TransportAgent
 {
  public:
+    virtual ~TransportAgent() {}
+
     /**
      * set transport specific URL of next message
      */
