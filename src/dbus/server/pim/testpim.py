@@ -253,10 +253,11 @@ class Watchdog():
           if not self.started:
                # Run with a long timeout. We want to know how long it
                # takes to reply, even if it is too long.
-               self.started = time.time()
+               started = time.time()
+               self.started = started
                self.manager.GetAllPeers(timeout=1000,
-                                        reply_handler=lambda peers: self._done(self.started, self.results, None),
-                                        error_handler=lambda error: self._done(self.started, self.results, error))
+                                        reply_handler=lambda peers: self._done(started, self.results, None),
+                                        error_handler=lambda error: self._done(started, self.results, error))
           return True
 
      def _done(self, started, results, error):
