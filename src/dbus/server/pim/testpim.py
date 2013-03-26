@@ -227,6 +227,8 @@ class Watchdog():
           self.timeout = glib.Timeout(int(self.interval * 1000))
           self.timeout.set_callback(self._ping)
           self.timeout.attach(loop.get_context())
+          if self.threshold < 0:
+               print '\nPinging server at intervals of %fs.' % self.interval
 
      def stop(self):
           if self.timeout:
@@ -235,10 +237,11 @@ class Watchdog():
 
      def check(self):
           '''Assert that all queries were served quickly enough.'''
-          tooslow = [x for x in self.results if x[1] > self.threshold]
-          self.test.assertEqual([], tooslow)
-          if self.started:
-               self.test.assertLess(time.time() - self.started, self.threshold)
+          if self.threshold > 0:
+               tooslow = [x for x in self.results if x[1] > self.threshold]
+               self.test.assertEqual([], tooslow)
+               if self.started:
+                    self.test.assertLess(time.time() - self.started, self.threshold)
 
      def reset(self):
           self.results = []
@@ -247,6 +250,9 @@ class Watchdog():
      def checkpoint(self, name):
           self.check()
           logging.printf('ping results for %s: %s', name, self.results)
+          if self.threshold < 0:
+               for result in self.results:
+                    print '%s: ping duration: %f' % (name, result[1])
           self.reset()
 
      def _ping(self):
@@ -264,7 +270,7 @@ class Watchdog():
           '''Record result. Intentionally uses the results array from the time when the call started,
           to handle intermittent checkpoints.'''
           duration = time.time() - started
-          if duration > self.threshold or error:
+          if self.threshold > 0 and duration > self.threshold or error:
                logging.printf('ping failure: duration %fs, error %s', duration, error)
           if error:
                results.append((started, duration, error))
