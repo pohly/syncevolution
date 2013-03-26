@@ -1669,8 +1669,8 @@ END:VCARD'''
                   output = open(item, "w")
                   output.write('''BEGIN:VCARD
 VERSION:3.0
-FN:John_%(peer)s%(index)03d Doe
-N:Doe;John_%(peer)s%(index)03d
+FN:John_%(peer)s%(index)04d Doe
+N:Doe;John_%(peer)s%(index)04d
 END:VCARD''' % {'peer': peer, 'index': index})
                   output.close()
 
@@ -1705,7 +1705,7 @@ END:VCARD''' % {'peer': peer, 'index': index})
                   del contact['source']
              expected = [{'full-name': first + ' Doe',
                                 'structured-name': {'given': first, 'family': 'Doe'}} for \
-                                    first in ['John_%(peer)s%(index)03d' % {'peer': peer,
+                                    first in ['John_%(peer)s%(index)04d' % {'peer': peer,
                                                                             'index': index} \
                                                    for peer in active \
                                                    for index in range(0, contactsPerPeer)] ]
