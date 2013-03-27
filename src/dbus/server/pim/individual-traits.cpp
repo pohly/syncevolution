@@ -286,7 +286,7 @@ template <> struct dbus_traits<FolksPostalAddressFieldDetails *> {
     static void append(builder_type &builder, FolksPostalAddressFieldDetails *value) {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(StringPrintf("(%sas)", INDIVIDUAL_DICT).c_str())); // pair of dict and string list
         FolksAbstractFieldDetails *fieldDetails = FOLKS_ABSTRACT_FIELD_DETAILS(value);
-        gconstpointer v = folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(fieldDetails));
+        gconstpointer v = folks_abstract_field_details_get_value(fieldDetails);
         dbus_traits<FolksPostalAddress *>::append(builder, static_cast<FolksPostalAddress *>(const_cast<gpointer>(v)));
         g_variant_builder_open(&builder, G_VARIANT_TYPE("as"));
         GeeMultiMap *map = folks_abstract_field_details_get_parameters(fieldDetails);
@@ -303,7 +303,7 @@ template <> struct dbus_traits<FolksPostalAddressFieldDetails *> {
 template <> struct dbus_traits<FolksNoteFieldDetails *> {
     static void append(builder_type &builder, FolksNoteFieldDetails *value) {
         FolksAbstractFieldDetails *fieldDetails = FOLKS_ABSTRACT_FIELD_DETAILS(value);
-        gconstpointer v = folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(fieldDetails));
+        gconstpointer v = folks_abstract_field_details_get_value(fieldDetails);
         dbus_traits<const char *>::append(builder, static_cast<const char *>(v)); // plain string
         // Ignore parameters. LANGUAGE is hardly ever set.
     }
@@ -312,7 +312,7 @@ template <> struct dbus_traits<FolksNoteFieldDetails *> {
 template <> struct dbus_traits<FolksRoleFieldDetails *> {
     static void append(builder_type &builder, FolksRoleFieldDetails *value) {
         FolksAbstractFieldDetails *fieldDetails = FOLKS_ABSTRACT_FIELD_DETAILS(value);
-        gconstpointer v = folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(fieldDetails));
+        gconstpointer v = folks_abstract_field_details_get_value(fieldDetails);
         dbus_traits<FolksRole *>::append(builder, static_cast<FolksRole *>(const_cast<gpointer>((v))));
         // Ignore parameters. LANGUAGE is hardly ever set.
     }
