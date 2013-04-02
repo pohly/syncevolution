@@ -5071,3 +5071,33 @@
    fun:folks_debug_dup_with_flags
    fun:folks_backend_store_constructor
 }
+
+# ==20811== 56 (16 direct, 40 indirect) bytes in 1 blocks are definitely lost in loss record 3,198 of 6,133
+# ==20811==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==20811==    by 0xA99FD40: g_malloc (gmem.c:159)
+# ==20811==    by 0xA9B4C82: g_slice_alloc (gslice.c:1003)
+# ==20811==    by 0xA96F049: g_static_rec_mutex_get_rec_mutex_impl.isra.1 (gthread-deprecated.c:685)
+# ==20811==    by 0xA96F318: g_static_rec_mutex_lock (gthread-deprecated.c:711)
+# ==20811==    by 0x50ADD31: folks_avatar_cache_dup (avatar-cache.vala:75)
+# ==20811==    by 0x4E45391: _edsf_persona_update (edsf-persona.vala:1523)
+# ==20811==    by 0x4E47DAD: edsf_persona_constructor (edsf-persona.vala:1000)
+# ==20811==    by 0xA517F70: g_object_newv (gobject.c:1719)
+# ==20811==    by 0xA51875F: g_object_new_valist (gobject.c:1836)
+# ==20811==    by 0xA518A93: g_object_new (gobject.c:1551)
+# ==20811==    by 0x4E42BB2: edsf_persona_construct (edsf-persona.vala:949)
+# ==20811==    by 0x4E49E6A: ___lambda4__gsource_func (edsf-persona-store.vala:2421)
+# ==20811==    by 0x4E4BF51: __edsf_persona_store_idle_process_gsource_func (edsf-persona-store.vala:2341)
+# ==20811==    by 0xA99A104: g_main_context_dispatch (gmain.c:2715)
+# ==20811==    by 0xA99A437: g_main_context_iterate.isra.24 (gmain.c:3290)
+# ==20811==    by 0xA99A831: g_main_loop_run (gmain.c:3484)
+# ==20811==    by 0x7CDF87: SyncEvo::Server::run() (server.cpp:440)
+# ==20811==    by 0x797255: main (main.cpp:198)
+# ==20811== 
+{
+   folks rec mutex II
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_static_rec_mutex_lock
+   fun:folks_avatar_cache_dup
+}
