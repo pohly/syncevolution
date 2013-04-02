@@ -4044,6 +4044,7 @@ END:VCARD''')
             self.assertEqual(report["source-addressbook-status"], "0") # unknown status for source (aborted early)
 
     @timeout(200)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testParentFailure(self):
         """TestLocalSync.testParentFailure - check that server and local sync helper detect when D-Bus helper dies"""
         self.setUpConfigs(childPassword="-")
@@ -4113,6 +4114,7 @@ END:VCARD''')
                                   'sync parent quit unexpectedly'))
 
     @timeout(200)
+    @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testChildFailure(self):
         """TestLocalSync.testChildFailure - check that server and D-Bus sync helper detect when local sync helper dies"""
         self.setUpConfigs(childPassword="-")
@@ -7757,7 +7759,7 @@ END:VCARD
 
 
     @property("debug", False)
-    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=60")
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=60 LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     @timeout(200)
     def testSyncFailure1(self):
         """TestCmdline.testSyncFailure1 - check that cmdline notices when sync fails prematurely before it even starts"""
@@ -7806,7 +7808,7 @@ END:VCARD
 ''' in out)
 
     @property("debug", False)
-    @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY2=60")
+    @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY2=60 LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     @timeout(200)
     def testSyncFailure2(self):
         """TestCmdline.testSyncFailure2 - check that cmdline notices when sync fails prematurely in the middle"""
