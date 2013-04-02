@@ -49,6 +49,8 @@ boost::shared_ptr<EDSFView> EDSFView::create(const ESourceRegistryCXX &registry,
 
 void EDSFView::doStart()
 {
+    // This function may get entered again, see retry code in opened() below.
+
     ESourceCXX source(e_source_registry_ref_source(m_registry, m_uuid.c_str()), false);
     if (!source) {
         SE_LOG_DEBUG(NULL, NULL, "edsf %s: address book not found", m_uuid.c_str());
@@ -56,23 +58,36 @@ void EDSFView::doStart()
     }
     m_store = EdsfPersonaStoreCXX::steal(edsf_persona_store_new_with_source_registry(m_registry, source));
     GErrorCXX gerror;
-    m_ebook = EBookClientCXX::steal(
-#ifdef HAVE_E_BOOK_CLIENT_NEW_DIRECT
-                                    getenv("SYNCEVOLUTION_NO_PIM_EDS_DIRECT") ?
-                                    e_book_client_new(source, gerror) :
-                                    e_book_client_new_direct(m_registry, source, gerror)
-#elif defined(HAVE_E_BOOK_CLIENT_CONNECT_DIRECT_SYNC)
-                                    getenv("SYNCEVOLUTION_NO_PIM_EDS_DIRECT") ?
-                                    e_book_client_new(source, gerror) :
-                                    E_BOOK_CLIENT(e_book_client_connect_direct_sync(m_registry, source, NULL, gerror))
-#else
-                                    e_book_client_new(source, gerror)
-#endif
-                                    );
-    if (!m_ebook) {
-        SE_LOG_DEBUG(NULL, NULL, "edfs %s: no client for address book: %s", m_uuid.c_str(), gerror->message);
+#ifdef HAVE_E_BOOK_CLIENT_CONNECT_DIRECT_SYNC
+    // TODO: use asynchronous version, once there is one in EDS
+    if (!getenv("SYNCEVOLUTION_NO_PIM_EDS_DIRECT")) {
+        while (!m_ebook) {
+            SE_LOG_DEBUG(NULL, NULL, "edsf %s: synchronously connecting direct", m_uuid.c_str());
+            m_ebook = EBookClientCXX::steal(E_BOOK_CLIENT(e_book_client_connect_direct_sync(m_registry, source, NULL, gerror)));
+            if (!m_ebook) {
+                SE_LOG_DEBUG(NULL, NULL, "edsf %s: no DRA client for address book: %s", m_uuid.c_str(), gerror ? gerror->message : "???");
+                if (gerror && g_error_matches(gerror, E_CLIENT_ERROR, E_CLIENT_ERROR_BUSY)) {
+                    SE_LOG_DEBUG(NULL, NULL, "edsf %s: try again", m_uuid.c_str());
+                    gerror.clear();
+                } else {
+                    return;
+                }
+            }
+        }
+        // Already opened by call above, proceed immediately.
+        opened(true, NULL);
         return;
     }
+#endif
+
+    SE_LOG_DEBUG(NULL, NULL, "edsf %s: new client", m_uuid.c_str());
+    m_ebook = EBookClientCXX::steal(e_book_client_new(source, gerror));
+    if (!m_ebook) {
+        SE_LOG_DEBUG(NULL, NULL, "edsf %s: no normal client for address book: %s", m_uuid.c_str(), gerror ? gerror->message : "???");
+        return;
+    }
+
+    SE_LOG_DEBUG(NULL, NULL, "edsf %s: asynchronous open", m_uuid.c_str());
     SYNCEVO_GLIB_CALL_ASYNC(e_client_open,
                             boost::bind(&EDSFView::opened,
                                         m_self,
@@ -87,9 +102,14 @@ void EDSFView::opened(gboolean success, const GError *gerror) throw()
 {
     try {
         if (!success) {
-            SE_LOG_DEBUG(NULL, NULL, "edfs %s: opening failed: %s", m_uuid.c_str(), gerror->message);
-            return;
+            SE_LOG_DEBUG(NULL, NULL, "edsf %s: opening failed: %s", m_uuid.c_str(), gerror ? gerror->message : "???");
+            if (gerror && g_error_matches(gerror, E_CLIENT_ERROR, E_CLIENT_ERROR_BUSY)) {
+                SE_LOG_DEBUG(NULL, NULL, "edsf %s: try again", m_uuid.c_str());
+                doStart();
+                return;
+            }
         }
+        SE_LOG_DEBUG(NULL, NULL, "edsf %s: opened successfully, reading contacts asynchronously: %s", m_uuid.c_str(), m_query.c_str());
         SYNCEVO_GLIB_CALL_ASYNC(e_book_client_get_contacts,
                                 boost::bind(&EDSFView::read,
                                             m_self,
@@ -107,9 +127,14 @@ void EDSFView::opened(gboolean success, const GError *gerror) throw()
 void EDSFView::read(gboolean success, GSList *contactslist, const GError *gerror) throw()
 {
     try {
+        SE_LOG_DEBUG(NULL, NULL, "edsf %s: reading contacts completed: %s",
+                     m_uuid.c_str(),
+                     success ? "success" :
+                     gerror ? gerror->message :
+                     "failed without error");
         GListCXX<EContact, GSList, GObjectDestructor> contacts(contactslist);
         if (!success) {
-            SE_LOG_DEBUG(NULL, NULL, "edfs %s: reading failed: %s", m_uuid.c_str(), gerror->message);
+            SE_LOG_DEBUG(NULL, NULL, "edsf %s: reading failed: %s", m_uuid.c_str(), gerror->message);
             return;
         }
 

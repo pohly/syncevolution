@@ -89,19 +89,25 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
                            (void *)"Evolution Data Server has died unexpectedly.");
 
 
-    // Always allow EDS to create the database. "only-if-exists =
-    // true" does not make sense.
-    if (!e_client_open_sync(client, false, NULL, gerror)) {
-        if (created) {
-            // Opening newly created address books often failed in old
-            // EDS releases - try again.
-            gerror.clear();
-            sleep(5);
-            if (!e_client_open_sync(client, false, NULL, gerror)) {
+    while (true) {
+        // Always allow EDS to create the database. "only-if-exists =
+        // true" does not make sense.
+        if (!e_client_open_sync(client, false, NULL, gerror)) {
+            if (gerror && g_error_matches(gerror, E_CLIENT_ERROR, E_CLIENT_ERROR_BUSY)) {
+                gerror.clear();
+                sleep(1);
+            } else if (created) {
+                // Opening newly created address books often failed in
+                // old EDS releases - try again. Probably covered by
+                // more recently added E_CLIENT_ERROR_BUSY check above.
+                gerror.clear();
+                sleep(5);
+            } else {
                 throwError("opening database", gerror);
             }
         } else {
-            throwError("opening database", gerror);
+            // Success!
+            break;
         }
     }
 
