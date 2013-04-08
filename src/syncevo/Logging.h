@@ -221,13 +221,6 @@ class Logger
 #endif
         ;
 
-    /**
-     * this logger instance can be used by multiple processes:
-     * true for those which write single lines, false
-     * for more complicated output like HTML (Synthesis log)
-     */
-    virtual bool isProcessSafe() const = 0;        
-
  protected:
     static std::string m_processName;
 };

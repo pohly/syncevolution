@@ -665,7 +665,6 @@ class LogRedirectTest : public CppUnit::TestFixture {
             CPPUNIT_ASSERT(options.m_level <= DEBUG && options.m_level >= 0);
             m_streams[options.m_level] << StringPrintfV(format, args);
         }
-        virtual bool isProcessSafe() const { return true; }
     };
     
 public:

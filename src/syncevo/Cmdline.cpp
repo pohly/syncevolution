@@ -4483,7 +4483,6 @@ private:
                 }
             }
         }
-        virtual bool isProcessSafe() const { return false; }
     };
 
     string DefaultConfig() {

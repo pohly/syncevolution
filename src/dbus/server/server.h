@@ -670,8 +670,6 @@ public:
                   va_list args,
                   const std::string &dbusPath,
                   const std::string &procname);
-
-    virtual bool isProcessSafe() const { return false; }
 };
 
 // extensions to the D-Bus server, created dynamically by main()

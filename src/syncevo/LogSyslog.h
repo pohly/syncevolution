@@ -49,7 +49,6 @@ public:
                           const char *format,
                           va_list args);
 
-    virtual bool isProcessSafe() const { return true; }
 private:
     static int getSyslogLevel(Level level);
 };

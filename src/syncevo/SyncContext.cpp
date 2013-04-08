@@ -803,8 +803,6 @@ public:
     }
 #endif
 
-    virtual bool isProcessSafe() const { return false; }
-
     /**
      * Compare two database dumps just based on their inodes.
      * @return true    if inodes differ
@@ -4287,7 +4285,6 @@ private:
             m_out << std::endl;
         }
     }
-    virtual bool isProcessSafe() const { return false; }
 
     CPPUNIT_TEST_SUITE(LogDirTest);
     CPPUNIT_TEST(testQuickCompare);

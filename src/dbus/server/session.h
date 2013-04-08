@@ -350,7 +350,6 @@ private:
     virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args);
-    virtual bool isProcessSafe() const { return false; }
 
     class LoggingGuard {
     public:

@@ -854,8 +854,6 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
         }
     }
 
-    virtual bool isProcessSafe() const { return false; }
-
 public:
     LocalTransportAgentChild() :
         m_ret(0),

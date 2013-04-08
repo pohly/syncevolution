@@ -85,7 +85,6 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args);
-    virtual bool isProcessSafe() const { return false; }
 
  public:
     SessionHelper(GMainLoop *loop,
