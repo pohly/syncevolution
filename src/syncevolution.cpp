@@ -1003,8 +1003,9 @@ void RemoteSession::interruptAsync(const char *operation)
 void RemoteSession::logOutput(Logger::Level level, const string &log, const string &procname)
 {
     if(m_output) {
-        ProcNameGuard guard(procname);
-        SE_LOG(NULL, level, "%s", log.c_str());
+        Logger::MessageOptions options(level);
+        options.m_processName = &procname;
+        SyncEvo::LoggerBase::instance().messageWithOptions(options, "%s", log.c_str());
     }
 }
 

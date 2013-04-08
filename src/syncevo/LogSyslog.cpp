@@ -82,8 +82,9 @@ void LoggerSyslog::messagev(const MessageOptions &options,
     }
 
     if (options.m_level <= getLevel()) {
+        const std::string none;
         formatLines(options.m_level, getLevel(),
-                    "", // process name is set when opening the syslog
+                    &none, // Process name is set when opening the syslog, don't repeat it.
                     options.m_prefix,
                     format, args,
                     boost::bind(printToSyslog, getSyslogLevel(options.m_level), _1, _2));

@@ -59,6 +59,7 @@ class LoggerStdout : public LoggerBase
                Level msglevel,
                Level filelevel,
                const std::string *prefix,
+               const std::string *procname,
                const char *format,
                va_list args);
     virtual void messagev(const MessageOptions &options,

@@ -175,8 +175,9 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
 
 void LocalTransportAgent::logChildOutput(const std::string &level, const std::string &message)
 {
-    ProcNameGuard guard(m_clientContext);
-    SE_LOG(NULL, Logger::strToLevel(level.c_str()), "%s", message.c_str());
+    Logger::MessageOptions options(Logger::strToLevel(level.c_str()));
+    options.m_processName = &m_clientContext;
+    SyncEvo::LoggerBase::instance().messageWithOptions(options, "%s", message.c_str());
 }
 
 void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn)

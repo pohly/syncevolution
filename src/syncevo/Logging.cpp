@@ -80,7 +80,7 @@ LoggerBase *LoggerBase::loggerAt(int index)
 
 void LoggerBase::formatLines(Level msglevel,
                              Level outputlevel,
-                             const std::string &processName,
+                             const std::string *processName,
                              const std::string *prefix,
                              const char *format,
                              va_list args,
@@ -92,10 +92,17 @@ void LoggerBase::formatLines(Level msglevel,
     if (msglevel != SHOW) {
         std::string reltime;
         std::string procname;
-        if (!processName.empty()) {
-            procname.reserve(processName.size() + 1);
+        const std::string *realProcname;
+
+        if (processName) {
+            realProcname = processName;
+        } else {
+            realProcname = &m_processName;
+        }
+        if (!realProcname->empty()) {
+            procname.reserve(realProcname->size() + 1);
             procname += " ";
-            procname += m_processName;
+            procname += *realProcname;
         }
 
         if (outputlevel >= DEBUG) {
@@ -184,6 +191,16 @@ void LoggerBase::formatLines(Level msglevel,
     }
 }
 
+Logger::MessageOptions::MessageOptions(Level level) :
+    m_level(level),
+    m_prefix(NULL),
+    m_file(NULL),
+    m_line(0),
+    m_function(NULL),
+    m_processName(NULL)
+{
+}
+
 Logger::MessageOptions::MessageOptions(Level level,
                                        const std::string *prefix,
                                        const char *file,
@@ -193,7 +210,8 @@ Logger::MessageOptions::MessageOptions(Level level,
     m_prefix(prefix),
     m_file(file),
     m_line(line),
-    m_function(function)
+    m_function(function),
+    m_processName(NULL)
 {
 }
 
@@ -222,6 +240,16 @@ void Logger::message(Level level,
     va_list args;
     va_start(args, format);
     messagev(MessageOptions(level, &prefix, file, line, function), format, args);
+    va_end(args);
+}
+
+void Logger::messageWithOptions(const MessageOptions &options,
+                                const char *format,
+                                ...)
+{
+    va_list args;
+    va_start(args, format);
+    messagev(options, format, args);
     va_end(args);
 }
 

@@ -96,8 +96,10 @@ void SessionHelper::messagev(const MessageOptions &options,
         if (m_parentLogger) {
             m_parentLogger->messagev(options, format, argsCopy);
         } else {
-            formatLines(options.m_level, DEBUG, getProcessName(),
-                        options.m_prefix, format, argsCopy,
+            formatLines(options.m_level, DEBUG,
+                        options.m_processName,
+                        options.m_prefix,
+                        format, argsCopy,
                         boost::bind(dumpString, _1));
         }
         va_end(argsCopy);
@@ -111,7 +113,7 @@ void SessionHelper::messagev(const MessageOptions &options,
     // send to parent
     string log = StringPrintfV(format, args);
     string strLevel = Logger::levelToStr(options.m_level);
-    emitLogOutput(strLevel, log, getProcessName());
+    emitLogOutput(strLevel, log, options.m_processName ? *options.m_processName : getProcessName());
 }
 
 void SessionHelper::run()

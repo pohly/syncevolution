@@ -232,6 +232,7 @@ void LogRedirect::messagev(const MessageOptions &options,
                         (m_err ? m_err : stderr),
                         options.m_level, getLevel(),
                         options.m_prefix,
+                        options.m_processName,
                         format,
                         args);
 }

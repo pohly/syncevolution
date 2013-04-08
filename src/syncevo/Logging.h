@@ -162,12 +162,15 @@ class Logger
         /** inserted at beginning of each line, if non-NULL */
         const std::string *m_prefix;
         /** source file where message comes from, if non-NULL */
-        char *m_file;
+        const char *m_file;
         /** source line number, if file is non-NULL */
         int m_line;
         /** surrounding function name, if non-NULL */
-        char *m_function;
+        const char *m_function;
+        /** name of the process which originally created the message, if different from current one */
+        const std::string *m_processName;
 
+        MessageOptions(Level level);
         MessageOptions(Level level,
                        const std::string *prefix,
                        const char *file,
@@ -210,6 +213,13 @@ class Logger
         __attribute__((format(printf, 7, 8)))
 #endif
         ;
+    void messageWithOptions(const MessageOptions &options,
+                            const char *format,
+                            ...)
+#ifdef __GNUC__
+        __attribute__((format(printf, 3, 4)))
+#endif
+        ;
 
     /**
      * this logger instance can be used by multiple processes:
@@ -220,33 +230,6 @@ class Logger
 
  protected:
     static std::string m_processName;
-};
-
-/**
- * Changes the process name temporarily.
- */
-class ProcNameGuard {
-    std::string m_oldProcName;
-    bool m_modified;
-
- public:
-    ProcNameGuard(const std::string &procname) :
-        m_oldProcName(Logger::getProcessName())
-    {
-        if (m_oldProcName != procname) {
-            Logger::setProcessName(procname);
-            m_modified = true;
-        } else {
-            m_modified = false;
-        }
-    }
-
-    ~ProcNameGuard()
-    {
-        if (m_modified) {
-            Logger::setProcessName(m_oldProcName);
-        }
-    }
 };
 
 /**
@@ -305,10 +288,13 @@ class LoggerBase : public Logger
      * Each chunk already includes the necessary line breaks (in
      * particular after the last line when it contains the entire
      * output). It may be modified by the callback.
+     *
+     * @param processName  NULL means use the current process' name,
+     *                     empty means use none
      */
     void formatLines(Level msglevel,
                      Level outputlevel,
-                     const std::string &processName,
+                     const std::string *processName,
                      const std::string *prefix,
                      const char *format,
                      va_list args,

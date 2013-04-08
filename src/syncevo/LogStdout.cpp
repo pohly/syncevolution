@@ -62,6 +62,7 @@ void LoggerStdout::write(FILE *file,
                          Level msglevel,
                          Level filelevel,
                          const std::string *prefix,
+                         const std::string *procname,
                          const char *format,
                          va_list args)
 {
@@ -70,7 +71,7 @@ void LoggerStdout::write(FILE *file,
         // TODO: print debugging information, perhaps only in log file
         std::string output;
         formatLines(msglevel, filelevel,
-                    m_processName,
+                    procname,
                     prefix,
                     format, args,
                     boost::bind(appendOutput, boost::ref(output), _1, _2));
@@ -85,6 +86,7 @@ void LoggerStdout::messagev(const MessageOptions &options,
 {
     write(m_file, options.m_level, getLevel(),
           options.m_prefix,
+          options.m_processName,
           format, args);
 }
 
