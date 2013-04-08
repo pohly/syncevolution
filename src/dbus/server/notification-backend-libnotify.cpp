@@ -62,7 +62,7 @@ gboolean (*notify_notification_show)(NotifyNotification *notification,
 
 static bool NotFound(const char *func)
 {
-    SE_LOG_DEBUG(NULL, NULL, "%s: not found", func);
+    SE_LOG_DEBUG(NULL, "%s: not found", func);
     return false;
 }
 #endif
@@ -102,7 +102,7 @@ bool NotificationBackendLibnotify::init()
     for (i = 1; i <= 4; i++) {
         dlhandle = dlopen(StringPrintf("libnotify.so.%d", i).c_str(), RTLD_LAZY|RTLD_GLOBAL);
         if (!dlhandle) {
-            SE_LOG_DEBUG(NULL, NULL, "failed to load libnotify.so.%d: %s", i, dlerror());
+            SE_LOG_DEBUG(NULL, "failed to load libnotify.so.%d: %s", i, dlerror());
         } else {
             break;
         }
@@ -123,7 +123,7 @@ bool NotificationBackendLibnotify::init()
         !LOOKUP(notify_notification_show)) {
         return false;
     }
-    SE_LOG_DEBUG(NULL, NULL, "using libnotify.so.%d", i);
+    SE_LOG_DEBUG(NULL, "using libnotify.so.%d", i);
 #endif
 
     m_initialized = notify_init("SyncEvolution");

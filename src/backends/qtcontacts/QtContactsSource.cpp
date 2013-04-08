@@ -391,7 +391,7 @@ void QtContactsSource::open()
 {
     QString buffer;
     QDebug(&buffer) << "available managers (default one first): " << QContactManager::availableManagers();
-    SE_LOG_DEBUG(NULL, NULL, buffer.toUtf8().data());
+    SE_LOG_DEBUG(NULL, buffer.toUtf8().data());
 
     string id = getDatabaseID();
     m_data = new QtContactsData(this, id.c_str());
@@ -405,7 +405,7 @@ void QtContactsSource::open()
     buffer = "";
     QDebug(&buffer) << manager->managerUri() << " manager supports contact types: " << manager->supportedContactTypes() <<
         " and data types: " << manager->supportedDataTypes();
-    SE_LOG_DEBUG(NULL, NULL, buffer.toUtf8().data());
+    SE_LOG_DEBUG(NULL, buffer.toUtf8().data());
 
     m_data->m_manager = manager;
 }

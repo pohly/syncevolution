@@ -690,7 +690,7 @@ bool Cmdline::run() {
     if (m_usage) {
         usage(true);
     } else if (m_version) {
-        SE_LOG_SHOW(NULL, NULL, "SyncEvolution %s%s\n%s%s",
+        SE_LOG_SHOW(NULL, "SyncEvolution %s%s\n%s%s",
                     VERSION,
                     SyncContext::isStableRelease() ? "" : " (pre-release)",
                     EDSAbiWrapperInfo(),
@@ -777,7 +777,7 @@ bool Cmdline::run() {
                 }
                 (this->*operation)(source.get(), header);
             } else {
-                SE_LOG_SHOW(NULL, NULL, "%s:\n   cannot access databases", header.c_str());
+                SE_LOG_SHOW(NULL, "%s:\n   cannot access databases", header.c_str());
             }
         } else {
             // list for all backends
@@ -795,7 +795,7 @@ bool Cmdline::run() {
                             auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
                             (this->*operation)(source.get(), header);
                         } catch (...) {
-                            SE_LOG_ERROR(NULL, NULL, "%s:\naccessing databases failed", header.c_str());
+                            SE_LOG_ERROR(NULL, "%s:\naccessing databases failed", header.c_str());
                             Exception::handle();
                         }
                     }
@@ -814,7 +814,7 @@ bool Cmdline::run() {
             }
             config.reset(new SyncConfig(m_server));
             if (!config->exists()) {
-                SE_LOG_ERROR(NULL, NULL, "Server '%s' has not been configured yet.", m_server.c_str());
+                SE_LOG_ERROR(NULL, "Server '%s' has not been configured yet.", m_server.c_str());
                 return false;
             }
 
@@ -829,7 +829,7 @@ bool Cmdline::run() {
                                           peer, context);
             config = SyncConfig::createPeerTemplate(peer);
             if (!config.get()) {
-                SE_LOG_ERROR(NULL, NULL, "No configuration template for '%s' available.", m_template.c_str());
+                SE_LOG_ERROR(NULL, "No configuration template for '%s' available.", m_template.c_str());
                 return false;
             }
 
@@ -865,7 +865,7 @@ bool Cmdline::run() {
         BOOST_FOREACH(const string &name, sources) {
             if (m_sources.empty() ||
                 m_sources.find(name) != m_sources.end()) {
-                SE_LOG_SHOW(NULL, NULL, "[%s]", name.c_str());
+                SE_LOG_SHOW(NULL, "[%s]", name.c_str());
                 SyncSourceNodes nodes = config->getSyncSourceNodes(name);
                 boost::shared_ptr<FilterConfigNode> sourceProps = nodes.getProperties();
                 sourceProps->setFilter(sourceFilters.createSourceFilter(name));
@@ -917,7 +917,7 @@ bool Cmdline::run() {
         string origPeer;
         if (m_migrate) {
             if (!m_sources.empty()) {
-                SE_LOG_ERROR(NULL, NULL, "cannot migrate individual sources");
+                SE_LOG_ERROR(NULL, "cannot migrate individual sources");
                 return false;
             }
 
@@ -928,7 +928,7 @@ bool Cmdline::run() {
                 oldContext = "";
                 from.reset(new SyncConfig(peer));
                 if (!from->exists()) {
-                    SE_LOG_ERROR(NULL, NULL, "Server '%s' has not been configured yet.", m_server.c_str());
+                    SE_LOG_ERROR(NULL, "Server '%s' has not been configured yet.", m_server.c_str());
                     return false;
                 }
             }
@@ -1005,7 +1005,7 @@ bool Cmdline::run() {
                     if (SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(configTemplate,
                                                                                         SyncConfig::NormalizeFlags(SyncConfig::NORMALIZE_SHORTHAND|SyncConfig::NORMALIZE_IS_NEW)),
                                                       peer, context)) {
-                        SE_LOG_ERROR(NULL, NULL, "Template %s must not specify a context.", configTemplate.c_str());
+                        SE_LOG_ERROR(NULL, "Template %s must not specify a context.", configTemplate.c_str());
                         return false;
                     }
                     string tmp;
@@ -1035,15 +1035,15 @@ bool Cmdline::run() {
                     }
                 }
                 if (!from.get()) {
-                    SE_LOG_ERROR(NULL, NULL, "No configuration template for '%s' available.", configTemplate.c_str());
+                    SE_LOG_ERROR(NULL, "No configuration template for '%s' available.", configTemplate.c_str());
                     if (m_template.empty()) {
-                        SE_LOG_INFO(NULL, NULL,
+                        SE_LOG_INFO(NULL,
                                     "Use '--template none' and/or specify relevant properties on the command line to create a configuration without a template. Need values for: %s",
                                     boost::join(missing, ", ").c_str());
                     } else if (missing.empty()) {
-                        SE_LOG_INFO(NULL, NULL, "All relevant properties seem to be set, omit the --template parameter to proceed.");
+                        SE_LOG_INFO(NULL, "All relevant properties seem to be set, omit the --template parameter to proceed.");
                     }
-                    SE_LOG_INFO(NULL, NULL, "\n");
+                    SE_LOG_INFO(NULL, "\n");
                     SyncConfig::DeviceList devices;
                     devices.push_back(SyncConfig::DeviceDescription("", "", SyncConfig::MATCH_ALL));
                     dumpConfigTemplates("Available configuration templates (clients and servers):",
@@ -1150,7 +1150,7 @@ bool Cmdline::run() {
 
         // TODO: update complete --configure output to be more informative.
         // This is a first step, but shouldn't be done in isolation.
-        // SE_LOG_INFO(NULL, NULL, "%s configuration %s",
+        // SE_LOG_INFO(NULL, "%s configuration %s",
         //             fromScratch ? "creating" : "updating",
         //             to->getConfigName().c_str());
 
@@ -1186,7 +1186,7 @@ bool Cmdline::run() {
 
                     // check whether the sync source works; this can
                     // take some time, so allow the user to abort
-                    SE_LOG_INFO(NULL, NULL, "%s: looking for databases...",
+                    SE_LOG_INFO(NULL, "%s: looking for databases...",
                                 source.c_str());
                     SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
                     auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
@@ -1205,7 +1205,7 @@ bool Cmdline::run() {
                         }
                     }
                     s.checkForNormal();
-                    SE_LOG_INFO(NULL, NULL, "%s: %s\n",
+                    SE_LOG_INFO(NULL, "%s: %s\n",
                                 source.c_str(),
                                 disable.empty() ? "okay" : disable.c_str());
                 }
@@ -1346,7 +1346,7 @@ bool Cmdline::run() {
                 if (logging) {
                     description = logging->getDescription(luid);
                 }
-                SE_LOG_SHOW(NULL, NULL, "%s%s%s",
+                SE_LOG_SHOW(NULL, "%s%s%s",
                             CmdlineLUID::fromLUID(luid).c_str(),
                             description.empty() ? "" : ": ",
                             description.c_str());
@@ -1419,7 +1419,7 @@ bool Cmdline::run() {
                                 luid = *m_luids.begin();
                             }
                         }
-                        SE_LOG_SHOW(NULL, NULL, "#0: %s",
+                        SE_LOG_SHOW(NULL, "#0: %s",
                                     insertItem(raw, luid, content).getEncoded().c_str());
                     } else {
                         typedef boost::split_iterator<string::iterator> string_split_iterator;
@@ -1454,7 +1454,7 @@ bool Cmdline::run() {
                                 luid = *luidit;
                                 ++luidit;
                             }
-                            SE_LOG_SHOW(NULL, NULL, "#%d: %s",
+                            SE_LOG_SHOW(NULL, "#%d: %s",
                                         count,
                                         insertItem(raw,
                                                    luid,
@@ -1471,7 +1471,7 @@ bool Cmdline::run() {
                         if (!ReadFile(path, content)) {
                             SyncContext::throwError(path, errno);
                         }
-                        SE_LOG_SHOW(NULL, NULL, "#%d: %s: %s",
+                        SE_LOG_SHOW(NULL, "#%d: %s: %s",
                                     count,
                                     entry.c_str(),
                                     insertItem(raw, "", content).getEncoded().c_str());
@@ -1528,7 +1528,7 @@ bool Cmdline::run() {
                         }
                         if (out == &std::cout) {
                             // special case, use logging infrastructure
-                            SE_LOG_SHOW(NULL, NULL, "%s%s",
+                            SE_LOG_SHOW(NULL, "%s%s",
                                         delimiter.c_str(),
                                         item.c_str());
                             // always prints newline
@@ -1627,15 +1627,15 @@ bool Cmdline::run() {
                 if (first) {
                     first = false;
                 } else if(!m_quiet) {
-                    SE_LOG_SHOW(NULL, NULL, "\n");
+                    SE_LOG_SHOW(NULL, "\n");
                 }
-                SE_LOG_SHOW(NULL, NULL, "%s", dir.c_str());
+                SE_LOG_SHOW(NULL, "%s", dir.c_str());
                 if (!m_quiet) {
                     SyncReport report;
                     context->readSessionInfo(dir, report);
                     ostringstream out;
                     out << report;
-                    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+                    SE_LOG_SHOW(NULL, "%s", out.str().c_str());
                 }
             }
         } else if (!m_restore.empty()) {
@@ -1810,13 +1810,13 @@ bool Cmdline::parseProp(PropertyType propertyType,
                 // replaced it
                 prop = validProps->find("backend");
                 if (!prop) {
-                    SE_LOG_ERROR(NULL, NULL, "backend: no such property");
+                    SE_LOG_ERROR(NULL, "backend: no such property");
                     return false;
                 }
                 SourceType sourceType(paramstr);
                 string error;
                 if (!prop->checkValue(sourceType.m_backend, error)) {
-                    SE_LOG_ERROR(NULL, NULL, "%s: %s", args.c_str(), error.c_str());
+                    SE_LOG_ERROR(NULL, "%s: %s", args.c_str(), error.c_str());
                     return false;
                 }
                 ContextProps &props = m_props[spec.m_config];
@@ -1835,19 +1835,19 @@ bool Cmdline::parseProp(PropertyType propertyType,
                     InitStateString("0", false);
                 return true;
             } else if (!prop) {
-                SE_LOG_ERROR(NULL, NULL, "%s: no such property", args.c_str());
+                SE_LOG_ERROR(NULL, "%s: no such property", args.c_str());
                 return false;
             } else {
                 string error;
                 if (!prop->checkValue(paramstr, error)) {
-                    SE_LOG_ERROR(NULL, NULL, "%s: %s", args.c_str(), error.c_str());
+                    SE_LOG_ERROR(NULL, "%s: %s", args.c_str(), error.c_str());
                     return false;
                 } else {
                     ContextProps &props = m_props[spec.m_config];
                     if (validProps == &m_validSyncProps) {
                         // complain if sync property includes source prefix
                         if (!spec.m_source.empty()) {
-                            SE_LOG_ERROR(NULL, NULL, "%s: source name '%s' not allowed in sync property",
+                            SE_LOG_ERROR(NULL, "%s: source name '%s' not allowed in sync property",
                                          args.c_str(),
                                          spec.m_source.c_str());
                             return false;
@@ -1899,7 +1899,7 @@ bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
 {
     const ConfigProperty *prop = validProps.find(propName);
     if (!prop && boost::iequals(propName, "type")) {
-        SE_LOG_SHOW(NULL, NULL,
+        SE_LOG_SHOW(NULL,
                     "%s\n"
                     "   <backend>[:<format>[:<version][!]]\n"
                     "   legacy property, replaced by 'backend', 'databaseFormat',\n"
@@ -1907,7 +1907,7 @@ bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
                     opt.c_str());
         return true;
     } else if (!prop) {
-        SE_LOG_ERROR(NULL, NULL, "%s: no such property", opt.c_str());
+        SE_LOG_ERROR(NULL, "%s: no such property", opt.c_str());
         return false;
     } else {
         ostringstream out;
@@ -1923,7 +1923,7 @@ bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
         } else {
             out << "   no documentation available" << endl;
         }
-        SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+        SE_LOG_SHOW(NULL, "%s", out.str().c_str());
         return true;
     }
 }
@@ -1968,7 +1968,7 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
     }
     out << endl;
     dumpComment(out, "   ", comment);
-    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+    SE_LOG_SHOW(NULL, "%s", out.str().c_str());
     return true;
 }
 
@@ -2034,8 +2034,8 @@ void Cmdline::listDatabases(SyncSource *source, const string &header)
             out << endl;
         }
     }
-    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
-    SE_LOG_SHOW(NULL, NULL, "\n");
+    SE_LOG_SHOW(NULL, "%s", out.str().c_str());
+    SE_LOG_SHOW(NULL, "\n");
 }
 
 void Cmdline::createDatabase(SyncSource *source, const string &header)
@@ -2051,7 +2051,7 @@ void Cmdline::createDatabase(SyncSource *source, const string &header)
         SE_THROW("The 'database' property must be set to the name of the new database");
     }
     SyncSource::Database database = source->createDatabase(SyncSource::Database(databaseID, ""));
-    SE_LOG_SHOW(NULL, NULL, "%s: database '%s' (%s) was created.",
+    SE_LOG_SHOW(NULL, "%s: database '%s' (%s) was created.",
                 header.c_str(),
                 database.m_name.c_str(),
                 database.m_uri.c_str());
@@ -2078,7 +2078,7 @@ void Cmdline::removeDatabase(SyncSource *source, const string &header)
     }
 
     source->deleteDatabase(database.m_uri);
-    SE_LOG_SHOW(NULL, NULL, "%s: database '%s' (%s) was removed.",
+    SE_LOG_SHOW(NULL, "%s: database '%s' (%s) was removed.",
                 header.c_str(),
                 database.m_name.c_str(),
                 database.m_uri.c_str());
@@ -2095,7 +2095,7 @@ void Cmdline::dumpConfigs(const string &preamble,
     if (!servers.size()) {
         out << "   none" << endl;
     }
-    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+    SE_LOG_SHOW(NULL, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpConfigTemplates(const string &preamble,
@@ -2121,7 +2121,7 @@ void Cmdline::dumpConfigTemplates(const string &preamble,
     if (!templates.size()) {
         out << "   none" << endl;
     }
-    SE_LOG(level, NULL, NULL, "%s", out.str().c_str());
+    SE_LOG(NULL, level, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpProperties(const ConfigNode &configuredProps,
@@ -2184,7 +2184,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
         }
     }
 
-    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+    SE_LOG_SHOW(NULL, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpComment(ostream &stream,
@@ -2200,17 +2200,17 @@ void Cmdline::dumpComment(ostream &stream,
 
 void Cmdline::usage(bool full, const string &error, const string &param)
 {
-    SE_LOG_SHOW(NULL, NULL, "%s", synopsis);
+    SE_LOG_SHOW(NULL, "%s", synopsis);
     if (full) {
-        SE_LOG_SHOW(NULL, NULL, "\nOptions:\n%s", options);
+        SE_LOG_SHOW(NULL, "\nOptions:\n%s", options);
     }
 
     if (error != "") {
-        SE_LOG_SHOW(NULL, NULL, "\n");
-        SE_LOG_ERROR(NULL, NULL, "%s", error.c_str());
+        SE_LOG_SHOW(NULL, "\n");
+        SE_LOG_ERROR(NULL, "%s", error.c_str());
     }
     if (param != "") {
-        SE_LOG_INFO(NULL, NULL, "use '%s%s?' to get a list of valid parameters",
+        SE_LOG_INFO(NULL, "use '%s%s?' to get a list of valid parameters",
                     param.c_str(),
                     boost::ends_with(param, "=") ? "" : " ");
     }

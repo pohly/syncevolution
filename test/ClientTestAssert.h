@@ -99,9 +99,9 @@ static void inline ClientTestExceptionHandle(const char *file, int line, const s
 #define CT_WRAP_ASSERT(_file, _line, _assert) \
     do { \
        try { \
-           SE_LOG_DEBUG(NULL, NULL, "%s:%d: starting %s", getBasename(_file).c_str(), _line, #_assert); \
+           SE_LOG_DEBUG(NULL, "%s:%d: starting %s", getBasename(_file).c_str(), _line, #_assert); \
            _assert; \
-           SE_LOG_DEBUG(NULL, NULL, "%s:%d: ending %s", getBasename(_file).c_str(), _line, #_assert); \
+           SE_LOG_DEBUG(NULL, "%s:%d: ending %s", getBasename(_file).c_str(), _line, #_assert); \
        } catch (...) { \
            ClientTestExceptionHandle(_file, _line); \
        } \
@@ -110,12 +110,12 @@ static void inline ClientTestExceptionHandle(const char *file, int line, const s
 #define CT_WRAP_ASSERT_MESSAGE(_file, _line, _message, _assert)  \
     do { \
        try { \
-           SE_LOG_DEBUG(NULL, NULL, "%s:%d: starting %s %s", \
+           SE_LOG_DEBUG(NULL, "%s:%d: starting %s %s", \
                         getBasename(_file).c_str(), _line, \
                         std::string(_message).c_str(), \
                         #_assert); \
            _assert; \
-           SE_LOG_DEBUG(NULL, NULL, "%s:%d: ending %s", getBasename(_file).c_str(), _line, #_assert); \
+           SE_LOG_DEBUG(NULL, "%s:%d: ending %s", getBasename(_file).c_str(), _line, #_assert); \
        } catch (...) { \
            ClientTestExceptionHandle(_file, _line, _message); \
        } \

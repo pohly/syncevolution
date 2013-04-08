@@ -166,7 +166,7 @@ int main(int argc, char **argv, char **envp)
         // syncevo-dbus-helper.
         Logger::setProcessName("syncevo-dbus-server");
 
-        SE_LOG_DEBUG(NULL, NULL, "syncevo-dbus-server: catch SIGINT/SIGTERM in our own shutdown function");
+        SE_LOG_DEBUG(NULL, "syncevo-dbus-server: catch SIGINT/SIGTERM in our own shutdown function");
         signal(SIGTERM, niam);
         signal(SIGINT, niam);
         boost::shared_ptr<SuspendFlags::Guard> guard = SuspendFlags::getSuspendFlags().activate();
@@ -196,22 +196,22 @@ int main(int argc, char **argv, char **envp)
 
         dbus_bus_connection_undelay(conn);
         server->run();
-        SE_LOG_DEBUG(NULL, NULL, "cleaning up");
+        SE_LOG_DEBUG(NULL, "cleaning up");
 #ifdef ENABLE_DBUS_PIM
         manager.reset();
 #endif
         server.reset();
         obj.reset();
         guard.reset();
-        SE_LOG_DEBUG(NULL, NULL, "flushing D-Bus connection");
+        SE_LOG_DEBUG(NULL, "flushing D-Bus connection");
         conn.flush();
         conn.reset();
-        SE_LOG_INFO(NULL, NULL, "terminating");
+        SE_LOG_INFO(NULL, "terminating");
         return 0;
     } catch ( const std::exception &ex ) {
-        SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
+        SE_LOG_ERROR(NULL, "%s", ex.what());
     } catch (...) {
-        SE_LOG_ERROR(NULL, NULL, "unknown error");
+        SE_LOG_ERROR(NULL, "unknown error");
     }
 
     return 1;

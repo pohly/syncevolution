@@ -225,11 +225,11 @@ Session::Session(const boost::shared_ptr<Settings> &settings) :
 
         // hack for Yahoo: need a client certificate
         ne_ssl_client_cert *cert = ne_ssl_clicert_read("client.p12");
-        SE_LOG_DEBUG(NULL, NULL, "client cert is %s", !cert ? "missing" : ne_ssl_clicert_encrypted(cert) ? "encrypted" : "unencrypted");
+        SE_LOG_DEBUG(NULL, "client cert is %s", !cert ? "missing" : ne_ssl_clicert_encrypted(cert) ? "encrypted" : "unencrypted");
         if (cert) {
             if (ne_ssl_clicert_encrypted(cert)) {
                 if (ne_ssl_clicert_decrypt(cert, "meego")) {
-                    SE_LOG_DEBUG(NULL, NULL, "decryption failed");
+                    SE_LOG_DEBUG(NULL, "decryption failed");
                 }
             }
             ne_ssl_set_clicert(m_session, cert);
@@ -301,7 +301,7 @@ int Session::getCredentials(void *userdata, const char *realm, int attempt, char
             SyncEvo::Strncpy(username, user.c_str(), NE_ABUFSIZ);
             SyncEvo::Strncpy(password, pw.c_str(), NE_ABUFSIZ);
             session->m_credentialsSent = true;
-            SE_LOG_DEBUG(NULL, NULL, "retry request with credentials");
+            SE_LOG_DEBUG(NULL, "retry request with credentials");
             return 0;
         } else {
             // give up
@@ -309,7 +309,7 @@ int Session::getCredentials(void *userdata, const char *realm, int attempt, char
         }
     } catch (...) {
         Exception::handle();
-        SE_LOG_ERROR(NULL, NULL, "no credentials for %s", realm);
+        SE_LOG_ERROR(NULL, "no credentials for %s", realm);
         return 1;
     }
 }
@@ -352,9 +352,9 @@ void Session::preSend(ne_request *req, ne_buffer *header)
 
             // check for acceptance of credentials later
             m_credentialsSent = true;
-            SE_LOG_DEBUG(NULL, NULL, "forced sending credentials");
+            SE_LOG_DEBUG(NULL, "forced sending credentials");
         } else {
-            SE_LOG_DEBUG(NULL, NULL, "skipping forced sending credentials because not using https");
+            SE_LOG_DEBUG(NULL, "skipping forced sending credentials because not using https");
         }
     }
 }
@@ -373,17 +373,17 @@ int Session::sslVerify(void *userdata, int failures, const ne_ssl_certificate *c
             { 0, NULL }
         };
 
-        SE_LOG_DEBUG(NULL, NULL,
+        SE_LOG_DEBUG(NULL,
                      "%s: SSL verification problem: %s",
                      session->getURL().c_str(),
                      Flags2String(failures, descr).c_str());
         if (!session->m_settings->verifySSLCertificate()) {
-            SE_LOG_DEBUG(NULL, NULL, "ignoring bad certificate");
+            SE_LOG_DEBUG(NULL, "ignoring bad certificate");
             return 0;
         }
         if (failures == NE_SSL_IDMISMATCH &&
             !session->m_settings->verifySSLHost()) {
-            SE_LOG_DEBUG(NULL, NULL, "ignoring hostname mismatch");
+            SE_LOG_DEBUG(NULL, "ignoring hostname mismatch");
             return 0;
         }
         return 1;
@@ -487,7 +487,7 @@ int Session::propIterator(void *userdata,
 
 void Session::startOperation(const string &operation, const Timespec &deadline)
 {
-    SE_LOG_DEBUG(NULL, NULL, "starting %s, credentials %s, %s",
+    SE_LOG_DEBUG(NULL, "starting %s, credentials %s, %s",
                  operation.c_str(),
                  m_settings->getCredentialsOkay() ? "okay" : "unverified",
                  deadline ? StringPrintf("deadline in %.1lfs",
@@ -597,7 +597,7 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
 
             // assume that credentials were valid, if sent
             if (m_credentialsSent) {
-                SE_LOG_DEBUG(NULL, NULL, "credentials accepted");
+                SE_LOG_DEBUG(NULL, "credentials accepted");
                 m_settings->setCredentialsOkay(true);
             }
 
@@ -638,23 +638,23 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
 
     if (code == 401) {
         if (m_settings->getCredentialsOkay()) {
-            SE_LOG_DEBUG(NULL, NULL, "credential error due to throttling (?), retry");
+            SE_LOG_DEBUG(NULL, "credential error due to throttling (?), retry");
             retry = true;
         } else {
             // give up without retrying
-            SE_LOG_DEBUG(NULL, NULL, "credential error, no success with them before => report it");
+            SE_LOG_DEBUG(NULL, "credential error, no success with them before => report it");
         }
     }
 
 
-    SE_LOG_DEBUG(NULL, NULL, "%s, %s",
+    SE_LOG_DEBUG(NULL, "%s, %s",
                  descr.c_str(),
                  retry ? "might retry" : "must not retry");
     if (retry) {
         m_attempt++;
 
         if (!m_deadline) {
-            SE_LOG_DEBUG(NULL, NULL, "retrying not allowed for %s (no deadline)",
+            SE_LOG_DEBUG(NULL, "retrying not allowed for %s (no deadline)",
                          operation.c_str());
         } else {
             Timespec now = Timespec::monotonic();
@@ -675,25 +675,25 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                     }
                     if (next > now) {
                         double duration = (next - now).duration();
-                        SE_LOG_DEBUG(NULL, NULL, "retry %s in %.1lfs, attempt #%d",
+                        SE_LOG_DEBUG(NULL, "retry %s in %.1lfs, attempt #%d",
                                      operation.c_str(),
                                      duration,
                                      m_attempt);
                         // Inform the user, because this will take a
                         // while and we don't want to give the
                         // impression of being stuck.
-                        SE_LOG_INFO(NULL, NULL, "operation temporarily (?) failed, going to retry in %.1lfs before giving up in %.1lfs: %s",
+                        SE_LOG_INFO(NULL, "operation temporarily (?) failed, going to retry in %.1lfs before giving up in %.1lfs: %s",
                                     duration,
                                     (m_deadline - now).duration(),
                                     descr.c_str());
                         Sleep(duration);
                     } else {
-                        SE_LOG_DEBUG(NULL, NULL, "retry %s immediately (due already), attempt #%d",
+                        SE_LOG_DEBUG(NULL, "retry %s immediately (due already), attempt #%d",
                                      operation.c_str(),
                                      m_attempt);
                     }
                 } else {
-                    SE_LOG_DEBUG(NULL, NULL, "retry %s immediately (retry interval <= 0), attempt #%d",
+                    SE_LOG_DEBUG(NULL, "retry %s immediately (retry interval <= 0), attempt #%d",
                                  operation.c_str(),
                                  m_attempt);
                 }
@@ -704,7 +704,7 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                     return false;
                 }
             } else {
-                SE_LOG_DEBUG(NULL, NULL, "retry %s would exceed deadline, bailing out",
+                SE_LOG_DEBUG(NULL, "retry %s would exceed deadline, bailing out",
                              m_operation.c_str());
             }
         }
@@ -712,7 +712,7 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
 
     if (code == 401) {
         // fatal credential error, remember that
-        SE_LOG_DEBUG(NULL, NULL, "credentials rejected");
+        SE_LOG_DEBUG(NULL, "credentials rejected");
         m_settings->setCredentialsOkay(false);
     }
 
@@ -758,7 +758,7 @@ int XMLParser::startCB(void *userdata, int parent,
         return cb->m_start(parent, nspace, name, atts);
     } catch (...) {
         Exception::handle();
-        SE_LOG_ERROR(NULL, NULL, "startCB %s %s failed", nspace, name);
+        SE_LOG_ERROR(NULL, "startCB %s %s failed", nspace, name);
         return -1;
     }
 }
@@ -773,7 +773,7 @@ int XMLParser::dataCB(void *userdata, int state,
             0;
     } catch (...) {
         Exception::handle();
-        SE_LOG_ERROR(NULL, NULL, "dataCB failed");
+        SE_LOG_ERROR(NULL, "dataCB failed");
         return -1;
     }
 }
@@ -788,7 +788,7 @@ int XMLParser::endCB(void *userdata, int state,
             0;
     } catch (...) {
         Exception::handle();
-        SE_LOG_ERROR(NULL, NULL, "endCB %s %s failed", nspace, name);
+        SE_LOG_ERROR(NULL, "endCB %s %s failed", nspace, name);
         return -1;
     }
 }

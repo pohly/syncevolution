@@ -494,7 +494,7 @@ void WebDAVSource::contactServer()
         // we have done this work before, no need to repeat it
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "using libneon %s with %s",
+    SE_LOG_DEBUG(NULL, "using libneon %s with %s",
                  ne_version_string(), Neon::features().c_str());
 
     // Can we skip auto-detection because a full resource URL is set?
@@ -521,7 +521,7 @@ void WebDAVSource::contactServer()
     if (m_calendar.empty()) {
         throwError("no database found");
     }
-    SE_LOG_DEBUG(NULL, NULL, "picked final path %s", m_calendar.m_path.c_str());
+    SE_LOG_DEBUG(NULL, "picked final path %s", m_calendar.m_path.c_str());
 
     // Check some server capabilities. Purely informational at this
     // point, doesn't have to succeed either (Google 401 throttling
@@ -529,7 +529,7 @@ void WebDAVSource::contactServer()
 #ifdef HAVE_LIBNEON_OPTIONS
     if (LoggerBase::instance().getLevel() >= Logger::DEV) {
         try {
-            SE_LOG_DEBUG(NULL, NULL, "read capabilities of %s", m_calendar.toURL().c_str());
+            SE_LOG_DEBUG(NULL, "read capabilities of %s", m_calendar.toURL().c_str());
             m_session->startOperation("OPTIONS", Timespec());
             int caps = m_session->options(m_calendar.m_path);
             static const Flag descr[] = {
@@ -551,7 +551,7 @@ void WebDAVSource::contactServer()
                 { NE_CAP_VC_COLLECTION, "DeltaV version-controlled-collection" },
                 { 0, NULL }
             };
-            SE_LOG_DEBUG(NULL, NULL, "%s WebDAV capabilities: %s",
+            SE_LOG_DEBUG(NULL, "%s WebDAV capabilities: %s",
                          m_session->getURL().c_str(),
                          Flags2String(caps, descr).c_str());
         } catch (...) {
@@ -567,7 +567,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     bool res = true; // completed
     int timeoutSeconds = m_settings->timeoutSeconds();
     int retrySeconds = m_settings->retrySeconds();
-    SE_LOG_DEBUG(NULL, getDisplayName(), "timout %ds, retry %ds => %s",
+    SE_LOG_DEBUG(getDisplayName(), "timout %ds, retry %ds => %s",
                  timeoutSeconds, retrySeconds,
                  (timeoutSeconds <= 0 ||
                   retrySeconds <= 0) ? "resending disabled" : "resending allowed");
@@ -612,7 +612,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             }
             buffer[read] = 0;
             m_contextSettings->setURL(buffer);
-            SE_LOG_DEBUG(NULL, getDisplayName(), "found syncURL '%s' via DNS SRV", buffer);
+            SE_LOG_DEBUG(getDisplayName(), "found syncURL '%s' via DNS SRV", buffer);
             int res = pclose(in);
             in = NULL;
             switch (res) {
@@ -629,12 +629,12 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (retrySeconds > 0 &&
                     timeoutSeconds > 0) {
                     if (now < startTime + timeoutSeconds) {
-                        SE_LOG_DEBUG(NULL, getDisplayName(), "DNS SRV search failed due to network issues, retry in %d seconds",
+                        SE_LOG_DEBUG(getDisplayName(), "DNS SRV search failed due to network issues, retry in %d seconds",
                                      retrySeconds);
                         Sleep(retrySeconds);
                         goto retry;
                     } else {
-                        SE_LOG_INFO(NULL, getDisplayName(), "DNS SRV search timed out after %d seconds", timeoutSeconds);
+                        SE_LOG_INFO(getDisplayName(), "DNS SRV search timed out after %d seconds", timeoutSeconds);
                     }
                 }
 
@@ -767,7 +767,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
 
         // must normalize so that we can compare against results from server
         path = tried.insert(path);
-        SE_LOG_DEBUG(NULL, NULL, "testing %s", path.c_str());
+        SE_LOG_DEBUG(NULL, "testing %s", path.c_str());
 
         // Accessing the well-known URIs should lead to a redirect, but
         // with Yahoo! Calendar all I got was a 502 "connection refused".
@@ -803,7 +803,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // properties which must be asked for explicitly!). Only
                 // relevant for debugging.
                 try {
-                    SE_LOG_DEBUG(NULL, NULL, "debugging: read all WebDAV properties of %s", path.c_str());
+                    SE_LOG_DEBUG(NULL, "debugging: read all WebDAV properties of %s", path.c_str());
                     Neon::Session::PropfindPropCallback_t callback =
                         boost::bind(&WebDAVSource::openPropCallback,
                                     this, _1, _2, _3, _4);
@@ -886,7 +886,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 { "urn:ietf:params:xml:ns:carddav", "max-resource-size" },
                 { NULL, NULL }
             };
-            SE_LOG_DEBUG(NULL, NULL, "read relevant properties of %s", path.c_str());
+            SE_LOG_DEBUG(NULL, "read relevant properties of %s", path.c_str());
             m_session->propfindProp(path, 0,
                                     getContent() == "VCARD" ? carddav : caldav,
                                     callback, deadline);
@@ -908,23 +908,23 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             if (next.m_scheme != old.m_scheme ||
                 next.m_host != old.m_host ||
                 next.m_port != old.m_port) {
-                SE_LOG_DEBUG(NULL, NULL, "ignore redirection to different server (not implemented): %s",
+                SE_LOG_DEBUG(NULL, "ignore redirection to different server (not implemented): %s",
                              ex.getLocation().c_str());
                 if (tried.errorIsFatal()) {
                     throw;
                 }
             } else if (tried.isNew(next.m_path)) {
-                SE_LOG_DEBUG(NULL, NULL, "new candidate from %s -> %s redirect",
+                SE_LOG_DEBUG(NULL, "new candidate from %s -> %s redirect",
                              old.m_path.c_str(),
                              next.m_path.c_str());
                 tried.addCandidate(next.m_path, Tried::FRONT);
             } else {
-                SE_LOG_DEBUG(NULL, NULL, "already known candidate from %s -> %s redirect",
+                SE_LOG_DEBUG(NULL, "already known candidate from %s -> %s redirect",
                              old.m_path.c_str(),
                              next.m_path.c_str());
             }
         } catch (const TransportStatusException &ex) {
-            SE_LOG_DEBUG(NULL, NULL, "TransportStatusException: %s", ex.what());
+            SE_LOG_DEBUG(NULL, "TransportStatusException: %s", ex.what());
             if (ex.syncMLStatus() == 404 && boost::find_first(path, username) && usernameInserted) {
                 // We're actually looking at an authentication error: the path to the calendar has
                 // not been found, so the username was wrong. Let's hijack the error message and
@@ -941,7 +941,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     // candidate; needed to handle 502 "Connection
                     // refused" for /.well-known/caldav/ from Yahoo!
                     // Calendar
-                    SE_LOG_DEBUG(NULL, NULL, "ignore error for URI candidate: %s", ex.what());
+                    SE_LOG_DEBUG(NULL, "ignore error for URI candidate: %s", ex.what());
                 }
             }
         } catch (const Exception &ex) {
@@ -952,7 +952,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // candidate; needed to handle 502 "Connection
                 // refused" for /.well-known/caldav/ from Yahoo!
                 // Calendar
-                SE_LOG_DEBUG(NULL, NULL, "ignore error for URI candidate: %s", ex.what());
+                SE_LOG_DEBUG(NULL, "ignore error for URI candidate: %s", ex.what());
             }
         }
 
@@ -965,7 +965,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (!m_davProps.empty()) {
                     pathProps = m_davProps.begin();
                     string newpath = pathProps->first;
-                    SE_LOG_DEBUG(NULL, NULL, "use properties for '%s' instead of '%s'",
+                    SE_LOG_DEBUG(NULL, "use properties for '%s' instead of '%s'",
                                  newpath.c_str(), path.c_str());
                     path = newpath;
                 }
@@ -989,7 +989,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (it != props.end()) {
                     name = it->second;
                 }
-                SE_LOG_DEBUG(NULL, NULL, "found %s = %s",
+                SE_LOG_DEBUG(NULL, "found %s = %s",
                              name.c_str(),
                              uri.toURL().c_str());
                 res = storeResult(name,
@@ -1007,10 +1007,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (!home.empty() &&
                     tried.isNew(home)) {
                     if (next.empty()) {
-                        SE_LOG_DEBUG(NULL, NULL, "follow home-set property to %s", home.c_str());
+                        SE_LOG_DEBUG(NULL, "follow home-set property to %s", home.c_str());
                         next = home;
                     } else {
-                        SE_LOG_DEBUG(NULL, NULL, "new candidate from home-set property %s", home.c_str());
+                        SE_LOG_DEBUG(NULL, "new candidate from home-set property %s", home.c_str());
                         tried.addCandidate(home, Tried::FRONT);
                     }
                 }
@@ -1025,7 +1025,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (!principal.empty() &&
                     tried.isNew(principal)) {
                     next = principal;
-                    SE_LOG_DEBUG(NULL, NULL, "follow current-user-prinicipal to %s", next.c_str());
+                    SE_LOG_DEBUG(NULL, "follow current-user-prinicipal to %s", next.c_str());
                 }
             }
             // finally, recursively descend into collections,
@@ -1037,7 +1037,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     // List members and find new candidates.
                     // Yahoo! Calendar does not return resources contained in /dav/<user>/Calendar/
                     // if <allprops> is used. Properties must be requested explicitly.
-                    SE_LOG_DEBUG(NULL, NULL, "list items in %s", path.c_str());
+                    SE_LOG_DEBUG(NULL, "list items in %s", path.c_str());
                     // See findCollections() for the reason why we are not mixing CalDAV and CardDAV
                     // properties.
                     static const ne_propname caldav[] = {
@@ -1083,9 +1083,9 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                             subType.find("<http://calendarserver.org/ns/shared") == subType.npos &&
                             (typeMatches(entry.second) || !ignoreCollection(entry.second))) {
                             subs.insert(sub);
-                            SE_LOG_DEBUG(NULL, NULL, "new candidate: %s", sub.c_str());
+                            SE_LOG_DEBUG(NULL, "new candidate: %s", sub.c_str());
                         } else {
-                            SE_LOG_DEBUG(NULL, NULL, "skipping: %s", sub.c_str());
+                            SE_LOG_DEBUG(NULL, "skipping: %s", sub.c_str());
                         }
                     }
 
@@ -1105,7 +1105,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // done searching
                 break;
             }
-            SE_LOG_DEBUG(NULL, NULL, "follow candidate %s", next.c_str());
+            SE_LOG_DEBUG(NULL, "follow candidate %s", next.c_str());
         }
 
         counter++;
@@ -1293,7 +1293,7 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 "          <include rule=\"ALL\"/>\n"
                 "      </remoterule>";
         }
-        SE_LOG_DEBUG(NULL, getDisplayName(), "using data conversion rules for '%s'", info.m_backendRule.c_str());
+        SE_LOG_DEBUG(getDisplayName(), "using data conversion rules for '%s'", info.m_backendRule.c_str());
     }
 }
 
@@ -1514,12 +1514,12 @@ void WebDAVSource::listAllItemsCallback(const Neon::URI &uri,
     const char *etag = ne_propset_value(results, &prop);
     if (etag) {
         std::string rev = ETag2Rev(etag);
-        SE_LOG_DEBUG(NULL, NULL, "item %s = rev %s",
+        SE_LOG_DEBUG(NULL, "item %s = rev %s",
                      uid.c_str(), rev.c_str());
         revisions[uid] = rev;
     } else {
         failed = true;
-        SE_LOG_ERROR(NULL, NULL,
+        SE_LOG_ERROR(NULL,
                      "%s: %s",
                      uri.toURL().c_str(),
                      Neon::Status2String(ne_propset_status(results, &prop)).c_str());
@@ -1652,7 +1652,7 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
         if (!req.run(&expected)) {
             goto retry;
         }
-        SE_LOG_DEBUG(NULL, NULL, "add item status: %s",
+        SE_LOG_DEBUG(NULL, "add item status: %s",
                      Neon::Status2String(req.getStatus()).c_str());
         switch (req.getStatusCode()) {
         case 204:
@@ -1686,7 +1686,7 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
             // <UID>.ics. Interestingly enough, our 1234567890!@#$%^&*()<>@dummy UID
             // test case leads to a resource path which Google then cannot find
             // via CalDAV. client-test must run with CLIENT_TEST_SIMPLE_UID=1...
-            SE_LOG_DEBUG(NULL, NULL, "new item mapped to %s", real_luid.c_str());
+            SE_LOG_DEBUG(NULL, "new item mapped to %s", real_luid.c_str());
             new_uid = real_luid;
             // TODO: find a better way of detecting unexpected updates.
             // state = ...
@@ -1712,7 +1712,7 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
             // to return the "real" uid to our caller.
             if (revisions.size() == 1 &&
                 revisions.begin()->first != new_uid) {
-                SE_LOG_DEBUG(NULL, NULL, "%s mapped to %s by peer",
+                SE_LOG_DEBUG(NULL, "%s mapped to %s by peer",
                              new_uid.c_str(),
                              revisions.begin()->first.c_str());
                 new_uid = revisions.begin()->first;
@@ -1740,7 +1740,7 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
         if (!req.run()) {
             goto retry;
         }
-        SE_LOG_DEBUG(NULL, NULL, "update item status: %s",
+        SE_LOG_DEBUG(NULL, "update item status: %s",
                      Neon::Status2String(req.getStatus()).c_str());
         switch (req.getStatusCode()) {
         case 204:
@@ -1860,7 +1860,7 @@ void WebDAVSource::removeItem(const string &uid)
             break;
         }
     }
-    SE_LOG_DEBUG(NULL, NULL, "remove item status: %s",
+    SE_LOG_DEBUG(NULL, "remove item status: %s",
                  Neon::Status2String(req->getStatus()).c_str());
     switch (req->getStatusCode()) {
     case 204:

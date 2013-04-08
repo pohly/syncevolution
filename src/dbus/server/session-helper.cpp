@@ -123,12 +123,12 @@ void SessionHelper::run()
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     while (true) {
         if (s.getState() != SuspendFlags::NORMAL) {
-            SE_LOG_DEBUG(NULL, NULL, "terminating because of suspend or abort signal");
+            SE_LOG_DEBUG(NULL, "terminating because of suspend or abort signal");
             break;
         }
         if (m_operation &&
             m_operation()) {
-            SE_LOG_DEBUG(NULL, NULL, "terminating as requested by operation");
+            SE_LOG_DEBUG(NULL, "terminating as requested by operation");
             break;
         }
         g_main_loop_run(m_loop);
@@ -154,6 +154,10 @@ bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
         m_sync.reset(new DBusSync(params, *this));
         SyncMLStatus status = m_sync->sync();
         if (status) {
+            // Clear the abort signal, to allow the process to send
+            // out the D-Bus response. Our parent will signal us again
+            // after it received the response.
+            // TODO
             SE_THROW_EXCEPTION_STATUS(StatusException,
                                       "sync failed",
                                       status);
@@ -258,7 +262,7 @@ void SessionHelper::passwordResponse(bool timedOut, bool aborted, const std::str
     if (m_sync) {
         m_sync->passwordResponse(timedOut, aborted, password);
     } else {
-        SE_LOG_DEBUG(NULL, NULL, "discarding obsolete password response");
+        SE_LOG_DEBUG(NULL, "discarding obsolete password response");
     }
 }
 

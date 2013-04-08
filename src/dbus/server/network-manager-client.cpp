@@ -46,7 +46,7 @@ NetworkManagerClient::NetworkManagerClient(Server &server) :
                                     &NetworkManagerClient::stateChanged,
                                     this, _1));
     } else {
-        SE_LOG_DEBUG(NULL, NULL,
+        SE_LOG_DEBUG(NULL,
                      "DBus connection setup for NetworkManager failed");
     }
 }
@@ -61,13 +61,13 @@ void NetworkManagerClient::stateChanged(uint32_t uiState)
     case NM_STATE_ASLEEP_DEPRECATED:
     case NM_STATE_CONNECTING_DEPRECATED:
     case NM_STATE_DISCONNECTED_DEPRECATED:
-        SE_LOG_DEBUG(NULL, NULL, "NetworkManager disconnected");
+        SE_LOG_DEBUG(NULL, "NetworkManager disconnected");
         m_server.getPresenceStatus().updatePresenceStatus(
             false, PresenceStatus::HTTP_TRANSPORT);
         break;
 
     default:
-        SE_LOG_DEBUG(NULL, NULL, "NetworkManager connected");
+        SE_LOG_DEBUG(NULL, "NetworkManager connected");
         m_server.getPresenceStatus().updatePresenceStatus(
             true, PresenceStatus::HTTP_TRANSPORT);
     }
@@ -95,10 +95,7 @@ void NetworkManagerClient::NetworkManagerProperties::getCallback(
     const std::string &error)
 {
     if(!error.empty()) {
-        SE_LOG_DEBUG (
-            NULL, NULL,
-            "Error in calling Get of Interface "
-            "org.freedesktop.DBus.Properties : %s", error.c_str());
+        SE_LOG_DEBUG(NULL, "Error in calling Get of Interface org.freedesktop.DBus.Properties : %s", error.c_str());
     } else {
         // Now, and only now, do we know that NetworkManager is running.
         m_manager.m_available = true;

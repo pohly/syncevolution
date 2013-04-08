@@ -86,7 +86,7 @@ void AkonadiSyncSource::start()
         // Starting it here also produces output that we don't want mixed
         // into normal SyncEvolution command line output.
 #if 0
-        SE_LOG_DEBUG(NULL, NULL, "Akonadi Server isn't running, and hence starting it.");
+        SE_LOG_DEBUG(NULL, "Akonadi Server isn't running, and hence starting it.");
         if (!Akonadi::Control::start()) {
             SE_THROW("Couldn't Start Akonadi Server: hence the akonadi backend of syncevolution wont work ..");
         }
@@ -153,7 +153,7 @@ void AkonadiSyncSource::open()
                 SE_THROW("need two Akonadi resources for testing");
             }
             id = databases[index].m_uri;
-            SE_LOG_DEBUG(NULL, NULL, "testing Akonadi with %s", id.c_str());
+            SE_LOG_DEBUG(NULL, "testing Akonadi with %s", id.c_str());
         }
     }
 

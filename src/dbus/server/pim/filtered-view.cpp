@@ -89,7 +89,7 @@ void FilteredView::fillViewCb()
 {
     // Can we add back contacts which were excluded because of the
     // maximum number of results?
-    SE_LOG_DEBUG(NULL, NULL, "filtered view %s: fill view on idle", getName());
+    SE_LOG_DEBUG(NULL, "filtered view %s: fill view on idle", getName());
     int candidate = m_local2parent.empty() ? 0 : m_local2parent.back() + 1;
     while (!isFull() &&
            candidate < m_parent->size()) {
@@ -303,7 +303,7 @@ void FilteredView::addIndividual(int parentIndex, const IndividualData &data)
             if (newEndIndex > index &&
                 !m_filter->isIncluded(newEndIndex)) {
                 const IndividualData *data = m_parent->getContact(m_local2parent.back());
-                SE_LOG_DEBUG(NULL, NULL, "%s: removed at #%ld/%ld to make room for new entry", getName(), (long)(newEndIndex - 1), (long)m_local2parent.size());
+                SE_LOG_DEBUG(NULL, "%s: removed at #%ld/%ld to make room for new entry", getName(), (long)(newEndIndex - 1), (long)m_local2parent.size());
                 m_local2parent.pop_back();
                 m_removedSignal(newEndIndex - 1, *data);
                 // Iterator might have pointed to removed entry, which may have
@@ -312,10 +312,10 @@ void FilteredView::addIndividual(int parentIndex, const IndividualData &data)
             }
 
             m_local2parent.insert(it, parentIndex);
-            SE_LOG_DEBUG(NULL, NULL, "%s: added at #%ld/%ld", getName(), (long)index, (long)m_local2parent.size());
+            SE_LOG_DEBUG(NULL, "%s: added at #%ld/%ld", getName(), (long)index, (long)m_local2parent.size());
             m_addedSignal(index, data);
         } else {
-            SE_LOG_DEBUG(NULL, NULL, "%s: not added at #%ld/%ld because outside of result range", getName(), (long)index, (long)m_local2parent.size());
+            SE_LOG_DEBUG(NULL, "%s: not added at #%ld/%ld because outside of result range", getName(), (long)index, (long)m_local2parent.size());
         }
     }
 }
@@ -341,7 +341,7 @@ void FilteredView::removeIndividual(int parentIndex, const IndividualData &data)
 
     if (found) {
         size_t index = it - m_local2parent.begin();
-        SE_LOG_DEBUG(NULL, NULL, "%s: removed at #%ld/%ld", getName(), (long)index, (long)m_local2parent.size());
+        SE_LOG_DEBUG(NULL, "%s: removed at #%ld/%ld", getName(), (long)index, (long)m_local2parent.size());
         m_local2parent.erase(it);
         m_removedSignal(index, data);
         // Try adding more contacts from the parent once the parent
@@ -363,11 +363,11 @@ void FilteredView::modifyIndividual(int parentIndex, const IndividualData &data)
         size_t index = it - m_local2parent.begin();
         if (matches) {
             // Still matched, merely pass on modification signal.
-            SE_LOG_DEBUG(NULL, NULL, "%s: modified at #%ld/%ld", getName(), (long)index, (long)m_local2parent.size());
+            SE_LOG_DEBUG(NULL, "%s: modified at #%ld/%ld", getName(), (long)index, (long)m_local2parent.size());
             m_modifiedSignal(index, data);
         } else {
             // Removed.
-            SE_LOG_DEBUG(NULL, NULL, "%s: removed at #%ld/%ld due to modification", getName(), (long)index, (long)m_local2parent.size());
+            SE_LOG_DEBUG(NULL, "%s: removed at #%ld/%ld due to modification", getName(), (long)index, (long)m_local2parent.size());
             m_local2parent.erase(it);
             m_removedSignal(index, data);
             fillView();
@@ -377,7 +377,7 @@ void FilteredView::modifyIndividual(int parentIndex, const IndividualData &data)
         size_t index = it - m_local2parent.begin();
         if (m_filter->isIncluded(index)) {
             m_local2parent.insert(it, parentIndex);
-            SE_LOG_DEBUG(NULL, NULL, "%s: added at #%ld/%ld due to modification", getName(), (long)index, (long)m_local2parent.size());
+            SE_LOG_DEBUG(NULL, "%s: added at #%ld/%ld due to modification", getName(), (long)index, (long)m_local2parent.size());
             m_addedSignal(index, data);
         }
     } else {

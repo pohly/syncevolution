@@ -26,7 +26,7 @@ SE_BEGIN_CXX
 
 Client::~Client()
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s is destructing", m_ID.c_str());
+    SE_LOG_DEBUG(NULL, "D-Bus client %s is destructing", m_ID.c_str());
 
     // explicitly detach all resources instead of just freeing the
     // list, so that the special behavior for sessions in detach() is

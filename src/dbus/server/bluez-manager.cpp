@@ -71,7 +71,7 @@ void BluezManager::defaultAdapterChanged(const DBusObject_t &adapter)
 void BluezManager::defaultAdapterCb(const DBusObject_t &adapter, const string &error)
 {
     if(!error.empty()) {
-        SE_LOG_DEBUG (NULL, NULL, "Error in calling DefaultAdapter of Interface org.bluez.Manager: %s", error.c_str());
+        SE_LOG_DEBUG(NULL, "Error in calling DefaultAdapter of Interface org.bluez.Manager: %s", error.c_str());
         m_done = true;
         return;
     }
@@ -93,7 +93,7 @@ BluezManager::BluezAdapter::BluezAdapter(BluezManager &manager, const string &pa
 void BluezManager::BluezAdapter::listDevicesCb(const std::vector<DBusObject_t> &devices, const string &error)
 {
     if(!error.empty()) {
-        SE_LOG_DEBUG (NULL, NULL, "Error in calling ListDevices of Interface org.bluez.Adapter: %s", error.c_str());
+        SE_LOG_DEBUG(NULL, "Error in calling ListDevices of Interface org.bluez.Adapter: %s", error.c_str());
         checkDone(true);
         return;
     }
@@ -216,7 +216,7 @@ void BluezManager::loadBluetoothDeviceLookupTable()
     string filePath(SyncEvolutionDataDir() + "/bluetooth_products.ini");
     if(!g_key_file_load_from_file(m_lookupTable.bt_key_file, filePath.c_str(),
                                   G_KEY_FILE_NONE, &err)) {
-        SE_LOG_DEBUG(NULL, NULL, "%s[%d]: %s - filePath = %s, error = %s",
+        SE_LOG_DEBUG(NULL, "%s[%d]: %s - filePath = %s, error = %s",
                      __FILE__, __LINE__, "Bluetooth products file not loaded",
                      filePath.c_str(), err->message);
         m_lookupTable.isLoaded = false;
@@ -324,7 +324,7 @@ void BluezManager::BluezDevice::getPropertiesCb(const PropDict &props, const str
     m_adapter.m_devReplies++;
     m_reply = true;
     if(!error.empty()) {
-        SE_LOG_DEBUG (NULL, NULL, "Error in calling GetProperties of Interface org.bluez.Device: %s", error.c_str());
+        SE_LOG_DEBUG(NULL, "Error in calling GetProperties of Interface org.bluez.Device: %s", error.c_str());
     } else {
         PropDict::const_iterator it = props.find("Name");
         if(it != props.end()) {

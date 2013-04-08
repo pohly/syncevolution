@@ -486,7 +486,7 @@ private:
         std::string tracking =
             string("_") + m_clientID +
             "_" + (isSourceA ? "A" : "B");
-        SE_LOG_DEBUG(NULL, NULL, "instantiating testing source %s in config %s, with tracking name %s",
+        SE_LOG_DEBUG(NULL, "instantiating testing source %s in config %s, with tracking name %s",
                      name.c_str(),
                      config.c_str(),
                      tracking.c_str());
@@ -500,7 +500,7 @@ private:
         std::string peerName = server ? (std::string(server) + "_" + m_clientID) : "@default";
         boost::shared_ptr<SyncConfig> peer(new SyncConfig(peerName));
         SyncSourceNodes peerNodes = peer->getSyncSourceNodes(name);
-        SE_LOG_DEBUG(NULL, NULL, "overriding testing source %s properties with the ones from config %s = %s",
+        SE_LOG_DEBUG(NULL, "overriding testing source %s properties with the ones from config %s = %s",
                      name.c_str(),
                      peerName.c_str(),
                      peer->getRootPath().c_str());
@@ -510,7 +510,7 @@ private:
             }
             boost::shared_ptr<FilterConfigNode> node = peerNodes.getNode(*prop);
             InitStateString value = prop->getProperty(*node);
-            SE_LOG_DEBUG(NULL, NULL, "   %s = %s (%s)",
+            SE_LOG_DEBUG(NULL, "   %s = %s (%s)",
                          prop->getMainName().c_str(),
                          value.c_str(),
                          value.wasSet() ? "set" : "default");

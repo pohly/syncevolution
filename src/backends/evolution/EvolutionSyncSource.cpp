@@ -47,7 +47,7 @@ void EvolutionSyncSource::getDatabasesFromRegistry(SyncSource::Databases &result
 static void handleErrorCB(EClient */*client*/, const gchar *error_msg, gpointer user_data)
 {
     EvolutionSyncSource *that = static_cast<EvolutionSyncSource *>(user_data);
-    SE_LOG_ERROR(NULL, that->getDisplayName(), "%s", error_msg);
+    SE_LOG_ERROR(that->getDisplayName(), "%s", error_msg);
 }
 
 EClientCXX EvolutionSyncSource::openESource(const char *extension,

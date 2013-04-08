@@ -504,7 +504,7 @@ public:
                 m_path = m_logdir;
                 if (mkdir(m_path.c_str(), S_IRWXU) &&
                     errno != EEXIST) {
-                    SE_LOG_DEBUG(NULL, NULL, "%s: %s", m_path.c_str(), strerror(errno));
+                    SE_LOG_DEBUG(NULL, "%s: %s", m_path.c_str(), strerror(errno));
                     SyncContext::throwError(m_path, errno);
                 }
             }
@@ -690,7 +690,7 @@ public:
                         }
                     }
                     if (!mustkeep) {
-                        SE_LOG_DEBUG(NULL, NULL, "removing %s", path.c_str());
+                        SE_LOG_DEBUG(NULL, "removing %s", path.c_str());
                         rm_r(path);
                         ++deleted;
                     }
@@ -1089,7 +1089,7 @@ public:
 
             string dir = databaseName(*source, suffix);
             boost::shared_ptr<ConfigNode> node = ConfigNode::createFileNode(dir + ".ini");
-            SE_LOG_DEBUG(NULL, NULL, "creating %s", dir.c_str());
+            SE_LOG_DEBUG(NULL, "creating %s", dir.c_str());
             rm_r(dir);
             BackupReport dummy;
             if (source->getOperations().m_backupData) {
@@ -1127,7 +1127,7 @@ public:
                                                              dir, node);
                 source->getOperations().m_backupData(oldBackup, newBackup,
                                                      report ? source->*report : dummy);
-                SE_LOG_DEBUG(NULL, NULL, "%s created", dir.c_str());
+                SE_LOG_DEBUG(NULL, "%s created", dir.c_str());
 
                 // remember that we have dumped at the beginning of a sync
                 if (suffix == "before") {
@@ -1226,7 +1226,7 @@ public:
 
             // dump only if not done before or changed
             if (m_intro != intro) {
-                SE_LOG_SHOW(NULL, NULL, "%s", intro.c_str());
+                SE_LOG_SHOW(NULL, "%s", intro.c_str());
                 m_intro = intro;
             }
 
@@ -1253,7 +1253,7 @@ public:
                 oldDir = databaseName(*source, oldSuffix, oldSession);
             }
             string newDir = databaseName(*source, newSuffix);
-            SE_LOG_SHOW(NULL, NULL, "*** %s ***", source->getDisplayName().c_str());
+            SE_LOG_SHOW(NULL, "*** %s ***", source->getDisplayName().c_str());
             string cmd = string("env CLIENT_TEST_COMPARISON_FAILED=10 " + config + " synccompare '" ) +
                 oldDir + "' '" + newDir + "'";
             int ret = Execute(cmd, EXECUTE_NO_STDERR);
@@ -1261,16 +1261,16 @@ public:
                     WIFEXITED(ret) ? WEXITSTATUS(ret) :
                     -1) {
             case 0:
-                SE_LOG_SHOW(NULL, NULL, "no changes");
+                SE_LOG_SHOW(NULL, "no changes");
                 break;
             case 10:
                 break;
             default:
-                SE_LOG_SHOW(NULL, NULL, "Comparison was impossible.");
+                SE_LOG_SHOW(NULL, "Comparison was impossible.");
                 break;
             }
         }
-        SE_LOG_SHOW(NULL, NULL, "\n");
+        SE_LOG_SHOW(NULL, "\n");
         return true;
     }
 
@@ -1288,7 +1288,7 @@ public:
             m_doLogging &&
             (m_client.getDumpData() || m_client.getPrintChanges())) {
             // dump initial databases
-            SE_LOG_INFO(NULL, NULL, "creating complete data backup of source %s before sync (%s)",
+            SE_LOG_INFO(NULL, "creating complete data backup of source %s before sync (%s)",
                         sourceName.c_str(),
                         (m_client.getDumpData() && m_client.getPrintChanges()) ? "enabled with dumpData and needed for printChanges" :
                         m_client.getDumpData() ? "because it was enabled with dumpData" :
@@ -1320,7 +1320,7 @@ public:
             (m_client.getDumpData() ||
              (m_client.getPrintChanges() && m_reportTodo && !m_prepared.empty()))) {
             try {
-                SE_LOG_INFO(NULL, NULL, "creating complete data backup after sync (%s)",
+                SE_LOG_INFO(NULL, "creating complete data backup after sync (%s)",
                             (m_client.getDumpData() && m_client.getPrintChanges()) ? "enabled with dumpData and needed for printChanges" :
                             m_client.getDumpData() ? "because it was enabled with dumpData" :
                             m_client.getPrintChanges() ? "needed for printChanges" :
@@ -1353,18 +1353,18 @@ public:
 
                 string logfile = m_logdir.getLogfile();
                 if (status == STATUS_OK) {
-                    SE_LOG_SHOW(NULL, NULL, "\nSynchronization successful.");
+                    SE_LOG_SHOW(NULL, "\nSynchronization successful.");
                 } else if (logfile.size()) {
-                    SE_LOG_SHOW(NULL, NULL, "\nSynchronization failed, see %s for details.",
+                    SE_LOG_SHOW(NULL, "\nSynchronization failed, see %s for details.",
                                 logfile.c_str());
                 } else {
-                    SE_LOG_SHOW(NULL, NULL, "\nSynchronization failed.");
+                    SE_LOG_SHOW(NULL, "\nSynchronization failed.");
                 }
 
                 // pretty-print report
                 if (m_logLevel > LOGGING_QUIET) {
                     std::string procname = Logger::getProcessName();
-                    SE_LOG_SHOW(NULL, NULL, "\nChanges applied during synchronization%s%s%s:",
+                    SE_LOG_SHOW(NULL, "\nChanges applied during synchronization%s%s%s:",
                                 procname.empty() ? "" : " (",
                                 procname.c_str(),
                                 procname.empty() ? "" : ")");
@@ -1376,7 +1376,7 @@ public:
                     if (!slowSync.empty()) {
                         out << endl << slowSync;
                     }
-                    SE_LOG_SHOW(NULL, NULL, "%s", out.str().c_str());
+                    SE_LOG_SHOW(NULL, "%s", out.str().c_str());
                 }
 
                 // compare databases?
@@ -1521,7 +1521,7 @@ string SyncContext::getUsedSyncURL() {
 static void CancelTransport(TransportAgent *agent, SuspendFlags &flags)
 {
     if (flags.getState() == SuspendFlags::ABORT) {
-        SE_LOG_DEBUG(NULL, NULL, "CancelTransport: cancelling because of SuspendFlags::ABORT");
+        SE_LOG_DEBUG(NULL, "CancelTransport: cancelling because of SuspendFlags::ABORT");
         agent->cancel();
     }
 }
@@ -1586,7 +1586,7 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainl
 
 void SyncContext::displayServerMessage(const string &message)
 {
-    SE_LOG_INFO(NULL, NULL, "message from server: %s", message.c_str());
+    SE_LOG_INFO(NULL, "message from server: %s", message.c_str());
 }
 
 void SyncContext::displaySyncProgress(sysync::TProgressEventEnum type,
@@ -1611,20 +1611,20 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         if (true || source.getFinalSyncMode() == SYNC_NONE) {
             // not active, suppress output
         } else if (extra2) {
-            SE_LOG_INFO(NULL, NULL, "%s: preparing %d/%d",
+            SE_LOG_INFO(NULL, "%s: preparing %d/%d",
                         source.getDisplayName().c_str(), extra1, extra2);
         } else {
-            SE_LOG_INFO(NULL, NULL, "%s: preparing %d",
+            SE_LOG_INFO(NULL, "%s: preparing %d",
                         source.getDisplayName().c_str(), extra1);
         }
         break;
     case sysync::PEV_DELETING:
         /* deleting (zapping datastore), extra1=progress, extra2=total */
         if (extra2) {
-            SE_LOG_INFO(NULL, NULL, "%s: deleting %d/%d",
+            SE_LOG_INFO(NULL, "%s: deleting %d/%d",
                         source.getDisplayName().c_str(), extra1, extra2);
         } else {
-            SE_LOG_INFO(NULL, NULL, "%s: deleting %d",
+            SE_LOG_INFO(NULL, "%s: deleting %d",
                         source.getDisplayName().c_str(), extra1);
         }
         break;
@@ -1635,7 +1635,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         // -1 is used for alerting a restore from backup. Synthesis won't use this
         bool peerIsClient = getPeerIsClient();
         if (extra1 != -1) {
-            SE_LOG_INFO(NULL, NULL, "%s: %s %s sync%s (%s)",
+            SE_LOG_INFO(NULL, "%s: %s %s sync%s (%s)",
                         source.getDisplayName().c_str(),
                         extra2 ? "resuming" : "starting",
                         extra1 == 0 ? "normal" :
@@ -1723,14 +1723,14 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 source.recordRestart();
             }
         } else {
-            SE_LOG_INFO(NULL, NULL, "%s: restore from backup", source.getDisplayName().c_str());
+            SE_LOG_INFO(NULL, "%s: restore from backup", source.getDisplayName().c_str());
             source.recordFinalSyncMode(SYNC_RESTORE_FROM_BACKUP);
         }
         break;
     }
     case sysync::PEV_SYNCSTART:
         /* sync started */
-        SE_LOG_INFO(NULL, NULL, "%s: started",
+        SE_LOG_INFO(NULL, "%s: started",
                     source.getDisplayName().c_str());
         break;
     case sysync::PEV_ITEMRECEIVED:
@@ -1738,10 +1738,10 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
            extra2=number of expected changes (if >= 0) */
         if (source.getFinalSyncMode() == SYNC_NONE) {
         } else if (extra2 > 0) {
-            SE_LOG_INFO(NULL, NULL, "%s: received %d/%d",
+            SE_LOG_INFO(NULL, "%s: received %d/%d",
                         source.getDisplayName().c_str(), extra1, extra2);
         } else {
-            SE_LOG_INFO(NULL, NULL, "%s: received %d",
+            SE_LOG_INFO(NULL, "%s: received %d",
                         source.getDisplayName().c_str(), extra1);
         }
         break;
@@ -1750,10 +1750,10 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
            extra2=number of expected items to be sent (if >=0) */
         if (source.getFinalSyncMode() == SYNC_NONE) {
         } else if (extra2 > 0) {
-            SE_LOG_INFO(NULL, NULL, "%s: sent %d/%d",
+            SE_LOG_INFO(NULL, "%s: sent %d/%d",
                         source.getDisplayName().c_str(), extra1, extra2);
         } else {
-            SE_LOG_INFO(NULL, NULL, "%s: sent %d",
+            SE_LOG_INFO(NULL, "%s: sent %d",
                         source.getDisplayName().c_str(), extra1);
         }
         break;
@@ -1763,7 +1763,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
            extra3=# deleted */
         if (source.getFinalSyncMode() == SYNC_NONE) {
         } else if (source.getFinalSyncMode() != SYNC_NONE) {
-            SE_LOG_INFO(NULL, NULL, "%s: added %d, updated %d, removed %d",
+            SE_LOG_INFO(NULL, "%s: added %d, updated %d, removed %d",
                         source.getDisplayName().c_str(), extra1, extra2, extra3);
         }
         break;
@@ -1772,13 +1772,13 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
            syncmode in extra2 (0=normal, 1=slow, 2=first time), 
            extra3=1 for resumed session) */
         if (source.getFinalSyncMode() == SYNC_NONE) {
-            SE_LOG_INFO(NULL, NULL, "%s: inactive", source.getDisplayName().c_str());
+            SE_LOG_INFO(NULL, "%s: inactive", source.getDisplayName().c_str());
         } else if(source.getFinalSyncMode() == SYNC_RESTORE_FROM_BACKUP) {
-            SE_LOG_INFO(NULL, NULL, "%s: restore done %s", 
+            SE_LOG_INFO(NULL, "%s: restore done %s", 
                         source.getDisplayName().c_str(),
                         extra1 ? "unsuccessfully" : "successfully" );
         } else {
-            SE_LOG_INFO(NULL, NULL, "%s: %s%s sync done %s",
+            SE_LOG_INFO(NULL, "%s: %s%s sync done %s",
                         source.getDisplayName().c_str(),
                         extra3 ? "resumed " : "",
                         extra2 == 0 ? "normal" :
@@ -1790,16 +1790,16 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         switch (extra1) {
         case 401:
             // TODO: reset cached password
-            SE_LOG_INFO(NULL, NULL, "authorization failed, check username '%s' and password", getSyncUsername().c_str());
+            SE_LOG_INFO(NULL, "authorization failed, check username '%s' and password", getSyncUsername().c_str());
             break;
         case 403:
-            SE_LOG_INFO(NULL, source.getDisplayName(), "log in succeeded, but server refuses access - contact server operator");
+            SE_LOG_INFO(source.getDisplayName(), "log in succeeded, but server refuses access - contact server operator");
             break;
         case 407:
-            SE_LOG_INFO(NULL, NULL, "proxy authorization failed, check proxy username and password");
+            SE_LOG_INFO(NULL, "proxy authorization failed, check proxy username and password");
             break;
         case 404:
-            SE_LOG_INFO(NULL, source.getDisplayName(), "server database not found, check URI '%s'", source.getURINonEmpty().c_str());
+            SE_LOG_INFO(source.getDisplayName(), "server database not found, check URI '%s'", source.getURINonEmpty().c_str());
             break;
         case 0:
             break;
@@ -1812,7 +1812,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
             // because even "good" sources will get a bad status when the overall
             // session turns bad. We also don't have good explanations for the
             // status here.
-            SE_LOG_ERROR(NULL, source.getDisplayName(), "%s", Status2String(SyncMLStatus(extra1)).c_str());
+            SE_LOG_ERROR(source.getDisplayName(), "%s", Status2String(SyncMLStatus(extra1)).c_str());
             break;
         }
         source.recordStatus(SyncMLStatus(extra1));
@@ -1908,7 +1908,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                            extra2);
         break;
     default:
-        SE_LOG_DEBUG(NULL, NULL, "%s: progress event %d, extra %d/%d/%d",
+        SE_LOG_DEBUG(NULL, "%s: progress event %d, extra %d/%d/%d",
                      source.getDisplayName().c_str(),
                      type, extra1, extra2, extra3);
     }
@@ -1963,7 +1963,7 @@ void SyncContext::throwError(const string &action, int error)
 
 void SyncContext::fatalError(void *object, const char *error)
 {
-    SE_LOG_ERROR(NULL, NULL, "%s", error);
+    SE_LOG_ERROR(NULL, "%s", error);
     if (m_activeContext && m_activeContext->m_sourceListPtr) {
         m_activeContext->m_sourceListPtr->syncDone(STATUS_FATAL, NULL);
     }
@@ -2592,7 +2592,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
                 if (!subType.m_format.empty() && (
                     sourceType.m_format != subType.m_format ||
                     sourceType.m_forceFormat != subType.m_forceFormat)) {
-                    SE_LOG_WARNING(NULL, NULL, 
+                    SE_LOG_WARNING(NULL, 
                                    "Virtual data source \"%s\" and sub data source \"%s\" have different data format. Will use the format in virtual data source.",
                                    vSource->getDisplayName().c_str(), source.c_str());
                 }
@@ -2750,7 +2750,7 @@ SharedEngine SyncContext::createEngine()
 namespace {
     void GnutlsLogFunction(int level, const char *str)
     {
-        SE_LOG_DEBUG(NULL, "GNUTLS", "level %d: %s", level, str);
+        SE_LOG_DEBUG("GNUTLS", "level %d: %s", level, str);
     }
 }
 
@@ -2818,7 +2818,7 @@ void SyncContext::initEngine(bool logXML)
     try {
         m_engine.InitEngineXML(xml.c_str());
     } catch (const BadSynthesisResult &ex) {
-        SE_LOG_ERROR(NULL, NULL,
+        SE_LOG_ERROR(NULL,
                      "internal error, invalid XML configuration (%s):\n%s",
                      m_sourceListPtr && !m_sourceListPtr->empty() ?
                      "with datastores" :
@@ -2828,7 +2828,7 @@ void SyncContext::initEngine(bool logXML)
     }
     if (logXML &&
         getLogLevel() >= 5) {
-        SE_LOG_DEV(NULL, NULL, "Full XML configuration:\n%s", xml.c_str());
+        SE_LOG_DEV(NULL, "Full XML configuration:\n%s", xml.c_str());
     }
 }
 
@@ -2887,7 +2887,7 @@ void SyncContext::initMain(const char *appname)
             set_log_level(atoi(gnutlsdbg));
             set_log_function(GnutlsLogFunction);
         } else {
-            SE_LOG_ERROR(NULL, NULL, "SYNCEVOLUTION_GNUTLS_DEBUG debugging not possible, log functions not found");
+            SE_LOG_ERROR(NULL, "SYNCEVOLUTION_GNUTLS_DEBUG debugging not possible, log functions not found");
         }
     }
 }
@@ -2921,9 +2921,9 @@ void SyncContext::checkConfig(const std::string &operation) const
     if (isConfigNeeded() &&
         (!exists() || peer.empty())) {
         if (peer.empty()) {
-            SE_LOG_INFO(NULL, NULL, "Configuration \"%s\" does not refer to a sync peer.", m_server.c_str());
+            SE_LOG_INFO(NULL, "Configuration \"%s\" does not refer to a sync peer.", m_server.c_str());
         } else {
-            SE_LOG_INFO(NULL, NULL, "Configuration \"%s\" does not exist.", m_server.c_str());
+            SE_LOG_INFO(NULL, "Configuration \"%s\" does not exist.", m_server.c_str());
         }
         throwError(StringPrintf("Cannot proceed with %s without a configuration.", operation.c_str()));
     }
@@ -2987,11 +2987,11 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
 
         try {
             // dump some summary information at the beginning of the log
-            SE_LOG_DEV(NULL, NULL, "SyncML server account: %s", getSyncUsername().c_str());
-            SE_LOG_DEV(NULL, NULL, "client: SyncEvolution %s for %s", getSwv().c_str(), getDevType().c_str());
-            SE_LOG_DEV(NULL, NULL, "device ID: %s", getDevID().c_str());
-            SE_LOG_DEV(NULL, NULL, "%s", EDSAbiWrapperDebug());
-            SE_LOG_DEV(NULL, NULL, "%s", SyncSource::backendsDebug().c_str());
+            SE_LOG_DEV(NULL, "SyncML server account: %s", getSyncUsername().c_str());
+            SE_LOG_DEV(NULL, "client: SyncEvolution %s for %s", getSwv().c_str(), getDevType().c_str());
+            SE_LOG_DEV(NULL, "device ID: %s", getDevID().c_str());
+            SE_LOG_DEV(NULL, "%s", EDSAbiWrapperDebug());
+            SE_LOG_DEV(NULL, "%s", SyncSource::backendsDebug().c_str());
 
             // ensure that config can be modified (might have to be migrated first)
             prepareConfigForWrite();
@@ -3019,13 +3019,13 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
              */
             ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
             BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                SE_LOG_DEBUG(NULL, NULL, "checking sync password %s", prop->getMainName().c_str());
+                SE_LOG_DEBUG(NULL, "checking sync password %s", prop->getMainName().c_str());
                 prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties());
             }
             BOOST_FOREACH(SyncSource *source, sourceList) {
                 ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
                 BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                    SE_LOG_DEBUG(NULL, NULL, "checking source %s password %s",
+                    SE_LOG_DEBUG(NULL, "checking source %s password %s",
                                  source->getName().c_str(),
                                  prop->getMainName().c_str());
                     prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
@@ -3140,7 +3140,7 @@ bool SyncContext::sendSAN(uint16_t version)
     if(serverId.empty()) {
         serverId = getDevID();
     }
-    SE_LOG_DEBUG(NULL, NULL, "starting SAN %u auth %s nonce %s session %u server %s",
+    SE_LOG_DEBUG(NULL, "starting SAN %u auth %s nonce %s session %u server %s",
                  version,
                  uauthb64.c_str(),
                  nonce.c_str(),
@@ -3185,7 +3185,7 @@ bool SyncContext::sendSAN(uint16_t version)
             mode = SA_TWO_WAY;
         }
         if (mode < SA_FIRST || mode > SA_LAST) {
-            SE_LOG_DEV (NULL, NULL, "Ignoring data source %s with an invalid sync mode", name.c_str());
+            SE_LOG_DEV(NULL, "Ignoring data source %s with an invalid sync mode", name.c_str());
             continue;
         }
         syncMode = mode;
@@ -3204,19 +3204,19 @@ bool SyncContext::sendSAN(uint16_t version)
             int contentTypeB = StringToContentType (sourceType.m_format, sourceType.m_forceFormat);
             if (contentTypeB == WSPCTC_UNKNOWN) {
                 contentTypeB = 0;
-                SE_LOG_DEBUG (NULL, NULL, "Unknown datasource mimetype, use 0 as default");
+                SE_LOG_DEBUG(NULL, "Unknown datasource mimetype, use 0 as default");
             }
-            SE_LOG_DEBUG(NULL, NULL, "SAN source %s uri %s type %u mode %d",
+            SE_LOG_DEBUG(NULL, "SAN source %s uri %s type %u mode %d",
                          name.c_str(),
                          uri.c_str(),
                          contentTypeB,
                          mode);
             if ( san.AddSync(mode, (uInt32) contentTypeB, uri.c_str())) {
-                SE_LOG_ERROR(NULL, NULL, "SAN: adding server alerted sync element failed");
+                SE_LOG_ERROR(NULL, "SAN: adding server alerted sync element failed");
             };
         } else {
             string mimetype = GetLegacyMIMEType(sourceType.m_format, sourceType.m_forceFormat);
-            SE_LOG_DEBUG(NULL, NULL, "SAN source %s uri %s type %s",
+            SE_LOG_DEBUG(NULL, "SAN source %s uri %s type %s",
                          name.c_str(),
                          uri.c_str(),
                          mimetype.c_str());
@@ -3233,21 +3233,21 @@ bool SyncContext::sendSAN(uint16_t version)
     size_t sanSize;
     if (!legacy) {
         if (san.GetPackage(buffer, sanSize)){
-            SE_LOG_ERROR (NULL, NULL, "SAN package generating failed");
+            SE_LOG_ERROR(NULL, "SAN package generating failed");
             return false;
         }
         //TODO log the binary SAN content
     } else {
-        SE_LOG_DEBUG(NULL, NULL, "SAN with overall sync mode %d", syncMode);
+        SE_LOG_DEBUG(NULL, "SAN with overall sync mode %d", syncMode);
         if (san.GetPackageLegacy(buffer, sanSize, alertedSources, syncMode, getWBXML())){
-            SE_LOG_ERROR (NULL, NULL, "SAN package generating failed");
+            SE_LOG_ERROR(NULL, "SAN package generating failed");
             return false;
         }
-        //SE_LOG_DEBUG (NULL, NULL, "SAN package content: %s", (char*)buffer);
+        //SE_LOG_DEBUG(NULL, "SAN package content: %s", (char*)buffer);
     }
 
     m_agent = createTransportAgent();
-    SE_LOG_INFO (NULL, NULL, "Server sending SAN");
+    SE_LOG_INFO(NULL, "Server sending SAN");
     m_serverAlerted = true;
     m_agent->setContentType(!legacy ? 
                            TransportAgent::m_contentTypeServerAlertedNotificationDS
@@ -3315,12 +3315,12 @@ SyncMLStatus SyncContext::doSync()
     // install signal handlers unless this was explicitly disabled
     bool catchSignals = getenv("SYNCEVOLUTION_NO_SYNC_SIGNALS") == NULL;
     if (catchSignals) {
-        SE_LOG_DEBUG(NULL, NULL, "sync is starting, catch signals");
+        SE_LOG_DEBUG(NULL, "sync is starting, catch signals");
         signalGuard = SuspendFlags::getSuspendFlags().activate();
     }
 
     // delay the sync for debugging purposes
-    SE_LOG_DEBUG(NULL, NULL, "ready to sync");
+    SE_LOG_DEBUG(NULL, "ready to sync");
     const char *delay = getenv("SYNCEVOLUTION_SYNC_DELAY");
     if (delay) {
         Sleep(atoi(delay));
@@ -3367,7 +3367,7 @@ SyncMLStatus SyncContext::doSync()
 
         if (! status) {
             if (sanFormat.empty()) {
-                SE_LOG_DEBUG (NULL, NULL, "Server Alerted Sync init with SANFormat %d failed, trying with legacy format", version);
+                SE_LOG_DEBUG(NULL, "Server Alerted Sync init with SANFormat %d failed, trying with legacy format", version);
                 version = 11;
                 if (!sendSAN (version)) {
                     // return a proper error code 
@@ -3537,7 +3537,7 @@ SyncMLStatus SyncContext::doSync()
             // After exception occurs, stepCmd will be set to abort to force
             // aborting, must avoid to change it back to suspend cmd.
             if (checkForSuspend() && stepCmd == sysync::STEPCMD_GOTDATA) {
-                SE_LOG_DEBUG(NULL, NULL, "suspending before SessionStep() in STEPCMD_GOTDATA as requested by user");
+                SE_LOG_DEBUG(NULL, "suspending before SessionStep() in STEPCMD_GOTDATA as requested by user");
                 stepCmd = sysync::STEPCMD_SUSPEND;
             }
 
@@ -3555,7 +3555,7 @@ SyncMLStatus SyncContext::doSync()
                  stepCmd == sysync::STEPCMD_SENTDATA ||
                  stepCmd == sysync::STEPCMD_NEEDDATA) &&
                 checkForAbort()) {
-                SE_LOG_DEBUG(NULL, NULL, "aborting before SessionStep() in %s as requested by script",
+                SE_LOG_DEBUG(NULL, "aborting before SessionStep() in %s as requested by script",
                              Step2String(stepCmd).c_str());
                 stepCmd = sysync::STEPCMD_ABORT;
             }
@@ -3564,7 +3564,7 @@ SyncMLStatus SyncContext::doSync()
             // let engine contine with its shutdown
             if (stepCmd == sysync::STEPCMD_ABORT) {
                 if (aborting) {
-                    SE_LOG_DEBUG(NULL, NULL, "engine already notified of abort request, reverting to %s",
+                    SE_LOG_DEBUG(NULL, "engine already notified of abort request, reverting to %s",
                                  Step2String(previousStepCmd).c_str());
                     stepCmd = previousStepCmd;
                 } else {
@@ -3574,7 +3574,7 @@ SyncMLStatus SyncContext::doSync()
             // same for suspending
             if (stepCmd == sysync::STEPCMD_SUSPEND) {
                 if (suspending) {
-                    SE_LOG_DEBUG(NULL, NULL, "engine already notified of suspend request, reverting to %s",
+                    SE_LOG_DEBUG(NULL, "engine already notified of suspend request, reverting to %s",
                                  Step2String(previousStepCmd).c_str());
                     stepCmd = previousStepCmd;
                     suspending++;
@@ -3590,18 +3590,18 @@ SyncMLStatus SyncContext::doSync()
                 // and wait for response.
             } else {
                 if (getLogLevel() > 4) {
-                    SE_LOG_DEBUG(NULL, NULL, "before SessionStep: %s", Step2String(stepCmd).c_str());
+                    SE_LOG_DEBUG(NULL, "before SessionStep: %s", Step2String(stepCmd).c_str());
                 }
                 m_engine.SessionStep(session, stepCmd, &progressInfo);
                 if (getLogLevel() > 4) {
-                    SE_LOG_DEBUG(NULL, NULL, "after SessionStep: %s", Step2String(stepCmd).c_str());
+                    SE_LOG_DEBUG(NULL, "after SessionStep: %s", Step2String(stepCmd).c_str());
                 }
                 reportStepCmd(stepCmd);
             }
 
             if (stepCmd == sysync::STEPCMD_SENDDATA &&
                 checkForScriptAbort(session)) {
-                SE_LOG_DEBUG(NULL, NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by script");
+                SE_LOG_DEBUG(NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by script");
 
                 // Catch outgoing message and abort if requested by script.
                 // Report which sources are affected, based on their status code.
@@ -3619,20 +3619,20 @@ SyncMLStatus SyncContext::doSync()
                                                                      sources);
                 if (!explanation.empty()) {
                     string sourceparam = boost::join(sources, " ");
-                    SE_LOG_ERROR(NULL, NULL,
+                    SE_LOG_ERROR(NULL,
                                  "Aborting because of unexpected slow sync for source(s): %s",
                                  sourceparam.c_str());
-                    SE_LOG_INFO(NULL, NULL, "%s", explanation.c_str());
+                    SE_LOG_INFO(NULL, "%s", explanation.c_str());
                 } else {
                     // we should not get here, but if we do, at least log something
-                    SE_LOG_ERROR(NULL, NULL, "aborting as requested by script");
+                    SE_LOG_ERROR(NULL, "aborting as requested by script");
                 }
                 stepCmd = sysync::STEPCMD_ABORT;
                 continue;
             } else if (stepCmd == sysync::STEPCMD_SENDDATA &&
                        checkForAbort()) {
                 // Catch outgoing message and abort if requested by user.
-                SE_LOG_DEBUG(NULL, NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by user");
+                SE_LOG_DEBUG(NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by user");
                 stepCmd = sysync::STEPCMD_ABORT;
                 continue;
             } else if (suspending == 1) {
@@ -3732,7 +3732,7 @@ SyncMLStatus SyncContext::doSync()
                 break;
             }
             case sysync::STEPCMD_RESENDDATA: {
-                SE_LOG_INFO (NULL, NULL, "resend previous message, retry #%d", m_retries);
+                SE_LOG_INFO(NULL, "resend previous message, retry #%d", m_retries);
                 resendStart = time(NULL);
                 /* We are resending previous message, just read from the
                  * previous buffer */
@@ -3760,7 +3760,7 @@ SyncMLStatus SyncContext::doSync()
                     // Same if() as below for FAILED.
                     if (m_serverMode ||
                         !m_retryInterval || duration > m_retryDuration || requestNum == 1) {
-                        SE_LOG_INFO(NULL, NULL,
+                        SE_LOG_INFO(NULL,
                                     "Transport giving up after %d retries and %ld:%02ldmin",
                                     m_retries,
                                     (long)(duration / 60),
@@ -3797,9 +3797,9 @@ SyncMLStatus SyncContext::doSync()
                         stepCmd = sysync::STEPCMD_GOTDATA; // we have received response data
                         break;
                     } else {
-                        SE_LOG_DEBUG(NULL, NULL, "unexpected content type '%s' in reply, %d bytes:\n%.*s",
+                        SE_LOG_DEBUG(NULL, "unexpected content type '%s' in reply, %d bytes:\n%.*s",
                                      contentType.c_str(), (int)replylen, (int)replylen, reply);
-                        SE_LOG_ERROR(NULL, NULL, "unexpected reply from server; might be a temporary problem, try again later");
+                        SE_LOG_ERROR(NULL, "unexpected reply from server; might be a temporary problem, try again later");
                       } //fall through to network failure case
                 }
                 /* If this is a network error, it usually failed quickly, retry
@@ -3811,11 +3811,11 @@ SyncMLStatus SyncContext::doSync()
                     // Send might have failed because of abort or
                     // suspend request.
                     if (checkForSuspend()) {
-                        SE_LOG_DEBUG(NULL, NULL, "suspending after TransportAgent::FAILED as requested by user");
+                        SE_LOG_DEBUG(NULL, "suspending after TransportAgent::FAILED as requested by user");
                         stepCmd = sysync::STEPCMD_SUSPEND;
                         break;
                     } else if (checkForAbort()) {
-                        SE_LOG_DEBUG(NULL, NULL, "aborting after TransportAgent::FAILED as requested by user");
+                        SE_LOG_DEBUG(NULL, "aborting after TransportAgent::FAILED as requested by user");
                         stepCmd = sysync::STEPCMD_ABORT;
                         break;
                     }
@@ -3825,7 +3825,7 @@ SyncMLStatus SyncContext::doSync()
                     // same if() as above for TIME_OUT
                     if (m_serverMode ||
                         !m_retryInterval || duration > m_retryDuration || requestNum == 1) {
-                        SE_LOG_INFO(NULL, NULL,
+                        SE_LOG_INFO(NULL,
                                     "Transport giving up after %d retries and %ld:%02ldmin",
                                     m_retries,
                                     (long)(duration / 60),
@@ -3837,10 +3837,10 @@ SyncMLStatus SyncContext::doSync()
                         if (leftTime >0 ) {
                             if (Sleep(leftTime) > 0) {
                                 if (checkForSuspend()) {
-                                    SE_LOG_DEBUG(NULL, NULL, "suspending after premature exit from sleep() caused by user suspend");
+                                    SE_LOG_DEBUG(NULL, "suspending after premature exit from sleep() caused by user suspend");
                                     stepCmd = sysync::STEPCMD_SUSPEND;
                                 } else {
-                                    SE_LOG_DEBUG(NULL, NULL, "aborting after premature exit from sleep() caused by user abort");
+                                    SE_LOG_DEBUG(NULL, "aborting after premature exit from sleep() caused by user abort");
                                     stepCmd = sysync::STEPCMD_ABORT;
                                 }
                                 break;
@@ -3856,11 +3856,11 @@ SyncMLStatus SyncContext::doSync()
                     // Send might have failed because of abort or
                     // suspend request.
                     if (checkForSuspend()) {
-                        SE_LOG_DEBUG(NULL, NULL, "suspending after TransportAgent::CANCELED as requested by user");
+                        SE_LOG_DEBUG(NULL, "suspending after TransportAgent::CANCELED as requested by user");
                         stepCmd = sysync::STEPCMD_SUSPEND;
                         break;
                     } else if (checkForAbort()) {
-                        SE_LOG_DEBUG(NULL, NULL, "aborting after TransportAgent::CANCELED as requested by user");
+                        SE_LOG_DEBUG(NULL, "aborting after TransportAgent::CANCELED as requested by user");
                         stepCmd = sysync::STEPCMD_ABORT;
                         break;
                     }
@@ -3884,26 +3884,26 @@ SyncMLStatus SyncContext::doSync()
             // loop until session done or aborted with error
         } catch (const BadSynthesisResult &result) {
             if (result.result() == sysync::LOCERR_USERABORT && aborting) {
-                SE_LOG_INFO(NULL, NULL, "Aborted as requested.");
+                SE_LOG_INFO(NULL, "Aborted as requested.");
                 stepCmd = sysync::STEPCMD_DONE;
             } else if (result.result() == sysync::LOCERR_USERSUSPEND && suspending) {
-                SE_LOG_INFO(NULL, NULL, "Suspended as requested.");
+                SE_LOG_INFO(NULL, "Suspended as requested.");
                 stepCmd = sysync::STEPCMD_DONE;
             } else if (aborting) {
                 // aborting very early can lead to results different from LOCERR_USERABORT
                 // => don't treat this as error
-                SE_LOG_INFO(NULL, NULL, "Aborted with unexpected result (%d)",
+                SE_LOG_INFO(NULL, "Aborted with unexpected result (%d)",
                             static_cast<int>(result.result()));
                 stepCmd = sysync::STEPCMD_DONE;
             } else {
                 Exception::handle(&status);
-                SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
+                SE_LOG_DEBUG(NULL, "aborting after catching fatal error");
                 // Don't tell engine to abort when it already did.
                 stepCmd = aborting ? sysync::STEPCMD_DONE : sysync::STEPCMD_ABORT;
             }
         } catch (...) {
             Exception::handle(&status);
-            SE_LOG_DEBUG(NULL, NULL, "aborting after catching fatal error");
+            SE_LOG_DEBUG(NULL, "aborting after catching fatal error");
             // Don't tell engine to abort when it already did.
             stepCmd = aborting ? sysync::STEPCMD_DONE : sysync::STEPCMD_ABORT;
         }
@@ -3970,7 +3970,7 @@ void SyncContext::status()
                         SyncReport::WITHOUT_CONFLICTS|
                         SyncReport::WITHOUT_REJECTS|
                         SyncReport::WITH_TOTAL);
-    SE_LOG_INFO(NULL, NULL, "Local item changes:\n%s",
+    SE_LOG_INFO(NULL, "Local item changes:\n%s",
                 out.str().c_str());
 
     sourceList.accessSession(getLogDir());
@@ -3989,9 +3989,9 @@ void SyncContext::status()
             }
         }
     } else {
-        SE_LOG_SHOW(NULL, NULL, "Previous log directory not found.");
+        SE_LOG_SHOW(NULL, "Previous log directory not found.");
         if (getLogDir().empty()) {
-            SE_LOG_SHOW(NULL, NULL, "Enable the 'logdir' option and synchronize to use this feature.");
+            SE_LOG_SHOW(NULL, "Enable the 'logdir' option and synchronize to use this feature.");
         }
     }
 }
@@ -4021,11 +4021,11 @@ static void logRestoreReport(const SyncReport &report, bool dryrun)
     if (!report.empty()) {
         stringstream out;
         report.prettyPrint(out, SyncReport::WITHOUT_SERVER|SyncReport::WITHOUT_CONFLICTS|SyncReport::WITH_TOTAL);
-        SE_LOG_INFO(NULL, NULL, "Item changes %s applied locally during restore:\n%s",
+        SE_LOG_INFO(NULL, "Item changes %s applied locally during restore:\n%s",
                     dryrun ? "to be" : "that were",
                     out.str().c_str());
-        SE_LOG_INFO(NULL, NULL, "The same incremental changes will be applied to the server during the next sync.");
-        SE_LOG_INFO(NULL, NULL, "Use -sync refresh-from-client to replace the complete data on the server.");
+        SE_LOG_INFO(NULL, "The same incremental changes will be applied to the server during the next sync.");
+        SE_LOG_INFO(NULL, "Use -sync refresh-from-client to replace the complete data on the server.");
     }
 }
 

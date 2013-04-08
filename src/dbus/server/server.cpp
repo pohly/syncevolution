@@ -45,7 +45,7 @@ SE_BEGIN_CXX
 
 static void logIdle(bool idle)
 {
-    SE_LOG_DEBUG(NULL, NULL, "server is %s", idle ? "idle" : "not idle");
+    SE_LOG_DEBUG(NULL, "server is %s", idle ? "idle" : "not idle");
 }
 
 void Server::clientGone(Client *c)
@@ -54,14 +54,14 @@ void Server::clientGone(Client *c)
         it != m_clients.end();
         ++it) {
         if (it->second.get() == c) {
-            SE_LOG_DEBUG(NULL, NULL, "D-Bus client %s has disconnected",
+            SE_LOG_DEBUG(NULL, "D-Bus client %s has disconnected",
                          c->m_ID.c_str());
             autoTermUnref(it->second->getAttachCount());
             m_clients.erase(it);
             return;
         }
     }
-    SE_LOG_DEBUG(NULL, NULL, "unknown client has disconnected?!");
+    SE_LOG_DEBUG(NULL, "unknown client has disconnected?!");
 }
 
 std::string Server::getNextSession()
@@ -168,7 +168,7 @@ void Server::connect(const Caller_t &caller,
                                                                  new_session,
                                                                  peer,
                                                                  must_authenticate));
-    SE_LOG_DEBUG(NULL, NULL, "connecting D-Bus client %s with connection %s '%s'",
+    SE_LOG_DEBUG(NULL, "connecting D-Bus client %s with connection %s '%s'",
                  caller.c_str(),
                  c->getPath(),
                  c->m_description.c_str());
@@ -370,17 +370,17 @@ bool Server::shutdown()
 {
     Timespec now = Timespec::monotonic();
     bool autosync = m_autoSync && m_autoSync->preventTerm();
-    SE_LOG_DEBUG(NULL, NULL, "shut down or restart server at %lu.%09lu because of file modifications, auto sync %s",
+    SE_LOG_DEBUG(NULL, "shut down or restart server at %lu.%09lu because of file modifications, auto sync %s",
                  now.tv_sec, now.tv_nsec, autosync ? "on" : "off");
     if (autosync) {
         // suitable exec() call which restarts the server using the same environment it was in
         // when it was started
-        SE_LOG_INFO(NULL, NULL, "server restarting because files loaded into memory were modified on disk");
+        SE_LOG_INFO(NULL, "server restarting because files loaded into memory were modified on disk");
         m_restart->restart();
     } else {
         // leave server now
         g_main_loop_quit(m_loop);
-        SE_LOG_INFO(NULL, NULL, "server shutting down because files loaded into memory were modified on disk");
+        SE_LOG_INFO(NULL, "server shutting down because files loaded into memory were modified on disk");
     }
 
     return false;
@@ -388,7 +388,7 @@ bool Server::shutdown()
 
 void Server::fileModified()
 {
-    SE_LOG_DEBUG(NULL, NULL, "file modified, %s shutdown: %s, %s",
+    SE_LOG_DEBUG(NULL, "file modified, %s shutdown: %s, %s",
                  m_shutdownRequested ? "continuing" : "initiating",
                  m_shutdownTimer ? "timer already active" : "timer not yet active",
                  m_activeSession ? "waiting for active session to finish" : "setting timer");
@@ -406,9 +406,9 @@ void Server::run()
     // memory which might be dynamically loadable, like backend
     // plugins.
     StringMap map = getVersions();
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus server ready to run, versions:");
+    SE_LOG_DEBUG(NULL, "D-Bus server ready to run, versions:");
     BOOST_FOREACH(const StringPair &entry, map) {
-        SE_LOG_DEBUG(NULL, NULL, "%s: %s", entry.first.c_str(), entry.second.c_str());
+        SE_LOG_DEBUG(NULL, "%s: %s", entry.first.c_str(), entry.second.c_str());
     }
 
     // Now that everything is loaded, check memory map for files which we have to monitor.
@@ -426,7 +426,7 @@ void Server::run()
     in.close();
     BOOST_FOREACH(const string &file, files) {
         try {
-            SE_LOG_DEBUG(NULL, NULL, "watching: %s", file.c_str());
+            SE_LOG_DEBUG(NULL, "watching: %s", file.c_str());
             boost::shared_ptr<SyncEvo::GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&Server::fileModified, this)));
             m_files.push_back(notify);
         } catch (...) {
@@ -435,12 +435,12 @@ void Server::run()
         }
     }
 
-    SE_LOG_INFO(NULL, NULL, "ready to run");
+    SE_LOG_INFO(NULL, "ready to run");
     if (!m_shutdownRequested) {
         g_main_loop_run(m_loop);
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "%s", "Exiting Server::run");
+    SE_LOG_DEBUG(NULL, "%s", "Exiting Server::run");
 }
 
 
@@ -512,7 +512,7 @@ void Server::killSessionsAsync(const std::string &peerDeviceID,
     while (it != m_workQueue.end()) {
         boost::shared_ptr<Session> session = it->lock();
         if (session && session->getPeerDeviceID() == peerDeviceID) {
-            SE_LOG_DEBUG(NULL, NULL, "removing pending session %s because it matches deviceID %s",
+            SE_LOG_DEBUG(NULL, "removing pending session %s because it matches deviceID %s",
                          session->getSessionID().c_str(),
                          peerDeviceID.c_str());
             // remove session and its corresponding connection
@@ -530,7 +530,7 @@ void Server::killSessionsAsync(const std::string &peerDeviceID,
     boost::shared_ptr<Session> active = m_activeSessionRef.lock();
     if (active &&
         active->getPeerDeviceID() == peerDeviceID) {
-        SE_LOG_DEBUG(NULL, NULL, "aborting active session %s because it matches deviceID %s",
+        SE_LOG_DEBUG(NULL, "aborting active session %s because it matches deviceID %s",
                      active->getSessionID().c_str(),
                      peerDeviceID.c_str());
         // hand over work to session
@@ -606,14 +606,14 @@ void Server::removeSyncSession(Session *session)
         delaySessionDestruction(m_syncSession);
         m_syncSession.reset();
     } else {
-        SE_LOG_DEBUG(NULL, NULL, "ignoring removeSyncSession() for session %s, it is not the sync session",
+        SE_LOG_DEBUG(NULL, "ignoring removeSyncSession() for session %s, it is not the sync session",
                      session->getSessionID().c_str());
     }
 }
 
 static void quitLoop(GMainLoop *loop)
 {
-    SE_LOG_DEBUG(NULL, NULL, "stopping server's event loop");
+    SE_LOG_DEBUG(NULL, "stopping server's event loop");
     g_main_loop_quit(loop);
 }
 
@@ -629,7 +629,7 @@ void Server::checkQueue()
         // But don't do it immediately: when done inside the Session.Detach()
         // call, the D-Bus response was not delivered reliably to the client
         // which caused the shutdown.
-        SE_LOG_DEBUG(NULL, NULL, "shutting down in checkQueue(), idle and shutdown was requested");
+        SE_LOG_DEBUG(NULL, "shutting down in checkQueue(), idle and shutdown was requested");
         addTimeout(boost::bind(quitLoop, m_loop), 0);
         return;
     }
@@ -650,7 +650,7 @@ void Server::checkQueue()
 
 void Server::sessionExpired(const boost::shared_ptr<Session> &session)
 {
-    SE_LOG_DEBUG(NULL, NULL, "session %s expired",
+    SE_LOG_DEBUG(NULL, "session %s expired",
                  session->getSessionID().c_str());
 }
 
@@ -660,7 +660,7 @@ void Server::delaySessionDestruction(const boost::shared_ptr<Session> &session)
         return;
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "delaying destruction of session %s by one minute",
+    SE_LOG_DEBUG(NULL, "delaying destruction of session %s by one minute",
                  session->getSessionID().c_str());
     addTimeout(boost::bind(&Server::sessionExpired,
                            session),

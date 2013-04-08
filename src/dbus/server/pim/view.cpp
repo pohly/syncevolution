@@ -24,7 +24,7 @@ SE_BEGIN_CXX
 
 void View::start()
 {
-    SE_LOG_DEBUG(NULL, NULL, "%s: start() %s",
+    SE_LOG_DEBUG(NULL, "%s: start() %s",
                  getName(),
                  m_started ? "already done" : "doing it now");
     if (!m_started) {

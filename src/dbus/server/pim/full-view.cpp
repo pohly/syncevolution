@@ -57,7 +57,7 @@ void FullView::doStart()
     Coll coll(map);
     guint size = gee_map_get_size(map);
     individuals.reserve(size);
-    SE_LOG_DEBUG(NULL, NULL, "starting with %u individuals", size);
+    SE_LOG_DEBUG(NULL, "starting with %u individuals", size);
     BOOST_FOREACH (const Coll::value_type &entry, coll) {
         FolksIndividual *individual = entry.value();
         data.init(m_compare.get(), m_locale.get(), individual);
@@ -110,7 +110,7 @@ void FullView::individualsChanged(GeeSet *added,
                                   FolksPersona *actor,
                                   FolksGroupDetailsChangeReason reason)
 {
-    SE_LOG_DEBUG(NULL, NULL, "individuals changed, %s, %d added, %d removed, message: %s",
+    SE_LOG_DEBUG(NULL, "individuals changed, %s, %d added, %d removed, message: %s",
                  actor ? folks_persona_get_display_id(actor) : "<<no actor>>",
                  added ? gee_collection_get_size(GEE_COLLECTION(added)) : 0,
                  removed ? gee_collection_get_size(GEE_COLLECTION(removed)) : 0,
@@ -135,7 +135,7 @@ void FullView::individualsChanged(GeeSet *added,
 void FullView::individualModified(gpointer gobject,
                                   GParamSpec *pspec)
 {
-    SE_LOG_DEBUG(NULL, NULL, "individual %p modified",
+    SE_LOG_DEBUG(NULL, "individual %p modified",
                  gobject);
     FolksIndividual *individual = FOLKS_INDIVIDUAL(gobject);
     // Delay the expensive modification check until the process is
@@ -151,7 +151,7 @@ void FullView::individualModified(gpointer gobject,
 void FullView::quiescenceChanged()
 {
     bool quiescent = folks_individual_aggregator_get_is_quiescent(m_folks);
-    SE_LOG_DEBUG(NULL, NULL, "aggregator is %s", quiescent ? "quiescent" : "busy");
+    SE_LOG_DEBUG(NULL, "aggregator is %s", quiescent ? "quiescent" : "busy");
     // In practice, libfolks only switches from "busy" to "quiescent"
     // once. See https://bugzilla.gnome.org/show_bug.cgi?id=684766
     // "enter and leave quiescence state".
@@ -159,7 +159,7 @@ void FullView::quiescenceChanged()
         int seconds = atoi(getEnv("SYNCEVOLUTION_PIM_DELAY_FOLKS", "0"));
         if (seconds > 0) {
             // Delay the quiescent state change as requested.
-            SE_LOG_DEBUG(NULL, NULL, "delay aggregrator quiescence by %d seconds", seconds);
+            SE_LOG_DEBUG(NULL, "delay aggregrator quiescence by %d seconds", seconds);
             m_quiescenceDelay.runOnce(seconds,
                                       boost::bind(&FullView::quiescenceChanged,
                                                   this));
@@ -182,7 +182,7 @@ void FullView::doAddIndividual(Entries_t::auto_type &data)
                          IndividualDataCompare(m_compare));
     size_t index = it - m_entries.begin();
     it = m_entries.insert(it, data.release());
-    SE_LOG_DEBUG(NULL, NULL, "full view: added at #%ld/%ld", (long)index, (long)m_entries.size());
+    SE_LOG_DEBUG(NULL, "full view: added at #%ld/%ld", (long)index, (long)m_entries.size());
     m_addedSignal(index, *it);
     waitForIdle();
 
@@ -221,12 +221,12 @@ void FullView::modifyIndividual(FolksIndividual *individual)
                 // sorting became invalid => move the entry. Do it
                 // as simple as possible, because this is not expected
                 // to happen often.
-                SE_LOG_DEBUG(NULL, NULL, "full view: temporarily removed at #%ld/%ld", (long)index, (long)m_entries.size());
+                SE_LOG_DEBUG(NULL, "full view: temporarily removed at #%ld/%ld", (long)index, (long)m_entries.size());
                 Entries_t::auto_type old = m_entries.release(it);
                 m_removedSignal(index, *old);
                 doAddIndividual(data);
             } else {
-                SE_LOG_DEBUG(NULL, NULL, "full view: modified at #%ld/%ld", (long)index, (long)m_entries.size());
+                SE_LOG_DEBUG(NULL, "full view: modified at #%ld/%ld", (long)index, (long)m_entries.size());
                 // Use potentially modified pre-computed data.
                 m_entries.replace(it, data.release());
                 m_modifiedSignal(index, *it);
@@ -237,7 +237,7 @@ void FullView::modifyIndividual(FolksIndividual *individual)
     }
     // Not a bug: individual might have been removed before we got
     // around to processing the modification notification.
-    SE_LOG_DEBUG(NULL, NULL, "full view: modified individual not found");
+    SE_LOG_DEBUG(NULL, "full view: modified individual not found");
 }
 
 void FullView::removeIndividual(FolksIndividual *individual)
@@ -247,7 +247,7 @@ void FullView::removeIndividual(FolksIndividual *individual)
          ++it) {
         if (it->m_individual.get() == individual) {
             size_t index = it - m_entries.begin();
-            SE_LOG_DEBUG(NULL, NULL, "full view: removed at #%ld/%ld", (long)index, (long)m_entries.size());
+            SE_LOG_DEBUG(NULL, "full view: removed at #%ld/%ld", (long)index, (long)m_entries.size());
             Entries_t::auto_type data = m_entries.release(it);
             m_removedSignal(index, *data);
             waitForIdle();
@@ -255,12 +255,12 @@ void FullView::removeIndividual(FolksIndividual *individual)
         }
     }
     // A bug?!
-    SE_LOG_DEBUG(NULL, NULL, "full view: individual to be removed not found");
+    SE_LOG_DEBUG(NULL, "full view: individual to be removed not found");
 }
 
 void FullView::onIdle()
 {
-    SE_LOG_DEBUG(NULL, NULL, "full view: process is idle");
+    SE_LOG_DEBUG(NULL, "full view: process is idle");
 
     // Process delayed contact modifications.
     BOOST_FOREACH (const FolksIndividualCXX &individual,

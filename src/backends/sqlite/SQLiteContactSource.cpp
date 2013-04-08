@@ -251,7 +251,7 @@ sysync::TSyError SQLiteContactSource::readItemAsKey(sysync::cItemID aID, sysync:
             string value = m_sqlite.getTextColumn(contact, map.colindex);
             sysync::TSyError res = getSynthesisAPI()->setValue(aItemKey, field, value.c_str(), value.size());
             if (res != sysync::LOCERR_OK) {
-                SE_LOG_WARNING (NULL, NULL, "SQLite backend: set field %s value %s failed", field.c_str(), value.c_str());
+                SE_LOG_WARNING(getDisplayName(), "SQLite backend: set field %s value %s failed", field.c_str(), value.c_str());
             }
         }
     }

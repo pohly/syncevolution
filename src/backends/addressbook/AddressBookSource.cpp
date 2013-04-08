@@ -1230,7 +1230,7 @@ void AddressBookSource::listAllItems(RevisionMap_t &revisions)
 void AddressBookSource::close()
 {
     if (m_addressbook && !hasFailed()) {
-        SE_LOG_DEBUG(NULL, getDisplayName(), "flushing address book");
+        SE_LOG_DEBUG(getDisplayName(), "flushing address book");
         // store changes persistently
         if (!ABSave(m_addressbook)) {
             throwError("saving address book");
@@ -1241,7 +1241,7 @@ void AddressBookSource::close()
         // sleep a bit before returning control
         sleep(2);
 
-        SE_LOG_DEBUG(NULL, getDisplayName(), "done with address book");
+        SE_LOG_DEBUG(getDisplayName(), "done with address book");
     }
     
     m_addressbook = NULL;
@@ -1272,7 +1272,7 @@ SyncItem *AddressBookSource::createItem(const string &uid, bool asVCard30)
 
 #ifdef USE_ADDRESS_BOOK_VCARD
     ref<CFDataRef> vcard(ABPersonCopyVCardRepresentation(person), "vcard");
-    SE_LOG_DEBUG(NULL, getDisplayName(), "%*s", (int)CFDataGetLength(vcard), (const char *)CFDataGetBytePtr(vcard));
+    SE_LOG_DEBUG(getDisplayName(), "%*s", (int)CFDataGetLength(vcard), (const char *)CFDataGetBytePtr(vcard));
     item->setData(CFDataGetBytePtr(vcard), CFDataGetLength(vcard));
 #else
     string vcard;
@@ -1319,7 +1319,7 @@ AddressBookSource::InsertItemResult AddressBookSource::insertItem(const string &
         person.set(PersonCreateWrapper(m_addressbook), "contact");
     }
     try {
-        SE_LOG_DEBUG(NULL, getDisplayName(), "storing vCard for %s:\n%s",
+        SE_LOG_DEBUG(getDisplayName(), "storing vCard for %s:\n%s",
                   update ? luid.c_str() : "new contact",
                   data.c_str());
         vCard2ABPerson converter(data, person);
@@ -1367,7 +1367,7 @@ void AddressBookSource::deleteItem(const string &uid)
             throwError(string("deleting contact ") + uid);
         }
     } else {
-        SE_LOG_DEBUG(NULL, getDisplayName(), "%s: %s: request to delete non-existant contact ignored",
+        SE_LOG_DEBUG(getDisplayName(), "%s: %s: request to delete non-existant contact ignored",
                   getName(), uid.c_str());
     }
 }
@@ -1405,7 +1405,7 @@ void AddressBookSource::logItem(const string &uid, const string &info, bool debu
         line += "): ";
         line += info;
         
-        SE_LOG(debug ? Logger::DEBUG : Logger::INFO, this, NULL, "%s", line.c_str() );
+        SE_LOG(getDisplayName(), debug ? Logger::DEBUG : Logger::INFO, "%s", line.c_str() );
     }
 }
 
@@ -1465,7 +1465,7 @@ void AddressBookSource::logItem(const SyncItem &item, const string &info, bool d
         line += ": ";
         line += info;
         
-        SE_LOG(debug ? Logger::DEBUG : Logger::INFO, this, NULL, "%s", line.c_str() );
+        SE_LOG(getDisplayName(), debug ? Logger::DEBUG : Logger::INFO, "%s", line.c_str() );
     }
 }
 

@@ -283,7 +283,7 @@ void CurlTransportAgent::checkCurl(CURLcode code, bool exception)
         if(exception){
             SE_THROW_EXCEPTION(TransportException, m_curlErrorText);
         }else {
-            SE_LOG_INFO(NULL, NULL, "CurlTransport Failure: %s", m_curlErrorText);
+            SE_LOG_INFO(NULL, "CurlTransport Failure: %s", m_curlErrorText);
         }
     }
 }

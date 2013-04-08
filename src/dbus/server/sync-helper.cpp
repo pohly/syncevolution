@@ -39,7 +39,7 @@ namespace {
     // call m_onFailure instead of throwing an exception
     void onFailure(const std::string &error, bool &failed) throw ()
     {
-        SE_LOG_DEBUG(NULL, NULL, "failure, quitting now: %s",  error.c_str());
+        SE_LOG_DEBUG(NULL, "failure, quitting now: %s",  error.c_str());
         failed = true;
     }
 
@@ -119,11 +119,11 @@ int main(int argc, char **argv, char **envp)
         // Run until we are connected, failed or get interrupted.
         boost::signals2::connection c =
             s.m_stateChanged.connect(boost::bind(&onAbort));
-        SE_LOG_DEBUG(NULL, NULL, "helper (pid %d) finished setup, waiting for parent connection", getpid());
+        SE_LOG_DEBUG(NULL, "helper (pid %d) finished setup, waiting for parent connection", getpid());
         while (true) {
             if (s.getState() != SuspendFlags::NORMAL) {
                 // not an error, someone wanted us to stop
-                SE_LOG_DEBUG(NULL, NULL, "aborted via signal while starting, terminating");
+                SE_LOG_DEBUG(NULL, "aborted via signal while starting, terminating");
                 // tell caller that we aborted by terminating via the SIGTERM signal
                 return 0;
             }
@@ -141,12 +141,12 @@ int main(int argc, char **argv, char **envp)
         // TODO: What if the parent fails to call us and instead closes his
         // side of the connection? Will we notice and abort?
         c.disconnect();
-        SE_LOG_DEBUG(NULL, NULL, "connected to parent, run helper");
+        SE_LOG_DEBUG(NULL, "connected to parent, run helper");
 
         helper->run();
-        SE_LOG_DEBUG(NULL, NULL, "helper operation done");
+        SE_LOG_DEBUG(NULL, "helper operation done");
         helper.reset();
-        SE_LOG_DEBUG(NULL, NULL, "helper destroyed");
+        SE_LOG_DEBUG(NULL, "helper destroyed");
 
         // Wait for confirmation from parent that we are allowed to
         // quit. This is necessary because we might have pending IO
@@ -154,20 +154,20 @@ int main(int argc, char **argv, char **envp)
         while (true) {
             if (s.getState() == SuspendFlags::ABORT) {
                 // not an error, someone wanted us to stop
-                SE_LOG_DEBUG(NULL, NULL, "aborted via signal after completing operation, terminating");
+                SE_LOG_DEBUG(NULL, "aborted via signal after completing operation, terminating");
                 return 0;
             }
             if (forkexec->getState() != ForkExecChild::CONNECTED) {
                 // no point running any longer, parent is gone
-                SE_LOG_DEBUG(NULL, NULL, "parent has quit, terminating");
+                SE_LOG_DEBUG(NULL, "parent has quit, terminating");
                 return 1;
             }
             g_main_context_iteration(NULL, true);
         }
     } catch ( const std::exception &ex ) {
-        SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
+        SE_LOG_ERROR(NULL, "%s", ex.what());
     } catch (...) {
-        SE_LOG_ERROR(NULL, NULL, "unknown error");
+        SE_LOG_ERROR(NULL, "unknown error");
     }
 
     return 1;

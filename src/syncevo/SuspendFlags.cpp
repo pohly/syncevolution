@@ -150,7 +150,7 @@ boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(boost::weak_pt
 
 boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
 {
-    SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: (re)activating, currently %s",
+    SE_LOG_DEBUG(NULL, "SuspendFlags: (re)activating, currently %s",
                  m_senderFD > 0 ? "active" : "inactive");
     int fds[2];
     if (pipe(fds)) {
@@ -161,7 +161,7 @@ boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
     fcntl(fds[1], F_SETFL, fcntl(fds[1], F_GETFL) | O_NONBLOCK);
     m_senderFD = fds[1];
     m_receiverFD = fds[0];
-    SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: activating signal handler(s) with fds %d->%d",
+    SE_LOG_DEBUG(NULL, "SuspendFlags: activating signal handler(s) with fds %d->%d",
                  m_senderFD, m_receiverFD);
     sigaction(SIGINT, NULL, &m_oldSigInt);
     sigaction(SIGTERM, NULL, &m_oldSigTerm);
@@ -181,11 +181,11 @@ boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
     }
     if (m_oldSigInt.sa_handler == SIG_DFL) {
         sigaction(SIGINT, &new_action, NULL);
-        SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: catch SIGINT");
+        SE_LOG_DEBUG(NULL, "SuspendFlags: catch SIGINT");
     }
     if (m_oldSigTerm.sa_handler == SIG_DFL) {
         sigaction(SIGTERM, &new_action, NULL);
-        SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: catch SIGTERM");
+        SE_LOG_DEBUG(NULL, "SuspendFlags: catch SIGTERM");
     }
 
     return boost::shared_ptr<Guard>(new GLibGuard(m_receiverFD));
@@ -193,18 +193,18 @@ boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
 
 void SuspendFlags::deactivate()
 {
-    SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: deactivating fds %d->%d",
+    SE_LOG_DEBUG(NULL, "SuspendFlags: deactivating fds %d->%d",
                  m_senderFD, m_receiverFD);
     if (m_receiverFD >= 0) {
         sigaction(SIGTERM, &m_oldSigTerm, NULL);
         sigaction(SIGINT, &m_oldSigInt, NULL);
-        SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: close m_receiverFD %d", m_receiverFD);
+        SE_LOG_DEBUG(NULL, "SuspendFlags: close m_receiverFD %d", m_receiverFD);
         close(m_receiverFD);
-        SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: close m_senderFD %d", m_senderFD);
+        SE_LOG_DEBUG(NULL, "SuspendFlags: close m_senderFD %d", m_senderFD);
         close(m_senderFD);
         m_receiverFD = -1;
         m_senderFD = -1;
-        SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: done with deactivation");
+        SE_LOG_DEBUG(NULL, "SuspendFlags: done with deactivation");
     }
 }
 
@@ -266,7 +266,7 @@ void SuspendFlags::printSignals()
     if (m_receiverFD >= 0) {
         unsigned char msg;
         while (read(m_receiverFD, &msg, 1) == 1) {
-            SE_LOG_DEBUG(NULL, NULL, "SuspendFlags: read %d from fd %d",
+            SE_LOG_DEBUG(NULL, "SuspendFlags: read %d from fd %d",
                          msg, m_receiverFD);
             const char *str = NULL;
             switch (msg) {
@@ -284,9 +284,9 @@ void SuspendFlags::printSignals()
                 break;
             }
             if (!str) {
-                SE_LOG_DEBUG(NULL, NULL, "internal error: received invalid signal msg %d", msg);
+                SE_LOG_DEBUG(NULL, "internal error: received invalid signal msg %d", msg);
             } else {
-                SE_LOG(m_level, NULL, NULL, "%s", str);
+                SE_LOG(NULL, m_level, "%s", str);
             }
             m_stateChanged(*this);
         }

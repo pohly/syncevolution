@@ -30,7 +30,7 @@ DBusTransportAgent::DBusTransportAgent(SessionHelper &helper) :
 
 void DBusTransportAgent::serverAlerted()
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: server alerted (old state: %s, %s)",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: server alerted (old state: %s, %s)",
                  SessionCommon::ConnectionStateToString(m_state).c_str(),
                  m_error.c_str());
     if (m_state == SessionCommon::SETUP) {
@@ -44,7 +44,7 @@ void DBusTransportAgent::serverAlerted()
 void DBusTransportAgent::storeMessage(const GDBusCXX::DBusArray<uint8_t> &buffer,
                                       const std::string &type)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: store incoming message, %ld bytes, %s (old state: %s, %s)",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: store incoming message, %ld bytes, %s (old state: %s, %s)",
                  (long)buffer.first,
                  type.c_str(),
                  SessionCommon::ConnectionStateToString(m_state).c_str(),
@@ -68,7 +68,7 @@ void DBusTransportAgent::storeMessage(const GDBusCXX::DBusArray<uint8_t> &buffer
 
 void DBusTransportAgent::storeState(const std::string &error)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: got error '%s', current error is '%s', state %s",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: got error '%s', current error is '%s', state %s",
                  error.c_str(), m_error.c_str(), SessionCommon::ConnectionStateToString(m_state).c_str());
 
     if (!error.empty()) {
@@ -88,7 +88,7 @@ void DBusTransportAgent::storeState(const std::string &error)
 
 void DBusTransportAgent::send(const char *data, size_t len)
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: outgoing message %ld bytes, %s, %s",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: outgoing message %ld bytes, %s, %s",
                  (long)len, m_type.c_str(), m_url.c_str());
     if (m_state != SessionCommon::PROCESSING) {
         SE_THROW_EXCEPTION(TransportException,
@@ -103,7 +103,7 @@ void DBusTransportAgent::send(const char *data, size_t len)
 
 void DBusTransportAgent::shutdown()
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: shut down (old state: %s, %s)",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: shut down (old state: %s, %s)",
                  SessionCommon::ConnectionStateToString(m_state).c_str(),
                  m_error.c_str());
     if (m_state == SessionCommon::PROCESSING) {
@@ -114,7 +114,7 @@ void DBusTransportAgent::shutdown()
 
 void DBusTransportAgent::doWait()
 {
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: wait - old state: %s, %s",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: wait - old state: %s, %s",
                  SessionCommon::ConnectionStateToString(m_state).c_str(),
                  m_error.c_str());
     if (SuspendFlags::getSuspendFlags().getState() == SuspendFlags::NORMAL) {
@@ -123,7 +123,7 @@ void DBusTransportAgent::doWait()
         // wake us up.
         g_main_context_iteration(NULL, true);
     }
-    SE_LOG_DEBUG(NULL, NULL, "D-Bus transport: wait - new state: %s, %s",
+    SE_LOG_DEBUG(NULL, "D-Bus transport: wait - new state: %s, %s",
                  SessionCommon::ConnectionStateToString(m_state).c_str(),
                  m_error.c_str());
 }

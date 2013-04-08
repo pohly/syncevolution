@@ -590,7 +590,7 @@ Session::Session(Server &server,
     add(emitStatus);
     add(emitProgress);
 
-    SE_LOG_DEBUG(NULL, NULL, "session %s created", getPath());
+    SE_LOG_DEBUG(NULL, "session %s created", getPath());
 }
 
 void Session::passwordRequest(const std::string &descr, const ConfigPasswordKey &key)
@@ -603,7 +603,7 @@ void Session::dbusResultCb(const std::string &operation, bool success, const std
 {
     Session::LoggingGuard guard(this);
     try {
-        SE_LOG_DEBUG(NULL, NULL, "%s helper call completed, %s",
+        SE_LOG_DEBUG(NULL, "%s helper call completed, %s",
                      operation.c_str(),
                      !error.empty() ? error.c_str() :
                      success ? "<<successfully>>" :
@@ -652,7 +652,7 @@ void Session::failureCb() throw()
             }
             // set error, but don't overwrite older one
             if (!m_error) {
-                SE_LOG_DEBUG(NULL, NULL, "session failed: remember %d error", error);
+                SE_LOG_DEBUG(NULL, "session failed: remember %d error", error);
                 m_error = error;
             }
             // will fire status signal, including the error
@@ -690,7 +690,7 @@ void Session::doneCb(bool success) throw()
             m_server.m_configChangedSignal(m_configName);
         }
 
-        SE_LOG_DEBUG(NULL, NULL, "session %s done, config %s, %s, result %d",
+        SE_LOG_DEBUG(NULL, "session %s done, config %s, %s, result %d",
                      getPath(),
                      m_configName.c_str(),
                      m_setConfig ? "modified" : "not modified",
@@ -713,7 +713,7 @@ void Session::doneCb(bool success) throw()
 
 Session::~Session()
 {
-    SE_LOG_DEBUG(NULL, NULL, "session %s deconstructing", getPath());
+    SE_LOG_DEBUG(NULL, "session %s deconstructing", getPath());
     doneCb();
 }
 
@@ -879,7 +879,7 @@ void Session::onConnect(const GDBusCXX::DBusConnectionPtr &conn) throw ()
 {
     Session::LoggingGuard guard(this);
     try {
-        SE_LOG_DEBUG(NULL, NULL, "helper has connected");
+        SE_LOG_DEBUG(NULL, "helper has connected");
         m_helper.reset(new SessionProxy(conn));
 
         // Activate signal watch on helper signals.
@@ -898,19 +898,19 @@ void Session::onQuit(int status) throw ()
 {
     Session::LoggingGuard guard(this);
     try {
-        SE_LOG_DEBUG(NULL, NULL, "helper quit with return code %d, was %s",
+        SE_LOG_DEBUG(NULL, "helper quit with return code %d, was %s",
                      status,
                      m_wasAborted ? "aborted" : "not aborted");
         if (m_status == SESSION_DONE) {
             // don't care anymore whether the helper goes down, not an error
-            SE_LOG_DEBUG(NULL, NULL, "session already completed, ignore helper");
+            SE_LOG_DEBUG(NULL, "session already completed, ignore helper");
         } else if (m_wasAborted  &&
                    ((WIFEXITED(status) && WEXITSTATUS(status) == 0) ||
                     (WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM))) {
-            SE_LOG_DEBUG(NULL, NULL, "helper terminated via SIGTERM, as expected");
+            SE_LOG_DEBUG(NULL, "helper terminated via SIGTERM, as expected");
             if (!m_error) {
                 m_error = sysync::LOCERR_USERABORT;
-                SE_LOG_DEBUG(NULL, NULL, "helper was asked to quit -> error %d = LOCERR_USERABORT",
+                SE_LOG_DEBUG(NULL, "helper was asked to quit -> error %d = LOCERR_USERABORT",
                              m_error);
             }
         } else {
@@ -943,7 +943,7 @@ void Session::onFailure(SyncMLStatus status, const std::string &explanation) thr
 {
     Session::LoggingGuard guard(this);
     try {
-        SE_LOG_DEBUG(NULL, NULL, "helper failed, status code %d = %s, %s",
+        SE_LOG_DEBUG(NULL, "helper failed, status code %d = %s, %s",
                      status,
                      Status2String(status).c_str(),
                      explanation.c_str());
@@ -958,7 +958,7 @@ void Session::onOutput(const char *buffer, size_t length)
     // treat null-bytes inside the buffer like line breaks
     size_t off = 0;
     do {
-        SE_LOG_ERROR(NULL, "session-helper", "%s", buffer + off);
+        SE_LOG_ERROR("session-helper", "%s", buffer + off);
         off += strlen(buffer + off) + 1;
     } while (off < length);
 }
@@ -1018,7 +1018,7 @@ void Session::syncProgress(sysync::TProgressEventEnum type,
         // result of the sync method invocation.
         //
         // if((uint32_t)extra1 != m_error) {
-        //     SE_LOG_DEBUG(NULL, NULL, "session sync progress: failed with code %d", extra1);
+        //     SE_LOG_DEBUG(NULL, "session sync progress: failed with code %d", extra1);
         //     m_error = extra1;
         //     fireStatus(true);
         // }

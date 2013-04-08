@@ -188,7 +188,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
         if (it == revisions.end() ||
             it->second.m_revision != item.second) {
             // read current information below
-            SE_LOG_DEBUG(NULL, NULL, "updateAllSubItems(): read new or modified item %s", item.first.c_str());
+            SE_LOG_DEBUG(NULL, "updateAllSubItems(): read new or modified item %s", item.first.c_str());
             mustRead.push_back(item.first);
             // The server told us that the item exists. We still need
             // to deal with the situation that the server might fail
@@ -210,7 +210,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
             m_cache.erase(item.first);
         } else {
             // copy still relevant information
-            SE_LOG_DEBUG(NULL, NULL, "updateAllSubItems(): unmodified item %s", it->first.c_str());
+            SE_LOG_DEBUG(NULL, "updateAllSubItems(): unmodified item %s", it->first.c_str());
             addSubItem(it->first, it->second);
         }
     }
@@ -343,7 +343,7 @@ int CalDAVSource::appendItem(SubRevisionMap_t &revisions,
     // after using it for a while. Deleting them via DELETE doesn't seem
     // to have an effect either, so all we really can do is ignore them.
     if (entry.m_subids.empty()) {
-        SE_LOG_DEBUG(NULL, NULL, "ignoring broken item %s (is empty)", davLUID.c_str());
+        SE_LOG_DEBUG(NULL, "ignoring broken item %s (is empty)", davLUID.c_str());
         revisions.erase(davLUID);
         m_cache.erase(davLUID);
         data.clear();
@@ -513,7 +513,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             Event::escapeRecurrenceID(buffer);
             data = &buffer;
         }
-        SE_LOG_DEBUG(NULL, getDisplayName(), "inserting new VEVENT");
+        SE_LOG_DEBUG(getDisplayName(), "inserting new VEVENT");
         res = insertItem(name, *data, true);
         subres.m_mainid = res.m_luid;
         subres.m_uid = newEvent->m_UID;
@@ -578,7 +578,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                 if (mangleRecurrenceID) {
                     Event::escapeRecurrenceID(buffer);
                 }
-                SE_LOG_DEBUG(NULL, NULL, "resending VEVENT to get rid of VALARM");
+                SE_LOG_DEBUG(NULL, "resending VEVENT to get rid of VALARM");
                 res = insertItem(name, *data, true);
                 newEvent->m_etag =
                     subres.m_revision = res.m_revision;
@@ -720,7 +720,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
 
         // TODO: avoid updating item on server immediately?
         try {
-            SE_LOG_DEBUG(NULL, getDisplayName(), "updating VEVENT");
+            SE_LOG_DEBUG(getDisplayName(), "updating VEVENT");
             InsertItemResult res = insertItem(event.m_DAVluid, data, true);
             if (res.m_state != ITEM_OKAY ||
                 res.m_luid != event.m_DAVluid) {
@@ -749,14 +749,14 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                 // a detached recurrence had to be added to an existing meeting
                 // series. Ignoring the problem means would keep the detached
                 // recurrence out of the server permanently.
-                SE_LOG_INFO(NULL, getDisplayName(), "%s: not updated because CalDAV server refused write access for it",
+                SE_LOG_INFO(getDisplayName(), "%s: not updated because CalDAV server refused write access for it",
                             getSubDescription(event, subid).c_str());
                 subres.m_merged = true;
                 subres.m_revision = event.m_etag;
 #endif
             } else if (ex.syncMLStatus() == 409 &&
                        strstr(ex.what(), "Can only store an event with a newer DTSTAMP")) {
-                SE_LOG_DEBUG(NULL, NULL, "resending VEVENT with updated SEQUENCE/LAST-MODIFIED/DTSTAMP to work around 409");
+                SE_LOG_DEBUG(NULL, "resending VEVENT with updated SEQUENCE/LAST-MODIFIED/DTSTAMP to work around 409");
 
                 // Sometimes a PUT of two linked events updates one of them on the server
                 // (visible in modified SEQUENCE and LAST-MODIFIED values) and then
@@ -913,7 +913,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
     if (event.m_subids.size() == 1) {
         // remove entire merged item, nothing will be left after removal
         if (*event.m_subids.begin() != subid) {
-            SE_LOG_DEBUG(NULL, getDisplayName(), "%s: request to remove the %s recurrence: only the %s recurrence exists",
+            SE_LOG_DEBUG(getDisplayName(), "%s: request to remove the %s recurrence: only the %s recurrence exists",
                          davLUID.c_str(),
                          SubIDName(subid).c_str(),
                          SubIDName(*event.m_subids.begin()).c_str());
@@ -945,7 +945,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                         }
                     }
                     if (updated) {
-                        SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack: remove RRULE before deleting");
+                        SE_LOG_DEBUG(getDisplayName(), "Google recurring event delete hack: remove RRULE before deleting");
                         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
                         insertSubItem(davLUID, subid, icalstr.get());
                         // It has been observed that trying the DELETE immediately
@@ -956,13 +956,13 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                         // try a few times before giving up.
                         for (int retry = 0; retry < 5; retry++) {
                             try {
-                                SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack: remove event, attempt #%d", retry);
+                                SE_LOG_DEBUG(getDisplayName(), "Google recurring event delete hack: remove event, attempt #%d", retry);
                                 removeSubItem(davLUID, subid);
                                 break;
                             } catch (const TransportStatusException &ex2) {
                                 if (ex2.syncMLStatus() == 409 &&
                                     strstr(ex2.what(), "Can't delete a recurring event")) {
-                                    SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack: try again in a second");
+                                    SE_LOG_DEBUG(getDisplayName(), "Google recurring event delete hack: try again in a second");
                                     Sleep(1);
                                 } else {
                                     throw;
@@ -970,7 +970,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                             }
                         }
                     } else {
-                        SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack not applicable, giving up");
+                        SE_LOG_DEBUG(getDisplayName(), "Google recurring event delete hack not applicable, giving up");
                         throw;
                     }
                 } else {
@@ -1031,7 +1031,7 @@ void CalDAVSource::removeMergedItem(const std::string &davLUID)
     EventCache::iterator it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         // gone already, no need to do anything
-        SE_LOG_DEBUG(NULL, getDisplayName(), "%s: ignoring request to delete non-existent item",
+        SE_LOG_DEBUG(getDisplayName(), "%s: ignoring request to delete non-existent item",
                      davLUID.c_str());
         return;
     }
@@ -1144,7 +1144,7 @@ int CalDAVSource::storeItem(const std::string &wantedLuid,
 {
     std::string luid = path2luid(Neon::URI::parse(href).m_path);
     if (luid == wantedLuid) {
-        SE_LOG_DEBUG(NULL, NULL, "got item %s via REPORT fallback", luid.c_str());
+        SE_LOG_DEBUG(NULL, "got item %s via REPORT fallback", luid.c_str());
         item = data;
     }
     data.clear();
@@ -1473,7 +1473,7 @@ int CalDAVSource::backupItem(ItemCache &cache,
         std::string rev = ETag2Rev(etag);
         cache.backupItem(data, luid, rev);
     } else {
-        SE_LOG_DEBUG(NULL, NULL, "ignoring broken item %s during backup (is empty)", href.c_str());
+        SE_LOG_DEBUG(NULL, "ignoring broken item %s during backup (is empty)", href.c_str());
     }
 
     // reset data for next item

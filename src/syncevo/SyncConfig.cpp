@@ -498,7 +498,7 @@ SyncConfig::SyncConfig(const string &peer,
          level = (ConfigLevel)(level + 1)) {
         if (exists(level)) {
             if (getConfigVersion(level, CONFIG_MIN_VERSION) > ConfigVersions[level][CONFIG_CUR_VERSION]) {
-                SE_LOG_INFO(NULL, NULL, "config version check failed: %s has format %d, but this SyncEvolution release only supports format %d",
+                SE_LOG_INFO(NULL, "config version check failed: %s has format %d, but this SyncEvolution release only supports format %d",
                             ConfigLevel2String(level).c_str(),
                             getConfigVersion(level, CONFIG_MIN_VERSION),
                             ConfigVersions[level][CONFIG_CUR_VERSION]);
@@ -546,7 +546,7 @@ void SyncConfig::prepareConfigForWrite()
                     // keep compiler happy, not reached for _MAX
                     break;
                 }
-                SE_LOG_INFO(NULL, NULL, "must change format of %s '%s' in backward-incompatible way",
+                SE_LOG_INFO(NULL, "must change format of %s '%s' in backward-incompatible way",
                             ConfigLevel2String(level).c_str(),
                             config.c_str());
                 if (m_configWriteMode == MIGRATE_AUTOMATICALLY) {

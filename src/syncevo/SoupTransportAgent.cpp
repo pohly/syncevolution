@@ -184,7 +184,7 @@ TransportAgent::Status SoupTransportAgent::wait(bool noReply)
     if(m_status == TIME_OUT || m_status == FAILED){
         std::string failure;
         std::swap(failure, m_failure);
-        SE_LOG_INFO(NULL, NULL, "SoupTransport Failure: %s", failure.c_str());
+        SE_LOG_INFO(NULL, "SoupTransport Failure: %s", failure.c_str());
     }
     if (!m_failure.empty()) {
         std::string failure;
@@ -237,7 +237,7 @@ void SoupTransportAgent::HandleSessionCallback(SoupSession *session,
         m_status = FAILED;
 
         if (m_responseContentType.find("text") != std::string::npos) {
-            SE_LOG_DEBUG(NULL, NULL, "unexpected HTTP response: status %d/%s, content type %s, body:\n%.*s",
+            SE_LOG_DEBUG(NULL, "unexpected HTTP response: status %d/%s, content type %s, body:\n%.*s",
                          msg->status_code, msg->reason_phrase ? msg->reason_phrase : "<no reason>",
                          m_responseContentType.c_str(),
                          m_response ? (int)m_response->length : 0,

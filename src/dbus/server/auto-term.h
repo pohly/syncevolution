@@ -53,12 +53,12 @@ class AutoTerm {
             time_t now = time(NULL);
             if (at->m_lastUsed + at->m_interval <= now) {
                 // yes, shut down event loop and daemon
-                SE_LOG_DEBUG(NULL, NULL, "terminating because not in use and idle for more than %ld seconds", (long)at->m_interval);
+                SE_LOG_DEBUG(NULL, "terminating because not in use and idle for more than %ld seconds", (long)at->m_interval);
                 at->m_shutdownRequested = true;
                 g_main_loop_quit(at->getLoop());
             } else {
                 // check again later
-                SE_LOG_DEBUG(NULL, NULL, "not terminating because last used %ld seconds ago, check again in %ld seconds",
+                SE_LOG_DEBUG(NULL, "not terminating because last used %ld seconds ago, check again in %ld seconds",
                              (long)(now - at->m_lastUsed),
                              (long)(at->m_lastUsed + at->m_interval - now));
                 at->m_checkSource = g_timeout_add_seconds(at->m_lastUsed + at->m_interval - now,
@@ -66,7 +66,7 @@ class AutoTerm {
                                                           data);
             }
         } else {
-            SE_LOG_DEBUG(NULL, NULL, "not terminating, not renewing timeout because busy");
+            SE_LOG_DEBUG(NULL, "not terminating, not renewing timeout because busy");
         }
         // always remove the current timeout, its job is done
         return FALSE;
@@ -130,7 +130,7 @@ public:
         if (m_refs > 0) {
             // in use, don't need timeout
             if (m_checkSource) {
-                SE_LOG_DEBUG(NULL, NULL, "deactivating idle termination because in use");
+                SE_LOG_DEBUG(NULL, "deactivating idle termination because in use");
                 g_source_remove(m_checkSource);
                 m_checkSource = 0;
             }
@@ -140,7 +140,7 @@ public:
             // reset the timer. Therefore we don't have to remove it.
             m_lastUsed = time(NULL);
             if (!m_checkSource) {
-                SE_LOG_DEBUG(NULL, NULL, "activating idle termination in %ld seconds because idle", m_interval);
+                SE_LOG_DEBUG(NULL, "activating idle termination in %ld seconds because idle", m_interval);
                 m_checkSource = g_timeout_add_seconds(m_interval,
                                                       checkCallback,
                                                       static_cast<gpointer>(this));

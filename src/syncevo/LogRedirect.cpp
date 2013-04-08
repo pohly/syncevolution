@@ -54,7 +54,7 @@ std::set<std::string> LogRedirect::m_knownErrors;
 void LogRedirect::abortHandler(int sig) throw()
 {
     // Don't know state of logging system, don't log here!
-    // SE_LOG_ERROR(NULL, NULL, "caught signal %d, shutting down", sig);
+    // SE_LOG_ERROR(NULL, "caught signal %d, shutting down", sig);
 
     // shut down redirection, also flushes to log
     if (m_redirect) {

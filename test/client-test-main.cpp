@@ -142,7 +142,7 @@ public:
             m_logger->setLevel(Logger::DEBUG);
             LoggerBase::pushLogger(m_logger.get());
         }
-        SE_LOG_DEBUG(NULL, NULL, "*** starting %s ***", m_currentTest.c_str());
+        SE_LOG_DEBUG(NULL, "*** starting %s ***", m_currentTest.c_str());
         m_failures.reset();
         m_testFailed = false;
 
@@ -188,9 +188,9 @@ public:
             result = "okay";
         }
 
-        SE_LOG_DEBUG(NULL, NULL, "*** ending %s: %s ***", m_currentTest.c_str(), result.c_str());
+        SE_LOG_DEBUG(NULL, "*** ending %s: %s ***", m_currentTest.c_str(), result.c_str());
         if (!failure.empty()) {
-            SE_LOG_ERROR(NULL, NULL, "%s", failure.c_str());
+            SE_LOG_ERROR(NULL, "%s", failure.c_str());
         }
         if (&LoggerBase::instance() == m_logger.get()) {
             LoggerBase::popLogger();

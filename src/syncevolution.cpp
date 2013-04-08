@@ -196,7 +196,7 @@ private:
                             const std::string &newOwner)
     {
         if (name == "org.syncevolution") {
-            SE_LOG_ERROR(NULL, NULL, "The SyncEvolution D-Bus service died unexpectedly. A running sync might still be able to complete normally, but the command line cannot report progress anymore and has to quit.");
+            SE_LOG_ERROR(NULL, "The SyncEvolution D-Bus service died unexpectedly. A running sync might still be able to complete normally, but the command line cannot report progress anymore and has to quit.");
             m_result = false;
             g_main_loop_quit(m_loop);
         }
@@ -473,7 +473,7 @@ int main( int argc, char **argv )
             }
             return 1;
 #else
-            SE_LOG_ERROR(NULL, NULL, "this syncevolution binary was compiled without support for monitoring a background sync");
+            SE_LOG_ERROR(NULL, "this syncevolution binary was compiled without support for monitoring a background sync");
             return 1;
 #endif
         } else if(cmdline.status() && 
@@ -488,7 +488,7 @@ int main( int argc, char **argv )
             }
             return 1;
 #else
-            SE_LOG_SHOW(NULL, NULL, "this syncevolution binary was compiled without support for monitoring a background sync");
+            SE_LOG_SHOW(NULL, "this syncevolution binary was compiled without support for monitoring a background sync");
             return 1;
 #endif
         } else if (useDaemon ||
@@ -504,12 +504,12 @@ int main( int argc, char **argv )
             } else {
                 // User didn't select --use-daemon and thus doesn't need to know about it
                 // not being available.
-                // SE_LOG_SHOW(NULL, NULL, "WARNING: cannot run syncevolution as daemon. "
+                // SE_LOG_SHOW(NULL, "WARNING: cannot run syncevolution as daemon. "
                 //             "Trying to run it without daemon.");
             }
 #else
             if (useDaemon.wasSet()) {
-                SE_LOG_SHOW(NULL, NULL, "ERROR: this syncevolution binary was compiled without support of daemon. "
+                SE_LOG_SHOW(NULL, "ERROR: this syncevolution binary was compiled without support of daemon. "
                             "Either run syncevolution with '--use-daemon=no' or without that option."); 
                 return 1;
             }
@@ -535,9 +535,9 @@ int main( int argc, char **argv )
             }
         }
     } catch ( const std::exception &ex ) {
-        SE_LOG_ERROR(NULL, NULL, "%s", ex.what());
+        SE_LOG_ERROR(NULL, "%s", ex.what());
     } catch (...) {
-        SE_LOG_ERROR(NULL, NULL, "unknown error");
+        SE_LOG_ERROR(NULL, "unknown error");
     }
 
     return 1;
@@ -575,7 +575,7 @@ bool RemoteDBusServer::checkStarted(bool printError)
 {
     if(!m_attached) {
         if (printError) {
-            SE_LOG_ERROR(NULL, NULL, "SyncEvolution D-Bus server not available.");
+            SE_LOG_ERROR(NULL, "SyncEvolution D-Bus server not available.");
         }
         return false;
     }
@@ -616,12 +616,12 @@ void RemoteDBusServer::versionCb(const StringMap &versions,
 {
     replyInc();
     if (!error.empty()) {
-        SE_LOG_DEBUG(NULL, NULL, "Server.GetVersions(): %s", error.c_str());
+        SE_LOG_DEBUG(NULL, "Server.GetVersions(): %s", error.c_str());
     } else {
         StringMap::const_iterator it = versions.find("version");
         if (it != versions.end() &&
             it->second != VERSION) {
-            SE_LOG_INFO(NULL, NULL,
+            SE_LOG_INFO(NULL,
                         "proceeding despite version mismatch between command line client 'syncevolution' and 'syncevo-dbus-server' (%s != %s)",
                         it->second.c_str(),
                         VERSION);
@@ -667,7 +667,7 @@ void RemoteDBusServer::infoResponseCb(const string &error)
 {
     replyInc();
     if(!error.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "information response failed.");
+        SE_LOG_ERROR(NULL, "information response failed.");
         m_result = false;
     }
     g_main_loop_quit(m_loop);
@@ -683,7 +683,7 @@ void RemoteDBusServer::sessionChangedCb(const DBusObject_t &object, bool active)
 void RemoteDBusServer::daemonGone()
 {
     //print error info and exit
-    SE_LOG_ERROR(NULL, NULL, "Background sync daemon has gone.");
+    SE_LOG_ERROR(NULL, "Background sync daemon has gone.");
     exit(1);
 }
 
@@ -782,9 +782,9 @@ void RemoteDBusServer::startSessionCb(const DBusObject_t &sessionPath, const str
 {
     replyInc();
     if(!error.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "starting D-Bus session failed: %s", error.c_str());
+        SE_LOG_ERROR(NULL, "starting D-Bus session failed: %s", error.c_str());
         if (error.find("org.freedesktop.DBus.Error.UnknownMethod") != error.npos) {
-            SE_LOG_INFO(NULL, NULL, "syncevo-dbus-server is most likely too old");
+            SE_LOG_INFO(NULL, "syncevo-dbus-server is most likely too old");
         }
         m_result = false;
         g_main_loop_quit(m_loop);
@@ -816,9 +816,9 @@ void RemoteDBusServer::runningSessions()
     vector<DBusObject_t> sessions = DBusClientCall1< vector<DBusObject_t> >(*this, "GetSessions")();
 
     if (sessions.empty()) {
-        SE_LOG_SHOW(NULL, NULL, "Background sync daemon is idle.");
+        SE_LOG_SHOW(NULL, "Background sync daemon is idle.");
     } else {
-        SE_LOG_SHOW(NULL, NULL, "Running session(s): ");
+        SE_LOG_SHOW(NULL, "Running session(s): ");
 
         // create local objects for sessions
         BOOST_FOREACH(const DBusObject_t &path, sessions) {
@@ -837,7 +837,7 @@ void RemoteDBusServer::runningSessions()
                 session.setConfigName(config);
 
                 if (!session.configName().empty()) {
-                    SE_LOG_SHOW(NULL, NULL, "   %s (%s)", session.configName().c_str(), session.getPath());
+                    SE_LOG_SHOW(NULL, "   %s (%s)", session.configName().c_str(), session.getPath());
                 }
             }
         }
@@ -879,7 +879,7 @@ bool RemoteDBusServer::monitor(const string &peer)
     vector<DBusObject_t> sessions = DBusClientCall1< vector<DBusObject_t> >(*this, "GetSessions")();
 
     if (sessions.empty()) {
-        SE_LOG_SHOW(NULL, NULL, "Background sync daemon is idle, no session available to be be monitored.");
+        SE_LOG_SHOW(NULL, "Background sync daemon is idle, no session available to be be monitored.");
     } else {
         // cheating: client and server might normalize the peer name differently...
         string peerNorm = SyncConfig::normalizeConfigString(peer);
@@ -897,9 +897,9 @@ bool RemoteDBusServer::monitor(const string &peer)
 
                 if (peer.empty() ||
                     peerNorm == session->configName()) {
-                    SE_LOG(Logger::SHOW, NULL, NULL, "Monitoring '%s' (%s)\n",
-                           session->configName().c_str(),
-                           session->getPath());
+                    SE_LOG_SHOW(NULL, "Monitoring '%s' (%s)\n",
+                                session->configName().c_str(),
+                                session->getPath());
                     // set DBusServer::m_session so that RemoteSession::logOutput gets called
                     // and enable printing that output
                     m_session = session;
@@ -910,12 +910,12 @@ bool RemoteDBusServer::monitor(const string &peer)
                         g_main_loop_run(getLoop());
                     }
 
-                    SE_LOG(Logger::SHOW, NULL, NULL, "Monitoring done");
+                    SE_LOG_SHOW(NULL, "Monitoring done");
                     return true;
                 }
             }
         }
-        SE_LOG_SHOW(NULL, NULL, "'%s' is not running.", peer.c_str());
+        SE_LOG_SHOW(NULL, "'%s' is not running.", peer.c_str());
     }
     return false;
 }
@@ -948,7 +948,7 @@ void RemoteSession::executeCb(const string &error)
 {
     m_server.replyInc();
     if(!error.empty()) {
-        SE_LOG_ERROR(NULL, NULL, "running the command line inside the D-Bus server failed");
+        SE_LOG_ERROR(NULL, "running the command line inside the D-Bus server failed");
         m_server.setResult(false);
         //end to print outputs
         m_output = false;
@@ -989,7 +989,7 @@ void RemoteSession::setConfigName(const Config_t &config)
 static void interruptCb(const std::string &error)
 {
     if (!error.empty()) {
-        SE_LOG_DEBUG(NULL, NULL, "interruptAsync() error from remote: %s", error.c_str());
+        SE_LOG_DEBUG(NULL, "interruptAsync() error from remote: %s", error.c_str());
     }
 }
 
@@ -1004,7 +1004,7 @@ void RemoteSession::logOutput(Logger::Level level, const string &log, const stri
 {
     if(m_output) {
         ProcNameGuard guard(procname);
-        SE_LOG(level, NULL, NULL, "%s", log.c_str());
+        SE_LOG(NULL, level, "%s", log.c_str());
     }
 }
 
@@ -1051,7 +1051,7 @@ void RemoteSession::handleInfoReq(const string &type, const StringMap &params, S
             }
             resp["password"] = string(buffer);
         } else {
-            SE_LOG_ERROR(NULL, NULL, "could not read password for %s", descr.c_str());
+            SE_LOG_ERROR(NULL, "could not read password for %s", descr.c_str());
         }
     }
 }

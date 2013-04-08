@@ -82,7 +82,7 @@ void MergeView::addEDSIndividual(const FolksIndividualCXX &individual) throw ()
                              IndividualDataCompare(m_compare));
         size_t index = it - m_entries.begin();
         it = m_entries.insert(it, data.release());
-        SE_LOG_DEBUG(NULL, NULL, "%s: added at #%ld/%ld", getName(), (long)index, (long)m_entries.size());
+        SE_LOG_DEBUG(NULL, "%s: added at #%ld/%ld", getName(), (long)index, (long)m_entries.size());
         m_addedSignal(index, *it);
     } catch (...) {
         Exception::handle(HANDLE_EXCEPTION_NO_ERROR);
@@ -92,14 +92,14 @@ void MergeView::addEDSIndividual(const FolksIndividualCXX &individual) throw ()
 void MergeView::edsDone(const std::string &uuid) throw ()
 {
     try {
-        SE_LOG_DEBUG(NULL, NULL, "%s: %s is done", getName(), uuid.c_str());
+        SE_LOG_DEBUG(NULL, "%s: %s is done", getName(), uuid.c_str());
         BOOST_FOREACH (const Searches::value_type &search, m_searches) {
             if (!search->isQuiescent()) {
-                SE_LOG_DEBUG(NULL, NULL, "%s: still waiting for %s", getName(), search->getName());
+                SE_LOG_DEBUG(NULL, "%s: still waiting for %s", getName(), search->getName());
                 return;
             }
         }
-        SE_LOG_DEBUG(NULL, NULL, "%s: all EDS searches done, %s", getName(), m_viewReady ? "folks also done" : "still waiting for folks, send quiescent now");
+        SE_LOG_DEBUG(NULL, "%s: all EDS searches done, %s", getName(), m_viewReady ? "folks also done" : "still waiting for folks, send quiescent now");
         if (!m_viewReady) {
             // folks is still busy, this may take a while. Therefore
             // flush current status.
@@ -148,7 +148,7 @@ void MergeView::viewReady() throw ()
         if (!m_viewReady) {
             m_viewReady = true;
 
-            SE_LOG_DEBUG(NULL, NULL, "%s: folks is ready: %d entries from EDS, %d from folks",
+            SE_LOG_DEBUG(NULL, "%s: folks is ready: %d entries from EDS, %d from folks",
                          getName(),
                          (int)m_entries.size(),
                          (int)m_view->size());
@@ -163,7 +163,7 @@ void MergeView::viewReady() throw ()
                 // that if the underlying contacts are identical, then
                 // so must be the data.
                 if (!SamePersonas(oldData.m_individual, newData->m_individual)) {
-                    SE_LOG_DEBUG(NULL, NULL, "%s: entry #%d modified",
+                    SE_LOG_DEBUG(NULL, "%s: entry #%d modified",
                                  getName(),
                                  index);
                     m_modifiedSignal(index, *newData);
@@ -171,7 +171,7 @@ void MergeView::viewReady() throw ()
             }
             for (; index < m_view->size(); index++) {
                 const IndividualData *newData = m_view->getContact(index);
-                SE_LOG_DEBUG(NULL, NULL, "%s: entry #%d added",
+                SE_LOG_DEBUG(NULL, "%s: entry #%d added",
                              getName(),
                              index);
                 m_addedSignal(index, *newData);
@@ -181,7 +181,7 @@ void MergeView::viewReady() throw ()
             int removeAt = index;
             for (; index < (int)m_entries.size(); index++) {
                 const IndividualData &oldData = m_entries[index];
-                SE_LOG_DEBUG(NULL, NULL, "%s: entry #%d removed",
+                SE_LOG_DEBUG(NULL, "%s: entry #%d removed",
                              getName(),
                              index);
                 m_removedSignal(removeAt, oldData);
@@ -196,7 +196,7 @@ void MergeView::viewReady() throw ()
             } catch (...) {
                 Exception::handle(HANDLE_EXCEPTION_NO_ERROR);
             }
-            SE_LOG_DEBUG(NULL, NULL, "%s: switched to folks, quiescent", getName());
+            SE_LOG_DEBUG(NULL, "%s: switched to folks, quiescent", getName());
             m_quiescenceSignal();
         }
     } catch (...) {

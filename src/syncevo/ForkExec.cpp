@@ -152,7 +152,7 @@ void ForkExecParent::start()
     // boost::shared_ptr<ForkExecParent> me = ...;
     GDBusCXX::DBusErrorCXX dbusError;
 
-    SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: preparing for child process %s", m_helper.c_str());
+    SE_LOG_DEBUG(NULL, "ForkExecParent: preparing for child process %s", m_helper.c_str());
     m_server = GDBusCXX::DBusServerCXX::listen("", &dbusError);
     if (!m_server) {
         dbusError.throwFailure("starting server");
@@ -198,7 +198,7 @@ void ForkExecParent::start()
     m_envStrings.push_back(ForkExecEnvVar + m_server->getAddress());
     m_env.reset(AllocStringArray(m_envStrings));
 
-    SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: running %s with D-Bus address %s",
+    SE_LOG_DEBUG(NULL, "ForkExecParent: running %s with D-Bus address %s",
                  helper.c_str(), m_server->getAddress().c_str());
 
     // Check which kind of output redirection is wanted.
@@ -227,7 +227,7 @@ void ForkExecParent::start()
     setupPipe(m_err, m_errID, err);
     setupPipe(m_out, m_outID, out);
 
-    SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: child process for %s has pid %ld",
+    SE_LOG_DEBUG(NULL, "ForkExecParent: child process for %s has pid %ld",
                  helper.c_str(), (long)m_childPid);
 
     // TODO: introduce C++ wrapper around GSource
@@ -246,7 +246,7 @@ void ForkExecParent::setupPipe(GIOChannel *&channel, guint &sourceID, int fd)
     channel = g_io_channel_unix_new(fd);
     if (!channel) {
         // failure
-        SE_LOG_DEBUG(NULL, NULL, "g_io_channel_unix_new() returned NULL");
+        SE_LOG_DEBUG(NULL, "g_io_channel_unix_new() returned NULL");
         close(fd);
         return;
     }
@@ -289,7 +289,7 @@ gboolean ForkExecParent::outputReady(GIOChannel *source,
         if (status == G_IO_STATUS_EOF ||
             (condition & (G_IO_HUP|G_IO_ERR)) ||
             error) {
-            SE_LOG_DEBUG(NULL, NULL, "reading helper %s done: %s",
+            SE_LOG_DEBUG(NULL, "reading helper %s done: %s",
                          source == me->m_out ? "stdout" :
                          me->m_mergedStdoutStderr ? "combined stdout/stderr" :
                          "stderr",
@@ -338,7 +338,7 @@ void ForkExecParent::checkCompletion() throw ()
             m_onQuit(m_status);
             if (!m_hasConnected ||
                 m_status != 0) {
-                SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: child was signaled %s, signal %d, int %d, term %d, int sent %s, term sent %s",
+                SE_LOG_DEBUG(NULL, "ForkExecParent: child was signaled %s, signal %d, int %d, term %d, int sent %s, term sent %s",
                              WIFSIGNALED(m_status) ? "yes" : "no",
                              WTERMSIG(m_status), SIGINT, SIGTERM,
                              m_sigIntSent ? "yes" : "no",
@@ -360,7 +360,7 @@ void ForkExecParent::checkCompletion() throw ()
                 } else {
                     error += " for unknown reasons";
                 }
-                SE_LOG_ERROR(NULL, NULL, "%s", error.c_str());
+                SE_LOG_ERROR(NULL, "%s", error.c_str());
                 m_onFailure(STATUS_FATAL, error);
             }
         } catch (...) {
@@ -378,7 +378,7 @@ void ForkExecParent::checkCompletion() throw ()
 void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw()
 {
     try {
-        SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: child %s has connected",
+        SE_LOG_DEBUG(NULL, "ForkExecParent: child %s has connected",
                      m_helper.c_str());
         m_hasConnected = true;
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
@@ -410,7 +410,7 @@ void ForkExecParent::stop(int signal)
         return;
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: killing %s with signal %d (%s %s)",
+    SE_LOG_DEBUG(NULL, "ForkExecParent: killing %s with signal %d (%s %s)",
                  m_helper.c_str(),
                  signal,
                  (!signal || signal == SIGINT) ? "SIGINT" : "",
@@ -438,7 +438,7 @@ void ForkExecParent::kill()
         return;
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "ForkExecParent: killing %s with SIGKILL",
+    SE_LOG_DEBUG(NULL, "ForkExecParent: killing %s with SIGKILL",
                  m_helper.c_str());
     ::kill(m_childPid, SIGKILL);
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
@@ -467,7 +467,7 @@ void ForkExecChild::connect()
         SE_THROW("cannot connect to parent, was not forked");
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "ForkExecChild: connecting to parent with D-Bus address %s",
+    SE_LOG_DEBUG(NULL, "ForkExecChild: connecting to parent with D-Bus address %s",
                  address);
     GDBusCXX::DBusErrorCXX dbusError;
     GDBusCXX::DBusConnectionPtr conn = dbus_get_bus_connection(address,
@@ -506,7 +506,7 @@ void ForkExecChild::connect()
 
 void ForkExecChild::connectionLost()
 {
-    SE_LOG_DEBUG(NULL, NULL, "lost connection to parent");
+    SE_LOG_DEBUG(NULL, "lost connection to parent");
     m_state = DISCONNECTED;
     m_onQuit();
 }

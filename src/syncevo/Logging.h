@@ -311,40 +311,31 @@ class LoggerBase : public Logger
 
 
 /**
- * Vararg macro which passes the message through a specific
- * Logger class instance (if non-NULL) and otherwise calls
- * the global logger directly. Adds source file and line.
+ * Wraps Logger::message() in the current default logger.
+ * and adds file and line where the message comes from.
+ *
+ * This macro reverses _prefix and _level to avoid the situation where
+ * the compiler mistakes a NULL _prefix with the _format parameter
+ * (happened once while doing code refactoring).
  *
  * @TODO make source and line info optional for release
  * @TODO add function name (GCC extension)
  */
-#define SE_LOG(_level, _instance, _prefix, _format, _args...) \
-    do { \
-        if (_instance) { \
-            static_cast<SyncEvo::Logger *>(_instance)->message(_level,  \
-                                                               _prefix, \
-                                                               __FILE__, \
-                                                               __LINE__, \
-                                                               0,       \
-                                                               _format, \
-                                                               ##_args); \
-        } else { \
-            SyncEvo::LoggerBase::instance().message(_level, \
-                                                    _prefix, \
-                                                    __FILE__, \
-                                                    __LINE__, \
-                                                    0, \
-                                                    _format, \
-                                                    ##_args); \
-        } \
-    } while(false)
+#define SE_LOG(_prefix, _level, _format, _args...) \
+    SyncEvo::LoggerBase::instance().message(_level, \
+                                            _prefix, \
+                                            __FILE__, \
+                                            __LINE__, \
+                                            NULL, \
+                                            _format, \
+                                            ##_args); \
 
-#define SE_LOG_SHOW(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::SHOW, _instance, _prefix, _format, ##_args)
-#define SE_LOG_ERROR(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::ERROR, _instance, _prefix, _format, ##_args)
-#define SE_LOG_WARNING(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::WARNING, _instance, _prefix, _format, ##_args)
-#define SE_LOG_INFO(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::INFO, _instance, _prefix, _format, ##_args)
-#define SE_LOG_DEV(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::DEV, _instance, _prefix, _format, ##_args)
-#define SE_LOG_DEBUG(_instance, _prefix, _format, _args...) SE_LOG(SyncEvo::Logger::DEBUG, _instance, _prefix, _format, ##_args)
+#define SE_LOG_SHOW(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::SHOW, _format, ##_args)
+#define SE_LOG_ERROR(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::ERROR, _format, ##_args)
+#define SE_LOG_WARNING(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::WARNING, _format, ##_args)
+#define SE_LOG_INFO(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::INFO, _format, ##_args)
+#define SE_LOG_DEV(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::DEV, _format, ##_args)
+#define SE_LOG_DEBUG(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::DEBUG, _format, ##_args)
  
 SE_END_CXX
 #endif // INCL_LOGGING

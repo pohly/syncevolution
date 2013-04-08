@@ -134,20 +134,20 @@ void PresenceStatus::updatePresenceStatus (bool httpPresence, bool btPresence) {
             if (boost::starts_with (url, "http") && (httpChanged || !initiated)) {
                 entry.second = m_httpPresence ? MIGHTWORK: NOTRANSPORT;
                 m_server.emitPresence (peer.first, status2string (entry.second), entry.first);
-                SE_LOG_DEBUG(NULL, NULL,
+                SE_LOG_DEBUG(NULL,
                         "http presence signal %s,%s,%s",
                         peer.first.c_str(),
                         status2string (entry.second).c_str(), entry.first.c_str());
             } else if (boost::starts_with (url, "obex-bt") && (btChanged || !initiated)) {
                 entry.second = m_btPresence ? MIGHTWORK: NOTRANSPORT;
                 m_server.emitPresence (peer.first, status2string (entry.second), entry.first);
-                SE_LOG_DEBUG(NULL, NULL,
+                SE_LOG_DEBUG(NULL,
                         "bluetooth presence signal %s,%s,%s",
                         peer.first.c_str(),
                         status2string (entry.second).c_str(), entry.first.c_str());
             } else if (boost::starts_with (url, "local") && !initiated) {
                 m_server.emitPresence (peer.first, status2string (MIGHTWORK), entry.first);
-                SE_LOG_DEBUG(NULL, NULL,
+                SE_LOG_DEBUG(NULL,
                         "local presence signal %s,%s,%s",
                         peer.first.c_str(),
                         status2string (MIGHTWORK).c_str(), entry.first.c_str());

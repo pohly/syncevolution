@@ -90,7 +90,7 @@ void AutoSyncManager::init()
 
 void AutoSyncManager::initConfig(const std::string &configName)
 {
-    SE_LOG_DEBUG(NULL, NULL, "auto sync: updating info about config %s", configName.c_str());
+    SE_LOG_DEBUG(NULL, "auto sync: updating info about config %s", configName.c_str());
 
     if (configName.empty()) {
         // Anything might have changed. Check all configs we know
@@ -177,7 +177,7 @@ void AutoSyncManager::initConfig(const std::string &configName)
         // the past problem -> allow auto syncing again.
         task->m_permanentFailure = false;
 
-        SE_LOG_DEBUG(NULL, NULL,
+        SE_LOG_DEBUG(NULL,
                      "auto sync: %s: auto sync '%s', %s, %s, %d seconds repeat interval, %d seconds online delay",
                      configName.c_str(),
                      autoSync.c_str(),
@@ -201,7 +201,7 @@ void AutoSyncManager::initConfig(const std::string &configName)
                (transport == AutoSyncTask::NEEDS_BT && bt) ||
                (transport == AutoSyncTask::NEEDS_OTHER && any)) {
                 task->m_urls.push_back(std::make_pair(transport, url));
-                SE_LOG_DEBUG(NULL, NULL,
+                SE_LOG_DEBUG(NULL,
                              "auto sync: adding config %s url %s",
                              configName.c_str(),
                              url.c_str());
@@ -214,11 +214,11 @@ void AutoSyncManager::initConfig(const std::string &configName)
 
     bool lock = preventTerm();
     if (m_autoTermLocked && !lock) {
-        SE_LOG_DEBUG(NULL, NULL, "auto sync: allow auto shutdown");
+        SE_LOG_DEBUG(NULL, "auto sync: allow auto shutdown");
         m_server.autoTermUnref();
         m_autoTermLocked = false;
     } else if (!m_autoTermLocked && lock) {
-        SE_LOG_DEBUG(NULL, NULL, "auto sync: prevent auto shutdown");
+        SE_LOG_DEBUG(NULL, "auto sync: prevent auto shutdown");
         m_server.autoTermRef();
         m_autoTermLocked = true;
     }
@@ -229,20 +229,20 @@ void AutoSyncManager::initConfig(const std::string &configName)
 
 void AutoSyncManager::schedule(const std::string &reason)
 {
-    SE_LOG_DEBUG(NULL, NULL, "auto sync: reschedule, %s", reason.c_str());
+    SE_LOG_DEBUG(NULL, "auto sync: reschedule, %s", reason.c_str());
 
     // idle callback will be (re)set if needed
     m_idleConnection.disconnect();
 
     if (!preventTerm()) {
-        SE_LOG_DEBUG(NULL, NULL, "auto sync: nothing to do");
+        SE_LOG_DEBUG(NULL, "auto sync: nothing to do");
         return;
     }
 
     if (!m_server.isIdle()) {
         // Only schedule automatic syncs when nothing else is
         // going on or pending.
-        SE_LOG_DEBUG(NULL, NULL, "auto sync: server not idle");
+        SE_LOG_DEBUG(NULL, "auto sync: server not idle");
         connectIdle();
         return;
     }
@@ -266,7 +266,7 @@ void AutoSyncManager::schedule(const std::string &reason)
             // Adds two seconds just to be on the safe side and not
             // wake up again too soon.
             int seconds = (task->m_lastSyncTime + task->m_interval - now).seconds() + 2;
-            SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: interval expires in %ds",
+            SE_LOG_DEBUG(NULL, "auto sync: %s: interval expires in %ds",
                          configName.c_str(),
                          seconds);
             task->m_intervalTimeout.runOnce(seconds,
@@ -284,7 +284,7 @@ void AutoSyncManager::schedule(const std::string &reason)
             Timeout *timeout = NULL;
             switch (urlinfo.first) {
             case AutoSyncTask::NEEDS_HTTP:
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: %s uses HTTP",
+                SE_LOG_DEBUG(NULL, "auto sync: %s: %s uses HTTP",
                              configName.c_str(),
                              urlinfo.second.c_str());
                 starttime = &m_httpStartTime;
@@ -292,7 +292,7 @@ void AutoSyncManager::schedule(const std::string &reason)
                 timeout = &task->m_httpTimeout;
                 break;
             case AutoSyncTask::NEEDS_BT:
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: %s uses Bluetooth",
+                SE_LOG_DEBUG(NULL, "auto sync: %s: %s uses Bluetooth",
                              configName.c_str(),
                              urlinfo.second.c_str());
                 starttime = &m_btStartTime;
@@ -300,7 +300,7 @@ void AutoSyncManager::schedule(const std::string &reason)
                 timeout = &task->m_btTimeout;
                 break;
             case AutoSyncTask::NEEDS_OTHER:
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: %s uses some unknown transport",
+                SE_LOG_DEBUG(NULL, "auto sync: %s: %s uses some unknown transport",
                              configName.c_str(),
                              urlinfo.second.c_str());
                 break;
@@ -308,7 +308,7 @@ void AutoSyncManager::schedule(const std::string &reason)
             if (!starttime || // some other transport, assumed to be online, use it
                 (*starttime && // present
                  (task->m_delay <= 0 || *starttime + task->m_delay <= now))) { // present long enough
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: ready to run via %s (transport present for %lds > %ds auto sync delay)",
+                SE_LOG_DEBUG(NULL, "auto sync: %s: ready to run via %s (transport present for %lds > %ds auto sync delay)",
                              configName.c_str(),
                              urlinfo.second.c_str(),
                              starttime ? (long)(*starttime - now).seconds() : -1,
@@ -321,13 +321,13 @@ void AutoSyncManager::schedule(const std::string &reason)
                 signal->connect(PresenceStatus::PresenceSignal_t::slot_type(&AutoSyncManager::schedule,
                                                                             this,
                                                                             "presence change").track(m_me));
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: transport for %s not present",
+                SE_LOG_DEBUG(NULL, "auto sync: %s: transport for %s not present",
                              configName.c_str(),
                              urlinfo.second.c_str());
             } else {
                 // check again after waiting the requested amount of time
                 int seconds = (*starttime + task->m_delay - now).seconds() + 2;
-                SE_LOG_DEBUG(NULL, NULL, "auto sync: %s: presence delay of transport for %s expires in %ds",
+                SE_LOG_DEBUG(NULL, "auto sync: %s: presence delay of transport for %s expires in %ds",
                              configName.c_str(),
                              urlinfo.second.c_str(),
                              seconds);
@@ -379,7 +379,7 @@ void AutoSyncManager::schedule(const std::string &reason)
 
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "auto sync: nothing to do now");
+    SE_LOG_DEBUG(NULL, "auto sync: nothing to do now");
 }
 
 void AutoSyncManager::connectIdle()
@@ -396,14 +396,14 @@ void AutoSyncManager::sessionStarted(const boost::shared_ptr<Session> &session)
     std::string configName = session->getConfigName();
     PeerMap::iterator it = m_peerMap.find(configName);
     if (it == m_peerMap.end()) {
-        SE_LOG_DEBUG(NULL, NULL, "auto sync: ignore running sync %s without config",
+        SE_LOG_DEBUG(NULL, "auto sync: ignore running sync %s without config",
                      configName.c_str());
         return;
     }
 
     boost::shared_ptr<AutoSyncManager> me = m_me.lock();
     if (!me) {
-        SE_LOG_DEBUG(NULL, NULL, "auto sync: already destructing, ignore new sync %s",
+        SE_LOG_DEBUG(NULL, "auto sync: already destructing, ignore new sync %s",
                      configName.c_str());
         return;
     }
@@ -445,7 +445,7 @@ bool AutoSyncManager::preventTerm()
 void AutoSyncManager::autoSyncSuccessStart(AutoSyncTask *task)
 {
     task->m_syncSuccessStart = true;
-    SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been successfully started.\n",
+    SE_LOG_INFO(NULL,"Automatic sync for '%s' has been successfully started.\n",
                 task->m_peerName.c_str());
     if (m_server.notificationsEnabled() &&
         task->m_notifyLevel >= SyncConfig::NOTIFY_ALL) {
@@ -475,7 +475,7 @@ static bool ErrorIsTemporary(SyncMLStatus status)
 
 void AutoSyncManager::autoSyncDone(AutoSyncTask *task, SyncMLStatus status)
 {
-    SE_LOG_INFO(NULL, NULL,"Automatic sync for '%s' has been done.\n", task->m_peerName.c_str());
+    SE_LOG_INFO(NULL,"Automatic sync for '%s' has been done.\n", task->m_peerName.c_str());
     if (m_server.notificationsEnabled()) {
         // send a notification to notification server
         std::string summary, body;
@@ -509,7 +509,7 @@ void AutoSyncManager::anySyncDone(AutoSyncTask *task, SyncMLStatus status)
 {
     // set "permanently failed" flag according to most recent result
     task->m_permanentFailure = status != STATUS_OK && !ErrorIsTemporary(status);
-    SE_LOG_DEBUG(NULL, NULL, "auto sync: sync session %s done, result %d %s",
+    SE_LOG_DEBUG(NULL, "auto sync: sync session %s done, result %d %s",
                  task->m_configName.c_str(),
                  status,
                  task->m_permanentFailure ?

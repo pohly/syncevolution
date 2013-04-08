@@ -300,7 +300,7 @@ void Manager::stop()
     // idle server has only two references to the main view:
     // one inside m_folks, one given back to us here.
     if (m_folks->getMainView().use_count() <= 2) {
-        SE_LOG_DEBUG(NULL, NULL, "restarting due to Manager.Stop()");
+        SE_LOG_DEBUG(NULL, "restarting due to Manager.Stop()");
         initFolks();
         initDatabases();
         initSorting(m_sortOrder);
@@ -435,7 +435,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     {
         FolksIndividual *individual = data.m_individual.get();
         const char *id = folks_individual_get_id(individual);
-        SE_LOG_DEBUG(NULL, NULL, "handle change %s: %s, #%d, %s = %s",
+        SE_LOG_DEBUG(NULL, "handle change %s: %s, #%d, %s = %s",
                      getPath(),
                      &call == &m_contactsModified ? "modified" :
                      &call == &m_contactsAdded ? "added" :
@@ -454,7 +454,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 &call == &m_contactsModified &&
                 start >= m_lastChange.m_start &&
                 start < m_lastChange.m_start + (int)m_lastChange.m_ids.size()) {
-                SE_LOG_DEBUG(NULL, NULL, "handle change %s: redundant 'modified' signal, ignore",
+                SE_LOG_DEBUG(NULL, "handle change %s: redundant 'modified' signal, ignore",
                              getPath());
 
                 return;
@@ -464,7 +464,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
             m_pendingChange.m_call = &call;
             m_pendingChange.m_start = start;
             m_pendingChange.m_ids.push_back(id);
-            SE_LOG_DEBUG(NULL, NULL, "handle change %s: stored as pending change",
+            SE_LOG_DEBUG(NULL, "handle change %s: stored as pending change",
                          getPath());
             return;
         }
@@ -475,7 +475,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 // Modification, indices are unchanged.
                 if (start + 1 == m_pendingChange.m_start) {
                     // New modified element at the front.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: insert modification, #%d + %d and #%d => #%d + %d",
+                    SE_LOG_DEBUG(NULL, "handle change %s: insert modification, #%d + %d and #%d => #%d + %d",
                                  getPath(),
                                  m_pendingChange.m_start, pendingCount,
                                  start,
@@ -485,7 +485,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                     return;
                 } else if (start == m_pendingChange.m_start + pendingCount) {
                     // New modified element at the end.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: append modification, #%d + %d and #%d => #%d + %d",
+                    SE_LOG_DEBUG(NULL, "handle change %s: append modification, #%d + %d and #%d => #%d + %d",
                                  getPath(),
                                  m_pendingChange.m_start, pendingCount,
                                  start,
@@ -495,7 +495,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 } else if (start >= m_pendingChange.m_start &&
                            start < m_pendingChange.m_start + pendingCount) {
                     // Element modified again => no change, except perhaps for the ID.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: modification of already modified contact, #%d + %d and #%d => #%d + %d",
+                    SE_LOG_DEBUG(NULL, "handle change %s: modification of already modified contact, #%d + %d and #%d => #%d + %d",
                                  getPath(),
                                  m_pendingChange.m_start, pendingCount,
                                  start,
@@ -511,7 +511,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                     // Adding in the middle or at the end?
                     int end = m_pendingChange.m_start + pendingCount;
                     if (start == end) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'added' individuals at end, #%d + %d and #%d new => #%d + %d",
+                        SE_LOG_DEBUG(NULL, "handle change %s: increase count of 'added' individuals at end, #%d + %d and #%d new => #%d + %d",
                                      getPath(),
                                      m_pendingChange.m_start, pendingCount,
                                      start,
@@ -519,7 +519,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                         m_pendingChange.m_ids.push_back(id);
                         return;
                     } else if (start < end) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'added' individuals in the middle, #%d + %d and #%d new => #%d + %d",
+                        SE_LOG_DEBUG(NULL, "handle change %s: increase count of 'added' individuals in the middle, #%d + %d and #%d new => #%d + %d",
                                      getPath(),
                                      m_pendingChange.m_start, pendingCount,
                                      start,
@@ -531,7 +531,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 } else {
                     // Adding directly before the previous start?
                     if (start + 1 == m_pendingChange.m_start) {
-                        SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'added' individuals, #%d + %d and #%d => #%d + %d",
+                        SE_LOG_DEBUG(NULL, "handle change %s: reduce start and increase count of 'added' individuals, #%d + %d and #%d => #%d + %d",
                                      getPath(),
                                      m_pendingChange.m_start, pendingCount,
                                      start,
@@ -547,7 +547,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                 int newCount = m_pendingChange.m_ids.size() + 1;
                 if (start == m_pendingChange.m_start) {
                     // Removing directly at end.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: increase count of 'removed' individuals, #%d + %d and #%d => #%d + %d",
+                    SE_LOG_DEBUG(NULL, "handle change %s: increase count of 'removed' individuals, #%d + %d and #%d => #%d + %d",
                                  getPath(),
                                  m_pendingChange.m_start, pendingCount,
                                  start,
@@ -556,7 +556,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
                     return;
                 } else if (start + 1 == m_pendingChange.m_start) {
                     // Removing directly before the previous start.
-                    SE_LOG_DEBUG(NULL, NULL, "handle change %s: reduce start and increase count of 'removed' individuals, #%d + %d and #%d => #%d + %d",
+                    SE_LOG_DEBUG(NULL, "handle change %s: reduce start and increase count of 'removed' individuals, #%d + %d and #%d => #%d + %d",
                                  getPath(),
                                  m_pendingChange.m_start, pendingCount,
                                  start,
@@ -578,7 +578,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
             start == m_pendingChange.m_start &&
             1 == m_pendingChange.m_ids.size() &&
             m_pendingChange.m_ids.front() == id) {
-            SE_LOG_DEBUG(NULL, NULL, "handle change %s: removed individual was re-added => #%d modified",
+            SE_LOG_DEBUG(NULL, "handle change %s: removed individual was re-added => #%d modified",
                          getPath(),
                          start);
             m_pendingChange.m_call = &m_contactsModified;
@@ -600,7 +600,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     {
         int count = m_pendingChange.m_ids.size();
         if (count) {
-            SE_LOG_DEBUG(NULL, NULL, "send change %s: %s, #%d + %d",
+            SE_LOG_DEBUG(NULL, "send change %s: %s, #%d + %d",
                          getPath(),
                          m_pendingChange.m_call == &m_contactsModified ? "modified" :
                          m_pendingChange.m_call == &m_contactsAdded ? "added" :
@@ -638,7 +638,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     {
         if (required && !error.empty()) {
             // remove view because it is no longer needed
-            SE_LOG_DEBUG(NULL, NULL, "ViewAgent %s method call failed, deleting view: %s", method, error.c_str());
+            SE_LOG_DEBUG(NULL, "ViewAgent %s method call failed, deleting view: %s", method, error.c_str());
             boost::shared_ptr<ViewResource> r = self.lock();
             if (r) {
                 r->close();
@@ -848,7 +848,7 @@ void Manager::doSearch(const ESourceRegistryCXX &registry,
     view = FilteredView::create(view, individualFilter);
     view->setName(StringPrintf("filtered view%u", ViewResource::getNextViewNumber()));
 
-    SE_LOG_DEBUG(NULL, NULL, "preparing %s: EDS search term is '%s', active address books %s",
+    SE_LOG_DEBUG(NULL, "preparing %s: EDS search term is '%s', active address books %s",
                  view->getName(),
                  ebookFilter.c_str(),
                  boost::join(m_enabledEBooks, " ").c_str());
@@ -1063,7 +1063,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
 
 
-    SE_LOG_DEBUG(NULL, NULL, "%s: creating config for protocol %s",
+    SE_LOG_DEBUG(NULL, "%s: creating config for protocol %s",
                  uid.c_str(),
                  protocol.c_str());
 
@@ -1175,7 +1175,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     }
 
     // Report success.
-    SE_LOG_DEBUG(NULL, NULL, "%s: created config for protocol %s",
+    SE_LOG_DEBUG(NULL, "%s: created config for protocol %s",
                  uid.c_str(),
                  protocol.c_str());
     result->done();

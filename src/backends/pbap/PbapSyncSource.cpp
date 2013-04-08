@@ -154,10 +154,10 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
     Params::const_iterator it = changed.find("Status");
     if (it != changed.end()) {
         std::string status = boost::get<std::string>(it->second);
-        SE_LOG_DEBUG(NULL, NULL, "OBEXD transfer %s: %s",
+        SE_LOG_DEBUG(NULL, "OBEXD transfer %s: %s",
                      path.c_str(), status.c_str());
         if (status == "complete") {
-            SE_LOG_DEBUG(NULL, NULL, "obexd transfer completed");
+            SE_LOG_DEBUG(NULL, "obexd transfer completed");
             m_transferComplete = true;
         } else if (status == "error") {
             m_transferComplete = true;
@@ -171,7 +171,7 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
 
 void PbapSession::completeCb(const GDBusCXX::Path_t &path)
 {
-    SE_LOG_DEBUG(NULL, NULL, "obexd transfer %s completed", path.c_str());
+    SE_LOG_DEBUG(NULL, "obexd transfer %s completed", path.c_str());
     m_transferComplete = true;
 }
 
@@ -179,7 +179,7 @@ void PbapSession::errorCb(const GDBusCXX::Path_t &path,
                           const std::string &error,
                           const std::string &msg)
 {
-    SE_LOG_DEBUG(NULL, NULL, "obexd transfer %s failed: %s %s",
+    SE_LOG_DEBUG(NULL, "obexd transfer %s failed: %s %s",
                  path.c_str(), error.c_str(), msg.c_str());
     m_transferComplete = true;
     m_transferErrorCode = error;
@@ -233,7 +233,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                   OBC_CLIENT_INTERFACE_NEW5,
                                                   OBC_SERVICE_NEW5, true));
     try {
-        SE_LOG_DEBUG(NULL, NULL, "trying to use bluez 5 obexd service %s", OBC_SERVICE_NEW5);
+        SE_LOG_DEBUG(NULL, "trying to use bluez 5 obexd service %s", OBC_SERVICE_NEW5);
         session =
             GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
     } catch (const std::exception &error) {
@@ -241,7 +241,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
             throw;
         }
         // Fall back to old interface.
-        SE_LOG_DEBUG(NULL, NULL, "bluez obex service not available (%s), falling back to previous obexd one %s",
+        SE_LOG_DEBUG(NULL, "bluez obex service not available (%s), falling back to previous obexd one %s",
                      error.what(),
                      OBC_SERVICE_NEW);
         m_obexAPI = OBEXD_NEW;
@@ -251,7 +251,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE_NEW,
                                                       OBC_SERVICE_NEW, true));
         try {
-            SE_LOG_DEBUG(NULL, NULL, "trying to use new obexd service %s", OBC_SERVICE_NEW);
+            SE_LOG_DEBUG(NULL, "trying to use new obexd service %s", OBC_SERVICE_NEW);
             session =
                 GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
         } catch (const std::exception &error) {
@@ -259,7 +259,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                 throw;
             }
             // Fall back to old interface.
-            SE_LOG_DEBUG(NULL, NULL, "new obexd service(s) not available (%s), falling back to old one %s",
+            SE_LOG_DEBUG(NULL, "new obexd service(s) not available (%s), falling back to old one %s",
                          error.what(),
                          OBC_SERVICE);
             m_obexAPI = OBEXD_OLD;
@@ -330,12 +330,12 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                    true));
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "PBAP session created: %s", m_session->getPath());
+    SE_LOG_DEBUG(NULL, "PBAP session created: %s", m_session->getPath());
 
     // get filter list so that we can continue validating our format specifier
     std::vector<std::string> filterFields =
         GDBusCXX::DBusClientCall1< std::vector<std::string> >(*m_session, "ListFilterFields")();
-    SE_LOG_DEBUG(NULL, NULL, "supported PBAP filter fields:\n    %s",
+    SE_LOG_DEBUG(NULL, "supported PBAP filter fields:\n    %s",
                  boost::join(filterFields, "\n    ").c_str());
 
     std::list<std::string> filter;
@@ -377,7 +377,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "PBAP session initialized");
+    SE_LOG_DEBUG(NULL, "PBAP session initialized");
 }
 
 void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
@@ -385,7 +385,7 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
     pcrecpp::StringPiece content;
     if (m_obexAPI != OBEXD_OLD) {
         tmpFile.create();
-        SE_LOG_DEBUG(NULL, NULL, "Created temporary file for PullAll %s", tmpFile.filename().c_str());
+        SE_LOG_DEBUG(NULL, "Created temporary file for PullAll %s", tmpFile.filename().c_str());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
         std::pair<GDBusCXX::DBusObject_t, Params> tuple =
             m_obexAPI == BLUEZ5 ?
@@ -394,7 +394,7 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
 
-        SE_LOG_DEBUG(NULL, NULL, "pullall transfer path %s, %ld properties", transfer.c_str(), (long)properties.size());
+        SE_LOG_DEBUG(NULL, "pullall transfer path %s, %ld properties", transfer.c_str(), (long)properties.size());
 
         while (!m_transferComplete) {
             g_main_context_iteration(NULL, true);
@@ -405,7 +405,7 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
                                              m_transferErrorMsg.c_str()));
         }
 
-        SE_LOG_DEBUG(NULL, NULL, "Temporary file size is %u", static_cast<unsigned> (tmpFile.size()));
+        SE_LOG_DEBUG(NULL, "Temporary file size is %u", static_cast<unsigned> (tmpFile.size()));
 
         content = tmpFile.stringPiece();
         // closing tmp file leaves the mapping
@@ -426,7 +426,7 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
         ++count;
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "PBAP content pulled: %d entries", (int) dst.size());
+    SE_LOG_DEBUG(NULL, "PBAP content pulled: %d entries", (int) dst.size());
 }
 
 void PbapSession::shutdown(void)
@@ -436,11 +436,11 @@ void PbapSession::shutdown(void)
     // always clear pointer, even if method call fails
     GDBusCXX::DBusObject_t path(m_session->getPath());
     //m_session.reset();
-    SE_LOG_DEBUG(NULL, NULL, "removed session: %s", path.c_str());
+    SE_LOG_DEBUG(NULL, "removed session: %s", path.c_str());
 
     removeSession(path);
 
-    SE_LOG_DEBUG(NULL, NULL, "PBAP session closed");
+    SE_LOG_DEBUG(NULL, "PBAP session closed");
 }
 
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :

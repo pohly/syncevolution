@@ -411,8 +411,9 @@ class PhoneNumberLogger : public i18n::phonenumbers::Logger
 public:
     virtual void WriteMessage(const std::string &msg)
     {
-        SE_LOG(level() == i18n::phonenumbers::LOG_FATAL ? SyncEvo::Logger::ERROR : SyncEvo::Logger::DEBUG,
-               NULL, getPrefix(), "%s", msg.c_str());
+        SE_LOG(getPrefix(),
+               level() == i18n::phonenumbers::LOG_FATAL ? SyncEvo::Logger::ERROR : SyncEvo::Logger::DEBUG,
+               "%s", msg.c_str());
     }
 };
 

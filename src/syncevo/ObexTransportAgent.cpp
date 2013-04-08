@@ -154,8 +154,8 @@ void ObexTransportAgent::connectInit () {
             SE_THROW_EXCEPTION (TransportException, "Error creating Bluetooth socket");
         }
         cxxptr<Socket> sockObj (new Socket (sockfd));  
-        SE_LOG_DEV(NULL,NULL, "Connecting Bluetooth device with address %s and channel %d",
-                m_address.c_str(), m_port);
+        SE_LOG_DEV(NULL, "Connecting Bluetooth device with address %s and channel %d",
+                   m_address.c_str(), m_port);
         // Init the OBEX handle
         ObexPtr handle(OBEX_Init (OBEX_TRANS_FD, obex_event, 0),
                        "Obex Handle");
@@ -199,7 +199,7 @@ void ObexTransportAgent::connectInit () {
                 m_handle = handle;
                 return;
             } else {
-                SE_LOG_ERROR (NULL, NULL, "connect failed with error code %d", errno);
+                SE_LOG_ERROR(NULL, "connect failed with error code %d", errno);
                 SE_THROW_EXCEPTION (TransportException, "ObexTransport: connect request failed with error");
             }
         }
@@ -214,7 +214,7 @@ void ObexTransportAgent::connectInit () {
     }//Bluetooth
     else {
         m_status = FAILED;
-        SE_LOG_ERROR (NULL, NULL, "ObexTransport: unsuported transport type");
+        SE_LOG_ERROR(NULL, "ObexTransport: unsuported transport type");
         return;
     }
 }
@@ -289,7 +289,7 @@ void ObexTransportAgent::shutdown() {
  * Send the request to peer
  */
 void ObexTransportAgent::send(const char *data, size_t len) {
-    SE_LOG_DEV (NULL, NULL, "ObexTransport send is called");
+    SE_LOG_DEV(NULL, "ObexTransport send is called");
     cxxptr<Socket> sockObj = m_sock;
     GIOChannelPtr channel = m_channel;
     if(m_connectStatus != CONNECTED) {
@@ -337,7 +337,7 @@ void ObexTransportAgent::cancel() {
         OBEX_TransportDisconnect(m_handle);
     }
     if (m_disconnecting) {
-        SE_LOG_WARNING (NULL, NULL, "Cancel disconncting process");
+        SE_LOG_WARNING(NULL, "Cancel disconncting process");
         if (m_status != CLOSED) {
             m_status = FAILED;
         }
@@ -646,14 +646,14 @@ void ObexTransportAgent::obex_callback (obex_object_t *object, int mode, int eve
     try {
         switch (event) {
             case OBEX_EV_PROGRESS:
-                SE_LOG_DEV (NULL, NULL, "OBEX progress");
+                SE_LOG_DEV(NULL, "OBEX progress");
                 break;
             case OBEX_EV_REQDONE:
                 m_obexReady = true;
                 m_requestStart = 0;
                 if (obex_rsp != OBEX_RSP_SUCCESS) {
-                    SE_LOG_ERROR (NULL, NULL, "OBEX Request %d got a failed response %s",
-                            obex_cmd,OBEX_ResponseToString(obex_rsp));
+                    SE_LOG_ERROR(NULL, "OBEX Request %d got a failed response %s",
+                                 obex_cmd,OBEX_ResponseToString(obex_rsp));
                     m_status = FAILED;
                     return;
                 } else {
@@ -668,18 +668,15 @@ void ObexTransportAgent::obex_callback (obex_object_t *object, int mode, int eve
                                     if (headertype == OBEX_HDR_CONNECTION) {
                                         m_connectId = header.bq4;
                                     } else if (headertype == OBEX_HDR_WHO) { 
-                                        SE_LOG_DEV (NULL, NULL, 
-                                                "OBEX Transport: get header who from connect response with value %.*s",
+                                        SE_LOG_DEV(NULL, "OBEX Transport: get header who from connect response with value %.*s",
                                                 len, header.bs);
                                     } else {
-                                        SE_LOG_WARNING (NULL, NULL, 
-                                                "OBEX Transport: Unknow header from connect response");
+                                        SE_LOG_WARNING(NULL, "OBEX Transport: Unknow header from connect response");
                                     }
                                 }
                                 if (m_connectId == 0) {
                                     m_status = FAILED;
-                                    SE_LOG_ERROR(NULL, NULL, 
-                                            "No connection id received from connect response");
+                                    SE_LOG_ERROR(NULL, "No connection id received from connect response");
                                 }
                                 m_connectStatus = CONNECTED;
 
@@ -706,24 +703,22 @@ void ObexTransportAgent::obex_callback (obex_object_t *object, int mode, int eve
                                     } else if (headertype == OBEX_HDR_BODY) {
                                         if (length ==0) {
                                             length = len;
-                                            SE_LOG_DEV (NULL, NULL, 
-                                                    "No length header for get response is recevied, using body size %d", len);
+                                            SE_LOG_DEV(NULL, "No length header for get response is recevied, using body size %d", len);
                                         }
                                         if (length ==0) {
                                             m_status = FAILED;
-                                            SE_LOG_ERROR (NULL, NULL, 
-                                                    "ObexTransport: Get zero sized response body for Get");
+                                            SE_LOG_ERROR(NULL, "ObexTransport: Get zero sized response body for Get");
                                         }
                                         m_buffer.set(new char[length], "buffer");
                                         m_bufferSize = length;
                                         memcpy (m_buffer, header.bs, length);
                                     } else {
-                                        SE_LOG_WARNING (NULL, NULL, "Unknow header received for Get cmd");
+                                        SE_LOG_WARNING(NULL, "Unknow header received for Get cmd");
                                     }
                                 }
                                 if( !length || !m_buffer) {
                                     m_status = FAILED;
-                                    SE_LOG_ERROR (NULL, NULL, "Get Cmd response have no body");
+                                    SE_LOG_ERROR(NULL, "Get Cmd response have no body");
                                 }
                                 m_status = GOT_REPLY;
                                 break;
@@ -741,7 +736,7 @@ void ObexTransportAgent::obex_callback (obex_object_t *object, int mode, int eve
                         m_obexReady = true;
                         m_status = CLOSED;
                     } else if (obex_rsp !=0) {
-                        SE_LOG_ERROR (NULL, NULL, "ObexTransport Error %d", obex_rsp);
+                        SE_LOG_ERROR(NULL, "ObexTransport Error %d", obex_rsp);
                         m_status = FAILED;
                         return;
                     }
@@ -758,7 +753,7 @@ void ObexTransportAgent::obex_callback (obex_object_t *object, int mode, int eve
 
 void ObexTransportAgent::handleException(const char *where)
 {
-    SE_LOG_DEBUG(NULL, NULL, "ObexTransport: exception thrown in %s", where);
+    SE_LOG_DEBUG(NULL, "ObexTransport: exception thrown in %s", where);
     if (m_status == FAILED ||
         m_status == CANCELED ) {
         // don't change anything, don't bother the user with error
@@ -774,7 +769,7 @@ obex_object_t* ObexTransportAgent::newCmd(uint8_t cmd) {
     obex_object_t *cmdObject = OBEX_ObjectNew (m_handle, cmd);
     if(!cmdObject) {
         m_status = FAILED;
-        SE_LOG_ERROR (NULL, NULL, "ObexTransport: OBEX Object New failed");
+        SE_LOG_ERROR(NULL, "ObexTransport: OBEX Object New failed");
         return NULL;
     } else {
         return cmdObject;

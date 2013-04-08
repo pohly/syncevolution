@@ -252,7 +252,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             if (flags & EXECUTE_NO_STDOUT) {
                 fullcmd += " >/dev/null";
             }
-            SE_LOG_DEBUG(NULL, NULL, "running command via system(): %s", cmd.c_str());
+            SE_LOG_DEBUG(NULL, "running command via system(): %s", cmd.c_str());
             ret = system(fullcmd.c_str());
         } else {
             // Need to catch at least one of stdout or stderr. A
@@ -260,7 +260,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             // are read after system() returns. But we want true
             // streaming of the output, so use fork()/exec() plus
             // reliable output redirection.
-            SE_LOG_DEBUG(NULL, NULL, "running command via fork/exec with output redirection: %s", cmd.c_str());
+            SE_LOG_DEBUG(NULL, "running command via fork/exec with output redirection: %s", cmd.c_str());
             LogRedirect io(flags);
             pid_t child = fork();
             switch (child) {
@@ -296,7 +296,7 @@ int Execute(const std::string &cmd, ExecuteFlags flags) throw()
             }
             case -1:
                 // error handling in parent when fork() fails
-                SE_LOG_ERROR(NULL, NULL, "%s: fork() failed: %s",
+                SE_LOG_ERROR(NULL, "%s: fork() failed: %s",
                              cmd.c_str(), strerror(errno));
                 break;
             default:
@@ -831,7 +831,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     try {
         throw;
     } catch (const TransportException &ex) {
-        SE_LOG_DEBUG(NULL, logPrefix, "TransportException thrown at %s:%d",
+        SE_LOG_DEBUG(logPrefix, "TransportException thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
         error = std::string(TRANSPORT_PROBLEM) + ex.what();
         new_status = SyncMLStatus(sysync::LOCERR_TRANSPFAIL);
@@ -842,7 +842,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
                              Status2String(new_status).c_str());
     } catch (const StatusException &ex) {
         new_status = ex.syncMLStatus();
-        SE_LOG_DEBUG(NULL, logPrefix, "exception thrown at %s:%d",
+        SE_LOG_DEBUG(logPrefix, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
         error = StringPrintf("%s%s: %s",
                              SYNCEVOLUTION_PROBLEM,
@@ -852,7 +852,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
             level = Logger::DEBUG;
         }
     } catch (const Exception &ex) {
-        SE_LOG_DEBUG(NULL, logPrefix, "exception thrown at %s:%d",
+        SE_LOG_DEBUG(logPrefix, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
         error = ex.what();
     } catch (const std::exception &ex) {
@@ -866,7 +866,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     if (flags & HANDLE_EXCEPTION_NO_ERROR) {
         level = Logger::DEBUG;
     }
-    SE_LOG(level, NULL, logPrefix, "%s", error.c_str());
+    SE_LOG(logPrefix, level, "%s", error.c_str());
     if (flags & HANDLE_EXCEPTION_FATAL) {
         // Something unexpected went wrong, can only shut down.
         ::abort();

@@ -4219,7 +4219,7 @@ bool SyncTests::doConversionCallback(bool *success,
                                        type.c_str(),
                                        type.c_str(),
                                        convertedItem)) {
-                SE_LOG_ERROR(NULL, NULL, "failed parsing as %s:\n%s",
+                SE_LOG_ERROR(NULL, "failed parsing as %s:\n%s",
                              type.c_str(),
                              item.c_str());
             } else {
@@ -5198,7 +5198,7 @@ public:
     virtual void send(const char *data, size_t len)
     {
         if (m_interruptAtMessage == m_messageCount) {
-            SE_LOG_DEBUG(NULL, NULL, "TransportFaultInjector: interrupt before sending message #%d", m_messageCount);
+            SE_LOG_DEBUG(NULL, "TransportFaultInjector: interrupt before sending message #%d", m_messageCount);
         }
         m_messageCount++;
         if (m_interruptAtMessage >= 0 &&
@@ -5211,7 +5211,7 @@ public:
         m_status = m_wrappedAgent->wait();
         
         if (m_interruptAtMessage == m_messageCount) {
-            SE_LOG_DEBUG(NULL, NULL, "TransportFaultInjector: interrupt after receiving reply #%d", m_messageCount);
+            SE_LOG_DEBUG(NULL, "TransportFaultInjector: interrupt after receiving reply #%d", m_messageCount);
         }
         m_messageCount++;
         if (m_interruptAtMessage >= 0 &&
@@ -5275,7 +5275,7 @@ public:
             m_interruptAtMessage < m_messageCount &&
             m_interruptAtMessage >= m_messageCount - 3) {
             int offset = m_interruptAtMessage - m_messageCount + 4;
-            SE_LOG_DEBUG(NULL, NULL, "TransportResendProxy: interrupt %s",
+            SE_LOG_DEBUG(NULL, "TransportResendProxy: interrupt %s",
                          offset == 1 ? "before sending message" :
                          offset == 2 ? "directly after sending message" :
                          "after receiving reply");
@@ -5324,7 +5324,7 @@ public:
             len = 0;
         } else {
             if (m_interruptAtMessage == m_messageCount) {
-                 SE_LOG_DEBUG(NULL, NULL, "UserSuspendInjector: user suspend after getting reply #%d", m_messageCount);
+                 SE_LOG_DEBUG(NULL, "UserSuspendInjector: user suspend after getting reply #%d", m_messageCount);
             }
             m_messageCount++;
             if (m_interruptAtMessage >= 0 &&
@@ -5911,7 +5911,7 @@ void SyncTests::doSync(const SyncOptions &options)
     simplifyFilename(logname);
     syncCounter++;
 
-    SE_LOG_DEBUG(NULL, NULL, "%d. starting %s with sync mode %s",
+    SE_LOG_DEBUG(NULL, "%d. starting %s with sync mode %s",
                  syncCounter, logname.c_str(), PrettyPrintSyncMode(options.m_syncMode).c_str());
 
     try {
@@ -6212,7 +6212,7 @@ std::string ClientTest::import(ClientTest &client, TestingSyncSource &source, co
 {
     list<string> items;
     getItems(file, items, realfile);
-    SE_LOG_DEBUG(NULL, NULL, "importing %d test cases from file %s", (int)items.size(), realfile.c_str());
+    SE_LOG_DEBUG(NULL, "importing %d test cases from file %s", (int)items.size(), realfile.c_str());
     std::string failures;
     bool doImport = !luids || luids->empty();
     std::list<std::string>::const_iterator it;
@@ -6498,7 +6498,7 @@ static std::string additionalYearly(const std::string &single,
     }
 
 
-    SE_LOG_DEBUG(NULL, NULL, "additional yearly: start %d, skip %d, index %d/%d:\n%s",
+    SE_LOG_DEBUG(NULL, "additional yearly: start %d, skip %d, index %d/%d:\n%s",
                  start, skip, index, total,
                  event.c_str());
     return event;
@@ -6540,7 +6540,7 @@ static std::string additionalMonthly(const std::string &single,
         }
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "additional monthly: start %d, skip %d, index %d/%d:\n%s",
+    SE_LOG_DEBUG(NULL, "additional monthly: start %d, skip %d, index %d/%d:\n%s",
                  start, skip, index, total,
                  event.c_str());
     return event;
@@ -6662,7 +6662,7 @@ static std::string additionalWeekly(const std::string &single,
         }
     }
 
-    SE_LOG_DEBUG(NULL, NULL, "additional weekly: start %d, skip %d, index %d/%d:\n%s",
+    SE_LOG_DEBUG(NULL, "additional weekly: start %d, skip %d, index %d/%d:\n%s",
                  start, skip, index, total,
                  event.c_str());
     return event;
@@ -7711,7 +7711,7 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
                         serverAdded, serverUpdated, serverDeleted);
     str << "Expected sync mode: " << PrettyPrintSyncMode(syncMode) << "\n";
     str << "Expected cycles: " << restarts + 1 << "\n";
-    SE_LOG_INFO(NULL, NULL, "sync report:\n%s\n", str.str().c_str());
+    SE_LOG_INFO(NULL, "sync report:\n%s\n", str.str().c_str());
 
     if (mustSucceed) {
         // both STATUS_OK and STATUS_HTTP_OK map to the same
@@ -7725,13 +7725,13 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
 
-        SE_LOG_DEBUG(NULL, NULL, "Checking sync source %s...", name.c_str());
+        SE_LOG_DEBUG(NULL, "Checking sync source %s...", name.c_str());
         if (mustSucceed) {
             CLIENT_TEST_EQUAL(name, STATUS_OK, source.getStatus());
         }
         check(name, source);
     }
-    SE_LOG_DEBUG(NULL, NULL, "Done with checking sync report.");
+    SE_LOG_DEBUG(NULL, "Done with checking sync report.");
 }
 
 void CheckSyncReport::check(const std::string &name, const SyncSourceReport &source) const

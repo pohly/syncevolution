@@ -358,7 +358,7 @@ void SyncSource::requestAnotherSync()
     // stored; instead only a per-session request is set. That's okay
     // for now because restarting is limited to sessions with only
     // one source active (intentional simplification).
-    SE_LOG_DEBUG(NULL, getDisplayName(), "requesting another sync");
+    SE_LOG_DEBUG(getDisplayName(), "requesting another sync");
     SyncContext::requestAnotherSync();
 }
 
@@ -839,7 +839,7 @@ void ItemCache::backupItem(const std::string &item,
         if (link(oldfilename.c_str(), filename.str().c_str())) {
             // Hard linking failed. Record this, then continue
             // by ignoring the old file.
-            SE_LOG_DEBUG(NULL, NULL, "hard linking old %s new %s: %s",
+            SE_LOG_DEBUG(NULL, "hard linking old %s new %s: %s",
                          oldfilename.c_str(),
                          filename.str().c_str(),
                          strerror(errno));
@@ -1247,7 +1247,7 @@ std::string SyncSourceLogging::getDescription(const string &luid)
 void SyncSourceLogging::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID)
 {
     std::string description = getDescription(aItemKey);
-    SE_LOG_INFO(NULL, getDisplayName(),
+    SE_LOG_INFO(getDisplayName(),
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "adding",
                 !description.empty() ? description.c_str() : "???");
@@ -1256,7 +1256,7 @@ void SyncSourceLogging::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID ne
 void SyncSourceLogging::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
     std::string description = getDescription(aItemKey);
-    SE_LOG_INFO(NULL, getDisplayName(),
+    SE_LOG_INFO(getDisplayName(),
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "updating",
                 !description.empty() ? description.c_str() : aID ? aID->item : "???");
@@ -1265,7 +1265,7 @@ void SyncSourceLogging::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID a
 void SyncSourceLogging::deleteItem(sysync::cItemID aID)
 {
     std::string description = getDescription(aID->item);
-    SE_LOG_INFO(NULL, getDisplayName(),
+    SE_LOG_INFO(getDisplayName(),
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "deleting",
                 !description.empty() ? description.c_str() : aID->item);

@@ -974,7 +974,7 @@ public:
 
 /** write log message into *.log file of a test */
 #define CLIENT_TEST_LOG(_format, _args...) \
-    SE_LOG_DEBUG(NULL, NULL, "\n%s:%d *** " _format, \
+    SE_LOG_DEBUG(NULL, "\n%s:%d *** " _format, \
                  getBasename(__FILE__).c_str(), __LINE__, \
                  ##_args)
 
