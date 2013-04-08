@@ -82,11 +82,7 @@ static void dumpString(const std::string &output)
     fputs(output.c_str(), stdout);
 }
 
-void SessionHelper::messagev(Level level,
-                             const std::string *prefix,
-                             const char *file,
-                             int line,
-                             const char *function,
+void SessionHelper::messagev(const MessageOptions &options,
                              const char *format,
                              va_list args)
 {
@@ -98,10 +94,10 @@ void SessionHelper::messagev(Level level,
         va_list argsCopy;
         va_copy(argsCopy, args);
         if (m_parentLogger) {
-            m_parentLogger->messagev(level, prefix, file, line, function, format, argsCopy);
+            m_parentLogger->messagev(options, format, argsCopy);
         } else {
-            formatLines(level, DEBUG, getProcessName(),
-                        prefix, format, argsCopy,
+            formatLines(options.m_level, DEBUG, getProcessName(),
+                        options.m_prefix, format, argsCopy,
                         boost::bind(dumpString, _1));
         }
         va_end(argsCopy);
@@ -114,7 +110,7 @@ void SessionHelper::messagev(Level level,
 
     // send to parent
     string log = StringPrintfV(format, args);
-    string strLevel = Logger::levelToStr(level);
+    string strLevel = Logger::levelToStr(options.m_level);
     emitLogOutput(strLevel, log, getProcessName());
 }
 

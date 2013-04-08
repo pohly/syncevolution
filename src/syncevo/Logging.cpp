@@ -184,6 +184,19 @@ void LoggerBase::formatLines(Level msglevel,
     }
 }
 
+Logger::MessageOptions::MessageOptions(Level level,
+                                       const std::string *prefix,
+                                       const char *file,
+                                       int line,
+                                       const char *function) :
+    m_level(level),
+    m_prefix(prefix),
+    m_file(file),
+    m_line(line),
+    m_function(function)
+{
+}
+
 void Logger::message(Level level,
                      const std::string *prefix,
                      const char *file,
@@ -194,7 +207,7 @@ void Logger::message(Level level,
 {
     va_list args;
     va_start(args, format);
-    messagev(level, prefix, file, line, function, format, args);
+    messagev(MessageOptions(level, prefix, file, line, function), format, args);
     va_end(args);
 }
 
@@ -208,7 +221,7 @@ void Logger::message(Level level,
 {
     va_list args;
     va_start(args, format);
-    messagev(level, &prefix, file, line, function, format, args);
+    messagev(MessageOptions(level, &prefix, file, line, function), format, args);
     va_end(args);
 }
 
@@ -281,7 +294,7 @@ int Logger::sysyncPrintf(FILE *stream,
         // in a better way (= to each line) via the prefix parameter.
         format += prefix.size() + 1;
     }
-    LoggerBase::instance().messagev(DEBUG, &prefix, NULL, 0, NULL, format, args);
+    LoggerBase::instance().messagev(MessageOptions(DEBUG, &prefix, NULL, 0, NULL), format, args);
     va_end(args);
 
     return 0;

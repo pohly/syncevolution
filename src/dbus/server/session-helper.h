@@ -82,11 +82,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
 
     // Logger implementation -> output via D-Bus emitLogOutput
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args);
     virtual bool isProcessSafe() const { return false; }

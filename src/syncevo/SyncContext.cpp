@@ -730,11 +730,7 @@ public:
     }
 
 
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args)
     {
@@ -745,13 +741,12 @@ public:
         {
             va_list argscopy;
             va_copy(argscopy, args);
-            m_parentLogger.messagev(level, prefix, file, line, function, format, argscopy);
+            m_parentLogger.messagev(options, format, argscopy);
             va_end(argscopy);
         }
 
         if (m_report &&
-            (level <= ERROR /* ||
-                               (level == SHOW && isErrorString(format, args)) */) &&
+            options.m_level <= ERROR &&
             m_report->getError().empty()) {
             va_list argscopy;
             va_copy(argscopy, args);
@@ -765,7 +760,13 @@ public:
             va_list argscopy;
             va_copy(argscopy, args);
             // once to Synthesis log, with full debugging
-            m_client.getEngine().doDebug(level, prefix ? prefix->c_str() : NULL, file, line, function, format, argscopy);
+            m_client.getEngine().doDebug(options.m_level,
+                                         options.m_prefix ? options.m_prefix->c_str() : NULL,
+                                         options.m_file,
+                                         options.m_line,
+                                         options.m_function,
+                                         format,
+                                         argscopy);
             va_end(argscopy);
         }
     }
@@ -4276,16 +4277,12 @@ private:
     }
 
     /** capture output produced while test ran */
-    void messagev(Level level,
-                  const std::string *prefix,
-                  const char *file,
-                  int line,
-                  const char *function,
+    void messagev(const MessageOptions &options,
                   const char *format,
                   va_list args)
     {
         std::string str = StringPrintfV(format, args);
-        m_out << '[' << levelToStr(level) << ']' << str;
+        m_out << '[' << levelToStr(options.m_level) << ']' << str;
         if (!boost::ends_with(str, "\n")) {
             m_out << std::endl;
         }

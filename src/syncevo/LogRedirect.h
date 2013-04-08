@@ -191,11 +191,7 @@ class LogRedirect : public LoggerStdout
     void flush() throw();
 
     /** format log messages via normal LogStdout and print to a valid stream owned by us */
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args);
 };

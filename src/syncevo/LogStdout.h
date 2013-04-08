@@ -55,20 +55,13 @@ class LoggerStdout : public LoggerBase
 
     ~LoggerStdout();
 
-    virtual void messagev(FILE *file,
-                          Level msglevel,
-                          Level filelevel,
-                          const std::string *prefix,
-                          const char *filename,
-                          int line,
-                          const char *function,
-                          const char *format,
-                          va_list args);
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    void write(FILE *file,
+               Level msglevel,
+               Level filelevel,
+               const std::string *prefix,
+               const char *format,
+               va_list args);
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args);
 

@@ -4463,14 +4463,11 @@ private:
         boost::scoped_array<const char *> m_argv;
 
         /** capture output produced while test ran */
-        void messagev(Level level,
-                      const std::string *prefix,
-                      const char *file,
-                      int line,
-                      const char *function,
+        void messagev(const MessageOptions &options,
                       const char *format,
                       va_list args)
         {
+            Level level = options.m_level;
             if (level <= INFO) {
                 ostringstream &out = level != SHOW ? m_err : m_out;
                 std::string str = StringPrintfV(format, args);

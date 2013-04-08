@@ -347,11 +347,7 @@ private:
      * helper. To be activated only temporarily while executing code
      * in the server which is related to the session.
      */
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args);
     virtual bool isProcessSafe() const { return false; }

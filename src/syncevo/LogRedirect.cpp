@@ -219,11 +219,7 @@ void LogRedirect::restore() throw()
     m_processing = false;
 }
 
-void LogRedirect::messagev(Level level,
-                           const std::string *prefix,
-                           const char *file,
-                           int line,
-                           const char *function,
+void LogRedirect::messagev(const MessageOptions &options,
                            const char *format,
                            va_list args)
 {
@@ -231,14 +227,13 @@ void LogRedirect::messagev(Level level,
     process();
     // Choose output channel: SHOW goes to original stdout,
     // everything else to stderr.
-    LoggerStdout::messagev(level == SHOW ?
-                           (m_out ? m_out : stdout) :
-                           (m_err ? m_err : stderr),
-                           level, getLevel(),
-                           prefix,
-                           file, line, function,
-                           format,
-                           args);
+    LoggerStdout::write(options.m_level == SHOW ?
+                        (m_out ? m_out : stdout) :
+                        (m_err ? m_err : stderr),
+                        options.m_level, getLevel(),
+                        options.m_prefix,
+                        format,
+                        args);
 }
 
 void LogRedirect::redirect(int original, FDs &fds) throw()
@@ -662,16 +657,12 @@ class LogRedirectTest : public CppUnit::TestFixture {
             delete m_redirect;
         }
 
-        virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
-                          const char *format,
-                          va_list args)
+        virtual void messagev(const MessageOptions &options,
+                              const char *format,
+                              va_list args)
         {
-            CPPUNIT_ASSERT(level <= DEBUG && level >= 0);
-            m_streams[level] << StringPrintfV(format, args);
+            CPPUNIT_ASSERT(options.m_level <= DEBUG && options.m_level >= 0);
+            m_streams[options.m_level] << StringPrintfV(format, args);
         }
         virtual bool isProcessSafe() const { return true; }
     };

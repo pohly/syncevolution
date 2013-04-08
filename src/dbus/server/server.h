@@ -658,23 +658,14 @@ public:
      * Not only print the message in the console
      * but also send them as signals to clients
      */
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args) {
-        messagev(level, prefix, file, line,
-                 function, format, args,
+        messagev(options, format, args,
                  getPath(),
                  getProcessName());
     }
-    void messagev(Level level,
-                  const std::string *prefix,
-                  const char *file,
-                  int line,
-                  const char *function,
+    void messagev(const MessageOptions &options,
                   const char *format,
                   va_list args,
                   const std::string &dbusPath,

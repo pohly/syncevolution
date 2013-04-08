@@ -836,11 +836,7 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
     /**
      * Write message into our own log and send to parent.
      */
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args)
     {
@@ -851,7 +847,7 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
             // prefix is used to set session path
             // for general server output, the object path field is dbus server
             // the object path can't be empty for object paths prevent using empty string.
-            string strLevel = Logger::levelToStr(level);
+            string strLevel = Logger::levelToStr(options.m_level);
             string log = StringPrintfV(format, args);
             m_child->m_logOutput(strLevel, log);
         }

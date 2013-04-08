@@ -804,18 +804,13 @@ void Session::useHelperAsync(const SimpleResult &result)
     }
 }
 
-void Session::messagev(Level level,
-                       const std::string *prefix,
-                       const char *file,
-                       int line,
-                       const char *function,
+void Session::messagev(const MessageOptions &options,
                        const char *format,
                        va_list args)
 {
     // log with session path and empty process name,
     // just like the syncevo-dbus-helper does
-    string strLevel = Logger::levelToStr(level);
-    m_server.messagev(level, NULL, NULL, 0, NULL,
+    m_server.messagev(options,
                       format, args,
                       getPath(), "");
 }

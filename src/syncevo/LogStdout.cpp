@@ -58,15 +58,12 @@ static void appendOutput(std::string &output, std::string &chunk, size_t expecte
     output.append(chunk);
 }
 
-void LoggerStdout::messagev(FILE *file,
-                            Level msglevel,
-                            Level filelevel,
-                            const std::string *prefix,
-                            const char *filename,
-                            int line,
-                            const char *function,
-                            const char *format,
-                            va_list args)
+void LoggerStdout::write(FILE *file,
+                         Level msglevel,
+                         Level filelevel,
+                         const std::string *prefix,
+                         const char *format,
+                         va_list args)
 {
     if (file &&
         msglevel <= filelevel) {
@@ -82,17 +79,13 @@ void LoggerStdout::messagev(FILE *file,
     }
 }
 
-void LoggerStdout::messagev(Level level,
-                            const std::string *prefix,
-                            const char *file,
-                            int line,
-                            const char *function,
+void LoggerStdout::messagev(const MessageOptions &options,
                             const char *format,
                             va_list args)
 {
-    messagev(m_file, level, getLevel(),
-             prefix, file, line, function,
-             format, args);
+    write(m_file, options.m_level, getLevel(),
+          options.m_prefix,
+          format, args);
 }
 
 SE_END_CXX

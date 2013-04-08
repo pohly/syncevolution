@@ -152,22 +152,38 @@ class Logger
     virtual ~Logger() {}
 
     /**
+     * Collects all the parameters which may get passed to
+     * messagev.
+     */
+    class MessageOptions {
+    public:
+        /** level for current message */
+        Level m_level;
+        /** inserted at beginning of each line, if non-NULL */
+        const std::string *m_prefix;
+        /** source file where message comes from, if non-NULL */
+        char *m_file;
+        /** source line number, if file is non-NULL */
+        int m_line;
+        /** surrounding function name, if non-NULL */
+        char *m_function;
+
+        MessageOptions(Level level,
+                       const std::string *prefix,
+                       const char *file,
+                       int line,
+                       const char *function);
+    };
+
+    /**
      * output a single message
      *
-     * @param level     level for current message
-     * @param prefix    inserted at beginning of each line, if non-NULL
-     * @param file      source file where message comes from, if non-NULL
-     * @param line      source line number, if file is non-NULL
-     * @param function  surrounding function name, if non-NULL
+     * @param options   carries additional information about the message
      * @param format    sprintf format
      * @param args      parameters for sprintf: consumed by this function, 
      *                  make copy with va_copy() if necessary!
      */
-    virtual void messagev(Level level,
-                          const std::string *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
+    virtual void messagev(const MessageOptions &options,
                           const char *format,
                           va_list args) = 0;
 

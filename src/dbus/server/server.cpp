@@ -909,11 +909,7 @@ void Server::updateDevice(const string &deviceId,
     }
 }
 
-void Server::messagev(Level level,
-                      const std::string *prefix,
-                      const char *file,
-                      int line,
-                      const char *function,
+void Server::messagev(const MessageOptions &options,
                       const char *format,
                       va_list args,
                       const std::string &dbusPath,
@@ -922,13 +918,13 @@ void Server::messagev(Level level,
     // iterating over args in messagev() is destructive, must make a copy first
     va_list argsCopy;
     va_copy(argsCopy, args);
-    m_parentLogger.messagev(level, prefix, file, line, function, format, args);
+    m_parentLogger.messagev(options, format, args);
     // prefix is used to set session path
     // for general server output, the object path field is dbus server
     // the object path can't be empty for object paths prevent using empty string.
-    if (level <= m_dbusLogLevel) {
+    if (options.m_level <= m_dbusLogLevel) {
         string log = StringPrintfV(format, argsCopy);
-        logOutput(dbusPath, level, log, procname);
+        logOutput(dbusPath, options.m_level, log, procname);
     }
     va_end(argsCopy);
 }

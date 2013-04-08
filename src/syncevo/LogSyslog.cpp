@@ -66,11 +66,7 @@ static void printToSyslog(int sysloglevel, std::string &chunk, size_t expectedTo
     }
 }
 
-void LoggerSyslog::messagev(Level level,
-                            const std::string *prefix,
-                            const char *file,
-                            int line,
-                            const char *function,
+void LoggerSyslog::messagev(const MessageOptions &options,
                             const char *format,
                             va_list args)
 {
@@ -81,16 +77,16 @@ void LoggerSyslog::messagev(Level level,
     {
         va_list argscopy;
         va_copy(argscopy, args);
-        m_parentLogger.messagev(level, prefix, file, line, function, format, argscopy);
+        m_parentLogger.messagev(options, format, argscopy);
         va_end(argscopy);
     }
 
-    if (level <= getLevel()) {
-        formatLines(level, getLevel(),
+    if (options.m_level <= getLevel()) {
+        formatLines(options.m_level, getLevel(),
                     "", // process name is set when opening the syslog
-                    prefix,
+                    options.m_prefix,
                     format, args,
-                    boost::bind(printToSyslog, getSyslogLevel(level), _1, _2));
+                    boost::bind(printToSyslog, getSyslogLevel(options.m_level), _1, _2));
     }
 }
 
