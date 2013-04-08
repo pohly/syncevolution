@@ -33,7 +33,7 @@ SE_BEGIN_CXX
 /**
  * A logger which writes to stdout or a file.
  */
-class LoggerStdout : public LoggerBase
+class LoggerStdout : public Logger
 {
     FILE *m_file;
     bool m_closeFile;

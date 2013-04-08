@@ -32,10 +32,10 @@ SE_BEGIN_CXX
 /**
  * A logger which writes to syslog.
  */
-class LoggerSyslog : public LoggerBase
+class LoggerSyslog : public Logger
 {
     const std::string m_processName;
-    LoggerBase &m_parentLogger;
+    Logger &m_parentLogger;
 
 public:
     /**

@@ -154,7 +154,7 @@ int main(int argc, char **argv, char **envp)
         // Redirect output and optionally log to syslog.
         LogRedirect redirect(true);
         redirect.setLevel(stdoutEnabled ? level : Logger::NONE);
-        std::auto_ptr<LoggerBase> syslogger;
+        std::auto_ptr<Logger> syslogger;
         if (syslogEnabled && level > Logger::NONE) {
             syslogger.reset(new LoggerSyslog(execName));
             syslogger->setLevel(level);

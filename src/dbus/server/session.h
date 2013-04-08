@@ -62,7 +62,7 @@ class InfoReq;
  * for simple sessions).
  */
 class Session : public GDBusCXX::DBusObjectHelper,
-                public LoggerBase,
+                public Logger,
                 public Resource,
                 private ReadOperations,
                 private boost::noncopyable
@@ -354,10 +354,10 @@ private:
     class LoggingGuard {
     public:
         LoggingGuard(Session *session) {
-            LoggerBase::pushLogger(session);
+            Logger::pushLogger(session);
         }
         ~LoggingGuard() {
-            LoggerBase::popLogger();
+            Logger::popLogger();
         }
     };
 

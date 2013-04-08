@@ -208,7 +208,7 @@ public:
             }
         }
         // get configuration and set obligatory fields
-        LoggerBase::instance().setLevel(Logger::DEBUG);
+        Logger::instance().setLevel(Logger::DEBUG);
         std::string root = std::string("evolution/") + server + "_" + m_clientID;
         boost::shared_ptr<SyncConfig> config(new SyncConfig(string(server) + "_" + m_clientID));
         boost::shared_ptr<SyncConfig> from = boost::shared_ptr<SyncConfig> ();

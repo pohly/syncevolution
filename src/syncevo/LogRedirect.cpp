@@ -132,7 +132,7 @@ LogRedirect::LogRedirect(bool both, const char *filename) throw()
                            fileno(m_out) :
                            m_stderr.m_copy), "w");
     }
-    LoggerBase::pushLogger(this);
+    Logger::pushLogger(this);
     m_redirect = this;
 
     if (!getenv("SYNCEVOLUTION_DEBUG")) {
@@ -187,7 +187,7 @@ LogRedirect::~LogRedirect() throw()
         free(m_buffer);
     }
     if (pop) {
-        LoggerBase::popLogger();
+        Logger::popLogger();
     }
 }
 
@@ -440,9 +440,9 @@ bool LogRedirect::process(FDs &fds) throw()
                     if (eol) {
                         m_stdoutData.append(text, eol - text);
                         text = eol + 1;
-                        LoggerBase::instance().message(level, prefix.empty() ? NULL : &prefix,
-                                                       NULL, 0, NULL,
-                                                       "%s", m_stdoutData.c_str());
+                        Logger::instance().message(level, prefix.empty() ? NULL : &prefix,
+                                                   NULL, 0, NULL,
+                                                   "%s", m_stdoutData.c_str());
                         m_stdoutData.clear();
                     }
                 }
@@ -502,9 +502,9 @@ bool LogRedirect::process(FDs &fds) throw()
             if (len > 0 && text[len - 1] == '\n') {
                 text[len - 1] = 0;
             }
-            LoggerBase::instance().message(level, prefix.empty() ? NULL : &prefix,
-                                           NULL, 0, NULL,
-                                           "%s", text);
+            Logger::instance().message(level, prefix.empty() ? NULL : &prefix,
+                                       NULL, 0, NULL,
+                                       "%s", text);
             available = 0;
         }
     } while(have_message);
@@ -617,9 +617,9 @@ void LogRedirect::flush() throw()
     if (!m_stdoutData.empty()) {
         std::string buffer;
         std::swap(buffer, m_stdoutData);
-        LoggerBase::instance().message(Logger::SHOW, NULL,
-                                       NULL, 0, NULL,
-                                       "%s", buffer.c_str());
+        Logger::instance().message(Logger::SHOW, NULL,
+                                   NULL, 0, NULL,
+                                   "%s", buffer.c_str());
     }
 }
 
@@ -641,7 +641,7 @@ class LogRedirectTest : public CppUnit::TestFixture {
      * redirect stdout/stderr, then intercept the log messages and
      * store them for inspection
      */
-    class LogBuffer : public LoggerBase, private boost::noncopyable
+    class LogBuffer : public Logger, private boost::noncopyable
     {
     public:
         std::stringstream m_streams[DEBUG + 1];

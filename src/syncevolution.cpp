@@ -448,7 +448,7 @@ int main( int argc, char **argv )
 
     try {
         if (getenv("SYNCEVOLUTION_DEBUG")) {
-            LoggerBase::instance().setLevel(Logger::DEBUG);
+            Logger::instance().setLevel(Logger::DEBUG);
         }
 
         SyncEvo::KeyringSyncCmdline cmdline(argc, argv);
@@ -744,8 +744,8 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         while(!isActive()) {
             g_main_loop_run(m_loop);
         }
-        // Logger::Level level = LoggerBase::instance().getLevel();
-        // LoggerBase::instance().setLevel(Logger::DEBUG);
+        // Logger::Level level = Logger::instance().getLevel();
+        // Logger::instance().setLevel(Logger::DEBUG);
         resetReplies();
         m_session->executeAsync(args);
 
@@ -772,7 +772,7 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
         }
 
         //restore logging level
-        // LoggerBase::instance().setLevel(level);
+        // Logger::instance().setLevel(level);
         m_session->setRunSync(false);
     }
     return m_result;
@@ -1005,7 +1005,7 @@ void RemoteSession::logOutput(Logger::Level level, const string &log, const stri
     if(m_output) {
         Logger::MessageOptions options(level);
         options.m_processName = &procname;
-        SyncEvo::LoggerBase::instance().messageWithOptions(options, "%s", log.c_str());
+        SyncEvo::Logger::instance().messageWithOptions(options, "%s", log.c_str());
     }
 }
 

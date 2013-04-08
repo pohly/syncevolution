@@ -69,12 +69,12 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(emitMessage);
     add(emitShutdown);
     activate();
-    LoggerBase::pushLogger(this);
+    Logger::pushLogger(this);
 }
 
 SessionHelper::~SessionHelper()
 {
-    LoggerBase::popLogger();
+    Logger::popLogger();
 }
 
 static void dumpString(const std::string &output)

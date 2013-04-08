@@ -29,15 +29,24 @@ SE_BEGIN_CXX
 
 std::string Logger::m_processName;
 
-static std::vector<LoggerBase *> &loggers()
+Logger::Logger() :
+    m_level(INFO)
+{
+}
+
+Logger::~Logger()
+{
+}
+
+static std::vector<Logger *> &loggers()
 {
     // allocate array once and never free it because it might be needed till
     // the very end of the application life cycle
-    static std::vector<LoggerBase *> *loggers = new std::vector<LoggerBase *>;
+    static std::vector<Logger *> *loggers = new std::vector<Logger *>;
     return *loggers;
 }
 
-LoggerBase &LoggerBase::instance()
+Logger &Logger::instance()
 {
     // prevent destructing this instance as part of the executable's
     // shutdown by allocating it dynamically, because it may be
@@ -52,12 +61,12 @@ LoggerBase &LoggerBase::instance()
     }
 }
 
-void LoggerBase::pushLogger(LoggerBase *logger)
+void Logger::pushLogger(Logger *logger)
 {
     loggers().push_back(logger);
 }
 
-void LoggerBase::popLogger()
+void Logger::popLogger()
 {
     if (loggers().empty()) {
         throw "too many popLogger() calls";
@@ -66,19 +75,19 @@ void LoggerBase::popLogger()
     }
 }
 
-int LoggerBase::numLoggers()
+int Logger::numLoggers()
 {
     return (int)loggers().size();
 }
 
-LoggerBase *LoggerBase::loggerAt(int index)
+Logger *Logger::loggerAt(int index)
 {
     return index < 0 || index >= (int)loggers().size() ?
         NULL :
         loggers()[index];
 }
 
-void LoggerBase::formatLines(Level msglevel,
+void Logger::formatLines(Level msglevel,
                              Level outputlevel,
                              const std::string *processName,
                              const std::string *prefix,
@@ -293,18 +302,18 @@ void Logger::glogFunc(const gchar *logDomain,
                       const gchar *message,
                       gpointer userData)
 {
-    LoggerBase::instance().message((logLevel & (G_LOG_LEVEL_ERROR|G_LOG_LEVEL_CRITICAL)) ? ERROR :
-                                   (logLevel & G_LOG_LEVEL_WARNING) ? WARNING :
-                                   (logLevel & (G_LOG_LEVEL_MESSAGE|G_LOG_LEVEL_INFO)) ? SHOW :
-                                   DEBUG,
-                                   NULL,
-                                   NULL,
-                                   0,
-                                   NULL,
-                                   "%s%s%s",
-                                   logDomain ? logDomain : "",
-                                   logDomain ? ": " : "",
-                                   message);
+    Logger::instance().message((logLevel & (G_LOG_LEVEL_ERROR|G_LOG_LEVEL_CRITICAL)) ? ERROR :
+                               (logLevel & G_LOG_LEVEL_WARNING) ? WARNING :
+                               (logLevel & (G_LOG_LEVEL_MESSAGE|G_LOG_LEVEL_INFO)) ? SHOW :
+                               DEBUG,
+                               NULL,
+                               NULL,
+                               0,
+                               NULL,
+                               "%s%s%s",
+                               logDomain ? logDomain : "",
+                               logDomain ? ": " : "",
+                               message);
 }
 
 #endif
@@ -322,7 +331,7 @@ int Logger::sysyncPrintf(FILE *stream,
         // in a better way (= to each line) via the prefix parameter.
         format += prefix.size() + 1;
     }
-    LoggerBase::instance().messagev(MessageOptions(DEBUG, &prefix, NULL, 0, NULL), format, args);
+    Logger::instance().messagev(MessageOptions(DEBUG, &prefix, NULL, 0, NULL), format, args);
     va_end(args);
 
     return 0;

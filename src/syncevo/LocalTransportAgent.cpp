@@ -177,7 +177,7 @@ void LocalTransportAgent::logChildOutput(const std::string &level, const std::st
 {
     Logger::MessageOptions options(Logger::strToLevel(level.c_str()));
     options.m_processName = &m_clientContext;
-    SyncEvo::LoggerBase::instance().messageWithOptions(options, "%s", message.c_str());
+    SyncEvo::Logger::instance().messageWithOptions(options, "%s", message.c_str());
 }
 
 void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn)
@@ -550,7 +550,7 @@ public:
                           true /* ignore transmission failures */> m_logOutput;
 };
 
-class LocalTransportAgentChild : public TransportAgent, private LoggerBase
+class LocalTransportAgentChild : public TransportAgent, private Logger
 {
     /** final return code of our main(): non-zero indicates that we need to shut down */
     int m_ret;
@@ -862,7 +862,7 @@ public:
         m_reportSent(false),
         m_status(INACTIVE)
     {
-        LoggerBase::pushLogger(this);
+        Logger::pushLogger(this);
 
         m_forkexec->m_onConnect.connect(boost::bind(&LocalTransportAgentChild::onConnect, this, _1));
         m_forkexec->m_onFailure.connect(boost::bind(&LocalTransportAgentChild::onFailure, this, _1, _2));
@@ -882,7 +882,7 @@ public:
 
     ~LocalTransportAgentChild()
     {
-        LoggerBase::popLogger();
+        Logger::popLogger();
     }
 
     void run()
@@ -1119,7 +1119,7 @@ int LocalTransportMain(int argc, char **argv)
 
     try {
         if (getenv("SYNCEVOLUTION_DEBUG")) {
-            LoggerBase::instance().setLevel(Logger::DEBUG);
+            Logger::instance().setLevel(Logger::DEBUG);
         }
         // process name will be set to target config name once it is known
         Logger::setProcessName("syncevo-local-sync");

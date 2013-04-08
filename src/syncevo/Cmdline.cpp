@@ -4362,7 +4362,7 @@ private:
      * vararg constructor with NULL termination,
      * out and error stream into stringstream members
      */
-    class TestCmdline : private LoggerBase {
+    class TestCmdline : private Logger {
         void init() {
             pushLogger(this);
 

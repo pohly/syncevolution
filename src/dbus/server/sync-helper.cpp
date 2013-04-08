@@ -96,7 +96,7 @@ int main(int argc, char **argv, char **envp)
 
     try {
         if (debug) {
-            LoggerBase::instance().setLevel(Logger::DEBUG);
+            Logger::instance().setLevel(Logger::DEBUG);
             Logger::setProcessName(StringPrintf("syncevo-dbus-helper-%ld", (long)getpid()));
         }
 

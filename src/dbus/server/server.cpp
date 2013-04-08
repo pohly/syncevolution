@@ -282,7 +282,7 @@ Server::Server(GMainLoop *loop,
     m_logOutputSignal(*this, "LogOutput"),
     m_autoTerm(m_loop, m_shutdownRequested, duration),
     m_dbusLogLevel(Logger::INFO),
-    m_parentLogger(LoggerBase::instance())
+    m_parentLogger(Logger::instance())
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -327,8 +327,8 @@ void Server::activate()
     // out object isn't visible to it yet.
     GDBusCXX::DBusObjectHelper::activate();
 
-    LoggerBase::pushLogger(this);
-    setLevel(LoggerBase::DEBUG);
+    Logger::pushLogger(this);
+    setLevel(Logger::DEBUG);
 
     m_presence.reset(new PresenceStatus(*this));
 
@@ -363,7 +363,7 @@ Server::~Server()
     m_connman.reset();
     m_networkManager.reset();
     m_presence.reset();
-    LoggerBase::popLogger();
+    Logger::popLogger();
 }
 
 bool Server::shutdown()

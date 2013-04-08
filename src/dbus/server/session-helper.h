@@ -43,7 +43,7 @@ class ForkExecChild;
  * traditional syncevo-dbus-server did.
  */
 class SessionHelper : public GDBusCXX::DBusObjectHelper,
-    private LoggerBase,
+    private Logger,
     private boost::noncopyable
 {
     GMainLoop *m_loop;

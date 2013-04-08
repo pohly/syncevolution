@@ -270,7 +270,7 @@ public:
 // this class owns the logging directory and is responsible
 // for redirecting output at the start and end of sync (even
 // in case of exceptions thrown!)
-class LogDir : public LoggerBase, private boost::noncopyable, private LogDirNames {
+class LogDir : public Logger, private boost::noncopyable, private LogDirNames {
     SyncContext &m_client;
     Logger &m_parentLogger;  /**< the logger which was active before we started to intercept messages */
     string m_logdir;         /**< configured backup root dir */
@@ -290,7 +290,7 @@ class LogDir : public LoggerBase, private boost::noncopyable, private LogDirName
     SyncReport *m_report;    /**< record start/end times here */
 
 public:
-    LogDir(SyncContext &client) : m_client(client), m_parentLogger(LoggerBase::instance()), m_info(NULL), m_readonly(false), m_report(NULL)
+    LogDir(SyncContext &client) : m_client(client), m_parentLogger(Logger::instance()), m_info(NULL), m_readonly(false), m_report(NULL)
     {
         // Set default log directory. This will be overwritten with a user-specified
         // location later on, if one was selected by the user. SyncEvolution >= 0.9 alpha
@@ -537,10 +537,10 @@ public:
             break;
         }
         if (mode != SESSION_USE_PATH) {
-            LoggerBase::instance().setLevel(level);
+            Logger::instance().setLevel(level);
         }
         setLevel(level);
-        LoggerBase::pushLogger(this);
+        Logger::pushLogger(this);
 
         time_t start = time(NULL);
         if (m_report) {
@@ -720,8 +720,8 @@ public:
 
     // remove redirection of logging (safe for destructor)
     void restore() {
-        if (&LoggerBase::instance() == this) {
-            LoggerBase::popLogger();
+        if (&Logger::instance() == this) {
+            Logger::popLogger();
         }
     }
 
@@ -3973,7 +3973,7 @@ void SyncContext::status()
                 out.str().c_str());
 
     sourceList.accessSession(getLogDir());
-    LoggerBase::instance().setLevel(Logger::INFO);
+    Logger::instance().setLevel(Logger::INFO);
     string prevLogdir = sourceList.getPrevLogdir();
     bool found = access(prevLogdir.c_str(), R_OK|X_OK) == 0;
 
@@ -4081,7 +4081,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
 
     SourceList sourceList(*this, false);
     sourceList.accessSession(dirname.c_str());
-    LoggerBase::instance().setLevel(Logger::INFO);
+    Logger::instance().setLevel(Logger::INFO);
     initSources(sourceList);
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
@@ -4157,7 +4157,7 @@ string SyncContext::readSessionInfo(const string &dir, SyncReport &report)
  * With that setup and a fake SyncContext it is possible to simulate
  * sessions and test the resulting logdirs.
  */
-class LogDirTest : public CppUnit::TestFixture, private SyncContext, private LoggerBase
+class LogDirTest : public CppUnit::TestFixture, private SyncContext, private Logger
 {
 public:
     LogDirTest() :
@@ -4305,7 +4305,7 @@ private:
      * @return logdir created for the session
      */
     string session(bool changeServer, SyncMLStatus status, ...) {
-        Logger::Level level = LoggerBase::instance().getLevel();
+        Logger::Level level = Logger::instance().getLevel();
         SourceList list(*this, true);
         list.setLogLevel(SourceList::LOGGING_QUIET);
         SyncReport report;
@@ -4355,7 +4355,7 @@ private:
         }
         list.syncDone(status, &report);
 
-        LoggerBase::instance().setLevel(level);
+        Logger::instance().setLevel(level);
         return list.getLogdir();
     }
 

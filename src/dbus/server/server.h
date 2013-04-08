@@ -60,7 +60,7 @@ using namespace std;
  * spinning of sync sessions as requested by clients.
  */
 class Server : public GDBusCXX::DBusObjectHelper,
-               public LoggerBase
+               public Logger
 {
     GMainLoop *m_loop;
     bool &m_shutdownRequested;
@@ -393,7 +393,7 @@ class Server : public GDBusCXX::DBusObjectHelper,
 
     //records the parent logger, dbus server acts as logger to
     //send signals to clients and put logs in the parent logger.
-    LoggerBase &m_parentLogger;
+    Logger &m_parentLogger;
 
     /**
      * All active timeouts created by addTimeout().

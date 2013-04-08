@@ -44,6 +44,14 @@ SE_BEGIN_CXX
  * implemented by other classes to add information (like a certain
  * prefix) before passing the message on to a global instance for the
  * actual processing.
+ *
+ * The static methods provide some common utility code and manage a
+ * global stack of loggers. The one pushed latest is called first to
+ * handle a new message. It can find its parent logger (= the one
+ * added just before it) and optionally pass the message up the chain
+ * before or after processing it itself.
+ *
+ * All methods must be thread-safe.
  */
 class Logger
 {
@@ -149,7 +157,8 @@ class Logger
                             const char *format,
                             ...);
 
-    virtual ~Logger() {}
+    Logger();
+    virtual ~Logger();
 
     /**
      * Collects all the parameters which may get passed to
@@ -221,28 +230,13 @@ class Logger
 #endif
         ;
 
- protected:
-    static std::string m_processName;
-};
-
-/**
- * Global logging, implemented as a singleton with one instance per
- * process.
- *
- * @TODO avoid global variable
- */
-class LoggerBase : public Logger
-{
- public:
-     LoggerBase() : m_level(INFO) {}
-
     /**
      * Grants access to the singleton which implements logging.
      * The implementation of this function and thus the Log
      * class itself is platform specific: if no Log instance
      * has been set yet, then this call has to create one.
      */
-    static LoggerBase &instance();
+    static Logger &instance();
 
     /**
      * Overrides the default Logger implementation. The Logger class
@@ -250,8 +244,8 @@ class LoggerBase : public Logger
      *
      * @param logger    will be used for all future logging activities
      */
+    static void pushLogger(Logger *logger);
 
-    static void pushLogger(LoggerBase *logger);
     /**
      * Remove the current logger and restore previous one.
      * Must match a pushLogger() call.
@@ -266,7 +260,7 @@ class LoggerBase : public Logger
      * @param index    0 for oldest (inner-most) logger
      * @return pointer or NULL for invalid index
      */
-    static LoggerBase *loggerAt(int index);
+    static Logger *loggerAt(int index);
 
     virtual void setLevel(Level level) { m_level = level; }
     virtual Level getLevel() { return m_level; }
@@ -294,6 +288,7 @@ class LoggerBase : public Logger
                      boost::function<void (std::string &chunk, size_t expectedTotal)> print);
 
  private:
+    static std::string m_processName;
     Level m_level;
 
     /**
@@ -317,13 +312,13 @@ class LoggerBase : public Logger
  * @TODO add function name (GCC extension)
  */
 #define SE_LOG(_prefix, _level, _format, _args...) \
-    SyncEvo::LoggerBase::instance().message(_level, \
-                                            _prefix, \
-                                            __FILE__, \
-                                            __LINE__, \
-                                            NULL, \
-                                            _format, \
-                                            ##_args); \
+    SyncEvo::Logger::instance().message(_level, \
+                                        _prefix, \
+                                        __FILE__, \
+                                        __LINE__, \
+                                        NULL, \
+                                        _format, \
+                                        ##_args);
 
 #define SE_LOG_SHOW(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::SHOW, _format, ##_args)
 #define SE_LOG_ERROR(_prefix, _format, _args...) SE_LOG(_prefix, SyncEvo::Logger::ERROR, _format, ##_args)

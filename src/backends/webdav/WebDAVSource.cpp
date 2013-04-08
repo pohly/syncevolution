@@ -161,7 +161,7 @@ public:
     {
         return m_context ?
             m_context->getLogLevel().get() :
-            LoggerBase::instance().getLevel();
+            Logger::instance().getLevel();
     }
 
 private:
@@ -527,7 +527,7 @@ void WebDAVSource::contactServer()
     // point, doesn't have to succeed either (Google 401 throttling
     // workaround not active here, so it may really fail!).
 #ifdef HAVE_LIBNEON_OPTIONS
-    if (LoggerBase::instance().getLevel() >= Logger::DEV) {
+    if (Logger::instance().getLevel() >= Logger::DEV) {
         try {
             SE_LOG_DEBUG(NULL, "read capabilities of %s", m_calendar.toURL().c_str());
             m_session->startOperation("OPTIONS", Timespec());
@@ -798,7 +798,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 deadline = Timespec();
             }
 
-            if (LoggerBase::instance().getLevel() >= Logger::DEV) {
+            if (Logger::instance().getLevel() >= Logger::DEV) {
                 // First dump WebDAV "allprops" properties (does not contain
                 // properties which must be asked for explicitly!). Only
                 // relevant for debugging.
