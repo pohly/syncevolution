@@ -49,16 +49,16 @@ void TrackingSyncSource::checkStatus(SyncSourceReport &changes)
     string oldRevision = m_metaNode->readProperty("databaseRevision");
     if (!oldRevision.empty()) {
         string newRevision = databaseRevision();
-        SE_LOG_DEBUG(this, NULL, "old database revision '%s', new revision '%s'",
+        SE_LOG_DEBUG(NULL, getDisplayName(), "old database revision '%s', new revision '%s'",
                      oldRevision.c_str(),
                      newRevision.c_str());
         if (newRevision == oldRevision) {
-            SE_LOG_DEBUG(this, NULL, "revisions match, no item changes");
+            SE_LOG_DEBUG(NULL, getDisplayName(), "revisions match, no item changes");
             mode = CHANGES_NONE;
         }
     }
     if (mode == CHANGES_FULL) {
-        SE_LOG_DEBUG(this, NULL, "using full item scan to detect changes");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "using full item scan to detect changes");
     }
 
     detectChanges(*m_trackingNode, mode);
@@ -86,17 +86,17 @@ void TrackingSyncSource::beginSync(const std::string &lastToken, const std::stri
     }
     // slow sync if token is empty
     if (token.empty()) {
-        SE_LOG_DEBUG(this, NULL, "slow sync or testing, do full item scan to detect changes");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "slow sync or testing, do full item scan to detect changes");
         mode = CHANGES_SLOW;
     } else {
         string oldRevision = m_metaNode->readProperty("databaseRevision");
         if (!oldRevision.empty()) {
             string newRevision = databaseRevision();
-            SE_LOG_DEBUG(this, NULL, "old database revision '%s', new revision '%s'",
+            SE_LOG_DEBUG(NULL, getDisplayName(), "old database revision '%s', new revision '%s'",
                          oldRevision.c_str(),
                          newRevision.c_str());
             if (newRevision == oldRevision) {
-                SE_LOG_DEBUG(this, NULL, "revisions match, no item changes");
+                SE_LOG_DEBUG(NULL, getDisplayName(), "revisions match, no item changes");
                 mode = CHANGES_NONE;
             }
 
@@ -107,7 +107,7 @@ void TrackingSyncSource::beginSync(const std::string &lastToken, const std::stri
         }
     }
     if (mode == CHANGES_FULL) {
-        SE_LOG_DEBUG(this, NULL, "using full item scan to detect changes");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "using full item scan to detect changes");
     }
 
     bool forceSlowSync = detectChanges(*m_trackingNode, mode);

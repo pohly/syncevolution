@@ -83,7 +83,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
 
     // Logger implementation -> output via D-Bus emitLogOutput
     virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,

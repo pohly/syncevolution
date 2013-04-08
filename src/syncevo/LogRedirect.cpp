@@ -220,7 +220,7 @@ void LogRedirect::restore() throw()
 }
 
 void LogRedirect::messagev(Level level,
-                           const char *prefix,
+                           const std::string *prefix,
                            const char *file,
                            int line,
                            const char *function,
@@ -430,7 +430,7 @@ bool LogRedirect::process(FDs &fds) throw()
             // Now pass it to logger, with a level determined by
             // the channel. This is the point where we can filter
             // out known noise.
-            const char *prefix = NULL;
+            std::string prefix;
             Logger::Level level = Logger::DEV;
             char *text = m_buffer;
 
@@ -444,7 +444,7 @@ bool LogRedirect::process(FDs &fds) throw()
                     if (eol) {
                         m_stdoutData.append(text, eol - text);
                         text = eol + 1;
-                        LoggerBase::instance().message(level, prefix,
+                        LoggerBase::instance().message(level, prefix.empty() ? NULL : &prefix,
                                                        NULL, 0, NULL,
                                                        "%s", m_stdoutData.c_str());
                         m_stdoutData.clear();
@@ -506,7 +506,7 @@ bool LogRedirect::process(FDs &fds) throw()
             if (len > 0 && text[len - 1] == '\n') {
                 text[len - 1] = 0;
             }
-            LoggerBase::instance().message(level, prefix,
+            LoggerBase::instance().message(level, prefix.empty() ? NULL : &prefix,
                                            NULL, 0, NULL,
                                            "%s", text);
             available = 0;
@@ -663,7 +663,7 @@ class LogRedirectTest : public CppUnit::TestFixture {
         }
 
         virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,

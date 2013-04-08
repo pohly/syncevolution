@@ -164,21 +164,32 @@ class Logger
      *                  make copy with va_copy() if necessary!
      */
     virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,
                           const char *format,
                           va_list args) = 0;
 
-    /** default: redirect into messagev() */
-    virtual void message(Level level,
-                         const char *prefix,
-                         const char *file,
-                         int line,
-                         const char *function,
-                         const char *format,
-                         ...)
+    /** redirect into messagev() */
+    void message(Level level,
+                 const std::string *prefix,
+                 const char *file,
+                 int line,
+                 const char *function,
+                 const char *format,
+                 ...)
+#ifdef __GNUC__
+        __attribute__((format(printf, 7, 8)))
+#endif
+        ;
+    void message(Level level,
+                 const std::string &prefix,
+                 const char *file,
+                 int line,
+                 const char *function,
+                 const char *format,
+                 ...)
 #ifdef __GNUC__
         __attribute__((format(printf, 7, 8)))
 #endif
@@ -282,7 +293,7 @@ class LoggerBase : public Logger
     void formatLines(Level msglevel,
                      Level outputlevel,
                      const std::string &processName,
-                     const char *prefix,
+                     const std::string *prefix,
                      const char *format,
                      va_list args,
                      boost::function<void (std::string &chunk, size_t expectedTotal)> print);

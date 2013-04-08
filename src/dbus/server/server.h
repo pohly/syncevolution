@@ -659,7 +659,7 @@ public:
      * but also send them as signals to clients
      */
     virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,
@@ -671,7 +671,7 @@ public:
                  getProcessName());
     }
     void messagev(Level level,
-                  const char *prefix,
+                  const std::string *prefix,
                   const char *file,
                   int line,
                   const char *function,

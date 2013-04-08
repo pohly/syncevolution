@@ -837,7 +837,7 @@ class LocalTransportAgentChild : public TransportAgent, private LoggerBase
      * Write message into our own log and send to parent.
      */
     virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,

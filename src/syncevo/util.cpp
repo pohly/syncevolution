@@ -818,7 +818,7 @@ const char * const SYNTHESIS_PROBLEM = "error code from Synthesis engine ";
 const char * const SYNCEVOLUTION_PROBLEM = "error code from SyncEvolution ";
 
 SyncMLStatus Exception::handle(SyncMLStatus *status,
-                               Logger *logger,
+                               const std::string *logPrefix,
                                std::string *explanation,
                                Logger::Level level,
                                HandleExceptionFlags flags)
@@ -831,7 +831,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     try {
         throw;
     } catch (const TransportException &ex) {
-        SE_LOG_DEBUG(logger, NULL, "TransportException thrown at %s:%d",
+        SE_LOG_DEBUG(NULL, logPrefix, "TransportException thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
         error = std::string(TRANSPORT_PROBLEM) + ex.what();
         new_status = SyncMLStatus(sysync::LOCERR_TRANSPFAIL);
@@ -842,7 +842,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
                              Status2String(new_status).c_str());
     } catch (const StatusException &ex) {
         new_status = ex.syncMLStatus();
-        SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
+        SE_LOG_DEBUG(NULL, logPrefix, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
         error = StringPrintf("%s%s: %s",
                              SYNCEVOLUTION_PROBLEM,
@@ -852,7 +852,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
             level = Logger::DEBUG;
         }
     } catch (const Exception &ex) {
-        SE_LOG_DEBUG(logger, NULL, "exception thrown at %s:%d",
+        SE_LOG_DEBUG(NULL, logPrefix, "exception thrown at %s:%d",
                      ex.m_file.c_str(), ex.m_line);
         error = ex.what();
     } catch (const std::exception &ex) {
@@ -866,7 +866,7 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
     if (flags & HANDLE_EXCEPTION_NO_ERROR) {
         level = Logger::DEBUG;
     }
-    SE_LOG(level, logger, NULL, "%s", error.c_str());
+    SE_LOG(level, NULL, logPrefix, "%s", error.c_str());
     if (flags & HANDLE_EXCEPTION_FATAL) {
         // Something unexpected went wrong, can only shut down.
         ::abort();

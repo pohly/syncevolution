@@ -513,7 +513,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             Event::escapeRecurrenceID(buffer);
             data = &buffer;
         }
-        SE_LOG_DEBUG(this, NULL, "inserting new VEVENT");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "inserting new VEVENT");
         res = insertItem(name, *data, true);
         subres.m_mainid = res.m_luid;
         subres.m_uid = newEvent->m_UID;
@@ -720,7 +720,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
 
         // TODO: avoid updating item on server immediately?
         try {
-            SE_LOG_DEBUG(this, NULL, "updating VEVENT");
+            SE_LOG_DEBUG(NULL, getDisplayName(), "updating VEVENT");
             InsertItemResult res = insertItem(event.m_DAVluid, data, true);
             if (res.m_state != ITEM_OKAY ||
                 res.m_luid != event.m_DAVluid) {
@@ -749,7 +749,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                 // a detached recurrence had to be added to an existing meeting
                 // series. Ignoring the problem means would keep the detached
                 // recurrence out of the server permanently.
-                SE_LOG_INFO(this, NULL, "%s: not updated because CalDAV server refused write access for it",
+                SE_LOG_INFO(NULL, getDisplayName(), "%s: not updated because CalDAV server refused write access for it",
                             getSubDescription(event, subid).c_str());
                 subres.m_merged = true;
                 subres.m_revision = event.m_etag;
@@ -913,7 +913,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
     if (event.m_subids.size() == 1) {
         // remove entire merged item, nothing will be left after removal
         if (*event.m_subids.begin() != subid) {
-            SE_LOG_DEBUG(this, NULL, "%s: request to remove the %s recurrence: only the %s recurrence exists",
+            SE_LOG_DEBUG(NULL, getDisplayName(), "%s: request to remove the %s recurrence: only the %s recurrence exists",
                          davLUID.c_str(),
                          SubIDName(subid).c_str(),
                          SubIDName(*event.m_subids.begin()).c_str());
@@ -945,7 +945,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                         }
                     }
                     if (updated) {
-                        SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: remove RRULE before deleting");
+                        SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack: remove RRULE before deleting");
                         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
                         insertSubItem(davLUID, subid, icalstr.get());
                         // It has been observed that trying the DELETE immediately
@@ -956,13 +956,13 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                         // try a few times before giving up.
                         for (int retry = 0; retry < 5; retry++) {
                             try {
-                                SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: remove event, attempt #%d", retry);
+                                SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack: remove event, attempt #%d", retry);
                                 removeSubItem(davLUID, subid);
                                 break;
                             } catch (const TransportStatusException &ex2) {
                                 if (ex2.syncMLStatus() == 409 &&
                                     strstr(ex2.what(), "Can't delete a recurring event")) {
-                                    SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack: try again in a second");
+                                    SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack: try again in a second");
                                     Sleep(1);
                                 } else {
                                     throw;
@@ -970,7 +970,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                             }
                         }
                     } else {
-                        SE_LOG_DEBUG(this, NULL, "Google recurring event delete hack not applicable, giving up");
+                        SE_LOG_DEBUG(NULL, getDisplayName(), "Google recurring event delete hack not applicable, giving up");
                         throw;
                     }
                 } else {
@@ -1031,7 +1031,7 @@ void CalDAVSource::removeMergedItem(const std::string &davLUID)
     EventCache::iterator it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         // gone already, no need to do anything
-        SE_LOG_DEBUG(this, NULL, "%s: ignoring request to delete non-existent item",
+        SE_LOG_DEBUG(NULL, getDisplayName(), "%s: ignoring request to delete non-existent item",
                      davLUID.c_str());
         return;
     }

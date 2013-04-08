@@ -77,28 +77,10 @@ void SyncSourceBase::throwError(SyncMLStatus status, const string &failure)
 
 SyncMLStatus SyncSourceBase::handleException(HandleExceptionFlags flags)
 {
-    SyncMLStatus res = Exception::handle(this, flags);
+    SyncMLStatus res = Exception::handle(getDisplayName(), flags);
     return res == STATUS_FATAL ?
         STATUS_DATASTORE_FAILURE :
         res;
-}
-
-void SyncSourceBase::messagev(Level level,
-                              const char *prefix,
-                              const char *file,
-                              int line,
-                              const char *function,
-                              const char *format,
-                              va_list args)
-{
-    string newprefix = getDisplayName();
-    if (prefix) {
-        newprefix += ": ";
-        newprefix += prefix;
-    }
-    LoggerBase::instance().messagev(level, newprefix.c_str(),
-                                    file, line, function,
-                                    format, args);
 }
 
 void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
@@ -376,7 +358,7 @@ void SyncSource::requestAnotherSync()
     // stored; instead only a per-session request is set. That's okay
     // for now because restarting is limited to sessions with only
     // one source active (intentional simplification).
-    SE_LOG_DEBUG(this, NULL, "requesting another sync");
+    SE_LOG_DEBUG(NULL, getDisplayName(), "requesting another sync");
     SyncContext::requestAnotherSync();
 }
 
@@ -1265,7 +1247,7 @@ std::string SyncSourceLogging::getDescription(const string &luid)
 void SyncSourceLogging::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID)
 {
     std::string description = getDescription(aItemKey);
-    SE_LOG_INFO(this, NULL,
+    SE_LOG_INFO(NULL, getDisplayName(),
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "adding",
                 !description.empty() ? description.c_str() : "???");
@@ -1274,7 +1256,7 @@ void SyncSourceLogging::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID ne
 void SyncSourceLogging::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
     std::string description = getDescription(aItemKey);
-    SE_LOG_INFO(this, NULL,
+    SE_LOG_INFO(NULL, getDisplayName(),
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "updating",
                 !description.empty() ? description.c_str() : aID ? aID->item : "???");
@@ -1283,7 +1265,7 @@ void SyncSourceLogging::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID a
 void SyncSourceLogging::deleteItem(sysync::cItemID aID)
 {
     std::string description = getDescription(aID->item);
-    SE_LOG_INFO(this, NULL,
+    SE_LOG_INFO(NULL, getDisplayName(),
                 description.empty() ? "%s <%s>" : "%s \"%s\"",
                 "deleting",
                 !description.empty() ? description.c_str() : aID->item);

@@ -104,7 +104,7 @@ void MapSyncSource::detectChanges(SyncSourceRevisions::ChangeMode mode)
             }
         }
         if (!okay) {
-            SE_LOG_DEBUG(this, NULL, "unsupported or corrupt revision entry: %s = %s",
+            SE_LOG_DEBUG(NULL, getDisplayName(), "unsupported or corrupt revision entry: %s = %s",
                          mainid.c_str(),
                          value.c_str());
         }
@@ -214,17 +214,17 @@ void MapSyncSource::beginSync(const std::string &lastToken, const std::string &r
     }
     // slow sync if token is empty
     if (token.empty()) {
-        SE_LOG_DEBUG(this, NULL, "slow sync or testing, do full item scan to detect changes");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "slow sync or testing, do full item scan to detect changes");
         mode = SyncSourceRevisions::CHANGES_SLOW;
     } else {
         string oldRevision = m_metaNode->readProperty("databaseRevision");
         if (!oldRevision.empty()) {
             string newRevision = m_sub->subDatabaseRevision();
-            SE_LOG_DEBUG(this, NULL, "old database revision '%s', new revision '%s'",
+            SE_LOG_DEBUG(NULL, getDisplayName(), "old database revision '%s', new revision '%s'",
                          oldRevision.c_str(),
                          newRevision.c_str());
             if (newRevision == oldRevision) {
-                SE_LOG_DEBUG(this, NULL, "revisions match, no item changes");
+                SE_LOG_DEBUG(NULL, getDisplayName(), "revisions match, no item changes");
                 mode = SyncSourceRevisions::CHANGES_NONE;
             }
 
@@ -235,7 +235,7 @@ void MapSyncSource::beginSync(const std::string &lastToken, const std::string &r
         }
     }
     if (mode == SyncSourceRevisions::CHANGES_FULL) {
-        SE_LOG_DEBUG(this, NULL, "using full item scan to detect changes");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "using full item scan to detect changes");
     }
 
     detectChanges(mode);

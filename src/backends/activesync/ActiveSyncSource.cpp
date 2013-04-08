@@ -241,10 +241,10 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
     m_startSyncKey = lastToken;
     if (lastToken.empty()) {
         // slow sync: wipe out cached list of IDs, will be filled anew below
-        SE_LOG_DEBUG(this, NULL, "sync key empty, starting slow sync");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "sync key empty, starting slow sync");
         m_ids->clear();
     } else {
-        SE_LOG_DEBUG(this, NULL, "sync key %s for account '%s' folder '%s', starting incremental sync",
+        SE_LOG_DEBUG(NULL, getDisplayName(), "sync key %s for account '%s' folder '%s', starting incremental sync",
                      lastToken.c_str(),
                      m_account.c_str(),
                      m_folder.c_str());
@@ -305,7 +305,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
             if (luid.empty()) {
                 throwError("empty server ID for new eas item");
             }
-            SE_LOG_DEBUG(this, NULL, "new item %s", luid.c_str());
+            SE_LOG_DEBUG(NULL, getDisplayName(), "new item %s", luid.c_str());
             addItem(luid, NEW);
             m_ids->setProperty(luid, "1");
             if (!item->data) {
@@ -321,7 +321,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
             if (luid.empty()) {
                 throwError("empty server ID for updated eas item");
             }
-            SE_LOG_DEBUG(this, NULL, "updated item %s", luid.c_str());
+            SE_LOG_DEBUG(NULL, getDisplayName(), "updated item %s", luid.c_str());
             addItem(luid, UPDATED);
             // m_ids.setProperty(luid, "1"); not necessary, should already exist (TODO: check?!)
             if (!item->data) {
@@ -337,7 +337,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
             if (luid.empty()) {
                 throwError("empty server ID for deleted eas item");
             }
-            SE_LOG_DEBUG(this, NULL, "deleted item %s", luid.c_str());
+            SE_LOG_DEBUG(NULL, getDisplayName(), "deleted item %s", luid.c_str());
             addItem(luid, DELETED);
             m_ids->removeProperty(luid);
         }
@@ -363,7 +363,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
     m_ids->readProperties(props);
     BOOST_FOREACH(const StringPair &entry, props) {
         const std::string &luid = entry.first;
-        SE_LOG_DEBUG(this, NULL, "existing item %s", luid.c_str());
+        SE_LOG_DEBUG(NULL, getDisplayName(), "existing item %s", luid.c_str());
         addItem(luid, ANY);
     }
 
@@ -386,7 +386,7 @@ std::string ActiveSyncSource::endSync(bool success)
     // let engine do incremental sync next time or start from scratch
     // in case of failure
     std::string newSyncKey = success ? m_currentSyncKey : "";
-    SE_LOG_DEBUG(this, NULL, "next sync key %s", newSyncKey.empty() ? "empty" : newSyncKey.c_str());
+    SE_LOG_DEBUG(NULL, getDisplayName(), "next sync key %s", newSyncKey.empty() ? "empty" : newSyncKey.c_str());
     return newSyncKey;
 }
 

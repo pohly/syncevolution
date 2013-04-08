@@ -348,7 +348,7 @@ private:
      * in the server which is related to the session.
      */
     virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,

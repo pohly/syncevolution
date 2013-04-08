@@ -4464,7 +4464,7 @@ private:
 
         /** capture output produced while test ran */
         void messagev(Level level,
-                      const char *prefix,
+                      const std::string *prefix,
                       const char *file,
                       int line,
                       const char *function,

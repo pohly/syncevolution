@@ -50,10 +50,10 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
     setStartSyncKey(lastToken);
     if (lastToken.empty()) {
         // slow sync: wipe out cached list of IDs, will be filled anew below
-        SE_LOG_DEBUG(this, NULL, "sync key empty, starting slow sync");
+        SE_LOG_DEBUG(NULL, getDisplayName(), "sync key empty, starting slow sync");
         m_trackingNode->clear();
     } else {
-        SE_LOG_DEBUG(this, NULL, "sync key %s, starting incremental sync", lastToken.c_str());
+        SE_LOG_DEBUG(NULL, getDisplayName(), "sync key %s, starting incremental sync", lastToken.c_str());
 
         // re-populate cache from storage, without any item data
         ConfigProps props;
@@ -87,7 +87,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
                 }
             }
             if (!okay) {
-                SE_LOG_DEBUG(this, NULL, "unsupported or corrupt revision entry: %s = %s",
+                SE_LOG_DEBUG(NULL, getDisplayName(), "unsupported or corrupt revision entry: %s = %s",
                              easid.c_str(),
                              value.c_str());
             }
@@ -150,13 +150,13 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
             if (easid.empty()) {
                 throwError("empty server ID for new eas item");
             }
-            SE_LOG_DEBUG(this, NULL, "new eas item %s", easid.c_str());
+            SE_LOG_DEBUG(NULL, getDisplayName(), "new eas item %s", easid.c_str());
             if (!item->data) {
                 throwError(StringPrintf("no body returned for new eas item %s", easid.c_str()));
             }
             Event &event = setItemData(easid, item->data);
             BOOST_FOREACH(const std::string &subid, event.m_subids) {
-                SE_LOG_DEBUG(this, NULL, "new eas item %s = uid %s + rid %s",
+                SE_LOG_DEBUG(NULL, getDisplayName(), "new eas item %s = uid %s + rid %s",
                              easid.c_str(), event.m_uid.c_str(), subid.c_str());
                 addItem(createLUID(easid, subid), NEW);
             }
@@ -169,13 +169,13 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
             if (easid.empty()) {
                 throwError("empty server ID for updated eas item");
             }
-            SE_LOG_DEBUG(this, NULL, "updated eas item %s", easid.c_str());
+            SE_LOG_DEBUG(NULL, getDisplayName(), "updated eas item %s", easid.c_str());
             if (!item->data) {
                 throwError(StringPrintf("no body returned for updated eas item %s", easid.c_str()));
             }
             Event &event = setItemData(easid, item->data);
             BOOST_FOREACH(const std::string &subid, event.m_subids) {
-                SE_LOG_DEBUG(this, NULL, "deleted eas item %s = uid %s + rid %s",
+                SE_LOG_DEBUG(NULL, getDisplayName(), "deleted eas item %s = uid %s + rid %s",
                              easid.c_str(), event.m_uid.c_str(), subid.c_str());
                 addItem(createLUID(easid, subid), UPDATED);
             }
@@ -190,10 +190,10 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
             }
             Event &event = findItem(easid);
             if (event.m_subids.empty()) {
-                SE_LOG_DEBUG(this, NULL, "deleted eas item %s empty?!", easid.c_str());
+                SE_LOG_DEBUG(NULL, getDisplayName(), "deleted eas item %s empty?!", easid.c_str());
             } else {
                 BOOST_FOREACH(const std::string &subid, event.m_subids) {
-                    SE_LOG_DEBUG(this, NULL, "deleted eas item %s = uid %s + rid %s",
+                    SE_LOG_DEBUG(NULL, getDisplayName(), "deleted eas item %s = uid %s + rid %s",
                                  easid.c_str(), event.m_uid.c_str(), subid.c_str());
                     addItem(createLUID(easid, subid), DELETED);
                 }
@@ -222,7 +222,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
         const std::string &easid = entry.first;
         const boost::shared_ptr<Event> &eventptr = entry.second;
         BOOST_FOREACH(const std::string &subid, eventptr->m_subids) {
-            SE_LOG_DEBUG(this, NULL, "existing eas item %s = uid %s + rid %s",
+            SE_LOG_DEBUG(NULL, getDisplayName(), "existing eas item %s = uid %s + rid %s",
                          easid.c_str(), eventptr->m_uid.c_str(), subid.c_str());
             addItem(createLUID(easid, subid), ANY);
         }
@@ -253,7 +253,7 @@ std::string ActiveSyncCalendarSource::endSync(bool success)
     m_trackingNode->flush();
 
     std::string newSyncKey = getCurrentSyncKey();
-    SE_LOG_DEBUG(this, NULL, "next sync key %s", newSyncKey.empty() ? "empty" : newSyncKey.c_str());
+    SE_LOG_DEBUG(NULL, getDisplayName(), "next sync key %s", newSyncKey.empty() ? "empty" : newSyncKey.c_str());
     return newSyncKey;
 }
 

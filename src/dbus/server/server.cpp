@@ -910,7 +910,7 @@ void Server::updateDevice(const string &deviceId,
 }
 
 void Server::messagev(Level level,
-                      const char *prefix,
+                      const std::string *prefix,
                       const char *file,
                       int line,
                       const char *function,

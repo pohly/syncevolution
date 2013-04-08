@@ -731,7 +731,7 @@ public:
 
 
     virtual void messagev(Level level,
-                          const char *prefix,
+                          const std::string *prefix,
                           const char *file,
                           int line,
                           const char *function,
@@ -765,7 +765,7 @@ public:
             va_list argscopy;
             va_copy(argscopy, args);
             // once to Synthesis log, with full debugging
-            m_client.getEngine().doDebug(level, prefix, file, line, function, format, argscopy);
+            m_client.getEngine().doDebug(level, prefix ? prefix->c_str() : NULL, file, line, function, format, argscopy);
             va_end(argscopy);
         }
     }
@@ -1793,13 +1793,13 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
             SE_LOG_INFO(NULL, NULL, "authorization failed, check username '%s' and password", getSyncUsername().c_str());
             break;
         case 403:
-            SE_LOG_INFO(&source, NULL, "log in succeeded, but server refuses access - contact server operator");
+            SE_LOG_INFO(NULL, source.getDisplayName(), "log in succeeded, but server refuses access - contact server operator");
             break;
         case 407:
             SE_LOG_INFO(NULL, NULL, "proxy authorization failed, check proxy username and password");
             break;
         case 404:
-            SE_LOG_INFO(&source, NULL, "server database not found, check URI '%s'", source.getURINonEmpty().c_str());
+            SE_LOG_INFO(NULL, source.getDisplayName(), "server database not found, check URI '%s'", source.getURINonEmpty().c_str());
             break;
         case 0:
             break;
@@ -1812,7 +1812,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
             // because even "good" sources will get a bad status when the overall
             // session turns bad. We also don't have good explanations for the
             // status here.
-            SE_LOG_ERROR(&source, NULL, "%s", Status2String(SyncMLStatus(extra1)).c_str());
+            SE_LOG_ERROR(NULL, source.getDisplayName(), "%s", Status2String(SyncMLStatus(extra1)).c_str());
             break;
         }
         source.recordStatus(SyncMLStatus(extra1));
@@ -4277,7 +4277,7 @@ private:
 
     /** capture output produced while test ran */
     void messagev(Level level,
-                  const char *prefix,
+                  const std::string *prefix,
                   const char *file,
                   int line,
                   const char *function,

@@ -67,7 +67,7 @@ static void printToSyslog(int sysloglevel, std::string &chunk, size_t expectedTo
 }
 
 void LoggerSyslog::messagev(Level level,
-                            const char *prefix,
+                            const std::string *prefix,
                             const char *file,
                             int line,
                             const char *function,

@@ -22,7 +22,6 @@
 #define INCL_SYNCSOURCE
 
 #include <syncevo/SyncConfig.h>
-#include <syncevo/Logging.h>
 #include <syncevo/SyncML.h>
 #include <syncevo/Timespec.h>
 
@@ -987,7 +986,7 @@ public OperationWrapperSwitch<F, boost::function<F>::arity>
  * this base via different intermediate classes, therefore the
  * need to keep it abstract.
  */
-class SyncSourceBase : public Logger {
+class SyncSourceBase {
  public:
     virtual ~SyncSourceBase() {}
 
@@ -1095,21 +1094,6 @@ class SyncSourceBase : public Logger {
      * returned.
      */
     virtual string getNativeDatatypeName();
-
-    /**
-     * Logging utility code.
-     *
-     * Every sync source adds "<name>" as prefix to its output.
-     * All calls are redirected into SyncContext logger.
-     */
-    virtual void messagev(Level level,
-                          const char *prefix,
-                          const char *file,
-                          int line,
-                          const char *function,
-                          const char *format,
-                          va_list args);
-    virtual bool isProcessSafe() const { return true; }
 
     /**
      * return Synthesis API pointer, if one currently is available

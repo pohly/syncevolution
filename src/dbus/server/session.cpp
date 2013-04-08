@@ -805,7 +805,7 @@ void Session::useHelperAsync(const SimpleResult &result)
 }
 
 void Session::messagev(Level level,
-                       const char *prefix,
+                       const std::string *prefix,
                        const char *file,
                        int line,
                        const char *function,

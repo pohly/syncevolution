@@ -133,7 +133,7 @@ TSyError SyncEvolution_Module_PluginParams( CContext mContext,
                                             cAppCharP mConfigParams, CVersion engineVersion )
 {
     SyncSource *source  = MoC(mContext);
-    SE_LOG_DEBUG(source, NULL, "Module_PluginParams\n Engine=%08lX\n %s",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "Module_PluginParams\n Engine=%08lX\n %s",
                  (long)engineVersion, mConfigParams);
     /*return LOCERR_CFGPARSE;*/ /* if there are unsupported params */
     return LOCERR_OK;
@@ -399,7 +399,7 @@ TSyError SyncEvolution_CreateContext( CContext *aContext, cAppCharP aContextName
         *aContext = (CContext)source;
         err = LOCERR_OK;
     }
-    SE_LOG_DEBUG(source, NULL, "'%s' dev='%s' usr='%s' err=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "'%s' dev='%s' usr='%s' err=%d",
                  aContextName, sDevKey, sUsrKey, err);
     return err;
 }
@@ -413,7 +413,7 @@ uInt32 SyncEvolution_ContextSupport( CContext aContext, cAppCharP aContextRules 
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    SE_LOG_DEBUG(source, NULL, "ContextSupport %s", aContextRules);
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "ContextSupport %s", aContextRules);
     return 0;
 }
 
@@ -427,7 +427,7 @@ uInt32 SyncEvolution_FilterSupport( CContext aContext, cAppCharP aFilterRules )
   if (!source) {
       return LOCERR_WRONGUSAGE;
   }
-  SE_LOG_DEBUG(source, NULL, "FilterSupport %s", aFilterRules);
+  SE_LOG_DEBUG(NULL, source->getDisplayName(), "FilterSupport %s", aFilterRules);
   return 0;
 } /* FilterSupport */
 
@@ -443,7 +443,7 @@ TSyError SyncEvolution_LoadAdminData( CContext aContext, cAppCharP aLocDB,
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_loadAdminData(*source, aLocDB, aRemDB, adminData);
-    SE_LOG_DEBUG(source, NULL, "LoadAdminData '%s' '%s', '%s' res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "LoadAdminData '%s' '%s', '%s' res=%d",
                  aLocDB, aRemDB, *adminData ? *adminData : "", res);
     return res;
 } /* LoadAdminData */
@@ -458,7 +458,7 @@ TSyError SyncEvolution_SaveAdminData( CContext aContext, cAppCharP adminData )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_saveAdminData(*source, adminData);
-    SE_LOG_DEBUG(source, NULL, "SaveAdminData '%s' res=%d", adminData, res);
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "SaveAdminData '%s' res=%d", adminData, res);
     return res;
 } /* SaveAdminData */
 
@@ -486,7 +486,7 @@ bool SyncEvolution_ReadNextMapItem( CContext aContext, MapID mID, bool aFirst )
         res = source->handleException();
     }
 
-    SE_LOG_DEBUG(source, NULL, "ReadNextMapItem '%s' + %x = '%s' + %d first=%s res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "ReadNextMapItem '%s' + %x = '%s' + %d first=%s res=%d",
                  res ? NullPtrCheck(mID->localID) : "(none)",
                  res ? mID->ident : 0,
                  res ? NullPtrCheck(mID->remoteID) : "(none)",
@@ -506,7 +506,7 @@ TSyError SyncEvolution_InsertMapItem( CContext aContext, cMapID mID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_insertMapItem(*source, mID);
-    SE_LOG_DEBUG(source, NULL, "InsertMapItem '%s' + %x = '%s' + %x res=%d", 
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "InsertMapItem '%s' + %x = '%s' + %x res=%d", 
                  NullPtrCheck(mID->localID), mID->ident,
                  NullPtrCheck(mID->remoteID), mID->flags,
                  res);
@@ -523,7 +523,7 @@ TSyError SyncEvolution_UpdateMapItem( CContext aContext, cMapID mID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_updateMapItem(*source, mID);
-    SE_LOG_DEBUG(source, NULL, "UpdateMapItem '%s' + %x = '%s' + %x, res=%d", 
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "UpdateMapItem '%s' + %x = '%s' + %x, res=%d", 
                  mID->localID, mID->ident,
                  mID->remoteID, mID->flags,
                  res);
@@ -541,7 +541,7 @@ TSyError SyncEvolution_DeleteMapItem( CContext aContext, cMapID mID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_deleteMapItem(*source, mID);
-    SE_LOG_DEBUG(source, NULL, "DeleteMapItem '%s' + %x = '%s' + %x res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "DeleteMapItem '%s' + %x = '%s' + %x res=%d",
                  mID->localID, mID->ident,
                  mID->remoteID, mID->flags,
                  res);
@@ -596,7 +596,7 @@ TSyError SyncEvolution_AdaptItem( CContext aContext, appCharP *aItemData1,
   if (!source) {
       return LOCERR_WRONGUSAGE;
   }
-  SE_LOG_DEBUG(source, NULL, "AdaptItem '%s' '%s' '%s' id=%d", 
+  SE_LOG_DEBUG(NULL, source->getDisplayName(), "AdaptItem '%s' '%s' '%s' id=%d", 
                *aItemData1, *aItemData2, *aLocalVars, aIdentifier);
   return LOCERR_OK;
 } /* AdaptItem */
@@ -616,7 +616,7 @@ TSyError SyncEvolution_StartDataRead( CContext aContext, cAppCharP   lastToken,
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_startDataRead(*source, lastToken, resumeToken);
-    SE_LOG_DEBUG(source, NULL, "StartDataRead last='%s' resume='%s' res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "StartDataRead last='%s' resume='%s' res=%d",
                  lastToken, resumeToken, res);
     return res;
 }
@@ -634,7 +634,7 @@ TSyError SyncEvolution_ReadNextItemAsKey( CContext aContext, ItemID aID, KeyH aI
     *aStatus = 0;
     memset(aID, 0, sizeof(*aID));
     TSyError res = source->getOperations().m_readNextItem(*source, aID, aStatus, aFirst);
-    SE_LOG_DEBUG(source, NULL, "ReadNextItemAsKey aStatus=%d aID=(%s,%s) res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "ReadNextItemAsKey aStatus=%d aID=(%s,%s) res=%d",
                  *aStatus, aID->item, aID->parent, res);
     return res;
 }
@@ -647,7 +647,7 @@ TSyError SyncEvolution_ReadItemAsKey( CContext aContext, cItemID aID, KeyH aItem
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_readItemAsKey(*source, aID, aItemKey);
-    SE_LOG_DEBUG(source, NULL, "ReadItemAsKey aID=(%s,%s) res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "ReadItemAsKey aID=(%s,%s) res=%d",
                  aID->item, aID->parent, res);
     return res;
 }
@@ -687,7 +687,7 @@ sysync::TSyError SyncEvolution_ReadBlob(CContext aContext, cItemID  aID,  cAppCh
       res = LOCERR_NOTIMP;
   }
 
-  SE_LOG_DEBUG(source, NULL, "ReadBlob aID=(%s,%s) aBlobID=(%s) aBlkPtr=%p aBlkSize=%lu aTotSize=%lu aFirst=%s aLast=%s res=%d",
+  SE_LOG_DEBUG(NULL, source->getDisplayName(), "ReadBlob aID=(%s,%s) aBlobID=(%s) aBlkPtr=%p aBlkSize=%lu aTotSize=%lu aFirst=%s aLast=%s res=%d",
                aID->item,aID->parent, aBlobID, aBlkPtr,
                aBlkSize ? (unsigned long)*aBlkSize : 0,
                aTotSize ? (unsigned long)*aTotSize : 0,
@@ -704,7 +704,7 @@ TSyError SyncEvolution_EndDataRead( CContext aContext )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_endDataRead(*source);
-    SE_LOG_DEBUG(source, NULL, "EndDataRead res=%d", res);
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "EndDataRead res=%d", res);
     return res;
 }
 
@@ -719,7 +719,7 @@ TSyError SyncEvolution_StartDataWrite( CContext aContext )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    SE_LOG_DEBUG(source, NULL, "StartDataWrite");
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "StartDataWrite");
     return LOCERR_OK;
 }
 
@@ -732,7 +732,7 @@ TSyError SyncEvolution_InsertItemAsKey( CContext aContext, KeyH aItemKey, ItemID
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_insertItemAsKey(*source, aItemKey, newID);
-    SE_LOG_DEBUG(source, NULL, "InsertItemAsKey res=%d\n", res);
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "InsertItemAsKey res=%d\n", res);
     return res;
 }
 
@@ -746,7 +746,7 @@ TSyError SyncEvolution_UpdateItemAsKey( CContext aContext, KeyH aItemKey, cItemI
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_updateItemAsKey(*source, aItemKey, aID, updID);
-    SE_LOG_DEBUG(source, NULL, "aID=(%s,%s) res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "aID=(%s,%s) res=%d",
                  aID->item,aID->parent, res);
     return res;
 }
@@ -760,7 +760,7 @@ TSyError SyncEvolution_MoveItem( CContext aContext, cItemID aID, cAppCharP newPa
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    SE_LOG_DEBUG(source, NULL, "MoveItem aID=(%s,%s) => (%s,%s)",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "MoveItem aID=(%s,%s) => (%s,%s)",
                  aID->item,aID->parent, aID->item,newParID);
     return LOCERR_NOTIMP;
 }
@@ -775,7 +775,7 @@ TSyError SyncEvolution_DeleteItem( CContext aContext, cItemID aID )
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_deleteItem(*source, aID);
-    SE_LOG_DEBUG(source, NULL, "DeleteItem aID=(%s,%s) res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "DeleteItem aID=(%s,%s) res=%d",
                  aID->item, aID->parent, res);
     return res;
 }
@@ -789,7 +789,7 @@ TSyError SyncEvolution_FinalizeLocalID( CContext aContext, cItemID aID, ItemID u
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    SE_LOG_DEBUG(source, NULL, "FinalizeLocalID not implemented");
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "FinalizeLocalID not implemented");
     return LOCERR_NOTIMP;
 }
 
@@ -802,7 +802,7 @@ TSyError SyncEvolution_DeleteSyncSet( CContext aContext )
     if (!source) {
         return LOCERR_WRONGUSAGE;
     }
-    SE_LOG_DEBUG(source, NULL, "DeleteSyncSet not implemented");
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "DeleteSyncSet not implemented");
     return LOCERR_NOTIMP;
 }
 
@@ -830,7 +830,7 @@ TSyError SyncEvolution_WriteBlob(CContext aContext, cItemID aID,  cAppCharP aBlo
         res = LOCERR_NOTIMP;
     }
     
-    SE_LOG_DEBUG(source, NULL, "WriteBlob aID=(%s,%s) aBlobID=(%s) aBlkPtr=%p aBlkSize=%lu aTotSize=%lu aFirst=%s aLast=%s res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "WriteBlob aID=(%s,%s) aBlobID=(%s) aBlkPtr=%p aBlkSize=%lu aTotSize=%lu aFirst=%s aLast=%s res=%d",
                  aID->item,aID->parent, aBlobID, aBlkPtr, (unsigned long)aBlkSize, (unsigned long)aTotSize, 
                  aFirst ? "true" : "false", aLast ? "true" : "false", res);
     return res;
@@ -846,7 +846,7 @@ TSyError SyncEvolution_DeleteBlob( CContext aContext, cItemID aID, cAppCharP aBl
     }
 
     TSyError res = source->getOperations().m_deleteBlob(*source, aID, aBlobID);
-    SE_LOG_DEBUG(source, NULL, "DeleteBlob aID=(%s,%s) aBlobID=(%s) res=%d",
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "DeleteBlob aID=(%s,%s) aBlobID=(%s) res=%d",
                  aID->item,aID->parent, aBlobID, res);
     return res;
 } /* DeleteBlob */
@@ -859,7 +859,7 @@ TSyError SyncEvolution_EndDataWrite( CContext aContext, bool success, appCharP *
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = source->getOperations().m_endDataWrite(*source, success, newToken);
-    SE_LOG_DEBUG(source, NULL, "EndDataWrite %s '%s' res=%d", 
+    SE_LOG_DEBUG(NULL, source->getDisplayName(), "EndDataWrite %s '%s' res=%d", 
                  success ? "COMMIT":"ROLLBACK", *newToken, res);
     return res;
 }
@@ -873,7 +873,7 @@ TSyError SyncEvolution_DeleteContext( CContext aContext )
   if (!source) {
       return LOCERR_WRONGUSAGE;
   }
-  SE_LOG_DEBUG(source, NULL, "DeleteContext");
+  SE_LOG_DEBUG(NULL, source->getDisplayName(), "DeleteContext");
   source->popSynthesisAPI();
   return LOCERR_OK;
 }

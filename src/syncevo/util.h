@@ -22,6 +22,7 @@
 # define INCL_SYNCEVOLUTION_UTIL
 
 #include <syncevo/SyncML.h>
+#include <syncevo/Logging.h>
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -40,12 +41,9 @@
 
 #include <syncevo/Timespec.h>    // definitions used to be included in util.h,
                                  // include it to avoid changing code using the time things
-#include <syncevo/Logging.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
-
-class Logger;
 
 /** case-insensitive less than for assoziative containers */
 template <class T> class Nocase : public std::binary_function<T, T, bool> {
@@ -521,12 +519,12 @@ class Exception : public std::runtime_error
      * status code if status still was STATUS_OK when called.
      * Returns updated status code.
      *
-     * @param logger    the class which does the logging
+     * @param logPrefix      passed to SE_LOG* messages
      * @retval explanation   set to explanation for problem, if non-NULL
      * @param level     level to be used for logging
      */
-    static SyncMLStatus handle(SyncMLStatus *status = NULL, Logger *logger = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
-    static SyncMLStatus handle(Logger *logger, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, logger, NULL, Logger::ERROR, flags); }
+    static SyncMLStatus handle(SyncMLStatus *status = NULL, const std::string *logPrefix = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
+    static SyncMLStatus handle(const std::string &logPrefix, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, &logPrefix, NULL, Logger::ERROR, flags); }
     static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, NULL, &explanation, Logger::ERROR, flags); }
     static void handle(HandleExceptionFlags flags) { handle(NULL, NULL, NULL, Logger::ERROR, flags); }
     static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }

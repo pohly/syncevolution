@@ -61,7 +61,7 @@ static void appendOutput(std::string &output, std::string &chunk, size_t expecte
 void LoggerStdout::messagev(FILE *file,
                             Level msglevel,
                             Level filelevel,
-                            const char *prefix,
+                            const std::string *prefix,
                             const char *filename,
                             int line,
                             const char *function,
@@ -83,7 +83,7 @@ void LoggerStdout::messagev(FILE *file,
 }
 
 void LoggerStdout::messagev(Level level,
-                            const char *prefix,
+                            const std::string *prefix,
                             const char *file,
                             int line,
                             const char *function,

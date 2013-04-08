@@ -81,7 +81,7 @@ LoggerBase *LoggerBase::loggerAt(int index)
 void LoggerBase::formatLines(Level msglevel,
                              Level outputlevel,
                              const std::string &processName,
-                             const char *prefix,
+                             const std::string *prefix,
                              const char *format,
                              va_list args,
                              boost::function<void (std::string &buffer, size_t expectedTotal)> print)
@@ -139,7 +139,7 @@ void LoggerBase::formatLines(Level msglevel,
                            levelToStr(msglevel),
                            procname.c_str(),
                            reltime.c_str(),
-                           prefix ? prefix : "",
+                           prefix ? prefix->c_str() : "",
                            prefix ? ": " : "");
     }
 
@@ -185,7 +185,7 @@ void LoggerBase::formatLines(Level msglevel,
 }
 
 void Logger::message(Level level,
-                     const char *prefix,
+                     const std::string *prefix,
                      const char *file,
                      int line,
                      const char *function,
@@ -195,6 +195,20 @@ void Logger::message(Level level,
     va_list args;
     va_start(args, format);
     messagev(level, prefix, file, line, function, format, args);
+    va_end(args);
+}
+
+void Logger::message(Level level,
+                     const std::string &prefix,
+                     const char *file,
+                     int line,
+                     const char *function,
+                     const char *format,
+                     ...)
+{
+    va_list args;
+    va_start(args, format);
+    messagev(level, &prefix, file, line, function, format, args);
     va_end(args);
 }
 
@@ -260,12 +274,14 @@ int Logger::sysyncPrintf(FILE *stream,
 {
     va_list args;
     va_start(args, format);
-    const char prefix[] = "SYSYNC ";
-    if (strlen(format) >= sizeof(prefix) &&
-        !memcmp(format, prefix, sizeof(prefix) - 1)) {
-        format += sizeof(prefix) - 1;
+    static const std::string prefix("SYSYNC");
+    if (boost::starts_with(format, prefix) &&
+        format[prefix.size()] == ' ') {
+        // Skip initial "SYSYNC " prefix, because it will get re-added
+        // in a better way (= to each line) via the prefix parameter.
+        format += prefix.size() + 1;
     }
-    LoggerBase::instance().messagev(DEBUG, "SYSYNC", NULL, 0, NULL, format, args);
+    LoggerBase::instance().messagev(DEBUG, &prefix, NULL, 0, NULL, format, args);
     va_end(args);
 
     return 0;

@@ -567,7 +567,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     bool res = true; // completed
     int timeoutSeconds = m_settings->timeoutSeconds();
     int retrySeconds = m_settings->retrySeconds();
-    SE_LOG_DEBUG(this, NULL, "timout %ds, retry %ds => %s",
+    SE_LOG_DEBUG(NULL, getDisplayName(), "timout %ds, retry %ds => %s",
                  timeoutSeconds, retrySeconds,
                  (timeoutSeconds <= 0 ||
                   retrySeconds <= 0) ? "resending disabled" : "resending allowed");
@@ -612,7 +612,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             }
             buffer[read] = 0;
             m_contextSettings->setURL(buffer);
-            SE_LOG_DEBUG(this, NULL, "found syncURL '%s' via DNS SRV", buffer);
+            SE_LOG_DEBUG(NULL, getDisplayName(), "found syncURL '%s' via DNS SRV", buffer);
             int res = pclose(in);
             in = NULL;
             switch (res) {
@@ -629,12 +629,12 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (retrySeconds > 0 &&
                     timeoutSeconds > 0) {
                     if (now < startTime + timeoutSeconds) {
-                        SE_LOG_DEBUG(this, NULL, "DNS SRV search failed due to network issues, retry in %d seconds",
+                        SE_LOG_DEBUG(NULL, getDisplayName(), "DNS SRV search failed due to network issues, retry in %d seconds",
                                      retrySeconds);
                         Sleep(retrySeconds);
                         goto retry;
                     } else {
-                        SE_LOG_INFO(this, NULL, "DNS SRV search timed out after %d seconds", timeoutSeconds);
+                        SE_LOG_INFO(NULL, getDisplayName(), "DNS SRV search timed out after %d seconds", timeoutSeconds);
                     }
                 }
 
@@ -1293,7 +1293,7 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 "          <include rule=\"ALL\"/>\n"
                 "      </remoterule>";
         }
-        SE_LOG_DEBUG(this, NULL, "using data conversion rules for '%s'", info.m_backendRule.c_str());
+        SE_LOG_DEBUG(NULL, getDisplayName(), "using data conversion rules for '%s'", info.m_backendRule.c_str());
     }
 }
 
