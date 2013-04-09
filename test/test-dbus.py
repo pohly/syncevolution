@@ -428,6 +428,9 @@ class DBusUtil(Timeout):
     pserver = None
     pmonitor = None
     storedenv = {}
+    # Choose a very long timeout for method calls;
+    # 'infinite' doesn't seem to be documented for Python.
+    dbusTimeout = 100000
 
     def getTestProperty(self, key, default):
         """retrieve values set with @property()"""
@@ -937,9 +940,9 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         If wait=True, then this call blocks until the session is ready.
         """
         if flags:
-            sessionpath = self.server.StartSessionWithFlags(config, flags)
+            sessionpath = self.server.StartSessionWithFlags(config, flags, timeout=self.dbusTimeout)
         else:
-            sessionpath = self.server.StartSession(config)
+            sessionpath = self.server.StartSession(config, timeout=self.dbusTimeout)
 
         def session_ready(object, ready):
             if self.running and ready and object == sessionpath:
@@ -956,7 +959,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 sessionpath),
                                  'org.syncevolution.Session')
-        status, error, sources = session.GetStatus(utf8_strings=True)
+        status, error, sources = session.GetStatus(utf8_strings=True, timeout=self.dbusTimeout)
         if wait and status == "queueing":
             # wait for signal
             loop.run()
@@ -1102,8 +1105,8 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         config["source/addressbook"] = addressbook
         if enableCalendar:
             config["source/calendar"] = calendar
-        self.session.SetConfig(False, False, config)
-        self.session.Detach()
+        self.session.SetConfig(False, False, config, timeout=self.dbusTimeout)
+        self.session.Detach(timeout=self.dbusTimeout)
         self.setUpSession("server")
         config = {"" : { "loglevel": "4",
                          "syncURL": "local://@client",
@@ -1120,7 +1123,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                           "backend": "file",
                                           "databaseFormat": "text/calendar",
                                           "database": "file://" + xdg_root + "/server-calendar" }
-        self.session.SetConfig(False, False, config)
+        self.session.SetConfig(False, False, config, timeout=self.dbusTimeout)
 
     def setUpFiles(self, snapshot):
         """ Copy reference directory trees from
@@ -5436,7 +5439,7 @@ class TestCmdline(DBusUtil, unittest.TestCase):
             pass
         if sessionFlags != None:
             self.assertTrue(self.session)
-            self.assertEqual(self.session.GetFlags(), sessionFlags)
+            self.assertEqual(self.session.GetFlags(timeout=self.dbusTimeout), sessionFlags)
 
         return (out, err, s.returncode)
 
