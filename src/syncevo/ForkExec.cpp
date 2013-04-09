@@ -128,14 +128,7 @@ void ForkExecParent::forked(gpointer data) throw()
     // any output is printed directly, instead of going through
     // the parent's output processing in LogRedirect.
     if (getenv("SYNCEVOLUTION_DEBUG")) {
-        int index = Logger::numLoggers();
-        LogRedirect *redirect = NULL;
-        while (--index >= 0 &&
-               !(redirect = dynamic_cast<LogRedirect *>(Logger::loggerAt(index)))) {
-        }
-        if (redirect) {
-            redirect->reset();
-        }
+        LogRedirect::removeRedirect();
     }
 
     if (me->m_mergedStdoutStderr) {

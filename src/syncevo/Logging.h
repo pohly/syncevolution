@@ -33,8 +33,11 @@
 #endif
 
 #include <syncevo/Timespec.h>
+#include <syncevo/ThreadSupport.h>
 
 #include <boost/function.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/noncopyable.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -130,8 +133,17 @@ class Logger
      *
      * Included by LoggerStdout in the [INFO/DEBUG/...] tag.
      */
-    static void setProcessName(const std::string &name) { m_processName = name; }
-    static std::string getProcessName() { return m_processName; }
+    static void setProcessName(const std::string &name);
+    static std::string getProcessName();
+
+    /**
+     * Obtains the recursive logging mutex.
+     *
+     * All calls offered by the Logger class already lock that mutex
+     * internally, but sometimes it may be necessary to protect a larger
+     * region of logging related activity.
+     */
+    static RecMutex::Guard lock();
 
 #ifdef HAVE_GLIB
     /**
@@ -159,6 +171,15 @@ class Logger
 
     Logger();
     virtual ~Logger();
+
+    /**
+     * Prepare logger for removal from logging stack. May be called
+     * multiple times.
+     *
+     * The logger should stop doing anything right away and just pass
+     * on messages until it gets deleted eventually.
+     */
+    virtual void remove() throw () {}
 
     /**
      * Collects all the parameters which may get passed to
@@ -199,36 +220,69 @@ class Logger
                           const char *format,
                           va_list args) = 0;
 
-    /** redirect into messagev() */
-    void message(Level level,
-                 const std::string *prefix,
-                 const char *file,
-                 int line,
-                 const char *function,
-                 const char *format,
-                 ...)
+    /**
+     * A convenience and backwards-compatibility class which allows
+     * calling some methods of the underlying pointer directly similar
+     * to the Logger reference returned in previous SyncEvolution
+     * releases.
+     */
+    class Handle
+    {
+        boost::shared_ptr<Logger> m_logger;
+
+    public:
+        Handle() throw ();
+        Handle(Logger *logger) throw ();
+        template<class L> Handle(const boost::shared_ptr<L> &logger) throw () : m_logger(logger) {}
+        template<class L> Handle(const boost::weak_ptr<L> &logger) throw () : m_logger(logger.lock()) {}
+        Handle(const Handle &other) throw ();
+        Handle &operator = (const Handle &other) throw ();
+        ~Handle() throw ();
+
+        operator bool () const { return m_logger; }
+        bool operator == (Logger *logger) const { return m_logger.get() == logger; }
+        Logger *get() const { return m_logger.get(); }
+
+        void messagev(const MessageOptions &options,
+                      const char *format,
+                      va_list args)
+        {
+            m_logger->messagev(options, format, args);
+        }
+
+        void message(Level level,
+                     const std::string *prefix,
+                     const char *file,
+                     int line,
+                     const char *function,
+                     const char *format,
+                     ...)
 #ifdef __GNUC__
-        __attribute__((format(printf, 7, 8)))
+            __attribute__((format(printf, 7, 8)))
 #endif
-        ;
-    void message(Level level,
-                 const std::string &prefix,
-                 const char *file,
-                 int line,
-                 const char *function,
-                 const char *format,
-                 ...)
+            ;
+        void message(Level level,
+                     const std::string &prefix,
+                     const char *file,
+                     int line,
+                     const char *function,
+                     const char *format,
+                     ...)
 #ifdef __GNUC__
-        __attribute__((format(printf, 7, 8)))
+            __attribute__((format(printf, 7, 8)))
 #endif
-        ;
-    void messageWithOptions(const MessageOptions &options,
-                            const char *format,
-                            ...)
+            ;
+        void messageWithOptions(const MessageOptions &options,
+                                const char *format,
+                                ...)
 #ifdef __GNUC__
-        __attribute__((format(printf, 3, 4)))
+            __attribute__((format(printf, 3, 4)))
 #endif
-        ;
+            ;
+        void setLevel(Level level) { m_logger->setLevel(level); }
+        Level getLevel() { return m_logger->getLevel(); }
+        void remove() throw () { m_logger->remove(); }
+    };
 
     /**
      * Grants access to the singleton which implements logging.
@@ -236,31 +290,25 @@ class Logger
      * class itself is platform specific: if no Log instance
      * has been set yet, then this call has to create one.
      */
-    static Logger &instance();
+    static Handle instance();
 
     /**
-     * Overrides the default Logger implementation. The Logger class
-     * itself will never delete the active logger.
+     * Overrides the current default Logger implementation.
      *
      * @param logger    will be used for all future logging activities
      */
-    static void pushLogger(Logger *logger);
+    static void addLogger(const Handle &logger);
 
     /**
-     * Remove the current logger and restore previous one.
-     * Must match a pushLogger() call.
+     * Remove the specified logger.
+     *
+     * Note that the logger might still be in use afterwards, for
+     * example when a different thread currently uses it. Therefore
+     * loggers should be small stub classes. If they need access to
+     * more expensive classes to do their work, they shold hold weak
+     * reference to those and only lock them when logging.
      */
-    static void popLogger();
-
-    /** total number of active loggers */
-    static int numLoggers();
-
-    /**
-     * access to active logger
-     * @param index    0 for oldest (inner-most) logger
-     * @return pointer or NULL for invalid index
-     */
-    static Logger *loggerAt(int index);
+    static void removeLogger(Logger *logger);
 
     virtual void setLevel(Level level) { m_level = level; }
     virtual Level getLevel() { return m_level; }
@@ -288,7 +336,6 @@ class Logger
                      boost::function<void (std::string &chunk, size_t expectedTotal)> print);
 
  private:
-    static std::string m_processName;
     Level m_level;
 
     /**
@@ -299,6 +346,76 @@ class Logger
     Timespec m_startTime;
 };
 
+/**
+ * Takes a logger and adds it to the stack
+ * as long as the instance exists.
+ */
+template<class L> class PushLogger : boost::noncopyable
+{
+    Logger::Handle m_logger;
+
+ public:
+    PushLogger() {}
+    /**
+     * Can use Handle directly here.
+     */
+    PushLogger(const Logger::Handle &logger) : m_logger(logger)
+    {
+        if (m_logger) {
+            Logger::addLogger(m_logger);
+        }
+    }
+    /**
+     * Take any type that a Handle constructor accepts, then use it as
+     * Handle.
+     */
+    template <class M> PushLogger(M logger) : m_logger(Logger::Handle(logger))
+    {
+        if (m_logger) {
+            Logger::addLogger(m_logger);
+        }
+    }
+    ~PushLogger() throw ()
+    {
+        if (m_logger) {
+            Logger::removeLogger(m_logger.get());
+        }
+    }
+
+    operator bool () const { return m_logger; }
+
+    void reset(const Logger::Handle &logger)
+    {
+        if (m_logger) {
+            Logger::removeLogger(m_logger.get());
+        }
+        m_logger = logger;
+        if (m_logger) {
+            Logger::addLogger(m_logger);
+        }
+    }
+    template<class M> void reset(M logger)
+    {
+        if (m_logger) {
+            Logger::removeLogger(m_logger.get());
+        }
+        m_logger = Logger::Handle(logger);
+        if (m_logger) {
+            Logger::addLogger(m_logger);
+        }
+    }
+
+    void reset()
+    {
+        if (m_logger) {
+            Logger::removeLogger(m_logger.get());
+        }
+        m_logger = Logger::Handle();
+    }
+
+    L *get() { return static_cast<L *>(m_logger.get()); }
+    L * operator -> () { return get(); }
+};
 
 /**
  * Wraps Logger::message() in the current default logger.

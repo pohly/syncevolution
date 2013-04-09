@@ -30,10 +30,82 @@
 
 SE_BEGIN_CXX
 
+static void dumpString(const std::string &output)
+{
+    fputs(output.c_str(), stdout);
+}
+
+/**
+ * Same logging approach as in Server class: pretend that we
+ * have reference counting for the SessionHelper class and
+ * use mutex locking to prevent dangling pointers.
+ */
+class SessionHelperLogger : public Logger
+{
+    boost::shared_ptr<LogRedirect> m_parentLogger;
+    boost::shared_ptr<SessionHelper> m_helper;
+
+public:
+    SessionHelperLogger(const boost::shared_ptr<LogRedirect> &parentLogger,
+                        const boost::shared_ptr<SessionHelper> &helper):
+        m_parentLogger(parentLogger),
+        m_helper(helper)
+    {
+    }
+
+    virtual void remove() throw ()
+    {
+        RecMutex::Guard guard = lock();
+        m_helper.reset();
+    }
+
+    virtual void messagev(const MessageOptions &options,
+                          const char *format,
+                          va_list args)
+    {
+        RecMutex::Guard guard = lock();
+        static bool dbg = getenv("SYNCEVOLUTION_DEBUG");
+
+        if (dbg) {
+            // let parent LogRedirect or utility function handle the output *in addition* to
+            // logging via D-Bus
+            va_list argsCopy;
+            va_copy(argsCopy, args);
+            if (m_parentLogger) {
+                m_parentLogger->messagev(options, format, argsCopy);
+            } else {
+                formatLines(options.m_level, DEBUG,
+                            options.m_processName,
+                            options.m_prefix,
+                            format, argsCopy,
+                            boost::bind(dumpString, _1));
+            }
+            va_end(argsCopy);
+        } else if (m_parentLogger) {
+            // Only flush parent logger, to capture output sent to
+            // stdout/stderr by some library and send it via D-Bus
+            // (recursively!)  before printing out own, new output.
+            m_parentLogger->flush();
+        }
+
+        if (m_helper) {
+            // send to parent
+            string log = StringPrintfV(format, args);
+            string strLevel = Logger::levelToStr(options.m_level);
+            try {
+                m_helper->emitLogOutput(strLevel, log, options.m_processName ? *options.m_processName : getProcessName());
+            } catch (...) {
+                // Give up forwarding output.
+                m_helper.reset();
+            }
+        }
+    }
+};
+
 SessionHelper::SessionHelper(GMainLoop *loop,
                              const GDBusCXX::DBusConnectionPtr &conn,
                              const boost::shared_ptr<ForkExecChild> &forkexec,
-                             LogRedirect *parentLogger) :
+                             const boost::shared_ptr<LogRedirect> &parentLogger) :
     GDBusCXX::DBusObjectHelper(conn,
                                SessionCommon::HELPER_PATH,
                                SessionCommon::HELPER_IFACE,
@@ -42,7 +114,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     m_loop(loop),
     m_conn(conn),
     m_forkexec(forkexec),
-    m_parentLogger(parentLogger),
+    m_logger(new SessionHelperLogger(parentLogger, boost::shared_ptr<SessionHelper>(this, NopDestructor()))),
     emitLogOutput(*this, "LogOutput"),
     emitSyncProgress(*this, "SyncProgress"),
     emitSourceProgress(*this, "SourceProgress"),
@@ -68,52 +140,18 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(emitPasswordRequest);
     add(emitMessage);
     add(emitShutdown);
-    activate();
-    Logger::pushLogger(this);
+}
+
+void SessionHelper::activate()
+{
+    GDBusCXX::DBusObjectHelper::activate();
+    m_pushLogger.reset(m_logger);
 }
 
 SessionHelper::~SessionHelper()
 {
-    Logger::popLogger();
-}
-
-static void dumpString(const std::string &output)
-{
-    fputs(output.c_str(), stdout);
-}
-
-void SessionHelper::messagev(const MessageOptions &options,
-                             const char *format,
-                             va_list args)
-{
-    static bool dbg = getenv("SYNCEVOLUTION_DEBUG");
-
-    if (dbg) {
-        // let parent LogRedirect or utility function handle the output *in addition* to
-        // logging via D-Bus
-        va_list argsCopy;
-        va_copy(argsCopy, args);
-        if (m_parentLogger) {
-            m_parentLogger->messagev(options, format, argsCopy);
-        } else {
-            formatLines(options.m_level, DEBUG,
-                        options.m_processName,
-                        options.m_prefix,
-                        format, argsCopy,
-                        boost::bind(dumpString, _1));
-        }
-        va_end(argsCopy);
-    } else {
-        // Only flush parent logger, to capture output sent to
-        // stdout/stderr by some library and send it via D-Bus
-        // (recursively!)  before printing out own, new output.
-        m_parentLogger->flush();
-    }
-
-    // send to parent
-    string log = StringPrintfV(format, args);
-    string strLevel = Logger::levelToStr(options.m_level);
-    emitLogOutput(strLevel, log, options.m_processName ? *options.m_processName : getProcessName());
+    m_pushLogger.reset();
+    m_logger.reset();
 }
 
 void SessionHelper::run()

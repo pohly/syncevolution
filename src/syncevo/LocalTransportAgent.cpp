@@ -550,7 +550,42 @@ public:
                           true /* ignore transmission failures */> m_logOutput;
 };
 
-class LocalTransportAgentChild : public TransportAgent, private Logger
+class ChildLogger : public Logger
+{
+    std::auto_ptr<LogRedirect> m_parentLogger;
+    boost::weak_ptr<LocalTransportChildImpl> m_child;
+
+public:
+    ChildLogger(const boost::shared_ptr<LocalTransportChildImpl> &child) :
+        m_parentLogger(new LogRedirect(LogRedirect::STDERR_AND_STDOUT)),
+        m_child(child)
+    {}
+    ~ChildLogger()
+    {
+        m_parentLogger.reset();
+    }
+
+    /**
+     * Write message into our own log and send to parent.
+     */
+    virtual void messagev(const MessageOptions &options,
+                          const char *format,
+                          va_list args)
+    {
+        m_parentLogger->process();
+        boost::shared_ptr<LocalTransportChildImpl> child = m_child.lock();
+        if (child) {
+            // prefix is used to set session path
+            // for general server output, the object path field is dbus server
+            // the object path can't be empty for object paths prevent using empty string.
+            string strLevel = Logger::levelToStr(options.m_level);
+            string log = StringPrintfV(format, args);
+            child->m_logOutput(strLevel, log);
+        }
+    }
+};
+
+class LocalTransportAgentChild : public TransportAgent
 {
     /** final return code of our main(): non-zero indicates that we need to shut down */
     int m_ret;
@@ -576,7 +611,7 @@ class LocalTransportAgentChild : public TransportAgent, private Logger
     /**
      * our D-Bus interface, created in onConnect()
      */
-    boost::scoped_ptr<LocalTransportChildImpl> m_child;
+    boost::shared_ptr<LocalTransportChildImpl> m_child;
 
     /**
      * sync context, created in Sync() D-Bus call
@@ -834,36 +869,13 @@ class LocalTransportAgentChild : public TransportAgent, private Logger
         }
     }
 
-    /**
-     * Write message into our own log and send to parent.
-     */
-    virtual void messagev(const MessageOptions &options,
-                          const char *format,
-                          va_list args)
-    {
-        if (m_parentLogger) {
-            m_parentLogger->process();
-        }
-        if (m_child) {
-            // prefix is used to set session path
-            // for general server output, the object path field is dbus server
-            // the object path can't be empty for object paths prevent using empty string.
-            string strLevel = Logger::levelToStr(options.m_level);
-            string log = StringPrintfV(format, args);
-            m_child->m_logOutput(strLevel, log);
-        }
-    }
-
 public:
     LocalTransportAgentChild() :
         m_ret(0),
-        m_parentLogger(new LogRedirect(true)), // redirect all output via D-Bus
         m_forkexec(SyncEvo::ForkExecChild::create()),
         m_reportSent(false),
         m_status(INACTIVE)
     {
-        Logger::pushLogger(this);
-
         m_forkexec->m_onConnect.connect(boost::bind(&LocalTransportAgentChild::onConnect, this, _1));
         m_forkexec->m_onFailure.connect(boost::bind(&LocalTransportAgentChild::onFailure, this, _1, _2));
         // When parent quits, we need to abort whatever we do and shut
@@ -880,9 +892,9 @@ public:
         m_forkexec->connect();
     }
 
-    ~LocalTransportAgentChild()
+    boost::shared_ptr<ChildLogger> createLogger()
     {
-        Logger::popLogger();
+        return boost::shared_ptr<ChildLogger>(new ChildLogger(m_child));
     }
 
     void run()
@@ -1125,8 +1137,16 @@ int LocalTransportMain(int argc, char **argv)
         Logger::setProcessName("syncevo-local-sync");
 
         boost::shared_ptr<LocalTransportAgentChild> child(new LocalTransportAgentChild);
+        PushLogger<Logger> logger;
+        // Temporary handle is necessary to avoid compiler issue with
+        // clang (ambiguous brackets).
+        {
+            Logger::Handle handle(child->createLogger());
+            logger.reset(handle);
+        }
         child->run();
         int ret = child->getReturnCode();
+        logger.reset();
         child.reset();
         return ret;
     } catch ( const std::exception &ex ) {

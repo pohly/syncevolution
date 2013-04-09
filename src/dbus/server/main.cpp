@@ -152,9 +152,9 @@ int main(int argc, char **argv, char **envp)
         setvbuf(stdout, NULL, _IONBF, 0);
 
         // Redirect output and optionally log to syslog.
-        LogRedirect redirect(true);
-        redirect.setLevel(stdoutEnabled ? level : Logger::NONE);
-        std::auto_ptr<Logger> syslogger;
+        PushLogger<LogRedirect> redirect(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));
+        redirect->setLevel(stdoutEnabled ? level : Logger::NONE);
+        PushLogger<LoggerSyslog> syslogger;
         if (syslogEnabled && level > Logger::NONE) {
             syslogger.reset(new LoggerSyslog(execName));
             syslogger->setLevel(level);
@@ -206,6 +206,9 @@ int main(int argc, char **argv, char **envp)
         SE_LOG_DEBUG(NULL, "flushing D-Bus connection");
         conn.flush();
         conn.reset();
+        SE_LOG_INFO(NULL, "terminating, closing logging");
+        syslogger.reset();
+        redirect.reset();
         SE_LOG_INFO(NULL, "terminating");
         return 0;
     } catch ( const std::exception &ex ) {

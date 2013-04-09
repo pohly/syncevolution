@@ -43,14 +43,14 @@ class ForkExecChild;
  * traditional syncevo-dbus-server did.
  */
 class SessionHelper : public GDBusCXX::DBusObjectHelper,
-    private Logger,
     private boost::noncopyable
 {
     GMainLoop *m_loop;
     GDBusCXX::DBusConnectionPtr m_conn;
     boost::shared_ptr<ForkExecChild> m_forkexec;
-    LogRedirect *m_parentLogger;
     boost::function<bool ()> m_operation;
+    boost::shared_ptr<Logger> m_logger;
+    PushLogger<Logger> m_pushLogger;
 
     /** valid during doSync() */
     boost::scoped_ptr<DBusSync> m_sync;
@@ -81,18 +81,14 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     /** SessionHelper.PasswordResponse */
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
 
-    // Logger implementation -> output via D-Bus emitLogOutput
-    virtual void messagev(const MessageOptions &options,
-                          const char *format,
-                          va_list args);
-
  public:
     SessionHelper(GMainLoop *loop,
                   const GDBusCXX::DBusConnectionPtr &conn,
                   const boost::shared_ptr<ForkExecChild> &forkexec,
-                  LogRedirect *parentLogger);
+                  const boost::shared_ptr<LogRedirect> &parentLogger);
     ~SessionHelper();
 
+    void activate();
     void run();
     GMainLoop *getLoop() const { return m_loop; }
 

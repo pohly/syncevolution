@@ -4362,9 +4362,9 @@ private:
      * vararg constructor with NULL termination,
      * out and error stream into stringstream members
      */
-    class TestCmdline : private Logger {
+    class TestCmdline : public Logger {
         void init() {
-            pushLogger(this);
+            addLogger(boost::shared_ptr<Logger>(this, NopDestructor()));
 
             m_argv.reset(new const char *[m_argvstr.size() + 1]);
             m_argv[0] = "client-test";
@@ -4398,7 +4398,7 @@ private:
         }
 
         ~TestCmdline() {
-            popLogger();
+            removeLogger(this);
         }
 
         boost::shared_ptr<SyncContext> parse()

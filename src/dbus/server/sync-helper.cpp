@@ -44,11 +44,12 @@ namespace {
     }
 
     void onConnect(const DBusConnectionPtr &conn,
-                   LogRedirect *parentLogger,
+                   const boost::shared_ptr<LogRedirect> &parentLogger,
                    const boost::shared_ptr<ForkExecChild> &forkexec,
                    boost::shared_ptr<SessionHelper> &helper)
     {
         helper.reset(new SessionHelper(loop, conn, forkexec, parentLogger));
+        helper->activate();
     }
 
     void onAbort()
@@ -87,9 +88,11 @@ int main(int argc, char **argv, char **envp)
     // which are unaware of the SyncEvolution logging system.
     // Redirecting is useful to get such output into our
     // sync logfile, once we have one.
-    boost::scoped_ptr<LogRedirect> redirect;
+    boost::shared_ptr<LogRedirect> redirect;
+    PushLogger<LogRedirect> pushRedirect;
     if (!debug) {
-        redirect.reset(new LogRedirect(true));
+        redirect.reset(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));
+        pushRedirect.reset(redirect);
     }
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -110,7 +113,7 @@ int main(int argc, char **argv, char **envp)
 
         boost::shared_ptr<SessionHelper> helper;
         bool failed = false;
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, redirect.get(),
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, redirect,
                                                   boost::cref(forkexec),
                                                   boost::ref(helper)));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2, boost::ref(failed)));

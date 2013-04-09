@@ -21,6 +21,7 @@
 #define INCL_SUSPENDFLAGS
 
 #include <signal.h>
+#include <stdint.h>
 #include <boost/smart_ptr.hpp>
 #include <boost/function.hpp>
 #include <boost/signals2.hpp>

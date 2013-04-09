@@ -421,7 +421,7 @@ int main( int argc, char **argv )
     // stdout is printed normally. Deconstructing it when
     // leaving main() does one final processing of pending
     // output.
-    LogRedirect redirect(false);
+    PushLogger<LogRedirect> redirect(new LogRedirect(LogRedirect::STDERR));
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
 

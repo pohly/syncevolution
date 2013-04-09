@@ -27,7 +27,32 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-std::string Logger::m_processName;
+static RecMutex logMutex;
+/**
+ * POD to have it initialized without relying on a constructor to run.
+ */
+static std::string *logProcessName;
+
+void Logger::setProcessName(const std::string &name)
+{
+    RecMutex::Guard guard = logMutex.lock();
+    if (!logProcessName) {
+        logProcessName = new std::string(name);
+    } else {
+        *logProcessName = name;
+    }
+}
+
+std::string Logger::getProcessName()
+{
+    RecMutex::Guard guard = logMutex.lock();
+    return logProcessName ? *logProcessName : "";
+}
+
+RecMutex::Guard Logger::lock()
+{
+    return logMutex.lock();
+}
 
 Logger::Logger() :
     m_level(INFO)
@@ -38,53 +63,55 @@ Logger::~Logger()
 {
 }
 
-static std::vector<Logger *> &loggers()
+/**
+ * Create (if necessary) and return the logger stack.
+ * It has at least one entry.
+ *
+ * logMutex must be locked when calling this.
+ */
+static std::vector<Logger::Handle> &LoggersSingleton()
 {
     // allocate array once and never free it because it might be needed till
     // the very end of the application life cycle
-    static std::vector<Logger *> *loggers = new std::vector<Logger *>;
+    static std::vector<Logger::Handle> *loggers;
+    if (!loggers) {
+        loggers = new std::vector<Logger::Handle>;
+        // Ensure that the array is never empty.
+        boost::shared_ptr<Logger> logger(new LoggerStdout);
+        loggers->push_back(logger);
+    }
     return *loggers;
 }
 
-Logger &Logger::instance()
+Logger::Handle Logger::instance()
 {
-    // prevent destructing this instance as part of the executable's
-    // shutdown by allocating it dynamically, because it may be
-    // needed by other instances that get destructed later
-    // (order of global instance construction/destruction is
-    // undefined)
-    static LoggerStdout *DefaultLogger = new LoggerStdout;
-    if (!loggers().empty()) {
-        return *loggers()[loggers().size() - 1];
-    } else {
-        return *DefaultLogger;
+    RecMutex::Guard guard = logMutex.lock();
+    std::vector<Handle> &loggers = LoggersSingleton();
+    return loggers.back();
+}
+
+void Logger::addLogger(const Handle &logger)
+{
+    RecMutex::Guard guard = logMutex.lock();
+    std::vector<Handle> &loggers = LoggersSingleton();
+
+    loggers.push_back(logger);
+}
+
+void Logger::removeLogger(Logger *logger)
+{
+    RecMutex::Guard guard = logMutex.lock();
+    std::vector<Handle> &loggers = LoggersSingleton();
+
+    for (ssize_t i = loggers.size() - 1;
+         i >= 0;
+         --i) {
+        if (loggers[i] == logger) {
+            loggers[i].remove();
+            loggers.erase(loggers.begin() + i);
+            break;
+        }
     }
-}
-
-void Logger::pushLogger(Logger *logger)
-{
-    loggers().push_back(logger);
-}
-
-void Logger::popLogger()
-{
-    if (loggers().empty()) {
-        throw "too many popLogger() calls";
-    } else {
-        loggers().pop_back();
-    }
-}
-
-int Logger::numLoggers()
-{
-    return (int)loggers().size();
-}
-
-Logger *Logger::loggerAt(int index)
-{
-    return index < 0 || index >= (int)loggers().size() ?
-        NULL :
-        loggers()[index];
 }
 
 void Logger::formatLines(Level msglevel,
@@ -101,55 +128,68 @@ void Logger::formatLines(Level msglevel,
     if (msglevel != SHOW) {
         std::string reltime;
         std::string procname;
-        const std::string *realProcname;
+        std::string firstLine;
 
-        if (processName) {
-            realProcname = processName;
-        } else {
-            realProcname = &m_processName;
-        }
-        if (!realProcname->empty()) {
-            procname.reserve(realProcname->size() + 1);
-            procname += " ";
-            procname += *realProcname;
-        }
+        // Run non-blocking operations on shared data while
+        // holding the mutex.
+        {
+            RecMutex::Guard guard = logMutex.lock();
+            const std::string *realProcname;
 
-        if (outputlevel >= DEBUG) {
-            // add relative time stamp
-            Timespec now = Timespec::monotonic();
-            if (!m_startTime) {
-                // first message, start counting time
-                m_startTime = now;
-                time_t nowt = time(NULL);
-                struct tm tm_gm, tm_local;
-                char buffer[2][80];
-                gmtime_r(&nowt, &tm_gm);
-                localtime_r(&nowt, &tm_local);
-                reltime = " 00:00:00";
-                strftime(buffer[0], sizeof(buffer[0]),
-                         "%a %Y-%m-%d %H:%M:%S",
-                         &tm_gm);
-                strftime(buffer[1], sizeof(buffer[1]),
-                         "%H:%M %z %Z",
-                         &tm_local);
-                std::string line =
-                    StringPrintf("[DEBUG%s%s] %s UTC = %s\n",
-                                 procname.c_str(),
-                                 reltime.c_str(),
-                                 buffer[0],
-                                 buffer[1]);
-                print(line, 1);
+            if (processName) {
+                realProcname = processName;
             } else {
-                if (now >= m_startTime) {
-                    Timespec delta = now - m_startTime;
-                    reltime = StringPrintf(" %02ld:%02ld:%02ld",
-                                           delta.tv_sec / (60 * 60),
-                                           (delta.tv_sec % (60 * 60)) / 60,
-                                           delta.tv_sec % 60);
+                if (!logProcessName) {
+                    logProcessName = new std::string;
+                }
+                realProcname = logProcessName;
+            }
+            if (!realProcname->empty()) {
+                procname.reserve(realProcname->size() + 1);
+                procname += " ";
+                procname += *realProcname;
+            }
+
+            if (outputlevel >= DEBUG) {
+                // add relative time stamp
+                Timespec now = Timespec::monotonic();
+                if (!m_startTime) {
+                    // first message, start counting time
+                    m_startTime = now;
+                    time_t nowt = time(NULL);
+                    struct tm tm_gm, tm_local;
+                    char buffer[2][80];
+                    gmtime_r(&nowt, &tm_gm);
+                    localtime_r(&nowt, &tm_local);
+                    reltime = " 00:00:00";
+                    strftime(buffer[0], sizeof(buffer[0]),
+                             "%a %Y-%m-%d %H:%M:%S",
+                             &tm_gm);
+                    strftime(buffer[1], sizeof(buffer[1]),
+                             "%H:%M %z %Z",
+                             &tm_local);
+                    std::string line =
+                        StringPrintf("[DEBUG%s%s] %s UTC = %s\n",
+                                     procname.c_str(),
+                                     reltime.c_str(),
+                                     buffer[0],
+                                     buffer[1]);
                 } else {
-                    reltime = " ??:??:??";
+                    if (now >= m_startTime) {
+                        Timespec delta = now - m_startTime;
+                        reltime = StringPrintf(" %02ld:%02ld:%02ld",
+                                               delta.tv_sec / (60 * 60),
+                                               (delta.tv_sec % (60 * 60)) / 60,
+                                               delta.tv_sec % 60);
+                    } else {
+                        reltime = " ??:??:??";
+                    }
                 }
             }
+        }
+
+        if (!firstLine.empty()) {
+            print(firstLine, 1);
         }
         tag = StringPrintf("[%s%s%s] %s%s",
                            levelToStr(msglevel),
@@ -224,41 +264,68 @@ Logger::MessageOptions::MessageOptions(Level level,
 {
 }
 
-void Logger::message(Level level,
-                     const std::string *prefix,
-                     const char *file,
-                     int line,
-                     const char *function,
-                     const char *format,
-                     ...)
+Logger::Handle::Handle() throw ()
+{
+}
+
+Logger::Handle::Handle(Logger *logger) throw ()
+{
+    m_logger.reset(logger);
+}
+
+Logger::Handle::Handle(const Handle &other) throw ()
+{
+    m_logger = other.m_logger;
+}
+
+Logger::Handle & Logger::Handle::operator = (const Handle &other) throw ()
+{
+    if (this != &other) {
+        m_logger = other.m_logger;
+    }
+    return *this;
+}
+
+Logger::Handle::~Handle() throw ()
+{
+    m_logger.reset();
+}
+
+void Logger::Handle::message(Level level,
+                             const std::string *prefix,
+                             const char *file,
+                             int line,
+                             const char *function,
+                             const char *format,
+                             ...)
 {
     va_list args;
     va_start(args, format);
-    messagev(MessageOptions(level, prefix, file, line, function), format, args);
+    m_logger->messagev(MessageOptions(level, prefix, file, line, function), format, args);
     va_end(args);
 }
 
-void Logger::message(Level level,
-                     const std::string &prefix,
-                     const char *file,
-                     int line,
-                     const char *function,
-                     const char *format,
-                     ...)
+void Logger::Handle::message(Level level,
+                             const std::string &prefix,
+                             const char *file,
+                             int line,
+                             const char *function,
+                             const char *format,
+                             ...)
 {
     va_list args;
     va_start(args, format);
-    messagev(MessageOptions(level, &prefix, file, line, function), format, args);
+    m_logger->messagev(MessageOptions(level, &prefix, file, line, function), format, args);
     va_end(args);
 }
 
-void Logger::messageWithOptions(const MessageOptions &options,
-                                const char *format,
-                                ...)
+void Logger::Handle::messageWithOptions(const MessageOptions &options,
+                                        const char *format,
+                                        ...)
 {
     va_list args;
     va_start(args, format);
-    messagev(options, format, args);
+    m_logger->messagev(options, format, args);
     va_end(args);
 }
 

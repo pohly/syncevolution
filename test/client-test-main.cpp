@@ -123,9 +123,7 @@ public:
     }
 
     ~ClientListener() {
-        if (&Logger::instance() == m_logger.get()) {
-            Logger::popLogger();
-        }
+        m_logger.reset();
     }
 
     void addAllowedFailures(string allowedFailures) {
@@ -138,9 +136,8 @@ public:
         if (!getenv("SYNCEVOLUTION_DEBUG")) {
             string logfile = m_currentTest + ".log";
             simplifyFilename(logfile);
-            m_logger.reset(new LogRedirect(true, logfile.c_str()));
+            m_logger.reset(new LogRedirect(LogRedirect::STDERR_AND_STDOUT, logfile.c_str()));
             m_logger->setLevel(Logger::DEBUG);
-            Logger::pushLogger(m_logger.get());
         }
         SE_LOG_DEBUG(NULL, "*** starting %s ***", m_currentTest.c_str());
         m_failures.reset();
@@ -192,9 +189,6 @@ public:
         if (!failure.empty()) {
             SE_LOG_ERROR(NULL, "%s", failure.c_str());
         }
-        if (&Logger::instance() == m_logger.get()) {
-            Logger::popLogger();
-        }
         m_logger.reset();
 
         string logfile = m_currentTest + ".log";
@@ -245,7 +239,7 @@ private:
     bool m_failed, m_testFailed;
     string m_currentTest;
     int m_alarmSeconds;
-    auto_ptr<Logger> m_logger;
+    PushLogger<Logger> m_logger;
     CppUnit::TestResultCollector m_failures;
 
     static void alarmTriggered(int signal) {

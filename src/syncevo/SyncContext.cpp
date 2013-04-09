@@ -267,12 +267,30 @@ public:
     }
 };
 
-// this class owns the logging directory and is responsible
+class LogDir;
+
+/**
+ * Helper class for LogDir: acts as proxy for logging into
+ * the LogDir's reports and log file.
+ */
+class LogDirLogger : public Logger
+{
+    Logger::Handle m_parentLogger;     /**< the logger which was active before we started to intercept messages */
+    boost::weak_ptr<LogDir> m_logdir;  /**< grants access to report and Synthesis engine */
+
+public:
+    LogDirLogger(const boost::weak_ptr<LogDir> &logdir);
+    virtual void remove() throw ();
+    virtual void messagev(const MessageOptions &options,
+                          const char *format,
+                          va_list args);
+};
+
+// This class owns the logging directory. It is responsible
 // for redirecting output at the start and end of sync (even
-// in case of exceptions thrown!)
-class LogDir : public Logger, private boost::noncopyable, private LogDirNames {
+// in case of exceptions thrown!).
+class LogDir : private boost::noncopyable, private LogDirNames {
     SyncContext &m_client;
-    Logger &m_parentLogger;  /**< the logger which was active before we started to intercept messages */
     string m_logdir;         /**< configured backup root dir */
     int m_maxlogdirs;        /**< number of backup dirs to preserve, 0 if unlimited */
     string m_prefix;         /**< common prefix of backup dirs */
@@ -286,11 +304,18 @@ class LogDir : public Logger, private boost::noncopyable, private LogDirNames {
                                   that this class still is the central point to ask
                                   for the name of the log file. */
     boost::scoped_ptr<SafeConfigNode> m_info;  /**< key/value representation of sync information */
+
+    // Access to m_report and m_client must be thread-safe as soon as
+    // LogDirLogger is active, because they are shared between main
+    // thread and any thread which might log errors.
+    friend class LogDirLogger;
     bool m_readonly;         /**< m_info is not to be written to */
     SyncReport *m_report;    /**< record start/end times here */
 
-public:
-    LogDir(SyncContext &client) : m_client(client), m_parentLogger(Logger::instance()), m_info(NULL), m_readonly(false), m_report(NULL)
+    boost::weak_ptr<LogDir> m_self;
+    PushLogger<LogDirLogger> m_logger; /**< active logger */
+
+    LogDir(SyncContext &client) : m_client(client), m_info(NULL), m_readonly(false), m_report(NULL)
     {
         // Set default log directory. This will be overwritten with a user-specified
         // location later on, if one was selected by the user. SyncEvolution >= 0.9 alpha
@@ -310,6 +335,14 @@ public:
             path = "${XDG_CACHE_HOME}/syncevolution";
         }
         setLogdir(path);
+    }
+
+public:
+    static boost::shared_ptr<LogDir> create(SyncContext &client)
+    {
+        boost::shared_ptr<LogDir> logdir(new LogDir(client));
+        logdir->m_self = logdir;
+        return logdir;
     }
 
     /**
@@ -512,35 +545,36 @@ public:
         }
 
         // update log level of default logger and our own replacement
-        Level level;
+        Logger::Level level;
         switch (logLevel) {
         case 0:
             // default for console output
-            level = INFO;
+            level = Logger::INFO;
             break;
         case 1:
-            level = ERROR;
+            level = Logger::ERROR;
             break;
         case 2:
-            level = INFO;
+            level = Logger::INFO;
             break;
         default:
             if (m_logfile.empty() || getenv("SYNCEVOLUTION_DEBUG")) {
                 // no log file or user wants to see everything:
                 // print all information to the console
-                level = DEBUG;
+                level = Logger::DEBUG;
             } else {
                 // have log file: avoid excessive output to the console,
                 // full information is in the log file
-                level = INFO;
+                level = Logger::INFO;
             }
             break;
         }
         if (mode != SESSION_USE_PATH) {
             Logger::instance().setLevel(level);
         }
-        setLevel(level);
-        Logger::pushLogger(this);
+        boost::shared_ptr<Logger> logger(new LogDirLogger(m_self));
+        logger->setLevel(level);
+        m_logger.reset(logger);
 
         time_t start = time(NULL);
         if (m_report) {
@@ -710,6 +744,7 @@ public:
             if (!m_readonly) {
                 writeTimestamp("end", end);
                 if (m_report) {
+                    RecMutex::Guard guard = Logger::lock();
                     writeReport(*m_report);
                 }
                 m_info->flush();
@@ -718,58 +753,15 @@ public:
         }
     }
 
-    // remove redirection of logging (safe for destructor)
+    // Remove redirection of logging.
     void restore() {
-        if (&Logger::instance() == this) {
-            Logger::popLogger();
-        }
+        m_logger.reset();
     }
 
     ~LogDir() {
         restore();
     }
 
-
-    virtual void messagev(const MessageOptions &options,
-                          const char *format,
-                          va_list args)
-    {
-        // always to parent first (usually stdout):
-        // if the parent is a LogRedirect instance, then
-        // it'll flush its own output first, which ensures
-        // that the new output comes later (as desired)
-        {
-            va_list argscopy;
-            va_copy(argscopy, args);
-            m_parentLogger.messagev(options, format, argscopy);
-            va_end(argscopy);
-        }
-
-        if (m_report &&
-            options.m_level <= ERROR &&
-            m_report->getError().empty()) {
-            va_list argscopy;
-            va_copy(argscopy, args);
-            string error = StringPrintfV(format, argscopy);
-            va_end(argscopy);
-
-            m_report->setError(error);
-        }
-
-        if (m_client.getEngine().get()) {
-            va_list argscopy;
-            va_copy(argscopy, args);
-            // once to Synthesis log, with full debugging
-            m_client.getEngine().doDebug(options.m_level,
-                                         options.m_prefix ? options.m_prefix->c_str() : NULL,
-                                         options.m_file,
-                                         options.m_line,
-                                         options.m_function,
-                                         format,
-                                         argscopy);
-            va_end(argscopy);
-        }
-    }
 
 #if 0
     /**
@@ -933,6 +925,67 @@ private:
     }
 };
 
+LogDirLogger::LogDirLogger(const boost::weak_ptr<LogDir> &logdir) :
+    m_parentLogger(Logger::instance()),
+    m_logdir(logdir)
+{
+}
+
+void LogDirLogger::remove() throw ()
+{
+    // Forget reference to LogDir. This prevents accessing it in
+    // future messagev() calls.
+    RecMutex::Guard guard = Logger::lock();
+    m_logdir.reset();
+}
+
+void LogDirLogger::messagev(const MessageOptions &options,
+                            const char *format,
+                            va_list args)
+{
+    // Protects ordering of log messages and access to shared
+    // variables like m_report and m_engine.
+    RecMutex::Guard guard = Logger::lock();
+
+    // always to parent first (usually stdout):
+    // if the parent is a LogRedirect instance, then
+    // it'll flush its own output first, which ensures
+    // that the new output comes later (as desired)
+    va_list argscopy;
+    va_copy(argscopy, args);
+    m_parentLogger.messagev(options, format, argscopy);
+    va_end(argscopy);
+
+    boost::shared_ptr<LogDir> logdir = m_logdir.lock();
+    if (logdir) {
+        if (logdir->m_report &&
+            options.m_level <= ERROR &&
+            logdir->m_report->getError().empty()) {
+            va_list argscopy;
+            va_copy(argscopy, args);
+            string error = StringPrintfV(format, argscopy);
+            va_end(argscopy);
+
+            logdir->m_report->setError(error);
+        }
+
+        if (logdir->m_client.getEngine().get()) {
+            va_list argscopy;
+            va_copy(argscopy, args);
+            // once to Synthesis log, with full debugging
+            logdir->m_client.getEngine().doDebug(options.m_level,
+                                                 options.m_prefix ? options.m_prefix->c_str() : NULL,
+                                                 options.m_file,
+                                                 options.m_line,
+                                                 options.m_function,
+                                                 format,
+                                                 argscopy);
+            va_end(argscopy);
+        }
+    }
+}
+
+
 const char* const LogDirNames::DIR_PREFIX = "SyncEvolution-";
 
 /**
@@ -1001,7 +1054,7 @@ public:
 
 private:
     VirtualSyncSources_t m_virtualSources; /**< all configured virtual data sources (aka Synthesis <superdatastore>) */
-    LogDir m_logdir;     /**< our logging directory */
+    boost::shared_ptr<LogDir> m_logdir;     /**< our logging directory */
     SyncContext &m_client; /**< the context in which we were instantiated */
     set<string> m_prepared;   /**< remember for which source we dumped databases successfully */
     string m_intro;      /**< remembers the dumpLocalChanges() intro and only prints it again
@@ -1015,7 +1068,7 @@ private:
     /** create name in current (if set) or previous logdir */
     string databaseName(SyncSource &source, const string suffix, string logdir = "") {
         if (!logdir.size()) {
-            logdir = m_logdir.getLogdir();
+            logdir = m_logdir->getLogdir();
         }
         return logdir + "/" +
             source.getName() + "." + suffix;
@@ -1076,9 +1129,9 @@ public:
         // to search for previous backups of each source, if
         // necessary.
         SyncContext context(m_client.getContextName());
-        LogDir logdir(context);
+        boost::shared_ptr<LogDir> logdir(LogDir::create(context));
         vector<string> dirs;
-        logdir.previousLogdirs(dirs);
+        logdir->previousLogdirs(dirs);
 
         BOOST_FOREACH(SyncSource *source, *this) {
             if ((!excludeSource.empty() && excludeSource != source->getName()) ||
@@ -1150,7 +1203,7 @@ public:
     }
 
     SourceList(SyncContext &client, bool doLogging) :
-        m_logdir(client),
+        m_logdir(LogDir::create(client)),
         m_client(client),
         m_doLogging(doLogging),
         m_reportTodo(true),
@@ -1160,37 +1213,37 @@ public:
     
     // call as soon as logdir settings are known
     void startSession(const string &logDirPath, int maxlogdirs, int logLevel, SyncReport *report) {
-        m_logdir.setLogdir(logDirPath);
-        m_previousLogdir = m_logdir.previousLogdir();
+        m_logdir->setLogdir(logDirPath);
+        m_previousLogdir = m_logdir->previousLogdir();
         if (m_doLogging) {
-            m_logdir.startSession(logDirPath, LogDir::SESSION_CREATE, maxlogdirs, logLevel, report);
+            m_logdir->startSession(logDirPath, LogDir::SESSION_CREATE, maxlogdirs, logLevel, report);
         } else {
             // Run debug session without paying attention to
             // the normal logdir handling. The log level here
             // refers to stdout. The log file will be as complete
             // as possible.
-            m_logdir.startSession(logDirPath, LogDir::SESSION_USE_PATH, 0, 1, report);
+            m_logdir->startSession(logDirPath, LogDir::SESSION_USE_PATH, 0, 1, report);
         }
     }
 
     /** read-only access to existing session, identified in logDirPath */
     void accessSession(const string &logDirPath) {
-        m_logdir.setLogdir(logDirPath);
-        m_previousLogdir = m_logdir.previousLogdir();
-        m_logdir.startSession(logDirPath, LogDir::SESSION_READ_ONLY, 0, 0, NULL);
+        m_logdir->setLogdir(logDirPath);
+        m_previousLogdir = m_logdir->previousLogdir();
+        m_logdir->startSession(logDirPath, LogDir::SESSION_READ_ONLY, 0, 0, NULL);
     }
 
 
     /** return log directory, empty if not enabled */
     const string &getLogdir() {
-        return m_logdir.getLogdir();
+        return m_logdir->getLogdir();
     }
 
     /** return previous log dir found in startSession() */
     const string &getPrevLogdir() const { return m_previousLogdir; }
 
     /** set directory for database files without actually redirecting the logging */
-    void setPath(const string &path) { m_logdir.setPath(path); }
+    void setPath(const string &path) { m_logdir->setPath(path); }
 
     /**
      * If possible (directory to compare against available) and enabled,
@@ -1214,7 +1267,7 @@ public:
 
         vector<string> dirs;
         if (oldSession.empty()) {
-            m_logdir.previousLogdirs(dirs);
+            m_logdir->previousLogdirs(dirs);
         }
 
         BOOST_FOREACH(SyncSource *source, *this) {
@@ -1237,10 +1290,10 @@ public:
                      it != dirs.rend();
                      ++it) {
                     const string &sessiondir = *it;
-                    LogDir oldsession(m_client);
-                    oldsession.openLogdir(sessiondir);
+                    boost::shared_ptr<LogDir> oldsession(LogDir::create(m_client));
+                    oldsession->openLogdir(sessiondir);
                     SyncReport report;
-                    oldsession.readReport(report);
+                    oldsession->readReport(report);
                     if (report.find(source->getName()) != report.end())  {
                         // source was active in that session, use dump
                         // made there
@@ -1283,7 +1336,7 @@ public:
             return;
         }
 
-        if (m_logdir.getLogfile().size() &&
+        if (m_logdir->getLogfile().size() &&
             m_doLogging &&
             (m_client.getDumpData() || m_client.getPrintChanges())) {
             // dump initial databases
@@ -1340,17 +1393,17 @@ public:
             }
 
             // ensure that stderr is seen again
-            m_logdir.restore();
+            m_logdir->restore();
 
             // write out session status
-            m_logdir.endSession();
+            m_logdir->endSession();
 
             if (m_reportTodo) {
                 // haven't looked at result of sync yet;
                 // don't do it again
                 m_reportTodo = false;
 
-                string logfile = m_logdir.getLogfile();
+                string logfile = m_logdir->getLogfile();
                 if (status == STATUS_OK) {
                     SE_LOG_SHOW(NULL, "\nSynchronization successful.");
                 } else if (logfile.size()) {
@@ -1380,7 +1433,7 @@ public:
 
                 // compare databases?
                 if (m_client.getPrintChanges()) {
-                    dumpLocalChanges(m_logdir.getLogdir(),
+                    dumpLocalChanges(m_logdir->getLogdir(),
                                      "before", "after", "",
                                      StringPrintf("\nData modified %s during synchronization:\n",
                                                   m_client.isLocalSync() ? m_client.getContextName().c_str() : "locally"),
@@ -1388,12 +1441,12 @@ public:
                 }
 
                 // now remove some old logdirs
-                m_logdir.expire();
+                m_logdir->expire();
             }
         } else {
             // finish debug session
-            m_logdir.restore();
-            m_logdir.endSession();
+            m_logdir->restore();
+            m_logdir->endSession();
         }
     }
 
@@ -4136,16 +4189,15 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
 
 void SyncContext::getSessions(vector<string> &dirs)
 {
-    LogDir logging(*this);
-    logging.previousLogdirs(dirs);
+    LogDir::create(*this)->previousLogdirs(dirs);
 }
 
 string SyncContext::readSessionInfo(const string &dir, SyncReport &report)
 {
-    LogDir logging(*this);
-    logging.openLogdir(dir);
-    logging.readReport(report);
-    return logging.getPeerNameFromLogdir(dir);
+    boost::shared_ptr<LogDir> logging(LogDir::create(*this));
+    logging->openLogdir(dir);
+    logging->readReport(report);
+    return logging->getPeerNameFromLogdir(dir);
 }
 
 #ifdef ENABLE_UNIT_TESTS
@@ -4157,7 +4209,7 @@ string SyncContext::readSessionInfo(const string &dir, SyncReport &report)
  * With that setup and a fake SyncContext it is possible to simulate
  * sessions and test the resulting logdirs.
  */
-class LogDirTest : public CppUnit::TestFixture, private SyncContext, private Logger
+class LogDirTest : public CppUnit::TestFixture, private SyncContext, public Logger
 {
 public:
     LogDirTest() :
@@ -4165,11 +4217,11 @@ public:
         m_maxLogDirs(10)
     {
         // suppress output by redirecting into m_out
-        pushLogger(this);
+        addLogger(boost::shared_ptr<Logger>(this, NopDestructor()));
     }
 
     ~LogDirTest() {
-        popLogger();
+        removeLogger(this);
     }
 
     void setUp() {

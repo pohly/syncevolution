@@ -351,16 +351,6 @@ private:
                           const char *format,
                           va_list args);
 
-    class LoggingGuard {
-    public:
-        LoggingGuard(Session *session) {
-            Logger::pushLogger(session);
-        }
-        ~LoggingGuard() {
-            Logger::popLogger();
-        }
-    };
-
 public:
     enum {
         PRI_CMDLINE = -10,

@@ -35,13 +35,11 @@ LoggerSyslog::LoggerSyslog(const std::string &processName) :
     // valgrind tells us that openlog() does not copy the string.
     // Must provide pointer to a permanent copy.
     openlog(m_processName.c_str(), LOG_CONS | LOG_NDELAY | LOG_PID, LOG_USER);
-    Logger::pushLogger(this);
 }
 
 LoggerSyslog::~LoggerSyslog()
 {
     closelog();
-    Logger::popLogger();
 }
 
 static void printToSyslog(int sysloglevel, std::string &chunk, size_t expectedTotal)

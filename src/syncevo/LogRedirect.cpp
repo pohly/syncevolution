@@ -57,8 +57,11 @@ void LogRedirect::abortHandler(int sig) throw()
     // SE_LOG_ERROR(NULL, "caught signal %d, shutting down", sig);
 
     // shut down redirection, also flushes to log
-    if (m_redirect) {
-        m_redirect->restore();
+    {
+        RecMutex::Guard guard = lock();
+        if (m_redirect) {
+            m_redirect->restore();
+        }
     }
 
     // Raise same signal again. Because our handler
@@ -103,13 +106,13 @@ void LogRedirect::init()
     m_knownErrors.insert("Qt: Session management error: None of the authentication protocols specified are supported");
 }
 
-LogRedirect::LogRedirect(bool both, const char *filename) throw()
+LogRedirect::LogRedirect(Mode mode, const char *filename)
 {
     init();
     m_processing = true;
     if (!getenv("SYNCEVOLUTION_DEBUG")) {
         redirect(STDERR_FILENO, m_stderr);
-        if (both) {
+        if (mode == STDERR_AND_STDOUT) {
             redirect(STDOUT_FILENO, m_stdout);
             m_out = filename ?
                 fopen(filename, "w") :
@@ -132,7 +135,12 @@ LogRedirect::LogRedirect(bool both, const char *filename) throw()
                            fileno(m_out) :
                            m_stderr.m_copy), "w");
     }
-    Logger::pushLogger(this);
+
+    // Modify process state while holding the Logger mutex.
+    RecMutex::Guard guard = lock();
+    if (m_redirect) {
+        SE_LOG_WARNING(NULL, "LogRedirect already instantiated?!");
+    }
     m_redirect = this;
 
     if (!getenv("SYNCEVOLUTION_DEBUG")) {
@@ -158,6 +166,8 @@ LogRedirect::LogRedirect(ExecuteFlags flags)
 {
     init();
 
+    // This instance does not modify process state and
+    // doesn't have to be thread-safe.
     m_streams = true;
     if (!(flags & EXECUTE_NO_STDERR)) {
         redirect(STDERR_FILENO, m_stderr);
@@ -169,10 +179,12 @@ LogRedirect::LogRedirect(ExecuteFlags flags)
 
 LogRedirect::~LogRedirect() throw()
 {
-    bool pop = false;
+    RecMutex::Guard guard;
+    if (!m_streams) {
+        guard = lock();
+    }
     if (m_redirect == this) {
         m_redirect = NULL;
-        pop = true;
     }
     process();
     restore();
@@ -186,28 +198,36 @@ LogRedirect::~LogRedirect() throw()
     if (m_buffer) {
         free(m_buffer);
     }
-    if (pop) {
-        Logger::popLogger();
-    }
 }
 
-void LogRedirect::redoRedirect() throw()
+void LogRedirect::remove() throw()
 {
-    bool doStdout = m_stdout.m_copy >= 0;
-    bool doStderr = m_stderr.m_copy >= 0;
+    restore();
+}
 
-    if (doStdout) {
-        restore(m_stdout);
-        redirect(STDOUT_FILENO, m_stdout);
-    }
-    if (doStderr) {
-        restore(m_stderr);
-        redirect(STDERR_FILENO, m_stderr);
+void LogRedirect::removeRedirect() throw()
+{
+    if (m_redirect) {
+        // We were forked. Ignore mutex (might be held by thread which was not
+        // forked) and restore the forked process' state to the one it was
+        // before setting up redirection.
+        //
+        // Do the minimal amount of work possible in restore(), i.e.,
+        // suppress the processing of streams.
+        m_redirect->m_streams = false;
+
+        m_redirect->restore(m_redirect->m_stdout);
+        m_redirect->restore(m_redirect->m_stderr);
     }
 }
 
 void LogRedirect::restore() throw()
 {
+    RecMutex::Guard guard;
+    if (!m_streams) {
+        guard = lock();
+    }
+
     if (m_processing) {
         return;
     }
@@ -223,6 +243,8 @@ void LogRedirect::messagev(const MessageOptions &options,
                            const char *format,
                            va_list args)
 {
+    RecMutex::Guard guard = lock();
+
     // check for other output first
     process();
     // Choose output channel: SHOW goes to original stdout,
@@ -524,6 +546,8 @@ bool LogRedirect::ignoreError(const std::string &text)
 
 void LogRedirect::process()
 {
+    RecMutex::Guard guard;
+
     if (m_streams) {
         // iterate until both sockets are closed by peer
         while (true) {
@@ -589,6 +613,8 @@ void LogRedirect::process()
                 break;
             }
         }
+    } else {
+        guard = lock();
     }
 
     if (m_processing) {
@@ -613,6 +639,8 @@ void LogRedirect::process()
 
 void LogRedirect::flush() throw()
 {
+    RecMutex::Guard guard = lock();
+
     process();
     if (!m_stdoutData.empty()) {
         std::string buffer;
@@ -645,17 +673,17 @@ class LogRedirectTest : public CppUnit::TestFixture {
     {
     public:
         std::stringstream m_streams[DEBUG + 1];
-        LogRedirect *m_redirect;
+        PushLogger<LogRedirect> m_redirect;
 
-        LogBuffer(bool both = true)
+        LogBuffer(LogRedirect::Mode mode = LogRedirect::STDERR_AND_STDOUT)
         {
-            m_redirect = new LogRedirect(both);
-            pushLogger(this);
+            m_redirect.reset(new LogRedirect(mode));
+            addLogger(boost::shared_ptr<Logger>(this, NopDestructor()));
         }
         ~LogBuffer()
         {
-            popLogger();
-            delete m_redirect;
+            removeLogger(this);
+            m_redirect.reset();
         }
 
         virtual void messagev(const MessageOptions &options,
@@ -746,7 +774,7 @@ public:
             orig_stdout = dup(STDOUT_FILENO);
             dup2(new_stdout, STDOUT_FILENO);
 
-            LogBuffer buffer(false);
+            LogBuffer buffer(LogRedirect::STDERR);
 
             fprintf(stdout, "normal message stdout\n");
             fflush(stdout);

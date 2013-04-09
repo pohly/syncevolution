@@ -48,6 +48,87 @@ static void logIdle(bool idle)
     SE_LOG_DEBUG(NULL, "server is %s", idle ? "idle" : "not idle");
 }
 
+class ServerLogger : public Logger
+{
+    Logger::Handle m_parentLogger;
+    // Currently a strong reference. Would be a weak reference
+    // if we had proper reference counting for Server.
+    boost::shared_ptr<Server> m_server;
+
+public:
+    ServerLogger(const boost::shared_ptr<Server> &server) :
+        m_parentLogger(Logger::instance()),
+        m_server(server)
+    {
+    }
+
+    virtual void remove() throw ()
+    {
+        // Hold the Logger mutex while cutting our connection to the
+        // server. The code using m_server below does the same and
+        // holds the mutex while logging. That way we prevent threads
+        // from holding onto the server while it tries to shut down.
+        //
+        // This is important because the server's live time is not
+        // really controlled via the boost::shared_ptr, it may
+        // destruct while there are still references. See
+        // Server::m_logger instantiation below.
+        RecMutex::Guard guard = lock();
+        m_server.reset();
+    }
+
+    virtual void messagev(const MessageOptions &options,
+                          const char *format,
+                          va_list args)
+    {
+        // Ensure that remove() cannot proceed while we have the
+        // server in use.
+        RecMutex::Guard guard = lock();
+        Server *server = m_server.get();
+        message2DBus(server,
+                     options,
+                     format,
+                     args,
+                     server ? server->getPath() : "",
+                     getProcessName());
+    }
+
+    /**
+     * @param server    may be NULL, in which case logging only goes to parent
+     */
+    void message2DBus(Server *server,
+                      const MessageOptions &options,
+                      const char *format,
+                      va_list args,
+                      const std::string &dbusPath,
+                      const std::string &procname)
+    {
+        // Keeps logging consistent: otherwise thread A might log to
+        // parent, thread B to parent and D-Bus, then thread A
+        // finishes its logging via D-Bus.  The order of log messages
+        // would then not be the same in the parent and D-Bus.
+        RecMutex::Guard guard = lock();
+
+        // iterating over args in messagev() is destructive, must make a copy first
+        va_list argsCopy;
+        va_copy(argsCopy, args);
+        m_parentLogger.messagev(options, format, args);
+
+        if (server) {
+            try {
+                if (options.m_level <= server->getDBusLogLevel()) {
+                    string log = StringPrintfV(format, argsCopy);
+                    server->logOutput(dbusPath, options.m_level, log, procname);
+                }
+            } catch (...) {
+                remove();
+                // Give up on server logging silently.
+            }
+        }
+        va_end(argsCopy);
+    }
+};
+
 void Server::clientGone(Client *c)
 {
     for (Clients_t::iterator it = m_clients.begin();
@@ -282,7 +363,11 @@ Server::Server(GMainLoop *loop,
     m_logOutputSignal(*this, "LogOutput"),
     m_autoTerm(m_loop, m_shutdownRequested, duration),
     m_dbusLogLevel(Logger::INFO),
-    m_parentLogger(Logger::instance())
+    // TODO (?): turn Server into a proper reference counted instance.
+    // This would help with dangling references to it when other threads
+    // use it for logging, see ServerLogger. However, with mutex locking
+    // in ServerLogger that shouldn't be a problem.
+    m_logger(new ServerLogger(boost::shared_ptr<Server>(this, NopDestructor())))
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -327,8 +412,9 @@ void Server::activate()
     // out object isn't visible to it yet.
     GDBusCXX::DBusObjectHelper::activate();
 
-    Logger::pushLogger(this);
-    setLevel(Logger::DEBUG);
+    // Push ourselves as logger for the time being.
+    m_logger->setLevel(Logger::DEBUG);
+    m_pushLogger.reset(m_logger);
 
     m_presence.reset(new PresenceStatus(*this));
 
@@ -363,7 +449,9 @@ Server::~Server()
     m_connman.reset();
     m_networkManager.reset();
     m_presence.reset();
-    Logger::popLogger();
+
+    m_pushLogger.reset();
+    m_logger.reset();
 }
 
 bool Server::shutdown()
@@ -909,24 +997,16 @@ void Server::updateDevice(const string &deviceId,
     }
 }
 
-void Server::messagev(const MessageOptions &options,
-                      const char *format,
-                      va_list args,
-                      const std::string &dbusPath,
-                      const std::string &procname)
+void Server::message2DBus(const Logger::MessageOptions &options,
+                          const char *format,
+                          va_list args,
+                          const std::string &dbusPath,
+                          const std::string &procname)
 {
-    // iterating over args in messagev() is destructive, must make a copy first
-    va_list argsCopy;
-    va_copy(argsCopy, args);
-    m_parentLogger.messagev(options, format, args);
     // prefix is used to set session path
     // for general server output, the object path field is dbus server
     // the object path can't be empty for object paths prevent using empty string.
-    if (options.m_level <= m_dbusLogLevel) {
-        string log = StringPrintfV(format, argsCopy);
-        logOutput(dbusPath, options.m_level, log, procname);
-    }
-    va_end(argsCopy);
+    m_logger->message2DBus(this, options, format, args, dbusPath, procname);
 }
 
 void Server::logOutput(const GDBusCXX::DBusObject_t &path,

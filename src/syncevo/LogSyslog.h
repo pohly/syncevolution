@@ -35,7 +35,7 @@ SE_BEGIN_CXX
 class LoggerSyslog : public Logger
 {
     const std::string m_processName;
-    Logger &m_parentLogger;
+    Handle m_parentLogger;
 
 public:
     /**
