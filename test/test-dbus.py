@@ -539,28 +539,37 @@ class DBusUtil(Timeout):
                 time.sleep(1)
             print "\nfound org.syncevolution on session bus, starting test"
         else:
-            logfile = open(syncevolog, "w")
+            if os.environ.get("SYNCEVOLUTION_DEBUG", None):
+                logfile = None
+            else:
+                logfile = open(syncevolog, "w")
             prefix = os.environ.get("TEST_DBUS_PREFIX", "")
             args = []
             if prefix:
                 args.append(prefix)
             args.extend(server)
             args.extend(serverArgs)
-            logfile.write("env:\n%s\n\nargs:\n%s\n\n" % (env, args))
-            logfile.flush()
+            if logfile != None:
+                logfile.write("env:\n%s\n\nargs:\n%s\n\n" % (env, args))
+                logfile.flush()
             size = os.path.getsize(syncevolog)
             DBusUtil.pserver = subprocess.Popen(args,
                                                 preexec_fn=lambda: os.setpgid(0, 0),
                                                 env=env,
                                                 stdout=logfile,
                                                 stderr=subprocess.STDOUT)
-            while self.isServerRunning():
-                newsize = os.path.getsize(syncevolog)
-                if newsize != size:
-                    if "] ready to run\n" in open(syncevolog).read():
-                        break
-                size = newsize
-                time.sleep(1)
+            if logfile != None:
+                while self.isServerRunning():
+                    newsize = os.path.getsize(syncevolog)
+                    if newsize != size:
+                        if "] ready to run\n" in open(syncevolog).read():
+                            break
+                        size = newsize
+                        time.sleep(1)
+            else:
+                print "test-dbus.py: giving syncevo-dbus-server time to start"
+                time.sleep(5)
+                print "test-dbus.py: starting test"
 
         # pserver.pid is not necessarily the pid of syncevo-dbus-server.
         # It might be the child of the pserver process.
