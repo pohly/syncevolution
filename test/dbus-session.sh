@@ -42,6 +42,8 @@ case "$@" in *valgrind*) prefix=`echo $@ | perl -p -e 's;.*?(\S*/?valgrind\S*).*
              *setup-syncevolution.sh*|*syncevolution\ *|*client-test\ *|*bash*|*testpim.py\ *|*test-dbus.py\ *|*gdb\ *) prefix=env;;
              *) prefix=;; # don't start EDS
 esac
+case "$TEST_DBUS_PREFIX" in *valgrind*) prefix="$TEST_DBUS_PREFIX";;
+esac
 akonadi=$prefix
 case "$@" in *test-dbus.py\ *) akonadi=;;
 esac
