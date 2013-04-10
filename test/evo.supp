@@ -2065,7 +2065,7 @@
 # ==1142==    by 0x4287F2A: CppUnit::TextTestRunner::run(CppUnit::TestResult&, std::string const&) (in /usr/lib/libcppunit-1.12.so.0.0.0)
 # ==1142==    by 0x4287FA1: CppUnit::TextTestRunner::run(std::string, bool, bool, bool) (in /usr/lib/libcppunit-1.12.so.0.0.0)
 {
-   <insert a suppression name here>
+   icalproperty pvl_newlist
    Memcheck:Leak
    fun:malloc
    fun:pvl_newlist
@@ -3464,7 +3464,7 @@
 # ==17481==    by 0x452723F: start_thread (in /lib/tls/i686/cmov/libpthread-2.3.6.so)
 # ==17481==    by 0x45FF49D: clone (in /lib/tls/i686/cmov/libc-2.3.6.so)
 {
-   <insert a suppression name here>
+   giop_recv_buffer_use_buf in thread
    Memcheck:Leak
    fun:calloc
    fun:g_malloc0
@@ -4728,7 +4728,7 @@
 # ==19190==    by 0x75EA14: main (in /home/pohly/work/syncevolution/src/client-test)
 # ==19190== 
 {
-   <insert_a_suppression_name_here>
+   glib g_ptr_array_add
    Memcheck:Leak
    ...
    fun:g_ptr_array_add
