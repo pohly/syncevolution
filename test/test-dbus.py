@@ -2790,8 +2790,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         # dbus server will be blocked by gnome-keyring-ask dialog, so we kill it, and then 
         # it can't get the password from gnome keyring and send info request for password
         def callback():
-            kill = subprocess.Popen("sh -c 'killall -9 gnome-keyring-ask >/dev/null 2>&1'", shell=True)
-            kill.communicate()
+            kill = subprocess.Popen('killall -9 gnome-keyring-ask'.split(),
+                                    stdout=open('/dev/null', 'w'),
+                                    stderr=subprocess.STDOUT)
+            kill.wait()
+            # Kill again soon.
             return True
 
         timeout_handler = Timeout.addTimeout(1, callback)
