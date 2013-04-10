@@ -20,13 +20,42 @@ LOGFILES=${VALGRIND_LOG:-valgrind.p$$.*.out}
 
 trap "cat $LOGFILES >&2 2>/dev/null; rm -f $LOGFILES" EXIT
 
+# Finds all valgrind processes created for this run of
+# valgrindcheck.sh, detected based on the log files created for
+# them. This is necessary to catch processes which might have forked
+# off from the $VALGRIND_PID that we know about.  We cannot simply
+# kill all valgrind processes, because there might be other, longer
+# running processes that need to continue.
+valgrindProcesses () {
+    if [ $LOGPARAM = "valgrind.p$$.c%p.out" ]; then
+        for file in $LOGFILES; do
+            pid=`echo $file | perl -p -e 's/.*valgrind\.p\d+\.c(\d+).*/$1/'`
+            echo $pid
+        done
+    fi
+}
+
+# Any child valgrind processes still running?
+valgrindRunning () {
+    for pid in `valgrindProcesses`; do
+        if ps $pid >/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Kill child valgrind process with given list of signals.
 killvalgrind () {
-    # killall did not always find valgrind when evolution-data-server-2.22 forked?!
-    # This will kill *all* running valgrind instances, even those not started
-    # by this script. That's better than missing some processes which were started
-    # directly or indirectly and now no longer are associated with our process.
-    killall -q $1 valgrind
-    for i in `ps x | grep -v grep | grep -e " valgrind " -e valgrind.bin | sed -e 's/^ *//' | cut -f1 -d " "`; do kill $1 $i; done
+    signals=$1
+    for pid in `valgrindProcesses`; do
+        if ps --no-headers ww $pid; then
+            for signal in $signals; do
+                echo "valgrind.sh: killing forked process $pid with signal $signal"
+                kill -$signal $pid 2>&1 | grep -v 'No such process'
+            done
+        fi
+    done
 }
 
 ( set +x; echo "*** starting $1 under valgrind, output to ${VALGRIND_CMD_LOG:-stdout}" )
@@ -49,15 +78,15 @@ echo "valgrindcheck ($$): '$@' ($VALGRIND_PID): returned $RET" >&2
 
 # give other valgrind instances some time to settle down, then kill them
 sleep 1
-killvalgrind -15
+killvalgrind INT TERM
 # let valgrind chew on leak checking for up to 30 seconds before killing it
 # for good
 i=0
-while ps x | grep -v grep | grep -q -e " valgrind " -e valgrind.bin && [ $i -lt 30 ]; do
+while valgrindRunning && [ $i -lt 30 ]; do
     sleep 1
     i=`expr $i + 1`
 done
-killvalgrind -9
+killvalgrind KILL
 # Filter out leaks in forked processes if VALGRIND_LEAK_CHECK_ONLY_FIRST is set,
 # detect if unfiltered errors were reported by valgrind. Unfiltered errors
 # are detected because valgrind will produce a suppression for us, which can
