@@ -52,8 +52,14 @@ void KDEInitMainSlot(const char *appname)
 {
     // Very simple check. API doesn't say whether asking
     // for the bus connection will connect immediately.
-    QDBusConnection dbus = QDBusConnection::sessionBus();
-    HaveDBus = dbus.isConnected();
+    // We use a private connection here instead of the shared
+    // QDBusConnection::sessionBus() because we don't have
+    // a QCoreApplication yet. Otherwise we get a warning:
+    // "QDBusConnection: session D-Bus connection created before QCoreApplication. Application may misbehave."
+    {
+        QDBusConnection dbus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, "org.syncevolution.kde-platform-test-connection");
+        HaveDBus = dbus.isConnected();
+    }
 
     if (!HaveDBus) {
         // KApplication has been seen to crash without D-Bus (BMC #25596).
