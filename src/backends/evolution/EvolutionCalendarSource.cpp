@@ -819,7 +819,7 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
 
     // removes all events with that UID, including children
     GErrorCXX gerror;
-    if (
+    if (!uid.empty() && // e_cal_client_remove_object_sync() in EDS 3.8 aborts the process for empty UID, other versions cannot succeed, so skip the call.
 #ifdef USE_EDS_CLIENT
         !e_cal_client_remove_object_sync(m_calendar,
                                          uid.c_str(), NULL, CALOBJ_MOD_ALL,
