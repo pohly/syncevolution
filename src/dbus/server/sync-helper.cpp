@@ -77,9 +77,11 @@ int main(int argc, char **argv, char **envp)
 
     // Suspend and abort are signaled via SIGINT/SIGTERM
     // respectively. SuspendFlags handle that for us.
+    // SIGURG is used as acknowledgement from parent to us that we
+    // can quite.
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     s.setLevel(Logger::DEV);
-    boost::shared_ptr<SuspendFlags::Guard> guard = s.activate();
+    boost::shared_ptr<SuspendFlags::Guard> guard = s.activate((1<<SIGINT)|(1<<SIGTERM)|(1<<SIGURG));
 
     bool debug = getenv("SYNCEVOLUTION_DEBUG");
 
@@ -155,7 +157,7 @@ int main(int argc, char **argv, char **envp)
         // quit. This is necessary because we might have pending IO
         // for the parent, like D-Bus method replies.
         while (true) {
-            if (s.getState() == SuspendFlags::ABORT) {
+            if (s.getReceivedSignals() & (1<<SIGURG)) {
                 // not an error, someone wanted us to stop
                 SE_LOG_DEBUG(NULL, "aborted via signal after completing operation, terminating");
                 return 0;

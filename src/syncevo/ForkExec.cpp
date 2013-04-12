@@ -419,9 +419,6 @@ void ForkExecParent::stop(int signal)
     if (signal && signal != SIGINT && signal != SIGTERM) {
         ::kill(m_childPid, signal);
     }
-#ifndef GDBUS_CXX_HAVE_DISCONNECT
-    m_api.reset();
-#endif
 }
 
 void ForkExecParent::kill()
@@ -435,6 +432,8 @@ void ForkExecParent::kill()
                  m_helper.c_str());
     ::kill(m_childPid, SIGKILL);
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
+    // Drop our connection to the child. Prevents further communication
+    // from child to us!
     m_api.reset();
 #endif
 }
