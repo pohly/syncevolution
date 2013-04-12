@@ -36,9 +36,11 @@ SE_BEGIN_CXX
 SuspendFlags::SuspendFlags() :
     m_level(Logger::INFO),
     m_state(NORMAL),
+    m_receivedSignals(0),
     m_lastSuspend(0),
     m_senderFD(-1),
-    m_receiverFD(-1)
+    m_receiverFD(-1),
+    m_activeSignals(0)
 {
 }
 
@@ -148,10 +150,14 @@ boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(boost::weak_pt
     return res;
 }
 
-boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
+boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate(uint32_t sigmask)
 {
     SE_LOG_DEBUG(NULL, "SuspendFlags: (re)activating, currently %s",
                  m_senderFD > 0 ? "active" : "inactive");
+    if (m_senderFD > 0) {
+        return m_guard.lock();
+    }
+
     int fds[2];
     if (pipe(fds)) {
         SE_THROW(StringPrintf("allocating pipe for signals failed: %s", strerror(errno)));
@@ -163,8 +169,11 @@ boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
     m_receiverFD = fds[0];
     SE_LOG_DEBUG(NULL, "SuspendFlags: activating signal handler(s) with fds %d->%d",
                  m_senderFD, m_receiverFD);
-    sigaction(SIGINT, NULL, &m_oldSigInt);
-    sigaction(SIGTERM, NULL, &m_oldSigTerm);
+    for (int sig = 0; sig < 32; sig++) {
+        if (sigmask & (1<<sig)) {
+            sigaction(sig, NULL, m_oldSignalHandlers + sig);
+        }
+    }
 
     struct sigaction new_action;
     memset(&new_action, 0, sizeof(new_action));
@@ -173,22 +182,27 @@ boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate()
     // don't let processing of SIGINT be interrupted
     // of SIGTERM and vice versa, if we are doing the
     // handling
-    if (m_oldSigInt.sa_handler == SIG_DFL) {
-        sigaddset(&new_action.sa_mask, SIGINT);
-    }
-    if (m_oldSigTerm.sa_handler == SIG_DFL) {
-        sigaddset(&new_action.sa_mask, SIGTERM);
-    }
-    if (m_oldSigInt.sa_handler == SIG_DFL) {
-        sigaction(SIGINT, &new_action, NULL);
-        SE_LOG_DEBUG(NULL, "SuspendFlags: catch SIGINT");
-    }
-    if (m_oldSigTerm.sa_handler == SIG_DFL) {
-        sigaction(SIGTERM, &new_action, NULL);
-        SE_LOG_DEBUG(NULL, "SuspendFlags: catch SIGTERM");
+    for (int sig = 0; sig < 32; sig++) {
+        if (sigmask & (1<<sig)) {
+            if (m_oldSignalHandlers[sig].sa_handler == SIG_DFL) {
+                sigaddset(&new_action.sa_mask, sig);
+            }
+        }
     }
 
-    return boost::shared_ptr<Guard>(new GLibGuard(m_receiverFD));
+    for (int sig = 0; sig < 32; sig++) {
+        if (sigmask & (1<<sig)) {
+            if (m_oldSignalHandlers[sig].sa_handler == SIG_DFL) {
+                sigaction(sig, &new_action, NULL);
+                SE_LOG_DEBUG(NULL, "SuspendFlags: catch signal %d", sig);
+            }
+        }
+    }
+    m_activeSignals = sigmask;
+    boost::shared_ptr<Guard> guard(new GLibGuard(m_receiverFD));
+    m_guard = guard;
+
+    return guard;
 }
 
 void SuspendFlags::deactivate()
@@ -196,14 +210,19 @@ void SuspendFlags::deactivate()
     SE_LOG_DEBUG(NULL, "SuspendFlags: deactivating fds %d->%d",
                  m_senderFD, m_receiverFD);
     if (m_receiverFD >= 0) {
-        sigaction(SIGTERM, &m_oldSigTerm, NULL);
-        sigaction(SIGINT, &m_oldSigInt, NULL);
+        for (int sig = 0; sig < 32; sig++) {
+            if (m_activeSignals & (1<<sig)) {
+                sigaction(sig, m_oldSignalHandlers + sig, NULL);
+            }
+        }
+        m_activeSignals = 0;
         SE_LOG_DEBUG(NULL, "SuspendFlags: close m_receiverFD %d", m_receiverFD);
         close(m_receiverFD);
         SE_LOG_DEBUG(NULL, "SuspendFlags: close m_senderFD %d", m_senderFD);
         close(m_senderFD);
         m_receiverFD = -1;
         m_senderFD = -1;
+        m_guard.reset();
         SE_LOG_DEBUG(NULL, "SuspendFlags: done with deactivation");
     }
 }
@@ -245,19 +264,24 @@ void SuspendFlags::handleSignal(int sig)
                 msg = SUSPEND_AGAIN;
             }
             break;
-        case SuspendFlags::ABORT:
+        case ABORT:
             msg = ABORT_AGAIN;
             break;
-        case SuspendFlags::ABORT_AGAIN:
-        case SuspendFlags::SUSPEND_AGAIN:
+        case ABORT_AGAIN:
+        case SUSPEND_AGAIN:
+        case ABORT_MAX:
             // shouldn't happen
+            msg = ABORT_MAX;
             break;
         }
+    default:
+        msg = ABORT_MAX;
         break;
     }
     }
     if (me.m_senderFD >= 0) {
-        write(me.m_senderFD, &msg, 1);
+        unsigned char msg2[2] = { (unsigned char)(ABORT_MAX + sig), msg };
+        write(me.m_senderFD, msg2, msg == ABORT_MAX ? 1 : 2);
     }
 }
 
@@ -282,10 +306,13 @@ void SuspendFlags::printSignals()
             case ABORT_AGAIN:
                 str = "Already aborting as requested earlier ...";
                 break;
+            default: {
+                int sig = msg - ABORT_MAX;
+                SE_LOG_DEBUG(NULL, "reveived signal %d", sig);
+                m_receivedSignals |= 1<<sig;
             }
-            if (!str) {
-                SE_LOG_DEBUG(NULL, "internal error: received invalid signal msg %d", msg);
-            } else {
+            }
+            if (str) {
                 SE_LOG(NULL, m_level, "%s", str);
             }
             m_stateChanged(*this);
