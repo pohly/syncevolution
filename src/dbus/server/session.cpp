@@ -700,7 +700,11 @@ void Session::doneCb(bool success) throw()
         // now also kill helper
         m_helper.reset();
         if (m_forkExecParent) {
+            // Abort (just in case, helper should already be waiting
+            // for SIGURG).
             m_forkExecParent->stop(SIGTERM);
+            // Quit.
+            m_forkExecParent->stop(SIGURG);
         }
 
         m_server.removeSyncSession(this);
