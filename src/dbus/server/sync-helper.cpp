@@ -163,16 +163,23 @@ int main(int argc, char **argv, char **envp)
                 return 0;
             }
             if (forkexec->getState() != ForkExecChild::CONNECTED) {
-                // no point running any longer, parent is gone
+                // No point running any longer, parent is gone.
+                //
+                // This can occur during normal operations, so don't
+                // treat it as an error:
+                // - we send final method response
+                // - parent signals us and closes the connection
+                // - our event loop processes these two events such
+                //   that we see the "not connected" one first
                 SE_LOG_DEBUG(NULL, "parent has quit, terminating");
-                return 1;
+                return 0;
             }
             g_main_context_iteration(NULL, true);
         }
     } catch ( const std::exception &ex ) {
-        SE_LOG_ERROR(NULL, "%s", ex.what());
+        SE_LOG_ERROR(NULL, "helper quitting with exception: %s", ex.what());
     } catch (...) {
-        SE_LOG_ERROR(NULL, "unknown error");
+        SE_LOG_ERROR(NULL, "helper quitting: unknown error");
     }
 
     return 1;
