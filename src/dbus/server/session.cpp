@@ -819,16 +819,42 @@ void Session::messagev(const MessageOptions &options,
                           getPath(), "");
 }
 
+static void Logging2ServerAndStdout(Server &server,
+                                    const GDBusCXX::DBusObject_t &path,
+                                    const Logger::MessageOptions &options,
+                                    const char *format,
+                                    ...)
+{
+    va_list args;
+    va_start(args, format);
+    server.message2DBus(options, format, args, path, options.m_processName ? *options.m_processName : "");
+    va_end(args);
+}
+
 static void Logging2Server(Server &server,
                            const GDBusCXX::DBusObject_t &path,
                            const std::string &strLevel,
                            const std::string &explanation,
                            const std::string &procname)
 {
-    server.logOutput(path,
-                     Logger::strToLevel(strLevel.c_str()),
-                     explanation,
-                     procname);
+    static bool dbg = getenv("SYNCEVOLUTION_DEBUG");
+
+    if (dbg) {
+        // Print to D-Bus directly. The helper handles its own
+        // printing to the console.
+        server.logOutput(path,
+                         Logger::strToLevel(strLevel.c_str()),
+                         explanation,
+                         procname);
+    } else {
+        // Print to D-Bus and console, because the helper
+        // relies on us to do that. Its own stdout/stderr
+        // was redirected into our pipe and any output
+        // there is considered an error.
+        Logger::MessageOptions options(Logger::strToLevel(strLevel.c_str()));
+        options.m_processName = &procname;
+        Logging2ServerAndStdout(server, path, options, "%s", explanation.c_str());
+    }
 }
 
 void Session::useHelper2(const SimpleResult &result, const boost::signals2::connection &c)

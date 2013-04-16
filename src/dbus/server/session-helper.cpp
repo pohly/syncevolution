@@ -67,8 +67,15 @@ public:
         static bool dbg = getenv("SYNCEVOLUTION_DEBUG");
 
         if (dbg) {
-            // let parent LogRedirect or utility function handle the output *in addition* to
-            // logging via D-Bus
+            // Let parent LogRedirect or utility function handle the
+            // output *in addition* to logging via D-Bus. That way
+            // it'll be visible via our stdout/stderr (= console)
+            // right away.
+            //
+            // In non-debug mode, nothing should get written to
+            // stdout/stder, which got redirected into a pipe
+            // read by our parend. In that mode, the parent will include
+            // our output in its own output streams.
             va_list argsCopy;
             va_copy(argsCopy, args);
             if (m_parentLogger) {
