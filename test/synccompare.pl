@@ -427,7 +427,7 @@ sub NormalizeItem {
 
    if ($googlecaldav) {
       #several properties are not preserved by Google in icalendar2.0 format
-      s/^(SEQUENCE|X-EVOLUTION-ALARM-UID)(;[^:;\n]*)*:.*\r?\n?//gm;
+      s/^(SEQUENCE|X-EVOLUTION-ALARM-UID|TRANSP)(;[^:;\n]*)*:.*\r?\n?//gm;
 
       # Google adds calendar owner as attendee of meetings, regardless
       # whether it was on the original attendee list. Ignore this
