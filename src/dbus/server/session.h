@@ -170,7 +170,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
     bool m_wasAborted;
 
     /**
-     * Indicates whether this session was initiated by the peer or locally.
+     * True iff we initiated the sync.
      */
     bool m_remoteInitiated;
     SyncStatus m_syncStatus;

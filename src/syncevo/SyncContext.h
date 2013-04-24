@@ -137,8 +137,8 @@ class SyncContext : public SyncConfig {
      * */
     string m_usedSyncURL;
 
-    /* Indicates whether current sync session is triggered by remote peer
-     * (such as server alerted sync)
+    /* True iff current sync session was triggered by us
+     * (such as in server alerted sync).
      */
     bool m_remoteInitiated;
   public:
