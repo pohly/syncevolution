@@ -87,6 +87,15 @@ void FileSyncSource::open()
     string basedir;
     bool createDir = false;
 
+    std::string varname = StringPrintf("SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_%s", getDisplayName().c_str());
+    const char *delay = getenv(varname.c_str());
+    if (delay) {
+        int seconds = atoi(delay);
+        SE_LOG_DEBUG(getDisplayName(), "sleeping %ds while opening file source", seconds);
+        Sleep(seconds);
+        SE_LOG_DEBUG(getDisplayName(), "continue opening file source");
+    }
+
     // file:// is optional. It indicates that the
     // directory is to be created.
     if (boost::starts_with(database, prefix)) {
@@ -160,6 +169,15 @@ FileSyncSource::Databases FileSyncSource::getDatabases()
 void FileSyncSource::listAllItems(RevisionMap_t &revisions)
 {
     ReadDir dirContent(m_basedir);
+
+    std::string varname = StringPrintf("SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_%s", getDisplayName().c_str());
+    const char *delay = getenv(varname.c_str());
+    if (delay) {
+        int seconds = atoi(delay);
+        SE_LOG_DEBUG(getDisplayName(), "sleeping %ds while listing items in file source", seconds);
+        Sleep(seconds);
+        SE_LOG_DEBUG(getDisplayName(), "continue listing items in file source");
+    }
 
     BOOST_FOREACH(const string &entry, dirContent) {
         string filename = createFilename(entry);
