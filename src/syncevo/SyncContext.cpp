@@ -1599,7 +1599,7 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainl
     string url = getUsedSyncURL();
     m_retryInterval = getRetryInterval();
     m_retryDuration = getRetryDuration();
-    int timeout = m_serverMode ? m_retryDuration : m_retryInterval;
+    int timeout = m_serverMode ? m_retryDuration : min(m_retryInterval, m_retryDuration);
 
     if (m_localSync) {
         string peer = url.substr(strlen("local://"));
@@ -3577,7 +3577,7 @@ SyncMLStatus SyncContext::doSync()
     // parameter STEPCMD_ABORT -> abort session as soon as possible.
     bool aborting = false;
     int suspending = 0; 
-    time_t sendStart = 0, resendStart = 0;
+    Timespec sendStart, resendStart;
     int requestNum = 0;
     sysync::uInt16 previousStepCmd = stepCmd;
     do {
@@ -3772,8 +3772,8 @@ SyncMLStatus SyncContext::doSync()
                                          "contenttype");
                 m_agent->setContentType(s);
                 sessionKey.reset();
-                
-                sendStart = resendStart = time (NULL);
+
+                sendStart = resendStart = Timespec::monotonic();
                 requestNum ++;
                 // use GetSyncMLBuffer()/RetSyncMLBuffer() to access the data to be
                 // sent or have it copied into caller's buffer using
@@ -3785,7 +3785,7 @@ SyncMLStatus SyncContext::doSync()
             }
             case sysync::STEPCMD_RESENDDATA: {
                 SE_LOG_INFO(NULL, "resend previous message, retry #%d", m_retries);
-                resendStart = time(NULL);
+                resendStart = Timespec::monotonic();
                 /* We are resending previous message, just read from the
                  * previous buffer */
                 m_agent->send(sendBuffer.get(), sendBuffer.size());
@@ -3795,7 +3795,7 @@ SyncMLStatus SyncContext::doSync()
             case sysync::STEPCMD_NEEDDATA:
                 if (!sendStart) {
                     // no message sent yet, record start of wait for data
-                    sendStart = time(NULL);
+                    sendStart = Timespec::monotonic();
                 }
                 switch (m_agent->wait()) {
                 case TransportAgent::ACTIVE:
@@ -3804,21 +3804,23 @@ SyncMLStatus SyncContext::doSync()
                     break;
                
                 case TransportAgent::TIME_OUT: {
-                    time_t duration = time(NULL) - sendStart;
+                    double duration = (Timespec::monotonic() - sendStart).duration();
                     // HTTP SyncML servers cannot resend a HTTP POST
                     // reply.  Other server transports could in theory
                     // resend, but don't have the necessary D-Bus APIs
                     // (MB #6370).
                     // Same if() as below for FAILED.
                     if (m_serverMode ||
-                        !m_retryInterval || duration > m_retryDuration || requestNum == 1) {
+                        !m_retryInterval || duration >= m_retryDuration || requestNum == 1) {
                         SE_LOG_INFO(NULL,
                                     "Transport giving up after %d retries and %ld:%02ldmin",
                                     m_retries,
-                                    (long)(duration / 60),
-                                    (long)(duration % 60));
+                                    (long)duration / 60,
+                                    (long)duration % 60);
                         SE_THROW_EXCEPTION(TransportException, "timeout, retry period exceeded");
                     }else {
+                        // Timeout must have been due to retryInterval having passed, resend
+                        // immediately.
                         m_retries ++;
                         stepCmd = sysync::STEPCMD_RESENDDATA;
                     }
@@ -3872,22 +3874,27 @@ SyncMLStatus SyncContext::doSync()
                         break;
                     }
 
-                    time_t curTime = time(NULL);
-                    time_t duration = curTime - sendStart;
-                    // same if() as above for TIME_OUT
+                    Timespec curTime = Timespec::monotonic();
+                    double duration = (curTime - sendStart).duration();
+                    double resendDelay = m_retryInterval - (curTime - resendStart).duration();
+                    if (resendDelay < 0) {
+                        resendDelay = 0;
+                    }
+                    // Similar if() as above for TIME_OUT. In addition, we must check that
+                    // the next resend won't happen after the retryDuration, because then
+                    // we might as well give up now immediately.
                     if (m_serverMode ||
-                        !m_retryInterval || duration > m_retryDuration || requestNum == 1) {
+                        !m_retryInterval || duration + resendDelay >= m_retryDuration || requestNum == 1) {
                         SE_LOG_INFO(NULL,
                                     "Transport giving up after %d retries and %ld:%02ldmin",
                                     m_retries,
-                                    (long)(duration / 60),
-                                    (long)(duration % 60));
+                                    (long)duration / 60,
+                                    (long)duration % 60);
                         SE_THROW_EXCEPTION(TransportException, "transport failed, retry period exceeded");
                     } else {
-                        // retry send
-                        int leftTime = m_retryInterval - (curTime - resendStart);
-                        if (leftTime >0 ) {
-                            if (Sleep(leftTime) > 0) {
+                        // Resend after having ensured that the retryInterval is over.
+                        if (resendDelay > 0) {
+                            if (Sleep(resendDelay) > 0) {
                                 if (checkForSuspend()) {
                                     SE_LOG_DEBUG(NULL, "suspending after premature exit from sleep() caused by user suspend");
                                     stepCmd = sysync::STEPCMD_SUSPEND;
