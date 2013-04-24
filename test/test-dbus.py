@@ -518,11 +518,11 @@ class DBusUtil(Timeout):
         useGZip = os.environ.get("TEST_DBUS_GZIP", False)
 
         # testAutoSyncFailure (__main__.TestSessionAPIsDummy) => testAutoSyncFailure_TestSessionAPIsDummy
-        testname = str(self).replace(" ", "_").replace("__main__.", "").replace("(", "").replace(")", "")
-        dbuslog = testname + ".dbus.log"
+        self.testname = str(self).replace(" ", "_").replace("__main__.", "").replace("(", "").replace(")", "")
+        dbuslog = self.testname + ".dbus.log"
         if useGZip:
             dbuslog = dbuslog + ".gz"
-        syncevolog = testname + ".syncevo.log"
+        syncevolog = self.testname + ".syncevo.log"
 
         self.pmonitor = subprocess.Popen(useGZip and ['sh', '-c', 'dbus-monitor | gzip'] or ['dbus-monitor'],
                                          stdout=open(dbuslog, "w"),
@@ -5353,22 +5353,8 @@ def filterFiles(config):
 #        return out[:-1]
     return out
 
-class TestCmdline(DBusUtil, unittest.TestCase):
-    """Tests cmdline by Session::Execute()."""
-
-    def setUp(self):
-        self.setUpServer()
-        self.setUpListeners(None)
-        # All tests run with their own XDG root hierarchy.
-        # Here are the config files.
-        self.configdir = xdg_root + "/config/syncevolution"
-
-    def run(self, result):
-        # Runtime varies a lot when using valgrind, because
-        # of the need to check an additional process. Allow
-        # a lot more time when running under valgrind.
-        self.runTest(result, own_xdg=True, own_home=True,
-                     defTimeout=usingValgrind() and 600 or 20)
+class CmdlineUtil(DBusUtil):
+    """Helper methods for running syncevolution command line tool."""
 
     def statusChanged(self, *args, **keywords):
         '''remember the command line session'''
@@ -5378,7 +5364,8 @@ class TestCmdline(DBusUtil, unittest.TestCase):
                                           'org.syncevolution.Session')
 
     def runCmdline(self, args, env=None, expectSuccess=True, preserveOutputOrder=False,
-                   sessionFlags=['no-sync']):
+                   sessionFlags=['no-sync'],
+                   testInstance=None):
         '''Run the 'syncevolution' command line (from PATH) with the
         given arguments (list or tuple of strings). Uses environment
         used to run syncevo-dbus-server unless one is set
@@ -5391,10 +5378,10 @@ class TestCmdline(DBusUtil, unittest.TestCase):
         Returns tuple with stdout, stderr and result code. DBusUtil.events
         contains the status and progress events seen while the command line
         ran. self.session is the proxy for that session.'''
-        s = self.startCmdline(args, env, preserveOutputOrder)
+        s = self.startCmdline(args, env, preserveOutputOrder, testInstance)
         return self.finishCmdline(s, expectSuccess, sessionFlags)
 
-    def startCmdline(self, args, env=None, preserveOutputOrder=False):
+    def startCmdline(self, args, env=None, preserveOutputOrder=False, testInstance=None):
         # Watch all future events, ignore old ones.
         while loop.get_context().iteration(False):
             pass
@@ -5402,25 +5389,54 @@ class TestCmdline(DBusUtil, unittest.TestCase):
         self.session = None
         a = [ 'syncevolution' ]
         a.extend(args)
+        if testInstance == None:
+            testInstance = self
         # Explicitly pass an environment. Otherwise subprocess.Popen()
         # from Python 2.6 uses the environment passed to a previous
         # call to subprocess.Popen() (which will fail if the previous
         # test ran with an environment which had SYNCEVOLUTION_DEBUG
         # set).
         if env == None:
-            cmdline_env = self.storedenv
+            cmdline_env = testInstance.storedenv
         else:
             cmdline_env = env
+        if not 'cmdlineCounter' in dir(testInstance):
+            testInstance.cmdlineCounter = 0
+        testInstance.cmdlineCounter = testInstance.cmdlineCounter + 1
         if preserveOutputOrder:
-            s = subprocess.Popen(a, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                 env=cmdline_env)
+            stdoutName = testInstance.testname + (".cmdline.%d.outerr.log" % testInstance.cmdlineCounter)
+            stderrName = None
+            stdout = open(stdoutName, "w")
+            stderr = subprocess.STDOUT
         else:
-            s = subprocess.Popen(a, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 env=cmdline_env)
+            stdoutName = testInstance.testname + (".cmdline.%d.out.log" % testInstance.cmdlineCounter)
+            stdout = open(stdoutName, "w")
+            stderrName = testInstance.testname + (".cmdline.%d.err.log" % testInstance.cmdlineCounter)
+            stderr = open(stderrName, "w")
+
+        s = subprocess.Popen(a, stdout=stdout, stderr=stderr,
+                             env=cmdline_env)
+        s.stdoutName = stdoutName
+        s.stderrName = stderrName
         return s
 
-    def finishCmdline(self, s, expectSuccess=True, sessionFlags=['no-sync'], preserveOutputOrder=False):
-        out, err = s.communicate()
+    def finishCmdline(self, s, expectSuccess=True, sessionFlags=['no-sync']):
+        try:
+            s.wait()
+        except Exception, ex:
+            message = str(ex)
+            message = message + (s.stderrName and "\nStdout:\n" or "\nStdout + Stderr:\n")
+            message = message + open(s.stdoutName).read()
+            if s.stderrName:
+                message = message + "\nStderr:\n"
+                message = message + open(s.stderrName).read()
+            raise Exception(message)
+        s.wait()
+        out = open(s.stdoutName).read()
+        if s.stderrName:
+            err = open(s.stderrName).read()
+        else:
+            err = None
         doFail = False
         if expectSuccess and s.returncode != 0:
             result = 'syncevolution command failed.'
@@ -5430,7 +5446,7 @@ class TestCmdline(DBusUtil, unittest.TestCase):
             doFail = True
         if doFail:
             result += '\nOutput:\n%s' % out
-            if not preserveOutputOrder:
+            if s.stderrName != None:
                 result += '\nSeparate stderr:\n%s' % err
             self.fail(result)
 
@@ -5452,6 +5468,24 @@ class TestCmdline(DBusUtil, unittest.TestCase):
     def assertNoErrors(self, err):
         '''check that error output is empty'''
         self.assertEqualDiff('', err)
+
+
+class TestCmdline(CmdlineUtil, unittest.TestCase):
+    """Tests cmdline by Session::Execute()."""
+
+    def setUp(self):
+        self.setUpServer()
+        self.setUpListeners(None)
+        # All tests run with their own XDG root hierarchy.
+        # Here are the config files.
+        self.configdir = xdg_root + "/config/syncevolution"
+
+    def run(self, result):
+        # Runtime varies a lot when using valgrind, because
+        # of the need to check an additional process. Allow
+        # a lot more time when running under valgrind.
+        self.runTest(result, own_xdg=True, own_home=True,
+                     defTimeout=usingValgrind() and 600 or 20)
 
     cachedSSLServerCertificates = None
     def getSSLServerCertificates(self):
@@ -7809,7 +7843,7 @@ END:VCARD
             receiver.remove()
         self.assertTrue(self.killed)
 
-        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=[], preserveOutputOrder=True)
+        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=[])
         self.assertEqual(err, None)
         self.assertEqual(1, code)
         out = self.stripSyncTime(out)
@@ -7858,7 +7892,7 @@ END:VCARD
             receiver.remove()
         self.assertTrue(self.killed)
 
-        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=[], preserveOutputOrder=True)
+        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=[])
         self.assertEqual(err, None)
         self.assertEqual(1, code)
         out = self.stripSyncTime(out)
