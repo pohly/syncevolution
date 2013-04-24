@@ -36,6 +36,8 @@ import ConfigParser
 import io
 import inspect
 import gzip
+import httplib
+import socket
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -8946,6 +8948,221 @@ no changes
 (.*\n)*progress: 100, \{addressbook: \(, -1, -1, -1, -1, -1, -1\), calendar: \(, -1, -1, -1, -1, -1, -1\)\}
 (.*\n)*status: done, .*''')
         self.checkSync(numReports=5)
+
+
+class TestHTTP(CmdlineUtil, unittest.TestCase):
+    """Test syncevo-http-server."""
+
+    def setUp(self):
+        self.setUpServer()
+        self.setUpListeners(None)
+        # All tests run with their own XDG root hierarchy.
+        # Here are the config files.
+        self.configdir = xdg_root + "/config/syncevolution"
+
+        # Check whether we have multithreading support.
+        out, err, code = self.runCmdline(["--sync-property", "SyncMLVersion=?", "--daemon=no"],
+                                         sessionFlags=None,
+                                         preserveOutputOrder=False)
+        self.assertEqual(err, '')
+        self.assertIn('REQUESTMAXTIME=', out)
+        self.assertEqual(0, code)
+        self.haveMultithreadedSyncEvo = 'is thread-safe' in out
+
+    def run(self, result):
+        # Runtime varies a lot when using valgrind, because
+        # of the need to check an additional process. Allow
+        # a lot more time when running under valgrind.
+        self.runTest(result, own_xdg=True, own_home=True,
+                     defTimeout=usingValgrind() and 600 or 20)
+
+    def runHTTPServer(self):
+        '''Pick port dynamically by running syncevo-http-server and checking whether it can listen on the port.'''
+        for port in range(9000, 10000):
+            httpserver = subprocess.Popen(['syncevo-http-server', '-q', 'http://127.0.0.1:%d' % port],
+                                          stderr=subprocess.PIPE)
+            while True:
+                if httpserver.poll() != None:
+                    error = httpserver.stderr.read()
+                    self.assertIn('twisted.internet.error.CannotListenError', error)
+                    break
+                http = httplib.HTTPConnection('127.0.0.1', port)
+                try:
+                    http.connect()
+                    return port
+                except socket.error, ex:
+                    self.assertEqual(errno.ECONNREFUSED, ex.errno)
+                    time.sleep(0.5)
+
+    def setUpConfigs(self,
+                     port,
+                     slowServer = False,
+                     dumpData = True,
+                     requestMaxTime = None,
+                     retryDuration = None,
+                     retryInterval = None,
+                     username = "johndoe",
+                     password = "foo",
+                     clientID = "fake-device"):
+        self.setUpSession("", flags = [ "all-configs" ])
+        config = {"" : { "loglevel": "4",
+                         "syncURL": "http://127.0.0.1:%d" % port,
+                         "deviceID": clientID,
+                         "useProxy": "0",
+                         "username": username,
+                         "password": password,
+                         "RetryDuration": "1m", # abort syncing after 1 minute of no server response
+                         },
+                  "source/addressbook-client" : { "sync": "two-way",
+                                                  "backend": "file",
+                                                  "databaseFormat": "text/vcard",
+                                                  "uri": slowServer and "addressbook-slow-server" or "addressbook-server",
+                                                  "database": "file://" + xdg_root + "/client",
+                                                  },
+                  }
+        if retryDuration != None:
+            config[""]["RetryDuration"] = retryDuration
+        if retryInterval != None:
+            config[""]["RetryInterval"] = retryInterval
+        self.session.SetNamedConfig("client", False, False, config, timeout=self.dbusTimeout)
+        config = {"" : { "loglevel": "4",
+                         "peerIsClient": "1",
+                         "deviceId": clientID, # Has to be repeated because it is shared.
+                         "remoteDeviceId": clientID,
+                         "username": username,
+                         "password": password,
+                         "printChanges": "0",
+                         "dumpData": dumpData and "1" or "0",
+                         },
+                  "source/addressbook-server": { "sync": "two-way",
+                                                 "uri": "addressbook",
+                                                 "backend": "file",
+                                                 "databaseFormat": "text/vcard",
+                                                 "database": "file://" + xdg_root + "/server" },
+                  "source/addressbook-slow-server": { "sync": "two-way",
+                                                      "uri": "addressbook",
+                                                      "backend": "file",
+                                                      "databaseFormat": "text/vcard",
+                                                      "database": "file://" + xdg_root + "/server" },
+                  }
+        if requestMaxTime != None:
+            config[""]["SyncMLVersion"] = "requestmaxtime=%d" % requestMaxTime
+        self.session.SetNamedConfig("server", False, False, config, timeout=self.dbusTimeout)
+        self.session.Detach()
+
+    @timeout(200)
+    def testHTTP(self):
+        """TestHTTP.testHTTP - run simple HTTP-based sync"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port)
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(0, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=60")
+    def testTimeoutOpen(self):
+        """TestHTTP.testTimeoutOpen - slow down server in open, let client abort"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="10s", retryInterval="5m")
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=False,
+                                         preserveOutputOrder=False)
+        self.assertNotIn('resend previous message', err)
+        self.assertIn('transport problem: timeout, retry period exceeded', err)
+        self.assertEqual(1, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=60")
+    def testTimeoutListAll(self):
+        """TestHTTP.testTimeoutListAll - slow down server in listAll, let client abort"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="10s", retryInterval="5m")
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=False,
+                                         preserveOutputOrder=False)
+        self.assertNotIn('resend previous message', err)
+        self.assertIn('transport problem: timeout, retry period exceeded', err)
+        self.assertEqual(1, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=140")
+    def testTimeoutSlow(self):
+        """TestHTTP.testTimeoutSlow - slow down server in open with disabled keep-alive messages, let client abort"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="130s", retryInterval="5m",
+                          requestMaxTime=0)
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=False,
+                                         preserveOutputOrder=False)
+        self.assertNotIn('resend previous message', err)
+        self.assertIn('transport problem: timeout, retry period exceeded', err)
+        self.assertEqual(1, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=140")
+    def testThreadedOpen(self):
+        """TestHTTP.testThreadedOpen - slow down server in open, let server send keep-alive messages at default rate"""
+        if not self.haveMultithreadedSyncEvo:
+            return
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="130", retryInterval="5m")
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=True,
+                                         preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(0, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=140")
+    def testThreadedListAll(self):
+        """TestHTTP.testThreadedListAll - slow down server in listAll, let server send keep-alive messages at default rate"""
+        if not self.haveMultithreadedSyncEvo:
+            return
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="130s", retryInterval="5m",
+                          dumpData=False) # listAll() gets called too often otherwise, which slows down the test too much.
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=True,
+                                         preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(0, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=40")
+    def testThreadedOpenQuick(self):
+        """TestHTTP.testThreadedOpenQuick - slow down server in open, let server send keep-alive messages at faster rate"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="30s", retryInterval="5m",
+                          requestMaxTime=10)
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=True,
+                                         preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(0, code)
+
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=40")
+    def testThreadedListAllQuick(self):
+        """TestHTTP.testThreadedListAllQuick - slow down server in listAll, let server send keep-alive messages at faster rate"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, retryDuration="30s", retryInterval="5m",
+                          requestMaxTime=10)
+        out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
+                                         sessionFlags=None,
+                                         expectSuccess=True,
+                                         preserveOutputOrder=True)
+        self.assertEqual(err, None)
+        self.assertEqual(0, code)
+
 
 if __name__ == '__main__':
     unittest.main()
