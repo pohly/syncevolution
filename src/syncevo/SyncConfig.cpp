@@ -32,6 +32,7 @@
 #include <syncevo/IniConfigNode.h>
 #include <syncevo/Cmdline.h>
 #include <syncevo/lcs.h>
+#include <syncevo/ThreadSupport.h>
 #include <test.h>
 #include <synthesis/timeutil.h>
 
@@ -1363,10 +1364,28 @@ static ConfigProperty syncPropSyncMLVersion("SyncMLVersion",
                                             "Instead or in adddition to the version, several keywords can\n"
                                             "be set in this property (separated by spaces or commas):\n"
                                             "\n"
-                                            "- NOCTCAP = avoid sending CtCap meta information\n"
-                                            "- NORESTART = disable the sync mode extension that SyncEvolution\n"
+                                            "- NOCTCAP - avoid sending CtCap meta information\n"
+                                            "- NORESTART - disable the sync mode extension that SyncEvolution\n"
                                             "  client and server use to negotiate whether both sides support\n"
                                             "  running multiple sync iterations in the same session\n"
+                                            "- REQUESTMAXTIME=<time> - override the rate at which the\n"
+                                            "  SyncML server sends preliminary replies while preparing\n"
+                                            "  local storages in the background. This helps to avoid timeouts\n"
+                                            "  in the SyncML client. Depends on multithreading.\n"
+#ifdef HAVE_THREAD_SUPPORT
+                                            // test-dbus.py checks for 'is thread-safe'!
+                                            "  This SyncEvolution binary is thread-safe and thus this feature\n"
+                                            "  is enabled by default for HTTP servers, with a delay of 2 minutes\n"
+                                            "  between messages. Other servers (Bluetooth, local sync) should not\n"
+                                            "  need preliminary replies and the feature is disabled, although\n"
+                                            "  it can be enabled by setting the time explicitly.\n"
+#else
+                                            "  This SyncEvolution binary is not thread-safe and thus this feature\n"
+                                            "  is disabled by default, although it can be enabled if absolutely\n"
+                                            "  needed by setting the time explicitly.\n"
+#endif
+                                            "  <time> can be specified like other durations in the config,\n"
+                                            "  for example as REQUESTMAXTIME=2m.\n"
                                             "\n"
                                             "Setting these flags should only be necessary as workaround for\n"
                                             "broken peers.\n"
@@ -1967,6 +1986,27 @@ InitStateString SyncConfig::getSyncMLVersion() const {
         }
     }
     return InitStateString("", flags.wasSet());
+}
+InitState<unsigned int> SyncConfig::getRequestMaxTime() const {
+    InitState<unsigned int> requestmaxtime;
+    InitState< std::set<std::string> > flags = getSyncMLFlags();
+    BOOST_FOREACH(const std::string &flag, flags) {
+        size_t offset = flag.find('=');
+        if (offset != flag.npos) {
+            std::string key = flag.substr(0, offset);
+            if (boost::iequals(key, "RequestMaxTime")) {
+                std::string value = flag.substr(offset + 1);
+                unsigned int seconds;
+                std::string error;
+                if (!SecondsConfigProperty::parseDuration(value, error, seconds)) {
+                    SE_THROW("invalid RequestMaxTime value in SyncMLVersion property: " + error);
+                }
+                requestmaxtime = seconds;
+                break;
+            }
+        }
+    }
+    return requestmaxtime;
 }
 InitState< std::set<std::string> > SyncConfig::getSyncMLFlags() const {
     InitStateString value = syncPropSyncMLVersion.getProperty(*getNode(syncPropSyncMLVersion));

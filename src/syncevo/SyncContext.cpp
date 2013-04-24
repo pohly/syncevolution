@@ -27,6 +27,7 @@
 #include <syncevo/SyncSource.h>
 #include <syncevo/util.h>
 #include <syncevo/SuspendFlags.h>
+#include <syncevo/ThreadSupport.h>
 
 #include <syncevo/SafeConfigNode.h>
 #include <syncevo/IniConfigNode.h>
@@ -2429,7 +2430,45 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             "  <server type='plugin'>\n"
             "    <plugin_module>SyncEvolution</plugin_module>\n"
             "    <plugin_sessionauth>yes</plugin_sessionauth>\n"
-            "    <plugin_deviceadmin>yes</plugin_deviceadmin>\n"
+            "    <plugin_deviceadmin>yes</plugin_deviceadmin>\n";
+
+        InitState<unsigned int> configrequestmaxtime = getRequestMaxTime();
+        unsigned int requestmaxtime;
+        if (configrequestmaxtime.wasSet()) {
+            // Explicitly set, use it regardless of the kind of sync.
+            // We allow this even if thread support was not available,
+            // because if a user enables it explicitly, it's probably
+            // for a good reason (= failing client), in which case
+            // risking multithreading issues is preferable.
+            requestmaxtime = configrequestmaxtime.get();
+        } else if (m_remoteInitiated || m_localSync) {
+            // We initiated the sync (local sync, Bluetooth). The client
+            // should not time out, so there is no need for intermediate
+            // message sending.
+            //
+            // To avoid potential problems and get a single log file,
+            // avoid it and multithreading by default.
+            requestmaxtime = 0;
+        } else {
+            // We were contacted by an HTTP client. Reply to client
+            // not later than 120 seconds while storage initializes
+            // in a background thread.
+#ifdef HAVE_THREAD_SUPPORT
+            requestmaxtime = 120; // default in seconds
+#else
+            requestmaxtime = 0;
+#endif
+        }
+        if (requestmaxtime) {
+            clientorserver <<
+                "    <multithread>yes</multithread>\n"
+                "    <requestmaxtime>" << requestmaxtime << "</requestmaxtime>\n";
+        } else {
+            clientorserver <<
+                "    <multithread>no</multithread>\n";
+        }
+
+        clientorserver <<
             "\n" <<
             sessioninitscript <<
             "    <sessiontimeout>300</sessiontimeout>\n"
@@ -2454,6 +2493,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         clientorserver <<
             "  <client type='plugin'>\n"
             "    <binfilespath>$(binfilepath)</binfilespath>\n"
+            "    <multithread>no</multithread>\n"
             "    <defaultauth/>\n";
         if (getRefreshSync()) {
             clientorserver <<
@@ -2511,7 +2551,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             "    <timestamp>yes</timestamp>\n"
             "    <timestampall>yes</timestampall>\n"
             "    <timedsessionlognames>no</timedsessionlognames>\n"
-            "    <subthreadmode>suppress</subthreadmode>\n"
+            "    <subthreadmode>separate</subthreadmode>\n"
             "    <logsessionstoglobal>yes</logsessionstoglobal>\n"
             "    <singlegloballog>yes</singlegloballog>\n";
         if (logging) {
