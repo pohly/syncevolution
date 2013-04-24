@@ -831,7 +831,7 @@ if test $SYNTHESIS_SRC != "no-synthesis-source"; then
     export PKG_CONFIG_PATH=$SYNTHESIS_SUBDIR:$PKG_CONFIG_PATH
     PKG_CHECK_MODULES([WITH_SYNTHESIS_SRC], [synthesis >= SYNTHESIS_MIN_VERSION],
                       [],
-                      [AC_MSG_ERROR([need at least libsynthesis >= SYNTHESIS_MIN_VERSION; the latest libsynthesis for SyncEvolution is the one from http://meego.gitorious.org/meego-middleware/libsynthesis])])
+                      [AC_MSG_ERROR([need at least libsynthesis >= SYNTHESIS_MIN_VERSION; the latest libsynthesis for SyncEvolution is the one from http://cgit.freedesktop.org/SyncEvolution/])])
 
 fi
 
