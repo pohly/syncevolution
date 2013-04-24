@@ -405,6 +405,7 @@ XDG root.
               c = [ '--daemon=no' ] + command
               logging.printf('running syncevolution command line: %s' % c)
               return cmdline.runCmdline(c,
+                                        testInstance=self,
                                         env=self.storedenv,
                                         sessionFlags=None,
                                         **args)
