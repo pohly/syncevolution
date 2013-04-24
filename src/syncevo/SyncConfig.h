@@ -1514,6 +1514,8 @@ class SyncConfig {
     /** all flags that are set in the SyncMLVersion property, including the 1.0/1.1/1.2 versions */
     virtual InitState< std::set<std::string> > getSyncMLFlags() const;
 
+    virtual InitState<unsigned int> getRequestMaxTime() const;
+
     /**
      * An arbitrary name assigned to the peer configuration,
      * not necessarily unique. Can be used by a GUI instead
