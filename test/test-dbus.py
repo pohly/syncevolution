@@ -1121,7 +1121,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                           "database": "file://" + xdg_root + "/server" } }
         if enableCalendar:
             config["source/calendar"] = { "sync": "two-way",
-                                          "uri": "calendar",
+                                          # "uri": "calendar", uri = local source name is the default
                                           "backend": "file",
                                           "databaseFormat": "text/calendar",
                                           "database": "file://" + xdg_root + "/server-calendar" }
