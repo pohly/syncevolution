@@ -128,7 +128,7 @@ class AkonadiTaskSource : public AkonadiSyncSource
 {
 public:
     AkonadiTaskSource(const SyncSourceParams &params)
-        : AkonadiSyncSource("text/calendar", params)
+        : AkonadiSyncSource("application/x-vnd.akonadi.calendar.todo", params)
     {
     }
 
