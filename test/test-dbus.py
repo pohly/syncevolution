@@ -9163,6 +9163,55 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(err, None)
         self.assertEqual(0, code)
 
+    @timeout(200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=400")
+    def testAbortThread(self):
+        """TestHTTP.testAbortThread - slow down server in open, abort sync while waiting for background thread"""
+        port = self.runHTTPServer()
+        self.setUpConfigs(port, slowServer=True, requestMaxTime=200)
+        self.session = None
+        self.isWaiting = False
+        self.messages = []
+        def output(path, level, message, process):
+            self.messages.append(message)
+            if 'wait for background thread: ' in message:
+                self.isWaiting = True
+        signal = bus.add_signal_receiver(output,
+                                         'LogOutput',
+                                         'org.syncevolution.Server',
+                                         self.server.bus_name,
+                                         None,
+                                         byte_arrays=True,
+                                         utf8_strings=True)
+
+        s = self.startCmdline(["--sync", "slow", "--daemon=no", "client"],
+                              preserveOutputOrder=True)
+
+        # Wait for session...
+        while not self.session:
+            self.loopIteration('waiting for session', may_block=True)
+        # ... and the confirmation that the background thread is running.
+        while not self.isWaiting:
+            self.loopIteration('background thread', may_block=True)
+
+        # We need to abort syncevo-dbus-server. Aborting the client via SIGTERM
+        # would not abort the server.
+        self.session.Abort(timeout=self.dbusTimeout)
+
+        # The HTTP client should see a network error.
+        out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=None)
+        self.assertEqual(err, None)
+        self.assertEqual(1, code)
+        self.assertIn('external transport failure', out)
+
+        # We expect that the FileSyncSource::open() detects the abort
+        # request quickly and then let's the background thread be
+        # reaped normally by the master thread.
+        self.assertIn('background thread completed', self.messages)
+
+        # Finally, also check server session status.
+        status, error, sources = self.session.GetStatus(timeout=self.dbusTimeout)
+        self.assertEqual(('done', 20017), (status, error))
 
 if __name__ == '__main__':
     unittest.main()
