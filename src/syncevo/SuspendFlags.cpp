@@ -115,9 +115,28 @@ SuspendFlags::State SuspendFlags::getState() const {
     }
 }
 
-void SuspendFlags::checkForNormal() const
+bool SuspendFlags::isAborted()
 {
-    if (getState() != SuspendFlags::NORMAL) {
+    printSignals();
+    return getState() == ABORT;
+}
+
+bool SuspendFlags::isSuspended()
+{
+    printSignals();
+    return getState() == SUSPEND;
+}
+
+bool SuspendFlags::isNormal()
+{
+    printSignals();
+    return getState() == NORMAL;
+}
+
+void SuspendFlags::checkForNormal()
+{
+    printSignals();
+    if (getState() != NORMAL) {
         SE_THROW_EXCEPTION_STATUS(StatusException,
                                   "aborting as requested by user",
                                   (SyncMLStatus)sysync::LOCERR_USERABORT);

@@ -640,27 +640,6 @@ class SyncContext : public SyncConfig {
      */
     virtual void reportStepCmd(sysync::uInt16 stepCmd) {}
 
-    /**
-     * Called to find out whether user wants to abort sync.
-     *
-     * Will be called regularly. Once it has flagged an abort, all
-     * following calls should return the same value. When the engine
-     * aborts, the sync is shut down as soon as possible.  The next
-     * sync most likely has to be done in slow mode, so don't do this
-     * unless absolutely necessary.
-     *
-     * @return true if user wants to abort
-     */
-    virtual bool checkForAbort();
-
-    /**
-     * Called to find out whether user wants to suspend sync.
-     *
-     * Same as checkForAbort(), but the session is finished
-     * gracefully so that it can be resumed.
-     */
-    virtual bool checkForSuspend();
-
  private:
     /** initialize members as part of constructors */
     void init();

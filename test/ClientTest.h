@@ -32,6 +32,7 @@
 #include <SyncML.h>
 #include <TransportAgent.h>
 #include <SyncSource.h>
+#include <syncevo/SuspendFlags.h>
 
 #include "test.h"
 #include "ClientTestAssert.h"
@@ -138,9 +139,8 @@ struct SyncOptions {
     int m_retryDuration;
     int m_retryInterval;
 
-    bool m_isSuspended; 
-    
-    bool m_isAborted;
+    boost::shared_ptr<SuspendFlags::StateBlocker> m_isSuspended;
+    boost::shared_ptr<SuspendFlags::StateBlocker> m_isAborted;
 
     /**
      * Callback to be invoked after setting up local sources, but
@@ -176,8 +176,6 @@ struct SyncOptions {
         m_isWBXML(isWBXML),
         m_retryDuration(300),
         m_retryInterval(60),
-        m_isSuspended(false),
-        m_isAborted(false),
         m_startCallback(startCallback),
         m_transport (transport)
     {}

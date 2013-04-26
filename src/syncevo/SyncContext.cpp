@@ -1967,20 +1967,6 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
     }
 }
 
-bool SyncContext::checkForAbort()
-{
-    SuspendFlags &flags(SuspendFlags::getSuspendFlags());
-    flags.printSignals();
-    return flags.getState() == SuspendFlags::ABORT;
-}
-
-bool SyncContext::checkForSuspend()
-{
-    SuspendFlags &flags(SuspendFlags::getSuspendFlags());
-    flags.printSignals();
-    return flags.getState() == SuspendFlags::SUSPEND;
-}
-
 void SyncContext::throwError(const string &error)
 {
     throwError(SyncMLStatus(STATUS_FATAL + sysync::LOCAL_STATUS_CODE), error);
@@ -3502,8 +3488,8 @@ SyncMLStatus SyncContext::doSync()
         Sleep(atoi(delay));
     }
 
-    if (checkForSuspend() ||
-        checkForAbort()) {
+    SuspendFlags &flags = SuspendFlags::getSuspendFlags();
+    if (!flags.isNormal()) {
         return (SyncMLStatus)sysync::LOCERR_USERABORT;
     }
 
@@ -3536,8 +3522,7 @@ SyncMLStatus SyncContext::doSync()
             //by pass the exception if we will try again with legacy SANFormat
         }
 
-        if (checkForSuspend() ||
-            checkForAbort()) {
+        if (!flags.isNormal()) {
             return (SyncMLStatus)sysync::LOCERR_USERABORT;
         }
 
@@ -3556,8 +3541,7 @@ SyncMLStatus SyncContext::doSync()
         }
     }
 
-    if (checkForSuspend() ||
-        checkForAbort()) {
+    if (!flags.isNormal()) {
         return (SyncMLStatus)sysync::LOCERR_USERABORT;
     }
 
@@ -3712,7 +3696,7 @@ SyncMLStatus SyncContext::doSync()
             // GOTDATA state.
             // After exception occurs, stepCmd will be set to abort to force
             // aborting, must avoid to change it back to suspend cmd.
-            if (checkForSuspend() && stepCmd == sysync::STEPCMD_GOTDATA) {
+            if (flags.isSuspended() && stepCmd == sysync::STEPCMD_GOTDATA) {
                 SE_LOG_DEBUG(NULL, "suspending before SessionStep() in STEPCMD_GOTDATA as requested by user");
                 stepCmd = sysync::STEPCMD_SUSPEND;
             }
@@ -3730,7 +3714,7 @@ SyncMLStatus SyncContext::doSync()
             if ((stepCmd == sysync::STEPCMD_RESENDDATA ||
                  stepCmd == sysync::STEPCMD_SENTDATA ||
                  stepCmd == sysync::STEPCMD_NEEDDATA) &&
-                checkForAbort()) {
+                flags.isAborted()) {
                 SE_LOG_DEBUG(NULL, "aborting before SessionStep() in %s as requested by script",
                              Step2String(stepCmd).c_str());
                 stepCmd = sysync::STEPCMD_ABORT;
@@ -3806,7 +3790,7 @@ SyncMLStatus SyncContext::doSync()
                 stepCmd = sysync::STEPCMD_ABORT;
                 continue;
             } else if (stepCmd == sysync::STEPCMD_SENDDATA &&
-                       checkForAbort()) {
+                       flags.isAborted()) {
                 // Catch outgoing message and abort if requested by user.
                 SE_LOG_DEBUG(NULL, "aborting after SessionStep() in STEPCMD_SENDDATA as requested by user");
                 stepCmd = sysync::STEPCMD_ABORT;
@@ -3988,11 +3972,11 @@ SyncMLStatus SyncContext::doSync()
                 case TransportAgent::FAILED: {
                     // Send might have failed because of abort or
                     // suspend request.
-                    if (checkForSuspend()) {
+                    if (flags.isSuspended()) {
                         SE_LOG_DEBUG(NULL, "suspending after TransportAgent::FAILED as requested by user");
                         stepCmd = sysync::STEPCMD_SUSPEND;
                         break;
-                    } else if (checkForAbort()) {
+                    } else if (flags.isAborted()) {
                         SE_LOG_DEBUG(NULL, "aborting after TransportAgent::FAILED as requested by user");
                         stepCmd = sysync::STEPCMD_ABORT;
                         break;
@@ -4019,7 +4003,7 @@ SyncMLStatus SyncContext::doSync()
                         // Resend after having ensured that the retryInterval is over.
                         if (resendDelay > 0) {
                             if (Sleep(resendDelay) > 0) {
-                                if (checkForSuspend()) {
+                                if (flags.isSuspended()) {
                                     SE_LOG_DEBUG(NULL, "suspending after premature exit from sleep() caused by user suspend");
                                     stepCmd = sysync::STEPCMD_SUSPEND;
                                 } else {
@@ -4038,11 +4022,11 @@ SyncMLStatus SyncContext::doSync()
                 case TransportAgent::CANCELED:
                     // Send might have failed because of abort or
                     // suspend request.
-                    if (checkForSuspend()) {
+                    if (flags.isSuspended()) {
                         SE_LOG_DEBUG(NULL, "suspending after TransportAgent::CANCELED as requested by user");
                         stepCmd = sysync::STEPCMD_SUSPEND;
                         break;
-                    } else if (checkForAbort()) {
+                    } else if (flags.isAborted()) {
                         SE_LOG_DEBUG(NULL, "aborting after TransportAgent::CANCELED as requested by user");
                         stepCmd = sysync::STEPCMD_ABORT;
                         break;
@@ -4094,11 +4078,11 @@ SyncMLStatus SyncContext::doSync()
 
     // If we get here without error, then close down connection normally.
     // Otherwise destruct the agent without further communication.
-    if (!status && !checkForAbort()) {
+    if (!status && !flags.isAborted()) {
         try {
             m_agent->shutdown();
             // TODO: implement timeout for peers which fail to respond
-            while (!checkForAbort() &&
+            while (!flags.isAborted() &&
                    m_agent->wait(true) == TransportAgent::ACTIVE) {
                 // TODO: allow aborting the sync here
             }

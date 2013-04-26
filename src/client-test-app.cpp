@@ -382,7 +382,7 @@ public:
                 SyncContext::prepare();
                 if (m_options.m_prepareCallback &&
                     m_options.m_prepareCallback(*this, m_options)) {
-                    m_options.m_isAborted = true;
+                    m_options.m_isAborted = SuspendFlags::getSuspendFlags().abort();
                 }
             }
 
@@ -392,13 +392,10 @@ public:
                 if (!m_started) {
                     m_started = true;
                     if (m_options.m_startCallback(*this, m_options)) {
-                        m_options.m_isAborted = true;
+                        m_options.m_isAborted = SuspendFlags::getSuspendFlags().abort();
                     }
                 }
             }
-
-            virtual bool checkForAbort() { return m_options.m_isAborted; }
-            virtual bool checkForSuspend() {return m_options.m_isSuspended;}
 
             virtual boost::shared_ptr<TransportAgent> createTransportAgent()
             {

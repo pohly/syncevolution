@@ -5329,7 +5329,7 @@ public:
             m_messageCount++;
             if (m_interruptAtMessage >= 0 &&
                     m_messageCount > m_interruptAtMessage) {
-                m_options->m_isSuspended = true;
+                m_options->m_isSuspended = SuspendFlags::getSuspendFlags().suspend();
             }
             m_wrappedAgent->getReply(data, len, contentType);
         }

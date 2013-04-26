@@ -81,12 +81,25 @@ class SuspendFlags
     uint32_t getReceivedSignals() const { return m_receivedSignals; }
 
     /**
-     * Throws a "aborting as requested by user" StatusException with
+     * Checks for status changes and returns true iff status is ABORT.
+     */
+    bool isAborted();
+    /**
+     * Checks for status changes and returns true iff status is SUSPEND.
+     */
+    bool isSuspended();
+    /**
+     * Checks for status changes and returns true iff status is NORMAL.
+     */
+    bool isNormal();
+
+    /**
+     * Checks for status changes and throws a "aborting as requested by user" StatusException with
      * LOCERR_USERABORT as status code if the current state is not
      * NORMAL. In other words, suspend and abort are both
      * treated like an abort request.
      */
-    void checkForNormal() const;
+    void checkForNormal();
 
     /**
      * Users of this class can read a single char for each received
