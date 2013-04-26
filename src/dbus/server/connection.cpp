@@ -298,6 +298,7 @@ void Connection::process(const Caller_t &caller,
                                                peerDeviceID,
                                                config,
                                                m_sessionID);
+            m_session->activate();
             if (serverMode) {
                 m_session->initServer(SharedBuffer(reinterpret_cast<const char *>(message.second),
                                                    message.first),
