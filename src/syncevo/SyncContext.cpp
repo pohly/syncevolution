@@ -2931,6 +2931,81 @@ extern "C" int (*SySync_ConsolePrintf)(FILE *stream, const char *format, ...);
 
 static int nopPrintf(FILE *stream, const char *format, ...) { return 0; }
 
+extern "C"
+{
+    extern int (*SySync_CondTimedWait)(pthread_cond_t *cond, pthread_mutex_t *mutex, bool &aTerminated, long aMilliSecondsToWait);
+}
+
+#ifdef HAVE_GLIB
+static gboolean timeout(gpointer data)
+{
+    // Call me again...
+    return true;
+}
+
+static int CondTimedWaitGLib(pthread_cond_t * /* cond */, pthread_mutex_t *mutex,
+                             bool &terminated, long milliSecondsToWait)
+{
+    int result = 0;
+
+    // return abstime ? pthread_cond_timedwait(cond, mutex, abstime) : pthread_cond_wait(cond, mutex);
+    try {
+        pthread_mutex_unlock(mutex);
+
+        SE_LOG_DEBUG(NULL, "wait for background thread: %lds", milliSecondsToWait);
+        SuspendFlags &flags = SuspendFlags::getSuspendFlags();
+
+        Timespec now = Timespec::system();
+        Timespec wait(milliSecondsToWait / 1000, milliSecondsToWait % 1000);
+        Timespec deadline = now + wait;
+
+        // We don't need to react to thread shutdown immediately (only
+        // called once per sync), so a relatively long check interval of
+        // one second is okay.
+        GLibEvent id(g_timeout_add_seconds(1, timeout, NULL), "timeout");
+
+        while (true) {
+            // Thread has terminated?
+            pthread_mutex_lock(mutex);
+            if (terminated) {
+                pthread_mutex_unlock(mutex);
+                SE_LOG_DEBUG(NULL, "background thread completed");
+                break;
+            }
+            pthread_mutex_unlock(mutex);
+
+            // Abort? Ignore when waiting for final thread shutdown, because
+            // in that case we just get called again.
+            if (milliSecondsToWait > 0 && flags.isAborted()) {
+                SE_LOG_DEBUG(NULL, "give up waiting for background thread, aborted");
+                // Signal error. libsynthesis then assumes that the thread still
+                // runs and enters its parallel message sending, which eventually
+                // returns control to us.
+                result = 1;
+                break;
+            }
+
+            // Timeout?
+            if (milliSecondsToWait > 0 && deadline <= Timespec::system()) {
+                SE_LOG_DEBUG(NULL, "give up waiting for background thread, timeout");
+                result = 1;
+                break;
+            }
+
+            // Check event loop with blocking. We'll return after one
+            // second.
+            g_main_context_iteration(NULL, true);
+        }
+    } catch (...) {
+        Exception::handle(HANDLE_EXCEPTION_FATAL);
+    }
+
+    pthread_mutex_lock(mutex);
+    return result;
+}
+
+#endif
+
 void SyncContext::initMain(const char *appname)
 {
 #if defined(HAVE_GLIB)
@@ -2948,6 +3023,8 @@ void SyncContext::initMain(const char *appname)
     // when called by the main thread, otherwise falls back to
     // select().
     g_main_context_acquire(NULL);
+
+    SySync_CondTimedWait = CondTimedWaitGLib;
 #endif
     if (atoi(getEnv("SYNCEVOLUTION_DEBUG", "0")) > 3) {
         SySync_ConsolePrintf = Logger::sysyncPrintf;
