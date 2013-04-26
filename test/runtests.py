@@ -1320,6 +1320,29 @@ test = SyncEvolutionTest("edsfile",
                          testPrefix=syncevoPrefix)
 context.add(test)
 
+# The test uses EDS on the client and server server side.
+test = SyncEvolutionTest("edseds",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
+                         [ "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # Slow, and running many syncs still fails when using
+                         # valgrind. Tested separately below in "edsxfile".
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix)
+context.add(test)
+
 # The test uses EDS on the clients and a server config with file
 # backends - suspend/retry/resend tests.
 test = SyncEvolutionTest("edsxfile",
