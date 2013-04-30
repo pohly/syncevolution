@@ -77,7 +77,12 @@ ESourceRegistryCXX EDSRegistryLoader::sync()
         if (m_gerror) {
             m_gerror.throwError("creating source registry");
         }
-        g_main_context_iteration(NULL, true);
+        // Only master thread can drive the event processing.
+	if (g_main_context_is_owner(g_main_context_default())) {
+            g_main_context_iteration(NULL, true);
+        } else {
+            Sleep(0.1);
+        }
     }
 }
 
