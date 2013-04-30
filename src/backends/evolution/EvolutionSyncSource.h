@@ -120,12 +120,19 @@ class EvolutionAsync {
     public:
     EvolutionAsync()
     {
-        m_loop = GMainLoopCXX(g_main_loop_new(NULL, FALSE), false);
+        m_loop = GMainLoopCXX(g_main_loop_new(NULL, TRUE), false);
     }
      
     /** start processing events */
     void run() {
-        g_main_loop_run(m_loop.get());
+        if (g_main_context_is_owner(g_main_context_default())) {
+            g_main_loop_run(m_loop.get());
+        } else {
+            // Let master thread handle events.
+            while (g_main_loop_is_running(m_loop.get())) {
+                Sleep(0.1);
+            }
+        }
     }
  
     /** stop processing events, to be called inside run() by callback */

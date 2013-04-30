@@ -764,31 +764,42 @@ double Sleep(double seconds)
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     if (s.getState() == SuspendFlags::NORMAL) {
 #ifdef HAVE_GLIB
-        bool triggered = false;
-        GLibEvent timeout(g_timeout_add(seconds * 1000,
-                                        SleepTimeout,
-                                        &triggered),
-                          "glib timeout");
-        while (!triggered) {
-            if (s.getState() != SuspendFlags::NORMAL) {
-                break;
+        // Only use glib if we are the owner of the main context.
+        // Otherwise we would interfere (?) with that owner or
+        // depend on it to drive the context (?). The glib docs
+        // don't say anything about this; in practice, it was
+        // observed that with some versions of glib, a second
+        // thread just blocked here when the main thread was not
+        // processing glib events.
+        if (g_main_context_is_owner(g_main_context_default())) {
+            bool triggered = false;
+            GLibEvent timeout(g_timeout_add(seconds * 1000,
+                                            SleepTimeout,
+                                            &triggered),
+                              "glib timeout");
+            while (!triggered) {
+                if (s.getState() != SuspendFlags::NORMAL) {
+                    break;
+                }
+                g_main_context_iteration(NULL, true);
             }
-            g_main_context_iteration(NULL, true);
-        }
-        // done
-        return 0;
-#else
-        // Only works when abort or suspend requests are delivered via signal.
-        // Not the case when used inside helper processes; but those have
-        // and depend on glib.
-        timeval delay;
-        delay.tv_sec = floor(seconds);
-        delay.tv_usec = (seconds - (double)delay.tv_sec) * 1e6;
-        if (select(0, NULL, NULL, NULL, &delay) != -1) {
             // done
             return 0;
         }
 #endif
+
+        // Fallback when glib is not available or unusable (= outside the main thread).
+        // Busy loop to detect abort requests.
+	Timespec deadline = start + Timespec(floor(seconds), (seconds - floor(seconds)) * 1e9);
+	while (deadline > Timespec::monotonic()) {
+            timeval delay;
+            delay.tv_sec = 0;
+            delay.tv_usec = 1e5;
+            select(0, NULL, NULL, NULL, &delay);
+            if (s.getState() != SuspendFlags::NORMAL) {
+                break;
+            }
+        }
     }
 
     // not done normally, calculate remaining time

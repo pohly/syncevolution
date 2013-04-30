@@ -2901,6 +2901,13 @@ void SyncContext::initMain(const char *appname)
 
     // redirect glib logging into our own logging
     g_log_set_default_handler(Logger::glogFunc, NULL);
+
+    // Only the main thread may use the default GMainContext.
+    // Anything else is unsafe, see https://mail.gnome.org/archives/gtk-list/2013-April/msg00040.html
+    // util.cpp:Sleep() checks this and uses the default context
+    // when called by the main thread, otherwise falls back to
+    // select().
+    g_main_context_acquire(NULL);
 #endif
     if (atoi(getEnv("SYNCEVOLUTION_DEBUG", "0")) > 3) {
         SySync_ConsolePrintf = Logger::sysyncPrintf;
