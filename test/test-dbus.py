@@ -252,9 +252,7 @@ class Timeout:
         DBusUtil.quit_events before calling loop.quit() caused
         a KeyboardInterrupt"""
         if have_glib and use_glib:
-            glib.timeout_add(delay_seconds, callback)
-            # TODO: implement removal of glib timeouts
-            return None
+            return glib.timeout_add(delay_seconds, callback)
         else:
             now = time.time()
             if cls.debugTimeout:
@@ -268,13 +266,20 @@ class Timeout:
     def removeTimeout(cls, timeout):
         """Remove a timeout returned by a previous addTimeout call.
         None and timeouts which have already fired are acceptable."""
-        try:
-            cls.alarms.remove(timeout)
-        except ValueError:
+        if timeout == None:
             pass
+        elif isinstance(timeout, tuple):
+            # non-glib case
+            try:
+                cls.alarms.remove(timeout)
+            except ValueError:
+                pass
+            else:
+                heapq.heapify(cls.alarms)
+                cls.__check_alarms()
         else:
-            heapq.heapify(cls.alarms)
-            cls.__check_alarms()
+            # glib timeout
+            glib.source_remove(timeout)
 
     @classmethod
     def __handler(cls, signum, stack):
