@@ -2807,13 +2807,15 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             # Kill again soon.
             return True
 
-        timeout_handler = Timeout.addTimeout(1, callback)
+        try:
+            timeout_handler = Timeout.addTimeout(1, callback)
 
-        # try to sync and invoke password request
-        self.session.Sync("", {})
-        loop.run()
-        Timeout.removeTimeout(timeout_handler)
-        self.assertEqual(self.lastState, "done")
+            # try to sync and invoke password request
+            self.session.Sync("", {})
+            loop.run()
+            self.assertEqual(self.lastState, "done")
+        finally:
+            Timeout.removeTimeout(timeout_handler)
 
     def doAutoSyncNetworkFailure(self):
         """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
