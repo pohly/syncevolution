@@ -282,10 +282,11 @@ gboolean ForkExecParent::outputReady(GIOChannel *source,
         if (status == G_IO_STATUS_EOF ||
             (condition & (G_IO_HUP|G_IO_ERR)) ||
             error) {
-            SE_LOG_DEBUG(NULL, "reading helper %s done: %s",
+            SE_LOG_DEBUG(NULL, "reading helper %s %ld done: %s",
                          source == me->m_out ? "stdout" :
                          me->m_mergedStdoutStderr ? "combined stdout/stderr" :
                          "stderr",
+                         (long)me->m_childPid,
                          (const char *)error);
 
             // Will remove event source from main loop.
@@ -331,7 +332,8 @@ void ForkExecParent::checkCompletion() throw ()
             m_onQuit(m_status);
             if (!m_hasConnected ||
                 m_status != 0) {
-                SE_LOG_DEBUG(NULL, "ForkExecParent: child was signaled %s, signal %d, int %d, term %d, int sent %s, term sent %s",
+                SE_LOG_DEBUG(NULL, "ForkExecParent: child %ld was signaled %s, signal %d (SIGINT=%d, SIGTERM=%d), int sent %s, term sent %s",
+                             (long)m_childPid,
                              WIFSIGNALED(m_status) ? "yes" : "no",
                              WTERMSIG(m_status), SIGINT, SIGTERM,
                              m_sigIntSent ? "yes" : "no",
@@ -371,8 +373,9 @@ void ForkExecParent::checkCompletion() throw ()
 void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw()
 {
     try {
-        SE_LOG_DEBUG(NULL, "ForkExecParent: child %s has connected",
-                     m_helper.c_str());
+        SE_LOG_DEBUG(NULL, "ForkExecParent: child %s %ld has connected",
+                     m_helper.c_str(),
+                     (long)m_childPid);
         m_hasConnected = true;
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
         m_api.reset(new ForkExecParentDBusAPI(conn));
@@ -403,8 +406,9 @@ void ForkExecParent::stop(int signal)
         return;
     }
 
-    SE_LOG_DEBUG(NULL, "ForkExecParent: killing %s with signal %d (%s %s)",
+    SE_LOG_DEBUG(NULL, "ForkExecParent: killing %s %ld with signal %d (%s %s)",
                  m_helper.c_str(),
+                 (long)m_childPid,
                  signal,
                  (!signal || signal == SIGINT) ? "SIGINT" : "",
                  (!signal || signal == SIGTERM) ? "SIGTERM" : "");
@@ -428,8 +432,9 @@ void ForkExecParent::kill()
         return;
     }
 
-    SE_LOG_DEBUG(NULL, "ForkExecParent: killing %s with SIGKILL",
-                 m_helper.c_str());
+    SE_LOG_DEBUG(NULL, "ForkExecParent: killing %s %ld with SIGKILL",
+                 m_helper.c_str(),
+                 (long)m_childPid);
     ::kill(m_childPid, SIGKILL);
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
     // Drop our connection to the child. Prevents further communication
