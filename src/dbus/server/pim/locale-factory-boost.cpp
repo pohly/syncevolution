@@ -554,11 +554,11 @@ public:
                     //
                     // We restore the right order by sorting, which puts the
                     // country code first, and then joining.
-                    GeeCollection *coll = folks_abstract_field_details_get_parameter_values(phone, "x-evolution-e164");
+                    GeeCollectionCXX coll(folks_abstract_field_details_get_parameter_values(phone, "x-evolution-e164"), false);
                     if (coll) {
                         std::vector<std::string> components;
                         components.reserve(2);
-                        BOOST_FOREACH (const gchar *component, GeeStringCollection(coll)) {
+                        BOOST_FOREACH (const gchar *component, GeeStringCollection(coll.get())) {
                             // Empty component represents an unset
                             // country code. Replace with the current
                             // country code to form the full number.
