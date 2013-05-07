@@ -81,6 +81,9 @@ class Session : public GDBusCXX::DBusObjectHelper,
         SYNC_ILLEGAL
     };
 
+    typedef std::map<std::string, SourceStatus> SourceStatuses_t;
+    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
+
  private:
     Server &m_server;
     std::vector<std::string> m_flags;
@@ -203,11 +206,9 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** progress data, holding progress calculation related info */
     ProgressData m_progData;
 
-    typedef std::map<std::string, SourceStatus> SourceStatuses_t;
     SourceStatuses_t m_sourceStatus;
 
     uint32_t m_error;
-    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
     SourceProgresses_t m_sourceProgress;
 
     // syncProgress() and sourceProgress() turn raw data from helper
@@ -291,6 +292,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** like fireStatus() for progress information */
     void fireProgress(bool flush = false);
 
+public:
     /** Session.StatusChanged */
     GDBusCXX::EmitSignal3<const std::string &,
                           uint32_t,
@@ -299,7 +301,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
     GDBusCXX::EmitSignal2<int32_t,
                           const SourceProgresses_t &> emitProgress;
 
-public:
     /**
      * Sessions must always be held in a shared pointer
      * because some operations depend on that. This
@@ -323,7 +324,7 @@ public:
      * explicitly mark an idle session as completed, even if it doesn't
      * get deleted yet (exceptions not expected by caller)
      */
-    void done() throw () { doneCb(); }
+    void done(bool success) throw () { doneCb(success); }
 
 private:
     Session(Server &server,
@@ -444,8 +445,12 @@ public:
     SyncSuccessStartSignal_t m_syncSuccessStartSignal;
 
     /** sync completed (may have failed) */
-    typedef boost::signals2::signal<void (SyncMLStatus)> DoneSignal_t;
+    typedef boost::signals2::signal<void (SyncMLStatus, SyncReport)> DoneSignal_t;
     DoneSignal_t m_doneSignal;
+
+    /** a source was synced, emitted multiple times during a multi-cycle sync */
+    typedef boost::signals2::signal<void (const std::string &, const SyncSourceReport &)> SourceSyncedSignal_t;
+    SourceSyncedSignal_t m_sourceSynced;
 
     /**
      * Called by server when the session is ready to run.
@@ -466,7 +471,7 @@ private:
     /** set m_syncFilter and m_sourceFilters to config */
     virtual bool setFilters(SyncConfig &config);
 
-    void dbusResultCb(const std::string &operation, bool success, const std::string &error) throw();
+    void dbusResultCb(const std::string &operation, bool success, const SyncReport &report, const std::string &error) throw();
 
     /**
      * to be called inside a catch() clause: returns error for any
@@ -481,8 +486,9 @@ private:
      *
      * @param success    if false, then ensure that m_error is set
      *                   before finalizing the session
+     * @param report     valid only in case of success
      */
-    void doneCb(bool success = true) throw();
+    void doneCb(bool success, const SyncReport &report = SyncReport()) throw();
 };
 
 SE_END_CXX

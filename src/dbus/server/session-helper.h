@@ -57,14 +57,14 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
 
     /** called by main event loop: initiate a sync operation */
     void sync(const SessionCommon::SyncParams &params,
-              const boost::shared_ptr< GDBusCXX::Result1<bool> > &result);
+              const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result);
 
     /**
      * called by run(): do the sync operation
      * @return true if the helper is meant to terminate
      */
     bool doSync(const SessionCommon::SyncParams &params,
-                const boost::shared_ptr< GDBusCXX::Result1<bool> > &result);
+                const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result);
 
     void restore(const std::string &configName,
                  const string &dir, bool before, const std::vector<std::string> &sources,
@@ -109,6 +109,9 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     GDBusCXX::EmitSignal6<sysync::TProgressEventEnum,
         std::string, SyncMode,
         int32_t, int32_t, int32_t, true> emitSourceProgress;
+
+    /** SyncContext::m_sourceSyncedSignal */
+    GDBusCXX::EmitSignal2<std::string, SyncSourceReport> emitSourceSynced;
 
     /** SyncContext::reportStepCmd -> true/false for "waiting on IO" */
     GDBusCXX::EmitSignal1<bool, true> emitWaiting;

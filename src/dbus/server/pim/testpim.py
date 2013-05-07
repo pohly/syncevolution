@@ -649,6 +649,24 @@ END:VCARD(\r|\n)*''',
         expected = sources.copy()
         peers = {}
 
+        syncProgress = []
+        signal = bus.add_signal_receiver(lambda uid, event, data: (logging.printf('received SyncProgress: %s, %s, %s', uid, event, data), syncProgress.append((uid, event, data)), logging.printf('progress %s' % syncProgress)),
+                                         'SyncProgress',
+                                         'org._01.pim.contacts.Manager',
+                                         None, #'org._01.pim.contacts',
+                                         '/org/01/pim/contacts',
+                                         byte_arrays=True,
+                                         utf8_strings=True)
+        def checkSync(expected, result):
+             self.assertEqual(expected, result)
+             while not (uid, 'done', {}) in syncProgress:
+                  self.loopIteration('added signal')
+             self.assertEqual([(uid, 'started', {}),
+                               (uid, 'modified', expected),
+                               (uid, 'done', {})],
+                              syncProgress)
+
+
         # Must be the Bluetooth MAC address (like A0:4E:04:1E:AD:30)
         # of a phone which is paired, currently connected, and
         # supports both PBAP and SyncML. SyncML is needed for putting
@@ -707,7 +725,9 @@ END:VCARD(\r|\n)*''',
         # Remember current list of files and modification time stamp.
         files = listsyncevo()
 
-        # Remove all data locally.
+        # Remove all data locally. There may or may not have been data
+        # locally, because the database of the peer might have existed
+        # from previous tests.
         self.manager.SyncPeer(uid,
                               timeout=self.timeout)
         # TODO: check that syncPhone() really used PBAP - but how?
@@ -817,8 +837,14 @@ END:VCARD
         output.write(john)
         output.close()
         self.syncPhone(phone, uid)
-        self.manager.SyncPeer(uid,
-                              timeout=self.timeout)
+        syncProgress = []
+        result = self.manager.SyncPeer(uid,
+                                       timeout=self.timeout)
+        checkSync({'modified': True,
+                    'added': 1,
+                    'updated': 0,
+                    'removed': 0},
+                  result)
 
         # Also exclude modified database files.
         self.assertEqual(files, listsyncevo(exclude=exclude))
@@ -834,16 +860,28 @@ END:VCARD
                              peers[uid],
                              timeout=self.timeout)
         files = listsyncevo(exclude=exclude)
-        self.manager.SyncPeer(uid,
-                              timeout=self.timeout)
+        syncProgress = []
+        result = self.manager.SyncPeer(uid,
+                                       timeout=self.timeout)
+        checkSync({'modified': False,
+                   'added': 0,
+                   'updated': 0,
+                   'removed': 0},
+                  result)
         exclude.append(logdir + '(/$)')
         self.assertEqual(files, listsyncevo(exclude=exclude))
 
         self.assertEqual(2, len(os.listdir(logdir)))
 
         # At most one!
-        self.manager.SyncPeer(uid,
-                              timeout=self.timeout)
+        syncProgress = []
+        result = self.manager.SyncPeer(uid,
+                                       timeout=self.timeout)
+        checkSync({'modified': False,
+                   'added': 0,
+                   'updated': 0,
+                   'removed': 0},
+                  result)
         exclude.append(logdir + '(/$)')
         self.assertEqual(files, listsyncevo(exclude=exclude))
         self.assertEqual(2, len(os.listdir(logdir)))
@@ -854,11 +892,48 @@ END:VCARD
                              peers[uid],
                              timeout=self.timeout)
         files = listsyncevo(exclude=exclude)
-        self.manager.SyncPeer(uid,
-                              timeout=self.timeout)
+        syncProgress = []
+        result = self.manager.SyncPeer(uid,
+                                       timeout=self.timeout)
+        checkSync({'modified': False,
+                   'added': 0,
+                   'updated': 0,
+                   'removed': 0},
+                  result)
         exclude.append(logdir + '(/$)')
         self.assertEqual(files, listsyncevo(exclude=exclude))
         self.assertEqual(4, len(os.listdir(logdir)))
+
+        # Update contact.
+        john = '''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+END:VCARD'''
+        output = open(item, "w")
+        output.write(john)
+        output.close()
+        self.syncPhone(phone, uid)
+        syncProgress = []
+        result = self.manager.SyncPeer(uid,
+                                       timeout=self.timeout)
+        checkSync({'modified': True,
+                   'added': 0,
+                   'updated': 1,
+                   'removed': 0},
+                  result)
+
+        # Remove contact.
+        os.unlink(item)
+        self.syncPhone(phone, uid)
+        syncProgress = []
+        result = self.manager.SyncPeer(uid,
+                                       timeout=self.timeout)
+        checkSync({'modified': True,
+                   'added': 0,
+                   'updated': 0,
+                   'removed': 1},
+                  result)
 
         # Test invalid maxsession values.
         with self.assertRaisesRegexp(dbus.DBusException,

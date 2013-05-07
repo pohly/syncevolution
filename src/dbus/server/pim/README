@@ -247,6 +247,29 @@ Not supported via the API at the moment:
 - selecting a specific phone address book
 - selecting which vCard properties get cached
 
+Syncing
+=======
+
+SetSync() in SyncEvolution will return a dict with all of the
+following entries set:
+    "modified": boolean - data was modified
+    "added" : integer - number of new contacts
+    "updated" : integer - number of updated contacts
+    "removed" : integer - number of deleted contacts
+
+In other words, the caller can reliably detect when nothing changed,
+but when contacts were modified or added, it needs to read them to
+determine which kind of properties were modified or added.
+
+The SyncProgress is triggered by SyncEvolution with three different
+keys (in this order, with "modified" occuring zero or more times):
+  "started" "modified"* "done"
+
+"started" and "done" send an empty data dictionary. "modified" sends
+the same dictionary as the one returned by SyncPeer(), if contact data
+was modified. So by definition, "modified" will be True in the
+dictionary, but is included anyway for the sake of consistency.
+
 
 Contact Data
 ============

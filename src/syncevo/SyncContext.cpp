@@ -1768,6 +1768,8 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 source.recordFirstSync(extra1 == 2);
                 source.recordResumeSync(extra2 == 1);
             } else if (SyncMode(mode) != SYNC_NONE) {
+                // Broadcast statistics before moving into next cycle.
+                m_sourceSyncedSignal(source.getName(), source);
                 // may happen when the source is used in multiple
                 // SyncML sessions; only remember the initial sync
                 // mode in that case and count all following syncs
@@ -3234,6 +3236,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
         // but some items failed, we report a "partial failure"
         // status.
         BOOST_FOREACH(SyncSource *source, sourceList) {
+            m_sourceSyncedSignal(source->getName(), *source);
             if (source->getStatus() == STATUS_OK &&
                 (source->getItemStat(SyncSource::ITEM_LOCAL,
                                      SyncSource::ITEM_ANY,

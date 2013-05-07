@@ -125,6 +125,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     emitLogOutput(*this, "LogOutput"),
     emitSyncProgress(*this, "SyncProgress"),
     emitSourceProgress(*this, "SourceProgress"),
+    emitSourceSynced(*this, "SourceSynced"),
     emitWaiting(*this, "Waiting"),
     emitSyncSuccessStart(*this, "SyncSuccessStart"),
     emitConfigChanged(*this, "ConfigChanged"),
@@ -141,6 +142,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(emitLogOutput);
     add(emitSyncProgress);
     add(emitSourceProgress);
+    add(emitSourceSynced);
     add(emitWaiting);
     add(emitSyncSuccessStart);
     add(emitConfigChanged);
@@ -184,18 +186,19 @@ bool SessionHelper::connected()
 }
 
 void SessionHelper::sync(const SessionCommon::SyncParams &params,
-                         const boost::shared_ptr< GDBusCXX::Result1<bool> > &result)
+                         const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result)
 {
     m_operation = boost::bind(&SessionHelper::doSync, this, params, result);
     g_main_loop_quit(m_loop);
 }
 
 bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
-                           const boost::shared_ptr< GDBusCXX::Result1<bool> > &result)
+                           const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result)
 {
     try {
         m_sync.reset(new DBusSync(params, *this));
-        SyncMLStatus status = m_sync->sync();
+        SyncReport report;
+        SyncMLStatus status = m_sync->sync(&report);
         if (status) {
             // Clear the abort signal, to allow the process to send
             // out the D-Bus response. Our parent will signal us again
@@ -205,7 +208,7 @@ bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
                                       "sync failed",
                                       status);
         }
-        result->done(true);
+        result->done(true, report);
     } catch (...) {
         dbusErrorCallback(result);
     }

@@ -80,7 +80,8 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
                      MANAGER_IFACE),
     m_mainThread(g_thread_self()),
     m_server(server),
-    m_locale(LocaleFactory::createFactory())
+    m_locale(LocaleFactory::createFactory()),
+    emitSyncProgress(*this, "SyncProgress")
 {
 }
 
@@ -143,6 +144,7 @@ void Manager::init()
     add(this, &Manager::addContact, "AddContact");
     add(this, &Manager::modifyContact, "ModifyContact");
     add(this, &Manager::removeContact, "RemoveContact");
+    add(emitSyncProgress);
 
     // Ready, make it visible via D-Bus.
     activate();
@@ -1298,7 +1300,7 @@ void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
     result->done();
 }
 
-void Manager::syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+void Manager::syncPeer(const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
                        const std::string &uid)
 {
     checkPeerUID(uid);
@@ -1311,12 +1313,30 @@ void Manager::syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
                  boost::bind(&Manager::doSyncPeer, this, _1, result, uid));
 }
 
-static void doneSyncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
-                         SyncMLStatus status)
+static Manager::SyncResult SyncReport2Result(const SyncReport &report)
+{
+    Manager::SyncResult result;
+    int added = 0, updated = 0, removed = 0;
+    if (!report.empty()) {
+        const SyncSourceReport &source = report.begin()->second;
+        added = source.getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_ADDED, SyncSourceReport::ITEM_TOTAL);
+        updated = source.getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_UPDATED, SyncSourceReport::ITEM_TOTAL);
+        removed = source.getItemStat(SyncSourceReport::ITEM_LOCAL, SyncSourceReport::ITEM_REMOVED, SyncSourceReport::ITEM_TOTAL);
+    }
+    result["modified"] = added || updated || removed;
+    result["added"] = added;
+    result["updated"] = updated;
+    result["removed"] = removed;
+    return result;
+}
+
+static void doneSyncPeer(const boost::shared_ptr<GDBusCXX::Result1<Manager::SyncResult> > &result,
+                         SyncMLStatus status,
+                         const SyncReport &report)
 {
     if (status == STATUS_OK ||
         status == STATUS_HTTP_OK) {
-        result->done();
+        result->done(SyncReport2Result(report));
     } else if (status == (SyncMLStatus)sysync::LOCERR_USERABORT) {
         result->failed(GDBusCXX::dbus_error(MANAGER_ERROR_ABORTED, "running sync aborted, probably by StopSync()"));
     } else {
@@ -1325,15 +1345,28 @@ static void doneSyncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
 }
 
 void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
-                         const boost::shared_ptr<GDBusCXX::Result0> &result,
+                         const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
                          const std::string &uid)
 {
+    // Keep client informed about progress.
+    emitSyncProgress(uid, "started", SyncResult());
+    session->m_doneSignal.connect(boost::bind(boost::ref(emitSyncProgress), uid, "done", SyncResult()));
+    session->m_sourceSynced.connect(boost::bind(&Manager::report2SyncProgress, m_self, uid, _1, _2));
     // After sync(), the session is tracked as the active sync session
     // by the server. It was removed from our own m_pending list by
     // doSession().
     session->sync("ephemeral", SessionCommon::SourceModes_t());
     // Relay result to caller when done.
-    session->m_doneSignal.connect(boost::bind(doneSyncPeer, result, _1));
+    session->m_doneSignal.connect(boost::bind(doneSyncPeer, result, _1, _2));
+}
+
+void Manager::report2SyncProgress(const std::string &uid,
+                                  const std::string &sourceName,
+                                  const SyncSourceReport &source)
+{
+    SyncReport report;
+    report.addSyncSourceReport("foo", source);
+    emitSyncProgress(uid, "modified", SyncReport2Result(report));
 }
 
 void Manager::stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
