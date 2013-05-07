@@ -74,6 +74,7 @@ public:
     m_logOutput(*this, "LogOutput", false),
     m_syncProgress(*this, "SyncProgress", false),
     m_sourceProgress(*this, "SourceProgress", false),
+    m_sourceSynced(*this, "SourceSynced", false),
     m_waiting(*this, "Waiting", false),
     m_syncSuccessStart(*this, "SyncSuccessStart", false),
     m_configChanged(*this, "ConfigChanged", false),
@@ -87,7 +88,7 @@ public:
     /* GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports; */
     /* GDBusCXX::DBusClientCall0                                    m_checkSource; */
     /* GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases; */
-    GDBusCXX::DBusClientCall1<bool> m_sync;
+    GDBusCXX::DBusClientCall2<bool, SyncReport> m_sync;
     GDBusCXX::DBusClientCall1<bool> m_restore;
     GDBusCXX::DBusClientCall1<bool> m_execute;
     /* GDBusCXX::DBusClientCall0                                    m_serverShutdown; */
@@ -103,6 +104,7 @@ public:
     GDBusCXX::SignalWatch6<sysync::TProgressEventEnum,
                            std::string, SyncMode,
                            int32_t, int32_t, int32_t> m_sourceProgress;
+    GDBusCXX::SignalWatch2<std::string, SyncSourceReport> m_sourceSynced;
     GDBusCXX::SignalWatch1<bool> m_waiting;
     GDBusCXX::SignalWatch0 m_syncSuccessStart;
     GDBusCXX::SignalWatch0 m_configChanged;
@@ -410,7 +412,7 @@ void Session::sync2(const std::string &mode, const SessionCommon::SourceModes_t 
     // the error is recorded before ending the session. Premature
     // exits by the helper are handled by D-Bus, which then will abort
     // the pending method call.
-    m_helper->m_sync.start(params, boost::bind(&Session::dbusResultCb, m_me, "sync()", _1, _2));
+    m_helper->m_sync.start(params, boost::bind(&Session::dbusResultCb, m_me, "sync()", _1, _2, _3));
 }
 
 void Session::abort()
@@ -599,7 +601,7 @@ void Session::passwordRequest(const std::string &descr, const ConfigPasswordKey 
     m_passwordRequest = m_server.passwordRequest(descr, key, m_me);
 }
 
-void Session::dbusResultCb(const std::string &operation, bool success, const std::string &error) throw()
+void Session::dbusResultCb(const std::string &operation, bool success, const SyncReport &report, const std::string &error) throw()
 {
     PushLogger<Logger> guard(m_me);
     try {
@@ -609,7 +611,7 @@ void Session::dbusResultCb(const std::string &operation, bool success, const std
                      success ? "<<successfully>>" :
                      "<<unsuccessfully>>");
         if (error.empty()) {
-            doneCb(success);
+            doneCb(success, report);
         } else {
             // Translate back into local exception, will be handled by
             // catch clause and (eventually) failureCb().
@@ -656,7 +658,7 @@ void Session::failureCb() throw()
                 m_error = error;
             }
             // will fire status signal, including the error
-            doneCb();
+            doneCb(false);
         }
     } catch (...) {
         // fatal problem, log it and terminate
@@ -664,7 +666,7 @@ void Session::failureCb() throw()
     }
 }
 
-void Session::doneCb(bool success) throw()
+void Session::doneCb(bool success, const SyncReport &report) throw()
 {
     PushLogger<Logger> guard(m_me);
     try {
@@ -695,7 +697,7 @@ void Session::doneCb(bool success) throw()
                      m_configName.c_str(),
                      m_setConfig ? "modified" : "not modified",
                      m_error);
-        m_doneSignal((SyncMLStatus)m_error);
+        m_doneSignal((SyncMLStatus)m_error, report);
 
         // now also kill helper
         m_helper.reset();
@@ -718,7 +720,8 @@ void Session::doneCb(bool success) throw()
 Session::~Session()
 {
     SE_LOG_DEBUG(NULL, "session %s deconstructing", getPath());
-    doneCb();
+    // If we are not done yet, then something went wrong.
+    doneCb(false);
 }
 
 /** child has quit before connecting, invoke result.failed() with suitable exception pending */
@@ -911,6 +914,7 @@ void Session::onConnect(const GDBusCXX::DBusConnectionPtr &conn) throw ()
         // Activate signal watch on helper signals.
         m_helper->m_syncProgress.activate(boost::bind(&Session::syncProgress, this, _1, _2, _3, _4));
         m_helper->m_sourceProgress.activate(boost::bind(&Session::sourceProgress, this, _1, _2, _3, _4, _5, _6));
+        m_helper->m_sourceSynced.activate(boost::bind(boost::ref(m_sourceSynced), _1, _2));
         m_helper->m_waiting.activate(boost::bind(&Session::setWaiting, this, _1));
         m_helper->m_syncSuccessStart.activate(boost::bind(boost::ref(Session::m_syncSuccessStartSignal)));
         m_helper->m_configChanged.activate(boost::bind(boost::ref(m_server.m_configChangedSignal), ""));
@@ -958,7 +962,8 @@ void Session::onQuit(int status) throw ()
         }
         m_server.addTimeout(boost::bind(&Session::doneCb,
                                         m_me,
-                                        false),
+                                        false,
+                                        SyncReport()),
                             0.1 /* seconds */);
     } catch (...) {
         Exception::handle();
@@ -1245,7 +1250,7 @@ void Session::restore2(const string &dir, bool before, const std::vector<std::st
 
     // helper is ready, tell it what to do
     m_helper->m_restore.start(m_configName, dir, before, sources,
-                              boost::bind(&Session::dbusResultCb, m_me, "restore()", _1, _2));
+                              boost::bind(&Session::dbusResultCb, m_me, "restore()", _1, SyncReport(), _2));
 }
 
 void Session::execute(const vector<string> &args, const map<string, string> &vars)
@@ -1276,7 +1281,7 @@ void Session::execute2(const vector<string> &args, const map<string, string> &va
 
     // helper is ready, tell it what to do
     m_helper->m_execute.start(args, vars,
-                              boost::bind(&Session::dbusResultCb, m_me, "execute()", _1, _2));
+                              boost::bind(&Session::dbusResultCb, m_me, "execute()", _1, SyncReport(), _2));
 }
 
 /*Implementation of Session.CheckPresence */

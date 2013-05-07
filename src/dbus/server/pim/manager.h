@@ -28,6 +28,7 @@
 #include "folks.h"
 #include "locale-factory.h"
 #include "../server.h"
+#include "../session.h"
 #include <syncevo/EDSClient.h>
 
 #include <syncevo/declarations.h>
@@ -135,13 +136,25 @@ class Manager : public GDBusCXX::DBusObjectHelper
                       const std::string &uid);
 
  public:
+    typedef std::map<std::string, boost::variant<bool, int> > SyncResult;
     /** Manager.SyncPeer() */
-    void syncPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
+    void syncPeer(const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
                   const std::string &uid);
+
+    /** Manager.SyncProgress */
+    GDBusCXX::EmitSignal3<const std::string &,
+                          const std::string &,
+                          const SyncResult &> emitSyncProgress;
+
+
  private:
     void doSyncPeer(const boost::shared_ptr<Session> &session,
-                    const boost::shared_ptr<GDBusCXX::Result0> &result,
+                    const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
                     const std::string &uid);
+
+    void report2SyncProgress(const std::string &uid,
+                             const std::string &sourceName,
+                             const SyncSourceReport &source);
 
  public:
     /** Manager.StopSync() */

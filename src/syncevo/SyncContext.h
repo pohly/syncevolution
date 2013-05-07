@@ -159,6 +159,12 @@ class SyncContext : public SyncConfig {
     static InitMainSignal &GetInitMainSignal();
 
     /**
+     * A signal invoked each time a source has gone through a sync cycle.
+     */
+    typedef boost::signals2::signal<void (const std::string &name, const SyncSourceReport &source)> SourceSyncedSignal;
+    SourceSyncedSignal m_sourceSyncedSignal;
+
+    /**
      * true if binary was compiled as stable release
      * (see gen-autotools.sh)
      */

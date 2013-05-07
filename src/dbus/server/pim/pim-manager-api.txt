@@ -238,13 +238,21 @@ Methods:
          part of the active address books, it will be removed
          automatically.
 
-    void SyncPeer(string uid)
+    dict SyncPeer(string uid)
 
          Retrieve contacts from the peer and ensure that the local
          cache is identical to the address book of the peer. The call
-         returns once the operation is complete. Only if there was no
-         error can the caller assume that the cache is up-to-date.
-         Otherwise it is in an undefined state.
+         returns once the operation is complete.
+
+         Only if there was no error can the caller assume that the cache
+         is up-to-date. In this case, a string to variant dictionary
+         is returned which provided additional information about the sync.
+         The content of the dictionary is implementation dependent.
+
+         If the call fails, no dictionary is returned and the local
+         cache may or may not be up-to-date. It may or may not have been
+         updated. The caller needs to check the local cache to find out
+         what it contains.
 
     void StopSync(string uid)
 
@@ -306,6 +314,16 @@ Methods:
 
          Remove the contact and all of its associated data (like the
          photo, if the photo file is owned by the contact storage).
+
+Signals:
+
+    SyncProgress(string uid, string event, dict data)
+
+         Provides information about a running sync for the peer with
+         the given "uid". The "event" string describes what happened
+         and the "data" dictionary provides further information about
+         it with a mapping from event specific string keys to variants
+         as value.
 
 
 Service: org._01.pim.contacts

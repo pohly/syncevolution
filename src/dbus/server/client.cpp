@@ -50,7 +50,7 @@ void Client::detach(Resource *resource)
                     // give clients a chance to query the session
                     m_server.delaySessionDestruction(session);
                     // allow other sessions to start
-                    session->done();
+                    session->done(false);
                 }
             }
             // this will trigger removal of the resource if

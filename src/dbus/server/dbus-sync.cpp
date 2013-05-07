@@ -90,6 +90,9 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
                                     SYNC_NONE,
                                     0, 0, 0);
     }
+
+    // Forward the SourceSyncedSignal via D-Bus.
+    m_sourceSyncedSignal.connect(boost::bind(m_helper.emitSourceSynced, _1, _2));
 }
 
 DBusSync::~DBusSync()
