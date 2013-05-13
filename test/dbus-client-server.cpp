@@ -273,7 +273,7 @@ int main(int argc, char **argv)
         // throw stdruntime_error("The --allow-anonymous option only makes sense when used with --server.");
         // }
 
-        loop = SyncEvo::GMainLoopCXX(g_main_loop_new (NULL, FALSE), false);
+        loop = SyncEvo::GMainLoopStealCXX(g_main_loop_new (NULL, FALSE));
         if (!loop) {
             throw std::runtime_error("could not allocate main loop");
         }

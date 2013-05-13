@@ -144,7 +144,7 @@ void FullView::individualModified(gpointer gobject,
     //
     // See https://bugzilla.gnome.org/show_bug.cgi?id=684764
     // "too many FolksIndividual modification signals"
-    m_pendingModifications.insert(individual);
+    m_pendingModifications.insert(FolksIndividualCXX(individual, ADD_REF));
     waitForIdle();
 }
 

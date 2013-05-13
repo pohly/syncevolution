@@ -156,7 +156,7 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
             throwError("unable to access backend databases", gerror);
         }
     }
-    ESourceListCXX sources(tmp, false);
+    ESourceListCXX sources(tmp, TRANSFER_REF);
     bool first = true;
     for (GSList *g = sources ? e_source_list_peek_groups (sources) : NULL;
          g;
@@ -240,7 +240,7 @@ void EvolutionCalendarSource::open()
     if (!e_cal_get_sources(&tmp, sourceType(), gerror)) {
         throwError("unable to access backend databases", gerror);
     }
-    ESourceListCXX sources(tmp, false);
+    ESourceListCXX sources(tmp, TRANSFER_REF);
 
     string id = getDatabaseID();    
     ESource *source = findSource(sources, id);
@@ -430,7 +430,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 
 void EvolutionCalendarSource::close()
 {
-    m_calendar = NULL;
+    m_calendar.reset();
 }
 
 void EvolutionCalendarSource::readItem(const string &luid, std::string &item, bool raw)
@@ -858,7 +858,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
          * remove all items with the given uid and if we only wanted to
          * delete the parent, then recreate the children.
          */
-        ICalComps_t children = removeEvents(id.m_uid, true, false);
+        ICalComps_t children = removeEvents(id.m_uid, true, TRANSFER_REF);
 
         // recreate children
         bool first = true;

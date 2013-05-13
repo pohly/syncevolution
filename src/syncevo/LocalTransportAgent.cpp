@@ -56,8 +56,8 @@ LocalTransportAgent::LocalTransportAgent(SyncContext *server,
     m_clientContext(SyncConfig::normalizeConfigString(clientContext)),
     m_status(INACTIVE),
     m_loop(loop ?
-           GMainLoopCXX(static_cast<GMainLoop *>(loop)) /* increase reference */ :
-           GMainLoopCXX(g_main_loop_new(NULL, false), false) /* use reference handed to us by _new */)
+           GMainLoopCXX(static_cast<GMainLoop *>(loop), ADD_REF) :
+           GMainLoopCXX(g_main_loop_new(NULL, false), TRANSFER_REF))
 {
 }
 

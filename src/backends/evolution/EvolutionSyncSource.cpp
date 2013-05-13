@@ -36,7 +36,7 @@ void EvolutionSyncSource::getDatabasesFromRegistry(SyncSource::Databases &result
     ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceListCXX sources(e_source_registry_list_sources(registry, extension));
     ESourceCXX def(refDef ? refDef(registry) : NULL,
-                   false);
+                   TRANSFER_REF);
     BOOST_FOREACH (ESource *source, sources) {
         result.push_back(Database(e_source_get_display_name(source),
                                   e_source_get_uid(source),
@@ -64,7 +64,7 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
 
     if (!source) {
         if (refBuiltin && (id.empty() || id == "<<system>>")) {
-            ESourceCXX builtin(refBuiltin(registry), false);
+            ESourceCXX builtin(refBuiltin(registry), TRANSFER_REF);
             client = EClientCXX::steal(newClient(builtin, gerror));
             // } else if (!id.compare(0, 7, "file://")) {
                 // TODO: create source
@@ -129,7 +129,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
                       e_source_new(NULL, NULL, gerror) :
                       e_source_new_with_uid(database.m_uri.c_str(),
                                             NULL, gerror),
-                      false);
+                      TRANSFER_REF);
     if (!source) {
         gerror.throwError("e_source_new()");
     }
@@ -179,7 +179,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
 void EvolutionSyncSource::deleteDatabase(const std::string &uri)
 {
     ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
-    ESourceCXX source(e_source_registry_ref_source(registry, uri.c_str()), false);
+    ESourceCXX source(e_source_registry_ref_source(registry, uri.c_str()), TRANSFER_REF);
     if (!source) {
         throwError(StringPrintf("EDS database with URI '%s' cannot be deleted, does not exist",
                                 uri.c_str()));

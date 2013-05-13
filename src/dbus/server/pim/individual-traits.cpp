@@ -344,7 +344,7 @@ template <> struct dbus_traits<GDateTime *> {
         // GTimeZone local = g_time_zone_new_local()
         // and use that throughout the runtime of the process, like
         // folks-eds does.
-        GDateTimeCXX local(g_date_time_to_local(value), false);
+        GDateTimeCXX local(g_date_time_to_local(value), TRANSFER_REF);
         gint year, month, day;
         g_date_time_get_ymd(local.get(), &year, &month, &day);
         g_variant_builder_open(&builder, G_VARIANT_TYPE("(iii)")); // tuple with year, month, day
@@ -399,11 +399,11 @@ static void DBus2AbstractField(GDBusCXX::ExtractArgs &context,
                                        g_object_unref,
                                        FolksAbstractFieldDetailsHash, NULL, NULL,
                                        FolksAbstractFieldDetailsEqual, NULL, NULL),
-                      false);
+                      TRANSFER_REF);
     BOOST_FOREACH (const Details_t::value_type &entry, value) {
         const Details_t::value_type::first_type &val = entry.first;
         const Details_t::value_type::second_type &flags = entry.second;
-        FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), false);
+        FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), TRANSFER_REF);
         BOOST_FOREACH (const std::string &type, flags) {
             folks_abstract_field_details_add_parameter(field.get(),
                                                        FOLKS_ABSTRACT_FIELD_DETAILS_PARAM_TYPE,
@@ -438,9 +438,9 @@ static void DBus2SimpleAbstractField(GDBusCXX::ExtractArgs &context,
                                        g_object_unref,
                                        FolksAbstractFieldDetailsHash, NULL, NULL,
                                        FolksAbstractFieldDetailsEqual, NULL, NULL),
-                      false);
+                      TRANSFER_REF);
     BOOST_FOREACH (const std::string &val, value) {
-        FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), false);
+        FolksAbstractFieldDetailsCXX field(fieldNew(val.c_str(), NULL), TRANSFER_REF);
         gee_collection_add(GEE_COLLECTION(set.get()),
                            field.get());
     }
@@ -466,10 +466,10 @@ static void DBus2Role(GDBusCXX::ExtractArgs &context,
                                        g_object_unref,
                                        FolksAbstractFieldDetailsHash, NULL, NULL,
                                        FolksAbstractFieldDetailsEqual, NULL, NULL),
-                      false);
+                      TRANSFER_REF);
     BOOST_FOREACH (const StringMap &entry, value) {
         FolksRoleCXX role(folks_role_new(NULL, NULL, NULL),
-                          false);
+                          TRANSFER_REF);
         BOOST_FOREACH (const StringPair &aspect, entry) {
             const std::string &k = aspect.first;
             const std::string &v = aspect.second;
@@ -482,7 +482,7 @@ static void DBus2Role(GDBusCXX::ExtractArgs &context,
             }
         }
         FolksRoleFieldDetailsCXX field(folks_role_field_details_new(role.get(), NULL),
-                                       false);
+                                       TRANSFER_REF);
         gee_collection_add(GEE_COLLECTION(set.get()),
                            field.get());
     }
@@ -500,7 +500,7 @@ static void DBus2Groups(GDBusCXX::ExtractArgs &context,
 {
     std::list<std::string> value;
     GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
-    GeeHashSetCXX set(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc)g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), false);
+    GeeHashSetCXX set(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc)g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), TRANSFER_REF);
     BOOST_FOREACH(const std::string &entry, value) {
         gee_collection_add(GEE_COLLECTION(set.get()),
                            entry.c_str());
@@ -527,7 +527,7 @@ static void DBus2Addr(GDBusCXX::ExtractArgs &context,
                                        g_object_unref,
                                        FolksAbstractFieldDetailsHash, NULL, NULL,
                                        FolksAbstractFieldDetailsEqual, NULL, NULL),
-                      false);
+                      TRANSFER_REF);
     BOOST_FOREACH (const Details_t::value_type &entry, value) {
         const StringMap &fields = entry.first;
         const std::vector<std::string> &flags = entry.second;
@@ -540,9 +540,9 @@ static void DBus2Addr(GDBusCXX::ExtractArgs &context,
                                                                GetWithDef(fields, CONTACT_HASH_ADDRESSES_COUNTRY).c_str(),
                                                                NULL /* address format */,
                                                                NULL /* uid */),
-                                      false);
+                                      TRANSFER_REF);
         FolksAbstractFieldDetailsCXX field(FOLKS_ABSTRACT_FIELD_DETAILS(folks_postal_address_field_details_new(address.get(), NULL)),
-                                           false);
+                                           TRANSFER_REF);
         BOOST_FOREACH (const std::string &type, flags) {
             folks_abstract_field_details_add_parameter(field.get(),
                                                        FOLKS_ABSTRACT_FIELD_DETAILS_PARAM_TYPE,
@@ -596,15 +596,15 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                                                               GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_ADDITIONAL).c_str(),
                                                                               GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_PREFIXES).c_str(),
                                                                               GetWithDef(value, CONTACT_HASH_STRUCTURED_NAME_SUFFIXES).c_str()),
-                                                    false));
+                                                    TRANSFER_REF));
         } else if (key == CONTACT_HASH_PHOTO) {
             std::string value;
             GDBusCXX::dbus_traits<std::string>::get(context, valueIter, value);
             GFileCXX file(g_file_new_for_uri(value.c_str()),
-                          false);
+                          TRANSFER_REF);
             g_hash_table_insert(details.get(),
                                 const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_AVATAR)),
-                                new GValueObjectCXX(g_file_icon_new(file.get()), false));
+                                new GValueObjectCXX(g_file_icon_new(file.get()), TRANSFER_REF));
         } else if (key == CONTACT_HASH_BIRTHDAY) {
             boost::tuple<int, int, int> value;
             GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
@@ -612,16 +612,16 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                                      value.get<1>(),
                                                      value.get<2>(),
                                                      0, 0, 0),
-                               false);
+                               TRANSFER_REF);
             g_hash_table_insert(details.get(),
                                 const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_BIRTHDAY)),
-                                new GValueDateTimeCXX(g_date_time_to_utc(local.get()), false));
+                                new GValueDateTimeCXX(g_date_time_to_utc(local.get()), TRANSFER_REF));
         } else if (key == CONTACT_HASH_LOCATION) {
             boost::tuple<double, double> value;
             GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
             FolksLocationCXX location(folks_location_new(value.get<0>(),
                                                          value.get<1>()),
-                                      false);
+                                      TRANSFER_REF);
             g_hash_table_insert(details.get(),
                                 const_cast<gchar *>(folks_persona_store_detail_key(FOLKS_PERSONA_DETAIL_LOCATION)),
                                 new GValueObjectCXX(location.get()));
@@ -660,7 +660,7 @@ struct Pending
     Pending(const Result<void ()> &result,
             FolksPersona *persona) :
         m_result(result),
-        m_persona(persona),
+        m_persona(persona, ADD_REF),
         m_current(0)
     {}
 

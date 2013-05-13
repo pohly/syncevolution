@@ -94,7 +94,7 @@ void IndividualData::init(const IndividualCompare *compare,
                           const LocaleFactory *locale,
                           FolksIndividual *individual)
 {
-    m_individual = individual;
+    m_individual = FolksIndividualCXX(individual, ADD_REF);
     if (compare) {
         m_criteria.clear();
         compare->createCriteria(individual, m_criteria);
@@ -135,7 +135,7 @@ bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const
 
 IndividualAggregator::IndividualAggregator(const boost::shared_ptr<LocaleFactory> &locale) :
     m_locale(locale),
-    m_databases(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc) g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), false)
+    m_databases(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc) g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), TRANSFER_REF)
 {
 }
 
@@ -215,7 +215,7 @@ void IndividualAggregator::storePrepared()
 void IndividualAggregator::backendsLoaded()
 {
     SE_LOG_DEBUG(NULL, "backend store has loaded backends");
-    GeeCollectionCXX coll(folks_backend_store_list_backends(m_backendStore));
+    GeeCollectionCXX coll(folks_backend_store_list_backends(m_backendStore), TRANSFER_REF);
     BOOST_FOREACH (FolksBackend *backend, GeeCollCXX<FolksBackend *>(coll.get())) {
         SE_LOG_DEBUG(NULL, "folks backend: %s", folks_backend_get_name(backend));
     }
@@ -225,7 +225,7 @@ void IndividualAggregator::backendsLoaded()
         // Remember system store, for writing contacts.
         GeeMap *stores = folks_backend_get_persona_stores(m_eds);
         FolksPersonaStore *systemStore = static_cast<FolksPersonaStore *>(gee_map_get(stores, "system-address-book"));
-        m_systemStore = systemStore;
+        m_systemStore = FolksPersonaStoreCXX(systemStore, TRANSFER_REF);
 
         // Tell the backend which databases we want.
         SE_LOG_DEBUG(NULL, "backends loaded: setting EDS persona stores: [%s]",
@@ -541,7 +541,7 @@ private:
     }
 
     void open() {
-        FolksIndividualAggregatorCXX aggregator(folks_individual_aggregator_new(), false);
+        FolksIndividualAggregatorCXX aggregator(folks_individual_aggregator_new(), TRANSFER_REF);
         bool done = false, failed = false;
         SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_prepare,
                                 boost::bind(asyncCB, _1,
@@ -561,11 +561,11 @@ private:
         GeeMap *individuals = folks_individual_aggregator_get_individuals(aggregator);
         SE_LOG_DEBUG(NULL, "%d individuals", gee_map_get_size(individuals));
 
-        GeeMapIteratorCXX it(gee_map_map_iterator(individuals), false);
+        GeeMapIteratorCXX it(gee_map_map_iterator(individuals), TRANSFER_REF);
         while (gee_map_iterator_next(it)) {
             PlainGStr id(reinterpret_cast<gchar *>(gee_map_iterator_get_key(it)));
             FolksIndividualCXX individual(reinterpret_cast<FolksIndividual *>(gee_map_iterator_get_value(it)),
-                                          false);
+                                          TRANSFER_REF);
             GValueStringCXX fullname;
             g_object_get_property(G_OBJECT(individual.get()), "full-name", &fullname);
             SE_LOG_DEBUG(NULL, "map: id %s name %s = %s",
@@ -574,9 +574,9 @@ private:
                          fullname.get());
         }
 
-        GeeIteratorCXX it2(gee_iterable_iterator(GEE_ITERABLE(individuals)), false);
+        GeeIteratorCXX it2(gee_iterable_iterator(GEE_ITERABLE(individuals)), TRANSFER_REF);
         while (gee_iterator_next(it2)) {
-            GeeMapEntryCXX entry(reinterpret_cast<GeeMapEntry *>(gee_iterator_get(it2)), false);
+            GeeMapEntryCXX entry(reinterpret_cast<GeeMapEntry *>(gee_iterator_get(it2)), TRANSFER_REF);
             gchar *id(reinterpret_cast<gchar *>(const_cast<gpointer>(gee_map_entry_get_key(entry))));
             FolksIndividual *individual(reinterpret_cast<FolksIndividual *>(const_cast<gpointer>(gee_map_entry_get_value(entry))));
             GValueStringCXX fullname;

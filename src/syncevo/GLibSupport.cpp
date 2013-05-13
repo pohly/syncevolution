@@ -191,9 +191,9 @@ GLibNotify::GLibNotify(const char *file,
                        const callback_t &callback) :
     m_callback(callback)
 {
-    GFileCXX filecxx(g_file_new_for_path(file));
+    GFileCXX filecxx(g_file_new_for_path(file), TRANSFER_REF);
     GErrorCXX gerror;
-    GFileMonitorCXX monitor(g_file_monitor_file(filecxx.get(), G_FILE_MONITOR_NONE, NULL, gerror));
+    GFileMonitorCXX monitor(g_file_monitor_file(filecxx.get(), G_FILE_MONITOR_NONE, NULL, gerror), TRANSFER_REF);
     m_monitor.swap(monitor);
     if (!m_monitor) {
         gerror.throwError(std::string("monitoring ") + file);
@@ -240,7 +240,7 @@ class GLibTest : public CppUnit::TestFixture {
         list<Event> events;
         static const char *name = "GLibTest.out";
         unlink(name);
-        GMainLoopCXX loop(g_main_loop_new(NULL, FALSE), false);
+        GMainLoopCXX loop(g_main_loop_new(NULL, FALSE), TRANSFER_REF);
         if (!loop) {
             SE_THROW("could not allocate main loop");
         }

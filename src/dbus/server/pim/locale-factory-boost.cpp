@@ -370,7 +370,7 @@ public:
                             // to the search term.
                             e_book_query_field_test(E_CONTACT_TEL, E_BOOK_QUERY_EQUALS_NATIONAL_PHONE_NUMBER,
                                                     m_tel.c_str()),
-                            false);
+                            TRANSFER_REF);
         PlainGStr filter(e_book_query_to_string(query.get()));
         return filter.get();
     }
@@ -554,7 +554,7 @@ public:
                     //
                     // We restore the right order by sorting, which puts the
                     // country code first, and then joining.
-                    GeeCollectionCXX coll(folks_abstract_field_details_get_parameter_values(phone, "x-evolution-e164"), false);
+                    GeeCollectionCXX coll(folks_abstract_field_details_get_parameter_values(phone, "x-evolution-e164"), TRANSFER_REF);
                     if (coll) {
                         std::vector<std::string> components;
                         components.reserve(2);

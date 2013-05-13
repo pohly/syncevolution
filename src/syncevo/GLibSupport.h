@@ -172,6 +172,19 @@ template<class A1, class A2, class A3, class A4, class A5, class A6, class A7, c
     }
 };
 
+enum RefOwnership
+{
+    TRANSFER_REF = false, /**<
+                           * Create new smart pointer which steals an existing reference without
+                           * increasing the reference count of the object.
+                           */
+    ADD_REF = true        /**<
+                           * Create new smart pointer which increases the reference count when
+                           * storing the pointer to the object.
+                           */
+};
+
+
 template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
     typedef boost::intrusive_ptr<C> Base_t;
 
@@ -186,14 +199,14 @@ template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
     }
 
  public:
-    TrackGObject(C *ptr, bool add_ref = true) : Base_t(ptr, add_ref) {}
+    TrackGObject(C *ptr, RefOwnership ownership) : Base_t(ptr, (bool)ownership) {}
     TrackGObject() {}
     TrackGObject(const TrackGObject &other) : Base_t(other) {}
     operator C * () const { return Base_t::get(); }
     operator bool () const { return Base_t::get() != NULL; }
     C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
 
-    static  TrackGObject steal(C *ptr) { return TrackGObject(ptr, false); }
+    static  TrackGObject steal(C *ptr) { return TrackGObject(ptr, TRANSFER_REF); }
 
     template<class S> guint connectSignal(const char *signal,
                                           const boost::function<S> &callback) {
@@ -211,7 +224,7 @@ template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
 
 template<class C> class StealGObject : public TrackGObject<C> {
  public:
-    StealGObject(C *ptr) : TrackGObject<C>(ptr, false) {}
+    StealGObject(C *ptr) : TrackGObject<C>(ptr, TRANSFER_REF) {}
     StealGObject() {}
     StealGObject(const StealGObject &other) : TrackGObject<C>(other) {}
 };
@@ -220,19 +233,19 @@ template<class C> class TrackGLib : public boost::intrusive_ptr<C> {
     typedef boost::intrusive_ptr<C> Base_t;
 
  public:
-    TrackGLib(C *ptr, bool add_ref = true) : Base_t(ptr, add_ref) {}
+ TrackGLib(C *ptr, RefOwnership ownership) : Base_t(ptr, (bool)ownership) {}
     TrackGLib() {}
     TrackGLib(const TrackGLib &other) : Base_t(other) {}
     operator C * () const { return Base_t::get(); }
     operator bool () const { return Base_t::get() != NULL; }
     C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
 
-    static  TrackGLib steal(C *ptr) { return TrackGLib(ptr, false); }
+    static  TrackGLib steal(C *ptr) { return TrackGLib(ptr, TRANSFER_REF); }
 };
 
 template<class C> class StealGLib : public TrackGLib<C> {
  public:
-    StealGLib(C *ptr) : TrackGLib<C>(ptr, false) {}
+    StealGLib(C *ptr) : TrackGLib<C>(ptr, TRANSFER_REF) {}
     StealGLib() {}
     StealGLib(const StealGLib &other) : TrackGLib<C>(other) {}
 };

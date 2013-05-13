@@ -89,7 +89,7 @@ template<class Entry> class GeeCollCXX
 
  public:
     template<class Collection> GeeCollCXX(Collection *collection) :
-        m_collection(GEE_ITERABLE(collection))
+        m_collection(GEE_ITERABLE(collection), ADD_REF)
     {}
 
     class Iterator
@@ -110,7 +110,7 @@ template<class Entry> class GeeCollCXX
          * Takes ownership of iterator, which may be NULL for the end Iterator.
          */
         Iterator(GeeIterator *iterator) :
-            m_it(iterator, false),
+            m_it(iterator, TRANSFER_REF),
             m_valid(false)
         {}
 
@@ -181,7 +181,7 @@ template<class Key, class Value> class GeeMapEntryWrapper  {
 
     /** take ownership of entry instance */
     GeeMapEntryWrapper(GeeMapEntry *entry = NULL) :
-        m_entry(entry, false)
+        m_entry(entry, TRANSFER_REF)
     {}
     GeeMapEntryWrapper(const GeeMapEntryWrapper &other):
         m_entry(other.m_entry)

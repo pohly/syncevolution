@@ -177,7 +177,7 @@ void EvolutionContactSource::open()
     if (!e_book_get_addressbooks(&tmp, gerror)) {
         throwError("unable to access address books", gerror);
     }
-    ESourceListCXX sources(tmp, false);
+    ESourceListCXX sources(tmp, TRANSFER_REF);
 
     string id = getDatabaseID();
     ESource *source = findSource(sources, id);
@@ -347,7 +347,7 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
     GErrorCXX gerror;
     EBookClientView *view;
 
-    EBookQueryCXX allItemsQuery(e_book_query_any_field_contains(""), false);
+    EBookQueryCXX allItemsQuery(e_book_query_any_field_contains(""), TRANSFER_REF);
     PlainGStr sexp(e_book_query_to_string (allItemsQuery.get()));
     
     if (!e_book_client_get_view_sync(m_addressbook, sexp, &view, NULL, gerror)) {
@@ -403,7 +403,7 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
 
 void EvolutionContactSource::close()
 {
-    m_addressbook = NULL;
+    m_addressbook.reset();
 }
 
 string EvolutionContactSource::getRevision(const string &luid)

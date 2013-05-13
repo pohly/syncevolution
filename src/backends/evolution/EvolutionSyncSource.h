@@ -120,7 +120,7 @@ class EvolutionAsync {
     public:
     EvolutionAsync()
     {
-        m_loop = GMainLoopCXX(g_main_loop_new(NULL, TRUE), false);
+        m_loop = GMainLoopStealCXX(g_main_loop_new(NULL, TRUE));
     }
      
     /** start processing events */

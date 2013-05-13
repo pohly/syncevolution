@@ -51,7 +51,7 @@ void EDSFView::doStart()
 {
     // This function may get entered again, see retry code in opened() below.
 
-    ESourceCXX source(e_source_registry_ref_source(m_registry, m_uuid.c_str()), false);
+    ESourceCXX source(e_source_registry_ref_source(m_registry, m_uuid.c_str()), TRANSFER_REF);
     if (!source) {
         SE_LOG_DEBUG(NULL, "edsf %s: address book not found", m_uuid.c_str());
         return;
@@ -139,10 +139,10 @@ void EDSFView::read(gboolean success, GSList *contactslist, const GError *gerror
         }
 
         BOOST_FOREACH (EContact *contact, contacts) {
-            EdsfPersonaCXX persona(edsf_persona_new(m_store, contact), false);
-            GeeHashSetCXX personas(gee_hash_set_new(G_TYPE_OBJECT, g_object_ref, g_object_unref, NULL, NULL, NULL, NULL, NULL, NULL), false);
+            EdsfPersonaCXX persona(edsf_persona_new(m_store, contact), TRANSFER_REF);
+            GeeHashSetCXX personas(gee_hash_set_new(G_TYPE_OBJECT, g_object_ref, g_object_unref, NULL, NULL, NULL, NULL, NULL, NULL), TRANSFER_REF);
             gee_collection_add(GEE_COLLECTION(personas.get()), persona.get());
-            FolksIndividualCXX individual(folks_individual_new(GEE_SET(personas.get())), false);
+            FolksIndividualCXX individual(folks_individual_new(GEE_SET(personas.get())), TRANSFER_REF);
             m_addedSignal(individual);
         }
         m_isQuiescent = true;
