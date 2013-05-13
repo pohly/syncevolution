@@ -970,9 +970,9 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     path = newpath;
                 }
             }
-            StringMap &props = pathProps->second;
+            StringMap *props = pathProps == m_davProps.end() ? NULL : &pathProps->second;
             bool isResult = false;
-            if (typeMatches(props)) {
+            if (props && typeMatches(*props)) {
                 isResult = true;
                 StringMap::const_iterator it;
 
@@ -982,11 +982,11 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
 
                 // found something
                 tried.foundResult();
-                it = props.find("DAV::displayname");
+                it = props->find("DAV::displayname");
                 Neon::URI uri = m_session->getURI();
                 uri.m_path = path;
                 std::string name;
-                if (it != props.end()) {
+                if (it != props->end()) {
                     name = it->second;
                 }
                 SE_LOG_DEBUG(NULL, "found %s = %s",
@@ -1002,7 +1002,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
 
             // find next path:
             // prefer CardDAV:calendar-home-set or CalDAV:addressbook-home-set
-            std::list<std::string> homes = extractHREFs(props[homeSetProp()]);
+            std::list<std::string> homes;
+            if (props) {
+                homes = extractHREFs((*props)[homeSetProp()]);
+            }
             BOOST_FOREACH(const std::string &home, homes) {
                 if (!home.empty() &&
                     tried.isNew(home)) {
@@ -1017,7 +1020,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             }
             // alternatively, follow principal URL
             if (next.empty()) {
-                std::string principal = extractHREF(props["DAV::current-user-principal"]);
+                std::string principal;
+                if (props) {
+                    principal = extractHREF((*props)["DAV::current-user-principal"]);
+                }
 
                 // TODO:
                 // xmlns:d="DAV:"
@@ -1032,7 +1038,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             // unless we identified it as a result (because those
             // cannot be recursive)
             if (next.empty() && !isResult) {
-                const std::string &type = props["DAV::resourcetype"];
+                std::string type;
+                if (props) {
+                    type = (*props)["DAV::resourcetype"];
+                }
                 if (type.find("<DAV:collection></DAV:collection>") != type.npos) {
                     // List members and find new candidates.
                     // Yahoo! Calendar does not return resources contained in /dav/<user>/Calendar/
