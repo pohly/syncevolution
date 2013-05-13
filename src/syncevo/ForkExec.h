@@ -100,8 +100,16 @@ class ForkExec : private boost::noncopyable {
     typedef boost::signals2::signal<void (SyncMLStatus, const std::string &)> OnFailure;
     OnFailure m_onFailure;
 
+    /**
+     * A unique string for the ForkExecParent/Child pair which can be used
+     * as D-Bus path component.
+     */
+    std::string getInstance() const { return m_instance; }
+
  protected:
     ForkExec();
+
+    std::string m_instance;
 };
 
 /**

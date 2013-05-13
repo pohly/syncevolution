@@ -107,7 +107,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
                              const boost::shared_ptr<ForkExecChild> &forkexec,
                              const boost::shared_ptr<LogRedirect> &parentLogger) :
     GDBusCXX::DBusObjectHelper(conn,
-                               SessionCommon::HELPER_PATH,
+                               std::string(SessionCommon::HELPER_PATH) + "/" + forkexec->getInstance(),
                                SessionCommon::HELPER_IFACE,
                                GDBusCXX::DBusObjectHelper::Callback_t(), // we don't care about a callback per message
                                true), // direct connection, close it when done

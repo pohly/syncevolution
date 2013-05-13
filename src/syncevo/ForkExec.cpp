@@ -19,15 +19,18 @@
 
 #include "ForkExec.h"
 #include <syncevo/LogRedirect.h>
+#include <syncevo/ThreadSupport.h>
 
 #if defined(HAVE_GLIB)
 
 #include <pcrecpp.h>
+#include <ctype.h>
 #include "test.h"
 
 SE_BEGIN_CXX
 
 static const std::string ForkExecEnvVar("SYNCEVOLUTION_FORK_EXEC=");
+static const std::string ForkExecInstanceEnvVar("SYNCEVOLUTION_FORK_EXEC_INSTANCE=");
 
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
 // internal D-Bus API: only used to monitor parent by having one method call pending
@@ -44,18 +47,34 @@ static const std::string FORKEXEC_PARENT_DESTINATION = "direct.peer"; // doesn't
 class ForkExecParentDBusAPI : public GDBusCXX::DBusObjectHelper
 {
 public:
-    ForkExecParentDBusAPI(const GDBusCXX::DBusConnectionPtr &conn) :
+    /**
+     * @param instance    a unique string to distinguish multiple different ForkExecParent
+     *                    instances; necessary because otherwise GIO GDBus may route messages from
+     *                    one connection to older instances on other connections
+     */
+    ForkExecParentDBusAPI(const GDBusCXX::DBusConnectionPtr &conn, const std::string &instance) :
         GDBusCXX::DBusObjectHelper(conn,
-                                   FORKEXEC_PARENT_PATH,
+                                   FORKEXEC_PARENT_PATH + "/" + instance,
                                    FORKEXEC_PARENT_IFACE)
     {
         add(this, &ForkExecParentDBusAPI::watch, "Watch");
         activate();
     }
 
+    ~ForkExecParentDBusAPI()
+    {
+        SE_LOG_DEBUG(NULL, "ForkExecParentDBusAPI %s: destroying with %ld active watches",
+                     getPath(),
+                     (long)m_watches.size());
+    }
+
+    bool hasWatches() const { return !m_watches.empty(); }
+
 private:
     void watch(const boost::shared_ptr< GDBusCXX::Result0> &result)
     {
+        SE_LOG_DEBUG(NULL, "ForkExecParentDBusAPI %s: received 'Watch' method call from child",
+                     getPath());
         m_watches.push_back(result);
     }
     std::list< boost::shared_ptr< GDBusCXX::Result0> > m_watches;
@@ -65,6 +84,9 @@ private:
 ForkExec::ForkExec()
 {
 }
+
+static Mutex ForkExecMutex;
+static unsigned int ForkExecCount;
 
 ForkExecParent::ForkExecParent(const std::string &helper) :
     m_helper(helper),
@@ -81,6 +103,9 @@ ForkExecParent::ForkExecParent(const std::string &helper) :
     m_errID(0),
     m_watchChild(NULL)
 {
+    Mutex::Guard guard = ForkExecMutex.lock();
+    ForkExecCount++;
+    m_instance = StringPrintf("forkexec%u", ForkExecCount);
 }
 
 boost::shared_ptr<ForkExecParent> ForkExecParent::create(const std::string &helper)
@@ -182,13 +207,15 @@ void ForkExecParent::start()
     for (char **env = environ;
          *env;
          env++) {
-        if (!boost::starts_with(*env, ForkExecEnvVar)) {
+        if (!boost::starts_with(*env, ForkExecEnvVar) &&
+            !boost::starts_with(*env, ForkExecInstanceEnvVar)) {
             m_envStrings.push_back(*env);
         }
     }
 
     // pass D-Bus address via env variable
     m_envStrings.push_back(ForkExecEnvVar + m_server->getAddress());
+    m_envStrings.push_back(ForkExecInstanceEnvVar + getInstance());
     m_env.reset(AllocStringArray(m_envStrings));
 
     SE_LOG_DEBUG(NULL, "ForkExecParent: running %s with D-Bus address %s",
@@ -375,7 +402,7 @@ void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) thro
                      m_helper.c_str());
         m_hasConnected = true;
 #ifndef GDBUS_CXX_HAVE_DISCONNECT
-        m_api.reset(new ForkExecParentDBusAPI(conn));
+        m_api.reset(new ForkExecParentDBusAPI(conn, getInstance()));
 #endif
         m_onConnect(conn);
     } catch (...) {
@@ -442,6 +469,7 @@ void ForkExecParent::kill()
 ForkExecChild::ForkExecChild() :
     m_state(IDLE)
 {
+    m_instance = getEnv(ForkExecInstanceEnvVar.substr(0, ForkExecInstanceEnvVar.size() - 1).c_str(), "");
 }
 
 boost::shared_ptr<ForkExecChild> ForkExecChild::create()
@@ -480,16 +508,16 @@ void ForkExecChild::connect()
     class Parent : public GDBusCXX::DBusRemoteObject
     {
     public:
-        Parent(const GDBusCXX::DBusConnectionPtr &conn) :
+        Parent(const GDBusCXX::DBusConnectionPtr &conn, const std::string &instance) :
             GDBusCXX::DBusRemoteObject(conn,
-                                       FORKEXEC_PARENT_PATH,
+                                       FORKEXEC_PARENT_PATH + "/" + instance,
                                        FORKEXEC_PARENT_IFACE,
                                        FORKEXEC_PARENT_DESTINATION),
             m_watch(*this, "Watch")
         {}
 
         GDBusCXX::DBusClientCall0 m_watch;
-    } parent(conn);
+    } parent(conn, getInstance());
     parent.m_watch.start(boost::bind(&ForkExecChild::connectionLost, this));
 #endif
 

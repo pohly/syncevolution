@@ -43,9 +43,9 @@ SE_BEGIN_CXX
 class SessionProxy : public GDBusCXX::DBusRemoteObject
 {
 public:
-  SessionProxy(const GDBusCXX::DBusConnectionPtr &conn) :
+    SessionProxy(const GDBusCXX::DBusConnectionPtr &conn, const std::string &instance) :
     GDBusCXX::DBusRemoteObject(conn.get(),
-                               SessionCommon::HELPER_PATH,
+                               std::string(SessionCommon::HELPER_PATH) + "/" + instance,
                                SessionCommon::HELPER_IFACE,
                                SessionCommon::HELPER_DESTINATION,
                                true), // This is a one-to-one connection. Close it.
@@ -874,8 +874,9 @@ void Session::onConnect(const GDBusCXX::DBusConnectionPtr &conn) throw ()
 {
     PushLogger<Logger> guard(m_me);
     try {
-        SE_LOG_DEBUG(NULL, "helper has connected");
-        m_helper.reset(new SessionProxy(conn));
+        std::string instance = m_forkExecParent->getInstance();
+        SE_LOG_DEBUG(NULL, "helper %s has connected", instance.c_str());
+        m_helper.reset(new SessionProxy(conn, instance));
 
         // Activate signal watch on helper signals.
         m_helper->m_syncProgress.activate(boost::bind(&Session::syncProgress, this, _1, _2, _3, _4));
