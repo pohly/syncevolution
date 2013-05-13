@@ -42,6 +42,7 @@ import re
 import itertools
 import codecs
 import glib
+import pprint
 
 # Update path so that testdbus.py can be found.
 pimFolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
@@ -2194,6 +2195,96 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
+
+    def doFilter(self, names, searches):
+        self.setUpView()
+
+        msg = None
+        try:
+             # Insert new contacts.
+             numtestcases = len(names)
+             for i, name in enumerate(names):
+                  item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+                  output = codecs.open(item, "w", "utf-8")
+                  output.write(u'''BEGIN:VCARD
+VERSION:3.0
+FN:%(name)s
+N:%(name)s;;;;
+END:VCARD
+''' % { 'name': name })
+                  output.close()
+             logging.log('inserting contacts')
+             out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+             # Relies on importing contacts sorted ascending by file name.
+             luids = self.extractLUIDs(out)
+             logging.printf('created contacts with luids: %s' % luids)
+
+             # Run until the view has adapted.
+             self.runUntil('view with three contacts',
+                           check=lambda: self.assertEqual([], self.view.errors),
+                           until=lambda: len(self.view.contacts) == numtestcases)
+
+             # Check for the one expected event.
+             # TODO: self.assertEqual([('added', 0, 3)], view.events)
+             self.view.events = []
+
+             # Read contacts.
+             logging.log('reading contacts')
+             self.view.read(0, numtestcases)
+             self.runUntil('contacts',
+                           check=lambda: self.assertEqual([], self.view.errors),
+                           until=lambda: self.view.haveData(0, numtestcases))
+             for i, name in enumerate(names):
+                  msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
+                  self.assertEqual(name, self.view.contacts[i]['full-name'])
+
+             # Run searches and compare results.
+             for i, (query, names) in enumerate(searches):
+                  msg = u'query %s, names %s' % (query, names)
+                  view = ContactsView(self.manager)
+                  view.search(query)
+                  self.runUntil('search %d: %s' % (i, query),
+                                check=lambda: self.assertEqual([], view.errors),
+                                until=lambda: view.quiescentCount > 0)
+                  msg = u'query %s, names %s in\n%s' % (query, names, pprint.pformat(self.stripDBus(view.contacts, sortLists=False)))
+                  self.assertEqual(len(names), len(view.contacts))
+                  view.read(0, len(names))
+                  self.runUntil('data %d: %s' % (i, query),
+                                check=lambda: self.assertEqual([], view.errors),
+                                until=lambda: view.haveData(0, len(names)))
+                  for e, name in enumerate(names):
+                       msg = u'query %s, names %s, name #%d %s in\n%s' % (query, names, e, name, pprint.pformat(self.stripDBus(view.contacts, sortLists=False)))
+                       self.assertEqual(name, view.contacts[e]['full-name'])
+        except Exception, ex:
+             if msg:
+                  print ex
+                  info = sys.exc_info()
+                  raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
+             else:
+                  raise
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 LANG=ja_JP.UTF-8")
+    def testFilterJapanese(self):
+         self.doFilter(# Names of all contacts, sorted as expected.
+                       ('111', u'1月', 'Bad'),
+                       # Query + expected results.
+                       (([], ('111', u'1月', 'Bad')),
+                        ([['any-contains', '1']], ('111', u'1月')),
+                        ([['any-contains', u'1月']], (u'1月',)))
+                       )
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8 LANG=zh_CN.UTF-8")
+    def testFilterChinesePinyin(self):
+         self.doFilter(# Names of all contacts, sorted as expected.
+                       # 江 = Jiang when using Pinyin and thus after Jeffries and before Meadows.
+                       ('Adams', 'Jeffries', u'江', 'Meadows'),
+                       # 'J' not expected to find Jiang; searching
+                       # is meant to use Chinese letters.
+                       (([['any-contains', 'J']], ('Jeffries')),
+                        ([['any-contains', u'江']], (u'江',)))
+                       )
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
