@@ -555,6 +555,8 @@ if test $enable_dbus_service = "yes"; then
                         # to go to the start of the link line).
                         DBUS_PIM_PLUGIN_LIBS='$(BOOST_LDFLAGS) $(BOOST_LOCALE_LIB)'
                         DBUS_PIM_PLUGIN_LDFLAGS=
+                        # We need to call ICU directly for the Han->Latin transformation.
+                        PKG_CHECK_MODULES(ICU, [icu-uc])
                         ;;
                 esac
                 AC_SUBST(DBUS_PIM_PLUGIN_CFLAGS)

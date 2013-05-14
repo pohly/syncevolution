@@ -31,6 +31,10 @@
 #include <boost/locale.hpp>
 #include <boost/lexical_cast.hpp>
 
+#include <unicode/unistr.h>
+#include <unicode/translit.h>
+#include <unicode/bytestream.h>
+
 SE_GLIB_TYPE(EBookQuery, e_book_query)
 
 SE_BEGIN_CXX
@@ -51,9 +55,10 @@ SE_BEGIN_CXX
  */
 static const boost::locale::collator_base::level_type DEFAULT_COLLATION_LEVEL = boost::locale::collator_base::secondary;
 
-class CompareBoost : public IndividualCompare {
+class CompareBoost : public IndividualCompare, private boost::noncopyable {
     std::locale m_locale;
     const boost::locale::collator<char> &m_collator;
+    std::auto_ptr<icu::Transliterator> m_trans;
 
 public:
     CompareBoost(const std::locale &locale);
@@ -66,6 +71,31 @@ CompareBoost::CompareBoost(const std::locale &locale) :
     m_locale(locale),
     m_collator(std::use_facet< boost::locale::collator<char> >(m_locale))
 {
+    std::string language = std::use_facet<boost::locale::info>(m_locale).language();
+    if (language == "zh") {
+        // Hard-code Pinyin sorting for all Chinese countries.
+        //
+        // There are three different ways of sorting Chinese and Western names:
+        // 1. Sort Chinese characters in pinyin order, but separate from Latin
+        // 2. Sort them interleaved with Latin, by the first character.
+        // 3. Sort them fully interleaved with Latin.
+        // Source: Mark Davis, ICU, http://sourceforge.net/mailarchive/forum.php?thread_name=CAJ2xs_GEnN-u3%3D%2B7P5puaF1%2BU__fX-4tuA-kEybThN9xsw577Q%40mail.gmail.com&forum_name=icu-support
+        //
+        // Either 2 or 3 is what apparently more people expect. Implementing 2 is
+        // harder, whereas 3 fits into the "generate keys, compare keys" concept
+        // of IndividualCompare, so we kind of arbitrarily implement that.
+        SE_LOG_DEBUG(NULL, "enabling Pinyin");
+
+        UErrorCode status = U_ZERO_ERROR;
+        icu::Transliterator *trans = icu::Transliterator::createInstance("Han-Latin", UTRANS_FORWARD, status);
+        m_trans.reset(trans);
+        if (U_FAILURE(status)) {
+            SE_LOG_WARNING(NULL, "creating ICU Han-Latin Transliterator for Pinyin failed, error code %s; falling back to normal collation", u_errorName(status));
+            m_trans.reset();
+        } else if (!trans) {
+            SE_LOG_WARNING(NULL, "creating ICU Han-Latin Transliterator for Pinyin failed, no error code; falling back to normal collation");
+        }
+    }
 }
 
 std::string CompareBoost::transform(const char *string) const
@@ -78,7 +108,18 @@ std::string CompareBoost::transform(const char *string) const
 
 std::string CompareBoost::transform(const std::string &string) const
 {
-    return m_collator.transform(DEFAULT_COLLATION_LEVEL, string);
+    if (m_trans.get()) {
+        // std::string result;
+        // m_trans->transliterate(icu::StringPiece(string), icu::StringByteSink<std::string>(&result));
+        icu::UnicodeString buffer(string.c_str());
+        m_trans->transliterate(buffer);
+        std::string result;
+        buffer.toUTF8String(result);
+        result = m_collator.transform(DEFAULT_COLLATION_LEVEL, result);
+        return result;
+    } else {
+        return m_collator.transform(DEFAULT_COLLATION_LEVEL, string);
+    }
 }
 
 class CompareFirstLastBoost : public CompareBoost {
