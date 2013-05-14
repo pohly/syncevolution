@@ -148,6 +148,10 @@ class SmartPtr
         m_pointer = pointer;
     }
 
+    void reset( T pointer = NULL ) {
+        set(pointer, NULL);
+    }
+
     /**
      * transfer ownership over the pointer to caller and stop tracking it:
      * pointer tracked by smart pointer is set to NULL and the original
@@ -177,6 +181,10 @@ template<class T, class base = T, class R = Unref > class eptr :
     eptr<T, base, R> &operator = ( T *pointer ) {
         base_t::set(pointer);
         return *this;
+    }
+
+    void reset(T *pointer = NULL) {
+        base_t::set(pointer);
     }
 };
 
