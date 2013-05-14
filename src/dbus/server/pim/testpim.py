@@ -2257,7 +2257,6 @@ END:VCARD
                        self.assertEqual(name, view.contacts[e]['full-name'])
         except Exception, ex:
              if msg:
-                  print ex
                   info = sys.exc_info()
                   raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
              else:
