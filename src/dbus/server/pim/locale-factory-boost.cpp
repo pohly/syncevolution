@@ -515,9 +515,26 @@ public:
         gen.categories(boost::locale::collation_facet |
                        boost::locale::convert_facet |
                        boost::locale::information_facet);
-        // TODO: Check env vars, then append @collation=phonebook
-        // to get phonebook specific sorting.
-        return gen("");
+        // Hard-code "phonebook" collation for certain languages
+        // where we know that it is desirable. We could use it
+        // in all cases, except that ICU has a bug where it does not
+        // fall back properly to the base collation. See
+        // http://sourceforge.net/mailarchive/message.php?msg_id=30802924
+        // and http://bugs.icu-project.org/trac/ticket/10149
+        std::locale locale = gen("");
+        std::string name = std::use_facet<boost::locale::info>(locale).name();
+        std::string language = std::use_facet<boost::locale::info>(locale).language();
+        std::string country = std::use_facet<boost::locale::info>(locale).country();
+        SE_LOG_DEV(NULL, "PIM Manager running with locale %s = language %s in country %s",
+                   name.c_str(),
+                   language.c_str(),
+                   country.c_str());
+        if (language == "de" ||
+            language == "fi") {
+            SE_LOG_DEV(NULL, "enabling phonebook collation for language %s", language.c_str());
+            locale = gen(name + "@collation=phonebook");
+        }
+        return locale;
     }
 
     virtual boost::shared_ptr<IndividualCompare> createCompare(const std::string &order)
