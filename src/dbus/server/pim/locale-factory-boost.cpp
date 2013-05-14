@@ -48,12 +48,15 @@ SE_BEGIN_CXX
  *
  * The drawback of higher levels is that they are computationally more
  * expensive (transformation is slower and leads to longer transformed
- * strings, thus a longer string comparisons during compare) and may
- * end up comparing aspects that are irrelevant (like case).
+ * strings, thus a longer string comparisons during compare).
  *
- * The default here pays attention to accents, but ignores the case.
+ * The default here pays attention to accents, case, and
+ * punctuation. According to
+ * http://userguide.icu-project.org/collation/concepts, it is required
+ * for Japanese.
  */
-static const boost::locale::collator_base::level_type DEFAULT_COLLATION_LEVEL = boost::locale::collator_base::secondary;
+static const boost::locale::collator_base::level_type DEFAULT_COLLATION_LEVEL =
+    boost::locale::collator_base::quaternary;
 
 class CompareBoost : public IndividualCompare, private boost::noncopyable {
     std::locale m_locale;
