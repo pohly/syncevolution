@@ -51,13 +51,40 @@ SE_BEGIN_CXX
  */
 static const boost::locale::collator_base::level_type DEFAULT_COLLATION_LEVEL = boost::locale::collator_base::secondary;
 
-class CompareFirstLastBoost : public IndividualCompare {
+class CompareBoost : public IndividualCompare {
     std::locale m_locale;
     const boost::locale::collator<char> &m_collator;
+
+public:
+    CompareBoost(const std::locale &locale);
+
+    std::string transform(const char *string) const;
+    std::string transform(const std::string &string) const;
+};
+
+CompareBoost::CompareBoost(const std::locale &locale) :
+    m_locale(locale),
+    m_collator(std::use_facet< boost::locale::collator<char> >(m_locale))
+{
+}
+
+std::string CompareBoost::transform(const char *string) const
+{
+    if (!string) {
+        return "";
+    }
+    return transform(std::string(string));
+}
+
+std::string CompareBoost::transform(const std::string &string) const
+{
+    return m_collator.transform(DEFAULT_COLLATION_LEVEL, string);
+}
+
+class CompareFirstLastBoost : public CompareBoost {
 public:
     CompareFirstLastBoost(const std::locale &locale) :
-        m_locale(locale),
-        m_collator(std::use_facet< boost::locale::collator<char> >(m_locale))
+        CompareBoost(locale)
     {}
 
     virtual void createCriteria(FolksIndividual *individual, Criteria_t &criteria) const {
@@ -66,19 +93,16 @@ public:
         if (fn) {
             const char *family = folks_structured_name_get_family_name(fn);
             const char *given = folks_structured_name_get_given_name(fn);
-            criteria.push_back(given ? m_collator.transform(DEFAULT_COLLATION_LEVEL, given) : "");
-            criteria.push_back(family ? m_collator.transform(DEFAULT_COLLATION_LEVEL, family) : "");
+            criteria.push_back(transform(given));
+            criteria.push_back(transform(family));
         }
     }
 };
 
-class CompareLastFirstBoost : public IndividualCompare {
-    std::locale m_locale;
-    const boost::locale::collator<char> &m_collator;
+class CompareLastFirstBoost : public CompareBoost {
 public:
     CompareLastFirstBoost(const std::locale &locale) :
-        m_locale(locale),
-        m_collator(std::use_facet< boost::locale::collator<char> >(m_locale))
+        CompareBoost(locale)
     {}
 
     virtual void createCriteria(FolksIndividual *individual, Criteria_t &criteria) const {
@@ -87,25 +111,22 @@ public:
         if (fn) {
             const char *family = folks_structured_name_get_family_name(fn);
             const char *given = folks_structured_name_get_given_name(fn);
-            criteria.push_back(family ? m_collator.transform(DEFAULT_COLLATION_LEVEL, family) : "");
-            criteria.push_back(given ? m_collator.transform(DEFAULT_COLLATION_LEVEL, given) : "");
+            criteria.push_back(transform(family));
+            criteria.push_back(transform(given));
         }
     }
 };
 
-class CompareFullnameBoost : public IndividualCompare {
-    std::locale m_locale;
-    const boost::locale::collator<char> &m_collator;
+class CompareFullnameBoost : public CompareBoost {
 public:
     CompareFullnameBoost(const std::locale &locale) :
-        m_locale(locale),
-        m_collator(std::use_facet< boost::locale::collator<char> >(m_locale))
+        CompareBoost(locale)
     {}
 
     virtual void createCriteria(FolksIndividual *individual, Criteria_t &criteria) const {
         const char *fullname = folks_name_details_get_full_name(FOLKS_NAME_DETAILS(individual));
         if (fullname) {
-            criteria.push_back(m_collator.transform(DEFAULT_COLLATION_LEVEL, fullname));
+            criteria.push_back(transform(fullname));
         } else {
             FolksStructuredName *fn =
                 folks_name_details_get_structured_name(FOLKS_NAME_DETAILS(individual));
@@ -127,7 +148,7 @@ public:
                 APPEND(family);
                 APPEND(suffix);
 #undef APPEND
-                criteria.push_back(m_collator.transform(DEFAULT_COLLATION_LEVEL, buffer));
+                criteria.push_back(transform(buffer));
             }
         }
     }
