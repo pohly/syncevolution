@@ -2290,6 +2290,29 @@ END:VCARD
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
+    def testFilterGermany(self):
+         self.doFilter(# Names of all contacts, sorted as expected.
+                       # DIN 5007 Variant 2 defines phone book sorting in
+                       # Germany. It does not apply to Austria.
+                       # Example from http://de.wikipedia.org/wiki/Alphabetische_Sortierung
+                       (u'Göbel', u'Goethe', u'Göthe', u'Götz', u'Goldmann'),
+                       (),
+                       )
+
+    # Not supported correctly by ICU?
+    # See icu-support "Subject: Austrian phone book sorting"
+    # @timeout(60)
+    # @property("ENV", "LC_TYPE=de_AT.UTF-8 LC_ALL=de_AT.UTF-8 LANG=de_AT.UTF-8")
+    # def testFilterAustria(self):
+    #      self.doFilter(# Names of all contacts, sorted as expected.
+    #                    # Austrian phone book sorting.
+    #                    # Example from http://de.wikipedia.org/wiki/Alphabetische_Sortierung
+    #                    (u'Goethe', u'Goldmann', u'Göbel', u'Göthe', u'Götz'),
+    #                    (),
+    #                    )
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
     def testFilterQuiescence(self):
         '''TestContacts.testFilterQuiescence - check that starting server via filter leads to quiescence signal'''
         self.setUpView(peers=[], withSystemAddressBook=True, search=[('any-contains', 'foo')])
