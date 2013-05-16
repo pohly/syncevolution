@@ -1563,6 +1563,8 @@ class FunambolTest(SyncEvolutionTest):
                                    "Client::Sync::eds_event::testAddBothSidesRefresh,"
                                    "Client::Sync::eds_task::testAddBothSides,"
                                    "Client::Sync::eds_task::testAddBothSidesRefresh,"
+                                   # Avoid all tests which do a slow sync, to avoid 417 throttling.
+                                   "Client::Sync::.*::(testDeleteAllRefresh|testSlowRestart|testTwinning|testSlowSync|testManyItems|testManyDeletes|testSlowSyncSemantic),"
                                    # test cannot pass because we don't have CtCap info about
                                    # the Funambol server
                                    "Client::Sync::eds_contact::testExtensions,"
