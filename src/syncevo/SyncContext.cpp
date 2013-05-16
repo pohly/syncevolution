@@ -3922,7 +3922,7 @@ SyncMLStatus SyncContext::doSync()
                     // (MB #6370).
                     // Same if() as below for FAILED.
                     if (m_serverMode ||
-                        !m_retryInterval || duration >= m_retryDuration || requestNum == 1) {
+                        !m_retryInterval || duration + 0.1 >= m_retryDuration || requestNum == 1) {
                         SE_LOG_INFO(NULL,
                                     "Transport giving up after %d retries and %ld:%02ldmin",
                                     m_retries,
@@ -3993,9 +3993,10 @@ SyncMLStatus SyncContext::doSync()
                     }
                     // Similar if() as above for TIME_OUT. In addition, we must check that
                     // the next resend won't happen after the retryDuration, because then
-                    // we might as well give up now immediately.
+                    // we might as well give up now immediately. Include some fuzz factor
+                    // in case we woke up slightly too early.
                     if (m_serverMode ||
-                        !m_retryInterval || duration + resendDelay >= m_retryDuration || requestNum == 1) {
+                        !m_retryInterval || duration + resendDelay + 0.1 >= m_retryDuration || requestNum == 1) {
                         SE_LOG_INFO(NULL,
                                     "Transport giving up after %d retries and %ld:%02ldmin",
                                     m_retries,
