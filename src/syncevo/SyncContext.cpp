@@ -3666,7 +3666,7 @@ SyncMLStatus SyncContext::doSync()
         sysync::STEPCMD_CLIENTSTART;
     SharedSession session = m_engine.OpenSession(m_sessionID);
     SharedBuffer sendBuffer;
-    SessionSentinel sessionSentinel(*this, session);
+    std::auto_ptr<SessionSentinel> sessionSentinel(new SessionSentinel(*this, session));
 
     if (m_serverMode && !m_localSync) {
         m_engine.WriteSyncMLBuffer(session,
@@ -4094,6 +4094,15 @@ SyncMLStatus SyncContext::doSync()
             status = handleException();
         }
     }
+
+    // Let session shut down before auto-destructing anything else
+    // (like our signal blocker). This may take a while, because it
+    // may involve shutting down the helper background thread which
+    // opened our local datastore.
+    SE_LOG_DEBUG(NULL, "closing session");
+    sessionSentinel.reset();
+    session.reset();
+    SE_LOG_DEBUG(NULL, "session closed");
 
     return status;
 }
