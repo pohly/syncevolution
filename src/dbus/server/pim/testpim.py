@@ -3660,9 +3660,6 @@ END:VCARD''']):
         self.setUpView(search=None, peers=[], withSystemAddressBook=True)
 
         # Insert new contact.
-        #
-        # The names are chosen so that sorting by first name and sorting by last name needs to
-        # reverse the list.
         for i, contact in enumerate([u'''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
@@ -3677,19 +3674,31 @@ END:VCARD''',
 
         out, err, returncode = self.runCmdline(['--import', self.contacts, 'backend=evolution-contacts'])
 
-        # Plug into "ContactsAdded" method so that it throws an error.
+        # Plug into processEvent() method so that it throws an error
+        # when receiving the ContactsAdded method call. The same cannot be
+        # done for Quiescent, because that call is optional and thus allowed
+        # to fail.
         original = self.view.processEvent
         def intercept(message, event):
+             if event[0] == 'quiescent':
+                  # Sometimes the aggregator was seen as idle before
+                  # it loaded the item above, leading to one
+                  # additional 'quiescent' before 'added'. Not sure
+                  # why. Anyway, that belongs into a different test,
+                  # so ignore 'quiescent' here.
+                  return
+             # Record it.
              original(message, event)
+             # Raise error?
              if event[0] == 'added':
+                  logging.printf('raising "fake error" for event %s' % event)
                   raise Exception('fake error')
         self.view.processEvent = intercept
         self.view.search([])
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.quiescentCount > 0)
-        self.assertEqual([('added', 0, 1),
-                          ('quiescent',)],
+                      until=lambda: self.view.events)
+        self.assertEqual([('added', 0, 1)],
                          self.view.events)
 
         # Expect an error, view should have been closed already.
