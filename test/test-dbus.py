@@ -9214,7 +9214,10 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         # We expect that the FileSyncSource::open() detects the abort
         # request quickly and then let's the background thread be
         # reaped normally by the master thread.
-        self.assertIn('background thread completed', self.messages)
+        # This may happen without ever having to enter our threading
+        # code, so we can't check for its 'background thread completed'
+        # message. Instead check that the file source continued normally.
+        self.assertIn('continue opening file source', self.messages)
 
         # Finally, also check server session status.
         status, error, sources = self.session.GetStatus(timeout=self.dbusTimeout)
