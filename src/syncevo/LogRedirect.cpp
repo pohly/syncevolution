@@ -534,8 +534,15 @@ bool LogRedirect::process(FDs &fds) throw()
     return data_read;
 }
 
+void LogRedirect::addIgnoreError(const std::string &error)
+{
+    RecMutex::Guard guard = Logger::lock();
+    m_knownErrors.insert(error);
+}
+
 bool LogRedirect::ignoreError(const std::string &text)
 {
+    RecMutex::Guard guard = Logger::lock();
     BOOST_FOREACH(const std::string &entry, m_knownErrors) {
         if (text.find(entry) != text.npos) {
             return true;

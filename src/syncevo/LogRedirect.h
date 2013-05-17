@@ -99,7 +99,15 @@ class LogRedirect : public LoggerStdout
     };
 
     /** ignore any error output containing "error" */
-    static void addIgnoreError(const std::string &error) { m_knownErrors.insert(error); }
+    static void addIgnoreError(const std::string &error);
+
+    /**
+     * Messages containing text listed in
+     * SYNCEVOLUTION_SUPPRESS_ERRORS env variable (new-line separated)
+     * or registered via addIgnoreError() are not real errors and
+     * should only be logged for developers.
+     */
+    static bool ignoreError(const std::string &text);
 
  private:
     FDs m_stdout, m_stderr;
@@ -121,13 +129,6 @@ class LogRedirect : public LoggerStdout
     /** @return true if data was available */
     bool process(FDs &fds) throw();
     static void abortHandler(int sig) throw();
-
-    /**
-     * ignore error messages containing text listed in
-     * SYNCEVOLUTION_SUPPRESS_ERRORS env variable (new-line
-     * separated)
-     */
-    bool ignoreError(const std::string &text);
 
     void init();
 

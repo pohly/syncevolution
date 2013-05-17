@@ -20,6 +20,7 @@
 
 #include <syncevo/Logging.h>
 #include <syncevo/LogStdout.h>
+#include <syncevo/LogRedirect.h>
 
 #include <vector>
 #include <string.h>
@@ -369,10 +370,21 @@ void Logger::glogFunc(const gchar *logDomain,
                       const gchar *message,
                       gpointer userData)
 {
-    Logger::instance().message((logLevel & (G_LOG_LEVEL_ERROR|G_LOG_LEVEL_CRITICAL)) ? ERROR :
-                               (logLevel & G_LOG_LEVEL_WARNING) ? WARNING :
-                               (logLevel & (G_LOG_LEVEL_MESSAGE|G_LOG_LEVEL_INFO)) ? SHOW :
-                               DEBUG,
+    Level level =
+        (logLevel & (G_LOG_LEVEL_ERROR|G_LOG_LEVEL_CRITICAL)) ? ERROR :
+        (logLevel & G_LOG_LEVEL_WARNING) ? WARNING :
+        (logLevel & (G_LOG_LEVEL_MESSAGE|G_LOG_LEVEL_INFO)) ? SHOW :
+        DEBUG;
+
+    // Downgrade some know error messages as registered with
+    // the LogRedirect helper class. That messages are registered
+    // there is a historic artifact.
+    if (level != DEBUG &&
+        LogRedirect::ignoreError(message)) {
+        level = DEBUG;
+    }
+
+    Logger::instance().message(level,
                                NULL,
                                NULL,
                                0,
