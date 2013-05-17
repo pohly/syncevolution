@@ -339,7 +339,7 @@ void LocalTransportAgent::send(const char *data, size_t len)
     if (m_child) {
         m_status = ACTIVE;
         m_child->m_sendMsg.start(m_contentType, GDBusCXX::makeDBusArray(len, (uint8_t *)(data)),
-                                 boost::bind(&LocalTransportAgent::storeReplyMsg, this, _1, _2, _3));
+                                 boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3));
     } else {
         m_status = FAILED;
         SE_THROW_EXCEPTION(TransportException,
