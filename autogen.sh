@@ -13,7 +13,7 @@ mkdir m4
 
 glib-gettextize --force --copy
 intltoolize --force --copy --automake
-autoreconf -vifW all -W no-portability -W no-obsolete
+autoreconf -v -i -f -W all -W no-portability -W no-obsolete
 
 #libtoolize -c
 #glib-gettextize --force --copy
