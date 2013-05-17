@@ -30,6 +30,8 @@ SE_GOBJECT_TYPE(GeeMapEntry)
 SE_GOBJECT_TYPE(GeeMapIterator)
 SE_GOBJECT_TYPE(GeeIterable)
 SE_GOBJECT_TYPE(GeeIterator)
+SE_GOBJECT_TYPE(GeeMultiMap)
+SE_GOBJECT_TYPE(GeeCollection)
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -88,9 +90,15 @@ template<class Entry> class GeeCollCXX
     GeeIterableCXX m_collection;
 
  public:
-    template<class Collection> GeeCollCXX(Collection *collection) :
-        m_collection(GEE_ITERABLE(collection), ADD_REF)
+    template<class Collection> GeeCollCXX(Collection *collection, RefOwnership ownership) :
+        m_collection(GEE_ITERABLE(collection), ownership)
     {}
+
+    GeeCollCXX(GeeCollectionCXX &collection) :
+        m_collection(GEE_ITERABLE(collection.get()), ADD_REF)
+    {}
+
+    GeeIterable *get() const { return m_collection.get(); }
 
     class Iterator
     {

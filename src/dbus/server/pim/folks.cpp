@@ -169,7 +169,7 @@ std::string IndividualAggregator::dumpDatabases()
 {
     std::string res;
 
-    BOOST_FOREACH (const gchar *tmp, GeeStringCollection(GEE_COLLECTION(m_databases.get()))) {
+    BOOST_FOREACH (const gchar *tmp, GeeStringCollection(GEE_COLLECTION(m_databases.get()), ADD_REF)) {
         if (!res.empty()) {
             res += ", ";
         }
@@ -216,7 +216,7 @@ void IndividualAggregator::backendsLoaded()
 {
     SE_LOG_DEBUG(NULL, "backend store has loaded backends");
     GeeCollectionCXX coll(folks_backend_store_list_backends(m_backendStore), TRANSFER_REF);
-    BOOST_FOREACH (FolksBackend *backend, GeeCollCXX<FolksBackend *>(coll.get())) {
+    BOOST_FOREACH (FolksBackend *backend, GeeCollCXX<FolksBackend *>(coll)) {
         SE_LOG_DEBUG(NULL, "folks backend: %s", folks_backend_get_name(backend));
     }
     m_eds =
@@ -505,9 +505,9 @@ void IndividualAggregator::doRunWithPersona(const boost::function<void (FolksPer
                                             const ErrorCb_t &onError) throw()
 {
     try {
-        GeeMap *personas = folks_persona_store_get_personas(m_systemStore);
         typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksPersona *> > Coll;
-        BOOST_FOREACH (const Coll::value_type &entry, Coll(personas)) {
+        Coll personas(folks_persona_store_get_personas(m_systemStore), ADD_REF);
+        BOOST_FOREACH (const Coll::value_type &entry, personas) {
             // key seems to be <store id>:<persona ID>
             const gchar *key = entry.key();
             const gchar *colon = strchr(key, ':');
@@ -559,6 +559,8 @@ private:
         }
 
         GeeMap *individuals = folks_individual_aggregator_get_individuals(aggregator);
+        typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksIndividual *> > Coll;
+        Coll coll(individuals, ADD_REF);
         SE_LOG_DEBUG(NULL, "%d individuals", gee_map_get_size(individuals));
 
         GeeMapIteratorCXX it(gee_map_map_iterator(individuals), TRANSFER_REF);
@@ -587,8 +589,6 @@ private:
                          fullname.get());
         }
 
-        typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksIndividual *> > Coll;
-        Coll coll(individuals);
         Coll::const_iterator curr = coll.begin();
         Coll::const_iterator end = coll.end();
         if (curr != end) {
@@ -604,7 +604,7 @@ private:
             ++curr;
         }
 
-        BOOST_FOREACH (Coll::value_type &entry, Coll(individuals)) {
+        BOOST_FOREACH (Coll::value_type &entry, coll) {
             const gchar *id = entry.key();
             FolksIndividual *individual(entry.value());
             // GValueStringCXX fullname;
@@ -616,10 +616,10 @@ private:
                          fullname ? "has" : "has no",
                          fullname);
 
-            GeeSet *emails = folks_email_details_get_email_addresses(FOLKS_EMAIL_DETAILS(individual));
-            SE_LOG_DEBUG(NULL, "     %d emails", gee_collection_get_size(GEE_COLLECTION(emails)));
             typedef GeeCollCXX<FolksEmailFieldDetails *> EmailColl;
-            BOOST_FOREACH (FolksEmailFieldDetails *email, EmailColl(emails)) {
+            EmailColl emails(folks_email_details_get_email_addresses(FOLKS_EMAIL_DETAILS(individual)), ADD_REF);
+            SE_LOG_DEBUG(NULL, "     %d emails", gee_collection_get_size(GEE_COLLECTION(emails.get())));
+            BOOST_FOREACH (FolksEmailFieldDetails *email, emails) {
                 SE_LOG_DEBUG(NULL, "     %s",
                              reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(email))));
             }

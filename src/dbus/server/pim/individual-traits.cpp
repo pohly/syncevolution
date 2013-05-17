@@ -105,7 +105,7 @@ template <> struct IsNonDefault< GeeCollCXX<FolksRoleFieldDetails *> >
     {
         // Don't send empty set and set which contains only empty roles.
         if (value) {
-            BOOST_FOREACH (FolksRoleFieldDetails *value, GeeCollCXX<FolksRoleFieldDetails *>(value)) {
+            BOOST_FOREACH (FolksRoleFieldDetails *value, GeeCollCXX<FolksRoleFieldDetails *>(value, ADD_REF)) {
                 FolksRole *role = static_cast<FolksRole *>(const_cast<gpointer>((folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(value)))));
                 if (IsNonDefault<const gchar *>::check(folks_role_get_organisation_name(role)) ||
                     IsNonDefault<const gchar *>::check(folks_role_get_title(role)) ||
@@ -152,12 +152,13 @@ template <class O, class V, class B> void SerializeFolks(GDBusCXX::builder_type 
         SE_THROW("casting to base class failed");
     }
     V value = get(obj);
+    B coll(value, ADD_REF);
 
     if (IsNonDefault<B>::check(value)) {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(INDIVIDUAL_DICT_ENTRY)); // dict entry
         GDBusCXX::dbus_traits<std::string>::append(builder, key);
         g_variant_builder_open(&builder, G_VARIANT_TYPE("v")); // variant
-        GDBusCXX::dbus_traits<B>::append(builder, value);
+        GDBusCXX::dbus_traits<B>::append(builder, coll);
         g_variant_builder_close(&builder); // variant
         g_variant_builder_close(&builder); // dict entry
     }
@@ -273,7 +274,8 @@ template <> struct dbus_traits<FolksAbstractFieldDetails *> {
         g_variant_builder_open(&builder, G_VARIANT_TYPE("as"));
         GeeMultiMap *map = folks_abstract_field_details_get_parameters(value);
         if (map) {
-            BOOST_FOREACH (const char *type, GeeCollCXX<const char *>(gee_multi_map_get(map, FOLKS_ABSTRACT_FIELD_DETAILS_PARAM_TYPE))) {
+            GeeCollCXX<const char *> coll(gee_multi_map_get(map, FOLKS_ABSTRACT_FIELD_DETAILS_PARAM_TYPE), TRANSFER_REF);
+            BOOST_FOREACH (const char *type, coll) {
                 dbus_traits<const char *>::append(builder, type);
             }
         }
@@ -291,7 +293,8 @@ template <> struct dbus_traits<FolksPostalAddressFieldDetails *> {
         g_variant_builder_open(&builder, G_VARIANT_TYPE("as"));
         GeeMultiMap *map = folks_abstract_field_details_get_parameters(fieldDetails);
         if (map) {
-            BOOST_FOREACH (const char *type, GeeCollCXX<const char *>(gee_multi_map_get(map, "type"))) {
+            GeeCollCXX<const char *> coll(gee_multi_map_get(map, "type"), TRANSFER_REF);
+            BOOST_FOREACH (const char *type, coll) {
                 dbus_traits<const char *>::append(builder, type);
             }
         }

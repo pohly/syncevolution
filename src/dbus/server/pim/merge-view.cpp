@@ -119,8 +119,8 @@ void MergeView::edsDone(const std::string &uuid) throw ()
 
 static void GetPersonaUIDs(FolksIndividual *individual, std::set<std::string> &uids)
 {
-    GeeSet *personas = folks_individual_get_personas(individual);
-    BOOST_FOREACH (FolksPersona *persona, GeeCollCXX<FolksPersona *>(personas)) {
+    GeeCollCXX<FolksPersona *> personas(folks_individual_get_personas(individual), ADD_REF);
+    BOOST_FOREACH (FolksPersona *persona, personas) {
         // Includes backend, address book, and UID inside address book.
         uids.insert(folks_persona_get_uid(persona));
     }

@@ -317,7 +317,7 @@ public:
         }
         FolksEmailDetails *emailDetails = FOLKS_EMAIL_DETAILS(individual);
         GeeSet *emails = folks_email_details_get_email_addresses(emailDetails);
-        BOOST_FOREACH (FolksEmailFieldDetails *email, GeeCollCXX<FolksEmailFieldDetails *>(emails)) {
+        BOOST_FOREACH (FolksEmailFieldDetails *email, GeeCollCXX<FolksEmailFieldDetails *>(emails, ADD_REF)) {
             const gchar *value =
                 reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(email)));
             if (containsSearchText(value)) {
@@ -326,7 +326,7 @@ public:
         }
         FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
         GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
-        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones)) {
+        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones, ADD_REF)) {
             const gchar *value =
                 reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
             if (containsSearchTel(value)) {
@@ -620,7 +620,7 @@ public:
         FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
         GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
         precomputed.m_phoneNumbers.reserve(gee_collection_get_size(GEE_COLLECTION(phones)));
-        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones)) {
+        BOOST_FOREACH (FolksAbstractFieldDetails *phone, GeeCollCXX<FolksAbstractFieldDetails *>(phones, ADD_REF)) {
             const gchar *value =
                 reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(phone));
             if (value) {
@@ -640,7 +640,7 @@ public:
                     if (coll) {
                         std::vector<std::string> components;
                         components.reserve(2);
-                        BOOST_FOREACH (const gchar *component, GeeStringCollection(coll.get())) {
+                        BOOST_FOREACH (const gchar *component, GeeStringCollection(coll)) {
                             // Empty component represents an unset
                             // country code. Replace with the current
                             // country code to form the full number.

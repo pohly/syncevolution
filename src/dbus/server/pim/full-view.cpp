@@ -54,7 +54,7 @@ void FullView::doStart()
     IndividualData data;
     typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksIndividual *> > Coll;
     GeeMap *map = folks_individual_aggregator_get_individuals(m_folks);
-    Coll coll(map);
+    Coll coll(map, ADD_REF);
     guint size = gee_map_get_size(map);
     individuals.reserve(size);
     SE_LOG_DEBUG(NULL, "starting with %u individuals", size);
@@ -119,14 +119,14 @@ void FullView::individualsChanged(GeeSet *added,
     // Remove first, to match the "remove + added = modified" change optimization
     // in Manager::handleChange().
     if (removed) {
-        BOOST_FOREACH (FolksIndividual *individual, Coll(removed)) {
+        BOOST_FOREACH (FolksIndividual *individual, Coll(removed, ADD_REF)) {
             removeIndividual(individual);
         }
     }
     if (added) {
         // TODO (?): Optimize adding many new individuals by pre-sorting them,
         // then using that information to avoid comparisons in addIndividual().
-        BOOST_FOREACH (FolksIndividual *individual, Coll(added)) {
+        BOOST_FOREACH (FolksIndividual *individual, Coll(added, ADD_REF)) {
             addIndividual(individual);
         }
     }
