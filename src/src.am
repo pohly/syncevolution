@@ -183,7 +183,7 @@ src_syncevo_local_sync_LDADD = $(gdbus_build_dir)/libgdbussyncevo.la $(CORE_LDAD
 src_syncevo_local_sync_CPPFLAGS = -DHAVE_CONFIG_H -I$(gdbus_dir) $(src_cppflags)
 src_syncevo_local_sync_CXXFLAGS = $(PCRECPP_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(GLIB_CFLAGS) $(DBUS_CFLAGS) $(LIBSOUP_CFLAGS) $(SYNCEVO_WFLAGS)
 src_syncevo_local_sync_LDFLAGS = $(PCRECPP_LIBS) $(CORE_LD_FLAGS) $(LIBSOUP_LIBS)
-src_syncevo_local_sync_DEPENDENCIES = $(builddir)/$(gdbus_build_dir)/libgdbussyncevo.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(SYNTHESIS_DEP)
+src_syncevo_local_sync_DEPENDENCIES = $(top_builddir)/$(gdbus_build_dir)/libgdbussyncevo.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(SYNTHESIS_DEP)
 
 
 # Do the linking here, as with all SyncEvolution executables.
