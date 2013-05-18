@@ -1556,7 +1556,7 @@ class FunambolTest(SyncEvolutionTest):
                                      "eds_event",
                                      "eds_task",
                                      "eds_memo" ],
-                                   "CLIENT_TEST_SKIP="
+                                   "'CLIENT_TEST_SKIP="
                                    # server duplicates items in add<->add conflict because it
                                    # does not check UID
                                    "Client::Sync::eds_event::testAddBothSides,"
@@ -1568,7 +1568,7 @@ class FunambolTest(SyncEvolutionTest):
                                    # test cannot pass because we don't have CtCap info about
                                    # the Funambol server
                                    "Client::Sync::eds_contact::testExtensions,"
-                                   " "
+                                   "' "
                                    "CLIENT_TEST_XML=1 "
                                    "CLIENT_TEST_MAX_ITEMSIZE=2048 "
                                    "CLIENT_TEST_DELAY=10 "
