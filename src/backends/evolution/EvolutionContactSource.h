@@ -88,6 +88,7 @@ class EvolutionContactSource : public EvolutionSyncSource,
 
 #ifdef USE_EDS_CLIENT
     virtual const char *sourceExtension() const { return E_SOURCE_EXTENSION_ADDRESS_BOOK; }
+    virtual ESourceCXX refSystemDB() const { return ESourceCXX(e_source_registry_ref_builtin_address_book(EDSRegistryLoader::getESourceRegistry()), TRANSFER_REF); }
 #endif
 
   private:

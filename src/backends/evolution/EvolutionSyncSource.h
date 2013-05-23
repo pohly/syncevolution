@@ -80,6 +80,9 @@ class EvolutionSyncSource : public TrackingSyncSource
 
     /** E_SOURCE_EXTENSION_ADDRESS_BOOK, etc. */
     virtual const char *sourceExtension() const = 0;
+
+    /** reference the system address book, calendar, etc. */
+    virtual ESourceCXX refSystemDB() const = 0;
 #endif
 
     /**

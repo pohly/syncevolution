@@ -21,6 +21,10 @@
 #include "EvolutionSyncSource.h"
 #include <syncevo/SmartPtr.h>
 #include <syncevo/SyncContext.h>
+#include <syncevo/GValueSupport.h>
+#include <syncevo/GLibSupport.h>
+
+SE_GLIB_TYPE(GKeyFile, g_key_file)
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -124,56 +128,107 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
 
 SyncSource::Database EvolutionSyncSource::createDatabase(const Database &database)
 {
-    GErrorCXX gerror;
-    ESourceCXX source(database.m_uri.empty() ?
-                      e_source_new(NULL, NULL, gerror) :
-                      e_source_new_with_uid(database.m_uri.c_str(),
-                                            NULL, gerror),
-                      TRANSFER_REF);
-    if (!source) {
-        gerror.throwError("e_source_new()");
-    }
-    e_source_set_enabled(source, true);
-    e_source_set_display_name(source, database.m_name.c_str());
-    e_source_set_parent(source, "local-stub");
-
-
-    // create extension of the right type and set "local" as backend
-    ESourceBackend *backend = static_cast<ESourceBackend *>(e_source_get_extension(source, sourceExtension()));
-    e_source_backend_set_backend_name(backend, "local");
-
-    // hack: detect databases requested by the PIM Manager and create
-    // them with a special summary. Long-term we need a better way of
-    // selecting extensions, for example with a new
-    // e_source_new_from_string().
-    if (boost::starts_with(database.m_uri, "pim-manager-")) {
-        g_type_ensure (E_TYPE_SOURCE_BACKEND_SUMMARY_SETUP);
-	ESourceBackendSummarySetup *setup =
-            static_cast<ESourceBackendSummarySetup *>(e_source_get_extension(source, E_SOURCE_EXTENSION_BACKEND_SUMMARY_SETUP));
-	e_source_backend_summary_setup_set_summary_fields(setup,
-                                                          E_CONTACT_TEL,
-                                                          0);
-	e_source_backend_summary_setup_set_indexed_fields(setup,
-                                                          E_CONTACT_TEL, E_BOOK_INDEX_PHONE,
-                                                          0);
-    }
-
+    // We'll need this later. Create it before doing any real work.
     ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
-    ESourceListCXX sources;
-    sources.push_back(source.ref()); // ESourceListCXX unrefs sources it points to
-    if (!e_source_registry_create_sources_sync(registry,
-                                               sources,
-                                               NULL,
-                                               gerror)) {
-        gerror.throwError(StringPrintf("creating EDS database of type %s with name '%s'%s%s",
-                                       sourceExtension(),
-                                       database.m_name.c_str(),
-                                       database.m_uri.empty() ? "" : " and URI ",
-                                       database.m_uri.c_str()));
+
+    // Clone the system DB. This allows the distro to change the
+    // configuration (backend, extensions (= in particular
+    // the contacts DB summary fields)) without having to
+    // modify SyncEvolution.
+    ESourceCXX systemSource = refSystemDB();
+    gsize len;
+    PlainGStr ini(e_source_to_string(systemSource, &len));
+
+    // Modify the entries in the key file directly. We can't
+    // instantiate an ESource (no API for it), copying the values from
+    // the key file into a fresh ESource is difficult (would have to
+    // reimplement EDS internal encoding/decoding), and copying from
+    // systemSource is hard (don't know which extensions it has,
+    // cannot instantiate extensions of unknown types, because
+    // e_source_get_extension() only works for types that were
+    // created).
+    static const char *mainSection = "Data Source";
+    GKeyFileCXX keyfile(g_key_file_new(), TRANSFER_REF);
+    GErrorCXX gerror;
+    if (!g_key_file_load_from_data(keyfile, ini, len, G_KEY_FILE_NONE, gerror)) {
+        gerror.throwError("parsing ESource .ini data");
     }
-    const gchar *name = e_source_get_display_name(source);
-    const gchar *uid = e_source_get_uid(source);
-    return Database(name, uid);
+    g_key_file_remove_key(keyfile, mainSection, "DisplayName", NULL); // Removes localized names.
+    g_key_file_set_string(keyfile, mainSection, "DisplayName", database.m_name.c_str());
+    g_key_file_set_boolean(keyfile, mainSection, "Enabled", true);
+    ini = g_key_file_to_data(keyfile, &len, NULL);
+    const char *configDir = g_get_user_config_dir();
+    int fd;
+    std::string filename;
+    std::string uid;
+
+    // Create sources dir. It might have been removed (for example, while
+    // testing) without having been recreated by evolution-source-registry.
+    std::string sourceDir = StringPrintf("%s/evolution/sources",
+                                         configDir);
+    mkdir_p(sourceDir);
+
+    // Create unique ID if necessary.
+    while (true) {
+        uid = database.m_uri.empty() ?
+            UUID() :
+            database.m_uri;
+        filename = StringPrintf("%s/%s.source", sourceDir.c_str(), uid.c_str());
+        fd = ::open(filename.c_str(),
+                    O_WRONLY|O_CREAT|O_EXCL,
+                    S_IRUSR|S_IWUSR);
+        if (fd >= 0) {
+            break;
+        }
+        if (errno == EEXIST) {
+            if (!database.m_uri.empty()) {
+                SE_THROW(StringPrintf("ESource UUID %s already in use", database.m_uri.c_str()));
+            } else {
+                // try again with new random UUID
+            }
+        } else {
+            SE_THROW(StringPrintf("creating %s failed: %s", filename.c_str(), strerror(errno)));
+        }
+    }
+    ssize_t written = write(fd, ini.get(), len);
+    int res = ::close(fd);
+    if (written != len || res) {
+        SE_THROW(StringPrintf("writing to %s failed: %s", filename.c_str(), strerror(errno)));
+    }
+
+    // We need to wait until ESourceRegistry notices the new file.
+    SE_LOG_DEBUG(getDisplayName(), "waiting for ESourceRegistry to notice new ESource %s", uid.c_str());
+    while (!ESourceCXX(e_source_registry_ref_source(registry, uid.c_str()), TRANSFER_REF)) {
+        // This will block forever if called from the non-main-thread.
+        // Don't do that...
+        g_main_context_iteration(NULL, true);
+    }
+    SE_LOG_DEBUG(getDisplayName(), "ESourceRegistry has new ESource %s", uid.c_str());
+
+    // Try triggering that by attempting to create an ESource with the same
+    // UUID. Does not work! evolution-source-registry simply overwrites the
+    // file that we created earlier.
+    // ESourceCXX source(e_source_new_with_uid(uid.c_str(),
+    //                                         NULL, gerror),
+    //                   TRANSFER_REF);
+    // e_source_set_display_name(source, "syncevolution-fake");
+    // e_source_set_parent(source, "local-stub");
+    // ESourceListCXX sources;
+    // sources.push_back(source.ref()); // ESourceListCXX unrefs sources it points to
+    // if (!e_source_registry_create_sources_sync(registry,
+    //                                            sources,
+    //                                            NULL,
+    //                                            gerror)) {
+    //     gerror.throwError(StringPrintf("creating EDS database of type %s with name '%s'%s%s",
+    //                                    sourceExtension(),
+    //                                    database.m_name.c_str(),
+    //                                    database.m_uri.empty() ? "" : " and URI ",
+    //                                    database.m_uri.c_str()));
+    // } else {
+    //     SE_THROW("creating syncevolution-fake ESource succeeded although it should have failed");
+    // }
+
+    return Database(database.m_name, uid);
 }
 
 void EvolutionSyncSource::deleteDatabase(const std::string &uri)
