@@ -111,4 +111,4 @@ if [ "$DBUS_SESSION_SH_EDS_BASE" ]; then
 fi
 
 echo dbus-session.sh: final result $res >&2
-return $res
+exit $res
