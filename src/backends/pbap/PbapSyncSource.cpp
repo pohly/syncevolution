@@ -53,9 +53,9 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-#define OBC_SERVICE "org.openobex.client"
-#define OBC_SERVICE_NEW "org.bluez.obex.client"
-#define OBC_SERVICE_NEW5 "org.bluez.obex"
+#define OBC_SERVICE "org.openobex.client" // obexd < 0.47
+#define OBC_SERVICE_NEW "org.bluez.obex.client" // obexd >= 0.47
+#define OBC_SERVICE_NEW5 "org.bluez.obex" // obexd in Bluez 5.0
 #define OBC_CLIENT_INTERFACE "org.openobex.Client"
 #define OBC_CLIENT_INTERFACE_NEW "org.bluez.obex.Client"
 #define OBC_CLIENT_INTERFACE_NEW5 "org.bluez.obex.Client1"
@@ -85,9 +85,9 @@ private:
     boost::weak_ptr<PbapSession> m_self;
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
     enum {
-        OBEXD_OLD,
-        OBEXD_NEW,
-        BLUEZ5
+        OBEXD_OLD, // obexd < 0.47
+        OBEXD_NEW, // obexd >= 0.47
+        BLUEZ5     // obexd in Bluez >= 5.0
     } m_obexAPI;
 
     /** filter parameters for BLUEZ5 PullAll */
@@ -369,12 +369,12 @@ void PbapSession::initSession(const std::string &address, const std::string &for
 
     GDBusCXX::DBusClientCall0(*m_session, "Select")(std::string("int"), std::string("PB"));
 
-    if (m_obexAPI == BLUEZ5) {
-        m_filter5["Format"] = version == "2.1" ? "vcard21" : "vcard30";
-        m_filter5["Fields"] = filter;
-    } else {
+    if (m_obexAPI == OBEXD_OLD) {
         GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(std::vector<std::string>(filter.begin(), filter.end()));
         GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
+    } else {
+        m_filter5["Format"] = version == "2.1" ? "vcard21" : "vcard30";
+        m_filter5["Fields"] = filter;
     }
 
     SE_LOG_DEBUG(NULL, "PBAP session initialized");
@@ -388,9 +388,9 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
         SE_LOG_DEBUG(NULL, "Created temporary file for PullAll %s", tmpFile.filename().c_str());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
         std::pair<GDBusCXX::DBusObject_t, Params> tuple =
-            m_obexAPI == BLUEZ5 ?
-            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(tmpFile.filename(), m_filter5) :
-            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(tmpFile.filename());
+            m_obexAPI == OBEXD_NEW ?
+            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(tmpFile.filename(), m_filter5) :
+            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(tmpFile.filename(), m_filter5);
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
 
