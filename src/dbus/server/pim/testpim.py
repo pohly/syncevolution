@@ -30,6 +30,7 @@
 # same directory.
 
 import os
+import errno
 import sys
 import inspect
 import unittest
@@ -310,8 +311,11 @@ XDG root.
         # 'infinite' doesn't seem to be documented for Python.
         self.timeout = 100000
 
-        # Common prefix for peer UIDs.
-        self.uidPrefix = 'test-dbus-'
+        # Common prefix for peer UIDs. Use different prefixes in each test,
+        # because evolution-addressbook-factory keeps the old instance
+        # open when syncevo-dbus-server stops or crashes and then fails
+        # to work with that database when we remove it.
+        self.uidPrefix = self.testname.replace('_', '-').lower() + '-'
 
         # Prefix used by PIM Manager in EDS.
         self.managerPrefix = 'pim-manager-'
@@ -502,10 +506,69 @@ END:VCARD(\r|\n)*''',
         self.runTestDBusCheck = lambda test, log: test.assertNotIn('ERROR', log.replace('ERROR SUMMARY:', 'error summary:'))
         self.runTestOutputCheck = self.runTestDBusCheck
 
+        # We have to clean the xdg_root ourselves. We have to be nice
+        # to EDS and can't just wipe out the entire directory.
+        items = list(os.walk(xdg_root))
+        items.reverse()
+        for dirname, dirs, files in items:
+            reldir = os.path.relpath(dirname, xdg_root)
+            for dir in dirs:
+                # evolution-source-registry gets confused when we remove
+                # the "sources" directory itself.
+                if reldir == 'config/evolution' and dir == 'sources':
+                    continue
+                dest = os.path.join(dirname, dir)
+                try:
+                    os.rmdir(dest)
+                except OSError, ex:
+                    if ex.errno != errno.ENOTEMPTY:
+                        raise
+            for file in files:
+                dest = os.path.join(dirname, file)
+                # Don't delete a DB that may still be in use by
+                # evolution-addressbook-factory and that we may still need.
+                # Other DBs can be removed because we are not going to depend on
+                # them anymore thanks to the per-test uid prefix.
+                if reldir == 'data/evolution/addressbook/system':
+                    continue
+                os.unlink(dest)
+
+        # We have to wait until evolution-source-registry catches up
+        # and recognized that the sources are gone, otherwise
+        # evolution-addressbook-factory will keep the .db files open
+        # although we already removed them.
+        while True:
+            out, err = subprocess.Popen(['syncevolution', '--print-databases', '--daemon=no', 'backend=evolution-contacts'],
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE).communicate()
+            self.assertEqual('', err)
+            # Count the number of database entries. An exact
+            # comparison against the output does not work, because the
+            # name of the system address book due to localization and
+            # (to a lesser degree) its UID may change.
+            if len([x for x in out.split('\n') if x.startswith('   ')]) == 1:
+                break
+            else:
+                time.sleep(0.5)
+
+        # Does not work, Reload()ing a running registry confuses evolution-addressbook-factory.
+        #
+        # for i in range(0, 100):
+        #     try:
+        #         registry = dbus.Interface(bus.get_object('org.gnome.evolution.dataserver.Sources%d' % i,
+        #                                                  '/org/gnome/evolution/dataserver/SourceManager'),
+        #                                   'org.gnome.evolution.dataserver.SourceManager')
+        #     except dbus.exceptions.DBusException, ex:
+        #         if ex.get_dbus_name() != 'org.freedesktop.DBus.Error.ServiceUnknown':
+        #             raise
+        # registry.Reload()
+        # # Give it some time...
+        # time.sleep(2)
+
         # Runtime varies a lot when using valgrind, because
         # of the need to check an additional process. Allow
         # a lot more time when running under valgrind.
-        self.runTest(result, own_xdg=True, own_home=True,
+        self.runTest(result, own_xdg=False, own_home=False,
                      defTimeout=usingValgrind() and 600 or 20)
 
     def currentSources(self):
@@ -1538,7 +1601,7 @@ END:VCARD
                         },
                        ],
                           'source': [
-                       ('test-dbus-foo', luids[0])
+                       (self.uidPrefix + 'foo', luids[0])
                        ],
                           'id': '<stripped>',
                           'notes': [
@@ -1681,8 +1744,8 @@ END:VCARD'''
                           'urls': [('http://john.doe.com', ['x-home-page'])],
                           'id': contact.get('id', '<???>'),
                           'source': [
-                       ('test-dbus-bar', luids[self.uidPrefix + 'bar'][0]),
-                       ('test-dbus-foo', luids[self.uidPrefix + 'foo'][0])
+                       (self.uidPrefix + 'bar', luids[self.uidPrefix + 'bar'][0]),
+                       (self.uidPrefix + 'foo', luids[self.uidPrefix + 'foo'][0])
 
                        ],
                           },
@@ -1698,7 +1761,7 @@ END:VCARD'''
 
         contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 10))
 
-        self.assertEqual(['', 'peer-test-dbus-a', 'peer-test-dbus-c'],
+        self.assertEqual(['', 'peer-' + self.uidPrefix + 'a', 'peer-' + self.uidPrefix + 'c'],
                          self.manager.GetActiveAddressBooks(timeout=self.timeout),
                          sortLists=True)
 
@@ -1736,13 +1799,13 @@ END:VCARD'''
         active = [''] + peers
 
         # Check that active databases were adapted and stored permanently.
-        self.assertEqual(['', 'peer-test-dbus-a', 'peer-test-dbus-b', 'peer-test-dbus-c'],
+        self.assertEqual(['', 'peer-' + self.uidPrefix + 'a', 'peer-' + self.uidPrefix + 'b', 'peer-' + self.uidPrefix + 'c'],
                          self.manager.GetActiveAddressBooks(timeout=self.timeout),
                          sortLists=True)
         # Order mirrors the one of SetActiveAddressBooks() in setUpView(),
         # assuming that the PIM Manager preserves that order (not really guaranteed
         # by the API, but is how it is implemented).
-        self.assertIn("active = pim-manager-test-dbus-a pim-manager-test-dbus-b pim-manager-test-dbus-c system-address-book\n",
+        self.assertIn('active = pim-manager-' + self.uidPrefix + 'a pim-manager-' + self.uidPrefix + 'b pim-manager-' + self.uidPrefix + 'c system-address-book\n',
                       open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
                            "r").readlines())
 
@@ -3729,11 +3792,19 @@ END:VCARD''',
 
 if __name__ == '__main__':
     xdg = (os.path.join(os.path.abspath('.'), 'temp-testpim', 'config'),
-           os.path.join(os.path.abspath('.'), 'temp-testpim', 'local', 'cache'))
+           os.path.join(os.path.abspath('.'), 'temp-testpim', 'data'),
+           os.path.join(os.path.abspath('.'), 'temp-testpim', 'cache'))
+
+    # Tell test-dbus.py about the temporary directory that we expect
+    # to use. It'll wipe it clean for us because we run with own_xdg=true.
+    # However, we have EDS daemons continuing to run while we do that.
+    # evolution-source-registry copes by watching for file changes.
+    xdg_root = os.path.join(os.path.abspath('.'), 'temp-testpim')
+    testdbus.xdg_root = xdg_root
     error = ''
-    if (os.environ.get('XDG_CONFIG_HOME', None), os.environ.get('XDG_DATA_HOME', None)) != xdg:
+    if (os.environ.get('XDG_CONFIG_HOME', None), os.environ.get('XDG_DATA_HOME', None), os.environ.get('XDG_CACHE_HOME', None)) != xdg:
          # Don't allow user of the script to erase his normal EDS data.
-         error = error + 'testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME=%s XDG_DATA_HOME=%s because it will modify system EDS databases there.\n' % xdg
+         error = error + 'testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME=%s XDG_DATA_HOME=%s XDG_CACHE_HOME=%s because it will modify system EDS databases there.\n' % xdg
     if os.environ.get('LANG', '') != 'de_DE.utf-8':
          error = error + 'EDS daemon must use the same LANG=de_DE.utf-8 as tests to get phone number normalization right.\n'
     if error:
