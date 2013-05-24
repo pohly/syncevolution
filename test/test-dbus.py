@@ -1134,10 +1134,10 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
 
     def setUpFiles(self, snapshot):
         """ Copy reference directory trees from
-        test/test-dbus/<snapshot> to own xdg_root (=./test-dbus). To
-        be used only in tests which called runTest() with
-        own_xdg=True."""
-        self.assertTrue(self.own_xdg)
+        test/test-dbus/<snapshot> to own xdg_root (=./test-dbus). When
+        used in tests which called runTest() with
+        own_xdg=True, then the target directory is known to be empty. Otherwise
+        it may contain files from previous tests."""
         # Get the absolute path of the current python file.
         scriptpath = os.path.abspath(os.path.expanduser(os.path.expandvars(sys.argv[0])))
         # reference directory 'test-dbus' is in the same directory as the current python file
@@ -1151,13 +1151,28 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                   'data'                      : 'data'     ,
                   'templates'                 : 'templates'}
         for src, dest in pairs.items():
-            destpath = os.path.join(xdg_root, dest)
-            # make sure the dest directory does not exist, which is required by shutil.copytree
-            shutil.rmtree(destpath, True)
             sourcepath = os.path.join(sourcedir, src)
+            destpath = os.path.join(xdg_root, dest)
             # if source exists and could be accessed, then copy them
             if os.access(sourcepath, os.F_OK):
-                shutil.copytree(sourcepath, destpath)
+                # Add to the destination directory. Removing it, if and
+                # only if required, was done earlier. Because copytree
+                # expects target directories to not exist, we must use
+                # our own recursive copy routine.
+                def copy(dirname, dirs, files):
+                    pass
+                for dirname, dirs, files in os.walk(sourcepath):
+                    destdirname = os.path.join(destpath, os.path.relpath(dirname, sourcepath))
+                    for dir in dirs:
+                        dest = os.path.join(destdirname, dir)
+                        if not os.access(dest, os.F_OK):
+                            logging.printf('creating snapshot directory %s', dest)
+                            os.makedirs(dest)
+                    for file in files:
+                        source = os.path.join(dirname, file)
+                        dest = os.path.join(destdirname, file)
+                        logging.printf('copying snapshot file %s -> %s', source, dest)
+                        shutil.copyfile(source, dest)
 
     def prettyPrintEvents(self, events=None):
         '''Format events as lines without full class specifiers, like this:
