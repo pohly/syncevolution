@@ -1666,6 +1666,83 @@ END:VCARD
                          contact,
                          sortLists=True)
 
+    def addressbooks(self):
+        entries = os.listdir(os.path.join(os.environ["XDG_DATA_HOME"], "evolution", "addressbook"))
+        entries.sort();
+        # Ignore trash folder and system DB, because they may or may not be present.
+        for db in ('trash', 'system'):
+            try:
+                entries.remove(db)
+            except ValueError:
+                pass
+        return entries
+
+    @timeout(60)
+    @property("snapshot", "simple-sort")
+    def testRemove(self):
+        '''TestContacts.testRemove - check that EDS database is created and removed'''
+        self.setUpView(search=None)
+
+        # Force sqlite DB files to exist by inserting a contact.
+        testcases = [r'''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+TEL:1234-5678
+EMAIL:john.doe@example.com
+URL:http://john.doe.com
+X-JABBER:jd@example.com
+END:VCARD
+''']
+        for i, contact in enumerate(testcases):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = open(item, "w")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+
+        self.assertEqual([self.managerPrefix + self.uid], self.addressbooks())
+        self.manager.RemovePeer(self.uid)
+        self.assertEqual([], self.addressbooks())
+
+    @timeout(60)
+    @property("snapshot", "simple-sort")
+    def testRemoveLive(self):
+        '''TestContacts.testRemove - check that EDS database is created and removed while it is open in a view'''
+        self.setUpView()
+
+        # Force sqlite DB files to exist by inserting a contact.
+        testcases = [r'''BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+N:Doe;John
+TEL:1234-5678
+EMAIL:john.doe@example.com
+URL:http://john.doe.com
+X-JABBER:jd@example.com
+END:VCARD
+''']
+        for i, contact in enumerate(testcases):
+             item = os.path.join(self.contacts, 'contact%d.vcf' % i)
+             output = open(item, "w")
+             output.write(contact)
+             output.close()
+        logging.log('inserting contacts')
+        out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
+
+        # Run until the view has adapted.
+        self.runUntil('view with one contact',
+                      check=lambda: self.assertEqual([], self.view.errors),
+                      until=lambda: len(self.view.contacts) > 0)
+        # Don't wait for more contacts here. They shouldn't come, and if
+        # they do, we'll notice it below.
+        self.assertEqual(1, len(self.view.contacts))
+
+        self.assertEqual([self.managerPrefix + self.uid], self.addressbooks())
+        self.manager.RemovePeer(self.uid)
+        self.assertEqual([], self.addressbooks())
+
     @timeout(60)
     @property("snapshot", "simple-sort")
     def testStop(self):
