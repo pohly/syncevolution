@@ -575,6 +575,14 @@ END:VCARD(\r|\n)*''',
         '''returns current set of EDS sources as set of UIDs, without the .source suffix'''
         return set([os.path.splitext(x)[0] for x in (os.path.exists(self.sourcedir) and os.listdir(self.sourcedir) or [])])
 
+    def testUIDError(self):
+        '''TestContacts.testUIDError - check that invalid UID is properly detected and reported'''
+        with self.assertRaisesRegexp(dbus.DBusException,
+                                     'invalid peer uid: CAPITAL-LETTERS-NOT-ALLOWED'):
+            self.manager.SetPeer('CAPITAL-LETTERS-NOT-ALLOWED',
+                                 {},
+                                 timeout=self.timeout)
+
     @property("snapshot", "simple-sort")
     def testConfig(self):
         '''TestContacts.testConfig - set and remove peers'''
