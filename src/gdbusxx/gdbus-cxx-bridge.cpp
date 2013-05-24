@@ -482,8 +482,50 @@ void getWatch(ExtractArgs &context,
               boost::shared_ptr<Watch> &value)
 {
     std::auto_ptr<Watch> watch(new Watch(context.m_conn));
-    watch->activate(g_dbus_message_get_sender(context.m_msg));
+    watch->activate((context.m_msg && *context.m_msg) ?
+                    g_dbus_message_get_sender(*context.m_msg) :
+                    context.m_sender);
     value.reset(watch.release());
+}
+
+void ExtractArgs::init(GDBusConnection *conn,
+                       GDBusMessage **msg,
+                       GVariant *msgBody,
+                       const char *sender,
+                       const char *path,
+                       const char *interface,
+                       const char *signal)
+{
+    m_conn = conn;
+    m_msg = msg;
+    m_sender = sender;
+    m_path = path;
+    m_interface = interface;
+    m_signal = signal;
+    if (msgBody != NULL) {
+        g_variant_iter_init(&m_iter, msgBody);
+    }
+}
+
+
+ExtractArgs::ExtractArgs(GDBusConnection *conn, GDBusMessage *&msg)
+{
+    init(conn, &msg, g_dbus_message_get_body(msg), NULL, NULL, NULL, NULL);
+}
+
+ExtractArgs::ExtractArgs(GDBusConnection *conn,
+                         const char *sender,
+                         const char *path,
+                         const char *interface,
+                         const char *signal)
+{
+    init(conn, NULL, NULL, sender, path, interface, signal);
+}
+
+ExtractResponse::ExtractResponse(GDBusConnection *conn, GDBusMessage *msg)
+{
+    init(conn, NULL, g_dbus_message_get_body(msg),
+         g_dbus_message_get_sender(msg), NULL, NULL, NULL);
 }
 
 } // namespace GDBusCXX
