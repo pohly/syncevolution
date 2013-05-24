@@ -21,10 +21,12 @@
 #include "EvolutionSyncSource.h"
 #include <syncevo/SmartPtr.h>
 #include <syncevo/SyncContext.h>
-#include <syncevo/GValueSupport.h>
 #include <syncevo/GLibSupport.h>
 
+#ifdef USE_EDS_CLIENT
+#include <syncevo/GValueSupport.h>
 SE_GLIB_TYPE(GKeyFile, g_key_file)
+#endif
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -192,7 +194,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     }
     ssize_t written = write(fd, ini.get(), len);
     int res = ::close(fd);
-    if (written != len || res) {
+    if (written != (ssize_t)len || res) {
         SE_THROW(StringPrintf("writing to %s failed: %s", filename.c_str(), strerror(errno)));
     }
 
@@ -231,7 +233,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     return Database(database.m_name, uid);
 }
 
-void EvolutionSyncSource::deleteDatabase(const std::string &uri)
+void EvolutionSyncSource::deleteDatabase(const std::string &uri, RemoveData removeData)
 {
     ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceCXX source(e_source_registry_ref_source(registry, uri.c_str()), TRANSFER_REF);
@@ -243,6 +245,34 @@ void EvolutionSyncSource::deleteDatabase(const std::string &uri)
     if (!e_source_remove_sync(source, NULL, gerror)) {
         throwError(StringPrintf("deleting EDS database with URI '%s'", uri.c_str()),
                    gerror);
+    }
+    if (removeData == REMOVE_DATA_FORCE) {
+        // Don't wait for evolution-source-registry cache-reaper to
+        // run, instead remove files ourselves. The reaper runs only
+        // once per day and also only moves the data into a trash
+        // folder, were it would linger until finally removed after 30
+        // days.
+        //
+        // This is equivalent to "rm -rf $XDG_DATA_HOME/evolution/*/<uuid>".
+        std::string basedir = StringPrintf("%s/evolution", g_get_user_data_dir());
+        if (isDir(basedir)) {
+            BOOST_FOREACH (const std::string &kind, ReadDir(basedir)) {
+                std::string subdir = basedir + "/" + kind;
+                if (isDir(subdir)) {
+                    BOOST_FOREACH (const std::string &source, ReadDir(subdir)) {
+                        // We assume that the UUID of the database
+                        // consists only of characters which can be
+                        // used in the directory name, i.e., no
+                        // special encoding of the directory name.
+                        if (source == uri) {
+                            rm_r(subdir + "/" + source);
+                            // Keep searching, just in case, although
+                            // there should only be one.
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

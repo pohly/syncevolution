@@ -1282,7 +1282,7 @@ void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
                 }
             }
             if (found) {
-                syncSource->deleteDatabase(localDatabaseName);
+                syncSource->deleteDatabase(localDatabaseName, SyncSource::REMOVE_DATA_FORCE);
             }
         }
     }

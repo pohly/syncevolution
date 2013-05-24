@@ -2077,7 +2077,7 @@ void Cmdline::removeDatabase(SyncSource *source, const string &header)
                               databaseID.c_str()));
     }
 
-    source->deleteDatabase(database.m_uri);
+    source->deleteDatabase(database.m_uri, SyncSource::REMOVE_DATA_DEFAULT);
     SE_LOG_SHOW(NULL, "%s: database '%s' (%s) was removed.",
                 header.c_str(),
                 database.m_name.c_str(),

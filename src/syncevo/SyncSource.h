@@ -1503,13 +1503,26 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     virtual Database createDatabase(const Database &database) { throwError("creating databases is not supported by backend " + getBackend()); return Database("", ""); }
 
     /**
+     * Removing a database primarily removes the meta data about the
+     * database. The data itself may still exist in a trash folder.
+     * The enum tells the deleteDatabase() call what the intention of
+     * the caller is.
+     */
+    enum RemoveData {
+        REMOVE_DATA_DEFAULT,    /**< do whatever makes most sense for the backend */
+        REMOVE_DATA_FORCE,      /**< force immediate purging of the data, fail if not possible */
+        REMOVE_DATA_KEEP        /**< keep data, only remove access to it */
+    };
+
+    /**
      * Removes a database. To map a "database" property to a uri,
      * instantiate the source with the desired config, open() it and
      * then call getDatabase().
      *
-     * @param uri    unique identifier for the database
+     * @param uri              unique identifier for the database
+     * @param removeData       describes what to do about the database content
      */
-    virtual void deleteDatabase(const std::string &uri) { throwError("deleting databases is not supported by backend " + getBackend()); }
+    virtual void deleteDatabase(const std::string &uri, RemoveData removeData) { throwError("deleting databases is not supported by backend " + getBackend()); }
 
     /**
      * Actually opens the data source specified in the constructor,

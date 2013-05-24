@@ -76,7 +76,7 @@ class EvolutionSyncSource : public TrackingSyncSource
     // Implementation of SyncSource calls which only works when using EDS Client API
     // and EDS > 3.4. Older EDS has no way of creating sources easily (or at all).
     virtual Database createDatabase(const Database &database);
-    virtual void deleteDatabase(const std::string &uri);
+    virtual void deleteDatabase(const std::string &uri, RemoveData removeData);
 
     /** E_SOURCE_EXTENSION_ADDRESS_BOOK, etc. */
     virtual const char *sourceExtension() const = 0;
