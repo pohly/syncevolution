@@ -2344,23 +2344,32 @@ END:VCARD''']):
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(0, len(view.contacts))
 
-    def doFilter(self, names, searches):
+    def doFilter(self, testdata, searches):
         self.setUpView()
 
         msg = None
         try:
-             # Insert new contacts.
-             numtestcases = len(names)
-             for i, name in enumerate(names):
+             # Insert new contacts and calculate their family names.
+             names = []
+             numtestcases = len(testdata)
+             for i, contact in enumerate(testdata):
                   item = os.path.join(self.contacts, 'contact%d.vcf' % i)
                   output = codecs.open(item, "w", "utf-8")
-                  output.write(u'''BEGIN:VCARD
+                  if isinstance(contact, tuple):
+                       # name + vcard
+                       output.write(contact[1])
+                       names.append(contact[0])
+                  else:
+                       # just the name
+                       output.write(u'''BEGIN:VCARD
 VERSION:3.0
 FN:%(name)s
 N:%(name)s;;;;
 END:VCARD
-''' % { 'name': name })
+''' % { 'name': contact })
+                       names.append(contact)
                   output.close()
+
              logging.log('inserting contacts')
              out, err, returncode = self.runCmdline(['--import', self.contacts, '@' + self.managerPrefix + self.uid, 'local'])
              # Relies on importing contacts sorted ascending by file name.
@@ -2476,6 +2485,113 @@ END:VCARD
                         # In a tuple that's fine, and also works with the PIM Manager.
                         (('or', ('and', ('any-contains', 'h'), ('any-contains', 'Z')), ('any-contains', 'X')), ('Xing', 'Zooh')),
                         (('and', ('or', ('any-contains', 'X'), ('any-contains', 'Z')), ('any-contains', 'h')), ('Zooh',))))
+
+    @timeout(60)
+    def testFilterFields(self):
+         '''TestContacts.testFilterFields - check filter operations on fields'''
+         self.doFilter([('John Doe', r'''BEGIN:VCARD
+VERSION:3.0
+URL:http://john.doe.com
+TITLE:Senior Tester
+ORG:Test Inc.;Testing;test#1
+ROLE:professional test case
+X-EVOLUTION-MANAGER:John Doe Senior
+X-EVOLUTION-ASSISTANT:John Doe Junior
+NICKNAME:user1
+BDAY:2006-01-08
+X-EVOLUTION-ANNIVERSARY:2006-01-09
+X-EVOLUTION-SPOUSE:Joan Doe
+NOTE:This is a test case which uses almost all Evolution fields.
+FN:John Doe
+N:Doe;John;Johnny;;
+X-EVOLUTION-FILE-AS:Doe\, John
+CATEGORIES:TEST
+X-EVOLUTION-BLOG-URL:web log
+GEO:30.12;-130.34
+CALURI:calender
+FBURL:free/busy
+X-EVOLUTION-VIDEO-URL:chat
+X-MOZILLA-HTML:TRUE
+ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
+ ld Testovia
+LABEL;TYPE=WORK:Test Drive 2\nTest Town\, Upper Test County\n12346\nTest Bo
+ x #2\nOld Testovia
+ADR;TYPE=HOME:Test Box #1;;Test Drive 1;Test Village;Lower Test County;1234
+ 5;Testovia
+LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
+  Box #1\nTestovia
+ADR:Test Box #3;Test Extension;Test Drive 3;Test Megacity;Test County;12347;New Testonia
+LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
+  #3\nNew Testonia
+UID:pas-id-43C0ED3900000001
+EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
+EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=4:john.doe@yet.another.world
+TEL;TYPE=work;TYPE=Voice;X-EVOLUTION-UI-SLOT=1:business 1
+TEL;TYPE=homE;TYPE=VOICE;X-EVOLUTION-UI-SLOT=2:home 2
+TEL;TYPE=CELL;X-EVOLUTION-UI-SLOT=3:mobile 3
+TEL;TYPE=WORK;TYPE=FAX;X-EVOLUTION-UI-SLOT=4:businessfax 4
+TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
+TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6
+TEL;TYPE=CAR;X-EVOLUTION-UI-SLOT=7:car 7
+TEL;TYPE=PREF;X-EVOLUTION-UI-SLOT=8:primary 8
+TEL:12 34-5
+END:VCARD
+''')],
+                       ((['is', 'full-name', 'john doe'], ('John Doe',)),
+                        (['is', 'full-name', 'John Doe', 'case-sensitive'], ('John Doe',)),
+                        (['is', 'full-name', 'john doe', 'case-sensitive'], ()),
+                        (['is', 'full-name', 'John Doe', 'case-insensitive'], ('John Doe',)),
+                        (['is', 'full-name', 'john'], ()),
+
+                        (['contains', 'full-name', 'ohn d'], ('John Doe',)),
+                        (['contains', 'full-name', 'ohn D', 'case-sensitive'], ('John Doe',)),
+                        (['contains', 'full-name', 'ohn d', 'case-sensitive'], ()),
+                        (['contains', 'full-name', 'ohn d', 'case-insensitive'], ('John Doe',)),
+                        (['contains', 'full-name', 'foobar'], ()),
+
+                        (['begins-with', 'full-name', 'john'], ('John Doe',)),
+                        (['begins-with', 'full-name', 'John', 'case-sensitive'], ('John Doe',)),
+                        (['begins-with', 'full-name', 'john', 'case-sensitive'], ()),
+                        (['begins-with', 'full-name', 'John', 'case-insensitive'], ('John Doe',)),
+                        (['begins-with', 'full-name', 'doe'], ()),
+
+                        (['ends-with', 'full-name', 'doe'], ('John Doe',)),
+                        (['ends-with', 'full-name', 'Doe', 'case-sensitive'], ('John Doe',)),
+                        (['ends-with', 'full-name', 'doe', 'case-sensitive'], ()),
+                        (['ends-with', 'full-name', 'Doe', 'case-insensitive'], ('John Doe',)),
+                        (['ends-with', 'full-name', 'john'], ()),
+
+                        (['is', 'nickname', 'user1'], ('John Doe',)),
+                        (['is', 'nickname', 'Johnny'], ()),
+                        (['is', 'structured-name/family', 'Doe'], ('John Doe',)),
+                        (['is', 'structured-name/family', 'John'], ()),
+                        (['is', 'structured-name/given', 'John'], ('John Doe',)),
+                        (['is', 'structured-name/given', 'Doe'], ()),
+                        (['is', 'structured-name/additional', 'Johnny'], ('John Doe',)),
+                        (['is', 'structured-name/additional', 'John'], ()),
+                        (['is', 'emails/value', 'john.doe@work.com'], ('John Doe',)),
+                        (['is', 'emails/value', 'foo@abc.com'], ()),
+                        (['is', 'addresses/po-box', 'Test Box #3'], ('John Doe',)),
+                        (['is', 'addresses/po-box', 'Foo Box'], ()),
+                        (['is', 'addresses/extension', 'Test Extension'], ('John Doe',)),
+                        (['is', 'addresses/extension', 'Foo Extension'], ()),
+                        (['is', 'addresses/street', 'Test Drive 3'], ('John Doe',)),
+                        (['is', 'addresses/street', 'Rodeo Drive'], ()),
+                        (['is', 'addresses/locality', 'Test Megacity'], ('John Doe',)),
+                        (['is', 'addresses/locality', 'New York'], ()),
+                        (['is', 'addresses/region', 'Test County'], ('John Doe',)),
+                        (['is', 'addresses/region', 'Testovia'], ()),
+                        (['is', 'addresses/postal-code', '54321'], ()),
+                        (['is', 'addresses/country', 'New Testonia'], ('John Doe',)),
+                        (['is', 'addresses/country', 'America'], ()),
+
+                        (['is', 'phones/value', 'business 1'], ('John Doe',)),
+                        (['is', 'phones/value', 'business 123'], ()),
+                        (['is', 'phones/value', '12345'], ('John Doe',)),
+                        (['is', 'phones/value', '123456'], ()),
+                        ))
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
