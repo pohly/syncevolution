@@ -1971,22 +1971,13 @@ template<class V> struct dbus_traits< std::vector<V> > : public dbus_traits_coll
 template<class V> struct dbus_traits< std::list<V> > : public dbus_traits_collection<std::list<V>, V> {};
 template<class V> struct dbus_traits< std::deque<V> > : public dbus_traits_collection<std::deque<V>, V> {};
 
-/**
- * Helper class to append variant values into a builder
- */
-class append_visitor_dummy_type {};
-
-template <class V1, class V2 = append_visitor_dummy_type> struct append_visitor : public boost::static_visitor<>
+struct append_visitor : public boost::static_visitor<>
 {
     GVariantBuilder &builder;
     append_visitor(GVariantBuilder &b) : builder(b) {}
-    void operator()(const V1 &v) const
+    template <class V> void operator()(const V &v) const
     {
-        dbus_traits<V1>::append(builder, v);
-    }
-    void operator()(const V2 &v) const
-    {
-        dbus_traits<V2>::append(builder, v);
+        dbus_traits<V>::append(builder, v);
     }
 };
 
@@ -2028,7 +2019,7 @@ template <class V> struct dbus_traits <boost::variant <V> > : public dbus_traits
     static void append(GVariantBuilder &builder, const boost::variant<V> &value)
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
-        boost::apply_visitor(append_visitor<V>(builder), value);
+        boost::apply_visitor(append_visitor(builder), value);
         g_variant_builder_close(&builder);
     }
 
@@ -2082,7 +2073,7 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
     static void append(GVariantBuilder &builder, const boost::variant<V1, V2> &value)
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
-        boost::apply_visitor(append_visitor<V1, V2>(builder), value);
+        boost::apply_visitor(append_visitor(builder), value);
         g_variant_builder_close(&builder);
     }
 
