@@ -2460,6 +2460,24 @@ END:VCARD
     #                    )
 
     @timeout(60)
+    def testFilterLogic(self):
+         '''TestContacts.testFilterLogic - check logic operators'''
+         self.doFilter(('Xing', 'Yeah', 'Zooh'),
+                       ((['or', ['any-contains', 'X'], ['any-contains', 'Z']], ('Xing', 'Zooh')),
+                        (['or', ['any-contains', 'X']], ('Xing',)),
+                        (['or', ['any-contains', 'Z']], ('Zooh',)),
+                        (['or'], ()),
+                        (['and', ['any-contains', 'h'], ['any-contains', 'Z']], ('Zooh',)),
+                        (['and', ['any-contains', 'h']], ('Yeah', 'Zooh')),
+                        (['and', ['any-contains', 'Z']], ('Zooh',)),
+                        (['and', ['any-contains', 'h'], ['any-contains', 'Z'], ['any-contains', 'A']], ()),
+                        (['and'], ()),
+                        # Python D-Bus does not like mixing elements of different types in a list.
+                        # In a tuple that's fine, and also works with the PIM Manager.
+                        (('or', ('and', ('any-contains', 'h'), ('any-contains', 'Z')), ('any-contains', 'X')), ('Xing', 'Zooh')),
+                        (('and', ('or', ('any-contains', 'X'), ('any-contains', 'Z')), ('any-contains', 'h')), ('Zooh',))))
+
+    @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
     def testFilterQuiescence(self):
         '''TestContacts.testFilterQuiescence - check that starting server via filter leads to quiescence signal'''
