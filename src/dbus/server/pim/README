@@ -108,6 +108,9 @@ The sort order can be "first/last", "last/first", "full name".
 Sorting is case-insensitive. The default is "last/first" if not set
 earlier.
 
+In addition, an empty string as sort order picks a simple, ASCII-based
+"last/first" sorting. This is used for testing.
+
 
 Searching
 =========
@@ -116,7 +119,31 @@ Supported searches:
 
     [ ] - An empty list matches all contacts.
 
-    [ ['phone', '<number>'] ] - Look up a valid phone number (= "caller ID").
+    [ [ <search> ], [ 'limit', <number> ] ] - a 'limit' search
+    term with a number as parameter (formatted as string) can be added
+    at the top level term to truncate the search results
+    after a certain number of contacts. Example: Search([['any-contains',
+    'Joe'], ['limit', '10']]) => return the first 10 Joes.
+
+    As with any other search, the resulting view will be updated if
+    contact data changes.
+
+    The limit must not be changed in a RefineSearch(). A 'limit' term
+    may (but doesn't have to) be given. If it is given, its value must
+    match the value set when creating the search. This limitation
+    simplifies the implementation and its testing. The limitation
+    could be removed if there is sufficient demand.
+
+    [ [ <search> ] ] - the same as [ <search> ]
+
+    [ 'or', <search1>, <search2>, ... ] - combines 0 to n other
+    searches and results in a match if any of the sub-searches
+    matches. ['or'] without any sub-search does not match.
+
+    [ 'and', <search1>, <search2>, ... ] - like 'or', but matches if
+    and only if all of the sub-searches match.
+
+    [ 'phone', '<number>' ] - Look up a valid phone number (= "caller ID").
     The country code for the current locale is added if no country
     code was given in the number. Phone numbers in the unified address
     book must start with the resulting full number, after being normalized
@@ -132,24 +159,76 @@ Supported searches:
     - Phone numbers in the address book which cannot be normalized
       cannot be matched.
 
-    [ ['any-contains', '<text>', <flags>] ] - Sub-string search for <text>
-    in the following contact values: first, middle or last name,
-    formatted name, nick name, phone number (sub-string search which ignores
-    formatting and treats alpha characters as aliases, in contrast
-    to prefix match in 'phone') or email address. Optional flags include:
-    'case-insensitive' (the default), 'case-sensitive'.
+    [ 'is|contains|begins-with|ends-with', '<field>', '<text>',
+    '<flags>' ] - compares a specified field against the search
+    text. For the 'is' operation, the entire field must match, for
+    'contains' anywhere inside the value, for 'begins_with' at the
+    beginning and for 'ends_with' at the end.
 
-    Using a list will allow extending the search capabilities later,
-    for example by allowing multiple terms which all must match
-    and/or adding recursive queries like this:
-      ['and',
-       ['or', ['any-contains', 'joe'], ['any-contains', 'joan']],
-       ['phone', '1234']
-      ]
+    Fields are referenced as in the contact dictionary (see below), using
+    multiple path components if necessary. Supported for matching are:
+    'full-name' - string
+    'nickname' - string
+    'structured-name/family' - string
+    'structured-name/given' - string
+    'structured-name/additional' - string
+    'phones/value' - telephone number
+    'emails/value' - string
+    'addresses/po-box' - string
+    'addresses/extension' - string
+    'addresses/street' - string
+    'addresses/locality' - string
+    'addresses/region' - string
+    'addresses/postal-code' - string
+    'addresses/country' - string
 
+    The fields referencing value lists ('phones', 'email', 'address')
+    check against any of the entries in these lists.
 
-Lookup and search are different: the former is based on a valid
-number, the later on user input.
+    Except for 'phones/value', all values are treated as text values.
+    For text values, the default search without explicit flags is
+    case-insensitive and accent-sensitive. Spaces between words
+    matter. This behavior can be modified by giving additional,
+    optional flags after the search value:
+    'case-insensitive' - force case-insensitive search (available for the sake
+    of consistency and just in case, should the default ever change)
+    'case-sensitive' - force case-sensitive search
+
+    For telephone numbers, only digits are compared. Latin alphabetic
+    characters are treated as aliases for digits as they typically
+    occur on a keypad or old rotary dial phones ('A', 'b', 'c' map to
+    '1', etc.).
+
+    If the full name was not set explicitly for a contact, the
+    concatenation of the given, middle and family with a space as
+    separator is used instead when matching against the 'full-name'
+    field.
+
+    Using the current syntax it is not possible to define searches
+    where the *same* value in a value list must meet different
+    criteria ("cell phone number containing the digits
+    1234"). Something like that could be added as a future extensions,
+    for example by allowing search values to have more complex types
+    than the simple '<text>'.
+
+    [ 'any-contains', '<text>', <flags> ] - Sub-string search for
+    <text> in the following contact values: first, middle or last
+    name, formatted name, nick name, phone number, or email
+    address. Optional flags include: 'case-insensitive' (the default),
+    'case-sensitive'.
+
+    This search is equivalent to:
+    [ 'or',
+      [ 'contains', 'structured-name/given', '<text>', <flags> ],
+      [ 'contains', 'structured-name/additional', '<text>', <flags> ],
+      [ 'contains', 'structured-name/family', '<text>', <flags> ],
+      [ 'contains', 'full-name', '<text>', <flags> ],
+      [ 'contains', 'emails/value', '<text>', <flags> ],
+      [ 'contains', 'phones/value', '<text>']
+    ]
+
+Note that lookup and search are different: the former is based on a
+valid number, the later on user input.
 
 A 'phone' lookup can compare normalized numbers including the country
 code, to ensure that the lookup is exact and does not mismatch numbers
@@ -160,26 +239,9 @@ An 'any-contains' search is based on user input, which might contain
 just some digits in the middle of the phone number. The search ignores
 formatting in both input and address book.
 
-In both cases, alpha characters are treated as aliases for their
-corresponding digit on a keypad when matching phone numbers.
-
-In addition, an empty string as sort order picks a simple, ASCII-based
-"last/first" sorting. This is used for testing.
-
-A 'limit' search term with a number as parameter (formatted as string)
-can be added to a 'phone' or 'any-contains' search term to truncate the
-search results after a certain number of contacts. Example:
-  Search([['any-contains', 'Joe'], ['limit', '10']])
-  => return the first 10 Joes.
-
-As with any other search, the resulting view will be updated if
-contact data changes.
-
-The limit must not be changed in a RefineSearch(). A 'limit' term may
-(but doesn't have to) be given. If it is given, its value must match
-the value set when creating the search. This limitation simplifies the
-implementation and its testing. The limitation could be removed if
-there is sufficient demand.
+Compound searches with 'and' and 'or' are evaluated lazily, from the
+first to the last sub-search. Therefore it makes sense to list
+sub-searches that are more likely to match first.
 
 
 Phone number lookup
