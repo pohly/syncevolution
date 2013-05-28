@@ -67,13 +67,13 @@ src_dbus_server_server_cpp_files += \
   src/dbus/server/pim/full-view.cpp \
   src/dbus/server/pim/filtered-view.cpp \
   src/dbus/server/pim/edsf-view.cpp \
+  src/dbus/server/pim/locale-factory.cpp \
   src/dbus/server/pim/merge-view.cpp \
   src/dbus/server/pim/individual-traits.cpp \
   src/dbus/server/pim/folks.cpp \
   src/dbus/server/pim/manager.cpp
 
 src_dbus_server_server_h_files += \
-  src/dbus/server/pim/locale-factory.h \
   src/dbus/server/pim/persona-details.h
 
 nodist_src_dbus_server_libsyncevodbusserver_la_SOURCES += \

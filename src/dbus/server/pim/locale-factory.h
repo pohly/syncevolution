@@ -27,6 +27,7 @@
 #define INCL_SYNCEVO_DBUS_SERVER_PIM_LOCALE_FACTORY
 
 #include <boost/shared_ptr.hpp>
+#include <boost/variant.hpp>
 
 #include <folks/folks.h>
 
@@ -62,22 +63,46 @@ class LocaleFactory
     virtual boost::shared_ptr<IndividualCompare> createCompare(const std::string &order) = 0;
 
     /**
-     * An array of search terms which all must match. Each search term
-     * itself is again an array of strings, with the first one choosing
-     * the search criteria and the rest providing parameters for that
-     * search term.
+     * A recursive definition of a search expression.
+     * All operand names, field names and values are strings.
      */
-    typedef std::vector< std::vector<std::string> > Filter_t;
+    typedef boost::make_recursive_variant<
+        std::string,
+        std::vector< boost::recursive_variant_ >
+        >::type Filter_t;
+
+    /**
+     * Simplified JSON representation (= no escaping of special characters),
+     * for debugging and error reporting.
+     */
+    static std::string Filter2String(const Filter_t &filter);
+
+    /**
+     * Throws "expected <item>, got instead: <filter as string>" when
+     * conversion to V fails.
+     */
+    static const std::string &getFilterString(const Filter_t &filter, const char *expected);
+    static const std::vector<Filter_t> &getFilterArray(const Filter_t &filter, const char *expected);
 
     /**
      * Creates a filter instance or throws an error when that is not
      * possible.
      *
-     * @param order     factory-specific string which chooses one of
-     *                  the search criteria supported by the factory
+     * @param  represents a (sub-)filter
+     * @level  0 at the root of the filter, incremented by one for each
+     *         non-trivial indirection; i.e., [ [ <filter> ] ] still
+     *         treats <filter> as if it was the root search
+     *
      * @return a valid instance, must not be NULL
      */
-    virtual boost::shared_ptr<IndividualFilter> createFilter(const Filter_t &filter) = 0;
+    virtual boost::shared_ptr<IndividualFilter> createFilter(const Filter_t &filter, int level) = 0;
+
+    /**
+     * To be called when parsing a Filter_t caused an exception.
+     * Will add information about the filter and a preamble, if
+     * called at the top level.
+     */
+    static void handleFilterException(const Filter_t &filter, int level, const std::string *file, int line);
 
     /**
      * Pre-computed data for a single FolksIndividual which will be needed

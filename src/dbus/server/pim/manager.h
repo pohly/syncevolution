@@ -80,7 +80,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void search(const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
                 const GDBusCXX::Caller_t &ID,
                 const boost::shared_ptr<GDBusCXX::Watch> &watch,
-                const LocaleFactory::Filter_t &filter,
+                const std::vector<LocaleFactory::Filter_t> &filter,
                 const GDBusCXX::DBusObject_t &agentPath);
  private:
     void searchWithRegistry(const ESourceRegistryCXX &registry,

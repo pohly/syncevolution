@@ -189,6 +189,15 @@ class MatchAll : public IndividualFilter
     virtual bool matches(const IndividualData &data) const { return true; }
 };
 
+/**
+ * A fake filter which just carries the maximum result parameter.
+ * Separate type because the dynamic_cast<> can be used to detect
+ * this special case.
+ */
+class ParamFilter : public MatchAll
+{
+};
+
 class FullView;
 
 /**

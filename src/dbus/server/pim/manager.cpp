@@ -762,14 +762,16 @@ public:
     }
 
     /** ViewControl.RefineSearch() */
-    void refineSearch(const LocaleFactory::Filter_t &filter)
+    void refineSearch(const std::vector<LocaleFactory::Filter_t> &filterArray)
     {
-        replaceSearch(filter, true);
+        replaceSearch(filterArray, true);
     }
 
-    void replaceSearch(const LocaleFactory::Filter_t &filter, bool refine)
+    void replaceSearch(const std::vector<LocaleFactory::Filter_t> &filterArray, bool refine)
     {
-        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
+        // Same as in Search().
+        LocaleFactory::Filter_t filter = filterArray;
+        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter, 0);
         m_view->replaceFilter(individualFilter, refine);
     }
 };
@@ -778,13 +780,25 @@ unsigned int ViewResource::m_counter;
 void Manager::search(const boost::shared_ptr< GDBusCXX::Result1<GDBusCXX::DBusObject_t> > &result,
                      const GDBusCXX::Caller_t &ID,
                      const boost::shared_ptr<GDBusCXX::Watch> &watch,
-                     const LocaleFactory::Filter_t &filter,
+                     const std::vector<LocaleFactory::Filter_t> &filterVector,
                      const GDBusCXX::DBusObject_t &agentPath)
 {
     // TODO: figure out a native, thread-safe API for this.
 
     // Start folks in parallel with asking for an ESourceRegistry.
     start();
+
+    // We use a std::vector as outer type to help Python decide how to
+    // send the empty list []. When we declare our parameter as
+    // variant instead of array of variants, as we do now, then the
+    // Python programmer has to use dbus.Array([], signature='s'),
+    // which breaks backwards compatibility (wasn't necessary earlier)
+    // and is not easy to use.
+    //
+    // But before we can pass the filter on, we need to turn it into
+    // a variant containing the vector.
+    LocaleFactory::Filter_t filter;
+    filter = filterVector;
 
     // We don't know for sure whether we'll need the ESourceRegistry.
     // Ask for it, just to be sure. If we need to hurry because we are
@@ -840,7 +854,7 @@ void Manager::doSearch(const ESourceRegistryCXX &registry,
     std::string ebookFilter;
     // Always use a filtered view. That way we can implement ReplaceView or RefineView
     // without having to switch from a FullView to a FilteredView.
-    boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter);
+    boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter, 0);
     ebookFilter = individualFilter->getEBookFilter();
     if (quiescent) {
         // Don't search via EDS directly because the unified
