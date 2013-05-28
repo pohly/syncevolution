@@ -98,6 +98,43 @@ void LocaleFactory::handleFilterException(const Filter_t &filter, int level, con
     }
 }
 
+class LogicFilter : public IndividualFilter
+{
+protected:
+    std::vector< boost::shared_ptr<IndividualFilter> > m_subFilter;
+public:
+    void addFilter(const boost::shared_ptr<IndividualFilter> &filter) { m_subFilter.push_back(filter); }
+};
+
+class OrFilter : public LogicFilter
+{
+public:
+    virtual bool matches(const IndividualData &data) const
+    {
+        BOOST_FOREACH (const boost::shared_ptr<IndividualFilter> &filter, m_subFilter) {
+            if (filter->matches(data)) {
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+class AndFilter : public LogicFilter
+{
+public:
+    virtual bool matches(const IndividualData &data) const
+    {
+        BOOST_FOREACH (const boost::shared_ptr<IndividualFilter> &filter, m_subFilter) {
+            if (!filter->matches(data)) {
+                return false;
+            }
+        }
+
+        // Does not match if empty, just like 'or'.
+        return !m_subFilter.empty();
+    }
+};
 
 boost::shared_ptr<IndividualFilter> LocaleFactory::createFilter(const Filter_t &filter, int level)
 {
@@ -156,6 +193,14 @@ boost::shared_ptr<IndividualFilter> LocaleFactory::createFilter(const Filter_t &
                 int maxResults = boost::lexical_cast<int>(limit);
                 res.reset(new ParamFilter());
                 res->setMaxResults(maxResults);
+            } else if (operation == "or" || operation == "and") {
+                boost::shared_ptr<LogicFilter> logicFilter(operation == "or" ?
+                                                           static_cast<LogicFilter *>(new OrFilter()) :
+                                                           static_cast<LogicFilter *>(new AndFilter()));
+                for (size_t i = 1; i < terms.size(); i++ ) {
+                    logicFilter->addFilter(createFilter(terms[i], level + 1));
+                }
+                res = logicFilter;
             } else {
                 SE_THROW(StringPrintf("Unknown operation '%s'", operation.c_str()));
             }
