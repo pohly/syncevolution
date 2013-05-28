@@ -132,6 +132,26 @@ class GVariantCXX : boost::noncopyable
     }
 };
 
+class GVariantIterCXX : boost::noncopyable
+{
+    GVariantIter *m_var;
+ public:
+    /** takes over ownership */
+    GVariantIterCXX(GVariantIter *var = NULL) : m_var(var) {}
+    ~GVariantIterCXX() { if (m_var) { g_variant_iter_free(m_var); } }
+
+    operator GVariantIter * () { return m_var; }
+    GVariantIterCXX &operator = (GVariantIter *var) {
+        if (m_var != var) {
+            if (m_var) {
+                g_variant_iter_free(m_var);
+            }
+            m_var = var;
+        }
+        return *this;
+    }
+};
+
 class DBusMessagePtr;
 
 inline void throwFailure(const std::string &object,
@@ -2079,6 +2099,94 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
 
     typedef boost::variant<V1, V2> host_type;
     typedef const boost::variant<V1, V2> &arg_type;
+};
+
+/**
+ * A recursive variant. Can represent values of a certain type V and
+ * vectors with a mixture of such values and the variant. Limiting
+ * this to vectors is done for the sake of simplicity and because
+ * vector is fairly efficient to work with, in particular when
+ * implementing methods.
+ *
+ * It would be nice to not refer to boost internals here. But using
+ * "typename boost::make_recursive_variant<V, std::vector< boost::recursive_variant_ > >::type"
+ * instead of the expanded
+ * "boost::variant< boost::detail::variant::recursive_flag<V>, A>"
+ * leads to a compiler error:
+ * class template partial specialization contains a template parameter that can not be deduced; this partial specialization will never be used [-Werror]
+ *  ...dbus_traits < typename boost::make_recursive_variant<V, std::vector< boost::recursive_variant_ > >::type > ...
+ *     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ */
+template <class V, class A> struct dbus_traits < boost::variant<boost::detail::variant::recursive_flag<V>, A>  > :  public dbus_traits_base
+{
+    static std::string getType() { return "v"; }
+    static std::string getSignature() { return getType(); }
+    static std::string getReply() { return ""; }
+
+    typedef boost::variant<boost::detail::variant::recursive_flag<V>, A> host_type;
+    typedef const host_type &arg_type;
+
+    static void get(ExtractArgs &context,
+                    GVariantIter &iter, host_type &value)
+    {
+        GVariantIterCXX itercopy(g_variant_iter_copy(&iter));
+
+        // Peek at next element, then decide what to do with it.
+        GVariantCXX var(g_variant_iter_next_value(&iter));
+        // We accept a variant, the plain type V, or an array.
+        // This is necessary for clients like Python which
+        // send [['foo', 'bar']] as 'aas' when seeing 'v'
+        // as signature.
+        if (var == NULL) {
+            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
+        }
+
+        const char *type = g_variant_get_type_string(var);
+        if (boost::iequals(type, "v")) {
+            // Strip the outer variant and decode the inner value recursively, in
+            // our own else branch.
+            GVariantIter varIter;
+            g_variant_iter_init(&varIter, var);
+            dbus_traits<host_type>::get(context, varIter, value);
+        } else if (boost::iequals(type, dbus_traits<V>::getSignature())) {
+            V val;
+            dbus_traits<V>::get(context, *itercopy, val);
+            value = val;
+        } else if (type[0] == 'a') {
+            std::vector<host_type> val;
+            dbus_traits< std::vector<host_type> >::get(context, *itercopy, val);
+            value = val;
+        } else if (type[0] == '(') {
+            // Treat a tuple like an array. We have to iterate ourself here.
+            std::vector<host_type> val;
+            GVariantIter tupIter;
+            g_variant_iter_init(&tupIter, var);
+            GVariantIterCXX copy(g_variant_iter_copy(&tupIter));
+            // Step through the elements in lockstep. We need this
+            // because we must not call the get() method when there is
+            // nothing to unpack.
+            while (GVariantCXX(g_variant_iter_next_value(copy))) {
+                host_type tmp;
+                dbus_traits<host_type>::get(context, tupIter, tmp);
+                val.push_back(tmp);
+            }
+            value = val;
+        } else {
+            // More strict than the other variants, because it is mostly used for
+            // method calls where we don't want to silently ignore parts of the
+            // parameter.
+            throw std::runtime_error(std::string("expected recursive variant containing " + dbus_traits<V>::getSignature() + ", got " + type));
+            return;
+        }
+    }
+
+    static void append(GVariantBuilder &builder, const boost::variant<V> &value)
+    {
+        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
+        boost::apply_visitor(append_visitor(builder), value);
+        g_variant_builder_close(&builder);
+    }
+
 };
 
 /**
