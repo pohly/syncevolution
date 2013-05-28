@@ -316,9 +316,9 @@ public:
         }
         FolksEmailDetails *emailDetails = FOLKS_EMAIL_DETAILS(individual);
         GeeSet *emails = folks_email_details_get_email_addresses(emailDetails);
-        BOOST_FOREACH (FolksEmailFieldDetails *email, GeeCollCXX<FolksEmailFieldDetails *>(emails, ADD_REF)) {
+        BOOST_FOREACH (FolksAbstractFieldDetails *email, GeeCollCXX<FolksAbstractFieldDetails *>(emails, ADD_REF)) {
             const gchar *value =
-                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(email)));
+                reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(email));
             if (containsSearchText(value)) {
                 return true;
             }
