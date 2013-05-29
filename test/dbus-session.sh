@@ -7,6 +7,18 @@
 eval `dbus-launch`
 export DBUS_SESSION_BUS_ADDRESS
 
+# Ensure that XDG dirs exist. Otherwise some daemons do not work correctly.
+createxdg() {
+    dir="$1"
+
+    if [ "$dir" ]; then
+        mkdir -p "$dir"
+    fi
+}
+createxdg "$XDG_CONFIG_HOME"
+createxdg "$XDG_CACHE_HOME"
+createxdg "$XDG_DATA_HOME"
+
 # Work-around for GNOME keyring daemon not started
 # when accessed via org.freedesktop.secrets: start it
 # explicitly.
