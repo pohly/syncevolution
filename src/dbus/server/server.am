@@ -1,5 +1,6 @@
 EXTRA_DIST += \
   src/dbus/server/pim/README \
+  src/dbus/server/pim/pim-manager-api.txt \
   src/dbus/server/pim/examples/search.py \
   src/dbus/server/pim/examples/sync.py \
   src/dbus/server/pim/testpim.py \
