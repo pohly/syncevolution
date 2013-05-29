@@ -111,7 +111,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
         int32_t, int32_t, int32_t, true> emitSourceProgress;
 
     /** SyncContext::m_sourceSyncedSignal */
-    GDBusCXX::EmitSignal2<std::string, SyncSourceReport> emitSourceSynced;
+    GDBusCXX::EmitSignal2<std::string, SyncSourceReport, true> emitSourceSynced;
 
     /** SyncContext::reportStepCmd -> true/false for "waiting on IO" */
     GDBusCXX::EmitSignal1<bool, true> emitWaiting;
