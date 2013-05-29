@@ -179,6 +179,8 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
         if(conn == NULL) {
             if (err) {
                 err->set(error);
+            } else {
+                g_clear_error(&error);
             }
             return NULL;
         }
@@ -190,6 +192,8 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
         if(conn == NULL) {
             if (err) {
                 err->set(error);
+            } else {
+                g_clear_error(&error);
             }
             return NULL;
         }
@@ -225,6 +229,8 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
                            false);
     if (!conn && err) {
         err->set(error);
+    } else {
+        g_clear_error(&error);
     }
 
     return conn;
@@ -301,6 +307,8 @@ boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &addres
     if (!server) {
         if (err) {
             err->set(error);
+        } else {
+            g_clear_error(&error);
         }
         return boost::shared_ptr<DBusServerCXX>();
     }
