@@ -2751,7 +2751,6 @@ void SyncTests::addTests(bool isFirstSource) {
                 // only make sense when restarting works.
                 ADD_TEST(SyncTests, testTwoWayRestart);
                 if (getenv("CLIENT_TEST_PEER_CAN_RESTART")) {
-                    ADD_TEST(SyncTests, testTwoWayRestart);
                     ADD_TEST(SyncTests, testSlowRestart);
                     ADD_TEST(SyncTests, testRefreshFromLocalRestart);
                     ADD_TEST(SyncTests, testOneWayFromLocalRestart);
