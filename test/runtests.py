@@ -1170,7 +1170,8 @@ test = SyncEvolutionTest("apple", compile,
                          "Client::Sync::eds_event Client::Sync::eds_task Client::Sync::eds_contact Client::Source::apple_caldav Client::Source::apple_caldavtodo Client::Source::apple_carddav",
                          [ "apple_caldav", "apple_caldavtodo", "apple_carddav", "eds_event", "eds_task", "eds_contact" ],
                          "CLIENT_TEST_WEBDAV='apple caldav caldavtodo carddav' "
-                         "CLIENT_TEST_NUM_ITEMS=250 " # test is local, so we can afford a higher number
+                         "CLIENT_TEST_NUM_ITEMS=100 " # test is local, so we can afford a higher number;
+                         # used to be 250, but with valgrind that led to runtimes of over 40 minutes in testManyItems (too long!)
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          ,
                          testPrefix=options.testprefix)
