@@ -4946,6 +4946,41 @@
    fun:g_dbus_object_proxy_set_property
 }
 
+# ==16352== 16 bytes in 1 blocks are definitely lost in loss record 1,013 of 3,623
+# ==16352==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==16352==    by 0xA821D40: g_malloc (gmem.c:159)
+# ==16352==    by 0xA836C82: g_slice_alloc (gslice.c:1003)
+# ==16352==    by 0xA837A7D: g_slist_prepend (gslist.c:265)
+# ==16352==    by 0xA39889A: g_object_notify_queue_add.isra.4 (gobject.c:307)
+# ==16352==    by 0xA398B22: g_object_constructor (gobject.c:1363)
+# ==16352==    by 0xA399F70: g_object_newv (gobject.c:1719)
+# ==16352==    by 0xA39A75F: g_object_new_valist (gobject.c:1836)
+# ==16352==    by 0x9C6F33D: g_initable_new_valist (ginitable.c:224)
+# ==16352==    by 0x9C6F438: g_initable_new (ginitable.c:148)
+# ==16352==    by 0x9CED9AE: add_interfaces (gdbusobjectmanagerclient.c:1478)
+# ==16352==    by 0x9CEDFC3: process_get_all_result (gdbusobjectmanagerclient.c:1627)
+# ==16352==    by 0x9CEE8E5: initable_init (gdbusobjectmanagerclient.c:1383)
+# ==16352==    by 0x9C6F34E: g_initable_new_valist (ginitable.c:228)
+# ==16352==    by 0x9C6F438: g_initable_new (ginitable.c:148)
+# ==16352==    by 0x7F0D400: e_dbus_object_manager_client_new_for_bus_sync (e-dbus-source.c:5708)
+# ==16352==    by 0x7EF7E5B: source_registry_object_manager_thread (e-source-registry.c:733)
+# ==16352==    by 0xA83F964: g_thread_proxy (gthread.c:797)
+# ==16352==    by 0xAAFCB4F: start_thread (pthread_create.c:304)
+# ==16352==    by 0xB793A7C: clone (clone.S:112)
+# ==16352== 
+#
+# Occurs very infrequently, race condition?
+{
+   notify leak in ESourceRegistry thread
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_object_notify_queue_add*
+   ...
+   fun:e_dbus_object_manager_client_new_for_bus_sync
+   fun:source_registry_object_manager_thread
+}
+
 # ==19542== 104 (40 direct, 64 indirect) bytes in 1 blocks are definitely lost in loss record 5,479 of 6,315
 # ==19542==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
 # ==19542==    by 0x955DDE0: g_malloc (gmem.c:159)
