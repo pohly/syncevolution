@@ -89,7 +89,7 @@ libphonenumber and is described below.
 Sorting
 =======
 
-The sort order can be "first/last", "last/first", "full name".
+The sort order can be "first/last", "last/first", "fullname".
 
     "first/last" sorts based on the first name stored in the "name"
     property, with the last name used to break ties between equal
@@ -97,7 +97,7 @@ The sort order can be "first/last", "last/first", "full name".
 
     "last/first" reverts that comparison.
 
-    "full name" sorts based on the full name chosen for the contact if
+    "fullname" sorts based on the full name chosen for the contact if
     there is such a string, otherwise it uses the concatenation of the
     individual name componts without prefix (= "[<first name>]
     [<middle name>] [<last name>] [<suffix>])" as fallback. In other
