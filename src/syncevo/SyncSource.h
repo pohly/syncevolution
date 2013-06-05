@@ -770,8 +770,8 @@ template<class F> class OperationWrapperSwitch<F, 0>
      * speaking this modifies the behavior of the
      * implementation.
      */
-    PreSignal &getPreSignal() const { return const_cast<OperationWrapperSwitch<F, 0> *>(this)->m_pre; }
-    PostSignal &getPostSignal() const { return const_cast<OperationWrapperSwitch<F, 0> *>(this)->m_post; }
+    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
+    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
  protected:
     OperationType m_operation;
@@ -822,8 +822,8 @@ template<class F> class OperationWrapperSwitch<F, 1>
         return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
     }
 
-    PreSignal &getPreSignal() const { return const_cast<OperationWrapperSwitch<F, 1> *>(this)->m_pre; }
-    PostSignal &getPostSignal() const { return const_cast<OperationWrapperSwitch<F, 1> *>(this)->m_post; }
+    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
+    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
  protected:
     OperationType m_operation;
@@ -875,8 +875,8 @@ template<class F> class OperationWrapperSwitch<F, 2>
         return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
     }
 
-    PreSignal &getPreSignal() const { return const_cast<OperationWrapperSwitch<F, 2> *>(this)->m_pre; }
-    PostSignal &getPostSignal() const { return const_cast<OperationWrapperSwitch<F, 2> *>(this)->m_post; }
+    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
+    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
  protected:
     OperationType m_operation;
@@ -929,8 +929,8 @@ template<class F> class OperationWrapperSwitch<F, 3>
         return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
     }
 
-    PreSignal &getPreSignal() const { return const_cast<OperationWrapperSwitch<F, 3> *>(this)->m_pre; }
-    PostSignal &getPostSignal() const { return const_cast<OperationWrapperSwitch<F, 3> *>(this)->m_post; }
+    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
+    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
  protected:
     OperationType m_operation;
