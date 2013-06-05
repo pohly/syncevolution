@@ -1061,6 +1061,7 @@ public:
     using inherited::end;
     using inherited::rbegin;
     using inherited::rend;
+    using inherited::size;
 
     /** transfers ownership (historic reasons for storing plain pointer...) */
     void addSource(cxxptr<SyncSource> &source) { checkSource(source); push_back(source.release()); }
@@ -1811,6 +1812,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
             SE_LOG_INFO(NULL, "%s: received %d",
                         source.getDisplayName().c_str(), extra1);
         }
+        source.recordTotalNumItemsReceived(extra1);
         break;
     case sysync::PEV_ITEMSENT:
         /* item sent,     extra1=current item count,
@@ -3704,6 +3706,7 @@ SyncMLStatus SyncContext::doSync()
     Timespec sendStart, resendStart;
     int requestNum = 0;
     sysync::uInt16 previousStepCmd = stepCmd;
+    std::vector<int> numItemsReceived; // source->getTotalNumItemsReceived() for each source, see STEPCMD_SENDDATA
     do {
         try {
             // check for suspend, if so, modify step command for next step
@@ -3880,6 +3883,34 @@ SyncMLStatus SyncContext::doSync()
                 m_retries = 0;
                 break;
             case sysync::STEPCMD_SENDDATA: {
+                // We'll be busy for a while with network IO, so give
+                // sources a chance to do some work in parallel.
+                if (m_sourceListPtr) {
+                    bool needResults = true;
+                    if (numItemsReceived.size() < m_sourceListPtr->size()) {
+                        numItemsReceived.insert(numItemsReceived.end(),
+                                                m_sourceListPtr->size() - numItemsReceived.size(),
+                                                0);
+                    }
+                    for (size_t i = 0; i < numItemsReceived.size(); i++) {
+                        SyncSource *source = (*m_sourceListPtr->getSourceSet())[i];
+                        int received = source->getTotalNumItemsReceived();
+                        SE_LOG_DEBUG(source->getDisplayName(), "total number of items received %d",
+                                     received);
+                        if (numItemsReceived[i] != received) {
+                            numItemsReceived[i] = received;
+                            needResults = false;
+                        }
+                    }
+
+                    BOOST_FOREACH (SyncSource *source, *m_sourceListPtr) {
+                        source->flush();
+                        if (needResults) {
+                            source->finish();
+                        }
+                    }
+                }
+
                 // send data to remote
 
                 SharedKey sessionKey = m_engine.OpenSessionKey(session);
