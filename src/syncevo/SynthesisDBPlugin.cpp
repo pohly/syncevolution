@@ -785,11 +785,6 @@ TSyError SyncEvolution_DeleteItem( CContext aContext, cItemID aID )
 extern "C"
 TSyError SyncEvolution_FinalizeLocalID( CContext aContext, cItemID aID, ItemID updID )
 {
-    SyncSource *source = DBC( aContext );
-    if (!source) {
-        return LOCERR_WRONGUSAGE;
-    }
-    SE_LOG_DEBUG(source->getDisplayName(), "FinalizeLocalID not implemented");
     return LOCERR_NOTIMP;
 }
 
