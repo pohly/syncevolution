@@ -3904,9 +3904,9 @@ SyncMLStatus SyncContext::doSync()
                     }
 
                     BOOST_FOREACH (SyncSource *source, *m_sourceListPtr) {
-                        source->flush();
+                        source->flushItemChanges();
                         if (needResults) {
-                            source->finish();
+                            source->finishItemChanges();
                         }
                     }
                 }

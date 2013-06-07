@@ -143,20 +143,41 @@ std::string TrackingSyncSource::endSync(bool success)
     return "1";
 }
 
-TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItem(const std::string &luid, const std::string &item)
+TrackingSyncSource::InsertItemResult TrackingSyncSource::continueInsertItem(const boost::function<InsertItemResult ()> &check, const std::string &luid)
 {
-    InsertItemResult res = insertItem(luid, item, false);
-    if (res.m_state != ITEM_NEEDS_MERGE) {
+    InsertItemResult res = check();
+    if (res.m_state == ITEM_AGAIN) {
+        // Delay updating the revision.
+        res.m_continue = InsertItemResult::Continue_t(boost::bind(&TrackingSyncSource::continueInsertItem, this,
+                                                                  res.m_continue, luid));
+    } else if (res.m_state != ITEM_NEEDS_MERGE) {
         updateRevision(*m_trackingNode, luid, res.m_luid, res.m_revision);
     }
     return res;
 }
 
+TrackingSyncSource::InsertItemResult TrackingSyncSource::doInsertItem(const std::string &luid, const std::string &item, bool raw)
+{
+    // insertItem() is overloaded, need to disambiguate here.
+    return continueInsertItem(boost::bind(static_cast<InsertItemResult (TrackingSyncSource::*)(const std::string &luid, const std::string &item, bool raw)>(&TrackingSyncSource::insertItem),
+                                          this, luid, item, raw),
+                              luid);
+}
+
+TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItem(const std::string &luid, const std::string &item)
+{
+    return doInsertItem(luid, item, false);
+}
+
 TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItemRaw(const std::string &luid, const std::string &item)
 {
-    InsertItemResult res = insertItem(luid, item, true);
-    if (res.m_state != ITEM_NEEDS_MERGE) {
-        updateRevision(*m_trackingNode, luid, res.m_luid, res.m_revision);
+    InsertItemResult res = doInsertItem(luid, item, true);
+    while (res.m_state == ITEM_AGAIN) {
+        // Flush and wait, because caller (command line, restore) is
+        // not prepared to deal with asynchronous execution.
+        flushItemChanges();
+        finishItemChanges();
+        res = res.m_continue();
     }
     return res;
 }

@@ -1620,6 +1620,28 @@ class SyncSourceBase {
      */
     virtual const Operations &getOperations() const = 0;
 
+    /**
+     * Start flushing item modifications which were not executed right
+     * away. Item modifications (add/update/delete) can be delayed by
+     * returning LOCERR_AGAIN or, when using for example
+     * SyncSourceSerialize aka TrackingSyncSource, by returning a "check"
+     * function instead of the final result.
+     *
+     * The sync engine calls this method after processing each incoming
+     * SyncML message.
+     */
+    virtual void flushItemChanges() {}
+
+    /**
+     * Called after flush() to ensure that all pending modifications
+     * have completed. Called when the engine needs the results.
+     *
+     * Called by the sync engine when the SyncML peer ran out of new
+     * item changes. At that time we would start sending back and forth
+     * empty messages, unless we can provide results.
+     */
+    virtual void finishItemChanges() {}
+
  protected:
     struct SynthesisInfo {
         /**
@@ -1832,28 +1854,6 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * the client asks for it, but not sooner.
      */
     virtual void open() = 0;
-
-    /**
-     * Start flushing item modifications which were not executed right
-     * away. Item modifications (add/update/delete) can be delayed by
-     * returning LOCERR_AGAIN or, when using for example
-     * SyncSourceSerialize aka TrackingSyncSource, by returning a "check"
-     * function instead of the final result.
-     *
-     * The sync engine calls this method after processing each incoming
-     * SyncML message.
-     */
-    virtual void flush() {}
-
-    /**
-     * Called after flush() to ensure that all pending modifications
-     * have completed. Called when the engine needs the results.
-     *
-     * Called by the sync engine when the SyncML peer ran out of new
-     * item changes. At that time we would start sending back and forth
-     * empty messages, unless we can provide results.
-     */
-    virtual void finish() {}
 
     /**
      * Returns the actual database that is in use. open() must
@@ -2226,6 +2226,12 @@ class SyncSourceDelete : virtual public SyncSourceBase {
 
 enum InsertItemResultState {
     /**
+     * Operation not complete, invoke callback in ItemResult to check
+     * for progress.
+     */
+    ITEM_AGAIN,
+
+    /**
      * item added or updated as requested
      */
     ITEM_OKAY,
@@ -2297,9 +2303,21 @@ class SyncSourceRaw : virtual public SyncSourceBase {
             m_state(state)
             {}
 
+        /**
+         * Constructor for the case where the final result is not available yet.
+         *
+         * @param check   will be called again later to poll for completion
+         */
+        InsertItemResult(const boost::function<InsertItemResult ()> &check) :
+        m_state(ITEM_AGAIN),
+            m_continue(check)
+        {}
+
         string m_luid;
         string m_revision;
         InsertItemResultState m_state;
+        typedef ContinueOperation<InsertItemResult ()> Continue_t;
+        Continue_t m_continue;
     };
 
     /** same as SyncSourceSerialize::insertItem(), but with internal format */
@@ -2396,8 +2414,8 @@ class SyncSourceSerialize : virtual public SyncSourceBase, virtual public SyncSo
     virtual void readItem(const std::string &luid, std::string &item) = 0;
 
     /* implement SyncSourceRaw under the assumption that the internal and engine format are identical */
-    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item) { return insertItem(luid, item); }
-    virtual void readItemRaw(const std::string &luid, std::string &item) { return readItem(luid, item); }
+    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item);
+    virtual void readItemRaw(const std::string &luid, std::string &item);
 
     /** set Synthesis DB Interface operations */
     void init(SyncSource::Operations &ops);
@@ -2412,7 +2430,9 @@ class SyncSourceSerialize : virtual public SyncSourceBase, virtual public SyncSo
                                   XMLConfigFragments &fragments);
  private:
     sysync::TSyError readItemAsKey(sysync::cItemID aID, sysync::KeyH aItemKey);
-    sysync::TSyError insertItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID);
+    SyncSource::Operations::InsertItemAsKeyResult_t insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID);
+    SyncSource::Operations::UpdateItemAsKeyResult_t updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID);
+    sysync::TSyError insertContinue(sysync::ItemID newID, const InsertItemResult::Continue_t &cont);
 };
 
 /**

@@ -275,6 +275,10 @@ class TrackingSyncSource : public TestingSyncSource,
     virtual void enableServerMode();
     virtual bool serverModeEnabled() const;
     virtual std::string getPeerMimeType() const;
+
+ private:
+    InsertItemResult doInsertItem(const std::string &luid, const std::string &item, bool raw);
+    InsertItemResult continueInsertItem(const boost::function<InsertItemResult ()> &check, const std::string &luid);
 };
 
 

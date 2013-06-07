@@ -731,17 +731,19 @@ sysync::TSyError SyncSourceSerialize::readItemAsKey(sysync::cItemID aID, sysync:
     return res;
 }
 
-sysync::TSyError SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
+SyncSource::Operations::InsertItemAsKeyResult_t SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID)
 {
     SharedBuffer data;
     TSyError res = getSynthesisAPI()->getValue(aItemKey, "data", data);
 
     if (!res) {
-        InsertItemResult inserted =
-            insertItem(!aID ? "" : aID->item, data.get());
-        newID->item = StrAlloc(inserted.m_luid.c_str());
+        InsertItemResult inserted = insertItem("", data.get());
         switch (inserted.m_state) {
         case ITEM_OKAY:
+            break;
+        case ITEM_AGAIN:
+            // Skip setting the newID.
+            return Operations::InsertItemAsKeyContinue_t(boost::bind(&SyncSourceSerialize::insertContinue, this, _2, inserted.m_continue));
             break;
         case ITEM_REPLACED:
             res = sysync::DB_DataReplaced;
@@ -753,18 +755,103 @@ sysync::TSyError SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sys
             res = sysync::DB_Conflict;
             break;
         }
+        newID->item = StrAlloc(inserted.m_luid.c_str());
     }
 
     return res;
 }
+
+SyncSource::Operations::UpdateItemAsKeyResult_t SyncSourceSerialize::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
+{
+    SharedBuffer data;
+    TSyError res = getSynthesisAPI()->getValue(aItemKey, "data", data);
+
+    if (!res) {
+        InsertItemResult inserted = insertItem(aID->item, data.get());
+        switch (inserted.m_state) {
+        case ITEM_OKAY:
+            break;
+        case ITEM_AGAIN:
+            // Skip setting the newID.
+            return Operations::UpdateItemAsKeyContinue_t(boost::bind(&SyncSourceSerialize::insertContinue, this, _3, inserted.m_continue));
+            break;
+        case ITEM_REPLACED:
+            res = sysync::DB_DataReplaced;
+            break;
+        case ITEM_MERGED:
+            res = sysync::DB_DataMerged;
+            break;
+        case ITEM_NEEDS_MERGE:
+            res = sysync::DB_Conflict;
+            break;
+        }
+        newID->item = StrAlloc(inserted.m_luid.c_str());
+    }
+
+    return res;
+}
+
+sysync::TSyError SyncSourceSerialize::insertContinue(sysync::ItemID newID, const InsertItemResult::Continue_t &cont)
+{
+    // The engine cannot tell us when it needs results (for example,
+    // in the "final message received from peer" case in
+    // TSyncSession::EndMessage(), so assume that it does whenever it
+    // calls us again => flush and wait.
+    flushItemChanges();
+    finishItemChanges();
+
+    InsertItemResult inserted = cont();
+    TSyError res = sysync::LOCERR_OK;
+    switch (inserted.m_state) {
+    case ITEM_OKAY:
+        break;
+    case ITEM_AGAIN:
+        // Skip setting the newID.
+        return sysync::LOCERR_AGAIN;
+        break;
+    case ITEM_REPLACED:
+        res = sysync::DB_DataReplaced;
+        break;
+    case ITEM_MERGED:
+        res = sysync::DB_DataMerged;
+        break;
+    case ITEM_NEEDS_MERGE:
+        res = sysync::DB_Conflict;
+        break;
+    }
+    newID->item = StrAlloc(inserted.m_luid.c_str());
+    return res;
+}
+
+SyncSourceSerialize::InsertItemResult SyncSourceSerialize::insertItemRaw(const std::string &luid, const std::string &item)
+{
+    InsertItemResult result = insertItem(luid, item);
+
+    while (result.m_state == ITEM_AGAIN) {
+        // Flush and wait, because caller (command line, restore) is
+        // not prepared to deal with asynchronous execution.
+        flushItemChanges();
+        finishItemChanges();
+        result = result.m_continue();
+    }
+
+    return result;
+}
+
+void SyncSourceSerialize::readItemRaw(const std::string &luid, std::string &item)
+{
+    return readItem(luid, item);
+}
+
+
 
 void SyncSourceSerialize::init(SyncSource::Operations &ops)
 {
     ops.m_readItemAsKey = boost::bind(&SyncSourceSerialize::readItemAsKey,
                                       this, _1, _2);
     ops.m_insertItemAsKey = boost::bind(&SyncSourceSerialize::insertItemAsKey,
-                                        this, _1, (sysync::cItemID)NULL, _2);
-    ops.m_updateItemAsKey = boost::bind(&SyncSourceSerialize::insertItemAsKey,
+                                        this, _1, _2);
+    ops.m_updateItemAsKey = boost::bind(&SyncSourceSerialize::updateItemAsKey,
                                         this, _1, _2, _3);
 }
 
