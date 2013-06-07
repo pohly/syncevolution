@@ -1134,6 +1134,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         if (!maxsessions.empty()) {
             config->setMaxLogDirs(maxLogDirs);
         }
+        config->setLogLevel(atoi(getEnv("SYNCEVOLUTION_LOGLEVEL", "0")));
         boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
         source->setBackend("evolution-contacts");
         source->setDatabaseID(localDatabaseName);
@@ -1168,6 +1169,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         if (!logdir.empty()) {
             config->setLogDir(logdir);
         }
+        config->setLogLevel(atoi(getEnv("SYNCEVOLUTION_LOGLEVEL", "0")));
         if (!maxsessions.empty()) {
             config->setMaxLogDirs(maxLogDirs);
         }
