@@ -973,9 +973,21 @@ void LogDirLogger::messagev(const MessageOptions &options,
         if (logdir->m_client.getEngine().get()) {
             va_list argscopy;
             va_copy(argscopy, args);
-            // once to Synthesis log, with full debugging
+            // Once to Synthesis log, with full debugging.
+            // The API does not support a process name, so
+            // put it into the prefix as "<procname> <prefix>".
+            std::string prefix;
+            if (options.m_processName) {
+                prefix += *options.m_processName;
+            }
+            if (options.m_prefix) {
+                if (!prefix.empty()) {
+                    prefix += " ";
+                }
+                prefix += *options.m_prefix;
+            }
             logdir->m_client.getEngine().doDebug(options.m_level,
-                                                 options.m_prefix ? options.m_prefix->c_str() : NULL,
+                                                 prefix.empty() ? NULL : prefix.c_str(),
                                                  options.m_file,
                                                  options.m_line,
                                                  options.m_function,
