@@ -3977,7 +3977,7 @@ SyncMLStatus SyncContext::doSync()
                     } else {
                         SE_LOG_DEBUG(NULL, "unexpected content type '%s' in reply, %d bytes:\n%.*s",
                                      contentType.c_str(), (int)replylen, (int)replylen, reply);
-                        SE_LOG_ERROR(NULL, "unexpected reply from server; might be a temporary problem, try again later");
+                        SE_LOG_ERROR(NULL, "unexpected reply from peer; might be a temporary problem, try again later");
                       } //fall through to network failure case
                 }
                 /* If this is a network error, it usually failed quickly, retry
