@@ -2,6 +2,9 @@
       <manufacturer>Patrick Ohly</manufacturer>
       <model>SyncEvolution</model>
 
+      <!-- enable reordering when talking to ourselves, enables asynchronous and batched execution -->
+      <strictexecordering>no</strictexecordering>
+
       <include rule="HAVE-SYNCEVOLUTION-EXDATE-DETACHED"/>
 
       <include rule="HAVE-EVOLUTION-UI-SLOT"/>
