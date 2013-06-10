@@ -38,6 +38,7 @@
 SE_GOBJECT_TYPE(EBookClient)
 SE_GOBJECT_TYPE(EBookClientView)
 #endif
+SE_GOBJECT_TYPE(EContact)
 
 SE_BEGIN_CXX
 
@@ -51,7 +52,7 @@ class EvolutionContactSource : public EvolutionSyncSource,
   public:
     EvolutionContactSource(const SyncSourceParams &params,
                            EVCardFormat vcardFormat = EVC_FORMAT_VCARD_30);
-    virtual ~EvolutionContactSource() { close(); }
+    virtual ~EvolutionContactSource();
 
     //
     // implementation of SyncSource
@@ -98,6 +99,46 @@ class EvolutionContactSource : public EvolutionSyncSource,
     /** valid after open(): the address book that this source references */
 #ifdef USE_EDS_CLIENT
     EBookClientCXX m_addressbook;
+    enum AccessMode {
+        SYNCHRONOUS,
+        BATCHED,
+        DEFAULT
+    } m_accessMode;
+    InitState<int> m_asyncOpCounter;
+
+    enum AsyncStatus {
+        MODIFYING, /**< insert or update request sent */
+        REVISION,  /**< asked for revision */
+        DONE       /**< finished successfully or with failure, depending on m_gerror */
+    };
+
+    struct Pending {
+        std::string m_name;
+        EContactCXX m_contact;
+        std::string m_uid;
+        std::string m_revision;
+        AsyncStatus m_status;
+        GErrorCXX m_gerror;
+
+        Pending() : m_status(MODIFYING) {}
+    };
+    typedef std::list< boost::shared_ptr<Pending> >PendingContainer_t;
+
+    /**
+     * Batched "contact add/update" operations.
+     * Delete is not batched because we need per-item status
+     * information - see removeItem().
+     */
+    PendingContainer_t m_batchedAdd;
+    PendingContainer_t m_batchedUpdate;
+    InitState<int> m_numRunningOperations;
+
+    InsertItemResult checkBatchedInsert(const boost::shared_ptr<Pending> &pending);
+    void completedAdd(const boost::shared_ptr<PendingContainer_t> &batched, gboolean success, /* const GStringListFreeCXX &uids */ GSList *uids, const GError *gerror) throw ();
+    void completedUpdate(const boost::shared_ptr<PendingContainer_t> &batched, gboolean success, const GError *gerror) throw ();
+    virtual void flushItemChanges();
+    virtual void finishItemChanges();
+
 #else
     eptr<EBook, GObject> m_addressbook;
 #endif
