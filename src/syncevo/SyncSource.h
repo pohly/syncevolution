@@ -1642,6 +1642,16 @@ class SyncSourceBase {
      */
     virtual void finishItemChanges() {}
 
+    /**
+     * In some usage scenarios, change tracking is not necessary.
+     * This includes local caching (where local data is not expected
+     * to changed outside of sync) or item manipulation.
+     *
+     * The user of a source must explicitly disable change tracking,
+     * see SyncSource.
+     */
+    virtual bool needChanges() { return true; }
+
  protected:
     struct SynthesisInfo {
         /**
@@ -1986,6 +1996,9 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     virtual long getNumDeleted() const { return m_numDeleted; }
     virtual void setNumDeleted(long num) { m_numDeleted = num; }
     virtual void incrementNumDeleted() { m_numDeleted++; }
+    virtual bool needChanges() { return m_needChanges; }
+    void setNeedChanges(bool needChanges) { m_needChanges = needChanges; }
+
 
     /**
      * Set to true in SyncContext::initSAN() when a SyncML server has
@@ -2026,6 +2039,9 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
 
     /** actual name of the source */
     std::string m_name;
+
+    /** change tracking enabled? */
+    bool m_needChanges;
 };
 
 /**

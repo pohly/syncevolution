@@ -196,7 +196,8 @@ SyncSource::SyncSource(const SyncSourceParams &params) :
     m_numDeleted(0),
     m_forceSlowSync(false),
     m_database("", ""),
-    m_name(params.getDisplayName())
+    m_name(params.getDisplayName()),
+    m_needChanges(true)
 {
 }
 
@@ -1174,10 +1175,19 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
     initRevisions();
 
     // Check whether we have valid revision information.  If not, then
-    // we need to do a slow sync. The assumption here is 
-    if (!m_revisions.empty() &&
+    // we need to do a slow sync. The assumption here is that an empty
+    // revision string marks missing information. When we don't need
+    // change information, not having a revision string is okay.
+    if (needChanges() &&
+        !m_revisions.empty() &&
         m_revisions.begin()->second.empty()) {
         forceSlowSync = true;
+        mode = CHANGES_SLOW;
+    }
+
+    // If we don't need changes, then override the mode so that
+    // we don't compute them below.
+    if (!needChanges()) {
         mode = CHANGES_SLOW;
     }
 
@@ -1246,6 +1256,10 @@ void SyncSourceRevisions::updateRevision(ConfigNode &trackingNode,
                                          const std::string &new_luid,
                                          const std::string &revision)
 {
+    if (!needChanges()) {
+        return;
+    }
+
     databaseModified();
     if (old_luid != new_luid) {
         trackingNode.removeProperty(old_luid);
@@ -1259,6 +1273,9 @@ void SyncSourceRevisions::updateRevision(ConfigNode &trackingNode,
 void SyncSourceRevisions::deleteRevision(ConfigNode &trackingNode,
                                          const std::string &luid)
 {
+    if (!needChanges()) {
+        return;
+    }
     databaseModified();
     trackingNode.removeProperty(luid);
 }

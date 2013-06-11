@@ -1328,6 +1328,7 @@ bool Cmdline::run() {
 
         checkSyncPasswords(*context);
         checkSourcePasswords(*context, source->getName(), sourceNodes);
+        source->setNeedChanges(false);
         source->open();
         const SyncSource::Operations &ops = source->getOperations();
         if (m_printItems) {

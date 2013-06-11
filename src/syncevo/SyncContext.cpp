@@ -2198,6 +2198,14 @@ void SyncContext::startSourceAccess(SyncSource *source)
         m_firstSourceAccess = false;
     }
     if (m_serverMode) {
+        // When using the source as cache, change tracking
+        // is not required. Disabling it can make item
+        // changes faster.
+        SyncMode mode = StringToSyncMode(source->getSync());
+        if (mode == SYNC_LOCAL_CACHE_SLOW ||
+            mode == SYNC_LOCAL_CACHE_INCREMENTAL) {
+            source->setNeedChanges(false);
+        }
         // source is active in sync, now open it
         source->open();
     }
