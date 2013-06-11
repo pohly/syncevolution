@@ -1176,6 +1176,9 @@ string EvolutionCalendarSource::getItemModTime(ECalComponent *ecomp)
 
 string EvolutionCalendarSource::getItemModTime(const ItemID &id)
 {
+    if (!needChanges()) {
+        return "";
+    }
     eptr<icalcomponent> icomp(retrieveItem(id));
     return getItemModTime(icomp);
 }

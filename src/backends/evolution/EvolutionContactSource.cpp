@@ -425,6 +425,10 @@ void EvolutionContactSource::close()
 
 string EvolutionContactSource::getRevision(const string &luid)
 {
+    if (!needChanges()) {
+        return "";
+    }
+
     EContact *contact;
     GErrorCXX gerror;
     if (
