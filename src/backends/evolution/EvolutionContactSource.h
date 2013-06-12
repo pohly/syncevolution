@@ -82,7 +82,20 @@ class EvolutionContactSource : public EvolutionSyncSource,
     {
         EvolutionSyncSource::getSynthesisInfo(info, fragments);
         info.m_profile = "\"vCard\", 2";
-        info.m_native = "vCard30";
+        info.m_native = "vCard30EDS";
+        // Replace normal vCard30 and vCard21 types with the
+        // EDS flavors which apply EDS specific transformations *before*
+        // letting the engine process the incoming item. This ensures
+        // that during a slow sync, modified (!) incoming item and
+        // DB item really match. Otherwise the engine compares unmodified
+        // incoming item and modified DB item, finding a mismatch caused
+        // by the transformations, and writes an item which ends up being
+        // identical to the one which is in the DB.
+        boost::replace_all(info.m_datatypes, "vCard30", "vCard30EDS");
+        boost::replace_all(info.m_datatypes, "vCard21", "vCard21EDS");
+        // Redundant when the same transformations are already applied to
+        // incoming items. But disabling it does not improve performance much,
+        // so keep it enabled just to be on the safe side.
         info.m_beforeWriteScript = "$VCARD_BEFOREWRITE_SCRIPT_EVOLUTION;";
         info.m_afterReadScript = "$VCARD_AFTERREAD_SCRIPT_EVOLUTION;";
     }

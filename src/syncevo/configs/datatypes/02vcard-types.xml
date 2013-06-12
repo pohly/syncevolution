@@ -33,3 +33,39 @@
         $VCARD_OUTGOING_EMAILTYPE_SCRIPT
       ]]></outgoingscript>
     </datatype>
+
+    <!-- vCard 2.1 datatype for use in EDS backend - same as above plus EDS corrections -->
+    <datatype name="vCard21EDS" basetype="vcard">
+      <version>2.1</version>
+      <use mimeprofile="vCard"/>
+     <incomingscript><![CDATA[
+        $VCARD_INCOMING_NAMECHANGE_SCRIPT
+        $VCARD_INCOMING_PHOTO_VALUE_SCRIPT
+        $VCARD_INCOMING_PHOTO_TYPE_SCRIPT
+        $VCARD_BEFOREWRITE_SCRIPT_EVOLUTION
+      ]]></incomingscript>
+      <outgoingscript><![CDATA[
+        $VCARD_OUTGOING_ADDREV_SCRIPT
+        $VCARD_OUTGOING_PHOTO_INLINING_SCRIPT
+        $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT
+        $VCARD_OUTGOING_EMAILTYPE_SCRIPT
+      ]]></outgoingscript>
+    </datatype>
+
+    <!-- vCard 3.0 datatype, using vCard profile defined above -->
+    <datatype name="vCard30EDS" basetype="vcard">
+      <version>3.0</version>
+      <use mimeprofile="vCard"/>
+      <incomingscript><![CDATA[
+        $VCARD_INCOMING_NAMECHANGE_SCRIPT
+        $VCARD_INCOMING_PHOTO_VALUE_SCRIPT
+        $VCARD_INCOMING_PHOTO_TYPE_SCRIPT
+        $VCARD_BEFOREWRITE_SCRIPT_EVOLUTION
+      ]]></incomingscript>
+      <outgoingscript><![CDATA[
+        $VCARD_OUTGOING_ADDREV_SCRIPT
+        $VCARD_OUTGOING_PHOTO_INLINING_SCRIPT
+        $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT
+        $VCARD_OUTGOING_EMAILTYPE_SCRIPT
+      ]]></outgoingscript>
+    </datatype>
