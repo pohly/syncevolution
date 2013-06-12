@@ -99,6 +99,20 @@
              }
          }
      }
+
+     // Ensure that FILE-AS is set. Some EDS versions will set it,
+     // so we need to do the same to ensure that incoming items
+     // match DB items during a slow sync.
+     if (FILE_AS == EMPTY) {
+        FILE_AS = N_LAST;
+        if (N_FIRST != EMPTY) {
+           if (FILE_AS != EMPTY) {
+              FILE_AS = FILE_AS + ", ";
+           }
+           FILE_AS = FILE_AS + N_FIRST;
+        }
+     }
+
      $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT;
    ]]></macro>
 

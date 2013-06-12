@@ -4340,8 +4340,13 @@ void SyncTests::testExtensions() {
         // right source config and thus setting it must come after the
         // createSourceB() call.
         ScopedEnvChange env("CLIENT_TEST_SERVER", "");
-        ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT");
-        ScopedEnvChange envProps("CLIENT_TEST_STRIP_PROPERTIES", "(PHOTO|FN)");
+        ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT"); 
+        // X-EVOLUTION-FILE-AS is not preserved correctly with EDS due
+        // to setting it on incoming items. It is not always set as already stored
+        // locally, so when writing back, the new, artificially generated value overwrites
+        // the one chosen by the user. Not ideal, but the alternative (not setting it on
+        // incoming items) is worse.
+        ScopedEnvChange envProps("CLIENT_TEST_STRIP_PROPERTIES", "(PHOTO|FN|X-EVOLUTION-FILE-AS)");
         if (!it->second->compareDatabases(refDir.c_str(), *source, false)) {
             equal = false;
         }

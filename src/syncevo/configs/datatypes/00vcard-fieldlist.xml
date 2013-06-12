@@ -13,7 +13,7 @@
       <field name="TITLE" type="string" compare="conflict" merge="fillempty"/>
 
       <field name="FN" type="string" compare="conflict" merge="fillempty"/>
-      <field name="FILE-AS" type="string" compare="conflict" merge="fillempty"/>
+      <field name="FILE_AS" type="string" compare="conflict" merge="fillempty"/>
 
       <field name="GENDER" type="string" compare="conflict" merge="fillempty"/>
 
