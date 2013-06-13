@@ -42,7 +42,6 @@ import traceback
 import re
 import itertools
 import codecs
-import glib
 import pprint
 import shutil
 
@@ -53,6 +52,9 @@ if pimFolder not in sys.path:
 testFolder = os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect.getfile(inspect.currentframe()))[0], "../../../../test")))
 if testFolder not in sys.path:
     sys.path.insert(0, testFolder)
+
+# Rely on the glib/gobject compatibility import code in test-dbus.py.
+from testdbus import glib, gobject
 
 from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, NullLogging, loop
 import testdbus

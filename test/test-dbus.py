@@ -42,8 +42,6 @@ import socket
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 import dbus.service
-import gobject
-import glib
 import sys
 import traceback
 import re
@@ -52,11 +50,24 @@ import base64
 
 # introduced in python-gobject 2.16, not available
 # on all Linux distros => make it optional
+glib = None
 try:
     import glib
-    have_glib = True
 except ImportError:
-    have_glib = False
+    try:
+         from gi.repository import GLib as glib
+    except ImportError:
+         pass
+
+gobject = None
+try:
+    import gobject
+except ImportError:
+    try:
+         from gi.repository import GObject as gobject
+    except ImportError:
+         pass
+
 
 DBusGMainLoop(set_as_default=True)
 
@@ -251,7 +262,7 @@ class Timeout:
         be executed. It was observed that trying to append to
         DBusUtil.quit_events before calling loop.quit() caused
         a KeyboardInterrupt"""
-        if have_glib and use_glib:
+        if glib and use_glib:
             return glib.timeout_add(delay_seconds, callback)
         else:
             now = time.time()
