@@ -44,6 +44,7 @@ import itertools
 import codecs
 import glib
 import pprint
+import shutil
 
 # Update path so that testdbus.py can be found.
 pimFolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
@@ -55,6 +56,12 @@ if testFolder not in sys.path:
 
 from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, NullLogging, loop
 import testdbus
+
+def timeFunction(func, *args1, **args2):
+     start = time.time()
+     res = func(*args1, **args2)
+     end = time.time()
+     return (end - start, res)
 
 @unittest.skip("not a real test")
 class ContactsView(dbus.service.Object, unittest.TestCase):
@@ -713,13 +720,27 @@ END:VCARD(\r|\n)*''',
         # EDS workaround
         time.sleep(2)
 
-    @timeout(300)
+    @timeout(os.environ.get('TESTPIM_TEST_SYNC_TESTCASES', False) and 300000 or 300)
     @property("snapshot", "simple-sort")
     def testSync(self):
         '''TestContacts.testSync - test caching of a dummy peer which uses a real phone or a local directory as fallback'''
         sources = self.currentSources()
         expected = sources.copy()
         peers = {}
+        logdir = xdg_root + '/cache/syncevolution'
+        # If set, then test importing all these contacts,
+        # matching them, and removing them. Prints timing information.
+        testcases = os.environ.get('TESTPIM_TEST_SYNC_TESTCASES', None)
+        if testcases:
+             def progress(step, duration):
+                  print
+                  edslogs = [x for x in os.listdir(logdir) if x.startswith('eds@')]
+                  edslogs.sort()
+                  print '%s: %fs, see %s' % (step, duration,
+                                             os.path.join(logdir, edslogs[-1]))
+        else:
+             def progress(*args1, **args2):
+                  pass
 
         syncProgress = []
         signal = bus.add_signal_receiver(lambda uid, event, data: (logging.printf('received SyncProgress: %s, %s, %s', uid, event, data), syncProgress.append((uid, event, data)), logging.printf('progress %s' % syncProgress)),
@@ -800,8 +821,10 @@ END:VCARD(\r|\n)*''',
         # Remove all data locally. There may or may not have been data
         # locally, because the database of the peer might have existed
         # from previous tests.
-        self.manager.SyncPeer(uid,
-                              timeout=self.timeout)
+        duration, res = timeFunction(self.manager.SyncPeer,
+                                     uid,
+                                     timeout=self.timeout)
+        progress('clear', duration)
         # TODO: check that syncPhone() really used PBAP - but how?
 
         # Should not have written files, except for specific exceptions:
@@ -904,16 +927,28 @@ TEL;TYPE=PREF;X-EVOLUTION-UI-SLOT=8:primary 8
 END:VCARD
 '''
 
-        item = os.path.join(contacts, 'john.vcf')
-        output = open(item, "w")
-        output.write(john)
-        output.close()
+        if testcases:
+             # Split test case file into files.
+             for i, data in enumerate(open(testcases).read().split('\n\n')):
+                  item = os.path.join(contacts, '%d.vcf' % i)
+                  output = open(item, "w")
+                  output.write(data)
+                  output.close()
+             numItems = i + 1
+        else:
+             item = os.path.join(contacts, 'john.vcf')
+             output = open(item, "w")
+             output.write(john)
+             output.close()
+             numItems = 1
         self.syncPhone(phone, uid)
         syncProgress = []
-        result = self.manager.SyncPeer(uid,
-                                       timeout=self.timeout)
+        duration, result = timeFunction(self.manager.SyncPeer,
+                                        uid,
+                                        timeout=self.timeout)
+        progress('import', duration)
         checkSync({'modified': True,
-                    'added': 1,
+                    'added': numItems,
                     'updated': 0,
                     'removed': 0},
                   result)
@@ -921,109 +956,121 @@ END:VCARD
         # Also exclude modified database files.
         self.assertEqual(files, listsyncevo(exclude=exclude))
 
-        self.exportCache(uid, export)
-        self.compareDBs(contacts, export)
+        # Testcase data does not necessarily import/export without changes.
+        if not testcases:
+             self.exportCache(uid, export)
+             self.compareDBs(contacts, export)
 
-        # Keep one session directory in a non-default location.
-        logdir = xdg_root + '/pim-logdir'
-        peers[uid]['logdir'] = logdir
-        peers[uid]['maxsessions'] = '1'
-        self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
-        files = listsyncevo(exclude=exclude)
+        # Skip logdir tests when focusing on syncing data.
+        if not testcases:
+             # Keep one session directory in a non-default location.
+             logdir = xdg_root + '/pim-logdir'
+             peers[uid]['logdir'] = logdir
+             peers[uid]['maxsessions'] = '1'
+             self.manager.SetPeer(uid,
+                                  peers[uid],
+                                  timeout=self.timeout)
+             files = listsyncevo(exclude=exclude)
+             syncProgress = []
+             result = self.manager.SyncPeer(uid,
+                                            timeout=self.timeout)
+             checkSync({'modified': False,
+                        'added': 0,
+                        'updated': 0,
+                        'removed': 0},
+                       result)
+             exclude.append(logdir + '(/$)')
+             self.assertEqual(files, listsyncevo(exclude=exclude))
+             self.assertEqual(2, len(os.listdir(logdir)))
+
+        # No changes.
         syncProgress = []
-        result = self.manager.SyncPeer(uid,
-                                       timeout=self.timeout)
+        duration, result = timeFunction(self.manager.SyncPeer,
+                                        uid,
+                                        timeout=self.timeout)
+        progress('match', duration)
         checkSync({'modified': False,
                    'added': 0,
                    'updated': 0,
                    'removed': 0},
                   result)
-        exclude.append(logdir + '(/$)')
         self.assertEqual(files, listsyncevo(exclude=exclude))
+        self.assertEqual(testcases and 6 or 2, len(os.listdir(logdir)))
 
-        self.assertEqual(2, len(os.listdir(logdir)))
+        if not testcases:
+             # And now prune none.
+             peers[uid]['maxsessions'] = '0'
+             self.manager.SetPeer(uid,
+                                  peers[uid],
+                                  timeout=self.timeout)
+             files = listsyncevo(exclude=exclude)
+             syncProgress = []
+             result = self.manager.SyncPeer(uid,
+                                            timeout=self.timeout)
+             checkSync({'modified': False,
+                        'added': 0,
+                        'updated': 0,
+                        'removed': 0},
+                       result)
+             exclude.append(logdir + '(/$)')
+             self.assertEqual(files, listsyncevo(exclude=exclude))
+             self.assertEqual(4, len(os.listdir(logdir)))
 
-        # At most one!
-        syncProgress = []
-        result = self.manager.SyncPeer(uid,
-                                       timeout=self.timeout)
-        checkSync({'modified': False,
-                   'added': 0,
-                   'updated': 0,
-                   'removed': 0},
-                  result)
-        exclude.append(logdir + '(/$)')
-        self.assertEqual(files, listsyncevo(exclude=exclude))
-        self.assertEqual(2, len(os.listdir(logdir)))
-
-        # And now prune none.
-        peers[uid]['maxsessions'] = '0'
-        self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
-        files = listsyncevo(exclude=exclude)
-        syncProgress = []
-        result = self.manager.SyncPeer(uid,
-                                       timeout=self.timeout)
-        checkSync({'modified': False,
-                   'added': 0,
-                   'updated': 0,
-                   'removed': 0},
-                  result)
-        exclude.append(logdir + '(/$)')
-        self.assertEqual(files, listsyncevo(exclude=exclude))
-        self.assertEqual(4, len(os.listdir(logdir)))
-
-        # Update contact.
-        john = '''BEGIN:VCARD
+        # Cannot update data when using pre-defined test cases.
+        if not testcases:
+             # Update contact.
+             john = '''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
 END:VCARD'''
-        output = open(item, "w")
-        output.write(john)
-        output.close()
-        self.syncPhone(phone, uid)
-        syncProgress = []
-        result = self.manager.SyncPeer(uid,
-                                       timeout=self.timeout)
-        checkSync({'modified': True,
-                   'added': 0,
-                   'updated': 1,
-                   'removed': 0},
-                  result)
+             output = open(item, "w")
+             output.write(john)
+             output.close()
+             self.syncPhone(phone, uid)
+             syncProgress = []
+             result = self.manager.SyncPeer(uid,
+                                            timeout=self.timeout)
+             checkSync({'modified': True,
+                        'added': 0,
+                        'updated': 1,
+                        'removed': 0},
+                       result)
 
-        # Remove contact.
-        os.unlink(item)
+        # Remove contact(s).
+        for file in os.listdir(contacts):
+             os.remove(os.path.join(contacts, file))
         self.syncPhone(phone, uid)
         syncProgress = []
-        result = self.manager.SyncPeer(uid,
-                                       timeout=self.timeout)
+        duration, result = timeFunction(self.manager.SyncPeer,
+                                        uid,
+                                        timeout=self.timeout)
+        progress('remove', duration)
         checkSync({'modified': True,
                    'added': 0,
                    'updated': 0,
-                   'removed': 1},
+                   'removed': numItems},
                   result)
 
         # Test invalid maxsession values.
-        with self.assertRaisesRegexp(dbus.DBusException,
-                                     "negative 'maxsessions' not allowed: -1"):
-             self.manager.SetPeer(uid,
-                                  {'protocol': 'PBAP',
-                                   'address': 'foo',
-                                   'maxsessions': '-1'},
-                                  timeout=self.timeout)
-        self.assertEqual(files, listsyncevo(exclude=exclude))
+        if not testcases:
+             with self.assertRaisesRegexp(dbus.DBusException,
+                                          "negative 'maxsessions' not allowed: -1"):
+                  self.manager.SetPeer(uid,
+                                       {'protocol': 'PBAP',
+                                        'address': 'foo',
+                                        'maxsessions': '-1'},
+                                       timeout=self.timeout)
+             self.assertEqual(files, listsyncevo(exclude=exclude))
 
-        with self.assertRaisesRegexp(dbus.DBusException,
-                                     'bad lexical cast: source type value could not be interpreted as target'):
-             self.manager.SetPeer(uid,
-                                  {'protocol': 'PBAP',
-                                   'address': 'foo',
-                                   'maxsessions': '1000000000000000000000000000000000000000000000'},
-                                  timeout=self.timeout)
+             with self.assertRaisesRegexp(dbus.DBusException,
+                                          'bad lexical cast: source type value could not be interpreted as target'):
+                  self.manager.SetPeer(uid,
+                                       {'protocol': 'PBAP',
+                                        'address': 'foo',
+                                        'maxsessions': '1000000000000000000000000000000000000000000000'},
+                                       timeout=self.timeout)
+
         self.assertEqual(files, listsyncevo(exclude=exclude))
 
     @timeout(100)
