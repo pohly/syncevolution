@@ -1071,6 +1071,36 @@
    fun:gdbus_shared_thread_func
 }
 
+# ==10677== 40 (16 direct, 24 indirect) bytes in 1 blocks are definitely lost in loss record 1,236 of 2,449
+# ==10677==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==10677==    by 0x9736F30: g_malloc (gmem.c:159)
+# ==10677==    by 0x974B322: g_slice_alloc (gslice.c:1003)
+# ==10677==    by 0x971E1FC: g_error_new_literal (gerror.c:456)
+# ==10677==    by 0x971E464: g_set_error_literal (gerror.c:595)
+# ==10677==    by 0x917B791: g_cancellable_set_error_if_cancelled (gcancellable.c:315)
+# ==10677==    by 0x91BA816: g_socket_client_enumerator_callback (gsocketclient.c:1533)
+# ==10677==    by 0x91B4536: g_simple_async_result_complete (gsimpleasyncresult.c:767)
+# ==10677==    by 0x827D374: ??? (in /usr/lib/x86_64-linux-gnu/libsoup-2.4.so.1.5.0)
+# ==10677==    by 0x827DA55: ??? (in /usr/lib/x86_64-linux-gnu/libsoup-2.4.so.1.5.0)
+# ==10677==    by 0x827DB6C: ??? (in /usr/lib/x86_64-linux-gnu/libsoup-2.4.so.1.5.0)
+# ==10677==    by 0x91B4536: g_simple_async_result_complete (gsimpleasyncresult.c:767)
+# ==10677==    by 0x91B4638: complete_in_idle_cb (gsimpleasyncresult.c:779)
+# ==10677==    by 0x9731354: g_main_context_dispatch (gmain.c:2539)
+# ==10677==    by 0x9731687: g_main_context_iterate.isra.23 (gmain.c:3146)
+# ==10677==    by 0x9731743: g_main_context_iteration (gmain.c:3207)
+# ==10677==    by 0x69F646: main (sync-helper.cpp:177)
+# ==10677== 
+{
+   soup + cancel
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_cancellable_set_error_if_cancelled
+   ...
+   fun:g_simple_async_result_complete
+   obj:*libsoup-2.4.so*
+}
+
 ### KDE ###
 
 # ==21052== 1,040 bytes in 26 blocks are possibly lost in loss record 5,184 of 5,271
