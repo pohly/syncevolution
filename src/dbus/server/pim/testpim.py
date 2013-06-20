@@ -3178,13 +3178,17 @@ END:VCARD''']):
         # they do, we'll notice it below.
         self.assertEqual(1, len(view.contacts))
 
+        # Check conditions as part of view updates.
+        check1 = view.setCheck(None)
+        check2 = self.view.setCheck(None)
+        check = lambda: (check1(), check2())
+
         # Read contacts.
         logging.log('reading contacts')
         view.read(0, 1)
         self.view.read(0, 3)
         self.runUntil('contacts',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: view.haveData(0) and \
                            self.view.haveData(0, 3))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
@@ -3203,18 +3207,15 @@ NICKNAME:King
 END:VCARD''')
         output.close()
         logging.log('change nick of Abraham')
+        check1 = view.setCheck(lambda: self.assertEqual(1, len(view.contacts)))
         out, err, returncode = self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('Abraham nickname changed',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual(1, len(view.contacts)),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveNoData(0) and view.haveNoData(0))
         view.read(0, 1)
         self.view.read(0, 1)
         self.runUntil('Abraham nickname read',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual(1, len(view.contacts)),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveData(0) and view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
@@ -3231,21 +3232,19 @@ NICKNAME:mamam
 END:VCARD''')
         output.close()
         logging.log('change nick of Charly')
+        check1 = view.setCheck(lambda: self.assertLess(0, len(view.contacts)))
         out, err, returncode = self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[2]])
         self.runUntil('Charly nickname changed',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertLess(0, len(view.contacts)),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveNoData(2))
+        check1 = view.setCheck(lambda: self.assertEqual(1, len(view.contacts)))
         self.assertEqual(1, len(view.contacts))
         self.assertTrue(view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
         self.assertFalse(self.view.haveData(2))
         self.view.read(2, 1)
         self.runUntil('Abraham nickname read, II',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual(1, len(view.contacts)),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveData(2) and \
                            view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
@@ -3254,19 +3253,18 @@ END:VCARD''')
         self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Invert sort order.
+        check1 = view.setCheck(None)
         self.manager.SetSortOrder("last/first",
                                   timeout=self.timeout)
         self.runUntil('reordering',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveNoData(0) and \
                            self.view.haveNoData(2) and \
                            view.haveNoData(0, 1))
         view.read(0, 1)
         self.view.read(0, 3)
         self.runUntil('read reordered contacts',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveData(0, 3) and \
                            view.haveData(0, 1))
         self.assertEqual(1, len(view.contacts))
@@ -3280,16 +3278,14 @@ END:VCARD''')
         self.manager.SetSortOrder("first/last",
                                   timeout=self.timeout)
         self.runUntil('reordering, II',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveNoData(0) and \
                            self.view.haveNoData(2) and \
                            view.haveNoData(0, 1))
         view.read(0, 1)
         self.view.read(0, 3)
         self.runUntil('read reordered contacts, II',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveData(0, 3) and \
                            view.haveData(0, 1))
         self.assertEqual(1, len(view.contacts))
@@ -3312,27 +3308,25 @@ END:VCARD''')
         logging.log('change name of Abraham')
         out, err, returncode = self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('Abraham -> Abrahan',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveNoData(0) and \
                            len(view.contacts) == 1 and \
                            view.haveNoData(0))
+        check1 = view.setCheck(lambda: self.assertEqual(1, len(view.contacts)))
         view.read(0, 1)
         self.view.read(0, 1)
         self.runUntil('Abrahan read',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual(1, len(view.contacts)),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: self.view.haveData(0) and view.haveData(0))
         self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
         self.assertEqual(u'Abrahan', self.view.contacts[0]['structured-name']['given'])
 
         # Finally, remove everything.
         logging.log('remove contacts')
+        check1 = view.setCheck(None)
         out, err, returncode = self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', '*'])
         self.runUntil('all contacts removed',
-                      check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertEqual([], self.view.errors)),
+                      check=check,
                       until=lambda: len(self.view.contacts) == 0 and \
                            len(view.contacts) == 0)
 
