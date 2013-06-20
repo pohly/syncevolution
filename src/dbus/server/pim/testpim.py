@@ -1175,6 +1175,7 @@ END:VCARD'''
         self.setUpView()
 
         # Insert new contact.
+        self.view.quiescentCount = 0
         john = '''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
@@ -1191,11 +1192,12 @@ END:VCARD'''
         # Run until the view has adapted.
         self.runUntil('view with one contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: len(self.view.contacts) == 1)
+                      until=lambda: self.view.quiescentCount > 0)
 
         # Check for the one expected event.
         self.assertEqual([('added', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
 
         # Read contact.
         logging.log('reading contact')
@@ -1219,18 +1221,19 @@ END:VCARD'''
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luid])
         self.runUntil('view with changed contact',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(0))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('modified', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
 
         # Remove contact.
         self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', '*'])
         self.runUntil('view without contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: len(self.view.contacts) == 0)
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('removed', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
-
+        self.view.quiescentCount = 0
 
     @timeout(60)
     @property("snapshot", "simple-sort")
@@ -1289,6 +1292,11 @@ END:VCARD''']):
         self.assertEqual('Benjamin Yeah', self.view.contacts[1]['full-name'])
         self.assertEqual('Abraham Zoo', self.view.contacts[2]['full-name'])
 
+        # We should have seen all events for the changes above now,
+        # start with a clean slate.
+        self.view.events = []
+        self.view.quiescentCount = 0
+
         # No re-ordering necessary: criteria doesn't change.
         item = os.path.join(self.contacts, 'contact0.vcf')
         output = open(item, "w")
@@ -1302,9 +1310,10 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(2))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('modified', 2, 1), ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
         logging.log('reading updated contact')
         self.view.read(2, 1)
         self.runUntil('updated contact',
@@ -1327,9 +1336,10 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(2))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('modified', 2, 1), ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
         logging.log('reading updated contact')
         self.view.read(2, 1)
         self.runUntil('updated contact',
@@ -1351,9 +1361,10 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[1]])
         self.runUntil('view with changed contact #1',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(1))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('modified', 1, 1), ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
         logging.log('reading updated contact')
         self.view.read(1, 1)
         self.runUntil('updated contact',
@@ -1375,9 +1386,10 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[2]])
         self.runUntil('view with changed contact #0',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(0))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('modified', 0, 1), ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
         logging.log('reading updated contact')
         self.view.read(0, 1)
         self.runUntil('updated contact',
@@ -1400,11 +1412,12 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #0',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(0))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('removed', 2, 1),
                           ('added', 0, 1),
                           ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
         logging.log('reading updated contact')
         self.view.read(0, 1)
         self.runUntil('updated contact',
@@ -1427,11 +1440,12 @@ END:VCARD''')
         self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('view with changed contact #2',
                       check=lambda: self.assertEqual([], self.view.errors),
-                      until=lambda: self.view.haveNoData(2))
+                      until=lambda: self.view.quiescentCount > 0)
         self.assertEqual([('removed', 0, 1),
                           ('added', 2, 1),
                           ('quiescent',)], self.view.events)
         self.view.events = []
+        self.view.quiescentCount = 0
         logging.log('reading updated contact')
         self.view.read(2, 1)
         self.runUntil('updated contact',
