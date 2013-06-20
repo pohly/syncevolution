@@ -2974,7 +2974,8 @@ static int CondTimedWaitGLib(pthread_cond_t * /* cond */, pthread_mutex_t *mutex
             }
 
             // Timeout?
-            if (milliSecondsToWait > 0 && deadline <= Timespec::system()) {
+            if (!milliSecondsToWait ||
+                (milliSecondsToWait > 0 && deadline <= Timespec::system())) {
                 SE_LOG_DEBUG(NULL, "give up waiting for background thread, timeout");
                 result = 1;
                 break;
