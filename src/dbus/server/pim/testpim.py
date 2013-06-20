@@ -3299,7 +3299,6 @@ END:VCARD''')
         out, err, returncode = self.runCmdline(['--update', item, '@' + self.managerPrefix + self.uid, 'local', luids[0]])
         self.runUntil('Abraham -> Abrahan',
                       check=lambda: (self.assertEqual([], view.errors),
-                                     self.assertLess(0, len(view.contacts)),
                                      self.assertEqual([], self.view.errors)),
                       until=lambda: self.view.haveNoData(0) and \
                            len(view.contacts) == 1 and \
