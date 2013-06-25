@@ -34,9 +34,10 @@
 #include <syncevo/TmpFile.h>
 SE_BEGIN_CXX
 
+class PullAll;
 class PbapSession;
 
-class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
+class PbapSyncSource : virtual public SyncSource, virtual public SyncSourceSession, virtual public SyncSourceRaw, private boost::noncopyable
 {
   public:
     PbapSyncSource(const SyncSourceParams &params);
@@ -48,28 +49,35 @@ class PbapSyncSource : public TrackingSyncSource, private boost::noncopyable
     virtual bool isEmpty();
     virtual void close();
     virtual Databases getDatabases();
-    virtual std::string getMimeType() const;
-    virtual std::string getMimeVersion() const;
+    virtual void enableServerMode();
+    virtual bool serverModeEnabled() const;
+    virtual std::string getPeerMimeType() const;
+    virtual void getSynthesisInfo(SynthesisInfo &info,
+                                  XMLConfigFragments &fragments);
 
-    /* implementation of TrackingSyncSource interface */
-    virtual void listAllItems(RevisionMap_t &revisions);
-    //virtual InsertItemResult insertItem(const string &luid, const std::string &item, bool raw);
-    virtual InsertItemResult insertItem(const string &luid, const std::string &item, bool raw);
-    void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual void removeItem(const string &uid);
+    /* implementation of SyncSourceSession interface */
+    virtual void beginSync(const std::string &lastToken, const std::string &resumeToken);
+    virtual std::string endSync(bool success);
+
+    /* implementation of SyncSourceRaw interface */
+    virtual InsertItemResult insertItemRaw(const std::string &luid, const std::string &item);
+    virtual void readItemRaw(const std::string &luid, std::string &item);
 
  private:
     boost::shared_ptr<PbapSession> m_session;
+    boost::shared_ptr<PullAll> m_pullAll;
 
     /**
-     * Refers to memory owned elsewhere: std::string m_buffer for old obexd,
-     * memory-mapped memory in m_memRange for new obexd.
+     * List items as expected by Synthesis engine.
      */
-    typedef std::map<std::string, pcrecpp::StringPiece> Content;
-    Content m_content;
+    sysync::TSyError readNextItem(sysync::ItemID aID,
+                                  sysync::sInt32 *aStatus,
+                                  bool aFirst);
 
-    std::string m_buffer;
-    TmpFile m_tmpFile;
+    /**
+     * Copy item into Synthesis key.
+     */
+    sysync::TSyError readItemAsKey(sysync::cItemID aID, sysync::KeyH aItemKey);
 };
 
 SE_END_CXX

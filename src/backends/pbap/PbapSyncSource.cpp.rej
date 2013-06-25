@@ -1,0 +1,21 @@
+--- src/backends/pbap/PbapSyncSource.cpp
++++ src/backends/pbap/PbapSyncSource.cpp
+@@ -81,16 +83,15 @@
+         return;
+     }
+ 
+-    typedef std::map<std::string, boost::variant<std::string> > Params;
+ 
+     GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>
+         createSession(m_client, "CreateSession");
+ 
+     Params params;
+-    params["Destination"] = std::string(address);
++    // params["Destination"] = std::string(address);
+     params["Target"] = std::string("PBAP");
+ 
+-    std::string session = createSession(params);
++    std::string session = createSession(std::string(address), params);
+     if (session.empty()) {
+         SE_THROW("PBAP: got empty session from CreateSession()");
+     }

@@ -49,6 +49,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/bind.hpp>
 
+#include <synthesis/SDK_util.h>
+
 #include <syncevo/SyncContext.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -65,6 +67,24 @@ SE_BEGIN_CXX
 #define OBC_TRANSFER_INTERFACE_NEW "org.bluez.obex.Transfer"
 #define OBC_TRANSFER_INTERFACE_NEW5 "org.bluez.obex.Transfer1"
 
+typedef std::map<int, pcrecpp::StringPiece> Content;
+
+class PullAll
+{
+    std::string m_buffer; // vCards kept in memory when using old obexd.
+    TmpFile m_tmpFile; // Stored in temporary file and mmapped with more recent obexd.
+    Content m_content; // Refers to chunks of m_buffer or m_tmpFile without copying them.
+    int m_currentContact; // Numbered starting with zero according to discovery in addVCards.
+    boost::shared_ptr<PbapSession> m_session; // Only set when there is a transfer ongoing.
+    int m_tmpFileOffset; // Number of bytes already parsed.
+
+    friend class PbapSession;
+public:
+    std::string getNextID();
+    bool getContact(int contactNumber, pcrecpp::StringPiece &vcard);
+    const char *addVCards(int startIndex, const pcrecpp::StringPiece &content);
+};
+
 class PbapSession : private boost::noncopyable {
 public:
     static boost::shared_ptr<PbapSession> create(PbapSyncSource &parent);
@@ -74,8 +94,9 @@ public:
     typedef std::map<std::string, pcrecpp::StringPiece> Content;
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
-    void pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile);
-    
+    boost::shared_ptr<PullAll> startPullAll();
+    void checkForError(); // Throws exception if transfer failed.
+    bool transferComplete() const { return m_transferComplete; }
     void shutdown(void);
 
 private:
@@ -113,6 +134,8 @@ private:
     
     std::auto_ptr<GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> >
         m_errorSignal;
+    void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
+                 const std::string &msg);
 
     // Bluez 5
     typedef GDBusCXX::SignalWatch4<GDBusCXX::Path_t, std::string, Params, std::vector<std::string> > PropChangedSignal_t;
@@ -126,9 +149,10 @@ private:
     typedef GDBusCXX::SignalWatch1<GDBusCXX::Path_t> CompleteSignal_t;
     std::auto_ptr<CompleteSignal_t> m_completeSignal;
     void completeCb(const GDBusCXX::Path_t &path);
-    void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
-                 const std::string &msg);
-        
+    typedef GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, boost::variant<int64_t> > PropertyChangedSignal_t;
+    std::auto_ptr<PropertyChangedSignal_t> m_propertyChangedSignal;
+    void propertyChangedCb(const GDBusCXX::Path_t &path, const std::string &name, const boost::variant<int64_t> &value);
+
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
 };
 
@@ -187,6 +211,20 @@ void PbapSession::errorCb(const GDBusCXX::Path_t &path,
     m_transferErrorMsg = msg;
 }
 
+void PbapSession::propertyChangedCb(const GDBusCXX::Path_t &path,
+                                    const std::string &name,
+                                    const boost::variant<int64_t> &value)
+{
+    const int64_t *tmp = boost::get<int64_t>(&value);
+    if (tmp) {
+        SE_LOG_DEBUG(NULL, "obexd transfer %s property change: %s = %ld",
+                     path.c_str(), name.c_str(), (long signed)*tmp);
+    } else {
+        SE_LOG_DEBUG(NULL, "obexd transfer %s property change: %s",
+                     path.c_str(), name.c_str());
+    }
+}
+
 void PbapSession::initSession(const std::string &address, const std::string &format)
 {
     if (m_session.get()) {
@@ -238,7 +276,8 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         session =
             GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
     } catch (const std::exception &error) {
-        if (!strstr(error.what(), "org.freedesktop.DBus.Error.ServiceUnknown")) {
+        if (!strstr(error.what(), "org.freedesktop.DBus.Error.ServiceUnknown") &&
+            !strstr(error.what(), "org.freedesktop.DBus.Error.UnknownObject")) {
             throw;
         }
         // Fall back to old interface.
@@ -298,6 +337,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         // the watch), but very well may happen in asynchronous method
         // calls. Therefore maintain m_self and show how to use it here.
         if (m_obexAPI == BLUEZ5) {
+            // Bluez 5
             m_propChangedSignal.reset(new PropChangedSignal_t
                                       (GDBusCXX::SignalFilter(m_client->getConnection(),
                                                               session,
@@ -306,10 +346,11 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                               GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
             m_propChangedSignal->activate(boost::bind(&PbapSession::propChangedCb, m_self, _1, _2, _3, _4));
         } else {
+            // obexd >= 0.47
             m_completeSignal.reset(new CompleteSignal_t
                                    (GDBusCXX::SignalFilter(m_client->getConnection(),
                                                            session,
-                                                           m_obexAPI == BLUEZ5 ? OBC_TRANSFER_INTERFACE_NEW5 : OBC_TRANSFER_INTERFACE_NEW,
+                                                           OBC_TRANSFER_INTERFACE_NEW,
                                                            "Complete",
                                                            GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
             m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
@@ -318,12 +359,21 @@ void PbapSession::initSession(const std::string &address, const std::string &for
             m_errorSignal.reset(new GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string>
                                 (GDBusCXX::SignalFilter(m_client->getConnection(),
                                                         session,
-                                                        m_obexAPI == BLUEZ5 ? OBC_TRANSFER_INTERFACE_NEW5 : OBC_TRANSFER_INTERFACE_NEW,
+                                                        OBC_TRANSFER_INTERFACE_NEW,
                                                         "Error",
                                                         GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
             m_errorSignal->activate(boost::bind(&PbapSession::errorCb, m_self, _1, _2, _3));
+
+            // and property changes
+            m_propertyChangedSignal.reset(new PropertyChangedSignal_t(GDBusCXX::SignalFilter(m_client->getConnection(),
+                                                                                             session,
+                                                                                             OBC_TRANSFER_INTERFACE_NEW,
+                                                                                             "PropertyChanged",
+                                                                                             GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
+            m_propertyChangedSignal->activate(boost::bind(&PbapSession::propertyChangedCb, m_self, _1, _2, _3));
         }
     } else {
+        // obexd < 0.47
         m_session.reset(new GDBusCXX::DBusRemoteObject(m_client->getConnection(),
                                                    session,
                                                    OBC_PBAP_INTERFACE,
@@ -382,53 +432,120 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     SE_LOG_DEBUG(NULL, "PBAP session initialized");
 }
 
-void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
+boost::shared_ptr<PullAll> PbapSession::startPullAll()
 {
-    pcrecpp::StringPiece content;
+    boost::shared_ptr<PullAll> state(new PullAll);
+    state->m_currentContact = 0;
     if (m_obexAPI != OBEXD_OLD) {
-        tmpFile.create();
-        SE_LOG_DEBUG(NULL, "Created temporary file for PullAll %s", tmpFile.filename().c_str());
+        state->m_tmpFile.create();
+        SE_LOG_DEBUG(NULL, "Created temporary file for PullAll %s", state->m_tmpFile.filename().c_str());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
         std::pair<GDBusCXX::DBusObject_t, Params> tuple =
             m_obexAPI == OBEXD_NEW ?
-            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(tmpFile.filename()) :
-            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(tmpFile.filename(), m_filter5);
+            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename()) :
+            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state->m_tmpFile.filename(), m_filter5);
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
-
         SE_LOG_DEBUG(NULL, "pullall transfer path %s, %ld properties", transfer.c_str(), (long)properties.size());
-
-        while (!m_transferComplete) {
-            g_main_context_iteration(NULL, true);
-        }
-        if (!m_transferErrorCode.empty()) {
-            m_parent.throwError(StringPrintf("%s: %s",
-                                             m_transferErrorCode.c_str(),
-                                             m_transferErrorMsg.c_str()));
-        }
-
-        SE_LOG_DEBUG(NULL, "Temporary file size is %u", static_cast<unsigned> (tmpFile.size()));
-
-        content = tmpFile.stringPiece();
-        // closing tmp file leaves the mapping
-        tmpFile.close();
+        // Work will be finished incrementally in PullAll::getNextID().
+        state->m_tmpFileOffset = 0;
+        state->m_session = m_self.lock();
     } else {
         GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
-        buffer = pullall();
-        content = buffer;
+        state->m_buffer = pullall();
+        state->addVCards(0, state->m_buffer);
     }
+    return state;
+}
 
+const char *PullAll::addVCards(int startIndex, const pcrecpp::StringPiece &vcards)
+{
     pcrecpp::StringPiece vcarddata;
-    int count = 0;
+    pcrecpp::StringPiece tmp = vcards;
+    int count = startIndex;
     pcrecpp::RE re("[\\r\\n]*(^BEGIN:VCARD.*?^END:VCARD)",
                    pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
-    while (re.Consume(&content, &vcarddata)) {
-        std::string id = StringPrintf("%d", count);
-        dst[id] = vcarddata;
+    while (re.Consume(&tmp, &vcarddata)) {
+        m_content[count] = vcarddata;
         ++count;
     }
 
-    SE_LOG_DEBUG(NULL, "PBAP content pulled: %d entries", (int) dst.size());
+    SE_LOG_DEBUG(NULL, "PBAP content parsed: %d entries starting at %d", count - startIndex, startIndex);
+    return tmp.data();
+}
+
+void PbapSession::checkForError()
+{
+    if (!m_transferErrorCode.empty()) {
+        m_parent.throwError(StringPrintf("%s: %s",
+                                         m_transferErrorCode.c_str(),
+                                         m_transferErrorMsg.c_str()));
+    }
+}
+
+std::string PullAll::getNextID()
+{
+    std::string id;
+    while ((size_t)m_currentContact == m_content.size() &&
+           m_session &&
+           (!m_session->transferComplete() || m_tmpFile.moreData())) {
+        // Wait? We rely on regular propgress signals to wake us up.
+        // obex 0.47 sends them every 64KB, at least in combination
+        // with a Samsung Galaxy SIII. This may depend on both obexd
+        // and the phone, so better check ourselves and perhaps do it
+        // less often - unmap/map can be expensive and invalidates
+        // some of the unread data (at least how it is implemented
+        // now).
+        while (!m_session->transferComplete() && m_tmpFile.moreData() < 128 * 1024) {
+            g_main_context_iteration(NULL, true);
+        }
+        m_session->checkForError();
+        if (m_tmpFile.moreData()) {
+            // Remap. This shifts all addresses already stored in
+            // m_content, so beware and update those.
+            pcrecpp::StringPiece oldMem = m_tmpFile.stringPiece();
+            m_tmpFile.unmap();
+            m_tmpFile.map();
+            pcrecpp::StringPiece newMem = m_tmpFile.stringPiece();
+            ssize_t delta = newMem.data() - oldMem.data();
+            BOOST_FOREACH (Content::value_type &entry, m_content) {
+                pcrecpp::StringPiece &vcard = entry.second;
+                vcard.set(vcard.data() + delta, vcard.size());
+            }
+
+            // File exists and obexd has written into it, so now we
+            // can unlink it to avoid leaking it if we crash.
+            m_tmpFile.remove();
+
+            // Continue parsing where we stopped before.
+            pcrecpp::StringPiece next(newMem.data() + m_tmpFileOffset,
+                                      newMem.size() - m_tmpFileOffset);
+            const char *end = addVCards(m_content.size(), next);
+            int newTmpFileOffset = end - newMem.data();
+            SE_LOG_DEBUG(NULL, "PBAP content parsed: %d out of %d (total), %d out of %d (last update)",
+                         newTmpFileOffset,
+                         newMem.size(),
+                         (int)(end - next.data()),
+                         next.size());
+            m_tmpFileOffset = newTmpFileOffset;
+        }
+    }
+    if ((size_t)m_currentContact < m_content.size()) {
+        id = StringPrintf("%d", m_currentContact);
+        m_currentContact++;
+    }
+    return id;
+}
+
+bool PullAll::getContact(int contactNumber, pcrecpp::StringPiece &vcard)
+{
+    SE_LOG_DEBUG(NULL, "get PBAP contact #%d", contactNumber);
+    Content::iterator it = m_content.find(contactNumber);
+    if (it == m_content.end()) {
+        return false;
+    }
+    vcard = it->second;
+    return true;
 }
 
 void PbapSession::shutdown(void)
@@ -446,23 +563,17 @@ void PbapSession::shutdown(void)
 }
 
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
-    TrackingSyncSource(params)
+    SyncSource(params)
 {
+    SyncSourceSession::init(m_operations);
+    m_operations.m_readNextItem = boost::bind(&PbapSyncSource::readNextItem, this, _1, _2, _3);
+    m_operations.m_readItemAsKey = boost::bind(&PbapSyncSource::readItemAsKey,
+                                               this, _1, _2);
     m_session = PbapSession::create(*this);
 }
 
 PbapSyncSource::~PbapSyncSource()
 {
-}
-
-std::string PbapSyncSource::getMimeType() const
-{
-    return "text/x-vcard";
-}
-
-std::string PbapSyncSource::getMimeVersion() const
-{
-    return "2.1";
 }
 
 void PbapSyncSource::open()
@@ -477,13 +588,23 @@ void PbapSyncSource::open()
     std::string address = database.substr(prefix.size());
 
     m_session->initSession(address, getDatabaseFormat());
-    m_session->pullAll(m_content, m_buffer, m_tmpFile);
+}
+
+void PbapSyncSource::beginSync(const std::string &lastToken, const std::string &resumeToken)
+{
+}
+
+std::string PbapSyncSource::endSync(bool success)
+{
+    m_pullAll.reset();
     m_session->shutdown();
+
+    return "";
 }
 
 bool PbapSyncSource::isEmpty()
 {
-    return m_content.empty();
+    return false; // We don't know for sure. Doesn't matter, so pretend to not be empty.
 }
 
 void PbapSyncSource::close()
@@ -499,31 +620,91 @@ PbapSyncSource::Databases PbapSyncSource::getDatabases()
     return result;
 }
 
-void PbapSyncSource::listAllItems(RevisionMap_t &revisions)
+void PbapSyncSource::enableServerMode()
 {
-    typedef std::pair<std::string, pcrecpp::StringPiece> Entry;
-    BOOST_FOREACH(const Entry &entry, m_content) {
-        revisions[entry.first] = "0";
+    SE_THROW("PbapSyncSource does not implement server mode.");
+}
+
+bool PbapSyncSource::serverModeEnabled() const
+{
+    return false;
+}
+
+std::string PbapSyncSource::getPeerMimeType() const
+{
+    return "text/vcard";
+}
+
+void PbapSyncSource::getSynthesisInfo(SynthesisInfo &info,
+                                      XMLConfigFragments &fragments)
+{
+    // We send vCards in either 2.1 or 3.0. The Synthesis engine
+    // handles both when parsing, so we don't have to be exact here.
+    info.m_native = "vCard21";
+    info.m_fieldlist = "contacts";
+    info.m_profile = "\"vCard\", 1";
+
+    // vCard 3.0 is the more sane format for exchanging with the
+    // Synthesis peer in a local sync, so use that by default.
+    std::string type = "text/vcard";
+    SourceType sourceType = getSourceType();
+    if (!sourceType.m_format.empty()) {
+        type = sourceType.m_format;
+    }
+    info.m_datatypes = getDataTypeSupport(type, sourceType.m_forceFormat);
+}
+
+sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
+                                  sysync::sInt32 *aStatus,
+                                  bool aFirst)
+{
+    if (aFirst) {
+        m_pullAll = m_session->startPullAll();
+    }
+    if (!m_pullAll) {
+        throwError("logic error: readNextItem without aFirst=true before");
+    }
+    std::string id = m_pullAll->getNextID();
+    if (id.empty()) {
+        *aStatus = sysync::ReadNextItem_EOF;
+    } else {
+        *aStatus = sysync::ReadNextItem_Unchanged;
+        aID->item = StrAlloc(id.c_str());
+        aID->parent = NULL;
+    }
+    return sysync::LOCERR_OK;
+}
+
+sysync::TSyError PbapSyncSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH aItemKey)
+{
+    if (!m_pullAll) {
+        throwError("logic error: readItemAsKey() without preceeding readNextItem()");
+    }
+    pcrecpp::StringPiece vcard;
+    if (m_pullAll->getContact(atoi(aID->item), vcard)) {
+        return getSynthesisAPI()->setValue(aItemKey, "data", vcard.data(), vcard.size());
+    } else {
+        return sysync::DB_NotFound;
     }
 }
 
-void PbapSyncSource::readItem(const string &uid, std::string &item, bool raw)
+SyncSourceRaw::InsertItemResult PbapSyncSource::insertItemRaw(const std::string &luid, const std::string &item)
 {
-    Content::iterator it = m_content.find(uid);
-    if(it != m_content.end()) {
-        item = it->second.as_string();
-    }
-}
-
-TrackingSyncSource::InsertItemResult PbapSyncSource::insertItem(const string &uid, const std::string &item, bool raw)
-{
-    throwError("Operation not supported");
+    throwError("writing via PBAP is not supported");
     return InsertItemResult();
 }
 
-void PbapSyncSource::removeItem(const string &uid)
+void PbapSyncSource::readItemRaw(const std::string &luid, std::string &item)
 {
-    throwError("Operation not supported");
+    if (!m_pullAll) {
+        throwError("logic error: readItemRaw() without preceeding readNextItem()");
+    }
+    pcrecpp::StringPiece vcard;
+    if (m_pullAll->getContact(atoi(luid.c_str()), vcard)) {
+        item.assign(vcard.data(), vcard.size());
+    } else {
+        throwError(STATUS_NOT_FOUND, string("retrieving item: ") + luid);
+    }
 }
 
 SE_END_CXX
