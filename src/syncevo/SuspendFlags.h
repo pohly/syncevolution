@@ -38,6 +38,10 @@ SE_BEGIN_CXX
  *
  * Can be polled and in addition, flags state changes by writing to a
  * file descriptor for integration into an event loop.
+ *
+ * All methods are thread-safe. activate() and deactivate() need to
+ * modify global process state and should only be used when it is safe
+ * to do so.
  */
 class SuspendFlags
 {
@@ -78,7 +82,7 @@ class SuspendFlags
      * Returns or-ed mask of all signals handled so far.
      * See activate().
      */
-    uint32_t getReceivedSignals() const { return m_receivedSignals; }
+    uint32_t getReceivedSignals() const;
 
     /**
      * Checks for status changes and returns true iff status is ABORT.
@@ -182,8 +186,8 @@ class SuspendFlags
     boost::shared_ptr<StateBlocker> abort();
 
     /** log level of the "aborting" messages */
-    Logger::Level getLevel() const { return m_level; }
-    void setLevel(Logger::Level level) { m_level = level; }
+    Logger::Level getLevel() const;
+    void setLevel(Logger::Level level);
 
  private:
     SuspendFlags();

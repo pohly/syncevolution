@@ -20,6 +20,7 @@
 
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/util.h>
+#include <syncevo/ThreadSupport.h>
 #include <synthesis/syerror.h>
 
 #include <errno.h>
@@ -32,6 +33,8 @@
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+static RecMutex suspendRecMutex;
 
 SuspendFlags::SuspendFlags() :
     m_level(Logger::INFO),
@@ -52,6 +55,7 @@ SuspendFlags::~SuspendFlags()
 SuspendFlags &SuspendFlags::getSuspendFlags()
 {
     // never free the instance, other singletons might depend on it
+    RecMutex::Guard guard = suspendRecMutex.lock();
     static SuspendFlags *flags;
     if (!flags) {
         flags = new SuspendFlags;
@@ -64,6 +68,7 @@ static gboolean SignalChannelReadyCB(GIOChannel *source,
                                      gpointer data) throw()
 {
     try {
+        RecMutex::Guard guard = suspendRecMutex.lock();
         SuspendFlags &me = SuspendFlags::getSuspendFlags();
         me.printSignals();
     } catch (...) {
@@ -104,6 +109,7 @@ public:
 };
 
 SuspendFlags::State SuspendFlags::getState() const {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     if (m_abortBlocker.lock()) {
         // active abort blocker
         return ABORT;
@@ -115,26 +121,45 @@ SuspendFlags::State SuspendFlags::getState() const {
     }
 }
 
+uint32_t SuspendFlags::getReceivedSignals() const {
+    RecMutex::Guard guard = suspendRecMutex.lock();
+    return m_receivedSignals;
+}
+
+Logger::Level SuspendFlags::getLevel() const {
+    RecMutex::Guard guard = suspendRecMutex.lock();
+    return m_level;
+}
+
+void SuspendFlags::setLevel(Logger::Level level) {
+    RecMutex::Guard guard = suspendRecMutex.lock();
+    m_level = level;
+}
+
 bool SuspendFlags::isAborted()
 {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     printSignals();
     return getState() == ABORT;
 }
 
 bool SuspendFlags::isSuspended()
 {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     printSignals();
     return getState() == SUSPEND;
 }
 
 bool SuspendFlags::isNormal()
 {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     printSignals();
     return getState() == NORMAL;
 }
 
 void SuspendFlags::checkForNormal()
 {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     printSignals();
     if (getState() != NORMAL) {
         SE_THROW_EXCEPTION_STATUS(StatusException,
@@ -147,6 +172,7 @@ boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::suspend() { return b
 boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::abort() { return block(m_abortBlocker); }
 boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(boost::weak_ptr<StateBlocker> &blocker)
 {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     State oldState = getState();
     boost::shared_ptr<StateBlocker> res = blocker.lock();
     if (!res) {
@@ -306,6 +332,7 @@ void SuspendFlags::handleSignal(int sig)
 
 void SuspendFlags::printSignals()
 {
+    RecMutex::Guard guard = suspendRecMutex.lock();
     if (m_receiverFD >= 0) {
         unsigned char msg;
         while (read(m_receiverFD, &msg, 1) == 1) {
