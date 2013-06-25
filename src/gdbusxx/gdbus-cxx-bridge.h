@@ -1343,7 +1343,8 @@ template<class host, class VariantTraits> struct basic_marshal : public dbus_tra
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), VariantTraits::getVariantType())) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
-        g_variant_get(var, g_variant_get_type_string(var), &value);
+        const char *type = g_variant_get_type_string(var);
+        g_variant_get(var, type, &value);
     }
 
     /**
@@ -1447,7 +1448,8 @@ template<> struct dbus_traits<bool> : public dbus_traits_base
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
         gboolean buffer;
-        g_variant_get(var, g_variant_get_type_string(var), &buffer);
+        const char *type = g_variant_get_type_string(var);
+        g_variant_get(var, type, &buffer);
         value = buffer;
     }
 
@@ -2024,7 +2026,8 @@ template <class V> struct dbus_traits <boost::variant <V> > : public dbus_traits
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
         GVariantCXX varVar(g_variant_iter_next_value(&varIter));
-        if (!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V>::getSignature())) {
+        const char *type = g_variant_get_type_string(varVar);
+        if (dbus_traits<V>::getSignature() != type) {
             //ignore unrecognized sub type in variant
             return;
         }
@@ -2070,12 +2073,13 @@ template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > : pu
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
         GVariantCXX varVar(g_variant_iter_next_value(&varIter));
-        if ((!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V2>::getSignature())) &&
-            (!boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V1>::getSignature()))) {
+        const char *type = g_variant_get_type_string(varVar);
+        if ((dbus_traits<V2>::getSignature() != type) &&
+            (dbus_traits<V1>::getSignature() != type)) {
             // ignore unrecognized sub type in variant
             return;
         }
-        else if (boost::iequals(g_variant_get_type_string(varVar), dbus_traits<V1>::getSignature())) {
+        else if (dbus_traits<V1>::getSignature() == type) {
             V1 val;
             // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
             g_variant_iter_init(&varIter, var);
@@ -2142,13 +2146,13 @@ template <class V, class A> struct dbus_traits < boost::variant<boost::detail::v
         }
 
         const char *type = g_variant_get_type_string(var);
-        if (boost::iequals(type, "v")) {
+        if (!strcmp(type, "v")) {
             // Strip the outer variant and decode the inner value recursively, in
             // our own else branch.
             GVariantIter varIter;
             g_variant_iter_init(&varIter, var);
             dbus_traits<host_type>::get(context, varIter, value);
-        } else if (boost::iequals(type, dbus_traits<V>::getSignature())) {
+        } else if (dbus_traits<V>::getSignature() == type) {
             V val;
             dbus_traits<V>::get(context, *itercopy, val);
             value = val;
