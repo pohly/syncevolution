@@ -108,13 +108,34 @@ void TmpFile::unmap()
     m_mapptr = 0;
 }
 
+size_t TmpFile::moreData() const
+{
+    if (m_fd >= 0) {
+        struct stat sb;
+        if (fstat(m_fd, &sb) != 0) {
+            throw TmpFileException("TmpFile::map(): fstat()");
+        }
+        if ((!m_mapptr && sb.st_size) ||
+            (sb.st_size > 0 && m_mapsize < (size_t)sb.st_size)) {
+            return sb.st_size - m_mapsize;
+        }
+    }
 
-void TmpFile::close()
+    return 0;
+}
+
+
+void TmpFile::remove()
 {
     if (!m_filename.empty()) {
         unlink(m_filename.c_str());
         m_filename.clear();
     }
+}
+
+void TmpFile::close()
+{
+    remove();
     if (m_fd >= 0) {
         ::close(m_fd);
         m_fd = -1;

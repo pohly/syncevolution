@@ -74,6 +74,17 @@ class TmpFile
          * Unmap a view of file.
          */
         void unmap();
+
+        /**
+         * Returns amount of bytes not mapped into memory yet, zero if none.
+         */
+        size_t moreData() const;
+
+        /**
+         * Remove the file. If the process crashes, the file will be removed,
+         * but the process itself can still map and use the file content.
+         */
+        void remove();
         /**
          * Remove and close the file.
          *
