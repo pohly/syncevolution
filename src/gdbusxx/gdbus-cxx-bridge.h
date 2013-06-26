@@ -1420,6 +1420,20 @@ template<> struct dbus_traits<uint32_t> :
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
+template<> struct dbus_traits<int64_t> :
+    public basic_marshal< int64_t, VariantTypeInt64 >
+{
+    static std::string getType() { return "x"; }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+};
+template<> struct dbus_traits<uint64_t> :
+    public basic_marshal< uint64_t, VariantTypeUInt64 >
+{
+    static std::string getType() { return "t"; }
+    static std::string getSignature() {return getType(); }
+    static std::string getReply() { return ""; }
+};
 template<> struct dbus_traits<double> :
     public basic_marshal< double, VariantTypeDouble >
 {
