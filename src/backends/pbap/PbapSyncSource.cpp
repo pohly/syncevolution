@@ -86,7 +86,8 @@ private:
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
     enum {
         OBEXD_OLD, // obexd < 0.47
-        OBEXD_NEW, // obexd >= 0.47
+        OBEXD_NEW, // obexd == 0.47, file-based transfer
+        // OBEXD_048 // obexd == 0.48, file-based transfer without SetFilter and with filter parameter to PullAll()
         BLUEZ5     // obexd in Bluez >= 5.0
     } m_obexAPI;
 
@@ -369,7 +370,8 @@ void PbapSession::initSession(const std::string &address, const std::string &for
 
     GDBusCXX::DBusClientCall0(*m_session, "Select")(std::string("int"), std::string("PB"));
 
-    if (m_obexAPI == OBEXD_OLD) {
+    if (m_obexAPI == OBEXD_OLD ||
+        m_obexAPI == OBEXD_NEW) {
         GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(std::vector<std::string>(filter.begin(), filter.end()));
         GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
     } else {
@@ -389,7 +391,7 @@ void PbapSession::pullAll(Content &dst, std::string &buffer, TmpFile &tmpFile)
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
         std::pair<GDBusCXX::DBusObject_t, Params> tuple =
             m_obexAPI == OBEXD_NEW ?
-            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(tmpFile.filename(), m_filter5) :
+            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(tmpFile.filename()) :
             GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(tmpFile.filename(), m_filter5);
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
