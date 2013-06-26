@@ -317,11 +317,14 @@ protected:
                    bool &ok);
 
     /**
-     * Fill list with all local IDs of the given source.
-     * Unsafe characters are escaped with SafeConfigNode::escape(true,true).
-     * startDataRead() must have been called.
+     * Fill list with all local IDs of the given source, as used by the source.
      */
     void readLUIDs(SyncSource *source, std::list<std::string> &luids);
+
+    /**
+     * Invoke a callback for each local ID.
+     */
+    void processLUIDs(SyncSource *source, const boost::function<void (const std::string &)> &callback);
 
     /**
      * Add or update one item.
