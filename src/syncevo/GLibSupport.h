@@ -370,6 +370,16 @@ struct GErrorCXX {
         return *this;
     }
 
+    /** takes over ownership */
+    void take (GError *err) {
+        if (err != m_gerror) {
+            if (m_gerror) {
+                g_clear_error(&m_gerror);
+            }
+            m_gerror = err;
+        }
+    }
+
     /** For convenient access to GError members (message, domain, ...) */
     const GError * operator-> () const { return m_gerror; }
 
