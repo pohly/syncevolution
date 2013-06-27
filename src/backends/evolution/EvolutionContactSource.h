@@ -42,6 +42,8 @@ SE_GOBJECT_TYPE(EContact)
 
 SE_BEGIN_CXX
 
+class ContactCache;
+
 /**
  * Implements access to Evolution address books.
  */
@@ -151,6 +153,36 @@ class EvolutionContactSource : public EvolutionSyncSource,
     void completedUpdate(const boost::shared_ptr<PendingContainer_t> &batched, gboolean success, const GError *gerror) throw ();
     virtual void flushItemChanges();
     virtual void finishItemChanges();
+
+    // Read-ahead of item data.
+    boost::shared_ptr<ContactCache> m_contactCache, m_contactCacheNext;
+    int m_cacheMisses, m_cacheStalls;
+    int m_contactReads; /**< number of readItemAsKey() calls */
+    int m_contactsFromDB; /**< number of contacts requested from DB (including ones not found) */
+    int m_contactQueries; /**< total number of e_book_client_get_contacts() calls */
+
+    ReadAheadOrder m_readAheadOrder;
+    ReadAheadItems m_nextLUIDs;
+
+    void checkCacheForError(boost::shared_ptr<ContactCache> &cache);
+    void invalidateCachedContact(const std::string &luid);
+    void invalidateCachedContact(boost::shared_ptr<ContactCache> &cache, const std::string &luid);
+    bool getContact(const string &luid, EContact **contact, GErrorCXX &gerror);
+    bool getContactFromCache(const string &luid, EContact **contact, GErrorCXX &gerror);
+    enum ReadingMode
+    {
+        START,    /**< luid is needed, must be read  */
+        CONTINUE  /**< luid is from old request, find next ones */
+    };
+    boost::shared_ptr<ContactCache> startReading(const std::string &luid, ReadingMode mode);
+    void completedRead(const boost::weak_ptr<ContactCache> &cachePtr, gboolean success, GSList *contactsPtr, const GError *gerror) throw();
+    void logCacheStats(Logger::Level level);
+
+    // Use the information provided to us to implement read-ahead efficiently.
+    virtual void setReadAheadOrder(ReadAheadOrder order,
+                                   const ReadAheadItems &luids);
+    virtual void getReadAheadOrder(ReadAheadOrder &order,
+                                   ReadAheadItems &luids);
 
 #else
     eptr<EBook, GObject> m_addressbook;
