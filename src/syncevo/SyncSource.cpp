@@ -1007,6 +1007,23 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
         revisions = &buffer;
     }
 
+    // Ensure that source knows what we are going to read.
+    std::vector<std::string> uids;
+    uids.reserve(revisions->size());
+    BOOST_FOREACH(const StringPair &mapping, *revisions) {
+        uids.push_back(mapping.first);
+    }
+
+    // We may dump after a hint was already set when starting the
+    // sync. Remember that and restore it when done. If we fail, we
+    // don't need to restore, because then syncing will abort or skip
+    // the source.
+    ReadAheadOrder oldOrder;
+    ReadAheadItems oldLUIDs;
+    getReadAheadOrder(oldOrder, oldLUIDs);
+
+    setReadAheadOrder(READ_SELECTED_ITEMS, uids);
+
     string item;
     errno = 0;
     BOOST_FOREACH(const StringPair &mapping, *revisions) {
@@ -1016,6 +1033,7 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
         cache.backupItem(item, uid, rev);
     }
 
+    setReadAheadOrder(oldOrder, oldLUIDs);
     cache.finalize(report);
 }
 

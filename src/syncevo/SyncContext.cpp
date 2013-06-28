@@ -1776,6 +1776,30 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 }
                 break;
             }
+
+            if (SyncMode(mode) != SYNC_NONE) {
+                SE_LOG_DEBUG(NULL, "reading: set read-ahead based on sync mode %s",
+                             PrettyPrintSyncMode(SyncMode(mode)).c_str());
+                switch (mode) {
+                case SIMPLE_SYNC_NONE:
+                case SIMPLE_SYNC_INVALID:
+                case SIMPLE_SYNC_RESTORE_FROM_BACKUP:
+                case SIMPLE_SYNC_ONE_WAY_FROM_REMOTE:
+                case SIMPLE_SYNC_REFRESH_FROM_REMOTE:
+                case SIMPLE_SYNC_LOCAL_CACHE_INCREMENTAL:
+                    source.setReadAheadOrder(SyncSourceBase::READ_NONE);
+                    break;
+                case SIMPLE_SYNC_TWO_WAY:
+                case SIMPLE_SYNC_ONE_WAY_FROM_LOCAL:
+                    source.setReadAheadOrder(SyncSourceBase::READ_CHANGED_ITEMS);
+                    break;
+                case SIMPLE_SYNC_SLOW:
+                case SIMPLE_SYNC_REFRESH_FROM_LOCAL:
+                case SIMPLE_SYNC_LOCAL_CACHE_SLOW:
+                    source.setReadAheadOrder(SyncSourceBase::READ_ALL_ITEMS);
+                    break;
+                }
+            }
             if (source.getFinalSyncMode() == SYNC_NONE) {
                 source.recordFinalSyncMode(SyncMode(mode));
                 source.recordFirstSync(extra1 == 2);

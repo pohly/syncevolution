@@ -1398,6 +1398,7 @@ bool Cmdline::run() {
 
             err = ops.m_startDataRead(*source, "", "");
             CHECK_ERROR("reading items");
+            source->setReadAheadOrder(SyncSourceBase::READ_ALL_ITEMS);
             processLUIDs(source, boost::bind(ShowLUID, logging, _1));
         } else if (m_deleteItems) {
             if (!ops.m_deleteItem) {
@@ -1549,6 +1550,7 @@ bool Cmdline::run() {
                 bool haveNewline = false;  // that item had a newline at the end
                 if (m_luids.empty()) {
                     // Read all items.
+                    raw->setReadAheadOrder(SyncSourceBase::READ_ALL_ITEMS);
                     processLUIDs(source, boost::bind(ExportLUID,
                                                      raw,
                                                      out,
@@ -1558,10 +1560,15 @@ bool Cmdline::run() {
                                                      boost::ref(haveNewline),
                                                      _1));
                 } else {
+                    SyncSourceBase::ReadAheadItems luids;
+                    luids.reserve(m_luids.size());
+                    luids.insert(luids.begin(), m_luids.begin(), m_luids.end());
+                    raw->setReadAheadOrder(SyncSourceBase::READ_SELECTED_ITEMS, luids);
                     BOOST_FOREACH(const string &luid, m_luids) {
                         ExportLUID(raw, out, m_delimiter, m_itemPath, haveItem, haveNewline, luid);
                     }
                 }
+                raw->setReadAheadOrder(SyncSourceBase::READ_NONE);
                 if (outFile) {
                     outFile->close();
                     if (outFile->bad()) {

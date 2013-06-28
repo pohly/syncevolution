@@ -1652,6 +1652,30 @@ class SyncSourceBase {
      */
     virtual bool needChanges() { return true; }
 
+    enum ReadAheadOrder {
+        READ_ALL_ITEMS,      /** all items as reported by the ReadNextItem operation */
+        READ_CHANGED_ITEMS,  /** read updated or added items as reported by the ReadNextItem operation */
+        READ_SELECTED_ITEMS, /** read items as given in an explicit list */
+        READ_NONE            /** remove previous hint */
+    };
+
+    typedef std::vector<std::string> ReadAheadItems;
+    /**
+     * Provides a hint to the source which items are going to be read
+     * next. A source may use this to implement read-ahead. This
+     * is just a hint, the source must also work if reads turn out to
+     * ask for other items.
+     */
+    virtual void setReadAheadOrder(ReadAheadOrder order,
+                                   const ReadAheadItems &luids = ReadAheadItems())
+    { }
+    virtual void getReadAheadOrder(ReadAheadOrder &order,
+                                   ReadAheadItems &luids)
+    {
+        order = READ_NONE;
+        luids.clear();
+    }
+
  protected:
     struct SynthesisInfo {
         /**
