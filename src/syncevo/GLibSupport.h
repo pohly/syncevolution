@@ -614,6 +614,19 @@ class PlainGStr : public boost::shared_ptr<gchar>
         const gchar *c_str() const { return &**this; }
 };
 
+/**
+ * Wraps a glib string array, frees with g_strfreev().
+ */
+class PlainGStrArray : public boost::shared_ptr<gchar *>
+{
+    public:
+        PlainGStrArray() {}
+        PlainGStrArray(gchar **array) : boost::shared_ptr<char *>(array, g_strfreev) {}
+        PlainGStrArray(const PlainGStrArray &other) : boost::shared_ptr<char *>(other) {}
+        operator gchar * const *() const { return &**this; }
+        gchar * &at(size_t index) { return get()[index]; }
+};
+
 // empty template, need specialization based on parameter and return types
 template <class T, class F, F *finish, class A1, class A2, class A3, class A4, class A5> struct GAsyncReady5 {};
 template <class T, class F, F *finish, class A1, class A2, class A3, class A4> struct GAsyncReady4 {};
