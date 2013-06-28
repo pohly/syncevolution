@@ -1302,7 +1302,7 @@ test = SyncEvolutionTest("edsfile",
                          "", options.shell,
                          "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
                          [ "eds_event", "eds_contact" ],
-                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_NUM_ITEMS=100 "
                          "CLIENT_TEST_LOG=syncevohttp.log "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
@@ -1327,7 +1327,7 @@ test = SyncEvolutionTest("edseds",
                          "", options.shell,
                          "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
                          [ "eds_event", "eds_contact" ],
-                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_NUM_ITEMS=100 "
                          "CLIENT_TEST_LOG=syncevohttp.log "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
@@ -1351,7 +1351,7 @@ test = SyncEvolutionTest("edsxfile",
                          "", options.shell,
                          "Client::Sync::eds_contact::Retry Client::Sync::eds_contact::Resend Client::Sync::eds_contact::Suspend",
                          [ "eds_contact" ],
-                         "CLIENT_TEST_NUM_ITEMS=10 "
+                         "CLIENT_TEST_NUM_ITEMS=100 "
                          "CLIENT_TEST_LOG=syncevohttp.log "
                          "CLIENT_TEST_RETRY=t "
                          "CLIENT_TEST_RESEND=t "
