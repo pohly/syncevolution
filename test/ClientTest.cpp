@@ -6307,8 +6307,10 @@ bool ClientTest::compare(ClientTest &client, const std::string &fileA, const std
         }
     }
     if (!success) {
-        printf("failed: env CLIENT_TEST_SERVER=%s synccompare %s %s\n",
-               currentServer().c_str(),
+        printf("failed: env CLIENT_TEST_SERVER=%s 'CLIENT_TEST_STRIP_PARAMETERS=%s' 'CLIENT_TEST_STRIP_PROPERTIES=%s'synccompare %s %s\n",
+               getEnv("CLIENT_TEST_SERVER", ""),
+               getEnv("CLIENT_TEST_STRIP_PARAMETERS", ""),
+               getEnv("CLIENT_TEST_STRIP_PROPERTIES", ""),
                fileA.c_str(), fileB.c_str());
     }
     return success;
