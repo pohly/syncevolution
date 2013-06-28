@@ -155,7 +155,17 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     if (!g_key_file_load_from_data(keyfile, ini, len, G_KEY_FILE_NONE, gerror)) {
         gerror.throwError("parsing ESource .ini data");
     }
-    g_key_file_remove_key(keyfile, mainSection, "DisplayName", NULL); // Removes localized names.
+    PlainGStrArray keys(g_key_file_get_keys(keyfile, mainSection, NULL, gerror));
+    if (!keys) {
+        gerror.throwError("listing keys in main section");
+    }
+    for (int i = 0; keys.at(i); i++) {
+        if (boost::starts_with(keys[i], "DisplayName[")) {
+            if (!g_key_file_remove_key(keyfile, mainSection, keys.at(i), gerror)) {
+                gerror.throwError("remove key");
+            }
+        }
+    }
     g_key_file_set_string(keyfile, mainSection, "DisplayName", database.m_name.c_str());
     g_key_file_set_boolean(keyfile, mainSection, "Enabled", true);
     ini = g_key_file_to_data(keyfile, &len, NULL);
