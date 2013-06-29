@@ -26,12 +26,15 @@
 #include <syncevo/Logging.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/SuspendFlags.h>
+#include <syncevo/GLibSupport.h>
 
 #include <synthesis/syerror.h>
 
 #include <boost/scoped_array.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/lambda/lambda.hpp>
+#include <boost/lambda/bind.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -777,12 +780,8 @@ double Sleep(double seconds)
                                             SleepTimeout,
                                             &triggered),
                               "glib timeout");
-            while (!triggered) {
-                if (s.getState() != SuspendFlags::NORMAL) {
-                    break;
-                }
-                g_main_context_iteration(NULL, true);
-            }
+            GRunWhile(! boost::lambda::var(triggered) &&
+                      boost::lambda::bind(&SuspendFlags::getState, boost::ref(s)) == SuspendFlags::NORMAL);
             // done
             return 0;
         }

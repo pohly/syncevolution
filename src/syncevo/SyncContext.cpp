@@ -2953,6 +2953,44 @@ static gboolean timeout(gpointer data)
     return true;
 }
 
+static bool CondTimedWaitContinue(pthread_mutex_t *mutex,
+                                  bool &terminated,
+                                  long milliSecondsToWait,
+                                  Timespec &deadline,
+                                  SuspendFlags &flags,
+                                  int &result)
+{
+    // Thread has terminated?
+    pthread_mutex_lock(mutex);
+    if (terminated) {
+        pthread_mutex_unlock(mutex);
+        SE_LOG_DEBUG(NULL, "background thread completed");
+        return false;
+    }
+    pthread_mutex_unlock(mutex);
+
+    // Abort? Ignore when waiting for final thread shutdown, because
+    // in that case we just get called again.
+    if (milliSecondsToWait > 0 && flags.isAborted()) {
+        SE_LOG_DEBUG(NULL, "give up waiting for background thread, aborted");
+        // Signal error. libsynthesis then assumes that the thread still
+        // runs and enters its parallel message sending, which eventually
+        // returns control to us.
+        result = 1;
+        return false;
+    }
+
+    // Timeout?
+    if (!milliSecondsToWait ||
+        (milliSecondsToWait > 0 && deadline <= Timespec::system())) {
+        SE_LOG_DEBUG(NULL, "give up waiting for background thread, timeout");
+        result = 1;
+        return false;
+    }
+
+    return true;
+}
+
 static int CondTimedWaitGLib(pthread_cond_t * /* cond */, pthread_mutex_t *mutex,
                              bool &terminated, long milliSecondsToWait)
 {
@@ -2974,39 +3012,13 @@ static int CondTimedWaitGLib(pthread_cond_t * /* cond */, pthread_mutex_t *mutex
         // one second is okay.
         GLibEvent id(g_timeout_add_seconds(1, timeout, NULL), "timeout");
 
-        while (true) {
-            // Thread has terminated?
-            pthread_mutex_lock(mutex);
-            if (terminated) {
-                pthread_mutex_unlock(mutex);
-                SE_LOG_DEBUG(NULL, "background thread completed");
-                break;
-            }
-            pthread_mutex_unlock(mutex);
-
-            // Abort? Ignore when waiting for final thread shutdown, because
-            // in that case we just get called again.
-            if (milliSecondsToWait > 0 && flags.isAborted()) {
-                SE_LOG_DEBUG(NULL, "give up waiting for background thread, aborted");
-                // Signal error. libsynthesis then assumes that the thread still
-                // runs and enters its parallel message sending, which eventually
-                // returns control to us.
-                result = 1;
-                break;
-            }
-
-            // Timeout?
-            if (!milliSecondsToWait ||
-                (milliSecondsToWait > 0 && deadline <= Timespec::system())) {
-                SE_LOG_DEBUG(NULL, "give up waiting for background thread, timeout");
-                result = 1;
-                break;
-            }
-
-            // Check event loop with blocking. We'll return after one
-            // second.
-            g_main_context_iteration(NULL, true);
-        }
+        GRunWhile(boost::bind(CondTimedWaitContinue,
+                              mutex,
+                              boost::ref(terminated),
+                              milliSecondsToWait,
+                              boost::ref(deadline),
+                              boost::ref(flags),
+                              boost::ref(result)));
     } catch (...) {
         Exception::handle(HANDLE_EXCEPTION_FATAL);
     }
@@ -3032,7 +3044,7 @@ void SyncContext::initMain(const char *appname)
     // Anything else is unsafe, see https://mail.gnome.org/archives/gtk-list/2013-April/msg00040.html
     // util.cpp:Sleep() checks this and uses the default context
     // when called by the main thread, otherwise falls back to
-    // select().
+    // select(). GRunWhile() is always safe to use.
     g_main_context_acquire(NULL);
 
     SySync_CondTimedWait = CondTimedWaitGLib;

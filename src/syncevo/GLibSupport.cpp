@@ -25,6 +25,7 @@
 #endif
 
 #include <boost/bind.hpp>
+#include <set>
 
 #include <string.h>
 
@@ -202,6 +203,93 @@ GLibNotify::GLibNotify(const char *file,
                            "changed",
                            G_CALLBACK(changed),
                            (void *)&m_callback);
+}
+
+class PendingChecks
+{
+    typedef std::set<const boost::function<bool ()> *> Checks;
+    Checks m_checks;
+    DynMutex m_mutex;
+    Cond m_cond;
+
+public:
+    /**
+     * Called by main thread before and after sleeping.
+     * Runs all registered checks and removes the ones
+     * which are done.
+     */
+    void runChecks();
+
+    /**
+     * Called by additional threads. Returns when check()
+     * returned false.
+     */
+    void blockOnCheck(const boost::function<bool ()> &check);
+};
+
+void PendingChecks::runChecks()
+{
+    DynMutex::Guard guard = m_mutex.lock();
+    Checks::iterator it = m_checks.begin();
+    bool removed = false;
+    while (it != m_checks.end()) {
+        bool cont;
+        try {
+            cont = (**it)();
+        } catch (...) {
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+            // keep compiler happy
+            cont = false;
+        }
+
+        if (!cont) {
+            // Done with this check
+            Checks::iterator next = it;
+            ++next;
+            m_checks.erase(it);
+            it = next;
+            removed = true;
+        } else {
+            ++it;
+        }
+    }
+    // Tell blockOnCheck() calls that they may have completed.
+    if (removed) {
+        m_cond.signal();
+    }
+}
+
+void PendingChecks::blockOnCheck(const boost::function<bool ()> &check)
+{
+    DynMutex::Guard guard = m_mutex.lock();
+    // When we get here, the conditions for returning may already have
+    // been met.  Check before sleeping. If we need to continue, then
+    // holding the mutex ensures that the main thread will run the
+    // check on the next iteration.
+    if (check()) {
+        m_checks.insert(&check);
+        do {
+             m_cond.wait(m_mutex);
+        } while (m_checks.find(&check) != m_checks.end());
+    }
+}
+
+void GRunWhile(const boost::function<bool ()> &check)
+{
+    static PendingChecks checks;
+    if (g_main_context_is_owner(g_main_context_default())) {
+        // Check once before sleeping, conditions may already be met
+        // for some checks.
+        checks.runChecks();
+        // Drive event loop.
+        while (check()) {
+            g_main_context_iteration(NULL, true);
+            checks.runChecks();
+        }
+    } else {
+        // Transfer check into main thread.
+        checks.blockOnCheck(check);
+    }
 }
 
 #ifdef ENABLE_UNIT_TESTS
