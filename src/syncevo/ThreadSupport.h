@@ -80,6 +80,9 @@ template<class M, void (*_lock)(M *), void (*_unlock)(M *)> class MutexTemplate
         _lock(&m_mutex);
         return Guard(&m_mutex);
     }
+
+    M *get() { return &m_mutex; }
+    operator M * () { return &m_mutex; }
 };
 
 /**
@@ -93,11 +96,11 @@ template<class M, void (*_lock)(M *), void (*_unlock)(M *), void (*_init)(M *), 
  public:
     DynMutexTemplate()
     {
-        _init(&MutexTemplate<M, _lock, _unlock>::m_mutex);
+        _init(MutexTemplate<M, _lock, _unlock>::get());
     }
     ~DynMutexTemplate()
     {
-        _clear(&MutexTemplate<M, _lock, _unlock>::m_mutex);
+        _clear(MutexTemplate<M, _lock, _unlock>::get());
     }
 };
 
