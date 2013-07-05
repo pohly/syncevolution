@@ -8,7 +8,18 @@
    <macro name="VCARD_MERGESCRIPT"><![CDATA[
      integer mode;
      mode = MERGEMODE();
-     if (mode == 1 && WINNING.PHOTO == EMPTY) {
+     if (SESSIONVAR("keepPhotoData") &&
+         WINNING.PHOTO == EMPTY &&
+         LOOSING.PHOTO != EMPTY) {
+       // The client's item is always the "winning" one in PBAP syncing,
+       // but it might not have the photo data that is already on the
+       // server. Therefore keep the server's photo, if there is
+       // one and we are not in the phase where the client sends
+       // its photos.
+       WINNING.PHOTO = LOOSING.PHOTO;
+       WINNING.PHOTO_TYPE = LOOSING.PHOTO_TYPE;
+       WINNING.PHOTO_VALUE = LOOSING.PHOTO_VALUE;
+     } else if (mode == 1 && WINNING.PHOTO == EMPTY) {
        // Removing photo from loosing item.
        if (LOOSING.PHOTO != EMPTY) {
          SETLOOSINGCHANGED(1);

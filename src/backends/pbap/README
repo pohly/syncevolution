@@ -93,3 +93,29 @@ syncevolution --configure \
 
 # run synchronization
 syncevolution pbap
+
+
+It may or may not be desirable to sync only the text properties of a
+contact. This can be considerably faster, because the PHOTO property
+is large and increases the download and processing time. SyncEvolution
+supports that in three different ways, chosen via the
+SYNCEVOLUTION_PBAP_SYNC env variable:
+
+SYNCEVOLUTION_PBAP_SYNC=text syncevolution pbap
+  Synchronize only the text properties by excluding the PHOTO property,
+  keep all photos already stored locally.
+
+SYNCEVOLUTION_PBAP_SYNC=all syncevolution pbap
+  Synchronize all properties according to the databaseFormat in one go,
+  adding/updating/removing photos locally to match the phone.
+
+SYNCEVOLUTION_PBAP_SYNC=incremental syncevolution pbap
+  Synchronize first text, then all data. Conceptually this is the same
+  as two invocations with "text" and then "all". Because the implementation
+  reuses the same PBAP session and sync session, it is slightly faster.
+  It is slower than a single "all" sync because the entire set of contacts
+  must be downloaded and synced twice, once without photo, then with.
+
+SYNCEVOLUTION_PBAP_SYNC has side effect on the entire sync and thus
+may only be used in a sync config which synchronizes contacts via
+PBAP.

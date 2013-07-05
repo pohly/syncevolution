@@ -66,6 +66,14 @@ class PbapSyncSource : virtual public SyncSource, virtual public SyncSourceSessi
  private:
     boost::shared_ptr<PbapSession> m_session;
     boost::shared_ptr<PullAll> m_pullAll;
+    enum PBAPSyncMode {
+        PBAP_SYNC_NORMAL,      ///< Read contact data according to filter.
+        PBAP_SYNC_TEXT,        ///< Sync without reading photo data from phone and keeping local photos instead.
+        PBAP_SYNC_INCREMENTAL  ///< Sync first without photo data (as in PBAP_SYNC_TEXT),
+                               ///  then add photo data in second cycle.
+    } m_PBAPSyncMode;
+    bool m_isFirstCycle;
+    bool m_hadContacts;
 
     /**
      * List items as expected by Synthesis engine.

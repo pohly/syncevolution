@@ -25,12 +25,7 @@
 
 #include "PbapSyncSource.h"
 
-// SyncEvolution includes a copy of Boost header files.
-// They are safe to use without creating additional
-// build dependencies. boost::filesystem requires a
-// library and therefore is avoided here. Some
-// utility functions from SyncEvolution are used
-// instead, plus standard C/Posix functions.
+#include <boost/assign/list_of.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/tokenizer.hpp>
 
@@ -85,6 +80,12 @@ public:
     const char *addVCards(int startIndex, const pcrecpp::StringPiece &content);
 };
 
+enum PullData
+{
+    PULL_AS_CONFIGURED,
+    PULL_WITHOUT_PHOTOS
+};
+
 class PbapSession : private boost::noncopyable {
 public:
     static boost::shared_ptr<PbapSession> create(PbapSyncSource &parent);
@@ -94,9 +95,10 @@ public:
     typedef std::map<std::string, pcrecpp::StringPiece> Content;
     typedef std::map<std::string, boost::variant<std::string> > Params;
 
-    boost::shared_ptr<PullAll> startPullAll();
+    boost::shared_ptr<PullAll> startPullAll(PullData pullata);
     void checkForError(); // Throws exception if transfer failed.
     bool transferComplete() const { return m_transferComplete; }
+    void resetTransfer() { m_transferComplete = false; m_transferErrorCode = ""; m_transferErrorMsg = ""; }
     void shutdown(void);
 
 private:
@@ -113,8 +115,11 @@ private:
     } m_obexAPI;
 
     /** filter parameters for BLUEZ5 PullAll */
-    typedef boost::variant< std::string, std::list<std::string> > Bluez5Values;
+    typedef std::list<std::string> Properties;
+    typedef boost::variant< std::string, Properties > Bluez5Values;
     std::map<std::string, Bluez5Values> m_filter5;
+    Properties m_filterFields;
+    Properties supportedProperties() const;
 
     /**
      * m_transferComplete will be set to true when observing a
@@ -223,6 +228,49 @@ void PbapSession::propertyChangedCb(const GDBusCXX::Path_t &path,
         SE_LOG_DEBUG(NULL, "obexd transfer %s property change: %s",
                      path.c_str(), name.c_str());
     }
+}
+
+PbapSession::Properties PbapSession::supportedProperties() const
+{
+    Properties props;
+    static const std::set<std::string> supported =
+        boost::assign::list_of("VERSION")
+        ("FN")
+        ("N")
+        ("PHOTO")
+        ("BDAY")
+        ("ADR")
+        ("LABEL")
+        ("TEL")
+        ("EMAIL")
+        ("MAILER")
+        ("TZ")
+        ("GEO")
+        ("TITLE")
+        ("ROLE")
+        ("LOGO")
+        ("AGENT")
+        ("ORG")
+        ("NOTE")
+        ("REV")
+        ("SOUND")
+        ("URL")
+        ("UID")
+        ("KEY")
+        ("NICKNAME")
+        ("CATEGORIES")
+        ("CLASS");
+
+    BOOST_FOREACH (const std::string &prop, m_filterFields) {
+        // Be conservative and only ask for properties that we
+        // really know how to use. obexd also lists the bit field
+        // strings ("BIT01") but phones have been seen to reject
+        // queries when those were enabled.
+        if (supported.find(prop) != supported.end()) {
+            props.push_back(prop);
+        }
+    }
+    return props;
 }
 
 void PbapSession::initSession(const std::string &address, const std::string &format)
@@ -384,15 +432,14 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     SE_LOG_DEBUG(NULL, "PBAP session created: %s", m_session->getPath());
 
     // get filter list so that we can continue validating our format specifier
-    std::vector<std::string> filterFields =
-        GDBusCXX::DBusClientCall1< std::vector<std::string> >(*m_session, "ListFilterFields")();
+    m_filterFields = GDBusCXX::DBusClientCall1< Properties >(*m_session, "ListFilterFields")();
     SE_LOG_DEBUG(NULL, "supported PBAP filter fields:\n    %s",
-                 boost::join(filterFields, "\n    ").c_str());
+                 boost::join(m_filterFields, "\n    ").c_str());
 
-    std::list<std::string> filter;
+    Properties filter;
     if (negated) {
         // negated, start with everything set
-        filter.insert(filter.begin(), filterFields.begin(), filterFields.end());
+        filter = supportedProperties();
     }
 
     // validate parameters and update filter
@@ -401,12 +448,12 @@ void PbapSession::initSession(const std::string &address, const std::string &for
             continue;
         }
 
-        std::vector<std::string>::const_iterator entry =
-            std::find_if(filterFields.begin(),
-                         filterFields.end(),
+        Properties::const_iterator entry =
+            std::find_if(m_filterFields.begin(),
+                         m_filterFields.end(),
                          boost::bind(&boost::iequals<std::string,std::string>, _1, prop, std::locale()));
 
-        if (entry == filterFields.end()) {
+        if (entry == m_filterFields.end()) {
             m_parent.throwError(StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
                                              prop.c_str()));
         }
@@ -419,21 +466,49 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     }
 
     GDBusCXX::DBusClientCall0(*m_session, "Select")(std::string("int"), std::string("PB"));
-
-    if (m_obexAPI == OBEXD_OLD ||
-        m_obexAPI == OBEXD_NEW) {
-        GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(std::vector<std::string>(filter.begin(), filter.end()));
-        GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(std::string(version == "2.1" ? "vcard21" : "vcard30"));
-    } else {
-        m_filter5["Format"] = version == "2.1" ? "vcard21" : "vcard30";
-        m_filter5["Fields"] = filter;
-    }
+    m_filter5["Format"] = version == "2.1" ? "vcard21" : "vcard30";
+    m_filter5["Fields"] = filter;
 
     SE_LOG_DEBUG(NULL, "PBAP session initialized");
 }
 
-boost::shared_ptr<PullAll> PbapSession::startPullAll()
+boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
 {
+    resetTransfer();
+
+    // Update prepared filter to match pullData.
+    std::map<std::string, Bluez5Values> currentFilter = m_filter5;
+    std::string &format = boost::get<std::string>(currentFilter["Format"]);
+    std::list<std::string> &filter = boost::get< std::list<std::string> >(currentFilter["Fields"]);
+    switch (pullData) {
+    case PULL_AS_CONFIGURED:
+        SE_LOG_DEBUG(NULL, "pull all with configured filter: '%s'",
+                     boost::join(filter, " ").c_str());
+        break;
+    case PULL_WITHOUT_PHOTOS:
+        // Remove PHOTO from list or create list with the other properties.
+        if (filter.empty()) {
+            filter = supportedProperties();
+        }
+        for (Properties::iterator it = filter.begin();
+             it != filter.end();
+             ++it) {
+            if (*it == "PHOTO") {
+                filter.erase(it);
+                break;
+            }
+        }
+        SE_LOG_DEBUG(NULL, "pull all without photos: '%s'",
+                     boost::join(filter, " ").c_str());
+        break;
+    }
+
+    if (m_obexAPI == OBEXD_OLD ||
+        m_obexAPI == OBEXD_NEW) {
+        GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(filter);
+        GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(format);
+    }
+
     boost::shared_ptr<PullAll> state(new PullAll);
     state->m_currentContact = 0;
     if (m_obexAPI != OBEXD_OLD) {
@@ -443,7 +518,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll()
         std::pair<GDBusCXX::DBusObject_t, Params> tuple =
             m_obexAPI == OBEXD_NEW ?
             GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename()) :
-            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state->m_tmpFile.filename(), m_filter5);
+            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter);
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
         SE_LOG_DEBUG(NULL, "pullall transfer path %s, %ld properties", transfer.c_str(), (long)properties.size());
@@ -570,6 +645,14 @@ PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     m_operations.m_readItemAsKey = boost::bind(&PbapSyncSource::readItemAsKey,
                                                this, _1, _2);
     m_session = PbapSession::create(*this);
+    const char *PBAPSyncMode = getenv("SYNCEVOLUTION_PBAP_SYNC");
+    m_PBAPSyncMode = !PBAPSyncMode ? PBAP_SYNC_NORMAL :
+        boost::iequals(PBAPSyncMode, "incremental") ? PBAP_SYNC_INCREMENTAL :
+        boost::iequals(PBAPSyncMode, "text") ? PBAP_SYNC_TEXT :
+        boost::iequals(PBAPSyncMode, "all") ? PBAP_SYNC_NORMAL :
+        (throwError(StringPrintf("invalid value for SYNCEVOLUTION_PBAP_SYNC: %s", PBAPSyncMode)), PBAP_SYNC_NORMAL);
+    m_isFirstCycle = true;
+    m_hadContacts = false;
 }
 
 PbapSyncSource::~PbapSyncSource()
@@ -592,14 +675,17 @@ void PbapSyncSource::open()
 
 void PbapSyncSource::beginSync(const std::string &lastToken, const std::string &resumeToken)
 {
+    if (!lastToken.empty()) {
+        throwError(STATUS_SLOW_SYNC_508, std::string("PBAP cannot do change detection"));
+    }
 }
 
 std::string PbapSyncSource::endSync(bool success)
 {
     m_pullAll.reset();
-    m_session->shutdown();
-
-    return "";
+    // Non-empty so that beginSync() can detect non-slow syncs and ask
+    // for one.
+    return "1";
 }
 
 bool PbapSyncSource::isEmpty()
@@ -609,6 +695,7 @@ bool PbapSyncSource::isEmpty()
 
 void PbapSyncSource::close()
 {
+    m_session->shutdown();
 }
 
 PbapSyncSource::Databases PbapSyncSource::getDatabases()
@@ -652,14 +739,24 @@ void PbapSyncSource::getSynthesisInfo(SynthesisInfo &info,
         type = sourceType.m_format;
     }
     info.m_datatypes = getDataTypeSupport(type, sourceType.m_forceFormat);
+
+    /**
+     * Access to data must be done early so that a slow sync can be
+     * enforced.
+     */
+    info.m_earlyStartDataRead = true;
 }
+
+// TODO: return IDs based on GetSize(), read only when engine needs data.
 
 sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
                                   sysync::sInt32 *aStatus,
                                   bool aFirst)
 {
     if (aFirst) {
-        m_pullAll = m_session->startPullAll();
+        m_pullAll = m_session->startPullAll((m_PBAPSyncMode == PBAP_SYNC_TEXT ||
+                                             (m_PBAPSyncMode == PBAP_SYNC_INCREMENTAL && m_isFirstCycle)) ? PULL_WITHOUT_PHOTOS :
+                                            PULL_AS_CONFIGURED);
     }
     if (!m_pullAll) {
         throwError("logic error: readNextItem without aFirst=true before");
@@ -667,10 +764,17 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
     std::string id = m_pullAll->getNextID();
     if (id.empty()) {
         *aStatus = sysync::ReadNextItem_EOF;
+        if (m_PBAPSyncMode == PBAP_SYNC_INCREMENTAL &&
+            m_hadContacts &&
+            m_isFirstCycle) {
+            requestAnotherSync();
+            m_isFirstCycle = false;
+        }
     } else {
         *aStatus = sysync::ReadNextItem_Unchanged;
         aID->item = StrAlloc(id.c_str());
         aID->parent = NULL;
+        m_hadContacts = true;
     }
     return sysync::LOCERR_OK;
 }

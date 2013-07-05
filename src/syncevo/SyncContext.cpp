@@ -1813,6 +1813,13 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 // (they should only finish the work of the initial
                 // one)
                 source.recordRestart();
+                if (m_serverMode) {
+                    // Done with first cycle, revert to normal photo
+                    // handling if it was disabled.
+                    SharedKey sessionKey = m_engine.OpenSessionKey(m_session);
+                    SharedKey contextKey = m_engine.OpenKeyByPath(sessionKey, "/sessionvars");
+                    m_engine.SetInt32Value(contextKey, "keepPhotoData", false);
+                }
             }
         } else {
             SE_LOG_INFO(NULL, "%s: restore from backup", source.getDisplayName().c_str());
@@ -2441,7 +2448,11 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     std::set<std::string> flags = getSyncMLFlags();
     bool noctcap = flags.find("noctcap") != flags.end();
     bool norestart = flags.find("norestart") != flags.end();
-    const char *sessioninitscript =
+    const char *PBAPSyncMode = getenv("SYNCEVOLUTION_PBAP_SYNC");
+    bool keepPhotoData = PBAPSyncMode &&
+        (boost::iequals(PBAPSyncMode, "incremental") ||
+         boost::iequals(PBAPSyncMode, "text"));
+    std::string sessioninitscript =
         "    <sessioninitscript><![CDATA[\n"
         "      // these variables are possibly modified by rule scripts\n"
         "      TIMESTAMP mindate; // earliest date remote party can handle\n"
@@ -2456,6 +2467,14 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         "      addInternetEmail = FALSE;\n"
         "      INTEGER stripUID;\n"
         "      stripUID = FALSE;\n"
+        "      INTEGER keepPhotoData;\n"
+        "      keepPhotoData = "
+        // Keep local photos in first cycle when using special sync
+        // mode for PBAP. PBAP source will request second cycle if it
+        // has contacts whose photo data was not donwloaded. Then we
+        // will disable this special handling for that cycle and photo
+        // can be updated and removed normally.
+        + std::string(keepPhotoData ? "TRUE" : "FALSE") + ";\n"
         "    ]]></sessioninitscript>\n";
 
     ostringstream clientorserver;
