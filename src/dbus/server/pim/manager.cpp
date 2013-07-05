@@ -1368,10 +1368,22 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
     emitSyncProgress(uid, "started", SyncResult());
     session->m_doneSignal.connect(boost::bind(boost::ref(emitSyncProgress), uid, "done", SyncResult()));
     session->m_sourceSynced.connect(boost::bind(&Manager::report2SyncProgress, m_self, uid, _1, _2));
+
+    // Determine sync mode. "pbap" is valid only when the remote
+    // source uses the PBAP backend. Otherwise we use "ephemeral",
+    // which ensures that absolutely no sync meta data gets written.
+    std::string syncMode = "ephemeral";
+    std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
+    boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_REMOTE_CONFIG + context));
+    boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE));
+    if (source->getBackend() == "PBAP Address Book") {
+        syncMode = "pbap";
+    }
+
     // After sync(), the session is tracked as the active sync session
     // by the server. It was removed from our own m_pending list by
     // doSession().
-    session->sync("ephemeral", SessionCommon::SourceModes_t());
+    session->sync(syncMode, SessionCommon::SourceModes_t());
     // Relay result to caller when done.
     session->m_doneSignal.connect(boost::bind(doneSyncPeer, result, _1, _2));
 }

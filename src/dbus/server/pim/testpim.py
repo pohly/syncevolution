@@ -778,14 +778,16 @@ VERSION:3.0\r?
                                          '/org/01/pim/contacts',
                                          byte_arrays=True,
                                          utf8_strings=True)
-        def checkSync(expected, result):
-             self.assertEqual(expected, result)
+        def checkSync(expectedResult, result, intermediateResult=None):
+             self.assertEqual(expectedResult, result)
              while not (uid, 'done', {}) in syncProgress:
                   self.loopIteration('added signal')
-             self.assertEqual([(uid, 'started', {}),
-                               (uid, 'modified', expected),
-                               (uid, 'done', {})],
-                              syncProgress)
+             progress = [ (uid, 'started', {}) ]
+             if intermediateResult:
+                  progress.append((uid, 'modified', intermediateResult))
+             progress.append((uid, 'modified', expectedResult))
+             progress.append((uid, 'done', {}))
+             self.assertEqual(progress, syncProgress)
 
 
         # Must be the Bluetooth MAC address (like A0:4E:04:1E:AD:30)
@@ -957,10 +959,13 @@ END:VCARD
 
         if testcases:
              # Split test case file into files.
+             numPhotos = 0
+             hasPhoto = re.compile('^PHOTO[;:].+\r?$', re.MULTILINE)
              for i, data in enumerate(open(testcases).read().split('\n\n')):
                   item = os.path.join(contacts, '%d.vcf' % i)
                   output = open(item, "w")
                   output.write(data)
+                  numPhotos = numPhotos + 1
                   output.close()
              numItems = i + 1
         else:
@@ -969,17 +974,31 @@ END:VCARD
              output.write(john)
              output.close()
              numItems = 1
+             numPhotos = 1
         self.syncPhone(phone, uid)
         syncProgress = []
         duration, result = timeFunction(self.manager.SyncPeer,
                                         uid,
                                         timeout=self.timeout)
         progress('import', duration)
+        incrementalSync = phone and os.environ.get('SYNCEVOLUTION_PBAP_SYNC', 'incremental') == 'incremental'
+        if incrementalSync:
+             # Single contact gets added, then updated to add the photo.
+             finalUpdated = numPhotos
+             intermediate = {'modified': True,
+                             'added': numItems,
+                             'updated': 0,
+                             'removed': 0}
+        else:
+             finalUpdated = 0
+             intermediate = None
+
         checkSync({'modified': True,
                     'added': numItems,
-                    'updated': 0,
+                    'updated': finalUpdated,
                     'removed': 0},
-                  result)
+                  result,
+                  intermediate)
 
         # Also exclude modified database files.
         self.assertEqual(files, listsyncevo(exclude=exclude))
@@ -1002,11 +1021,13 @@ END:VCARD
              syncProgress = []
              result = self.manager.SyncPeer(uid,
                                             timeout=self.timeout)
-             checkSync({'modified': False,
-                        'added': 0,
-                        'updated': 0,
-                        'removed': 0},
-                       result)
+             expectedResult = {'modified': False,
+                               'added': 0,
+                               'updated': 0,
+                               'removed': 0}
+             checkSync(expectedResult,
+                       result,
+                       incrementalSync and expectedResult)
              exclude.append(logdir + '(/$)')
              self.assertEqual(files, listsyncevo(exclude=exclude))
              self.assertEqual(2, len(os.listdir(logdir)))
@@ -1017,13 +1038,16 @@ END:VCARD
                                         uid,
                                         timeout=self.timeout)
         progress('match', duration)
-        checkSync({'modified': False,
-                   'added': 0,
-                   'updated': 0,
-                   'removed': 0},
-                  result)
+        expectedResult = {'modified': False,
+                          'added': 0,
+                          'updated': 0,
+                          'removed': 0}
+        checkSync(expectedResult,
+                  result,
+                  incrementalSync and expectedResult)
         self.assertEqual(files, listsyncevo(exclude=exclude))
-        self.assertEqual(testcases and 6 or 2, len(os.listdir(logdir)))
+        if not phone:
+             self.assertEqual(testcases and 6 or 2, len(os.listdir(logdir)))
 
         if not testcases:
              # And now prune none.
@@ -1035,18 +1059,20 @@ END:VCARD
              syncProgress = []
              result = self.manager.SyncPeer(uid,
                                             timeout=self.timeout)
-             checkSync({'modified': False,
-                        'added': 0,
-                        'updated': 0,
-                        'removed': 0},
-                       result)
+             expectedResult = {'modified': False,
+                               'added': 0,
+                               'updated': 0,
+                               'removed': 0}
+             checkSync(expectedResult,
+                       result,
+                       incrementalSync and expectedResult)
              exclude.append(logdir + '(/$)')
              self.assertEqual(files, listsyncevo(exclude=exclude))
              self.assertEqual(4, len(os.listdir(logdir)))
 
         # Cannot update data when using pre-defined test cases.
         if not testcases:
-             # Update contact.
+             # Update contact, removing extra properties.
              john = '''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
@@ -1063,7 +1089,11 @@ END:VCARD'''
                         'added': 0,
                         'updated': 1,
                         'removed': 0},
-                       result)
+                       result,
+                       incrementalSync and {'modified': False,
+                                            'added': 0,
+                                            'updated': 0,
+                                            'removed': 0})
 
         # Remove contact(s).
         for file in os.listdir(contacts):
@@ -1074,11 +1104,13 @@ END:VCARD'''
                                         uid,
                                         timeout=self.timeout)
         progress('remove', duration)
-        checkSync({'modified': True,
-                   'added': 0,
-                   'updated': 0,
-                   'removed': numItems},
-                  result)
+        expectedResult = {'modified': True,
+                          'added': 0,
+                          'updated': 0,
+                          'removed': numItems}
+        checkSync(expectedResult,
+                  result,
+                  incrementalSync and expectedResult)
 
         # Test invalid maxsession values.
         if not testcases:
