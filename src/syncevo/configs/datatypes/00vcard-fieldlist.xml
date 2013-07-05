@@ -107,13 +107,13 @@
       <field name="NOTE" type="multiline" compare="conflict" merge="lines"/>
 
       <!-- Photo -->
-      <field name="PHOTO" type="blob" compare="never" merge="fillempty"/>
+      <field name="PHOTO" type="string" compare="conflict" merge="fillempty"/>
       <field name="PHOTO_TYPE" type="string" compare="never" merge="fillempty"/>
       <field name="PHOTO_VALUE" type="string" compare="never" merge="fillempty"/>
 
       <!-- Location -->
-      <field name="GEO_LAT" type="string" compare="never"/>
-      <field name="GEO_LONG" type="string" compare="never"/>
+      <field name="GEO_LAT" type="string" compare="conflict"/>
+      <field name="GEO_LONG" type="string" compare="conflict"/>
 
       <!-- Crypto fields for KAddressbook -->
       <field name="CRYPTOENCRYPTPREF" type="string" compare="conflict"/>

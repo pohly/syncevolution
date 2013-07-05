@@ -1,0 +1,37 @@
+   <!-- Special treatment of PHOTO data: keep a local file if it has the
+        same content as the binary data in the winning item.
+        Use in combination with a PHOTO field of type="string" (not blob,
+        because we need to be able to compare the field in the MERGEFIELDS()
+        call to detect when the data really changes) and compare="conflict"
+        (not used to find matches, changes are relevant).
+   -->
+   <macro name="VCARD_MERGESCRIPT"><![CDATA[
+     integer mode;
+     mode = MERGEMODE();
+     if (mode == 1 && WINNING.PHOTO == EMPTY) {
+       // Removing photo from loosing item.
+       if (LOOSING.PHOTO != EMPTY) {
+         SETLOOSINGCHANGED(1);
+       }
+       LOOSING.PHOTO = EMPTY;
+       LOOSING.PHOTO_TYPE = "";
+       LOOSING.PHOTO_VALUE = "";
+     } else if (LOOSING.PHOTO != EMPTY) {
+       // Updating photo. Might actually be the same!
+       if (LOOSING.PHOTO_VALUE == "uri" && (WINNING.PHOTO_VALUE == EMPTY || WINNING.PHOTO_VALUE == "binary")) {
+         string path;
+         path = URITOPATH(LOOSING.PHOTO);
+         if (path) {
+           if (READ(path) == WINNING.PHOTO) {
+             // Reuse photo file from loosing item.
+             // If we need to write back for some other reason, we'll inline the data again.
+             WINNING.PHOTO = LOOSING.PHOTO;
+             WINNING.PHOTO_TYPE = LOOSING.PHOTO_TYPE;
+             WINNING.PHOTO_VALUE = LOOSING.PHOTO_VALUE;
+           }
+         }
+       }
+     }
+     // Continue merge.
+     MERGEFIELDS(mode);
+   ]]></macro>

@@ -34,7 +34,7 @@
       ]]></outgoingscript>
     </datatype>
 
-    <!-- vCard 2.1 datatype for use in EDS backend - same as above plus EDS corrections -->
+    <!-- vCard 2.1 datatype for use in EDS backend - same as above plus EDS corrections and special merge script -->
     <datatype name="vCard21EDS" basetype="vcard">
       <version>2.1</version>
       <use mimeprofile="vCard"/>
@@ -50,9 +50,12 @@
         $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT
         $VCARD_OUTGOING_EMAILTYPE_SCRIPT
       ]]></outgoingscript>
+      <mergescript><![CDATA[
+        $VCARD_MERGESCRIPT
+      ]]></mergescript>
     </datatype>
 
-    <!-- vCard 3.0 datatype, using vCard profile defined above -->
+    <!-- vCard 3.0 datatype, using vCard profile defined above and special merge script -->
     <datatype name="vCard30EDS" basetype="vcard">
       <version>3.0</version>
       <use mimeprofile="vCard"/>
@@ -68,4 +71,7 @@
         $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT
         $VCARD_OUTGOING_EMAILTYPE_SCRIPT
       ]]></outgoingscript>
+      <mergescript><![CDATA[
+        $VCARD_MERGESCRIPT
+      ]]></mergescript>
     </datatype>
