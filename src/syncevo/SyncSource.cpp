@@ -512,8 +512,19 @@ void SyncSourceSession::init(SyncSource::Operations &ops)
 
 sysync::TSyError SyncSourceSession::startDataRead(const char *lastToken, const char *resumeToken)
 {
-    beginSync(lastToken ? lastToken : "",
-              resumeToken ? resumeToken : "");
+    try {
+        beginSync(lastToken ? lastToken : "",
+                  resumeToken ? resumeToken : "");
+    } catch (const StatusException &ex) {
+        SyncMLStatus status = ex.syncMLStatus();
+        if (status == STATUS_SLOW_SYNC_508) {
+            // Not an error. Return it normally, without ERROR logging
+            // in our caller.
+            return status;
+        } else {
+            throw;
+        }
+    }
     return sysync::LOCERR_OK;
 }
 
