@@ -458,14 +458,13 @@ XDG root.
         self.runCmdline(['--export', filename, '@' + self.managerPrefix + uid, 'local'])
         contacts = open(filename, 'r').read()
         # Ignore one empty vcard because the Nokia N97 always sends such a vcard,
-        # despite having deleted everything via SyncML. The ordering of properties
-        # comes from our own vcard profile (UID/PRODID/REV first).
+        # despite having deleted everything via SyncML.
         contacts = re.sub(r'''BEGIN:VCARD\r?
 VERSION:3.0\r?
 ((UID|PRODID|REV):.*\r?
-)*N:;;;;\r?
-FN:\r?
-END:VCARD(\r|\n)*''',
+|N:;;;;\r?
+|FN:\r?
+)*END:VCARD(\r|\n)*''',
                           '',
                           contacts,
                           1)
