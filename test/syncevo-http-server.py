@@ -115,6 +115,7 @@ class SyncMLSession:
     def __init__(self):
         self.sessionid = None
         self.request = None
+        self.aborted_request = None
         self.conpath = None
         self.abort_match = None
         self.reply_match = None
@@ -192,6 +193,12 @@ class SyncMLSession:
     def done(self, error):
         '''lost connection to HTTP client, either normally or in error'''
         logger.debug("done with request in session %s, error %s", self.sessionid, error)
+        # Keep request if client closed the connection, the client
+        # might be about to resend.
+        if error != None:
+            self.aborted_request = self.request
+        else:
+            self.aborted_request = None
         # keep connection to syncevo-dbus-server, client might still
         # retry the request
         self.request = None
@@ -252,16 +259,35 @@ class SyncMLSession:
         '''process next message by client in running session'''
         type = request.getHeader('content-type')
         self.logMessage("incoming", request, data, type)
+        mustprocess = True
         if self.request:
-            # message resend?! Ignore old request.
-            logger.debug("message resend?!")
+            # Message resend?! Ignore old, active request.
+            self.logMessage("new message while still processing one on active TCP connection", self.request, self.request.processingdata, self.request.processingtype)
             self.request.finish()
+            if self.request.processingdata == data and self.request.processingtype == type:
+                logger.debug("is message resend, no need to process again")
+                mustprocess = False
+            else:
+                logger.debug("different message, send to syncevo-dbus-server")
             self.request = None
+        if self.aborted_request != None:
+            # Message resend after closing connection and thus aborting the currently
+            # active request?
+            self.logMessage("new message after aborting the previous one", self.aborted_request, self.aborted_request.processingdata, self.aborted_request.processingtype)
+            if self.aborted_request.processingdata == data and self.aborted_request.processingtype == type:
+                logger.debug("is message resend, no need to process again")
+                mustprocess = False
+            else:
+                logger.debug("different message, send to syncevo-dbus-server")
+            self.aborted_request = None
         deferred = request.notifyFinish()
         deferred.addCallback(self.done)
         deferred.addErrback(self.done)
         self.request = request
-        self.connection.Process(data, type)
+        request.processingdata = data
+        request.processingtype = type
+        if mustprocess:
+            self.connection.Process(data, type)
 
     def logMessage(self, direction, request, data, type):
         if 'plain' in type or "+xml" in type:
