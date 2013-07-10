@@ -72,9 +72,11 @@ except ImportError:
 DBusGMainLoop(set_as_default=True)
 
 debugger = os.environ.get("TEST_DBUS_GDB", None) and "gdb" or ""
-# Verbosity must at least include INFO messages, the "ready to run" we
-# wait for is not printed otherwise. Default is DEBUG.
-level = os.environ.get("TEST_DBUS_QUIET", False) and 2 or 3
+# Default verbosity is DEBUG.
+if os.environ.get("TEST_DBUS_QUIET", False):
+    level = 0
+else:
+    level = 3
 server = ("syncevo-dbus-server --no-syslog --stdout --verbosity=%d --dbus-verbosity=%d" % (level, level)).split()
 
 # primarily for XDG files, but also other temporary files
@@ -580,13 +582,8 @@ class DBusUtil(Timeout):
                                                 stdout=logfile,
                                                 stderr=subprocess.STDOUT)
             if logfile != None:
-                while self.isServerRunning():
-                    newsize = os.path.getsize(syncevolog)
-                    if newsize != size:
-                        if "] ready to run\n" in open(syncevolog).read():
-                            break
-                        size = newsize
-                        time.sleep(1)
+                while self.isServerRunning() and not bus.name_has_owner('org.syncevolution'):
+                    time.sleep(1)
             else:
                 print "test-dbus.py: giving syncevo-dbus-server time to start"
                 time.sleep(5)
