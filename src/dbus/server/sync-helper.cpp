@@ -71,6 +71,15 @@ int main(int argc, char **argv, char **envp)
         Sleep(atoi(delay));
     }
 
+    if (getenv("SYNCEVOLUTION_DBUS_HELPER_VGDB")) {
+        // Trigger an error in valgrind. Use in combination with
+        // --vgdb-error=1 --vgdb=yes (note the =1!) to attach when
+        // the process is running.
+        void *dummy = malloc(1);
+        free(dummy);
+        free(dummy);
+    }
+
     SyncContext::initMain("syncevo-dbus-helper");
 
     loop = g_main_loop_new(NULL, FALSE);
