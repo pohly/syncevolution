@@ -109,13 +109,13 @@ void Connection::process(const Caller_t &caller,
 
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
-        throw runtime_error("unknown client");
+        SE_THROW("unknown client");
     }
 
     boost::shared_ptr<Connection> myself =
         boost::static_pointer_cast<Connection, Resource>(client->findResource(this));
     if (!myself) {
-        throw runtime_error("client does not own connection");
+        SE_THROW("client does not own connection");
     }
 
     // any kind of error from now on terminates the connection
@@ -263,7 +263,7 @@ void Connection::process(const Caller_t &caller,
                                                          message_type);
                 if (info.m_deviceID.empty()) {
                     // TODO: proper exception
-                    throw runtime_error("could not extract LocURI=deviceID from initial message");
+                    SE_THROW("could not extract LocURI=deviceID from initial message");
                 }
                 BOOST_FOREACH(const SyncConfig::ConfigList::value_type &entry,
                               SyncConfig::getConfigs()) {
@@ -282,14 +282,13 @@ void Connection::process(const Caller_t &caller,
                 }
                 if (config.empty()) {
                     // TODO: proper exception
-                    throw runtime_error(string("no configuration found for ") +
-                                        info.toString());
+                    SE_THROW(string("no configuration found for ") + info.toString());
                 }
 
                 // identified peer, still need to abort previous sessions below
                 peerDeviceID = info.m_deviceID;
             } else {
-                throw runtime_error(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
+                SE_THROW(StringPrintf("message type '%s' not supported for starting a sync", message_type.c_str()));
             }
 
             // run session as client or server
@@ -334,7 +333,7 @@ void Connection::process(const Caller_t &caller,
             break;
         }
         case SessionCommon::PROCESSING:
-            throw std::runtime_error("protocol error: already processing a message");
+            SE_THROW("protocol error: already processing a message");
             break;
         case SessionCommon::WAITING:
             m_incomingMsg = SharedBuffer(reinterpret_cast<const char *>(message.second),
@@ -347,15 +346,15 @@ void Connection::process(const Caller_t &caller,
             m_timeout.deactivate();
             break;
         case SessionCommon::FINAL:
-            throw std::runtime_error("protocol error: final reply sent, no further message processing possible");
+            SE_THROW("protocol error: final reply sent, no further message processing possible");
         case SessionCommon::DONE:
-            throw std::runtime_error("protocol error: connection closed, no further message processing possible");
+            SE_THROW("protocol error: connection closed, no further message processing possible");
             break;
         case SessionCommon::FAILED:
-            throw std::runtime_error(m_failure);
+            SE_THROW(m_failure);
             break;
         default:
-            throw std::runtime_error("protocol error: unknown internal state");
+            SE_THROW("protocol error: unknown internal state");
             break;
         }
     } catch (const std::exception &error) {
@@ -424,7 +423,7 @@ void Connection::close(const Caller_t &caller,
 
     boost::shared_ptr<Client> client(m_server.findClient(caller));
     if (!client) {
-        throw runtime_error("unknown client");
+        SE_THROW("unknown client");
     }
 
     // Remove reference to us from client, will destruct *this*
