@@ -2557,7 +2557,8 @@ END:VCARD
     def testFilterChinesePinyin(self):
          self.doFilter(# Names of all contacts, sorted as expected.
                        # 江 = jiāng = Jiang when using Pinyin and thus after Jeffries and before Meadows.
-                       ('Adams', 'Jeffries', u'江', 'Meadows'),
+                       # 鳥 = niǎo before 女性 = nǚ xìng (see FDO #66618)
+                       ('Adams', 'Jeffries', u'江', 'Meadows', u'鳥', u'女性' ),
                        # 'J' not expected to find Jiang; searching
                        # is meant to use Chinese letters.
                        (([['any-contains', 'J']], ('Jeffries',)),
