@@ -88,8 +88,9 @@ ForkExec::ForkExec()
 static Mutex ForkExecMutex;
 static unsigned int ForkExecCount;
 
-ForkExecParent::ForkExecParent(const std::string &helper) :
+ForkExecParent::ForkExecParent(const std::string &helper, const std::vector<std::string> &args) :
     m_helper(helper),
+    m_args(args),
     m_childPid(0),
     m_hasConnected(false),
     m_hasQuit(false),
@@ -108,9 +109,10 @@ ForkExecParent::ForkExecParent(const std::string &helper) :
     m_instance = StringPrintf("forkexec%u", ForkExecCount);
 }
 
-boost::shared_ptr<ForkExecParent> ForkExecParent::create(const std::string &helper)
+boost::shared_ptr<ForkExecParent> ForkExecParent::create(const std::string &helper,
+                                                         const std::vector<std::string> &args)
 {
-    boost::shared_ptr<ForkExecParent> forkexec(new ForkExecParent(helper));
+    boost::shared_ptr<ForkExecParent> forkexec(new ForkExecParent(helper, args));
     return forkexec;
 }
 
@@ -212,6 +214,9 @@ void ForkExecParent::start()
     }
 
     m_argvStrings.push_back(helper);
+    m_argvStrings.insert(m_argvStrings.end(),
+                         m_args.begin(),
+                         m_args.end());
     m_argv.reset(AllocStringArray(m_argvStrings));
     for (char **env = environ;
          *env;

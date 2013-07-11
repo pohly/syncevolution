@@ -126,7 +126,8 @@ class ForkExecParent : public ForkExec
      * will not start the helper yet: first connect your slots, then
      * call start().
      */
-    static boost::shared_ptr<ForkExecParent> create(const std::string &helper);
+    static boost::shared_ptr<ForkExecParent> create(const std::string &helper,
+                                                    const std::vector<std::string> &args = std::vector<std::string>());
 
     /**
      * the helper string passed to create()
@@ -203,9 +204,10 @@ class ForkExecParent : public ForkExec
     void addEnvVar(const std::string &name, const std::string &value);
 
  private:
-    ForkExecParent(const std::string &helper);
+    ForkExecParent(const std::string &helper, const std::vector<std::string> &args);
 
     std::string m_helper;
+    std::vector<std::string> m_args;
     boost::shared_ptr<GDBusCXX::DBusServerCXX> m_server;
     boost::scoped_array<char *> m_argv;
     std::list<std::string> m_argvStrings;
