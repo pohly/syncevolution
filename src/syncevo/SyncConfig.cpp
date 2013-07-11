@@ -2773,8 +2773,16 @@ InitState<bool> SyncSourceConfig::getForceSyncFormat() const
     return sourcePropForceSyncFormat.getPropertyValue(*getNode(sourcePropForceSyncFormat));
 }
 
-InitState<int> SyncSourceConfig::getSynthesisID() const { return sourcePropSynthesisID.getPropertyValue(*getNode(sourcePropSynthesisID)); }
-void SyncSourceConfig::setSynthesisID(int value, bool temporarily) { sourcePropSynthesisID.setProperty(*getNode(sourcePropSynthesisID), value, temporarily); }
+InitState<int> SyncSourceConfig::getSynthesisID() const {
+    if (!m_synthesisID.wasSet()) {
+        const_cast<InitState<int> &>(m_synthesisID) = sourcePropSynthesisID.getPropertyValue(*getNode(sourcePropSynthesisID));
+    }
+    return m_synthesisID;
+}
+void SyncSourceConfig::setSynthesisID(int value, bool temporarily) {
+    m_synthesisID = value;
+    sourcePropSynthesisID.setProperty(*getNode(sourcePropSynthesisID), value, temporarily);
+}
 
 ConfigPasswordKey DatabasePasswordConfigProperty::getPasswordKey(const string &descr,
                                                                  const string &serverName,

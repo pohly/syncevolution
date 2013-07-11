@@ -1954,6 +1954,9 @@ class SyncSourceConfig {
     bool isDisabled() { return getSync() == "disabled"; }
 
  private:
+    // This can be called quite often, cache it.
+    InitState<int> m_synthesisID;
+
     std::string m_name;
     SyncSourceNodes m_nodes;
     std::string m_cachedPassword;
