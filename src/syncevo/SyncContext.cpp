@@ -1661,11 +1661,54 @@ void SyncContext::displaySyncProgress(sysync::TProgressEventEnum type,
     
 }
 
-void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
-                                                SyncSource &source,
-                                                int32_t extra1, int32_t extra2, int32_t extra3)
+bool SyncContext::displaySourceProgress(SyncSource &source,
+                                        const SyncSourceEvent &event,
+                                        bool flush)
 {
-    switch(type) {
+    if (!flush) {
+        // Certain events do not need to be printed immediately.
+        // For example, instead of multiple PEV_ITEMRECEIVED events
+        //   foo: received 1/100
+        //   foo: received 2/100
+        //   foo: ...
+        //   foo: received 100/100
+        // it is better to just print one:
+        //   foo: received 100/100
+        switch (event.m_type) {
+        case sysync::PEV_ITEMPROCESSED:
+            // Ignore this one completely. There is one such event
+            // after each PEV_ITEMRECEIVED, so processing
+            // PEV_ITEMPROCESSED would break the merging of
+            // PEV_ITEMRECEIVED, at least the way it is implemented
+            // now. PEV_ITEMPROCESSED also doesn't add much
+            // information.
+            return true;
+        case sysync::PEV_DELETING:
+        case sysync::PEV_ITEMRECEIVED:
+        case sysync::PEV_ITEMSENT:
+            // Flush when switching to a different event type or source.
+            if (m_sourceEvent.m_type != sysync::PEV_NOP &&
+                (m_sourceEvent.m_type != event.m_type ||
+                 m_sourceProgress != &source)) {
+                displaySourceProgress(*m_sourceProgress, m_sourceEvent, true);
+            }
+            m_sourceEvent.m_type = event.m_type;
+            m_sourceEvent.m_extra1 = event.m_extra1;
+            m_sourceEvent.m_extra2 = event.m_extra2;
+            m_sourceEvent.m_extra3 = event.m_extra3;
+            m_sourceProgress = &source;
+            return true;
+            break;
+        default:
+            if (m_sourceEvent.m_type != sysync::PEV_NOP) {
+                displaySourceProgress(*m_sourceProgress, m_sourceEvent, true);
+                m_sourceEvent.m_type = sysync::PEV_NOP;
+            }
+            break;
+        }
+    }
+
+    switch(event.m_type) {
     case sysync::PEV_PREPARING:
         /* preparing (e.g. preflight in some clients), extra1=progress, extra2=total */
         /* extra2 might be zero */
@@ -1676,22 +1719,22 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
          */
         if (true || source.getFinalSyncMode() == SYNC_NONE) {
             // not active, suppress output
-        } else if (extra2) {
+        } else if (event.m_extra2) {
             SE_LOG_INFO(NULL, "%s: preparing %d/%d",
-                        source.getDisplayName().c_str(), extra1, extra2);
+                        source.getDisplayName().c_str(), event.m_extra1, event.m_extra2);
         } else {
             SE_LOG_INFO(NULL, "%s: preparing %d",
-                        source.getDisplayName().c_str(), extra1);
+                        source.getDisplayName().c_str(), event.m_extra1);
         }
         break;
     case sysync::PEV_DELETING:
         /* deleting (zapping datastore), extra1=progress, extra2=total */
-        if (extra2) {
+        if (event.m_extra2) {
             SE_LOG_INFO(NULL, "%s: deleting %d/%d",
-                        source.getDisplayName().c_str(), extra1, extra2);
+                        source.getDisplayName().c_str(), event.m_extra1, event.m_extra2);
         } else {
             SE_LOG_INFO(NULL, "%s: deleting %d",
-                        source.getDisplayName().c_str(), extra1);
+                        source.getDisplayName().c_str(), event.m_extra1);
         }
         break;
     case sysync::PEV_ALERTED: {
@@ -1700,25 +1743,25 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
            extra3 0=twoway, 1=fromserver, 2=fromclient */
         // -1 is used for alerting a restore from backup. Synthesis won't use this
         bool peerIsClient = getPeerIsClient();
-        if (extra1 != -1) {
+        if (event.m_extra1 != -1) {
             SE_LOG_INFO(NULL, "%s: %s %s sync%s (%s)",
                         source.getDisplayName().c_str(),
-                        extra2 ? "resuming" : "starting",
-                        extra1 == 0 ? "normal" :
-                        extra1 == 1 ? "slow" :
-                        extra1 == 2 ? "first time" :
+                        event.m_extra2 ? "resuming" : "starting",
+                        event.m_extra1 == 0 ? "normal" :
+                        event.m_extra1 == 1 ? "slow" :
+                        event.m_extra1 == 2 ? "first time" :
                         "unknown",
-                        extra3 == 0 ? ", two-way" :
-                        extra3 == 1 ? " from server" :
-                        extra3 == 2 ? " from client" :
+                        event.m_extra3 == 0 ? ", two-way" :
+                        event.m_extra3 == 1 ? " from server" :
+                        event.m_extra3 == 2 ? " from client" :
                         ", unknown direction",
                         peerIsClient ? "peer is client" : "peer is server");
          
             SimpleSyncMode mode = SIMPLE_SYNC_NONE;
             SyncMode sync = StringToSyncMode(source.getSync());
-            switch (extra1) {
+            switch (event.m_extra1) {
             case 0:
-                switch (extra3) {
+                switch (event.m_extra3) {
                 case 0:
                     mode = SIMPLE_SYNC_TWO_WAY;
                     if (m_serverMode &&
@@ -1748,7 +1791,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                 break;
             case 1:
             case 2:
-                switch (extra3) {
+                switch (event.m_extra3) {
                 case 0:
                     mode = SIMPLE_SYNC_SLOW;
                     if (m_serverMode &&
@@ -1802,8 +1845,8 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
             }
             if (source.getFinalSyncMode() == SYNC_NONE) {
                 source.recordFinalSyncMode(SyncMode(mode));
-                source.recordFirstSync(extra1 == 2);
-                source.recordResumeSync(extra2 == 1);
+                source.recordFirstSync(event.m_extra1 == 2);
+                source.recordResumeSync(event.m_extra2 == 1);
             } else if (SyncMode(mode) != SYNC_NONE) {
                 // Broadcast statistics before moving into next cycle.
                 m_sourceSyncedSignal(source.getName(), source);
@@ -1836,27 +1879,28 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         /* item received, extra1=current item count,
            extra2=number of expected changes (if >= 0) */
         if (source.getFinalSyncMode() == SYNC_NONE) {
-        } else if (extra2 > 0) {
+        } else if (event.m_extra2 > 0) {
             SE_LOG_INFO(NULL, "%s: received %d/%d",
-                        source.getDisplayName().c_str(), extra1, extra2);
+                        source.getDisplayName().c_str(), event.m_extra1, event.m_extra2);
         } else {
             SE_LOG_INFO(NULL, "%s: received %d",
-                        source.getDisplayName().c_str(), extra1);
+                        source.getDisplayName().c_str(), event.m_extra1);
         }
-        source.recordTotalNumItemsReceived(extra1);
+        source.recordTotalNumItemsReceived(event.m_extra1);
         break;
     case sysync::PEV_ITEMSENT:
         /* item sent,     extra1=current item count,
            extra2=number of expected items to be sent (if >=0) */
         if (source.getFinalSyncMode() == SYNC_NONE) {
-        } else if (extra2 > 0) {
+        } else if (event.m_extra2 > 0) {
             SE_LOG_INFO(NULL, "%s: sent %d/%d",
-                        source.getDisplayName().c_str(), extra1, extra2);
+                        source.getDisplayName().c_str(), event.m_extra1, event.m_extra2);
         } else {
             SE_LOG_INFO(NULL, "%s: sent %d",
-                        source.getDisplayName().c_str(), extra1);
+                        source.getDisplayName().c_str(), event.m_extra1);
         }
         break;
+    // Not reached, see above.
     case sysync::PEV_ITEMPROCESSED:
         /* item locally processed,               extra1=# added, 
            extra2=# updated,
@@ -1864,10 +1908,10 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         if (source.getFinalSyncMode() == SYNC_NONE) {
         } else if (source.getFinalSyncMode() != SYNC_NONE) {
             SE_LOG_INFO(NULL, "%s: added %d, updated %d, removed %d",
-                        source.getDisplayName().c_str(), extra1, extra2, extra3);
+                        source.getDisplayName().c_str(), event.m_extra1, event.m_extra2, event.m_extra3);
         }
         break;
-    case sysync::PEV_SYNCEND:
+    case sysync::PEV_SYNCEND: {
         /* sync finished, probably with error in extra1 (0=ok),
            syncmode in extra2 (0=normal, 1=slow, 2=first time), 
            extra3=1 for resumed session) */
@@ -1876,17 +1920,18 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         } else if(source.getFinalSyncMode() == SYNC_RESTORE_FROM_BACKUP) {
             SE_LOG_INFO(NULL, "%s: restore done %s", 
                         source.getDisplayName().c_str(),
-                        extra1 ? "unsuccessfully" : "successfully" );
+                        event.m_extra1 ? "unsuccessfully" : "successfully" );
         } else {
             SE_LOG_INFO(NULL, "%s: %s%s sync done %s",
                         source.getDisplayName().c_str(),
-                        extra3 ? "resumed " : "",
-                        extra2 == 0 ? "normal" :
-                        extra2 == 1 ? "slow" :
-                        extra2 == 2 ? "first time" :
+                        event.m_extra3 ? "resumed " : "",
+                        event.m_extra2 == 0 ? "normal" :
+                        event.m_extra2 == 1 ? "slow" :
+                        event.m_extra2 == 2 ? "first time" :
                         "unknown",
-                        extra1 ? "unsuccessfully" : "successfully");
+                        event.m_extra1 ? "unsuccessfully" : "successfully");
         }
+        int32_t extra1 = event.m_extra1;
         switch (extra1) {
         case 401:
             // TODO: reset cached password
@@ -1912,11 +1957,12 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
             // because even "good" sources will get a bad status when the overall
             // session turns bad. We also don't have good explanations for the
             // status here.
-            SE_LOG_ERROR(source.getDisplayName(), "%s", Status2String(SyncMLStatus(extra1)).c_str());
+            SE_LOG_ERROR(source.getDisplayName(), "%s", Status2String(SyncMLStatus(event.m_extra1)).c_str());
             break;
         }
         source.recordStatus(SyncMLStatus(extra1));
         break;
+    }
     case sysync::PEV_DSSTATS_L:
         /* datastore statistics for local       (extra1=# added, 
            extra2=# updated,
@@ -1924,11 +1970,11 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         source.setItemStat(SyncSource::ITEM_LOCAL,
                            SyncSource::ITEM_ADDED,
                            SyncSource::ITEM_TOTAL,
-                           extra1);
+                           event.m_extra1);
         source.setItemStat(SyncSource::ITEM_LOCAL,
                            SyncSource::ITEM_UPDATED,
                            SyncSource::ITEM_TOTAL,
-                           extra2);
+                           event.m_extra2);
         source.setItemStat(SyncSource::ITEM_LOCAL,
                            SyncSource::ITEM_REMOVED,
                            SyncSource::ITEM_TOTAL,
@@ -1940,7 +1986,7 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
                            (source.getFinalSyncMode() == (m_serverMode ? SYNC_REFRESH_FROM_CLIENT : SYNC_REFRESH_FROM_SERVER) ||
                             source.getFinalSyncMode() == SYNC_REFRESH_FROM_REMOTE) ?
                            source.getNumDeleted() :
-                           extra3);
+                           event.m_extra3);
         break;
     case sysync::PEV_DSSTATS_R:
         /* datastore statistics for remote      (extra1=# added, 
@@ -1949,15 +1995,15 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_ADDED,
                            SyncSource::ITEM_TOTAL,
-                           extra1);
+                           event.m_extra1);
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_UPDATED,
                            SyncSource::ITEM_TOTAL,
-                           extra2);
+                           event.m_extra2);
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_REMOVED,
                            SyncSource::ITEM_TOTAL,
-                           extra3);
+                           event.m_extra3);
         break;
     case sysync::PEV_DSSTATS_E:
         /* datastore statistics for local/remote rejects (extra1=# locally rejected, 
@@ -1965,18 +2011,18 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         source.setItemStat(SyncSource::ITEM_LOCAL,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_REJECT,
-                           extra1);
+                           event.m_extra1);
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_REJECT,
-                           extra2);
+                           event.m_extra2);
         break;
     case sysync::PEV_DSSTATS_S:
         /* datastore statistics for server slowsync  (extra1=# slowsync matches) */
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_MATCH,
-                           extra1);
+                           event.m_extra1);
         break;
     case sysync::PEV_DSSTATS_C:
         /* datastore statistics for server conflicts (extra1=# server won,
@@ -1985,15 +2031,15 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_CONFLICT_SERVER_WON,
-                           extra1);
+                           event.m_extra1);
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_CONFLICT_CLIENT_WON,
-                           extra2);
+                           event.m_extra2);
         source.setItemStat(SyncSource::ITEM_REMOTE,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_CONFLICT_DUPLICATED,
-                           extra3);
+                           event.m_extra3);
         break;
     case sysync::PEV_DSSTATS_D:
         /* datastore statistics for data   volume    (extra1=outgoing bytes,
@@ -2001,17 +2047,22 @@ void SyncContext::displaySourceProgress(sysync::TProgressEventEnum type,
         source.setItemStat(SyncSource::ITEM_LOCAL,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_SENT_BYTES,
-                           extra1);
+                           event.m_extra1);
         source.setItemStat(SyncSource::ITEM_LOCAL,
                            SyncSource::ITEM_ANY,
                            SyncSource::ITEM_RECEIVED_BYTES,
-                           extra2);
+                           event.m_extra2);
+        break;
+    case sysync::PEV_NOP:
+        // Handled, do not process further.
+        return true;
         break;
     default:
         SE_LOG_DEBUG(NULL, "%s: progress event %d, extra %d/%d/%d",
                      source.getDisplayName().c_str(),
-                     type, extra1, extra2, extra3);
+                     event.m_type, event.m_extra1, event.m_extra2, event.m_extra3);
     }
+    return false;
 }
 
 void SyncContext::throwError(const string &error)
@@ -2203,21 +2254,21 @@ void SyncContext::initSources(SourceList &sourceList)
             // "done"
             class DummySyncSource source(name, contextName);
             source.recordFinalSyncMode(SYNC_NONE);
-            displaySourceProgress(sysync::PEV_PREPARING,
-                                  source,
-                                  0, 0, 0);
-            displaySourceProgress(sysync::PEV_ITEMPROCESSED,
-                                  source,
-                                  0, 0, 0);
-            displaySourceProgress(sysync::PEV_ITEMRECEIVED,
-                                  source,
-                                  0, 0, 0);
-            displaySourceProgress(sysync::PEV_ITEMSENT,
-                                  source,
-                                  0, 0, 0);
-            displaySourceProgress(sysync::PEV_SYNCEND,
-                                  source,
-                                  0, 0, 0);
+            displaySourceProgress(source,
+                                  SyncSourceEvent(sysync::PEV_PREPARING, 0, 0, 0),
+                                  true);
+            displaySourceProgress(source,
+                                  SyncSourceEvent(sysync::PEV_ITEMPROCESSED, 0, 0, 0),
+                                  true);
+            displaySourceProgress(source,
+                                  SyncSourceEvent(sysync::PEV_ITEMRECEIVED, 0, 0, 0),
+                                  true);
+            displaySourceProgress(source,
+                                  SyncSourceEvent(sysync::PEV_ITEMSENT, 0, 0, 0),
+                                  true);
+            displaySourceProgress(source,
+                                  SyncSourceEvent(sysync::PEV_SYNCEND, 0, 0, 0),
+                                  true);
         }
     }
 }
@@ -3919,11 +3970,12 @@ SyncMLStatus SyncContext::doSync()
                         // find it...
                         SyncSource *source = m_sourceListPtr->lookupBySynthesisID(progressInfo.targetID);
                         if (source) {
-                            displaySourceProgress(sysync::TProgressEventEnum(progressInfo.eventtype),
-                                                  *source,
-                                                  progressInfo.extra1,
-                                                  progressInfo.extra2,
-                                                  progressInfo.extra3);
+                            displaySourceProgress(*source,
+                                                  SyncSourceEvent(sysync::TProgressEventEnum(progressInfo.eventtype),
+                                                                  progressInfo.extra1,
+                                                                  progressInfo.extra2,
+                                                                  progressInfo.extra3),
+                                                  false);
                         } else {
                             throwError(std::string("unknown target ") + s);
                         }
@@ -3947,7 +3999,8 @@ SyncMLStatus SyncContext::doSync()
                 break;
             case sysync::STEPCMD_SENDDATA: {
                 // We'll be busy for a while with network IO, so give
-                // sources a chance to do some work in parallel.
+                // sources a chance to do some work in parallel and
+                // flush pending progress notifications.
                 if (m_sourceListPtr) {
                     bool needResults = true;
                     if (numItemsReceived.size() < m_sourceListPtr->size()) {
@@ -3971,6 +4024,7 @@ SyncMLStatus SyncContext::doSync()
                         if (needResults) {
                             source->finishItemChanges();
                         }
+                        displaySourceProgress(*source, SyncSourceEvent(), false);
                     }
                 }
 
@@ -4383,7 +4437,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
 
     BOOST_FOREACH(SyncSource *source, sourceList) {
         // fake a source alert event
-        displaySourceProgress(sysync::PEV_ALERTED, *source, -1, 0, 0);
+        displaySourceProgress(*source, SyncSourceEvent(sysync::PEV_ALERTED, -1, 0, 0), true);
         source->open();
     }
 
@@ -4402,12 +4456,12 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
         BOOST_FOREACH(SyncSource *source, sourceList) {
             SyncSourceReport sourcereport;
             try {
-                displaySourceProgress(sysync::PEV_SYNCSTART, *source, 0, 0, 0);
+                displaySourceProgress(*source, SyncSourceEvent(sysync::PEV_SYNCSTART, 0, 0, 0), true);
                 sourceList.restoreDatabase(*source,
                                            datadump,
                                            m_dryrun,
                                            sourcereport);
-                displaySourceProgress(sysync::PEV_SYNCEND, *source, 0, 0, 0);
+                displaySourceProgress(*source, SyncSourceEvent(sysync::PEV_SYNCEND, 0, 0, 0), true);
                 report.addSyncSourceReport(source->getName(), sourcereport);
             } catch (...) {
                 sourcereport.recordStatus(STATUS_FATAL);

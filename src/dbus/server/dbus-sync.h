@@ -68,9 +68,9 @@ protected:
     virtual boost::shared_ptr<TransportAgent> createTransportAgent();
     virtual void displaySyncProgress(sysync::TProgressEventEnum type,
                                      int32_t extra1, int32_t extra2, int32_t extra3);
-    virtual void displaySourceProgress(sysync::TProgressEventEnum type,
-                                       SyncSource &source,
-                                       int32_t extra1, int32_t extra2, int32_t extra3);
+    virtual bool displaySourceProgress(SyncSource &source,
+                                       const SyncSourceEvent &event,
+                                       bool flush);
     virtual void reportStepCmd(sysync::uInt16 stepCmd);
     virtual void syncSuccessStart();
     string askPassword(const string &passwordName,

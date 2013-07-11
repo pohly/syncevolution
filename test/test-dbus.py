@@ -8070,7 +8070,6 @@ Comparison was impossible.
 [INFO] @default/addressbook: sent 1
 [INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
-[INFO @client] @client/addressbook: added 1, updated 0, removed 0
 [INFO] @default/addressbook: first time sync done successfully
 [INFO @client] @client/addressbook: first time sync done successfully
 [INFO @client] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
@@ -8257,7 +8256,6 @@ END:VCARD                                END:VCARD
 [INFO] @default/addressbook: sent 1
 [INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
-[INFO @client] @client/addressbook: added 0, updated 1, removed 0
 [INFO] @default/addressbook: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
 [INFO @client] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
@@ -8354,7 +8352,6 @@ END:VCARD                              <
 [INFO] @default/addressbook: sent 1
 [INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
-[INFO @client] @client/addressbook: added 0, updated 0, removed 1
 [INFO] @default/addressbook: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
 [INFO @client] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
@@ -8467,7 +8464,6 @@ Comparison was impossible.
 [INFO] @default/addressbook: sent 1
 [INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
-[INFO @client] @client/addressbook: added 1, updated 0, removed 0
 [INFO @client] @client/calendar: started
 [INFO] @default/addressbook: first time sync done successfully
 [INFO] @default/calendar: first time sync done successfully
@@ -8701,7 +8697,6 @@ no changes
 [INFO] @default/addressbook: sent 1
 [INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
-[INFO @client] @client/addressbook: added 0, updated 1, removed 0
 [INFO @client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO] @default/calendar: normal sync done successfully
@@ -8824,7 +8819,6 @@ no changes
 [INFO] @default/addressbook: sent 1
 [INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
-[INFO @client] @client/addressbook: added 0, updated 0, removed 1
 [INFO @client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO] @default/calendar: normal sync done successfully

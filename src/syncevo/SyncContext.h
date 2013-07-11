@@ -41,6 +41,7 @@ SE_BEGIN_CXX
 class TransportAgent;
 class SourceList;
 class SyncSource;
+class SyncSourceEvent;
 
 /**
  * This is the main class inside SyncEvolution which
@@ -625,17 +626,41 @@ class SyncContext : public SyncConfig {
                                      int32_t extra1, int32_t extra2, int32_t extra3);
 
     /**
+     * An event plus its parameters, see Synthesis engine.
+     */
+    class SyncSourceEvent
+    {
+      public:
+        sysync::TProgressEventEnum m_type;
+        int32_t m_extra1, m_extra2, m_extra3;
+
+        SyncSourceEvent() :
+            m_type(sysync::PEV_NOP)
+        {}
+
+        SyncSourceEvent(sysync::TProgressEventEnum type,
+                        int32_t extra1,
+                        int32_t extra2,
+                        int32_t extra3)
+        {
+            m_type = type;
+            m_extra1 = extra1;
+            m_extra2 = extra2;
+            m_extra3 = extra3;
+        }
+    };
+
+    /**
      * display sync source specific progress
      *
-     * @param type    PEV_*, see <synthesis/engine_defs.h>
      * @param source  source which is the target of the event
-     * @param extra1  extra information depending on type
-     * @param extra2  extra information depending on type
-     * @param extra3  extra information depending on type
+     * @param event   contains PEV_* and extra parameters, see <synthesis/engine_defs.h>
+     * @param flush   if true, then bypass caching events and print directly
+     * @return true if the event was cached
      */
-    virtual void displaySourceProgress(sysync::TProgressEventEnum type,
-                                       SyncSource &source,
-                                       int32_t extra1, int32_t extra2, int32_t extra3);
+    virtual bool displaySourceProgress(SyncSource &source,
+                                       const SyncSourceEvent &event,
+                                       bool flush);
 
     /**
      * report step command info
@@ -713,6 +738,10 @@ class SyncContext : public SyncConfig {
     //a flag indicating whether it is the first time to start source access.
     //It can be used to report infomation about a sync is successfully started.
     bool m_firstSourceAccess;
+
+    // Cache for use in displaySourceProgress().
+    SyncSource *m_sourceProgress;
+    SyncSourceEvent m_sourceEvent;
 
 public:
     /**
