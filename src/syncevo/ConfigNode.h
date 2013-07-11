@@ -54,6 +54,12 @@ class ConfigNode {
     virtual std::string getName() const = 0;
 
     /**
+     * True if the config node has no persistent storage behind it.
+     * In that case, flush() and setProperty() may as well be skipped.
+     */
+    virtual bool isVolatile() const = 0;
+
+    /**
      * save all changes persistently
      */
     virtual void flush() = 0;

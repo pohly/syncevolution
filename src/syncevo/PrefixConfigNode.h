@@ -51,6 +51,7 @@ class PrefixConfigNode : public ConfigNode {
                      const boost::shared_ptr<const ConfigNode> &node);
 
     virtual std::string getName() const { return m_readOnlyNode->getName(); }
+    virtual bool isVolatile() const { return m_readOnlyNode->isVolatile(); }
 
     /* ConfigNode API */
     virtual void flush();

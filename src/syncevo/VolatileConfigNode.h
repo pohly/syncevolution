@@ -39,6 +39,7 @@ class VolatileConfigNode : public FilterConfigNode {
         {}
 
     virtual std::string getName() const { return "intermediate configuration"; }
+    virtual bool isVolatile() const { return true; }
     virtual void flush() {}
 };
 

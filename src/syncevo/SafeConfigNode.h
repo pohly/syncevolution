@@ -57,6 +57,7 @@ class SafeConfigNode : public ConfigNode {
     bool getMode() { return m_strictMode; }
 
     virtual std::string getName() const { return m_readOnlyNode->getName(); }
+    virtual bool isVolatile() const { return m_readOnlyNode->isVolatile(); }
 
     /* keep underlying methods visible; our own setProperty() would hide them */
     using ConfigNode::setProperty;

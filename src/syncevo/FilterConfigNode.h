@@ -56,6 +56,7 @@ class FilterConfigNode : public ConfigNode {
                      const ConfigFilter &filter = ConfigFilter());
 
     virtual std::string getName() const { return m_readOnlyNode->getName(); }
+    virtual bool isVolatile() const { return m_readOnlyNode->isVolatile(); }
 
     /** add another entry to the list of filter properties */
     virtual void addFilter(const std::string &property,

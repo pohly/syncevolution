@@ -81,6 +81,7 @@ class MultiplexConfigNode : public FilterConfigNode
     virtual void setFilter(const ConfigFilter &filter);
 
     virtual std::string getName() const { return m_name; }
+    virtual bool isVolatile() const { return false; } // it is safe to pretend that it is not volatile, even if some or even all of its sub-nodes are
     virtual void flush();
     virtual InitStateString readProperty(const std::string &property) const;
     virtual void writeProperty(const std::string &property,

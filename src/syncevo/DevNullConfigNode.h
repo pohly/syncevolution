@@ -35,6 +35,7 @@ class DevNullConfigNode : public ConfigNode {
     DevNullConfigNode(const string &name) : m_name() {}
 
     virtual string getName() const { return m_name; }
+    virtual bool isVolatile() const { return true; }
     virtual void flush() {}
     virtual InitStateString readProperty(const string &property) const { return ""; }
     virtual void writeProperty(const string &property,

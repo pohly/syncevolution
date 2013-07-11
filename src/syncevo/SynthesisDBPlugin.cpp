@@ -119,6 +119,9 @@ TSyError SyncEvolution_Module_Capabilities( CContext mContext, appCharP *mCapabi
 
     if (source && source->getOperations().m_loadAdminData) {
         s << Plugin_DS_Admin << ":yes\n";
+        if (source && !source->getOperations().m_readNextMapItem) {
+            s << CA_ResumeSupported << ":no\n";
+        }
     }
 
     *mCapabilities= StrAlloc(s.str().c_str());

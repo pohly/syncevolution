@@ -1582,14 +1582,26 @@ void SyncSourceAdmin::init(SyncSource::Operations &ops,
                                       this, _1, _2, _3);
     ops.m_saveAdminData = boost::bind(&SyncSourceAdmin::saveAdminData,
                                       this, _1);
-    ops.m_readNextMapItem = boost::bind(&SyncSourceAdmin::readNextMapItem,
-                                        this, _1, _2);
-    ops.m_insertMapItem = boost::bind(&SyncSourceAdmin::insertMapItem,
-                                      this, _1);
-    ops.m_updateMapItem = boost::bind(&SyncSourceAdmin::updateMapItem,
-                                      this, _1);
-    ops.m_deleteMapItem = boost::bind(&SyncSourceAdmin::deleteMapItem,
-                                      this, _1);
+    if (mapping->isVolatile()) {
+        // Don't provide map item operations. SynthesisDBPlugin will
+        // tell the Synthesis engine not to call these (normally needed
+        // for suspend/resume, which we don't support in volatile mode
+        // because we don't store any meta data persistently).
+        //
+        // ops.m_readNextMapItem = boost::lambda::constant(false);
+        // ops.m_insertMapItem = boost::lambda::constant(sysync::LOCERR_OK);
+        // ops.m_updateMapItem = boost::lambda::constant(sysync::LOCERR_OK);
+        // ops.m_deleteMapItem = boost::lambda::constant(sysync::LOCERR_OK);
+    } else {
+        ops.m_readNextMapItem = boost::bind(&SyncSourceAdmin::readNextMapItem,
+                                            this, _1, _2);
+        ops.m_insertMapItem = boost::bind(&SyncSourceAdmin::insertMapItem,
+                                          this, _1);
+        ops.m_updateMapItem = boost::bind(&SyncSourceAdmin::updateMapItem,
+                                          this, _1);
+        ops.m_deleteMapItem = boost::bind(&SyncSourceAdmin::deleteMapItem,
+                                          this, _1);
+    }
     ops.m_endDataWrite.getPostSignal().connect(boost::bind(&SyncSourceAdmin::flush, this));
 }
 
