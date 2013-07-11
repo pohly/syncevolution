@@ -764,7 +764,10 @@ void Session::useHelperAsync(const SimpleResult &result)
         // helper process for both operations.
         if (!m_forkExecParent ||
             m_forkExecParent->getState() != ForkExecParent::STARTING) {
-            m_forkExecParent = SyncEvo::ForkExecParent::create("syncevo-dbus-helper");
+            std::vector<std::string> args;
+            args.push_back("--dbus-verbosity");
+            args.push_back(StringPrintf("%d", m_server.getDBusLogLevel()));
+            m_forkExecParent = SyncEvo::ForkExecParent::create("syncevo-dbus-helper", args);
             // We own m_forkExecParent, so the "this" pointer for
             // onConnect will live longer than the signal in
             // m_forkExecParent -> no need for resource

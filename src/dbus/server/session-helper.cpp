@@ -44,14 +44,19 @@ class SessionHelperLogger : public Logger
 {
     boost::shared_ptr<LogRedirect> m_parentLogger;
     boost::shared_ptr<SessionHelper> m_helper;
+    Level m_dbusLogLevel;
 
 public:
     SessionHelperLogger(const boost::shared_ptr<LogRedirect> &parentLogger,
                         const boost::shared_ptr<SessionHelper> &helper):
         m_parentLogger(parentLogger),
-        m_helper(helper)
+        m_helper(helper),
+        m_dbusLogLevel(DEBUG)
     {
     }
+
+    void setDBusLogLevel(Level level) { m_dbusLogLevel = level; }
+    Level getDBusLogLevel() const { return m_dbusLogLevel; }
 
     virtual void remove() throw ()
     {
@@ -95,7 +100,8 @@ public:
             m_parentLogger->flush();
         }
 
-        if (m_helper) {
+        if (m_helper &&
+            options.m_level <= m_dbusLogLevel) {
             // send to parent
             string log = StringPrintfV(format, args);
             string strLevel = Logger::levelToStr(options.m_level);
@@ -149,6 +155,16 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(emitPasswordRequest);
     add(emitMessage);
     add(emitShutdown);
+}
+
+void SessionHelper::setDBusLogLevel(Logger::Level level)
+{
+    m_logger->setDBusLogLevel(level);
+}
+
+Logger::Level SessionHelper::getDBusLogLevel() const
+{
+    return m_logger->getDBusLogLevel();
 }
 
 void SessionHelper::activate()

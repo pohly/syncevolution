@@ -34,6 +34,7 @@ SE_BEGIN_CXX
 
 class LogRedirect;
 class ForkExecChild;
+class SessionHelperLogger;
 
 /**
  * Waits for requests via the internal D-Bus connection in run(), sent
@@ -49,7 +50,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     GDBusCXX::DBusConnectionPtr m_conn;
     boost::shared_ptr<ForkExecChild> m_forkexec;
     boost::function<bool ()> m_operation;
-    boost::shared_ptr<Logger> m_logger;
+    boost::shared_ptr<SessionHelperLogger> m_logger;
     PushLogger<Logger> m_pushLogger;
 
     /** valid during doSync() */
@@ -87,6 +88,9 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
                   const boost::shared_ptr<ForkExecChild> &forkexec,
                   const boost::shared_ptr<LogRedirect> &parentLogger);
     ~SessionHelper();
+
+    void setDBusLogLevel(Logger::Level level);
+    Logger::Level getDBusLogLevel() const;
 
     void activate();
     void run();

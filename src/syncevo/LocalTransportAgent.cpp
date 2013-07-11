@@ -572,15 +572,17 @@ public:
                           const char *format,
                           va_list args)
     {
-        m_parentLogger->process();
-        boost::shared_ptr<LocalTransportChildImpl> child = m_child.lock();
-        if (child) {
-            // prefix is used to set session path
-            // for general server output, the object path field is dbus server
-            // the object path can't be empty for object paths prevent using empty string.
-            string strLevel = Logger::levelToStr(options.m_level);
-            string log = StringPrintfV(format, args);
-            child->m_logOutput(strLevel, log);
+        if (options.m_level <= m_parentLogger->getLevel()) {
+            m_parentLogger->process();
+            boost::shared_ptr<LocalTransportChildImpl> child = m_child.lock();
+            if (child) {
+                // prefix is used to set session path
+                // for general server output, the object path field is dbus server
+                // the object path can't be empty for object paths prevent using empty string.
+                string strLevel = Logger::levelToStr(options.m_level);
+                string log = StringPrintfV(format, args);
+                child->m_logOutput(strLevel, log);
+            }
         }
     }
 };
