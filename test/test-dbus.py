@@ -7901,7 +7901,7 @@ END:VCARD
         # SYNCEVOLUTION_LOCAL_CHILD_DELAY2 should give us that chance.
         self.killed = False
         def output(path, level, text, procname):
-            if self.running and not self.killed and procname == '@client':
+            if self.running and not self.killed and procname == '@client' and text == 'target side of local sync ready':
                 # kill syncevo-local-sync
                 for pid, (name, cmdline) in self.getChildren().iteritems():
                     if 'syncevo-local-sync' in cmdline:
@@ -7942,7 +7942,8 @@ END:VCARD
         if out.startswith('[ERROR] child process quit because of signal 9'):
             out = out.replace('''[ERROR] sending message to child failed: The connection is closed
 ''', '')
-            self.assertEqualDiff(out, '''[ERROR] child process quit because of signal 9
+            self.assertEqualDiff(out, '''[INFO @client] target side of local sync ready
+[ERROR] child process quit because of signal 9
 [ERROR] local transport failed: child process quit because of signal 9
 [INFO] Transport giving up after x retries and y:zzmin
 [ERROR] transport problem: transport failed, retry period exceeded
@@ -7964,7 +7965,8 @@ First ERROR encountered: child process quit because of signal 9
 
 ''')
         else:
-            self.assertEqualDiff(out, '''[ERROR] sending message to child failed: The connection is closed
+            self.assertEqualDiff(out, '''[INFO @client] target side of local sync ready
+[ERROR] sending message to child failed: The connection is closed
 [INFO] Transport giving up after x retries and y:zzmin
 [ERROR] transport problem: transport failed, retry period exceeded
 [INFO] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
