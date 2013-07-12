@@ -1,3 +1,244 @@
+SyncEvolution 1.3.99.4, 12.07.2013
+==================================
+
+The focus of this development snapshot is enhanced performance of
+syncing. With EDS, contacts get added, updated or loaded with batch
+operations, which led to 4x runtime improvements when importing PBAP
+address book for the first time. Removing unnecessary work from any
+following PBAP sync led to more than a 6x improvement.
+
+These improvements also benefit non-PBAP syncing and could in theory
+work with any SyncML peer. In practice, batching of items is currently
+limited to SyncEvolution as peer.
+
+The PBAP backend itself was rewritten such that data gets transferred
+from a phone in parallel to processing the already transferred
+data. The effect is that on a sufficiently fast system, a sync takes
+about the same time as downloading all contacts. To get the text-only
+part of the contacts even faster, PBAP syncing can be done such that
+it first syncs the text-only parts (without removing existing photos),
+then in a second round adds or modifies photos. The PIM Manager uses
+this incremental mode by default, in the command line it can be chose
+with the SYNCEVOLUTION_PBAP_SYNC env variable.
+
+The HTTP server became better at handling message resends when the
+server is slow with processing a message. The server is able to keep a
+sync session alive while loading the initial data set by sending
+acknowledgement replies before the client times out.
+
+Guido Günther provided some patches addressing problems when compiling
+SyncEvolution for Maemo.
+
+
+Details:
+
+* sync: less verbose output, shorter runtime
+
+  For each incoming change, one INFO line with "received x[/out of y]"
+  was printed, immediately followed by another line with total counts
+  "added x, updated y, removed z". For each outgoing change, a "sent
+  x[/out of y]" was printed.
+
+  In addition, these changes were forwarded to the D-Bus server where a
+  "percent complete" was calculated and broadcasted to clients. All of
+  that caused a very high overhead for every single change, even if the
+  actual logging was off. The syncevo-dbus-server was constantly
+  consuming CPU time during a sync when it should have been mostly idle.
+
+  To avoid this overhead, the updated received/sent numbers that come
+  from the Synthesis engine are now cached and only processed when done
+  with a SyncML message or some other event happens (whatever happens
+  first).
+
+  To keep the implementation simple, the "added x, updated y, removed z"
+  information is ignored completely and no longer appears in the output.
+
+* HTTP server: handle message resends
+
+  If a client gave up waiting for the server's response and resent its message
+  while the server was still processing the message, syncing failed with
+  "protocol error: already processing a message" raised by the
+  syncevo-dbus-server because it wasn't prepared to handle that situation.
+
+  The right place to handle this is inside the syncevo-http-server, because it
+  depends on the protocol (HTTP in this case) whether resending is valid or
+  not. It handles that now by tracking the message that is currently in
+  processing and matching it against each new message. If it matches, the new
+  request replaces the obsolete one without sending the message again to
+  syncevo-dbus-server. When syncevo-dbus-server replies to the old message, the
+  reply is used to finish the newer request.
+
+* PBAP: incremental sync (FDO #59551)
+
+  Depending on the SYNCEVOLUTION_PBAP_SYNC env variable, syncing reads
+  all properties as configured ("all"), excludes photos ("text") or
+  first text, then all ("incremental").
+
+  When excluding photos, only known properties get requested. This
+  avoids issues with phones which reject the request when enabling
+  properties via the bit flags. This also helps with
+  "databaseFormat=^PHOTO".
+
+* PIM: use incremental sync for PBAP by default (FDO #59551)
+
+  When doing a PBAP sync, PIM manager asks the D-Bus sync helper to set
+  its SYNCEVOLUTION_PBAP_SYNC to "incremental". If the env variable
+  is already set, it does not get overwritten, which allows overriding
+  this default.
+
+* PIM: set debug level in peer configs via env variable
+
+  Typically the peer configs get created from scratch, in particular
+  when testing with testpim.py. In that case the log level cannot be set
+  in advance and doing it via the D-Bus API is also not supported.
+  Therefore, for debugging, use SYNCEVOLUTION_LOGLEVEL=<level> to create
+  peers with a specific log level.
+
+* PIM: include pim-manager-api.txt in source distro (FDO #62516)
+
+  The text file must be listed explicitly to be included by "make dist".
+
+* PIM: "full name" -> "fullname" fix in documentation (FDO #62515)
+
+  Make the documentation match the code. A single word without
+  space makes more sense, so let's go with what the code already
+  used.
+
+* PIM: enhanced searching (search part of FDO #64177)
+
+  Search terms now also include 'is/contains/begins-with/ends-with'
+  and they can be combined with 'and' and 'or', also recursively.
+
+* PIM: Pinyin sorting for zh languages (part of FDO #64173)
+
+  Full interleaving of Pinyin transliterations of Chinese names with
+  Western names can be done by doing an explicit Pinyin transliteration
+  as part of computing the sort keys.
+
+  This is done using ICU's Transliteration("Han-Latin"), which we have
+  to call directly because boost::locale does not expose that API.
+
+  We hard-code this behavior for all "zh" languages (as identified by
+  boost::locale), because by default, ICU would sort Pinyin separately
+  from Western names when using the "pinyin" collation.
+
+* PIM: new return value for SyncPeer(), new SyncProgress signal (FDO #63417)
+
+  The SyncPeer() result is derived from the sync statistics. To have
+  them available, the "sync done" signal must include the SyncReport.
+
+  Start and end of a sync could already be detected; "modified" signals
+  while a sync runs depends on a new signal inside the SyncContext when
+  switching from one cycle to the next and at the end of the last one.
+
+* PIM: allow removal of data together with database removal (part of FDO #64835)
+
+  There is a difference in EDS between removing the database definition
+  from the ESourceRegistry (which makes the data unaccessible via EDS)
+  and removing the actual database. EDS itself only removes the definition
+  and leaves the data around to be garbage-collected eventually. This is
+  not what we want for the PIM Manager API; the API makes a stronger
+  guarantee that data is really gone.
+
+  Fixed by introducing a new mode flag for the deleteDatabase() method
+  and deleting the directory of the source directly in the EDS backend,
+  if requested by the caller.
+
+  The syncevolution command line tool will use the default mode and thus
+  keep the data around, while the PIM Manager forces the removal of
+  data.
+
+* EDS: create new databases by cloning the builtin ones (FDO #64176)
+
+  Instead of hard-coding a specific "Backend Summary Setup" in
+  SyncEvolution, copy the config of the system database. That way
+  special flags (like the desired "Backend Summary Setup" for local
+  address books) can be set on a system-wide basis and without having to
+  modify or configure SyncEvolution.
+
+  Because EDS has no APIs to clone an ESource or turn a .source file
+  into a new ESource, SyncEvolution has to resort to manipulating and
+  creating the keyfile directly.
+
+* EDS contacts: update PHOTO+GEO during slow sync, avoid rewriting PHOTO file
+
+  If PHOTO and/or GEO were the only modified properties during a slow
+  sync, the updated item was not written into local storage because
+  they were marked as compare="never" = "not relevant".
+
+  For PHOTO this was intentional in the sample config, with the
+  rationale that local storages often don't store the data exactly as
+  requested. When that happens, comparing the data would lead to
+  unnecessary writes. But EDS and probably all other local SyncEvolution
+  storages (KDE, file) store the photo exactly as requested, so not
+  considering changes had the undesirable effect of not always writing
+  new photo data.
+
+  For GEO, ignoring it was accidental.
+
+* EDS contacts: avoid unnecessary DB writes during slow sync
+
+  Traditionally, contacts were modified shortly before writing into EDS
+  to match with Evolution expectations (must have N, only one CELL TEL,
+  VOICE flag must be set). During a slow sync, the engine compare the
+  modified contacts with the unmodified, incoming one. This led to
+  mismatches and/or merge operations which end up not changing anything
+  in the DB because the only difference would be removed again before
+  writing.
+
+* EDS contacts: read-ahead cache
+
+  Performance is improved by requesting multiple contacts at once and
+  overlapping reading with processing. On a fast system (SSD, CPU fast
+  enough to not be the limiting factor), testpim.py's testSync takes 8
+  seconds for a "match" sync where 1000 contacts get loaded and compared
+  against the same set of contacts. Read-ahead with only 1 contact per
+  query speeds that up to 6.7s due to overlapping IO and
+  processing. Read-ahead with the default 50 contacts per query takes
+  5.5s. It does not get much faster with larger queries.
+
+* command line: execute --export and --print-items while the source is still reading
+
+  Instead of reading all item IDs, then iterating over them, process
+  each new ID as soon as it is available. With sources that support
+  incremental reading (only the PBAP source at the moment) that provides
+  output sooner and is a bit more memory efficient.
+
+* WebDAV: avoid segfault during collection lookup
+
+  Avoid referencing pathProps->second when the set of paths that
+  PROPFINDs returns is empty. Apparently this can happen in combination
+  with Calypso.
+
+* engine: prevent timeouts in HTTP server mode
+
+  HTTP SyncML clients give up after a certain timeout (SyncEvolution
+  after RetryDuration = 5 minutes by default, Nokia e51 after 15
+  minutes) when the server fails to respond.
+
+  This can happen with SyncEvolution as server when it uses a slow
+  storage with many items, for example via WebDAV. In the case of slow
+  session startup, multithreading is now used to run the storage
+  initializing in parallel to sending regular "keep-alive" SyncML
+  replies to the client.
+
+  By default, these replies are sent every 2 minutes. This can be
+  configured with another extensions of the SyncMLVersion property:
+    SyncMLVersion = REQUESTMAXTIME=5m
+
+  Other modes do not use multithreading by default, but it can be
+  enabled by setting REQUESTMAXTIME explicitly. It can be disabled
+  by setting the time to zero.
+
+  The new feature depends on a libsynthesis with multithreading enabled
+  and glib >= 2.32.0, which is necessary to make SyncEvolution itself
+  thread-safe. With an older glib, multithreading is disabled, but can
+  be enabled as a stop-gap measure by setting REQUESTMAXTIME explicitly.
+
+* Various testing and stability enhancements. SyncEvolution had to
+  be made thread-safe for the HTTP timeout prevention.
+
+
 SyncEvolution 1.3.99.3, 06.03.2013
 ==================================
 
