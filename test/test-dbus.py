@@ -4901,7 +4901,7 @@ END:VCARD'''
 
     @timeout(200)
     def testPropertyRemovalIncremental100(self):
-        """TestLocalCache.testPropertyRemoval - ensure that obsolete item properties are removed during incremental sync while leaving 100 items unchanged"""
+        """TestLocalCache.testPropertyRemovalIncremental100 - ensure that obsolete item properties are removed during incremental sync while leaving 100 items unchanged"""
         self.doPropertyRemoval(step=2, numAdditional=100)
 
 
