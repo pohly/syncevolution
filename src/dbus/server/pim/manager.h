@@ -34,6 +34,8 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+class LocaledListener;
+
 /**
  * Implementation of org._01.pim.contacts.Manager.
  */
@@ -44,6 +46,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     boost::shared_ptr<Server> m_server;
     boost::shared_ptr<IndividualAggregator> m_folks;
     boost::shared_ptr<LocaleFactory> m_locale;
+    boost::shared_ptr<LocaledListener> m_localedListener;
     /** Stores "sort" property in XDG ~/.config/syncevolution/pim-manager.ini'. */
     boost::shared_ptr<ConfigNode> m_configNode;
     std::string m_sortOrder;
@@ -64,6 +67,10 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void initFolks();
     void initDatabases();
     void initSorting(const std::string &order);
+    void localeChanged();
+
+    typedef boost::signals2::signal<void (const boost::shared_ptr<LocaleFactory> &locale)> LocaleChangedSignal;
+    LocaleChangedSignal m_localeChanged;
 
  public:
     /** Manager.Start() */

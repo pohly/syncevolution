@@ -45,6 +45,8 @@ import codecs
 import pprint
 import shutil
 
+import localed
+
 # Update path so that testdbus.py can be found.
 pimFolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
 if pimFolder not in sys.path:
@@ -2561,6 +2563,54 @@ END:VCARD
                        (u'Göbel', u'Goethe', u'Göthe', u'Götz', u'Goldmann'),
                        (),
                        )
+
+    @timeout(60)
+    @property("ENV", "LC_TYPE=zh_CN.UTF-8 LANG=zh_CN.UTF-8 DBUS_TEST_LOCALED=session")
+    def testLocaled(self):
+         # Use mixed Chinese/Western names, because then the locale really matters.
+         namespinyin = ('Adams', 'Jeffries', u'江', 'Meadows', u'鳥', u'女性' )
+         namesgerman = ('Adams', 'Jeffries', 'Meadows', u'女性', u'江', u'鳥' )
+         numtestcases = len(namespinyin)
+         self.doFilter(namespinyin, ())
+
+         daemon = localed.Localed(bus)
+         msg = None
+         try:
+              # Broadcast Locale value together with PropertiesChanged signal.
+              self.view.quiescentCount = 0
+              daemon.SetLocale(['LC_TYPE=de_DE.UTF-8', 'LANG=de_DE.UTF-8'], False)
+              logging.log('reading contacts, German')
+              self.runUntil('German sorting',
+                            check=lambda: self.assertEqual([], self.view.errors),
+                            until=lambda: self.view.quiescentCount > 0)
+              self.view.read(0, numtestcases)
+              self.runUntil('German contacts',
+                            check=lambda: self.assertEqual([], self.view.errors),
+                            until=lambda: self.view.haveData(0, numtestcases))
+              for i, name in enumerate(namesgerman):
+                   msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
+                   self.assertEqual(name, self.view.contacts[i]['full-name'])
+
+              # Switch back to Pinyin without including the new value.
+              self.view.quiescentCount = 0
+              daemon.SetLocale(['LC_TYPE=zh_CN.UTF-8', 'LANG=zh_CN.UTF-8'], True)
+              logging.log('reading contacts, Pinyin')
+              self.runUntil('Pinyin sorting',
+                            check=lambda: self.assertEqual([], self.view.errors),
+                            until=lambda: self.view.quiescentCount > 0)
+              self.view.read(0, numtestcases)
+              self.runUntil('Pinyin contacts',
+                            check=lambda: self.assertEqual([], self.view.errors),
+                            until=lambda: self.view.haveData(0, numtestcases))
+              for i, name in enumerate(namespinyin):
+                   msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
+                   self.assertEqual(name, self.view.contacts[i]['full-name'])
+         except Exception, ex:
+             if msg:
+                  info = sys.exc_info()
+                  raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
+             else:
+                  raise
 
     # Not supported correctly by ICU?
     # See icu-support "Subject: Austrian phone book sorting"

@@ -104,6 +104,15 @@ boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX 
     return view;
 }
 
+
+void FullView::setLocale(const boost::shared_ptr<LocaleFactory> &locale)
+{
+    m_locale = locale;
+
+    // Don't recompute all IndividualData content. That will be done
+    // as part of setCompare(), which must be called later.
+}
+
 void FullView::individualsChanged(GeeSet *added,
                                   GeeSet *removed,
                                   gchar *message,

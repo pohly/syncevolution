@@ -315,6 +315,12 @@ class IndividualAggregator
     void setCompare(const boost::shared_ptr<IndividualCompare> &compare);
 
     /**
+     * Change current locale. Must be followed by setCompare() to update
+     * any pre-computed data.
+     */
+    void setLocale(const boost::shared_ptr<LocaleFactory> &locale);
+
+    /**
      * Starts pulling and sorting of contacts.
      * Creates m_view and starts populating it.
      * Can be called multiple times.

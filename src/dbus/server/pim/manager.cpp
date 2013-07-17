@@ -27,6 +27,7 @@
 #include "../resource.h"
 #include "../client.h"
 #include "../session.h"
+#include "../localed-listener.h"
 
 #include <syncevo/IniConfigNode.h>
 #include <syncevo/BoostHelper.h>
@@ -81,8 +82,15 @@ Manager::Manager(const boost::shared_ptr<Server> &server) :
     m_mainThread(g_thread_self()),
     m_server(server),
     m_locale(LocaleFactory::createFactory()),
+    m_localedListener(LocaledListener::create()),
     emitSyncProgress(*this, "SyncProgress")
 {
+    // Update our own environment and sorting on each locale change.
+    m_localedListener->m_localeValues.connect(boost::bind(&LocaledListener::setLocale, m_localedListener.get(), _1));
+    m_localedListener->m_localeChanged.connect(boost::bind(&Manager::localeChanged, this));
+
+    // Get the environment once from localed, just to be sure.
+    m_localedListener->check(boost::bind(&LocaledListener::setLocale, boost::weak_ptr<LocaledListener>(m_localedListener), _1));
 }
 
 Manager::~Manager()
@@ -257,6 +265,23 @@ void Manager::initSorting(const std::string &order)
     m_folks->setCompare(compare);
 }
 
+void Manager::localeChanged()
+{
+    // First update locale.
+    m_locale = LocaleFactory::createFactory();
+    // Change sorting. First install new locale in
+    // IndividualAggregator and through it in FullView.
+    if (m_folks) {
+        m_folks->setLocale(m_locale);
+    }
+    // Then update IndividualData of all loaded individuals by
+    // changing the sort order.
+    initSorting(m_sortOrder);
+
+    // Now update views.
+    m_localeChanged(m_locale);
+}
+
 boost::shared_ptr<Manager> Manager::create(const boost::shared_ptr<Server> &server)
 {
     boost::shared_ptr<Manager> manager(new Manager(server));
@@ -366,6 +391,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     boost::shared_ptr<IndividualView> m_view;
     boost::shared_ptr<LocaleFactory> m_locale;
     boost::weak_ptr<Client> m_owner;
+    LocaleFactory::Filter_t m_filter;
     struct Change {
         Change() : m_start(0), m_call(NULL) {}
 
@@ -381,6 +407,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
     ViewResource(const boost::shared_ptr<IndividualView> view,
                  const boost::shared_ptr<LocaleFactory> &locale,
                  const boost::shared_ptr<Client> &owner,
+                 const LocaleFactory::Filter_t &filter,
                  GDBusCXX::connection_type *connection,
                  const GDBusCXX::Caller_t &ID,
                  const GDBusCXX::DBusObject_t &agentPath) :
@@ -394,6 +421,7 @@ class ViewResource : public Resource, public GDBusCXX::DBusObjectHelper
         m_view(view),
         m_locale(locale),
         m_owner(owner),
+        m_filter(filter),
 
         // use ViewAgent interface
         m_quiescent(m_viewAgent, "Quiescent"),
@@ -707,6 +735,7 @@ public:
     static boost::shared_ptr<ViewResource> create(const boost::shared_ptr<IndividualView> &view,
                                                   const boost::shared_ptr<LocaleFactory> &locale,
                                                   const boost::shared_ptr<Client> &owner,
+                                                  const LocaleFactory::Filter_t &filter,
                                                   GDBusCXX::connection_type *connection,
                                                   const GDBusCXX::Caller_t &ID,
                                                   const GDBusCXX::DBusObject_t &agentPath)
@@ -714,6 +743,7 @@ public:
         boost::shared_ptr<ViewResource> viewResource(new ViewResource(view,
                                                                       locale,
                                                                       owner,
+                                                                      filter,
                                                                       connection,
                                                                       ID,
                                                                       agentPath));
@@ -770,10 +800,32 @@ public:
     void replaceSearch(const std::vector<LocaleFactory::Filter_t> &filterArray, bool refine)
     {
         // Same as in Search().
-        LocaleFactory::Filter_t filter = filterArray;
-        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(filter, 0);
+        m_filter = filterArray;
+        redoSearch(refine);
+    }
+
+    /**
+     * Start filtering again, using the current environment. To be
+     * called after a locale change or when m_filter changed.
+     *
+     * @param refine   true only if it is known to the caller that the new result set is
+     *                 a subset of the current one, false if uncertain
+     */
+    void redoSearch(bool refine)
+    {
+        boost::shared_ptr<IndividualFilter> individualFilter = m_locale->createFilter(m_filter, 0);
         m_view->replaceFilter(individualFilter, refine);
     }
+
+    /**
+     * Change locale, then refilter because the filter may have changed.
+     */
+    void setLocale(const boost::shared_ptr<LocaleFactory> &locale)
+    {
+        m_locale = locale;
+        redoSearch(true);
+    }
+
 };
 unsigned int ViewResource::m_counter;
 
@@ -897,10 +949,14 @@ void Manager::doSearch(const ESourceRegistryCXX &registry,
     boost::shared_ptr<ViewResource> viewResource(ViewResource::create(view,
                                                                       m_locale,
                                                                       client,
+                                                                      filter,
                                                                       getConnection(),
                                                                       ID,
                                                                       agentPath));
     client->attach(boost::shared_ptr<Resource>(viewResource));
+
+    // Redo search when locale changes.
+    m_localeChanged.connect(LocaleChangedSignal::slot_type(&ViewResource::setLocale, viewResource.get(), _1).track(viewResource));
 
     // created local resource
     result->done(viewResource->getPath());

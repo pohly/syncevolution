@@ -275,6 +275,16 @@ void IndividualAggregator::setCompare(const boost::shared_ptr<IndividualCompare>
     }
 }
 
+void IndividualAggregator::setLocale(const boost::shared_ptr<LocaleFactory> &locale)
+{
+    m_locale = locale;
+
+    if (m_view) {
+        m_view->setLocale(m_locale);
+    }
+}
+
+
 void IndividualAggregator::start()
 {
     if (!m_view) {

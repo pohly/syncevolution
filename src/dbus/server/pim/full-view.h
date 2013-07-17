@@ -78,6 +78,12 @@ class FullView : public IndividualView
     static boost::shared_ptr<FullView> create(const FolksIndividualAggregatorCXX &folks,
                                               const boost::shared_ptr<LocaleFactory> &locale);
 
+    /**
+     * Change locale. Updating pre-computed data must be triggered by
+     * calling setCompare() later.
+     */
+    void setLocale(const boost::shared_ptr<LocaleFactory> &locale);
+
     /** FolksIndividualAggregator "individuals-changed" slot */
     void individualsChanged(GeeSet *added,
                             GeeSet *removed,
