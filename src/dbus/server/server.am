@@ -25,6 +25,7 @@ src_dbus_server_server_cpp_files = \
   src/dbus/server/dbus-callbacks.cpp \
   src/dbus/server/dbus-user-interface.cpp \
   src/dbus/server/exceptions.cpp \
+  src/dbus/server/localed-listener.cpp \
   src/dbus/server/info-req.cpp \
   src/dbus/server/network-manager-client.cpp \
   src/dbus/server/presence-status.cpp \
