@@ -74,7 +74,11 @@ LocaledListener::LocaledListener():
     m_propertiesChanged(*this, PROPERTIES_CHANGED_SIGNAL),
     m_propertiesGet(*this, PROPERTIES_GET)
 {
-    m_propertiesChanged.activate(boost::bind(&LocaledListener::onPropertiesChange, this, _1, _2, _3));
+    if (getConnection()) {
+        m_propertiesChanged.activate(boost::bind(&LocaledListener::onPropertiesChange, this, _1, _2, _3));
+    } else {
+        SE_LOG_DEBUG(NULL, "localed: not activating, no connection");
+    }
 };
 
 
@@ -157,10 +161,14 @@ void LocaledListener::emitLocaleEnv(const LocaleEnv &env)
 
 void LocaledListener::check(const boost::function<void (const LocaleEnv &env)> &result)
 {
-    SE_LOG_DEBUG(NULL, "localed: get current Locale property");
-    m_propertiesGet.start(std::string(LOCALED_INTERFACE),
-                          std::string(LOCALED_LOCALE_PROPERTY),
-                          boost::bind(&LocaledListener::processLocaleProperty, m_self, _1, _2, true, result));
+    if (getConnection()) {
+        SE_LOG_DEBUG(NULL, "localed: get current Locale property");
+        m_propertiesGet.start(std::string(LOCALED_INTERFACE),
+                              std::string(LOCALED_LOCALE_PROPERTY),
+                              boost::bind(&LocaledListener::processLocaleProperty, m_self, _1, _2, true, result));
+    } else {
+        processLocaleProperty(LocaleVariant(), "no D-Bus connection", true, result);
+    }
 }
 
 void LocaledListener::setLocale(const LocaleEnv &locale)
