@@ -7939,7 +7939,8 @@ END:VCARD
         # 2. loss of D-Bus connection is noticed first.
         # Also, the "connection is closed" error only
         # occurs occasionally.
-        if out.startswith('[ERROR] child process quit because of signal 9'):
+        if out.startswith('''[INFO @client] target side of local sync ready
+[ERROR] child process quit because of signal 9'''):
             out = out.replace('''[ERROR] sending message to child failed: The connection is closed
 ''', '')
             self.assertEqualDiff(out, '''[INFO @client] target side of local sync ready
