@@ -24,12 +24,14 @@ createxdg "$XDG_DATA_HOME"
 # explicitly.
 # See https://launchpad.net/bugs/525642 and
 # https://bugzilla.redhat.com/show_bug.cgi?id=572137
-/usr/bin/gnome-keyring-daemon --start --foreground --components=secrets 1>&2 &
-KEYRING_PID=$!
+if [ -x /usr/bin/gnome-keyring-daemon ]; then
+    /usr/bin/gnome-keyring-daemon --start --foreground --components=secrets 1>&2 &
+    KEYRING_PID=$!
+fi
 
 # kill all programs started by us
 atexit() {
-    kill $KEYRING_PID
+    [ ! "$KEYRING_PID" ] || kill $KEYRING_PID
     kill $DBUS_SESSION_BUS_PID
 }
 trap atexit EXIT
