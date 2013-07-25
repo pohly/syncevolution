@@ -714,12 +714,6 @@ class PasswordConfigProperty : public ConfigProperty {
                                              const std::string &sourceName = std::string(),
                                              const boost::shared_ptr<FilterConfigNode> &sourceConfigNode =
                                              boost::shared_ptr<FilterConfigNode>()) const; 
-
-    /**
-     * return the cached value if necessary and possible
-     */
-    virtual InitStateString getCachedProperty(const ConfigNode &node,
-                                              const std::string &cachedPassword);
 };
 
 /**
@@ -1644,8 +1638,6 @@ private:
 
     Layout m_layout;
     std::string m_redirectPeerRootPath;
-    std::string m_cachedPassword;
-    std::string m_cachedProxyPassword;
     ConfigWriteMode m_configWriteMode;
     Bool m_ephemeral;
 
@@ -1959,7 +1951,6 @@ class SyncSourceConfig {
 
     std::string m_name;
     SyncSourceNodes m_nodes;
-    std::string m_cachedPassword;
 };
 
 class SingleFileConfigTree;
