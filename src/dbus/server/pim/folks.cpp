@@ -90,18 +90,20 @@ boost::shared_ptr<IndividualCompare> IndividualCompare::defaultCompare()
     return compare;
 }
 
-void IndividualData::init(const IndividualCompare *compare,
+bool IndividualData::init(const IndividualCompare *compare,
                           const LocaleFactory *locale,
                           FolksIndividual *individual)
 {
+    bool precomputedModified = false;
     m_individual = FolksIndividualCXX(individual, ADD_REF);
     if (compare) {
         m_criteria.clear();
         compare->createCriteria(individual, m_criteria);
     }
     if (locale) {
-        locale->precompute(individual, m_precomputed);
+        precomputedModified = locale->precompute(individual, m_precomputed);
     }
+    return precomputedModified;
 }
 
 bool IndividualCompare::compare(const Criteria_t &a, const Criteria_t &b) const

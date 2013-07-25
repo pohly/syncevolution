@@ -116,8 +116,10 @@ struct IndividualData
      * Sets all members to match the given individual, using the
      * compare instance to compute values. Both compare and locale may
      * be NULL.
+     *
+     * Returns true if the precomputed values changed.
      */
-    void init(const IndividualCompare *compare,
+    bool init(const IndividualCompare *compare,
               const LocaleFactory *locale,
               FolksIndividual *individual);
 

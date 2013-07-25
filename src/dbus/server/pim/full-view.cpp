@@ -21,6 +21,8 @@
 
 #include <syncevo/BoostHelper.h>
 
+#include <boost/dynamic_bitset.hpp>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -28,6 +30,7 @@ FullView::FullView(const FolksIndividualAggregatorCXX &folks,
                    const boost::shared_ptr<LocaleFactory> &locale) :
     m_folks(folks),
     m_locale(locale),
+    m_localeChanged(false), // set only after explicit setLocale()
     m_isQuiescent(false),
     // Ensure that there is a sort criteria.
     m_compare(IndividualCompare::defaultCompare())
@@ -108,6 +111,7 @@ boost::shared_ptr<FullView> FullView::create(const FolksIndividualAggregatorCXX 
 void FullView::setLocale(const boost::shared_ptr<LocaleFactory> &locale)
 {
     m_locale = locale;
+    m_localeChanged = true;
 
     // Don't recompute all IndividualData content. That will be done
     // as part of setCompare(), which must be called later.
@@ -306,8 +310,17 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
     memcpy(old.get(), m_entries.c_array(), sizeof(IndividualData *) * m_entries.size());
 
     // Change sort criteria and sort.
-    BOOST_FOREACH (IndividualData &data, m_entries) {
-        data.init(m_compare.get(), NULL, data.m_individual);
+    // Optionally also re-compute locale-dependent values, if
+    // the locale changed (see setLocale()).
+    LocaleFactory *locale = m_localeChanged ? m_locale.get() : NULL;
+    m_localeChanged = false;
+    boost::dynamic_bitset<size_t> modified(locale ? m_entries.size() : 0);
+    for (size_t i = 0; i < m_entries.size(); i++ ) {
+        IndividualData &data = m_entries[i];
+        bool preComputedModified = data.init(m_compare.get(), locale, data.m_individual);
+        if (locale && preComputedModified) {
+            modified.set(i);
+        }
     }
     m_entries.sort(IndividualDataCompare(m_compare));
 
@@ -315,7 +328,8 @@ void FullView::setCompare(const boost::shared_ptr<IndividualCompare> &compare)
     for (size_t index = 0; index < m_entries.size(); index++) {
         IndividualData &previous = *old[index],
             &current = m_entries[index];
-        if (previous.m_individual != current.m_individual) {
+        if (previous.m_individual != current.m_individual ||
+            (locale && modified[index])) {
             // Contact at the index changed. Don't try to find out
             // where it came from now. The effect is that temporarily
             // the same contact might be shown at two different

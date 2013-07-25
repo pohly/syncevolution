@@ -71,6 +71,13 @@ class SimpleE164
      * empty string if both are unset.
      */
     std::string toString() const;
+
+    bool operator == (const SimpleE164 &other) const 
+    {
+        return m_countryCode == other.m_countryCode &&
+        m_nationalNumber == other.m_nationalNumber;
+    }
+    bool operator != (const SimpleE164 &other) const { return !(*this == other); }
 };
 
 /**
@@ -147,13 +154,16 @@ class LocaleFactory
      */
     struct Precomputed
     {
-        std::vector<SimpleE164> m_phoneNumbers;
+        typedef std::vector<SimpleE164> PhoneNumbers;
+        PhoneNumbers m_phoneNumbers;
+        bool operator == (const Precomputed &other) const;
+        bool operator != (const Precomputed &other) const { return !(*this == other); }
     };
 
     /**
      * (Re)set pre-computed data for an individual.
      */
-    virtual void precompute(FolksIndividual *individual, Precomputed &precomputed) const = 0;
+    virtual bool precompute(FolksIndividual *individual, Precomputed &precomputed) const = 0;
 };
 
 SE_END_CXX

@@ -1014,7 +1014,7 @@ class LocaleFactoryBoost : public LocaleFactory
 public:
     LocaleFactoryBoost() :
         m_phoneNumberUtil(*i18n::phonenumbers::PhoneNumberUtil::GetInstance()),
-        m_edsSupportsPhoneNumbers(e_phone_number_is_supported()),
+        m_edsSupportsPhoneNumbers(e_phone_number_is_supported() && !getenv("SYNCEVOLUTION_PIM_EDS_NO_E164")),
         m_locale(genLocale()),
         m_country(std::use_facet<boost::locale::info>(m_locale).country()),
         m_defaultCountryCode(StringPrintf("+%d", m_phoneNumberUtil.GetCountryCodeForRegion(m_country)))
@@ -1178,9 +1178,10 @@ public:
         return res ? res : LocaleFactory::createFilter(filter, level);
     }
 
-    virtual void precompute(FolksIndividual *individual, Precomputed &precomputed) const
+    virtual bool precompute(FolksIndividual *individual, Precomputed &precomputed) const
     {
-        precomputed.m_phoneNumbers.clear();
+        LocaleFactory::Precomputed old;
+        std::swap(old, precomputed);
 
         FolksPhoneDetails *phoneDetails = FOLKS_PHONE_DETAILS(individual);
         GeeSet *phones = folks_phone_details_get_phone_numbers(phoneDetails);
@@ -1251,6 +1252,9 @@ public:
                 }
             }
         }
+
+        // Now check if any phone number changed.
+        return old != precomputed;
     }
 };
 

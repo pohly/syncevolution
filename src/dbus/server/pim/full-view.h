@@ -33,6 +33,7 @@ class FullView : public IndividualView
 {
     FolksIndividualAggregatorCXX m_folks;
     boost::shared_ptr<LocaleFactory> m_locale;
+    bool m_localeChanged;
     bool m_isQuiescent;
     boost::weak_ptr<FullView> m_self;
     Timeout m_waitForIdle;

@@ -2449,6 +2449,7 @@ END:VCARD''']):
         self.setUpView()
 
         msg = None
+        view = None
         try:
              # Insert new contacts and calculate their family names.
              names = []
@@ -2519,6 +2520,7 @@ END:VCARD
                   raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
              else:
                   raise
+        return view
 
     @timeout(60)
     @property("ENV", "LC_TYPE=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 LANG=ja_JP.UTF-8")
@@ -2565,7 +2567,7 @@ END:VCARD
                        )
 
     @timeout(60)
-    @property("ENV", "LC_TYPE=zh_CN.UTF-8 LANG=zh_CN.UTF-8 DBUS_TEST_LOCALED=session")
+    @property("ENV", "LC_TYPE=zh_CN.UTF-8 LANG=zh_CN.UTF-8")
     def testLocaled(self):
          # Use mixed Chinese/Western names, because then the locale really matters.
          namespinyin = ('Adams', 'Jeffries', u'江', 'Meadows', u'鳥', u'女性' )
@@ -2573,7 +2575,7 @@ END:VCARD
          numtestcases = len(namespinyin)
          self.doFilter(namespinyin, ())
 
-         daemon = localed.Localed(bus)
+         daemon = localed.Localed()
          msg = None
          try:
               # Broadcast Locale value together with PropertiesChanged signal.
@@ -2582,7 +2584,7 @@ END:VCARD
               logging.log('reading contacts, German')
               self.runUntil('German sorting',
                             check=lambda: self.assertEqual([], self.view.errors),
-                            until=lambda: self.view.quiescentCount > 0)
+                            until=lambda: self.view.quiescentCount > 1)
               self.view.read(0, numtestcases)
               self.runUntil('German contacts',
                             check=lambda: self.assertEqual([], self.view.errors),
@@ -2597,7 +2599,7 @@ END:VCARD
               logging.log('reading contacts, Pinyin')
               self.runUntil('Pinyin sorting',
                             check=lambda: self.assertEqual([], self.view.errors),
-                            until=lambda: self.view.quiescentCount > 0)
+                            until=lambda: self.view.quiescentCount > 1)
               self.view.read(0, numtestcases)
               self.runUntil('Pinyin contacts',
                             check=lambda: self.assertEqual([], self.view.errors),
@@ -2605,6 +2607,52 @@ END:VCARD
               for i, name in enumerate(namespinyin):
                    msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
                    self.assertEqual(name, self.view.contacts[i]['full-name'])
+         except Exception, ex:
+             if msg:
+                  info = sys.exc_info()
+                  raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
+             else:
+                  raise
+
+    @timeout(60)
+    # Must disable usage of pre-computed phone numbers from EDS, because we can't tell EDS
+    # when locale is meant to change.
+    @property("ENV", "LANG=en_US.UTF-8 SYNCEVOLUTION_PIM_EDS_NO_E164=1")
+    def testLocaledPhone(self):
+         # Parsing of 1234-5 depends on locale: US drops the 1 from 1234
+         # Germany (and other countries) don't. Use that to match (or not match)
+         # a contact.
+         testcases = (('Doe', '''BEGIN:VCARD
+VERSION:3.0
+FN:Doe
+N:Doe;;;;
+TEL:12 34-5
+END:VCARD
+'''),)
+         names = ('Doe')
+         numtestcases = len(testcases)
+         view = self.doFilter(testcases,
+                              (([['phone', '+12345']], ('Doe',)),))
+
+         daemon = localed.Localed()
+         msg = None
+         try:
+              # Contact no longer matched because it's phone number normalization
+              # becomes different.
+              view.quiescentCount = 0
+              daemon.SetLocale(['LANG=de_DE.UTF-8'], True)
+              self.runUntil('German locale',
+                            check=lambda: self.assertEqual([], view.errors),
+                            until=lambda: view.quiescentCount > 1)
+              self.assertEqual(len(view.contacts), 0)
+
+              # Switch back to US.
+              view.quiescentCount = 0
+              daemon.SetLocale(['LANG=en_US.UTF-8'], True)
+              self.runUntil('US locale',
+                            check=lambda: self.assertEqual([], view.errors),
+                            until=lambda: view.quiescentCount > 1)
+              self.assertEqual(len(view.contacts), 1)
          except Exception, ex:
              if msg:
                   info = sys.exc_info()
