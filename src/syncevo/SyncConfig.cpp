@@ -1736,7 +1736,7 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
 InitStateString SyncConfig::getSyncUsername() const { return syncPropUsername.getProperty(*getNode(syncPropUsername)); }
 void SyncConfig::setSyncUsername(const string &value, bool temporarily) { syncPropUsername.setProperty(*getNode(syncPropUsername), value, temporarily); }
 InitStateString SyncConfig::getSyncPassword() const {
-    return syncPropPassword.getCachedProperty(*getNode(syncPropPassword), m_cachedPassword);
+    return syncPropPassword.getProperty(*getNode(syncPropPassword));
 }
 void PasswordConfigProperty::checkPassword(UserInterface &ui,
                                            const string &serverName,
@@ -1814,19 +1814,6 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
     }
 }
 
-InitStateString PasswordConfigProperty::getCachedProperty(const ConfigNode &node,
-                                                          const string &cachedPassword)
-{
-    InitStateString password;
-
-    if (!cachedPassword.empty()) {
-        password = InitStateString(cachedPassword, true);
-    } else {
-        password = getProperty(node);
-    }
-    return password;
-}
-
 /**
  * remove some unnecessary parts of server URL.
  * internal use.
@@ -1877,8 +1864,7 @@ ConfigPasswordKey ProxyPasswordConfigProperty::getPasswordKey(const string &desc
     key.user   = syncPropProxyUsername.getProperty(globalConfigNode);
     return key;
 }
-
-void SyncConfig::setSyncPassword(const string &value, bool temporarily) { m_cachedPassword = ""; syncPropPassword.setProperty(*getNode(syncPropPassword), value, temporarily); }
+void SyncConfig::setSyncPassword(const string &value, bool temporarily) { syncPropPassword.setProperty(*getNode(syncPropPassword), value, temporarily); }
 
 InitState<bool> SyncConfig::getPreventSlowSync() const {
     return syncPropPreventSlowSync.getPropertyValue(*getNode(syncPropPreventSlowSync));
@@ -1920,9 +1906,9 @@ InitStateString SyncConfig::getProxyUsername() const { return syncPropProxyUsern
 void SyncConfig::setProxyUsername(const string &value, bool temporarily) { syncPropProxyUsername.setProperty(*getNode(syncPropProxyUsername), value, temporarily); }
 
 InitStateString SyncConfig::getProxyPassword() const {
-    return syncPropProxyPassword.getCachedProperty(*getNode(syncPropProxyPassword), m_cachedProxyPassword);
+    return syncPropProxyPassword.getProperty(*getNode(syncPropProxyPassword));
 }
-void SyncConfig::setProxyPassword(const string &value, bool temporarily) { m_cachedProxyPassword = ""; syncPropProxyPassword.setProperty(*getNode(syncPropProxyPassword), value, temporarily); }
+void SyncConfig::setProxyPassword(const string &value, bool temporarily) { syncPropProxyPassword.setProperty(*getNode(syncPropProxyPassword), value, temporarily); }
 InitState< vector<string> > SyncConfig::getSyncURL() const { 
     InitStateString s = syncPropSyncURL.getProperty(*getNode(syncPropSyncURL));
     vector<string> urls;
@@ -2635,7 +2621,7 @@ void SyncSourceConfig::setDatabaseID(const string &value, bool temporarily) { so
 InitStateString SyncSourceConfig::getUser() const { return sourcePropUser.getProperty(*getNode(sourcePropUser)); }
 void SyncSourceConfig::setUser(const string &value, bool temporarily) { sourcePropUser.setProperty(*getNode(sourcePropUser), value, temporarily); }
 InitStateString SyncSourceConfig::getPassword() const {
-    return sourcePropPassword.getCachedProperty(*getNode(sourcePropPassword), m_cachedPassword);
+    return sourcePropPassword.getProperty(*getNode(sourcePropPassword));
 }
 void SyncSourceConfig::checkPassword(UserInterface &ui, 
                                      const string &serverName, 
@@ -2647,7 +2633,7 @@ void SyncSourceConfig::savePassword(UserInterface &ui,
                                     FilterConfigNode& globalConfigNode) {
     sourcePropPassword.savePassword(ui, serverName, globalConfigNode, m_name, getNode(sourcePropPassword));
 }
-void SyncSourceConfig::setPassword(const string &value, bool temporarily) { m_cachedPassword = ""; sourcePropPassword.setProperty(*getNode(sourcePropPassword), value, temporarily); }
+void SyncSourceConfig::setPassword(const string &value, bool temporarily) { sourcePropPassword.setProperty(*getNode(sourcePropPassword), value, temporarily); }
 InitStateString SyncSourceConfig::getURI() const { return sourcePropURI.getProperty(*getNode(sourcePropURI)); }
 InitStateString SyncSourceConfig::getURINonEmpty() const {
     InitStateString uri = sourcePropURI.getProperty(*getNode(sourcePropURI));
