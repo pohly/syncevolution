@@ -7,6 +7,14 @@
 eval `dbus-launch`
 export DBUS_SESSION_BUS_ADDRESS
 
+if [ "$DBUS_SESSION_SH_SYSTEM_BUS" ]; then
+    # Use own private bus as system bus, then start a new one.
+    DBUS_SYSTEM_BUS_PID=$DBUS_SESSION_BUS_PID
+    DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS
+    export DBUS_SYSTEM_BUS_ADDRESS
+    eval `dbus-launch`
+fi
+
 # Ensure that XDG dirs exist. Otherwise some daemons do not work correctly.
 createxdg() {
     dir="$1"
@@ -32,6 +40,7 @@ fi
 # kill all programs started by us
 atexit() {
     [ ! "$KEYRING_PID" ] || kill $KEYRING_PID
+    [ ! "$DBUS_SYSTEM_BUS_PID" ] || kill $DBUS_SYSTEM_BUS_PID
     kill $DBUS_SESSION_BUS_PID
 }
 trap atexit EXIT
