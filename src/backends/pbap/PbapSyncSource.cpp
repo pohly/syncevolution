@@ -31,6 +31,7 @@
 
 #include <errno.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #include <pcrecpp.h>
 #include <algorithm>
@@ -528,7 +529,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
         // Beware, this will lead to a "Complete" signal in obexd
         // 0.47. We need to be careful with looking at the right
         // transfer to determine whether PullAll completed.
-        state->m_numContacts = GDBusCXX::DBusClientCall1<uint16>(*m_session, "GetSize")();
+        state->m_numContacts = GDBusCXX::DBusClientCall1<uint16_t>(*m_session, "GetSize")();
         SE_LOG_DEBUG(NULL, "Expecting %d contacts.", state->m_numContacts);
 
         state->m_tmpFile.create();
