@@ -2547,6 +2547,18 @@ static const std::string yahoo =
                "sync = two-way\n"
                "backend = CalDAV\n";
 
+// Expected content of config.ini file depends on whether
+// a keyring is enabled or not.
+static const char DATABASE_PASSWORD_BAR[] =
+#ifdef HAVE_KEYRING
+               // In keyring.
+               "databasePassword = -"
+#else
+               // In file.
+               "databasePassword = bar"
+#endif
+               ;
+
 /**
  * Testing is based on a text representation of a directory
  * hierarchy where each line is of the format
@@ -3936,7 +3948,7 @@ protected:
         boost::replace_first(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
         boost::replace_first(expected, "# database = ", "database = xyz");
         boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-        boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+        boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
         // migrating "type" sets forceSyncFormat if not the default,
         // and databaseFormat (if format was part of type, as for addressbook)
         boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
@@ -4052,7 +4064,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             // migrating "type" sets forceSyncFormat if different from the "false" default
             // and databaseFormat (if format was part of type, as for addressbook)
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
@@ -4086,7 +4098,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(newRoot, "scheduleworld.old.1");
@@ -4118,7 +4130,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             boost::replace_first(expected,
                                  "peers/scheduleworld/sources/addressbook/config.ini",
@@ -4157,7 +4169,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(oldRoot + ".old");
@@ -4184,7 +4196,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             renamedConfig = scanFiles(otherRoot, "scheduleworld.old.3");
@@ -4349,7 +4361,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             // migrating "type" sets forceSyncFormat if not already the default,
             // and databaseFormat (if format was part of type, as for addressbook)
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
@@ -4378,7 +4390,7 @@ protected:
             boost::replace_all(expected, "# ConsumerReady = 0", "ConsumerReady = 1");
             boost::replace_first(expected, "# database = ", "database = xyz");
             boost::replace_first(expected, "# databaseUser = ", "databaseUser = foo");
-            boost::replace_first(expected, "# databasePassword = ", "databasePassword = bar");
+            boost::replace_first(expected, "# databasePassword = ", DATABASE_PASSWORD_BAR);
             boost::replace_first(expected, "# databaseFormat = ", "databaseFormat = text/vcard");
             CPPUNIT_ASSERT_EQUAL_DIFF(expected, migratedConfig);
             string renamedConfig = scanFiles(newRoot, "scheduleworld.old.1");
