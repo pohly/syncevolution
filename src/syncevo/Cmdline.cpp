@@ -658,23 +658,16 @@ void Cmdline::checkSyncPasswords(SyncContext &context)
 {
     ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
     BOOST_FOREACH(const ConfigProperty *prop, registry) {
-        prop->checkPassword(context.getUserInterfaceNonNull(),
-                            context.getConfigName(),
-                            *context.getProperties());
+        prop->checkPassword(context.getUserInterfaceNonNull(), context);
     }
 }
 
 void Cmdline::checkSourcePasswords(SyncContext &context,
-                                   const std::string &sourceName,
-                                   SyncSourceNodes &nodes)
+                                   const std::string &sourceName)
 {
     ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
     BOOST_FOREACH(const ConfigProperty *prop, registry) {
-        prop->checkPassword(context.getUserInterfaceNonNull(),
-                            context.getConfigName(),
-                            *context.getProperties(),
-                            sourceName,
-                            nodes.getProperties());
+        prop->checkPassword(context.getUserInterfaceNonNull(), context, sourceName);
     }
 }
 
@@ -831,7 +824,7 @@ bool Cmdline::run() {
                 if (!m_server.empty() && nodes) {
                     // ensure that we have passwords for this config
                     checkSyncPasswords(*context);
-                    checkSourcePasswords(*context, sourceName, *nodes);
+                    checkSourcePasswords(*context, sourceName);
                 }
                 (this->*operation)(source.get(), header);
             } else {
@@ -1385,7 +1378,7 @@ bool Cmdline::run() {
 #define CHECK_ERROR(_op) if (err) { SE_THROW_EXCEPTION_STATUS(StatusException, string(source->getName()) + ": " + (_op), SyncMLStatus(err)); }
 
         checkSyncPasswords(*context);
-        checkSourcePasswords(*context, source->getName(), sourceNodes);
+        checkSourcePasswords(*context, source->getName());
         source->setNeedChanges(false);
         source->open();
         const SyncSource::Operations &ops = source->getOperations();

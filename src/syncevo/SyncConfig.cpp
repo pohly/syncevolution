@@ -945,7 +945,7 @@ void SyncConfig::preFlush(UserInterface &ui)
     /* save password in the global config node */
     ConfigPropertyRegistry& registry = getRegistry();
     BOOST_FOREACH(const ConfigProperty *prop, registry) {
-        prop->savePassword(ui, m_peer, *getProperties());
+        prop->savePassword(ui, *this);
     }
 
     /** grep each source and save their password */
@@ -956,8 +956,7 @@ void SyncConfig::preFlush(UserInterface &ui)
         SyncSourceNodes sourceNodes = getSyncSourceNodes(sourceName);
 
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->savePassword(ui, m_peer, *getProperties(),
-                               sourceName, sourceNodes.getProperties());
+            prop->savePassword(ui, *this, sourceName);
         }
     }
 }
@@ -1234,18 +1233,11 @@ public:
                                "  ask         : password = -\n"
                                "  env variable: password = ${<name of environment variable>}\n")
     {}
-    
+
     virtual void checkPassword(UserInterface &ui,
-                               const std::string &serverName,
-                               FilterConfigNode &globalConfigNode,
-                               const std::string &sourceName,
-                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
-        PasswordConfigProperty::checkPassword(ui,
-                                              syncPropUsername,
-                                              serverName,
-                                              globalConfigNode,
-                                              sourceName,
-                                              sourceConfigNode);
+                               SyncConfig &config,
+                               const std::string &sourceName = "") const {
+        PasswordConfigProperty::checkPassword(ui, config, syncPropUsername, sourceName);
     }
 
     ConfigPasswordKey getPasswordKey(const string &descr,
@@ -1318,18 +1310,11 @@ public:
      * before retrieving proxy password
      */
     virtual void checkPassword(UserInterface &ui,
-                               const std::string &serverName,
-                               FilterConfigNode &globalConfigNode,
-                               const std::string &sourceName,
-                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+                               SyncConfig &config,
+                               const std::string &sourceName = std::string()) const {
         /* if useProxy is set 'true', then check proxypassword */
-        if(syncPropUseProxy.getPropertyValue(globalConfigNode)) {
-            PasswordConfigProperty::checkPassword(ui,
-                                                  syncPropProxyUsername,
-                                                  serverName,
-                                                  globalConfigNode,
-                                                  sourceName,
-                                                  sourceConfigNode);
+        if (config.getUseProxy()) {
+            PasswordConfigProperty::checkPassword(ui, config, syncPropProxyUsername, sourceName);
         }
     }
     virtual ConfigPasswordKey getPasswordKey(const std::string &descr,
@@ -1855,13 +1840,21 @@ InitStateString SyncConfig::getSyncPassword() const {
     return syncPropPassword.getProperty(*getNode(syncPropPassword));
 }
 void PasswordConfigProperty::checkPassword(UserInterface &ui,
+                                           SyncConfig &config,
                                            const ConfigProperty &usernameProperty,
-                                           const string &serverName,
-                                           FilterConfigNode &globalConfigNode,
-                                           const string &sourceName,
-                                           const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
+                                           const std::string &sourceName) const
 {
-    InitStateString username = usernameProperty.getProperty(sourceConfigNode ? *sourceConfigNode : globalConfigNode);
+    std::string serverName = config.getConfigName();
+    boost::shared_ptr<FilterConfigNode> globalConfigNode = config.getProperties();
+    boost::shared_ptr<FilterConfigNode> sourceConfigNode;
+    if (!sourceName.empty()) {
+        sourceConfigNode = config.getSyncSourceNodes(sourceName).getNode(*this);
+    }
+    InitStateString username = usernameProperty.getProperty(sourceConfigNode ? *sourceConfigNode : *globalConfigNode);
+    SE_LOG_DEBUG(NULL, "checking password property '%s' in config '%s' with user identity '%s'",
+                 getMainName().c_str(),
+                 serverName.c_str(),
+                 username.c_str());
     UserIdentity identity(UserIdentity::fromString(username));
 
     if (identity.m_provider == USER_IDENTITY_SYNC_CONFIG) {
@@ -1879,14 +1872,14 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
     string password, passwordSave;
     /* if no source config node, then it should only be password in the global config node */
     if(sourceConfigNode.get() == NULL) {
-        password = getProperty(globalConfigNode);
+        password = getProperty(*globalConfigNode);
     } else {
         password = getProperty(*sourceConfigNode);
     }
 
-    string descr = getDescr(serverName,globalConfigNode,sourceName,sourceConfigNode);
+    string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
     if (password == "-") {
-        ConfigPasswordKey key = getPasswordKey(descr,serverName,globalConfigNode,sourceName,sourceConfigNode);
+        ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
         passwordSave = ui.askPassword(getMainName(),descr, key);
     } else if(boost::starts_with(password, "${") &&
               boost::ends_with(password, "}")) {
@@ -1906,7 +1899,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
      * Previous impl use temp string to store them, this is not good for expansion in the backend */
     if(!passwordSave.empty()) {
         if(sourceConfigNode.get() == NULL) {
-            globalConfigNode.addFilter(getMainName(), InitStateString(passwordSave, true));
+            globalConfigNode->addFilter(getMainName(), InitStateString(passwordSave, true));
         } else {
             sourceConfigNode->addFilter(getMainName(), InitStateString(passwordSave, true));
         }
@@ -1922,17 +1915,22 @@ std::string PasswordConfigProperty::getUsername(const ConfigProperty &usernamePr
 }
 
 void PasswordConfigProperty::savePassword(UserInterface &ui,
-                                          const string &serverName,
-                                          FilterConfigNode &globalConfigNode,
-                                          const string &sourceName,
-                                          const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
+                                          SyncConfig &config,
+                                          const std::string &sourceName) const
 {
+    std::string serverName = config.getConfigName();
+    boost::shared_ptr<FilterConfigNode> globalConfigNode = config.getProperties();
+    boost::shared_ptr<FilterConfigNode> sourceConfigNode;
+    if (!sourceName.empty()) {
+        sourceConfigNode = config.getSyncSourceNodes(sourceName).getNode(*this);
+    }
+
     // TODO: support identities
 
     /** here we don't invoke askPassword for this function has different logic from it */
     string password;
     if(sourceConfigNode.get() == NULL) {
-        password = getProperty(globalConfigNode);
+        password = getProperty(*globalConfigNode);
     } else {
         password = getProperty(*sourceConfigNode);
     }
@@ -1945,12 +1943,12 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
          * it might be changed in the sync time. */
         return;
     }
-    string descr = getDescr(serverName,globalConfigNode,sourceName,sourceConfigNode);
-    ConfigPasswordKey key = getPasswordKey(descr,serverName,globalConfigNode,sourceName,sourceConfigNode);
+    string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
+    ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
     if(ui.savePassword(getMainName(), password, key)) {
         string value = "-";
         if(sourceConfigNode.get() == NULL) {
-            setProperty(globalConfigNode, value);
+            setProperty(*globalConfigNode, value);
         } else {
             setProperty(*sourceConfigNode,value);
         }
@@ -2599,16 +2597,9 @@ public:
     {}
 
     virtual void checkPassword(UserInterface &ui,
-                               const std::string &serverName,
-                               FilterConfigNode &globalConfigNode,
-                               const std::string &sourceName,
-                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
-        PasswordConfigProperty::checkPassword(ui,
-                                              sourcePropUser,
-                                              serverName,
-                                              globalConfigNode,
-                                              sourceName,
-                                              sourceConfigNode);
+                               SyncConfig &config,
+                               const std::string &sourceName) const {
+        PasswordConfigProperty::checkPassword(ui, config, sourcePropUser, sourceName);
     }
 
     virtual ConfigPasswordKey getPasswordKey(const std::string &descr,

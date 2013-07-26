@@ -3315,7 +3315,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
             BOOST_FOREACH(const ConfigProperty *prop, registry) {
                 SE_LOG_DEBUG(NULL, "checking sync password %s", prop->getMainName().c_str());
-                prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties());
+                prop->checkPassword(getUserInterfaceNonNull(), *this);
             }
             BOOST_FOREACH(SyncSource *source, sourceList) {
                 ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
@@ -3323,8 +3323,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
                     SE_LOG_DEBUG(NULL, "checking source %s password %s",
                                  source->getName().c_str(),
                                  prop->getMainName().c_str());
-                    prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
-                                        source->getName(), source->getProperties());
+                    prop->checkPassword(getUserInterfaceNonNull(), *this, source->getName());
                 }
             }
 
@@ -4304,8 +4303,7 @@ void SyncContext::status()
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
-                                source->getName(), source->getProperties());
+            prop->checkPassword(getUserInterfaceNonNull(), *this, source->getName());
         }
     }
     BOOST_FOREACH(SyncSource *source, sourceList) {
@@ -4356,8 +4354,7 @@ void SyncContext::checkStatus(SyncReport &report)
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
-                                source->getName(), source->getProperties());
+            prop->checkPassword(getUserInterfaceNonNull(), *this, source->getName());
         }
     }
     BOOST_FOREACH(SyncSource *source, sourceList) {
@@ -4438,8 +4435,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
     BOOST_FOREACH(SyncSource *source, sourceList) {
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
-                                source->getName(), source->getProperties());
+            prop->checkPassword(getUserInterfaceNonNull(), *this, source->getName());
         }
     }
 

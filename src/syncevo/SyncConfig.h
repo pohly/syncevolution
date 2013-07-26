@@ -128,6 +128,7 @@ class ConfigTree;
 class UserInterface;
 class SyncSourceNodes;
 class ConstSyncSourceNodes;
+class SyncConfig;
 struct ConfigPasswordKey;
 
 /** name of the per-source admin data property */
@@ -336,16 +337,12 @@ class ConfigProperty {
      * sourceName and sourceConfigNode might be not set by caller. They only affect
      * when checking password for syncsourceconfig 
      * @param ui user interface
-     * @param serverName server name
-     * @param globalConfigNode the sync global config node for a server
-     * @param sourceName the source name used for source config properties
-     * @param sourceConfigNode the config node for the source
+     * @param config    the peer config in which we are checking the password
+     * @param sourceName   the source name for which we need the password, empty if checking a peer password
      */
     virtual void checkPassword(UserInterface &ui,
-                               const std::string &serverName,
-                               FilterConfigNode &globalConfigNode,
-                               const std::string &sourceName = std::string(),
-                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode = boost::shared_ptr<FilterConfigNode>()) const {}
+                               SyncConfig &config,
+                               const std::string &sourceName = std::string()) const {}
 
     /**
      * Try to save password if a config property wants.
@@ -353,10 +350,8 @@ class ConfigProperty {
      * function to save the password if necessary
      */
     virtual void savePassword(UserInterface &ui,
-                              const std::string &serverName,
-                              FilterConfigNode &globalConfigNode,
-                              const std::string &sourceName = std::string(),
-                              const boost::shared_ptr<FilterConfigNode> &sourceConfigNode = boost::shared_ptr<FilterConfigNode>()) const {}
+                              SyncConfig &config,
+                              const std::string &sourceName = std::string()) const {}
 
     /**
      * This is used to generate description dynamically according to the context information
@@ -737,25 +732,20 @@ class PasswordConfigProperty : public ConfigProperty {
            {}
 
     /**
-     * Check the password and cache the result.
+     * Check the password and cache the result. Accessed via base
+     * ConfigProperty class, must be implemented in derived classes.
      */
     virtual void checkPassword(UserInterface &ui,
-                               const std::string &serverName,
-                               FilterConfigNode &globalConfigNode,
-                               const std::string &sourceName = "",
-                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode =
-                               boost::shared_ptr<FilterConfigNode>()) const = 0;
+                               SyncConfig &config,
+                               const std::string &sourceName = std::string()) const = 0;
 
     /**
      * It firstly check password and then invoke ui's savePassword
      * function to save the password if necessary
      */
     virtual void savePassword(UserInterface &ui,
-                              const std::string &serverName,
-                              FilterConfigNode &globalConfigNode,
-                              const std::string &sourceName = "",
-                              const boost::shared_ptr<FilterConfigNode> &sourceConfigNode =
-                              boost::shared_ptr<FilterConfigNode>()) const;
+                              SyncConfig &config,
+                              const std::string &sourceName = std::string()) const;
 
  protected:
 
@@ -764,12 +754,9 @@ class PasswordConfigProperty : public ConfigProperty {
      * provided by derived classes.
      */
     void checkPassword(UserInterface &ui,
+                       SyncConfig &config,
                        const ConfigProperty &usernameProperty,
-                       const std::string &serverName,
-                       FilterConfigNode &globalConfigNode,
-                       const std::string &sourceName = "",
-                       const boost::shared_ptr<FilterConfigNode> &sourceConfigNode =
-                       boost::shared_ptr<FilterConfigNode>()) const;
+                       const std::string &sourceName = std::string()) const;
 
     /**
      * Get password lookup key for storing or retrieving passwords.
