@@ -313,7 +313,9 @@ TSyError SyncEvolution_Session_Login( CContext sContext, cAppCharP sUsername, ap
         return LOCERR_WRONGUSAGE;
     }
     TSyError res = DB_Forbidden;
-    string user = sc->getSyncUsername();
+    UserIdentity id = sc->getSyncUser();
+    // TODO: check for plain authentication
+    std::string user = id.m_identity;
     string password = sc->getSyncPassword();
 
     if (user.empty() && password.empty()) {

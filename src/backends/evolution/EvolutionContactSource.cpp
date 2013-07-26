@@ -242,21 +242,22 @@ void EvolutionContactSource::open()
     // users are not expected to configure an authentication method,
     // so pick one automatically if the user indicated that he wants authentication
     // by setting user or password
-    std::string user = getUser(),
-        passwd = getPassword();
-    if (!user.empty() || !passwd.empty()) {
+    UserIdentity identity = getUser();
+    InitStateString passwd = getPassword();
+    if (identity.wasSet() || passwd.wasSet()) {
         GList *authmethod;
         if (!e_book_get_supported_auth_methods(m_addressbook, &authmethod, gerror)) {
             throwError("getting authentication methods", gerror);
         }
         while (authmethod) {
+            // TODO: map identity + password to plain username/password credentials
             const char *method = (const char *)authmethod->data;
             SE_LOG_DEBUG(getDisplayName(), "trying authentication method \"%s\", user %s, password %s",
                          method,
-                         !user.empty() ? "configured" : "not configured",
-                         !passwd.empty() ? "configured" : "not configured");
+                         identity.wasSet() ? "configured" : "not configured",
+                         passwd.wasSet() ? "configured" : "not configured");
             if (e_book_authenticate_user(m_addressbook,
-                                         user.c_str(),
+                                         identity.m_identity.c_str(),
                                          passwd.c_str(),
                                          method,
                                          gerror)) {
