@@ -1888,14 +1888,6 @@ class SyncSourceConfig {
     virtual InitStateString getPassword() const;
     virtual void setPassword(const std::string &value, bool temporarily = false);
 
-    /** same as SyncConfig::checkPassword() but with
-     * an extra argument globalConfigNode for source config property
-     * may need global config node to check password */
-    virtual void checkPassword(UserInterface &ui, const std::string &serverName, FilterConfigNode& globalConfigNode);
-
-    /** same as SyncConfig::savePassword() */
-    virtual void savePassword(UserInterface &ui, const std::string &serverName, FilterConfigNode& globalConfigNode);
-
     /** selects the backend database to use */
     virtual InitStateString getDatabaseID() const;
     virtual void setDatabaseID(const std::string &value, bool temporarily = false);

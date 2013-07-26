@@ -2764,16 +2764,6 @@ void SyncSourceConfig::setUsername(const string &value, bool temporarily) { sour
 InitStateString SyncSourceConfig::getPassword() const {
     return sourcePropPassword.getProperty(*getNode(sourcePropPassword));
 }
-void SyncSourceConfig::checkPassword(UserInterface &ui, 
-                                     const string &serverName, 
-                                     FilterConfigNode& globalConfigNode) {
-    sourcePropPassword.checkPassword(ui, serverName, globalConfigNode, m_name, getNode(sourcePropPassword));
-}
-void SyncSourceConfig::savePassword(UserInterface &ui, 
-                                    const string &serverName, 
-                                    FilterConfigNode& globalConfigNode) {
-    sourcePropPassword.savePassword(ui, serverName, globalConfigNode, m_name, getNode(sourcePropPassword));
-}
 void SyncSourceConfig::setPassword(const string &value, bool temporarily) { sourcePropPassword.setProperty(*getNode(sourcePropPassword), value, temporarily); }
 InitStateString SyncSourceConfig::getURI() const { return sourcePropURI.getProperty(*getNode(sourcePropURI)); }
 InitStateString SyncSourceConfig::getURINonEmpty() const {
