@@ -180,7 +180,7 @@ void ReadOperations::getNamedConfig(const std::string &configName,
         //try to check password and read password from gnome keyring if possible
         ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
         BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(ui, configName, *dbusConfig->getProperties());
+            prop->checkPassword(ui, *dbusConfig);
         }
         list<string> configuredSources = dbusConfig->getSyncSources();
         BOOST_FOREACH(const string &sourceName, configuredSources) {
@@ -188,8 +188,7 @@ void ReadOperations::getNamedConfig(const std::string &configName,
             SyncSourceNodes sourceNodes = dbusConfig->getSyncSourceNodes(sourceName);
 
             BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(ui, configName, *dbusConfig->getProperties(),
-                        sourceName, sourceNodes.getProperties());
+                prop->checkPassword(ui, *dbusConfig, sourceName);
             }
         }
         syncConfig = dbusConfig.get();

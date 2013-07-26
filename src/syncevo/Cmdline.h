@@ -337,8 +337,7 @@ protected:
 
     static void checkSyncPasswords(SyncContext &context);
     static void checkSourcePasswords(SyncContext &context,
-                                     const std::string &sourceName,
-                                     SyncSourceNodes &nodes);
+                                     const std::string &sourceName);
 };
 
 
