@@ -884,6 +884,15 @@ class ConfigPropertyRegistry : public std::list<const ConfigProperty *> {
  */
 class SyncConfig {
  public:
+    enum Layout {
+        SYNC4J_LAYOUT,        /**< .syncj4/evolution/<server>, SyncEvolution <= 0.7.x */
+        HTTP_SERVER_LAYOUT,   /**< .config/syncevolution/<server> with sources
+                                 underneath, SyncEvolution <= 0.9.x */
+        SHARED_LAYOUT         /**< .config/syncevolution/<context> containing sources 
+                                 and peers, with source settings shared by peers,
+                                 SyncEvolution >= 1.0 */
+    };
+
     /**
      * Opens the configuration for a specific server,
      * searching for the config files in the usual
@@ -911,6 +920,8 @@ class SyncConfig {
      *               searching for it; always uses the
      *               current layout in that tree
      *
+     * @param layout if tree is given, then this is the layout to be used with it
+     *
      * @param redirectPeerRootPath
      *               Can be used to redirect the per-peer
      *               files into a different directory. Only works
@@ -918,6 +929,7 @@ class SyncConfig {
      *               Used by SyncContext for local sync.
      */
     SyncConfig(const std::string &peer,
+               Layout treeLayout = HTTP_SERVER_LAYOUT,
                boost::shared_ptr<ConfigTree> tree = boost::shared_ptr<ConfigTree>(),
                const std::string &redirectPeerRootPath = "");
 
@@ -1574,15 +1586,6 @@ class SyncConfig {
     virtual InitStateString getSwv() const;
     virtual InitStateString getDevType() const;
     /**@}*/
-
-    enum Layout {
-        SYNC4J_LAYOUT,        /**< .syncj4/evolution/<server>, SyncEvolution <= 0.7.x */
-        HTTP_SERVER_LAYOUT,   /**< .config/syncevolution/<server> with sources
-                                 underneath, SyncEvolution <= 0.9.x */
-        SHARED_LAYOUT         /**< .config/syncevolution/<context> containing sources 
-                                 and peers, with source settings shared by peers,
-                                 SyncEvolution >= 1.0 */
-    };
 
     /** config versioning; setting is done internally */
     int getConfigVersion(ConfigLevel level, ConfigLimit limit) const;

@@ -340,6 +340,7 @@ void SyncConfig::makeEphemeral()
 }
 
 SyncConfig::SyncConfig(const string &peer,
+                       Layout treeLayout,
                        boost::shared_ptr<ConfigTree> tree,
                        const string &redirectPeerRootPath) :
     m_layout(SHARED_LAYOUT),
@@ -362,11 +363,20 @@ SyncConfig::SyncConfig(const string &peer,
         m_peer;
 
     if (tree.get() != NULL) {
-        // existing tree points into simple configuration
         m_tree = tree;
-        m_layout = HTTP_SERVER_LAYOUT;
-        m_peerPath =
-            m_contextPath = "";
+        m_layout = treeLayout;
+        if (treeLayout == SHARED_LAYOUT) {
+            // Use the standard paths, same as below.
+            splitConfigString(m_peer, m_peerPath, m_contextPath);
+            if (!m_peerPath.empty()) {
+                m_peerPath = m_contextPath + "/peers/" + m_peerPath;
+            }
+        } else {
+            // Existing tree points into simple configuration,
+            // use empty paths.
+            m_peerPath =
+                m_contextPath = "";
+        }
     } else {
         // search for configuration in various places...
         root = getOldRoot();
@@ -835,7 +845,7 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
     }
     
     boost::shared_ptr<ConfigTree> tree(new SingleFileConfigTree(templateConfig));
-    boost::shared_ptr<SyncConfig> config(new SyncConfig(server, tree));
+    boost::shared_ptr<SyncConfig> config(new SyncConfig(server, SyncConfig::HTTP_SERVER_LAYOUT, tree));
     boost::shared_ptr<PersistentSyncSourceConfig> source;
 
     config->setDefaults(false);

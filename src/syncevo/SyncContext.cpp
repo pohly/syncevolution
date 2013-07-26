@@ -101,6 +101,7 @@ SyncContext::SyncContext(const string &client,
                          const boost::shared_ptr<TransportAgent> &agent,
                          bool doLogging) :
     SyncConfig(client,
+               SyncConfig::HTTP_SERVER_LAYOUT,
                boost::shared_ptr<ConfigTree>(),
                rootPath),
     m_server(client),
