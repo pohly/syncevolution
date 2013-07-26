@@ -57,11 +57,16 @@ public:
     {
         std::string url;
 
+        // Look up credentials on demand.
+        m_haveCredentials = false;
+
         // check source config first
         if (m_sourceConfig) {
             url = m_sourceConfig->getDatabaseID();
-            std::string username = m_sourceConfig->getUser();
-            boost::replace_all(url, "%u", Neon::URI::escape(username));
+            if (url.find("%u") != url.npos) {
+                std::string username = getUsername();
+                boost::replace_all(url, "%u", Neon::URI::escape(username));
+            }
         }
 
         // fall back to sync context
@@ -70,8 +75,10 @@ public:
 
             if (!urls.empty()) {
                 url = urls.front();
-                std::string username = m_context->getSyncUsername();
-                boost::replace_all(url, "%u", Neon::URI::escape(username));
+                if (url.find("%u") != url.npos) {
+                    std::string username = getUsername();
+                    boost::replace_all(url, "%u", Neon::URI::escape(username));
+                }
             }
         }
 
@@ -129,20 +136,15 @@ public:
                                 std::string &username,
                                 std::string &password)
     {
-        // prefer source config if anything is set there
-        if (m_sourceConfig) {
-            username = m_sourceConfig->getUser();
-            password = m_sourceConfig->getPassword();
-            if (!username.empty() || !password.empty()) {
-                return;
-            }
-        }
+        lookupCredentials();
+        username = m_username;
+        password = m_password;
+    }
 
-        // fall back to context
-        if (m_context) {
-            username = m_context->getSyncUsername();
-            password = m_context->getSyncPassword();
-        }
+    std::string getUsername()
+    {
+        lookupCredentials();
+        return m_username;
     }
 
     virtual bool getCredentialsOkay() { return m_credentialsOkay; }
@@ -166,7 +168,39 @@ public:
 
 private:
     void initializeFlags(const std::string &url);
+    std::string m_username;
+    std::string m_password;
+    bool m_haveCredentials;
+
+    void lookupCredentials();
 };
+
+void ContextSettings::lookupCredentials()
+{
+    if (m_haveCredentials) {
+        return;
+    }
+
+    UserIdentity identity;
+    InitStateString password;
+
+    // prefer source config if anything is set there
+    if (m_sourceConfig) {
+        identity = m_sourceConfig->getUser();
+        password = m_sourceConfig->getPassword();
+    }
+
+    // fall back to context
+    if (m_context && !identity.wasSet() && !password.wasSet()) {
+        identity = m_context->getSyncUser();
+        password = m_context->getSyncPassword();
+    }
+
+    // TODO: lookup actual authentication method instead of assuming username/password
+    m_username = identity.m_identity;
+    m_password = password;
+    m_haveCredentials = true;
+}
 
 void ContextSettings::initializeFlags(const std::string &url)
 {

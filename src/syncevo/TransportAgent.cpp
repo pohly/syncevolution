@@ -32,8 +32,11 @@ void HTTPTransportAgent::setConfig(SyncConfig &config)
 {
     if (config.getUseProxy()) {
         setProxy(config.getProxyHost());
-        setProxyAuth(config.getProxyUsername(),
-                     config.getProxyPassword());
+        UserIdentity identity = config.getProxyUser();
+        // TODO: resolve to plain username
+        std::string username = identity.m_identity;
+        std::string password = config.getProxyPassword();
+        setProxyAuth(username, password);
     }
     setUserAgent(config.getUserAgent());
     setSSL(config.findSSLServerCertificate(),

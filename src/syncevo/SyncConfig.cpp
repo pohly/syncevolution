@@ -33,6 +33,7 @@
 #include <syncevo/Cmdline.h>
 #include <syncevo/lcs.h>
 #include <syncevo/ThreadSupport.h>
+#include <syncevo/IdentityProvider.h>
 #include <test.h>
 #include <synthesis/timeutil.h>
 
@@ -106,6 +107,33 @@ PropertySpecifier PropertySpecifier::StringToPropSpec(const std::string &spec, i
     res.m_property = spec.substr(slash, at - slash);
 
     return res;
+}
+
+UserIdentity UserIdentity::fromString(const InitStateString &idString)
+{
+    UserIdentity id;
+    if (idString.wasSet()) {
+        size_t off = idString.find(':');
+        if (off != idString.npos) {
+            id.m_provider = idString.substr(0, off);
+            id.m_identity = idString.substr(off + 1);
+        } else {
+            id.m_provider = InitStateString(USER_IDENTITY_PLAIN_TEXT, false);
+            id.m_identity = idString;
+        }
+    }
+    return id;
+}
+
+InitStateString UserIdentity::toString() const
+{
+    std::string str;
+    if (m_provider.wasSet()) {
+        str += m_provider;
+        str += ':';
+    }
+    str += m_identity;
+    return InitStateString(str, m_provider.wasSet() || m_identity.wasSet());
 }
 
 std::string PropertySpecifier::toString()
@@ -1185,14 +1213,55 @@ static ConfigProperty syncPropDevID("deviceId",
 static ConfigProperty syncPropUsername("username",
                                        "user name used for authorization with the SyncML server",
                                        "");
-static PasswordConfigProperty syncPropPassword("password",
-                                               "password used for authorization with the peer;\n"
-                                               "in addition to specifying it directly as plain text, it can\n"
-                                               "also be read from the standard input or from an environment\n"
-                                               "variable of your choice::\n\n"
-                                               "  plain text  : password = <insert your password here>\n"
-                                               "  ask         : password = -\n"
-                                               "  env variable: password = ${<name of environment variable>}\n");
+
+static class SyncPasswordConfigProperty : public PasswordConfigProperty
+{
+public:
+    SyncPasswordConfigProperty() :
+        PasswordConfigProperty("password",
+                               "password used for authorization with the peer;\n"
+                               "in addition to specifying it directly as plain text, it can\n"
+                               "also be read from the standard input or from an environment\n"
+                               "variable of your choice::\n\n"
+                               "  plain text  : password = <insert your password here>\n"
+                               "  ask         : password = -\n"
+                               "  env variable: password = ${<name of environment variable>}\n")
+    {}
+    
+    virtual void checkPassword(UserInterface &ui,
+                               const std::string &serverName,
+                               FilterConfigNode &globalConfigNode,
+                               const std::string &sourceName,
+                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+        PasswordConfigProperty::checkPassword(ui,
+                                              syncPropUsername,
+                                              serverName,
+                                              globalConfigNode,
+                                              sourceName,
+                                              sourceConfigNode);
+    }
+
+    ConfigPasswordKey getPasswordKey(const string &descr,
+                                     const string &serverName,
+                                     FilterConfigNode &globalConfigNode,
+                                     const string &sourceName,
+                                     const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+        /** here we use server sync url without protocol prefix and
+         * user account name as the key in the keyring */
+        ConfigPasswordKey key;
+
+        key.server = syncPropSyncURL.getProperty(globalConfigNode);
+        size_t start = key.server.find("://");
+        /* we don't preserve protocol prefix for it may change */
+        if (start != key.server.npos) {
+            key.server = key.server.substr(start + 3);
+        }
+
+        key.user = getUsername(syncPropUsername, globalConfigNode);
+        return key;
+    }
+} syncPropPassword;
+
 static BoolConfigProperty syncPropPreventSlowSync("preventSlowSync",
                                                   "During a slow sync, the SyncML server must match all items\n"
                                                   "of the client with its own items and detect which ones it\n"
@@ -1227,11 +1296,47 @@ static ConfigProperty syncPropProxyHost("proxyHost",
                                         "proxy URL (``http://<host>:<port>``)");
 static ConfigProperty syncPropProxyUsername("proxyUsername",
                                             "authentication for proxy: username");
-static ProxyPasswordConfigProperty syncPropProxyPassword("proxyPassword",
-                                                         "proxy password, can be specified in different ways,\n"
-                                                         "see SyncML server password for details\n",
-                                                         "",
-                                                         "proxy");
+
+static class ProxyPasswordConfigProperty : public PasswordConfigProperty {
+public:
+    ProxyPasswordConfigProperty() :
+        PasswordConfigProperty("proxyPassword",
+                               "proxy password, can be specified in different ways,\n"
+                               "see SyncML server password for details\n",
+                               "",
+                               "proxy")
+    {}
+    /**
+     * re-implement this function for it is necessary to do a check 
+     * before retrieving proxy password
+     */
+    virtual void checkPassword(UserInterface &ui,
+                               const std::string &serverName,
+                               FilterConfigNode &globalConfigNode,
+                               const std::string &sourceName,
+                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+        /* if useProxy is set 'true', then check proxypassword */
+        if(syncPropUseProxy.getPropertyValue(globalConfigNode)) {
+            PasswordConfigProperty::checkPassword(ui,
+                                                  syncPropProxyUsername,
+                                                  serverName,
+                                                  globalConfigNode,
+                                                  sourceName,
+                                                  sourceConfigNode);
+        }
+    }
+    virtual ConfigPasswordKey getPasswordKey(const std::string &descr,
+                                             const std::string &serverName,
+                                             FilterConfigNode &globalConfigNode,
+                                             const std::string &sourceName,
+                                             const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+        ConfigPasswordKey key;
+        key.server = syncPropProxyHost.getProperty(globalConfigNode);
+        key.user = getUsername(syncPropProxyUsername, globalConfigNode);
+        return key;
+    }
+} syncPropProxyPassword;
+
 static StringConfigProperty syncPropClientAuthType("clientAuthType",
                                                    "- empty or \"md5\" for secure method (recommended)\n"
                                                    "- \"basic\" for insecure method\n"
@@ -1733,17 +1838,37 @@ ConfigPropertyRegistry &SyncConfig::getRegistry()
     return registry;
 }
 
-InitStateString SyncConfig::getSyncUsername() const { return syncPropUsername.getProperty(*getNode(syncPropUsername)); }
+UserIdentity SyncConfig::getSyncUser() const {
+    InitStateString user = syncPropUsername.getProperty(*getNode(syncPropUsername));
+    UserIdentity id(UserIdentity::fromString(user));
+    return id;
+}
 void SyncConfig::setSyncUsername(const string &value, bool temporarily) { syncPropUsername.setProperty(*getNode(syncPropUsername), value, temporarily); }
 InitStateString SyncConfig::getSyncPassword() const {
     return syncPropPassword.getProperty(*getNode(syncPropPassword));
 }
 void PasswordConfigProperty::checkPassword(UserInterface &ui,
+                                           const ConfigProperty &usernameProperty,
                                            const string &serverName,
                                            FilterConfigNode &globalConfigNode,
                                            const string &sourceName,
                                            const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
 {
+    InitStateString username = usernameProperty.getProperty(sourceConfigNode ? *sourceConfigNode : globalConfigNode);
+    UserIdentity identity(UserIdentity::fromString(username));
+
+    if (identity.m_provider == USER_IDENTITY_SYNC_CONFIG) {
+        // TODO: Actual username/password are stored in a different config. Go find it...
+        return;
+    }
+    if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
+        // Can some provider give us the plain text password? Not at the moment,
+        // so we've got nothing to do here.
+        return;
+    }
+
+    // Default, internal password handling.
+
     string password, passwordSave;
     /* if no source config node, then it should only be password in the global config node */
     if(sourceConfigNode.get() == NULL) {
@@ -1780,12 +1905,23 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
         }
     }
 }
+
+std::string PasswordConfigProperty::getUsername(const ConfigProperty &usernameProperty,
+                                                const FilterConfigNode &node)
+{
+    InitStateString username = usernameProperty.getProperty(node);
+    UserIdentity id(UserIdentity::fromString(username));
+    return id.m_identity;
+}
+
 void PasswordConfigProperty::savePassword(UserInterface &ui,
                                           const string &serverName,
                                           FilterConfigNode &globalConfigNode,
                                           const string &sourceName,
                                           const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
 {
+    // TODO: support identities
+
     /** here we don't invoke askPassword for this function has different logic from it */
     string password;
     if(sourceConfigNode.get() == NULL) {
@@ -1814,56 +1950,6 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
     }
 }
 
-/**
- * remove some unnecessary parts of server URL.
- * internal use.
- */
-static void purifyServer(string &server)
-{
-    /** here we use server sync url without protocol prefix and
-     * user account name as the key in the keyring */
-    size_t start = server.find("://");
-    /** we don't reserve protocol prefix for it may change*/
-    if(start != server.npos) {
-        server = server.substr(start + 3);
-    }
-}
-
-ConfigPasswordKey PasswordConfigProperty::getPasswordKey(const string &descr,
-                                                         const string &serverName,
-                                                         FilterConfigNode &globalConfigNode,
-                                                         const string &sourceName,
-                                                         const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const 
-{
-    ConfigPasswordKey key;
-    key.server = syncPropSyncURL.getProperty(globalConfigNode);
-    purifyServer(key.server);
-    key.user   = syncPropUsername.getProperty(globalConfigNode);
-    return key;
-}
-void ProxyPasswordConfigProperty::checkPassword(UserInterface &ui,
-                                           const string &serverName,
-                                           FilterConfigNode &globalConfigNode,
-                                           const string &sourceName,
-                                           const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
-{
-    /* if useProxy is set 'true', then check proxypassword */
-    if(syncPropUseProxy.getPropertyValue(globalConfigNode)) {
-        PasswordConfigProperty::checkPassword(ui, serverName, globalConfigNode, sourceName, sourceConfigNode);
-    }
-}
-
-ConfigPasswordKey ProxyPasswordConfigProperty::getPasswordKey(const string &descr,
-                                                              const string &serverName,
-                                                              FilterConfigNode &globalConfigNode,
-                                                              const string &sourceName,
-                                                              const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
-{
-    ConfigPasswordKey key;
-    key.server = syncPropProxyHost.getProperty(globalConfigNode);
-    key.user   = syncPropProxyUsername.getProperty(globalConfigNode);
-    return key;
-}
 void SyncConfig::setSyncPassword(const string &value, bool temporarily) { syncPropPassword.setProperty(*getNode(syncPropPassword), value, temporarily); }
 
 InitState<bool> SyncConfig::getPreventSlowSync() const {
@@ -1902,7 +1988,11 @@ InitStateString SyncConfig::getProxyHost() const {
 
 void SyncConfig::setProxyHost(const string &value, bool temporarily) { syncPropProxyHost.setProperty(*getNode(syncPropProxyHost), value, temporarily); }
 
-InitStateString SyncConfig::getProxyUsername() const { return syncPropProxyUsername.getProperty(*getNode(syncPropProxyUsername)); }
+UserIdentity SyncConfig::getProxyUser() const {
+    InitStateString username = syncPropProxyUsername.getProperty(*getNode(syncPropProxyUsername));
+    UserIdentity id(UserIdentity::fromString(username));
+    return id;
+}
 void SyncConfig::setProxyUsername(const string &value, bool temporarily) { syncPropProxyUsername.setProperty(*getNode(syncPropProxyUsername), value, temporarily); }
 
 InitStateString SyncConfig::getProxyPassword() const {
@@ -2494,7 +2584,53 @@ static ConfigProperty sourcePropUser(Aliases("databaseUser") + "evolutionuser",
                                      "Warning: setting database user/password in cases where it is not\n"
                                      "needed, as for example with local Evolution calendars and addressbooks,\n"
                                      "can cause the Evolution backend to hang.");
-static DatabasePasswordConfigProperty sourcePropPassword(Aliases("databasePassword") + "evolutionpassword", "","", "backend");
+
+static class DatabasePasswordConfigProperty : public PasswordConfigProperty {
+public:
+    DatabasePasswordConfigProperty() :
+        PasswordConfigProperty(Aliases("databasePassword") + "evolutionpassword", "","", "backend")
+    {}
+
+    virtual void checkPassword(UserInterface &ui,
+                               const std::string &serverName,
+                               FilterConfigNode &globalConfigNode,
+                               const std::string &sourceName,
+                               const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+        PasswordConfigProperty::checkPassword(ui,
+                                              sourcePropUser,
+                                              serverName,
+                                              globalConfigNode,
+                                              sourceName,
+                                              sourceConfigNode);
+    }
+
+    virtual ConfigPasswordKey getPasswordKey(const std::string &descr,
+                                             const std::string &serverName,
+                                             FilterConfigNode &globalConfigNode,
+                                             const std::string &sourceName = std::string(),
+                                             const boost::shared_ptr<FilterConfigNode> &sourceConfigNode=boost::shared_ptr<FilterConfigNode>()) const {
+        ConfigPasswordKey key;
+        key.user = getUsername(sourcePropUser, *sourceConfigNode);
+        std::string configName = SyncConfig::normalizeConfigString(serverName, SyncConfig::NORMALIZE_LONG_FORMAT);
+        std::string peer, context;
+        SyncConfig::splitConfigString(configName, peer, context);
+        key.object = "@";
+        key.object += context;
+        key.object += " ";
+        key.object += sourceName;
+        key.object += " backend";
+        return key;
+    }
+    virtual const std::string getDescr(const std::string &serverName,
+                                  FilterConfigNode &globalConfigNode,
+                                  const std::string &sourceName,
+                                  const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+        std::string descr = sourceName;
+        descr += " ";
+        descr += ConfigProperty::getDescr();
+        return descr;
+    }
+} sourcePropPassword;
 
 static ConfigProperty sourcePropAdminData(SourceAdminDataName,
                                           "used by the Synthesis library internally; do not modify");
@@ -2618,8 +2754,13 @@ SyncSourceNodes::getNode(const ConfigProperty &prop) const
 
 InitStateString SyncSourceConfig::getDatabaseID() const { return sourcePropDatabaseID.getProperty(*getNode(sourcePropDatabaseID)); }
 void SyncSourceConfig::setDatabaseID(const string &value, bool temporarily) { sourcePropDatabaseID.setProperty(*getNode(sourcePropDatabaseID), value, temporarily); }
-InitStateString SyncSourceConfig::getUser() const { return sourcePropUser.getProperty(*getNode(sourcePropUser)); }
-void SyncSourceConfig::setUser(const string &value, bool temporarily) { sourcePropUser.setProperty(*getNode(sourcePropUser), value, temporarily); }
+UserIdentity SyncSourceConfig::getUser() const {
+    InitStateString user = sourcePropUser.getProperty(*getNode(sourcePropUser));
+    UserIdentity id(UserIdentity::fromString(user));
+    return id;
+}
+
+void SyncSourceConfig::setUsername(const string &value, bool temporarily) { sourcePropUser.setProperty(*getNode(sourcePropUser), value, temporarily); }
 InitStateString SyncSourceConfig::getPassword() const {
     return sourcePropPassword.getProperty(*getNode(sourcePropPassword));
 }
@@ -2770,24 +2911,6 @@ void SyncSourceConfig::setSynthesisID(int value, bool temporarily) {
     sourcePropSynthesisID.setProperty(*getNode(sourcePropSynthesisID), value, temporarily);
 }
 
-ConfigPasswordKey DatabasePasswordConfigProperty::getPasswordKey(const string &descr,
-                                                                 const string &serverName,
-                                                                 FilterConfigNode &globalConfigNode,
-                                                                 const string &sourceName,
-                                                                 const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const
-{
-    ConfigPasswordKey key;
-    key.user = sourcePropUser.getProperty(*sourceConfigNode);
-    std::string configName = SyncConfig::normalizeConfigString(serverName, SyncConfig::NORMALIZE_LONG_FORMAT);
-    std::string peer, context;
-    SyncConfig::splitConfigString(configName, peer, context);
-    key.object = "@";
-    key.object += context;
-    key.object += " ";
-    key.object += sourceName;
-    key.object += " backend";
-    return key;
-}
 
 // Used for built-in templates
 SyncConfig::TemplateDescription::TemplateDescription (const std::string &name, const std::string &description)
