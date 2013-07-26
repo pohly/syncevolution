@@ -1603,6 +1603,12 @@ class SyncConfig {
     /** file layout used by config */
     Layout getLayout() const { return m_layout; }
 
+    /**
+     * The storage for the current config and (if the layout is SHARED_LAYOUT)
+     * also other configs. May be NULL.
+     */
+    boost::shared_ptr<ConfigTree> getConfigTree() const { return m_tree; }
+
 private:
     /**
      * scans for peer configurations
