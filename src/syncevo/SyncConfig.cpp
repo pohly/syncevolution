@@ -1370,6 +1370,12 @@ public:
         PasswordConfigProperty::checkPassword(ui, config, syncPropUsername, sourceName);
     }
 
+    virtual void savePassword(UserInterface &ui,
+                              SyncConfig &config,
+                              const std::string &sourceName = "") const {
+        PasswordConfigProperty::savePassword(ui, config, syncPropUsername, sourceName);
+    }
+
     ConfigPasswordKey getPasswordKey(const string &descr,
                                      const string &serverName,
                                      FilterConfigNode &globalConfigNode,
@@ -1459,6 +1465,11 @@ public:
         if (config.getUseProxy()) {
             PasswordConfigProperty::checkPassword(ui, config, syncPropProxyUsername, sourceName);
         }
+    }
+    virtual void savePassword(UserInterface &ui,
+                               SyncConfig &config,
+                               const std::string &sourceName = std::string()) const {
+        PasswordConfigProperty::savePassword(ui, config, syncPropProxyUsername, sourceName);
     }
     virtual ConfigPasswordKey getPasswordKey(const std::string &descr,
                                              const std::string &serverName,
@@ -1977,59 +1988,88 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
     if (!sourceName.empty()) {
         sourceConfigNode = config.getSyncSourceNodes(sourceName).getNode(*this);
     }
-    InitStateString username = usernameProperty.getProperty(sourceConfigNode ? *sourceConfigNode : *globalConfigNode);
+    FilterConfigNode &configNode = sourceConfigNode ? *sourceConfigNode : *globalConfigNode;
+    InitStateString username = usernameProperty.getProperty(configNode);
     SE_LOG_DEBUG(NULL, "checking password property '%s' in config '%s' with user identity '%s'",
                  getMainName().c_str(),
                  serverName.c_str(),
                  username.c_str());
     UserIdentity identity(UserIdentity::fromString(username));
 
+    InitStateString passwordToSave;
+    InitStateString usernameToSave;
     if (identity.m_provider == USER_IDENTITY_SYNC_CONFIG) {
-        // TODO: Actual username/password are stored in a different config. Go find it...
-        return;
-    }
-    if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
+        const std::string &credConfigName = identity.m_identity;
+        SE_LOG_INFO(NULL, "using %s/%s from config '%s' as credentials for %s%s%s",
+                    syncPropUsername.getMainName().c_str(),
+                    syncPropPassword.getMainName().c_str(),
+                    credConfigName.c_str(),
+                    serverName.c_str(),
+                    sourceName.empty() ? "" : "/",
+                    sourceName.c_str());
+        // Actual username/password are stored in a different config. Go find it...
+        SyncConfig::Layout layout = config.getLayout();
+        if (layout != SyncConfig::SHARED_LAYOUT) {
+            SE_THROW(StringPrintf("%s = %s: only supported in configs using the current config storage, please migrate config %s",
+                                  usernameProperty.getMainName().c_str(),
+                                  username.c_str(),
+                                  config.getConfigName().c_str()));
+        }
+        boost::shared_ptr<SyncConfig> credConfig(new SyncConfig(credConfigName));
+        if (!credConfig->exists()) {
+            SE_THROW(StringPrintf("%s = %s: config '%s' not found, cannot look up credentials",
+                                  usernameProperty.getMainName().c_str(),
+                                  username.c_str(),
+                                  credConfigName.c_str()));
+        }
+        syncPropPassword.checkPassword(ui, *credConfig);
+        // Always store the new values.
+        passwordToSave = InitStateString(credConfig->getSyncPassword(), true);
+        usernameToSave = InitStateString(credConfig->getSyncUser().toString(), true);
+    } else if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
         // Can some provider give us the plain text password? Not at the moment,
         // so we've got nothing to do here.
-        return;
-    }
-
-    // Default, internal password handling.
-
-    string password, passwordSave;
-    /* if no source config node, then it should only be password in the global config node */
-    if(sourceConfigNode.get() == NULL) {
-        password = getProperty(*globalConfigNode);
     } else {
-        password = getProperty(*sourceConfigNode);
+        // Default, internal password handling.
+        InitStateString password = getProperty(configNode);
+
+        string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
+        if (password == "-") {
+            ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
+            std::string uiPassword = ui.askPassword(getMainName(),descr, key);
+            // Empty means "no response". askPassword() pre-dates the
+            // InitStateString class, and probably should be changed
+            // to use it to avoid this kind of ambiguity, but for now
+            // keep this semantic. Therefore don't use the result if
+            // empty.
+            if (!uiPassword.empty()) {
+                passwordToSave = uiPassword;
+            }
+        } else if(boost::starts_with(password, "${") &&
+                  boost::ends_with(password, "}")) {
+            string envname = password.substr(2, password.size() - 3);
+            const char *envval = getenv(envname.c_str());
+            if (!envval) {
+                SyncContext::throwError(string("the environment variable '") +
+                                        envname +
+                                        "' for the '" +
+                                        descr +
+                                        "' password is not set");
+            } else {
+                passwordToSave = envval;
+            }
+        }
     }
 
-    string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
-    if (password == "-") {
-        ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
-        passwordSave = ui.askPassword(getMainName(),descr, key);
-    } else if(boost::starts_with(password, "${") &&
-              boost::ends_with(password, "}")) {
-        string envname = password.substr(2, password.size() - 3);
-        const char *envval = getenv(envname.c_str());
-        if (!envval) {
-            SyncContext::throwError(string("the environment variable '") +
-                                            envname +
-                                            "' for the '" +
-                                            descr +
-                                            "' password is not set");
-        } else {
-            passwordSave = envval;
-        }
+    // If we found a password, then set it in the config node
+    // temporarily.  That way, all following "get password" calls will
+    // be able to return it without having to make all callers away of
+    // password handling.
+    if (passwordToSave.wasSet()) {
+        configNode.addFilter(getMainName(), InitStateString(passwordToSave, true));
     }
-    /* If password is from ui or environment variable, set them in the config node on fly
-     * Previous impl use temp string to store them, this is not good for expansion in the backend */
-    if(!passwordSave.empty()) {
-        if(sourceConfigNode.get() == NULL) {
-            globalConfigNode->addFilter(getMainName(), InitStateString(passwordSave, true));
-        } else {
-            sourceConfigNode->addFilter(getMainName(), InitStateString(passwordSave, true));
-        }
+    if (usernameToSave.wasSet()) {
+        configNode.addFilter(usernameProperty.getMainName(), InitStateString(usernameToSave, true));
     }
 }
 
@@ -2043,6 +2083,7 @@ std::string PasswordConfigProperty::getUsername(const ConfigProperty &usernamePr
 
 void PasswordConfigProperty::savePassword(UserInterface &ui,
                                           SyncConfig &config,
+                                          const ConfigProperty &usernameProperty,
                                           const std::string &sourceName) const
 {
     std::string serverName = config.getConfigName();
@@ -2051,34 +2092,72 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
     if (!sourceName.empty()) {
         sourceConfigNode = config.getSyncSourceNodes(sourceName).getNode(*this);
     }
+    FilterConfigNode &configNode = sourceConfigNode ? *sourceConfigNode : *globalConfigNode;
 
-    // TODO: support identities
+    InitStateString username = usernameProperty.getProperty(configNode);
+    SE_LOG_DEBUG(NULL, "saving password property '%s' in config '%s' with user identity '%s'",
+                 getMainName().c_str(),
+                 serverName.c_str(),
+                 username.c_str());
+    UserIdentity identity(UserIdentity::fromString(username));
 
-    /** here we don't invoke askPassword for this function has different logic from it */
-    string password;
-    if(sourceConfigNode.get() == NULL) {
-        password = getProperty(*globalConfigNode);
-    } else {
-        password = getProperty(*sourceConfigNode);
-    }
-    /** if it has been stored or it has no value, do nothing */
-    if(password == "-" || password == "") {
-        return;
-    } else if(boost::starts_with(password, "${") &&
-              boost::ends_with(password, "}")) {
-        /** we delay this calculation of environment variable for 
-         * it might be changed in the sync time. */
-        return;
-    }
-    string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
-    ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
-    if(ui.savePassword(getMainName(), password, key)) {
-        string value = "-";
-        if(sourceConfigNode.get() == NULL) {
-            setProperty(*globalConfigNode, value);
-        } else {
-            setProperty(*sourceConfigNode,value);
+    // In checkPassword() we retrieve from background storage and store as temporary value.
+    // Here we use the temporary value and move it in the background storage.
+    InitStateString password = getProperty(configNode);
+
+    bool updatePassword = false;
+    InitStateString passwordToSave;
+    if (identity.m_provider == USER_IDENTITY_SYNC_CONFIG) {
+        // Store in the other config and unset it here.
+        updatePassword = true;
+
+        const std::string &credConfigName = identity.m_identity;
+        SE_LOG_INFO(NULL, "setting %s in config '%s' as part of credentials for %s%s%s",
+                    syncPropPassword.getMainName().c_str(),
+                    credConfigName.c_str(),
+                    serverName.c_str(),
+                    sourceName.empty() ? "" : "/",
+                    sourceName.c_str());
+        // Actual username/password are stored in a different config. Go find it...
+        SyncConfig::Layout layout = config.getLayout();
+        if (layout != SyncConfig::SHARED_LAYOUT) {
+            SE_THROW(StringPrintf("%s = %s: only supported in configs using the current config storage, please migrate config %s",
+                                  usernameProperty.getMainName().c_str(),
+                                  username.c_str(),
+                                  config.getConfigName().c_str()));
         }
+        boost::shared_ptr<SyncConfig> credConfig(new SyncConfig(credConfigName));
+        if (!credConfig->exists()) {
+            SE_THROW(StringPrintf("%s = %s: config '%s' not found, cannot look up credentials",
+                                  usernameProperty.getMainName().c_str(),
+                                  username.c_str(),
+                                  credConfigName.c_str()));
+        }
+        credConfig->setSyncPassword(password, false);
+        syncPropPassword.savePassword(ui, *credConfig);
+    } else if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
+        // Cannot store passwords in providers.
+        if (password.wasSet() && !password.empty()) {
+            SE_THROW(StringPrintf("setting property '%s' not supported for provider '%s' from property '%s'",
+                                  getMainName().c_str(),
+                                  identity.m_provider.c_str(),
+                                  usernameProperty.getMainName().c_str()));
+        }
+    } else {
+        if (password == "-" || password == "" ||
+            (boost::starts_with(password, "${") && boost::ends_with(password, "}"))) {
+            // Nothing to do, leave it as is.
+        } else {
+            string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
+            ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
+            if (ui.savePassword(getMainName(), password, key)) {
+                passwordToSave = "-";
+                updatePassword = true;
+            }
+        }
+    }
+    if (updatePassword) {
+        setProperty(configNode, passwordToSave);
     }
 }
 
@@ -2727,6 +2806,11 @@ public:
                                SyncConfig &config,
                                const std::string &sourceName) const {
         PasswordConfigProperty::checkPassword(ui, config, sourcePropUser, sourceName);
+    }
+    virtual void savePassword(UserInterface &ui,
+                               SyncConfig &config,
+                               const std::string &sourceName) const {
+        PasswordConfigProperty::savePassword(ui, config, sourcePropUser, sourceName);
     }
 
     virtual ConfigPasswordKey getPasswordKey(const std::string &descr,

@@ -742,12 +742,12 @@ class PasswordConfigProperty : public ConfigProperty {
                                const std::string &sourceName = std::string()) const = 0;
 
     /**
-     * It firstly check password and then invoke ui's savePassword
-     * function to save the password if necessary
+     * Move password to storage. Accessed via base ConfigProperty
+     * class, must be implemented in derived classes.
      */
     virtual void savePassword(UserInterface &ui,
                               SyncConfig &config,
-                              const std::string &sourceName = std::string()) const;
+                              const std::string &sourceName = std::string()) const = 0;
 
  protected:
 
@@ -759,6 +759,11 @@ class PasswordConfigProperty : public ConfigProperty {
                        SyncConfig &config,
                        const ConfigProperty &usernameProperty,
                        const std::string &sourceName = std::string()) const;
+
+    void savePassword(UserInterface &ui,
+                      SyncConfig &config,
+                      const ConfigProperty &usernameProperty,
+                      const std::string &sourceName = std::string()) const;
 
     /**
      * Get password lookup key for storing or retrieving passwords.
