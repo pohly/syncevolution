@@ -19,6 +19,7 @@
 
 #include <syncevo/TransportAgent.h>
 #include <syncevo/SyncConfig.h>
+#include <syncevo/IdentityProvider.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -33,10 +34,8 @@ void HTTPTransportAgent::setConfig(SyncConfig &config)
     if (config.getUseProxy()) {
         setProxy(config.getProxyHost());
         UserIdentity identity = config.getProxyUser();
-        // TODO: resolve to plain username
-        std::string username = identity.m_identity;
-        std::string password = config.getProxyPassword();
-        setProxyAuth(username, password);
+        Credentials cred = IdentityProviderCredentials(identity, config.getProxyPassword());
+        setProxyAuth(cred.m_username, cred.m_password);
     }
     setUserAgent(config.getUserAgent());
     setSSL(config.findSSLServerCertificate(),

@@ -26,6 +26,7 @@ using namespace std;
 
 #include "config.h"
 #include "EvolutionSyncSource.h"
+#include <syncevo/IdentityProvider.h>
 
 #ifdef ENABLE_EBOOK
 
@@ -250,15 +251,16 @@ void EvolutionContactSource::open()
             throwError("getting authentication methods", gerror);
         }
         while (authmethod) {
-            // TODO: map identity + password to plain username/password credentials
+            // map identity + password to plain username/password credentials
+            Credentials cred = IdentityProviderCredentials(identity, passwd);
             const char *method = (const char *)authmethod->data;
             SE_LOG_DEBUG(getDisplayName(), "trying authentication method \"%s\", user %s, password %s",
                          method,
                          identity.wasSet() ? "configured" : "not configured",
                          passwd.wasSet() ? "configured" : "not configured");
             if (e_book_authenticate_user(m_addressbook,
-                                         identity.m_identity.c_str(),
-                                         passwd.c_str(),
+                                         cred.m_username.c_str(),
+                                         cred.m_password.c_str(),
                                          method,
                                          gerror)) {
                 SE_LOG_DEBUG(getDisplayName(), "authentication succeeded");

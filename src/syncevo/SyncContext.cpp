@@ -28,6 +28,7 @@
 #include <syncevo/util.h>
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/ThreadSupport.h>
+#include <syncevo/IdentityProvider.h>
 
 #include <syncevo/SafeConfigNode.h>
 #include <syncevo/IniConfigNode.h>
@@ -2881,9 +2882,9 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     substTag(xml, "maxobjsize", std::max(getMaxObjSize().get(), 1024u));
     if (m_serverMode) {
         UserIdentity id = getSyncUser();
-        // TODO: resolve id
-        const string user = id.m_identity;
-        const string password = getSyncPassword();
+        Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
+        const string &user = cred.m_username;
+        const string &password = cred.m_password;
 
         /*
          * Do not check username/pwd if this local sync or over
@@ -3425,9 +3426,9 @@ bool SyncContext::sendSAN(uint16_t version)
     /* Should be nonce sent by the server in the preceeding sync session */
     string nonce = "SyncEvolution";
     UserIdentity id = getSyncUser();
-    std::string password = getSyncPassword();
-    // TODO: resolve id
-    std::string user = id.m_identity;
+    Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
+    const std::string &user = cred.m_username;
+    const std::string &password = cred.m_password;
     string uauthb64 = san.B64_H(user, password);
     /* Client is expected to conduct the sync in the backgroud */
     sysync::UI_Mode mode = sysync::UI_not_specified;
@@ -3709,9 +3710,9 @@ SyncMLStatus SyncContext::doSync()
          
         m_engine.SetStrValue(profile, "serverURI", getUsedSyncURL());
         UserIdentity id = getSyncUser();
-        std::string password = getSyncPassword();
-        // TODO: resolve id
-        std::string user = id.m_identity;
+        Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
+        const std::string &user = cred.m_username;
+        const std::string &password = cred.m_password;
         m_engine.SetStrValue(profile, "serverUser", user);
         m_engine.SetStrValue(profile, "serverPassword", password);
         m_engine.SetInt32Value(profile, "encoding",
