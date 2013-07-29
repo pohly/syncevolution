@@ -178,19 +178,10 @@ void ReadOperations::getNamedConfig(const std::string &configName,
         dbusConfig = getLocalConfig(configName);
         DBusUserInterface ui(dbusConfig->getKeyring());
         //try to check password and read password from gnome keyring if possible
-        ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
-        BOOST_FOREACH(const ConfigProperty *prop, registry) {
-            prop->checkPassword(ui, *dbusConfig);
-        }
-        list<string> configuredSources = dbusConfig->getSyncSources();
-        BOOST_FOREACH(const string &sourceName, configuredSources) {
-            ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
-            SyncSourceNodes sourceNodes = dbusConfig->getSyncSourceNodes(sourceName);
-
-            BOOST_FOREACH(const ConfigProperty *prop, registry) {
-                prop->checkPassword(ui, *dbusConfig, sourceName);
-            }
-        }
+        PasswordConfigProperty::checkPasswords(ui, *dbusConfig,
+                                               // Keep usernames as they are, but retrieve passwords for the D-Bus client.
+                                               PasswordConfigProperty::CHECK_PASSWORD_ALL & ~PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_USERNAME,
+                                               dbusConfig->getSyncSources());
         syncConfig = dbusConfig.get();
     }
 

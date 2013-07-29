@@ -1239,8 +1239,9 @@ public:
 
     virtual void checkPassword(UserInterface &ui,
                                SyncConfig &config,
+                               int flags,
                                const std::string &sourceName = "") const {
-        PasswordConfigProperty::checkPassword(ui, config, syncPropUsername, sourceName);
+        PasswordConfigProperty::checkPassword(ui, config, flags, syncPropUsername, sourceName);
     }
 
     virtual void savePassword(UserInterface &ui,
@@ -1327,10 +1328,11 @@ public:
      */
     virtual void checkPassword(UserInterface &ui,
                                SyncConfig &config,
+                               int flags,
                                const std::string &sourceName = std::string()) const {
         /* if useProxy is set 'true', then check proxypassword */
         if (config.getUseProxy()) {
-            PasswordConfigProperty::checkPassword(ui, config, syncPropProxyUsername, sourceName);
+            PasswordConfigProperty::checkPassword(ui, config, flags, syncPropProxyUsername, sourceName);
         }
     }
     virtual void savePassword(UserInterface &ui,
@@ -1862,6 +1864,7 @@ InitStateString SyncConfig::getSyncPassword() const {
 }
 void PasswordConfigProperty::checkPassword(UserInterface &ui,
                                            SyncConfig &config,
+                                           int flags,
                                            const ConfigProperty &usernameProperty,
                                            const std::string &sourceName) const
 {
@@ -1906,7 +1909,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
                                   username.c_str(),
                                   credConfigName.c_str()));
         }
-        syncPropPassword.checkPassword(ui, *credConfig);
+        syncPropPassword.checkPassword(ui, *credConfig, flags);
         // Always store the new values.
         passwordToSave = InitStateString(credConfig->getSyncPassword(), true);
         usernameToSave = InitStateString(credConfig->getSyncUser().toString(), true);
@@ -1941,11 +1944,28 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
     // temporarily.  That way, all following "get password" calls will
     // be able to return it without having to make all callers away of
     // password handling.
-    if (passwordToSave.wasSet()) {
+    if (passwordToSave.wasSet() && (flags & CHECK_PASSWORD_RESOLVE_PASSWORD)) {
         configNode.addFilter(getMainName(), InitStateString(passwordToSave, true));
     }
-    if (usernameToSave.wasSet()) {
+    if (usernameToSave.wasSet() && (flags & CHECK_PASSWORD_RESOLVE_USERNAME)) {
         configNode.addFilter(usernameProperty.getMainName(), InitStateString(usernameToSave, true));
+    }
+}
+
+void PasswordConfigProperty::checkPasswords(UserInterface &ui,
+                                            SyncConfig &config,
+                                            int flags,
+                                            const std::list<std::string> &sourceNames)
+{
+    ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
+    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        prop->checkPassword(ui, config, flags);
+    }
+    BOOST_FOREACH (const std::string &sourceName, sourceNames) {
+        ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
+        BOOST_FOREACH(const ConfigProperty *prop, registry) {
+            prop->checkPassword(ui, config, flags, sourceName);
+        }
     }
 }
 
@@ -1971,15 +1991,19 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
     FilterConfigNode &configNode = sourceConfigNode ? *sourceConfigNode : *globalConfigNode;
 
     InitStateString username = usernameProperty.getProperty(configNode);
+    // In checkPassword() we retrieve from background storage and store as temporary value.
+    // Here we use the temporary value and move it in the background storage.
+    InitStateString password = getProperty(configNode);
+    if (!password.wasSet()) {
+        return;
+    }
+
     SE_LOG_DEBUG(NULL, "saving password property '%s' in config '%s' with user identity '%s'",
                  getMainName().c_str(),
                  serverName.c_str(),
                  username.c_str());
     UserIdentity identity(UserIdentity::fromString(username));
 
-    // In checkPassword() we retrieve from background storage and store as temporary value.
-    // Here we use the temporary value and move it in the background storage.
-    InitStateString password = getProperty(configNode);
 
     bool updatePassword = false;
     InitStateString passwordToSave;
@@ -2681,8 +2705,9 @@ public:
 
     virtual void checkPassword(UserInterface &ui,
                                SyncConfig &config,
+                               int flags,
                                const std::string &sourceName) const {
-        PasswordConfigProperty::checkPassword(ui, config, sourcePropUser, sourceName);
+        PasswordConfigProperty::checkPassword(ui, config, flags, sourcePropUser, sourceName);
     }
     virtual void savePassword(UserInterface &ui,
                                SyncConfig &config,

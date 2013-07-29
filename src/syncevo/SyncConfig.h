@@ -335,10 +335,12 @@ class ConfigProperty {
      * when checking password for syncsourceconfig 
      * @param ui user interface
      * @param config    the peer config in which we are checking the password
+     * @param flags     see PasswordConfigProperty
      * @param sourceName   the source name for which we need the password, empty if checking a peer password
      */
     virtual void checkPassword(UserInterface &ui,
                                SyncConfig &config,
+                               int flags,
                                const std::string &sourceName = std::string()) const {}
 
     /**
@@ -734,6 +736,7 @@ class PasswordConfigProperty : public ConfigProperty {
      */
     virtual void checkPassword(UserInterface &ui,
                                SyncConfig &config,
+                               int flags,
                                const std::string &sourceName = std::string()) const = 0;
 
     /**
@@ -744,6 +747,28 @@ class PasswordConfigProperty : public ConfigProperty {
                               SyncConfig &config,
                               const std::string &sourceName = std::string()) const = 0;
 
+    /**
+     * Utility method, invokes checkPassword() on the properties selected
+     * via flags and sourceNames array. Optionally updates the properties
+     * to reflect the actual values which need to be used.
+     */
+    static void checkPasswords(UserInterface &ui,
+                               SyncConfig &config,
+                               int flags,
+                               const std::list<std::string> &sourceNames = std::list<std::string>());
+
+    enum {
+        CHECK_PASSWORD_RESOLVE_USERNAME = 1<<0,   ///< temporarily replace username that corresponds to the password
+        CHECK_PASSWORD_RESOLVE_PASSWORD = 1<<1,   ///< temporarily replace password with actual value
+        CHECK_PASSWORD_SYNC = 1<<2,               ///< check sync properties
+        CHECK_PASSWORD_SOURCE = 1<<3,             ///< check source properties
+
+        /** Alias for the "check and resolve" everything. */
+        CHECK_PASSWORD_ALL = CHECK_PASSWORD_RESOLVE_USERNAME|CHECK_PASSWORD_RESOLVE_PASSWORD|CHECK_PASSWORD_SYNC|CHECK_PASSWORD_SOURCE,
+
+        CHECK_PASSWORD_FLAG_NONE = 0
+    };
+
  protected:
 
     /**
@@ -752,6 +777,7 @@ class PasswordConfigProperty : public ConfigProperty {
      */
     void checkPassword(UserInterface &ui,
                        SyncConfig &config,
+                       int flags,
                        const ConfigProperty &usernameProperty,
                        const std::string &sourceName = std::string()) const;
 
