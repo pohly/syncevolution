@@ -3931,6 +3931,80 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertNotEqual(config[""]["deviceId"], "shared-device-identifier")
 
+    def testCredentials(self):
+        """TestMultipleConfigs.testCredentials - test storing username/password"""
+
+        self.setupConfigs()
+
+        # Store username/password in config 'foo' without using keyring.
+        # We want this test to work in all cases.
+        self.setUpSession("foo")
+        config = self.session.GetConfig(False, utf8_strings=True)
+        config[""]["keyring"] = "no"
+        config[""]["username"] = "john"
+        config[""]["password"] = "doe-pwd"
+        self.session.SetConfig(True, False, config)
+        self.session.Detach()
+
+        # Retrieve username/password.
+        self.setUpSession("foo")
+        config = self.session.GetConfig(False, utf8_strings=True)
+        self.assertEqual(config[""]["username"], "john")
+        self.assertEqual(config[""]["password"], "doe-pwd")
+        self.session.Detach()
+
+        # Re-use credentials in second config.
+        self.setUpSession("bar")
+        config = self.session.GetConfig(False, utf8_strings=True)
+        config[""]["username"] = "id:foo"
+        self.assertNotIn("password", config[""])
+        self.session.SetConfig(True, False, config)
+        self.session.Detach()
+
+        # We expect to see the actual "username" value from "bar"
+        # here, not the one from "foo". When running a sync, the
+        # credentials from "foo" must be used, which needs to be
+        # tested in configurations used by the nightly testing.
+        #
+        # The "password" however should come from "foo", to allow the
+        # user to edit it. This is consistent with showing the
+        # password after retrieving it from a keyring.
+        self.setUpSession("bar")
+        config = self.session.GetConfig(False, utf8_strings=True)
+        self.assertEqual(config[""]["username"], "id:foo")
+        self.assertEqual(config[""]["password"], "doe-pwd")
+
+        # When changing passwords via "bar", the actual writes need
+        # to go to "foo".
+        config[""]["password"] = "doe-pwd-2"
+        self.session.SetConfig(True, False, config)
+        self.session.Detach()
+
+        # Check in "foo".
+        self.setUpSession("foo")
+        config = self.session.GetConfig(False, utf8_strings=True)
+        self.assertEqual(config[""]["username"], "john")
+        self.assertEqual(config[""]["password"], "doe-pwd-2")
+        self.session.Detach()
+
+        # Check in "bar".
+        self.setUpSession("bar")
+        config = self.session.GetConfig(False, utf8_strings=True)
+        self.assertEqual(config[""]["username"], "id:foo")
+        self.assertEqual(config[""]["password"], "doe-pwd-2")
+
+        # Now try it also with proxy and database crdentials.
+        config[""]["proxyUsername"] = "id:foo"
+        config[""]["useProxy"] = "1"
+        config["source/calendar"]["databaseUser"] = "id:foo"
+        self.session.SetConfig(True, False, config)
+
+        config = self.session.GetConfig(False, utf8_strings=True)
+        self.assertEqual(config[""]["proxyUsername"], "id:foo")
+        self.assertEqual(config[""]["proxyPassword"], "doe-pwd-2")
+        self.assertEqual(config["source/calendar"]["databaseUser"], "id:foo")
+        self.assertEqual(config["source/calendar"]["databasePassword"], "doe-pwd-2")
+
 class TestLocalSync(unittest.TestCase, DBusUtil):
     """Tests involving local sync."""
 
