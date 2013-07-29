@@ -51,6 +51,7 @@ using namespace std;
 #include <boost/tokenizer.hpp>
 #include <boost/foreach.hpp>
 #include <boost/range.hpp>
+#include <boost/assign/list_of.hpp>
 #include <fstream>
 
 #include <syncevo/declarations.h>
@@ -659,23 +660,6 @@ public:
     }
 };
 
-void Cmdline::checkSyncPasswords(SyncContext &context)
-{
-    ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
-    BOOST_FOREACH(const ConfigProperty *prop, registry) {
-        prop->checkPassword(context.getUserInterfaceNonNull(), context);
-    }
-}
-
-void Cmdline::checkSourcePasswords(SyncContext &context,
-                                   const std::string &sourceName)
-{
-    ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-    BOOST_FOREACH(const ConfigProperty *prop, registry) {
-        prop->checkPassword(context.getUserInterfaceNonNull(), context, sourceName);
-    }
-}
-
 static void ShowLUID(SyncSourceLogging *logging, const std::string &luid)
 {
     string description;
@@ -828,8 +812,10 @@ bool Cmdline::run() {
             if (source.get() != NULL) {
                 if (!m_server.empty() && nodes) {
                     // ensure that we have passwords for this config
-                    checkSyncPasswords(*context);
-                    checkSourcePasswords(*context, sourceName);
+                    PasswordConfigProperty::checkPasswords(context->getUserInterfaceNonNull(),
+                                                           *context,
+                                                           PasswordConfigProperty::CHECK_PASSWORD_ALL,
+                                                           boost::assign::list_of(sourceName));
                 }
                 (this->*operation)(source.get(), header);
             } else {
@@ -1382,8 +1368,10 @@ bool Cmdline::run() {
         sysync::TSyError err;
 #define CHECK_ERROR(_op) if (err) { SE_THROW_EXCEPTION_STATUS(StatusException, string(source->getName()) + ": " + (_op), SyncMLStatus(err)); }
 
-        checkSyncPasswords(*context);
-        checkSourcePasswords(*context, source->getName());
+        PasswordConfigProperty::checkPasswords(context->getUserInterfaceNonNull(),
+                                               *context,
+                                               PasswordConfigProperty::CHECK_PASSWORD_ALL,
+                                               boost::assign::list_of(source->getName()));
         source->setNeedChanges(false);
         source->open();
         const SyncSource::Operations &ops = source->getOperations();
