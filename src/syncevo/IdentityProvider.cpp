@@ -16,37 +16,31 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301  USA
  */
-#ifndef INCL_SYNC_EVOLUTION_IDENTITY_PROVIDER
-# define INCL_SYNC_EVOLUTION_IDENTITY_PROVIDER
 
-#include <syncevo/util.h>
+#include <syncevo/IdentityProvider.h>
+#include <syncevo/SyncConfig.h>
 
-#include <string>
-
-#include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-extern const char USER_IDENTITY_PLAIN_TEXT[];
-extern const char USER_IDENTITY_SYNC_CONFIG[];
+const char USER_IDENTITY_PLAIN_TEXT[] = "user";
+const char USER_IDENTITY_SYNC_CONFIG[] = "id";
 
-struct UserIdentity; // from SyncConfig.h
-
-struct Credentials
-{
-    std::string m_username;
-    std::string m_password;
-};
-
-/**
- * Returns username/password for an identity. The password is the
- * string configured for it inside SyncEvolution. It may be empty and/or unset if
- * the plain text password comes from the identity provider.
- *
- * If the credentials cannot be retrieved, an error is thrown, so don't use this
- * in cases where a different authentication method might also work.
- */
 Credentials IdentityProviderCredentials(const UserIdentity &identity,
-                                        const InitStateString &password);
+                                        const InitStateString &password)
+{
+    Credentials cred;
+
+    if (identity.m_provider == USER_IDENTITY_PLAIN_TEXT) {
+        cred.m_username = identity.m_identity;
+        cred.m_password = password;
+    } else {
+        // We could use the gSSO password plugin to request
+        // username/password. But it is uncertain whether that is useful,
+        // therefore that is not implemented at the moment.
+        SE_THROW(StringPrintf("%s: need username+password as credentials", identity.toString().c_str()));
+    }
+
+    return cred;
+}
 
 SE_END_CXX
-#endif

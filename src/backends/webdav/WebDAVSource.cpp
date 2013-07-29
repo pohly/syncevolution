@@ -12,6 +12,7 @@
 #include <boost/scoped_ptr.hpp>
 
 #include <syncevo/LogRedirect.h>
+#include <syncevo/IdentityProvider.h>
 
 #include <boost/assign.hpp>
 
@@ -196,9 +197,11 @@ void ContextSettings::lookupCredentials()
         password = m_context->getSyncPassword();
     }
 
-    // TODO: lookup actual authentication method instead of assuming username/password
-    m_username = identity.m_identity;
-    m_password = password;
+    // lookup actual authentication method instead of assuming username/password
+    // TODO: oauth2
+    Credentials cred = IdentityProviderCredentials(identity, password);
+    m_username = cred.m_username;
+    m_password = cred.m_password;
     m_haveCredentials = true;
 }
 
