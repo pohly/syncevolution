@@ -92,16 +92,64 @@ class AuthProvider
      * automatically.
      *
      * See http://tools.ietf.org/html/draft-ietf-oauth-v2-bearer-20#section-2.1
+     *
+     * An application should:
+     * - request a token and try to use it
+     * - in case of failure try to request a token again, and try to use it
+     *   again (in case the first token has expired just before using it)
+     * - if the second token also fails, request a third token with full
+     *   re-authentication as above.
+     * - if that fails, then give up.
+     *
+     * To achieve that, the caller must count how often he got a token that
+     * did not work.
+     *
+     * @param failedTokens   zero when asking for initial token, one for refresh, two for full re-authorization
+     *
+     * @return a base64 encoded token, ready to be used in "Authorization: Bearer %s"
      */
-    virtual std::string getOAuth2Bearer() const = 0;
+    virtual std::string getOAuth2Bearer(int failedTokens) const = 0;
 
     /**
-     * Returns username at the remote service. Works for both
-     * username/password credentials and OAuth2.
+     * Returns username at the remote service. Works for
+     * username/password credentials and may be made to work for
+     * OAuth2. At the moment, code should not depend on it when using
+     * OAuth2.
      */
     virtual std::string getUsername() const = 0;
 };
 
+/**
+ * Instantiating this class adds a new provider.
+ * Deleting it removes it.
+ */
+class IdentityProvider
+{
+ public:
+    /** returns NULL if disabled, valid AuthProvider if possible, and throws error if something goes wrong */
+    virtual boost::shared_ptr<AuthProvider> create(const InitStateString &username,
+                                                   const InitStateString &password) = 0;
+
+    /**
+     * All known providers.
+     */
+    static std::list<IdentityProvider *> &getRegistry();
+
+    /**
+     * @param key            short, unique word without colons used to select this provider
+     *                       in an identity string, for example "gsso"
+     * @param descr          one or more lines describing the provider and its syntax,
+     *                       for example
+     *                       "gsso:<account ID>\n"
+     *                       "   authentication using libgsignond + libaccounts\n"
+     */
+    IdentityProvider(const std::string &key,
+                     const std::string &descr);
+    virtual ~IdentityProvider();
+
+    const std::string m_key;
+    const std::string m_descr;
+};
 
 SE_END_CXX
 #endif
