@@ -20,6 +20,8 @@
 #include <syncevo/IdentityProvider.h>
 #include <syncevo/SyncConfig.h>
 
+#include <algorithm>
+
 SE_BEGIN_CXX
 
 const char USER_IDENTITY_PLAIN_TEXT[] = "user";
@@ -57,7 +59,7 @@ public:
 
     virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_CREDENTIALS; }
     virtual Credentials getCredentials() const { return m_creds; }
-    virtual std::string getOAuth2Bearer() const { SE_THROW("OAuth2 not supported"); return ""; }
+    virtual std::string getOAuth2Bearer(int failedTokens) const { SE_THROW("OAuth2 not supported"); return ""; }
     virtual std::string getUsername() const { return m_creds.m_username; }
 };
 
@@ -69,12 +71,46 @@ boost::shared_ptr<AuthProvider> AuthProvider::create(const UserIdentity &identit
     if (identity.m_provider == USER_IDENTITY_PLAIN_TEXT) {
         authProvider.reset(new CredentialsProvider(identity.m_identity, password));
     } else {
-        SE_THROW(StringPrintf("unknown identity provider '%s' in '%s'",
-                              identity.m_provider.c_str(),
-                              identity.toString().c_str()));
+        BOOST_FOREACH (IdentityProvider *idProvider, IdentityProvider::getRegistry()) {
+            if (boost::iequals(idProvider->m_key, identity.m_provider)) {
+                authProvider = idProvider->create(identity.m_identity, password);
+                if (!authProvider) {
+                    SE_THROW(StringPrintf("identity provider for '%s' is disabled in this installation",
+                                          identity.m_provider.c_str()));
+                }
+                break;
+            }
+        }
+
+        if (!authProvider) {
+            SE_THROW(StringPrintf("unknown identity provider '%s' in '%s'",
+                                  identity.m_provider.c_str(),
+                                  identity.toString().c_str()));
+        }
     }
 
     return authProvider;
+}
+
+std::list<IdentityProvider *> &IdentityProvider::getRegistry()
+{
+    static std::list<IdentityProvider *> providers;
+    return providers;
+}
+
+IdentityProvider::IdentityProvider(const std::string &key,
+                                   const std::string &descr) :
+    m_key(key),
+    m_descr(descr)
+{
+    getRegistry().push_back(this);
+}
+
+IdentityProvider::~IdentityProvider()
+{
+    getRegistry().erase(std::find(getRegistry().begin(),
+                                  getRegistry().end(),
+                                  this));
 }
 
 SE_END_CXX
