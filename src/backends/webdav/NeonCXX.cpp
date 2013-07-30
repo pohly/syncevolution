@@ -22,6 +22,7 @@
 #include <syncevo/LogRedirect.h>
 #include <syncevo/SmartPtr.h>
 #include <syncevo/SuspendFlags.h>
+#include <syncevo/IdentityProvider.h>
 
 #include <sstream>
 
@@ -190,6 +191,7 @@ std::string Status2String(const ne_status *status)
 Session::Session(const boost::shared_ptr<Settings> &settings) :
     m_forceAuthorizationOnce(false),
     m_credentialsSent(false),
+    m_oauthTokenRejections(0),
     m_settings(settings),
     m_debugging(false),
     m_session(NULL),
@@ -293,9 +295,17 @@ boost::shared_ptr<Session> Session::create(const boost::shared_ptr<Settings> &se
 int Session::getCredentials(void *userdata, const char *realm, int attempt, char *username, char *password) throw()
 {
     try {
-        if (!attempt) {
+        Session *session = static_cast<Session *>(userdata);
+        boost::shared_ptr<AuthProvider> authProvider = session->m_settings->getAuthProvider();
+        if (authProvider && authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
+            // We have to fail here because we cannot provide neon
+            // with a username/password combination. Instead we rely
+            // on the "retry request" mechanism to resend the request
+            // with a fresh token.
+            SE_LOG_DEBUG(NULL, "giving up on request, try again with new OAuth2 token");
+            return 1;
+        } else if (!attempt) {
             // try again with credentials
-            Session *session = static_cast<Session *>(userdata);
             std::string user, pw;
             session->m_settings->getCredentials(realm, user, pw);
             SyncEvo::Strncpy(username, user.c_str(), NE_ABUFSIZ);
@@ -314,11 +324,10 @@ int Session::getCredentials(void *userdata, const char *realm, int attempt, char
     }
 }
 
-void Session::forceAuthorization(const std::string &username, const std::string &password)
+void Session::forceAuthorization(const boost::shared_ptr<AuthProvider> &authProvider)
 {
     m_forceAuthorizationOnce = true;
-    m_forceUsername = username;
-    m_forcePassword = password;
+    m_authProvider = authProvider;
 }
 
 void Session::preSendHook(ne_request *req, void *userdata, ne_buffer *header) throw()
@@ -337,15 +346,28 @@ void Session::preSend(ne_request *req, ne_buffer *header)
         SE_THROW("internal error: startOperation() not called");
     }
 
-    if (m_forceAuthorizationOnce) {
-        // only do this once
+    // Only do this once when using normal username/password.
+    // Always do it when using OAuth2.
+    bool useOAuth2 = m_authProvider && m_authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2);
+    if (m_forceAuthorizationOnce || useOAuth2) {
         m_forceAuthorizationOnce = false;
+        bool haveAuthorizationHeader = boost::starts_with(header->data, "Authorization:") ||
+            strstr(header->data, "\nAuthorization:");
 
-        if (m_uri.m_scheme == "https") {
+        if (useOAuth2) {
+            if (haveAuthorizationHeader) {
+                SE_THROW("internal error: already have Authorization header when about to add OAuth2");
+            }
+            // Token was obtained by Session::run().
+            SE_LOG_DEBUG(NULL, "using OAuth2 token '%s' to authenticate", m_oauth2Bearer.c_str());
+            m_credentialsSent = true;
+            // SmartPtr<char *> blob(ne_base64((const unsigned char *)m_oauth2Bearer.c_str(), m_oauth2Bearer.size()));
+            ne_buffer_concat(header, "Authorization: Bearer ", m_oauth2Bearer.c_str() /* blob.get() */, "\r\n", NULL);
+        } else if (m_uri.m_scheme == "https") {
             // append "Authorization: Basic" header if not present already
-            if (!boost::starts_with(header->data, "Authorization:") &&
-                !strstr(header->data, "\nAuthorization:")) {
-                std::string credentials = m_forceUsername + ":" + m_forcePassword;
+            if (!haveAuthorizationHeader) {
+                Credentials creds = m_authProvider->getCredentials();
+                std::string credentials = creds.m_username + ":" + creds.m_password;
                 SmartPtr<char *> blob(ne_base64((const unsigned char *)credentials.c_str(), credentials.size()));
                 ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", NULL);
             }
@@ -419,6 +441,7 @@ void Session::propfindURI(const std::string &path, int depth,
     boost::shared_ptr<ne_propfind_handler> handler;
     int error;
 
+    checkAuthorization();
     handler = boost::shared_ptr<ne_propfind_handler>(ne_propfind_create(m_session, path.c_str(), depth),
                                                      PropFindDeleter());
     if (props != NULL) {
@@ -600,11 +623,32 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                 SE_LOG_DEBUG(NULL, "credentials accepted");
                 m_settings->setCredentialsOkay(true);
             }
+            m_oauthTokenRejections = 0;
 
             return true;
         }
         break;
-    case NE_AUTH:
+    case NE_AUTH: {
+        // Retry OAuth2-based request if we still have a valid token.
+        bool useOAuth2 = m_authProvider && m_authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2);
+        if (useOAuth2) {
+            // Try again with new token? Need to restore the counter,
+            // because it is relevant for getOAuth2Bearer() in preSend().
+            if (m_oauthTokenRejections < 2) {
+                if (!m_oauth2Bearer.empty() && m_credentialsSent) {
+                    SE_LOG_DEBUG(NULL, "discarding used and rejected OAuth2 token '%s'", m_oauth2Bearer.c_str());
+                    m_oauthTokenRejections++;
+                    m_oauth2Bearer.clear();
+                } else {
+                    SE_LOG_DEBUG(NULL, "OAuth2 token '%s' not used?!", m_oauth2Bearer.c_str());
+                }
+                retry = true;
+                SE_LOG_DEBUG(NULL, "OAuth2 retry after %d failed tokens", m_oauthTokenRejections);
+            } else {
+                SE_LOG_DEBUG(NULL, "too many failed OAuth2 tokens, giving up");
+            }
+        }
+
         // tell caller what kind of transport error occurred
         code = STATUS_UNAUTHORIZED;
         descr = StringPrintf("%s: Neon error code %d = NE_AUTH, HTTP status %d: %s",
@@ -612,6 +656,7 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
                              error, code,
                              ne_get_error(m_session));
         break;
+    }
     case NE_ERROR:
         if (code) {
             descr = StringPrintf("%s: Neon error code %d: %s",
@@ -881,20 +926,49 @@ static int ne_accept_2xx(void *userdata, ne_request *req, const ne_status *st)
 }
 #endif
 
-bool Request::run(const std::set<int> *expectedCodes)
+void Session::checkAuthorization()
+{
+    bool useOAuth2 = m_authProvider && m_authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2);
+    if (useOAuth2 &&
+        m_oauth2Bearer.empty()) {
+        // Count the number of times we asked for new tokens. This helps
+        // the provider determine whether the token that it returns are valid.
+        try {
+            m_oauth2Bearer = m_authProvider->getOAuth2Bearer(m_oauthTokenRejections);
+            SE_LOG_DEBUG(NULL, "got new OAuth2 token '%s' for next request", m_oauth2Bearer.c_str());
+        } catch (...) {
+            std::string explanation;
+            Exception::handle(explanation);
+            // Treat all errors as fatal authentication errors.
+            // Our caller will abort immediately.
+            SE_THROW_EXCEPTION_STATUS(FatalException,
+                                      StringPrintf("logging into remote service failed: %s", explanation.c_str()),
+                                      STATUS_FORBIDDEN);
+        }
+    }
+}
+
+bool Session::run(Request &request, const std::set<int> *expectedCodes)
 {
     int error;
 
-    if (m_result) {
-        m_result->clear();
-        ne_add_response_body_reader(m_req, ne_accept_2xx,
-                                    addResultData, this);
-        error = ne_request_dispatch(m_req);
+    // Check for authorization while we still can.
+    checkAuthorization();
+
+    std::string *result = request.getResult();
+    ne_request *req = request.getRequest();
+    if (result) {
+        result->clear();
+        ne_add_response_body_reader(req, ne_accept_2xx,
+                                    Request::addResultData, &request);
+        error = ne_request_dispatch(req);
     } else {
-        error = ne_xml_dispatch_request(m_req, m_parser->get());
+        error = ne_xml_dispatch_request(req, request.getParser()->get());
     }
 
-    return checkError(error, expectedCodes);
+    return checkError(error, request.getStatus()->code, request.getStatus(),
+                      request.getResponseHeader("Location"),
+                      expectedCodes);
 }
 
 int Request::addResultData(void *userdata, const char *buf, size_t len)
@@ -902,12 +976,6 @@ int Request::addResultData(void *userdata, const char *buf, size_t len)
     Request *me = static_cast<Request *>(userdata);
     me->m_result->append(buf, len);
     return 0;
-}
-
-bool Request::checkError(int error, const std::set<int> *expectedCodes)
-{
-    return m_session.checkError(error, getStatus()->code, getStatus(), getResponseHeader("Location"),
-                                expectedCodes);
 }
 
 }
