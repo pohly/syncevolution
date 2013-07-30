@@ -25,9 +25,12 @@ using namespace std;
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 
+
 #include <syncevo/util.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+class AuthProvider;
 
 namespace Neon {
 #if 0
@@ -38,6 +41,21 @@ namespace Neon {
 std::string features();
 
 class Request;
+
+/**
+ * Throwing this will stop all further attempts to use the
+ * remote service.
+ */
+class FatalException : public StatusException
+{
+public:
+    FatalException(const std::string &file,
+                   int line,
+                   const std::string &what,
+                   SyncMLStatus status) :
+        StatusException(file, line, what, status)
+    {}
+};
 
 class Settings {
  public:
@@ -68,6 +86,12 @@ class Settings {
     virtual void getCredentials(const std::string &realm,
                                 std::string &username,
                                 std::string &password) = 0;
+
+    /**
+     * Grant access to AuthProvider. In addition to plain username/password
+     * in getCredentials, this one here might also be used for OAuth2.
+     */
+    virtual boost::shared_ptr<AuthProvider> getAuthProvider() = 0;
 
     /**
      * Google returns a 401 error even if the credentials
@@ -209,16 +233,31 @@ class Session {
     static boost::shared_ptr<Session> m_cachedSession;
 
     bool m_forceAuthorizationOnce;
-    std::string m_forceUsername, m_forcePassword;
+    boost::shared_ptr<AuthProvider> m_authProvider;
 
     /**
-     * Remember whether a request was sent with credentials.
+     * Count how often a request was sent with credentials.
      * If the request succeeds, we assume that the credentials
      * were okay. A bit fuzzy because forcing authorization
      * might succeed despite invalid credentials if the
      * server doesn't check them.
      */
     bool m_credentialsSent;
+
+    /**
+     * Count the number of consecutive times that an OAuth2 token
+     * failed to get accepted. This can happen when the current one
+     * expired and needs to be refreshed or we need re-authorization
+     * by the user.
+     */
+    int m_oauthTokenRejections;
+
+    /**
+     * Cached token for OAuth2. Obtained before starting the request in run(),
+     * used in preSend(), invalidated when it caused an authentication error
+     * in checkError().
+     */
+    std::string m_oauth2Bearer;
 
     /**
      * current operation; used for debugging output
@@ -296,10 +335,42 @@ class Session {
     void startOperation(const string &operation, const Timespec &deadline);
 
     /**
+     * Run one attempt to execute the request. May be called multiple times.
+     *
+     * Uses checkError() underneath to detect fatal errors and throw
+     * exceptions.
+     *
+     * @return result of Session::checkError()
+     */
+    bool run(Request &request, const std::set<int> *expectedCodes);
+
+    /**
      * to be called after each operation which might have produced debugging output by neon;
      * automatically called by checkError()
      */
     void flush();
+
+    ne_session *getSession() const { return m_session; }
+
+    /**
+     * Force next request in this session to have Basic authorization
+     * (when username/password are provided by AuthProvider) or all
+     * requests to use OAuth2 authentication.
+     */
+    void forceAuthorization(const boost::shared_ptr<AuthProvider> &authProvider);
+
+ private:
+    boost::shared_ptr<Settings> m_settings;
+    bool m_debugging;
+    ne_session *m_session;
+    URI m_uri;
+    std::string m_proxyURL;
+    /** time when last successul request completed, maintained by checkError() */
+    Timespec m_lastRequestEnd;
+    /** number of times a request was sent, maintained by startOperation(), the credentials callback, and checkError() */
+    int m_attempt;
+
+    void checkAuthorization();
 
     /**
      * throw error if error code indicates failure;
@@ -315,30 +386,10 @@ class Session {
      *
      * @return true for success, false if retry needed (only if deadline not empty);
      *         errors reported via exceptions
-     */ 
+     */
     bool checkError(int error, int code = 0, const ne_status *status = NULL,
                     const string &location = "",
                     const std::set<int> *expectedCodes = NULL);
-
-    ne_session *getSession() const { return m_session; }
-
-    /**
-     * force next request in this session to have Basic authorization
-     * with the given username/password (which may be invalid to
-     * trigger real authorization)
-     */
-    void forceAuthorization(const std::string &username, const std::string &password);
-
- private:
-    boost::shared_ptr<Settings> m_settings;
-    bool m_debugging;
-    ne_session *m_session;
-    URI m_uri;
-    std::string m_proxyURL;
-    /** time when last successul request completed, maintained by checkError() */
-    Timespec m_lastRequestEnd;
-    /** number of times a request was sent, maintained by startOperation(), the credentials callback, and checkError() */
-    int m_attempt;
 
     /** ne_set_server_auth() callback */
     static int getCredentials(void *userdata, const char *realm, int attempt, char *username, char *password) throw();
@@ -526,13 +577,9 @@ class Request
     }
 
     /**
-     * Execute the request. May only be called once per request. Uses
-     * Session::checkError() underneath to detect fatal errors and throw
-     * exceptions.
-     *
-     * @return result of Session::checkError()
+     * Execute the request. See Session::run().
      */
-    bool run(const std::set<int> *expectedCodes = NULL);
+    bool run(const std::set<int> *expectedCodes = NULL) { return m_session.run(*this, expectedCodes); }
 
     std::string getResponseHeader(const std::string &name) {
         const char *value = ne_get_response_header(m_req, name.c_str());
@@ -540,6 +587,13 @@ class Request
     }
     int getStatusCode() { return ne_get_status(m_req)->code; }
     const ne_status *getStatus() { return ne_get_status(m_req); }
+
+    ne_request *getRequest() const { return m_req; }
+    std::string *getResult() const { return m_result; }
+    XMLParser *getParser() const { return m_parser; }
+
+    /** ne_block_reader implementation */
+    static int addResultData(void *userdata, const char *buf, size_t len);
 
  private:
     // buffers for string (copied by ne_request_create(),
@@ -551,12 +605,6 @@ class Request
     ne_request *m_req;
     std::string *m_result;
     XMLParser *m_parser;
-
-    /** ne_block_reader implementation */
-    static int addResultData(void *userdata, const char *buf, size_t len);
-
-    /** throw error if error code *or* current status indicates failure */
-    bool checkError(int error, const std::set<int> *expectedCodes = NULL);
 };
 
 /** thrown for 301 HTTP status */

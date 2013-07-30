@@ -58,9 +58,6 @@ public:
     {
         std::string url;
 
-        // Look up credentials on demand.
-        m_haveCredentials = false;
-
         // check source config first
         if (m_sourceConfig) {
             url = m_sourceConfig->getDatabaseID();
@@ -135,17 +132,14 @@ public:
 
     virtual void getCredentials(const std::string &realm,
                                 std::string &username,
-                                std::string &password)
-    {
-        lookupCredentials();
-        username = m_username;
-        password = m_password;
-    }
+                                std::string &password);
+
+    virtual boost::shared_ptr<AuthProvider> getAuthProvider();
 
     std::string getUsername()
     {
-        lookupCredentials();
-        return m_username;
+        lookupAuthProvider();
+        return m_authProvider->getUsername();
     }
 
     virtual bool getCredentialsOkay() { return m_credentialsOkay; }
@@ -169,16 +163,30 @@ public:
 
 private:
     void initializeFlags(const std::string &url);
-    std::string m_username;
-    std::string m_password;
-    bool m_haveCredentials;
-
-    void lookupCredentials();
+    boost::shared_ptr<AuthProvider> m_authProvider;
+    void lookupAuthProvider();
 };
 
-void ContextSettings::lookupCredentials()
+
+void ContextSettings::getCredentials(const std::string &realm,
+                                     std::string &username,
+                                     std::string &password)
 {
-    if (m_haveCredentials) {
+    lookupAuthProvider();
+    Credentials creds = m_authProvider->getCredentials();
+    username = creds.m_username;
+    password = creds.m_password;
+}
+
+boost::shared_ptr<AuthProvider> ContextSettings::getAuthProvider()
+{
+    lookupAuthProvider();
+    return m_authProvider;
+}
+
+void ContextSettings::lookupAuthProvider()
+{
+    if (m_authProvider) {
         return;
     }
 
@@ -198,11 +206,7 @@ void ContextSettings::lookupCredentials()
     }
 
     // lookup actual authentication method instead of assuming username/password
-    // TODO: oauth2
-    Credentials cred = IdentityProviderCredentials(identity, password);
-    m_username = cred.m_username;
-    m_password = cred.m_password;
-    m_haveCredentials = true;
+    m_authProvider = AuthProvider::create(identity, password);
 }
 
 void ContextSettings::initializeFlags(const std::string &url)
@@ -543,10 +547,8 @@ void WebDAVSource::contactServer()
         m_contextSettings->setURL(database);
         // start talking to host defined by m_settings->getURL()
         m_session = Neon::Session::create(m_settings);
-        // force authentication
-        std::string user, pw;
-        m_settings->getCredentials("", user, pw);
-        m_session->forceAuthorization(user, pw);
+        // force authentication via username/password or OAuth2
+        m_session->forceAuthorization(m_settings->getAuthProvider());
         return;
     }
 
@@ -591,6 +593,8 @@ void WebDAVSource::contactServer()
             SE_LOG_DEBUG(NULL, "%s WebDAV capabilities: %s",
                          m_session->getURL().c_str(),
                          Flags2String(caps, descr).c_str());
+        } catch (const Neon::FatalException &ex) {
+            throw;
         } catch (...) {
             Exception::handle();
         }
@@ -609,8 +613,8 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                  (timeoutSeconds <= 0 ||
                   retrySeconds <= 0) ? "resending disabled" : "resending allowed");
 
-    std::string username, password;
-    m_contextSettings->getCredentials("", username, password);
+    boost::shared_ptr<AuthProvider> authProvider = m_contextSettings->getAuthProvider();
+    std::string username = authProvider->getUsername();
 
     // If no URL was configured, then try DNS SRV lookup.
     // syncevo-webdav-lookup and at least one of the tools
@@ -841,15 +845,22 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // relevant for debugging.
                 try {
                     SE_LOG_DEBUG(NULL, "debugging: read all WebDAV properties of %s", path.c_str());
+                    // Use OAuth2, if available.
+                    boost::shared_ptr<AuthProvider> authProvider = m_settings->getAuthProvider();
+                    if (authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
+                        m_session->forceAuthorization(authProvider);
+                    }
                     Neon::Session::PropfindPropCallback_t callback =
                         boost::bind(&WebDAVSource::openPropCallback,
                                     this, _1, _2, _3, _4);
                     m_session->propfindProp(path, 0, NULL, callback, Timespec());
+                } catch (const Neon::FatalException &ex) {
+                    throw;
                 } catch (...) {
                     handleException(HANDLE_EXCEPTION_NO_ERROR);
                 }
             }
-        
+
             // Now ask for some specific properties of interest for us.
             // Using CALDAV:allprop would be nice, but doesn't seem to
             // be possible with Neon.
@@ -866,19 +877,17 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             //    <unauthenticated/>
             // </current-user-principal>
             //
-            // We send valid credentials here, using Basic authorization.
+            // We send valid credentials here, using Basic authorization,
+            // if configured to use credentials instead of something like OAuth2.
             // The rationale is that this cuts down on the number of
             // requests for https while still being secure. For
-            // http the setup already is insecure if the transport
-            // isn't trusted (sends PIM data as plain text).
+            // http, our Neon wrapper is smart enough to ignore our request.
             //
             // See also:
             // http://tools.ietf.org/html/rfc4918#appendix-E
             // http://lists.w3.org/Archives/Public/w3c-dist-auth/2005OctDec/0243.html
             // http://thread.gmane.org/gmane.comp.web.webdav.neon.general/717/focus=719
-            std::string user, pw;
-            m_settings->getCredentials("", user, pw);
-            m_session->forceAuthorization(user, pw);
+            m_session->forceAuthorization(m_settings->getAuthProvider());
             m_davProps.clear();
             // Avoid asking for CardDAV properties when only using CalDAV
             // and vice versa, to avoid breaking both when the server is only
@@ -928,6 +937,8 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                                     getContent() == "VCARD" ? carddav : caldav,
                                     callback, deadline);
             success = true;
+        } catch (const Neon::FatalException &ex) {
+            throw;
         } catch (const Neon::RedirectException &ex) {
             // follow to new location
             Neon::URI next = Neon::URI::parse(ex.getLocation(), true);
