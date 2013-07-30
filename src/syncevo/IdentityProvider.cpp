@@ -43,4 +43,39 @@ Credentials IdentityProviderCredentials(const UserIdentity &identity,
     return cred;
 }
 
+class CredentialsProvider : public AuthProvider
+{
+    Credentials m_creds;
+
+public:
+    CredentialsProvider(const std::string &username,
+                        const std::string &password)
+    {
+        m_creds.m_username = username;
+        m_creds.m_password = password;
+    }
+
+    virtual bool wasConfigured() const { return !m_creds.m_username.empty() || !m_creds.m_password.empty(); }
+    virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_CREDENTIALS; }
+    virtual Credentials getCredentials() const { return m_creds; }
+    virtual std::string getOAuth2Bearer() const { SE_THROW("OAuth2 not supported"); return ""; }
+    virtual std::string getUsername() const { return m_creds.m_username; }
+};
+
+boost::shared_ptr<AuthProvider> AuthProvider::create(const UserIdentity &identity,
+                                                     const InitStateString &password)
+{
+    boost::shared_ptr<AuthProvider> authProvider;
+
+    if (identity.m_provider == USER_IDENTITY_PLAIN_TEXT) {
+        authProvider.reset(new CredentialsProvider(identity.m_identity, password));
+    } else {
+        SE_THROW(StringPrintf("unknown identity provider '%s' in '%s'",
+                              identity.m_provider.c_str(),
+                              identity.toString().c_str()));
+    }
+
+    return authProvider;
+}
+
 SE_END_CXX

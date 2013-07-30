@@ -48,5 +48,60 @@ struct Credentials
 Credentials IdentityProviderCredentials(const UserIdentity &identity,
                                         const InitStateString &password);
 
+/**
+ * Supports multiple different ways of authorizing the user.
+ * Actual implementations are IdentityProvider specific.
+ */
+class AuthProvider
+{
+ public:
+    /**
+     * Creates an AuthProvider matching the identity.m_provider value
+     * or throws an exception if that fails. Never returns NULL.
+     */
+    static boost::shared_ptr<AuthProvider> create(const UserIdentity &identity,
+                                                  const InitStateString &password);
+
+    enum AuthMethod {
+        AUTH_METHOD_NONE,
+        AUTH_METHOD_CREDENTIALS,
+        AUTH_METHOD_OAUTH2,
+        AUTH_METHOD_MAX
+    };
+
+    /**
+     * Return true if some kind of credentials were configured by the user.
+     * They don't have to be usable.
+     */
+    virtual bool wasConfigured() const { return true; }
+
+    /**
+     * Returns true if the given method is supported and currently possible.
+     */
+    virtual bool methodIsSupported(AuthMethod method) const = 0;
+
+    /**
+     * Returns username/password credentials. Throws an error if not supported.
+     */
+    virtual Credentials getCredentials() const = 0;
+
+    /**
+     * Returns the 'Bearer b64token' string required for logging into
+     * services supporting OAuth2 or throws an exception when we don't
+     * have a valid token. Internally this will refresh tokens
+     * automatically.
+     *
+     * See http://tools.ietf.org/html/draft-ietf-oauth-v2-bearer-20#section-2.1
+     */
+    virtual std::string getOAuth2Bearer() const = 0;
+
+    /**
+     * Returns username at the remote service. Works for both
+     * username/password credentials and OAuth2.
+     */
+    virtual std::string getUsername() const = 0;
+};
+
+
 SE_END_CXX
 #endif
