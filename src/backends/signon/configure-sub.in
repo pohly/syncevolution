@@ -1,0 +1,17 @@
+PKG_CHECK_MODULES(GSSO, [libgsignon-glib libaccounts-glib], HAVE_GSSO=yes, HAVE_GSSO=no)
+
+AC_ARG_ENABLE(gsso,
+              AS_HELP_STRING([--enable-gsso],
+                             [enables or disables support for the gSSO single-sign-on system; default is on if development files are available]),
+              [enable_gsso="$enableval"
+               test "$enable_gsso" = "yes" || test "$enable_gsso" = "no" || AC_MSG_ERROR([invalid value for --enable-gsso: $enable_gsso])
+               test "$enable_gsso" = "no" || test "$HAVE_GSSO" = "yes" || AC_MSG_ERROR([required pkg(s) not found that are needed for --enable-gsso])],
+              enable_gsso="$HAVE_GSSO")
+if test $enable_gsso = "yes"; then
+    AC_DEFINE(USE_GSSO, 1, [use gSSO])
+    # link into static executables, similar to a SyncSource
+    SYNCSOURCES="$SYNCSOURCES src/backends/gsso/providergsso.la"
+fi
+
+# conditional compilation in make
+AM_CONDITIONAL([USE_GSSO], [test "$use_gsso" = "yes"])
