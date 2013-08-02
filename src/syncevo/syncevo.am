@@ -22,9 +22,6 @@ src_syncevo_sources = \
   src/syncevo/EDSClient.h \
   src/syncevo/EDSClient.cpp \
   \
-  src/syncevo/IdentityProvider.h \
-  src/syncevo/IdentityProvider.cpp \
-  \
   src/syncevo/ConfigTree.h \
   src/syncevo/ConfigFilter.h \
   src/syncevo/ConfigFilter.cpp \
@@ -165,7 +162,6 @@ src_syncevo_libsyncevolution_include_HEADERS = \
   src/syncevo/SafeConfigNode.h \
   src/syncevo/SyncConfig.h \
   src/syncevo/SyncSource.h \
-  src/syncevo/IdentityProvider.h \
   src/syncevo/util.h \
   src/syncevo/BoostHelper.h \
   src/syncevo/SuspendFlags.h \

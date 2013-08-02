@@ -195,7 +195,7 @@ static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t
     // up sharing change tracking with source A.
     if (!isSourceA) {
         ActiveSyncSource *eassource = static_cast<ActiveSyncSource *>(res.get());
-        std::string account = eassource->getSyncConfig().getSyncUser().toString();
+        std::string account = eassource->getSyncConfig().getSyncUsername();
         account += "_B";
         eassource->getSyncConfig().setSyncUsername(account, true);
     }

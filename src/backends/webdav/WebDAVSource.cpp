@@ -12,7 +12,6 @@
 #include <boost/scoped_ptr.hpp>
 
 #include <syncevo/LogRedirect.h>
-#include <syncevo/IdentityProvider.h>
 
 #include <boost/assign.hpp>
 
@@ -61,10 +60,8 @@ public:
         // check source config first
         if (m_sourceConfig) {
             url = m_sourceConfig->getDatabaseID();
-            if (url.find("%u") != url.npos) {
-                std::string username = getUsername();
-                boost::replace_all(url, "%u", Neon::URI::escape(username));
-            }
+            std::string username = m_sourceConfig->getUser();
+            boost::replace_all(url, "%u", Neon::URI::escape(username));
         }
 
         // fall back to sync context
@@ -73,10 +70,8 @@ public:
 
             if (!urls.empty()) {
                 url = urls.front();
-                if (url.find("%u") != url.npos) {
-                    std::string username = getUsername();
-                    boost::replace_all(url, "%u", Neon::URI::escape(username));
-                }
+                std::string username = m_context->getSyncUsername();
+                boost::replace_all(url, "%u", Neon::URI::escape(username));
             }
         }
 
@@ -132,14 +127,22 @@ public:
 
     virtual void getCredentials(const std::string &realm,
                                 std::string &username,
-                                std::string &password);
-
-    virtual boost::shared_ptr<AuthProvider> getAuthProvider();
-
-    std::string getUsername()
+                                std::string &password)
     {
-        lookupAuthProvider();
-        return m_authProvider->getUsername();
+        // prefer source config if anything is set there
+        if (m_sourceConfig) {
+            username = m_sourceConfig->getUser();
+            password = m_sourceConfig->getPassword();
+            if (!username.empty() || !password.empty()) {
+                return;
+            }
+        }
+
+        // fall back to context
+        if (m_context) {
+            username = m_context->getSyncUsername();
+            password = m_context->getSyncPassword();
+        }
     }
 
     virtual bool getCredentialsOkay() { return m_credentialsOkay; }
@@ -163,51 +166,7 @@ public:
 
 private:
     void initializeFlags(const std::string &url);
-    boost::shared_ptr<AuthProvider> m_authProvider;
-    void lookupAuthProvider();
 };
-
-
-void ContextSettings::getCredentials(const std::string &realm,
-                                     std::string &username,
-                                     std::string &password)
-{
-    lookupAuthProvider();
-    Credentials creds = m_authProvider->getCredentials();
-    username = creds.m_username;
-    password = creds.m_password;
-}
-
-boost::shared_ptr<AuthProvider> ContextSettings::getAuthProvider()
-{
-    lookupAuthProvider();
-    return m_authProvider;
-}
-
-void ContextSettings::lookupAuthProvider()
-{
-    if (m_authProvider) {
-        return;
-    }
-
-    UserIdentity identity;
-    InitStateString password;
-
-    // prefer source config if anything is set there
-    if (m_sourceConfig) {
-        identity = m_sourceConfig->getUser();
-        password = m_sourceConfig->getPassword();
-    }
-
-    // fall back to context
-    if (m_context && !identity.wasSet() && !password.wasSet()) {
-        identity = m_context->getSyncUser();
-        password = m_context->getSyncPassword();
-    }
-
-    // lookup actual authentication method instead of assuming username/password
-    m_authProvider = AuthProvider::create(identity, password);
-}
 
 void ContextSettings::initializeFlags(const std::string &url)
 {
@@ -547,8 +506,10 @@ void WebDAVSource::contactServer()
         m_contextSettings->setURL(database);
         // start talking to host defined by m_settings->getURL()
         m_session = Neon::Session::create(m_settings);
-        // force authentication via username/password or OAuth2
-        m_session->forceAuthorization(m_settings->getAuthProvider());
+        // force authentication
+        std::string user, pw;
+        m_settings->getCredentials("", user, pw);
+        m_session->forceAuthorization(user, pw);
         return;
     }
 
@@ -593,8 +554,6 @@ void WebDAVSource::contactServer()
             SE_LOG_DEBUG(NULL, "%s WebDAV capabilities: %s",
                          m_session->getURL().c_str(),
                          Flags2String(caps, descr).c_str());
-        } catch (const Neon::FatalException &ex) {
-            throw;
         } catch (...) {
             Exception::handle();
         }
@@ -613,8 +572,8 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                  (timeoutSeconds <= 0 ||
                   retrySeconds <= 0) ? "resending disabled" : "resending allowed");
 
-    boost::shared_ptr<AuthProvider> authProvider = m_contextSettings->getAuthProvider();
-    std::string username = authProvider->getUsername();
+    std::string username, password;
+    m_contextSettings->getCredentials("", username, password);
 
     // If no URL was configured, then try DNS SRV lookup.
     // syncevo-webdav-lookup and at least one of the tools
@@ -845,22 +804,15 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // relevant for debugging.
                 try {
                     SE_LOG_DEBUG(NULL, "debugging: read all WebDAV properties of %s", path.c_str());
-                    // Use OAuth2, if available.
-                    boost::shared_ptr<AuthProvider> authProvider = m_settings->getAuthProvider();
-                    if (authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
-                        m_session->forceAuthorization(authProvider);
-                    }
                     Neon::Session::PropfindPropCallback_t callback =
                         boost::bind(&WebDAVSource::openPropCallback,
                                     this, _1, _2, _3, _4);
                     m_session->propfindProp(path, 0, NULL, callback, Timespec());
-                } catch (const Neon::FatalException &ex) {
-                    throw;
                 } catch (...) {
                     handleException(HANDLE_EXCEPTION_NO_ERROR);
                 }
             }
-
+        
             // Now ask for some specific properties of interest for us.
             // Using CALDAV:allprop would be nice, but doesn't seem to
             // be possible with Neon.
@@ -877,17 +829,19 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             //    <unauthenticated/>
             // </current-user-principal>
             //
-            // We send valid credentials here, using Basic authorization,
-            // if configured to use credentials instead of something like OAuth2.
+            // We send valid credentials here, using Basic authorization.
             // The rationale is that this cuts down on the number of
             // requests for https while still being secure. For
-            // http, our Neon wrapper is smart enough to ignore our request.
+            // http the setup already is insecure if the transport
+            // isn't trusted (sends PIM data as plain text).
             //
             // See also:
             // http://tools.ietf.org/html/rfc4918#appendix-E
             // http://lists.w3.org/Archives/Public/w3c-dist-auth/2005OctDec/0243.html
             // http://thread.gmane.org/gmane.comp.web.webdav.neon.general/717/focus=719
-            m_session->forceAuthorization(m_settings->getAuthProvider());
+            std::string user, pw;
+            m_settings->getCredentials("", user, pw);
+            m_session->forceAuthorization(user, pw);
             m_davProps.clear();
             // Avoid asking for CardDAV properties when only using CalDAV
             // and vice versa, to avoid breaking both when the server is only
@@ -937,8 +891,6 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                                     getContent() == "VCARD" ? carddav : caldav,
                                     callback, deadline);
             success = true;
-        } catch (const Neon::FatalException &ex) {
-            throw;
         } catch (const Neon::RedirectException &ex) {
             // follow to new location
             Neon::URI next = Neon::URI::parse(ex.getLocation(), true);

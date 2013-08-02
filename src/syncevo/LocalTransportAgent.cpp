@@ -212,8 +212,8 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
                                           m_server->getRootPath()),
                                static_cast<std::string>(m_server->getLogDir()),
                                m_server->getDoLogging(),
-                               std::make_pair(m_server->getSyncUser(),
-                                              m_server->getSyncPassword()),
+                               StringPair(m_server->getSyncUsername(),
+                                          m_server->getSyncPassword()),
                                m_server->getConfigProps(),
                                sources,
                                boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3));
@@ -724,7 +724,7 @@ class LocalTransportAgentChild : public TransportAgent
                    const StringPair &serverConfig, // config name + root path
                    const std::string &serverLogDir,
                    bool serverDoLogging,
-                   const std::pair<UserIdentity, InitStateString> &serverSyncCredentials,
+                   const StringPair &serverSyncCredentials,
                    const FullProps &serverConfigProps,
                    const LocalTransportChild::ActiveSources_t &sources,
                    const LocalTransportChild::ReplyPtr &reply)
@@ -771,10 +771,10 @@ class LocalTransportAgentChild : public TransportAgent
         // will end up in our LocalTransportContext::askPassword()
         // implementation above, which will pass the question to
         // the local sync parent.
-        if (serverSyncCredentials.first.wasSet()) {
-            m_client->setSyncUsername(serverSyncCredentials.first.toString(), true);
+        if (!serverSyncCredentials.first.empty()) {
+            m_client->setSyncUsername(serverSyncCredentials.first, true);
         }
-        if (serverSyncCredentials.second.wasSet()) {
+        if (!serverSyncCredentials.second.empty()) {
             m_client->setSyncPassword(serverSyncCredentials.second, true);
         }
 

@@ -28,7 +28,6 @@
 #include <syncevo/ConfigFilter.h>
 #include <syncevo/UserInterface.h>
 #include <syncevo/SyncML.h>
-#include <syncevo/SyncConfig.h>
 #include <synthesis/engine_defs.h>
 
 #include <gdbus-cxx-bridge.h>
@@ -123,12 +122,6 @@ namespace GDBusCXX {
                                   GDBusCXX::dbus_member<SyncEvo::ConfigPasswordKey, std::string, &SyncEvo::ConfigPasswordKey::protocol,
                                   GDBusCXX::dbus_member<SyncEvo::ConfigPasswordKey, std::string, &SyncEvo::ConfigPasswordKey::authtype,
                                   GDBusCXX::dbus_member_single<SyncEvo::ConfigPasswordKey, unsigned int, &SyncEvo::ConfigPasswordKey::port> > > > > > > >
-    {};
-
-    template <> struct dbus_traits<SyncEvo::UserIdentity> :
-        public dbus_struct_traits<SyncEvo::UserIdentity,
-                                  GDBusCXX::dbus_member<SyncEvo::UserIdentity, SyncEvo::InitStateString, &SyncEvo::UserIdentity::m_provider,
-                                  GDBusCXX::dbus_member_single<SyncEvo::UserIdentity, SyncEvo::InitStateString, &SyncEvo::UserIdentity::m_identity> > >
     {};
 }
 

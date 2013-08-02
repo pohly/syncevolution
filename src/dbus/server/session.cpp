@@ -311,38 +311,13 @@ void Session::setNamedConfig(const std::string &configName,
         for ( it = sourceFilters.begin(); it != sourceFilters.end(); it++ ) {
             from->setConfigFilter(false, it->first, it->second);
         }
-
-        // We need no interactive user interface, but we do need to handle
-        // storing passwords in a keyring here.
+        // run without dedicated user interface and thus without
+        // interactive password requests here (not needed)
         boost::shared_ptr<SyncContext> syncConfig(new SyncContext(configName));
         syncConfig->prepareConfigForWrite();
         syncConfig->copy(*from, NULL);
 
-        class KeyringUI : public UserInterface {
-            InitStateString m_keyring;
-        public:
-            KeyringUI(const InitStateString &keyring) :
-                m_keyring(keyring)
-            {}
-
-            // Implement UserInterface.
-            virtual bool savePassword(const std::string &passwordName,
-                                      const std::string &password,
-                                      const ConfigPasswordKey &key)
-            {
-                return GetSavePasswordSignal()(m_keyring, passwordName, password, key);
-            }
-            virtual void readStdin(std::string &content) { SE_THROW("not implemented"); }
-            virtual std::string askPassword(const std::string &passwordName,
-                                            const std::string &descr,
-                                            const ConfigPasswordKey &key)
-            {
-                SE_THROW("not implemented");
-                return "";
-            }
-
-        } ui(syncConfig->getKeyring());
-        syncConfig->preFlush(ui);
+        syncConfig->preFlush(syncConfig->getUserInterfaceNonNull());
         syncConfig->flush();
         m_setConfig = true;
     }

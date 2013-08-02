@@ -42,7 +42,6 @@ typedef void *GMainLoop;
 #include <boost/type_traits/remove_pointer.hpp>
 #include <boost/type_traits/function_traits.hpp>
 #include <boost/utility/value_init.hpp>
-#include <boost/lambda/lambda.hpp>
 
 #include <iterator>
 #include <memory>
@@ -1034,7 +1033,9 @@ template<> class GAsyncReadyDoneCXX<void>
         SYNCEVO_GLIB_CALL_ASYNC(_prepare, \
                                 GAsyncReadyDoneCXX<boost::function<typeof(_prepare ## _finish)>::result_type>::createCB(_res, _gerror, done), \
                                 _args); \
-        GRunWhile(! boost::lambda::var(done)); \
+        while (!done) { \
+            g_main_context_iteration(NULL, true); \
+        } \
     } while (false); \
 
 

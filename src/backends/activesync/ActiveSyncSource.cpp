@@ -154,11 +154,7 @@ ActiveSyncSource::Databases ActiveSyncSource::getDatabases()
 {
     Databases result;
     // do a scan if username is set
-    UserIdentity identity = m_context->getSyncUser();
-    if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
-        throwError(StringPrintf("%s: only the 'user:<account ID in gconf>' format is supported by ActiveSync", identity.toString().c_str()));
-    }
-    const std::string &account = identity.m_identity;
+    std::string account = m_context->getSyncUsername();
 
     if (!account.empty()) {
 
@@ -195,12 +191,7 @@ std::string ActiveSyncSource::lookupFolder(std::string folder) {
 void ActiveSyncSource::open()
 {
     // extract account ID and throw error if missing
-    UserIdentity identity = m_context->getSyncUser();
-    if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
-        throwError(StringPrintf("%s: only the 'user:<account ID in gconf>' format is supported by ActiveSync", identity.toString().c_str()));
-    }
-    const std::string &username = identity.m_identity;
-
+    std::string username = m_context->getSyncUsername();
     std::string folder = getDatabaseID();
     SE_LOG_DEBUG(NULL,
                  "using eas sync account %s from config %s with folder %s",

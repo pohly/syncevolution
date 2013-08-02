@@ -257,7 +257,7 @@ public:
                 sc->setDatabaseID(database);
             }
             if (!sc->getUser().wasSet() && !m_evoUser.empty()) {
-                sc->setUsername(m_evoUser);
+                sc->setUser(m_evoUser);
             }
             if (!sc->getPassword().wasSet() && !m_evoPassword.empty()) {
                 sc->setPassword(m_evoPassword);

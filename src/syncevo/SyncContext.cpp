@@ -28,7 +28,6 @@
 #include <syncevo/util.h>
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/ThreadSupport.h>
-#include <syncevo/IdentityProvider.h>
 
 #include <syncevo/SafeConfigNode.h>
 #include <syncevo/IniConfigNode.h>
@@ -102,7 +101,6 @@ SyncContext::SyncContext(const string &client,
                          const boost::shared_ptr<TransportAgent> &agent,
                          bool doLogging) :
     SyncConfig(client,
-               SyncConfig::HTTP_SERVER_LAYOUT,
                boost::shared_ptr<ConfigTree>(),
                rootPath),
     m_server(client),
@@ -1519,18 +1517,7 @@ public:
         }
         return NULL;
     }
-
-    std::list<std::string> getSourceNames() const;
 };
-
-std::list<std::string> SourceList::getSourceNames() const
-{
-    std::list<std::string> sourceNames;
-    BOOST_FOREACH (SyncSource *source, *this) {
-        sourceNames.push_back(source->getName());
-    }
-    return sourceNames;
-}
 
 void unref(SourceList *sourceList)
 {
@@ -1948,7 +1935,7 @@ bool SyncContext::displaySourceProgress(SyncSource &source,
         switch (extra1) {
         case 401:
             // TODO: reset cached password
-            SE_LOG_INFO(NULL, "authorization failed, check username '%s' and password", getSyncUser().toString().c_str());
+            SE_LOG_INFO(NULL, "authorization failed, check username '%s' and password", getSyncUsername().c_str());
             break;
         case 403:
             SE_LOG_INFO(source.getDisplayName(), "log in succeeded, but server refuses access - contact server operator");
@@ -2881,10 +2868,8 @@ void SyncContext::getConfigXML(string &xml, string &configname)
     substTag(xml, "maxmsgsize", std::max(getMaxMsgSize().get(), 10000ul));
     substTag(xml, "maxobjsize", std::max(getMaxObjSize().get(), 1024u));
     if (m_serverMode) {
-        UserIdentity id = getSyncUser();
-        Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
-        const string &user = cred.m_username;
-        const string &password = cred.m_password;
+        const string user = getSyncUsername();
+        const string password = getSyncPassword();
 
         /*
          * Do not check username/pwd if this local sync or over
@@ -3295,7 +3280,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
 
         try {
             // dump some summary information at the beginning of the log
-            SE_LOG_DEV(NULL, "SyncML server account: %s", getSyncUser().toString().c_str());
+            SE_LOG_DEV(NULL, "SyncML server account: %s", getSyncUsername().c_str());
             SE_LOG_DEV(NULL, "client: SyncEvolution %s for %s", getSwv().c_str(), getDevType().c_str());
             SE_LOG_DEV(NULL, "device ID: %s", getDevID().c_str());
             SE_LOG_DEV(NULL, "%s", EDSAbiWrapperDebug());
@@ -3322,9 +3307,24 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             startLoopThread();
 
             // ask for passwords now
-            PasswordConfigProperty::checkPasswords(getUserInterfaceNonNull(), *this,
-                                                   PasswordConfigProperty::CHECK_PASSWORD_ALL,
-                                                   sourceList.getSourceNames());
+            /* iterator over all sync and source properties instead of checking
+             * some specified passwords.
+             */
+            ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
+            BOOST_FOREACH(const ConfigProperty *prop, registry) {
+                SE_LOG_DEBUG(NULL, "checking sync password %s", prop->getMainName().c_str());
+                prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties());
+            }
+            BOOST_FOREACH(SyncSource *source, sourceList) {
+                ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
+                BOOST_FOREACH(const ConfigProperty *prop, registry) {
+                    SE_LOG_DEBUG(NULL, "checking source %s password %s",
+                                 source->getName().c_str(),
+                                 prop->getMainName().c_str());
+                    prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
+                                        source->getName(), source->getProperties());
+                }
+            }
 
             // open each source - failing now is still safe
             // in clients; in servers we wait until the source
@@ -3425,11 +3425,7 @@ bool SyncContext::sendSAN(uint16_t version)
     bool legacy = version < 12;
     /* Should be nonce sent by the server in the preceeding sync session */
     string nonce = "SyncEvolution";
-    UserIdentity id = getSyncUser();
-    Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
-    const std::string &user = cred.m_username;
-    const std::string &password = cred.m_password;
-    string uauthb64 = san.B64_H(user, password);
+    string uauthb64 = san.B64_H (getSyncUsername(), getSyncPassword());
     /* Client is expected to conduct the sync in the backgroud */
     sysync::UI_Mode mode = sysync::UI_not_specified;
 
@@ -3709,12 +3705,8 @@ SyncMLStatus SyncContext::doSync()
         }
          
         m_engine.SetStrValue(profile, "serverURI", getUsedSyncURL());
-        UserIdentity id = getSyncUser();
-        Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
-        const std::string &user = cred.m_username;
-        const std::string &password = cred.m_password;
-        m_engine.SetStrValue(profile, "serverUser", user);
-        m_engine.SetStrValue(profile, "serverPassword", password);
+        m_engine.SetStrValue(profile, "serverUser", getSyncUsername());
+        m_engine.SetStrValue(profile, "serverPassword", getSyncPassword());
         m_engine.SetInt32Value(profile, "encoding",
                                getWBXML() ? 1 /* WBXML */ : 2 /* XML */);
 
@@ -4299,10 +4291,13 @@ void SyncContext::status()
 
     SourceList sourceList(*this, false);
     initSources(sourceList);
-    PasswordConfigProperty::checkPasswords(getUserInterfaceNonNull(), *this,
-                                           // Don't need sync passwords.
-                                           PasswordConfigProperty::CHECK_PASSWORD_ALL & ~PasswordConfigProperty::CHECK_PASSWORD_SYNC,
-                                           sourceList.getSourceNames());
+    BOOST_FOREACH(SyncSource *source, sourceList) {
+        ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
+        BOOST_FOREACH(const ConfigProperty *prop, registry) {
+            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
+                                source->getName(), source->getProperties());
+        }
+    }
     BOOST_FOREACH(SyncSource *source, sourceList) {
         source->open();
     }
@@ -4348,10 +4343,13 @@ void SyncContext::checkStatus(SyncReport &report)
 
     SourceList sourceList(*this, false);
     initSources(sourceList);
-    PasswordConfigProperty::checkPasswords(getUserInterfaceNonNull(), *this,
-                                           // Don't need sync passwords.
-                                           PasswordConfigProperty::CHECK_PASSWORD_ALL & ~PasswordConfigProperty::CHECK_PASSWORD_SYNC,
-                                           sourceList.getSourceNames());
+    BOOST_FOREACH(SyncSource *source, sourceList) {
+        ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
+        BOOST_FOREACH(const ConfigProperty *prop, registry) {
+            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
+                                source->getName(), source->getProperties());
+        }
+    }
     BOOST_FOREACH(SyncSource *source, sourceList) {
         source->open();
     }
@@ -4427,10 +4425,14 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
     sourceList.accessSession(dirname.c_str());
     Logger::instance().setLevel(Logger::INFO);
     initSources(sourceList);
-    PasswordConfigProperty::checkPasswords(getUserInterfaceNonNull(), *this,
-                                           // Don't need sync passwords.
-                                           PasswordConfigProperty::CHECK_PASSWORD_ALL & ~PasswordConfigProperty::CHECK_PASSWORD_SYNC,
-                                           sourceList.getSourceNames());
+    BOOST_FOREACH(SyncSource *source, sourceList) {
+        ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
+        BOOST_FOREACH(const ConfigProperty *prop, registry) {
+            prop->checkPassword(getUserInterfaceNonNull(), m_server, *getProperties(),
+                                source->getName(), source->getProperties());
+        }
+    }
+
     string datadump = database == DATABASE_BEFORE_SYNC ? "before" : "after";
 
     BOOST_FOREACH(SyncSource *source, sourceList) {

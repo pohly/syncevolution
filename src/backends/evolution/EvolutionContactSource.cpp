@@ -26,7 +26,6 @@ using namespace std;
 
 #include "config.h"
 #include "EvolutionSyncSource.h"
-#include <syncevo/IdentityProvider.h>
 
 #ifdef ENABLE_EBOOK
 
@@ -243,24 +242,22 @@ void EvolutionContactSource::open()
     // users are not expected to configure an authentication method,
     // so pick one automatically if the user indicated that he wants authentication
     // by setting user or password
-    UserIdentity identity = getUser();
-    InitStateString passwd = getPassword();
-    if (identity.wasSet() || passwd.wasSet()) {
+    std::string user = getUser(),
+        passwd = getPassword();
+    if (!user.empty() || !passwd.empty()) {
         GList *authmethod;
         if (!e_book_get_supported_auth_methods(m_addressbook, &authmethod, gerror)) {
             throwError("getting authentication methods", gerror);
         }
         while (authmethod) {
-            // map identity + password to plain username/password credentials
-            Credentials cred = IdentityProviderCredentials(identity, passwd);
             const char *method = (const char *)authmethod->data;
             SE_LOG_DEBUG(getDisplayName(), "trying authentication method \"%s\", user %s, password %s",
                          method,
-                         identity.wasSet() ? "configured" : "not configured",
-                         passwd.wasSet() ? "configured" : "not configured");
+                         !user.empty() ? "configured" : "not configured",
+                         !passwd.empty() ? "configured" : "not configured");
             if (e_book_authenticate_user(m_addressbook,
-                                         cred.m_username.c_str(),
-                                         cred.m_password.c_str(),
+                                         user.c_str(),
+                                         passwd.c_str(),
                                          method,
                                          gerror)) {
                 SE_LOG_DEBUG(getDisplayName(), "authentication succeeded");
