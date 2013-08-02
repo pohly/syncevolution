@@ -52,7 +52,7 @@
 SE_BEGIN_CXX
 
 #define OBC_SERVICE "org.openobex.client" // obexd < 0.47
-#define OBC_SERVICE_NEW "org.bluez.obex.client" // obexd >= 0.47
+#define OBC_SERVICE_NEW "org.bluez.obex.client" // obexd >= 0.47, including 0.48 (with yet another slight API change!)
 #define OBC_SERVICE_NEW5 "org.bluez.obex" // obexd in Bluez 5.0
 #define OBC_CLIENT_INTERFACE "org.openobex.Client"
 #define OBC_CLIENT_INTERFACE_NEW "org.bluez.obex.Client"
@@ -517,10 +517,18 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
         break;
     }
 
+    bool pullAllWithFiltersFallback = false;
     if (m_obexAPI == OBEXD_OLD ||
         m_obexAPI == OBEXD_NEW) {
-        GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(filter);
-        GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(format);
+        try {
+            GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(filter);
+            GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(format);
+        } catch (...) {
+            // Ignore failure, can happen with 0.48. Instead send filter together
+            // with PullAll method call.
+            Exception::handle(HANDLE_EXCEPTION_NO_ERROR);
+            pullAllWithFiltersFallback = true;
+        }
     }
 
     boost::shared_ptr<PullAll> state(new PullAll);
@@ -536,8 +544,13 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
         SE_LOG_DEBUG(NULL, "Created temporary file for PullAll %s", state->m_tmpFile.filename().c_str());
         GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> > pullall(*m_session, "PullAll");
         std::pair<GDBusCXX::DBusObject_t, Params> tuple =
+            pullAllWithFiltersFallback ?
+            // 0.48
+            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter) :
             m_obexAPI == OBEXD_NEW ?
+            // 0.47
             GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename()) :
+            // 5.x
             GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter);
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
@@ -552,6 +565,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
         state->m_tmpFileOffset = 0;
         state->m_session = m_self.lock();
     } else {
+        // < 0.47
         GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
         state->m_buffer = pullall();
         state->addVCards(0, state->m_buffer);
