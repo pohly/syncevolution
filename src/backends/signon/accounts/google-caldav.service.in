@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<service id="google-contacts">
+  <type>contacts</type>
+  <name>Google Contacts</name>
+  <provider>google</provider>
+
+  <!-- default settings (account settings have precedence over these) -->
+  <template>
+    <group name="auth">
+      <setting name="method">oauth</setting>
+      <setting name="mechanism">oauth2</setting>
+      <group name="oauth">
+        <group name="oauth2">
+          <setting name="Scope">email https://www.googleapis.com/auth/calendar</setting>
+          <!-- workaround for (g)signond token cache issue: use different client IDs for each service and the provider -->
+          <setting name="ClientId">@GOOGLE_CLIENT_ID_CALDAV@</setting>
+          <setting name="ClientSecret">@GOOGLE_CLIENT_SECRET_CALDAV@</setting>
+        </group>
+      </group>
+    </group>
+  </template>
+</service>

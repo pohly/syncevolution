@@ -1,0 +1,90 @@
+Google CalDAV/CardDAV via OAuth2
+================================
+
+Setup
+-----
+
+SyncEvolution needs an active account for Google. Services for CardDAV
+and CalDAV can be used, but are not required if the provider was
+already configured to ask for CardDAV and CalDAV access.
+
+SyncEvolution source code ships with example .provider, .service, and
+.service-type files in the src/backends/signon/accounts
+directory. These files work with gSSO.
+
+When compiling, it is possible to insert valid client ID+secret into
+these files using the --with-google-client-* configure options. The
+example files then get installed into
+$docdir/accounts/[providers|services|service_types].
+
+SyncEvolution binaries from syncevolution.org are compiled with valid
+client ID+secret. Distributions are encouraged to *not* reuse the same
+credentials and register themselves with Google instead. That way,
+abuse of the credentials affects less users and the quota available to
+all users of the same credentials does not get exhausted as quickly.
+
+Users of the syncevolution.org binaries need to install the
+/usr/share/doc/syncevolution/accounts themselves, typically in their
+home directory:
+  cp -a /usr/share/doc/syncevolution/accounts ~/.local/share/accounts
+
+A "google" account needs to be created and enabled:
+  ag-tool create-account google google-for-syncevolution
+  ID=`ag-tool list-accounts | grep google-for-syncevolution | sed -e 's/ .*//'`
+  ag-tool enable-account $ID
+
+Optionally, one can also enable the services:
+  ag-tool enable-service $ID google-carddav
+  ag-tool enable-service $ID google-caldav
+
+It is not possible to create signond identities via command line
+tools. SyncEvolution will create those automatically and store them
+for the provider so that it can be reused in future operations.
+
+
+Usage
+-----
+
+OAuth2 authentication with gSSO is enabled by setting username or
+databaseUser to a string of the format
+   gsso:<numeric accountID>[,<service name>]
+
+When used without service name, SyncEvolution will ask for access to
+CalDAV and CardDAV only once. When used with service name, it will ask
+for access to only CalDAV or CardDAV, but it will have to ask twice
+(once for each service).
+
+The base URL for each service currently needs to be given via syncURL:
+
+  syncevolution --print-databases \
+                backend=carddav \
+                username=gsso:$ID,google-carddav \
+                syncURL=https://www.googleapis.com/.well-known/carddav
+
+  src/syncevolution --print-databases \
+                    backend=caldav \
+                    username=gsso:$ID,google-caldav \
+                    syncURL=https://apidata.googleusercontent.com/caldav/v2
+
+Once that works, follow the "CalDAV and CardDAV" instructions from the
+README with the different username and syncURL.
+
+
+Debugging
+---------
+
+Add --daemon=no to the command line to prevent shifting the actual
+command executing into syncevo-dbus-server and (from there)
+syncevo-dbus-helper.
+
+  Warning: gsignond limits access to the identity to the executable which created
+  it. One has to use different accounts for syncevolution with and without
+  --daemon=no and another account when using valgrind.
+
+Set SYNCEVOLUTION_DEBUG=1 to see all debug messages and increase the
+loglevel to see HTTP requests:
+
+  SYNCEVOLUTION_DEBUG=1 syncevolution --daemon=no \
+                        loglevel=4 \
+                        --print-databases \
+                        ...

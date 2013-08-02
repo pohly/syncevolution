@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<service-type id="caldav">
+  <name>CalDAV</name>
+  <description>Integrate your events, tasks, memos via CalDAV</description>
+</service-type>

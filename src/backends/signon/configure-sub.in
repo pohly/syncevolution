@@ -15,3 +15,42 @@ fi
 
 # conditional compilation in make
 AM_CONDITIONAL([USE_GSSO], [test "$use_gsso" = "yes"])
+
+AC_ARG_WITH([google-client-id],
+            [OAuth2 client ID for google.provider],
+            [GOOGLE_CLIENT_ID=$withval],
+            [GOOGLE_CLIENT_ID=insert-your-client-id-here])
+AC_ARG_WITH([google-client-secret],
+            [OAuth2 client secret for google.provider],
+            [GOOGLE_CLIENT_SECRET=$withval],
+            [GOOGLE_CLIENT_SECRET=insert-your-client-secret-here])
+AC_SUBST(GOOGLE_CLIENT_ID)
+AC_SUBST(GOOGLE_CLIENT_SECRET)
+
+AC_ARG_WITH([google-client-id-caldav],
+            [OAuth2 client ID for google-caldav.service],
+            [GOOGLE_CLIENT_ID_CALDAV=$withval],
+            [GOOGLE_CLIENT_ID_CALDAV=insert-your-client-id-here])
+AC_ARG_WITH([google-client-secret],
+            [OAuth2 client secret for google-caldav.service],
+            [GOOGLE_CLIENT_SECRET_CALDAV=$withval],
+            [GOOGLE_CLIENT_SECRET_CALDAV=insert-your-client-secret-here])
+AC_SUBST(GOOGLE_CLIENT_ID_CALDAV)
+AC_SUBST(GOOGLE_CLIENT_SECRET_CALDAV)
+
+AC_ARG_WITH([google-client-id-carddav],
+            [OAuth2 client ID for google-carddav.service],
+            [GOOGLE_CLIENT_ID_CARDDAV=$withval],
+            [GOOGLE_CLIENT_ID_CARDDAV=insert-your-client-id-here])
+AC_ARG_WITH([google-client-secret],
+            [OAuth2 client secret for google-carddav.service],
+            [GOOGLE_CLIENT_SECRET_CARDDAV=$withval],
+            [GOOGLE_CLIENT_SECRET_CARDDAV=insert-your-client-secret-here])
+AC_SUBST(GOOGLE_CLIENT_ID_CARDDAV)
+AC_SUBST(GOOGLE_CLIENT_SECRET_CARDDAV)
+
+AC_CONFIG_FILES([
+  src/backends/signon/accounts/google-caldav.service
+  src/backends/signon/accounts/google-carddav.service
+  src/backends/signon/accounts/google.provider
+])
