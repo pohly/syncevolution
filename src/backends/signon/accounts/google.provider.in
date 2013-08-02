@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<provider id="google-contacts">
+  <name>Google Contacts</name>
+
+  <!-- default settings (account settings have precedence over these) -->
+  <template>
+    <group name="auth">
+      <setting name="method">oauth</setting>
+      <setting name="mechanism">oauth2</setting>
+      <group name="oauth">
+        <group name="oauth2">
+          <setting name="ResponseType">code</setting>
+          <setting name="AuthHost">accounts.google.com</setting>
+          <setting name="AuthPath">/o/oauth2/auth</setting>
+          <setting name="RedirectUri">http://localhost</setting>
+          <setting name="Scope">email https://www.googleapis.com/auth/carddav https://www.googleapis.com/auth/calendar</setting>
+          <setting name="TokenHost">accounts.google.com</setting>
+          <setting name="TokenPath">/o/oauth2/token</setting>
+          <setting name="ClientId">@GOOGLE_CLIENT_ID@</setting>
+          <setting name="ClientSecret">@GOOGLE_CLIENT_SECRET@</setting>
+          <setting type="boolean" name="ForceClientAuthViaRequestBody">true</setting>
+        </group>
+      </group>
+    </group>
+  </template>
+</provider>

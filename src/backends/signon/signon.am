@@ -1,4 +1,28 @@
-dist_noinst_DATA += src/backends/signon/configure-sub.in
+dist_noinst_DATA += src/backends/signon/configure-sub.in \
+  src/backends/signon/README \
+  $(NONE)
+
+# Distribute the .in file, install the generated one.
+accounts_servicesdir = $(docdir)/accounts/services
+nodist_accounts_services_DATA = \
+  src/backends/signon/accounts/google-caldav.service \
+  src/backends/signon/accounts/google-carddav.service \
+  $(NONE)
+dist_noinst_DATA += $(nodist_accounts_services_DATA:%:%.in)
+
+# Distribute the .in file, install the generated one.
+accounts_providersdir = $(docdir)/accounts/providers
+nodist_accounts_providers_DATA = \
+  src/backends/signon/accounts/google.provider \
+  $(NONE)
+dist_noinst_DATA += $(nodist_accounts_providers_DATA:%:%.in)
+
+# Distribute and install the same file.
+accounts_service_typesdir = $(docdir)/accounts/service_types
+dist_accounts_service_types_DATA = \
+  src/backends/signon/accounts/caldav.service-type \
+  src/backends/signon/accounts/carddav.service-type \
+  $(NONE)
 
 src_backends_signon_lib = src/backends/signon/providergsso.la
 MOSTLYCLEANFILES += $(src_backends_signon_lib)

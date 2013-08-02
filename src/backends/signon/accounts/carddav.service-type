@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<service-type id="carddav">
+  <name>CardDAV</name>
+  <description>Integrate your contacts via CardDAV</description>
+</service-type>
