@@ -39,6 +39,7 @@ SE_BEGIN_CXX
 struct ConfigPasswordKey {
  public:
     ConfigPasswordKey() : port(0) {}
+    std::string toString() const;
 
     /** the user for the password */
     std::string user;

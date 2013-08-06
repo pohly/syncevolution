@@ -18,9 +18,30 @@
  */
 
 #include <syncevo/UserInterface.h>
+#include <boost/algorithm/string/join.hpp>
+
+#include <boost/algorithm/string/join.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+std::string ConfigPasswordKey::toString() const
+{
+    std::vector<std::string> props;
+    props.reserve(7);
+#define PUSH_PROP(_x) if (!_x.empty()) { props.push_back(StringPrintf("%s=%s", #_x, _x.c_str())); }
+    PUSH_PROP(user);
+    PUSH_PROP(server);
+    PUSH_PROP(domain);
+    PUSH_PROP(object);
+    PUSH_PROP(protocol);
+    PUSH_PROP(authtype);
+#undef PUSH_PROP
+    if (port) {
+        props.push_back(StringPrintf("port=%d", port));
+    }
+    return boost::join(props, " ");
+}
 
 static bool CheckKeyring(const InitStateTri &keyring)
 {
