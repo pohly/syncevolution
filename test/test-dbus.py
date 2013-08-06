@@ -2292,11 +2292,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     def clearAllConfig(self):
         """ clear a server config. All should be removed. Used internally. """
         emptyConfig = {}
-        self.session.SetConfig(False, False, emptyConfig, utf8_strings=True)
+        self.session.SetConfig(False, False, emptyConfig, utf8_strings=True, timeout=self.dbusTimeout)
 
     def setupConfig(self):
         """ create a server with full config. Used internally. """
-        self.session.SetConfig(False, False, self.config, utf8_strings=True)
+        self.session.SetConfig(False, False, self.config, utf8_strings=True, timeout=self.dbusTimeout)
 
     def testTemporaryConfig(self):
         """TestSessionAPIsDummy.testTemporaryConfig - various temporary config changes"""
