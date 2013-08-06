@@ -68,6 +68,7 @@ bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
                            InitStateString &password)
 {
     if (!UseGNOMEKeyring(keyring)) {
+        SE_LOG_DEBUG(NULL, "not using GNOME keyring");
         return false;
     }
 
@@ -89,7 +90,15 @@ bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
         key_data = (GnomeKeyringNetworkPasswordData*)list->data;
         password = std::string(key_data->password);
         gnome_keyring_network_password_list_free(list);
+        SE_LOG_DEBUG(NULL, "loaded password from GNOME keyring using %s", key.toString().c_str());
+    } else {
+        SE_LOG_DEBUG(NULL, "password not in GNOME keyring using %s: %s",
+                     key.toString().c_str(),
+                     result == GNOME_KEYRING_RESULT_NO_MATCH ? "no match" :
+                     result != GNOME_KEYRING_RESULT_OK ? "error using keyring" :
+                     "empty result list");
     }
+
 
     return true;
 }
@@ -100,6 +109,7 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
                            const ConfigPasswordKey &key)
 {
     if (!UseGNOMEKeyring(keyring)) {
+        SE_LOG_DEBUG(NULL, "not using GNOME keyring");
         return false;
     }
 
@@ -137,6 +147,7 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
         SyncContext::throwError("Try to save " + passwordName + " in gnome-keyring but get an error. The gnome-keyring error code is " + value.str() + ".");
 #endif
     }
+    SE_LOG_DEBUG(NULL, "saved password in GNOME keyring using %s", key.toString().c_str());
 
     // handled
     return true;
