@@ -160,6 +160,7 @@ bool KWalletLoadPasswordSlot(const InitStateTri &keyring,
 {
     if (!UseKWallet(keyring,
                     GetLoadPasswordSignal().num_slots() - INTERNAL_LOAD_PASSWORD_SLOTS)) {
+        SE_LOG_DEBUG(NULL, "not using KWallet");
         return false;
     }
 
@@ -176,14 +177,19 @@ bool KWalletLoadPasswordSlot(const InitStateTri &keyring,
     //QString folder = QString::fromUtf8("Syncevolution");
     const QLatin1String folder("Syncevolution");
 
+    bool found = false;
     if (!KWallet::Wallet::keyDoesNotExist(wallet_name, folder, walletKey)) {
         KWallet::Wallet *wallet = KWallet::Wallet::openWallet(wallet_name, -1, KWallet::Wallet::Synchronous);
         if (wallet &&
             wallet->setFolder(folder) &&
             wallet->readPassword(walletKey, walletPassword) == 0) {
             password = walletPassword.toStdString();
+            found = true;
         }
     }
+    SE_LOG_DEBUG(NULL, "%s password in KWallet using %s",
+                 found ? "found" : "no",
+                 key.toString().c_str());
 
     return true;
 }
@@ -196,6 +202,7 @@ bool KWalletSavePasswordSlot(const InitStateTri &keyring,
 {
     if (!UseKWallet(keyring,
                     GetSavePasswordSignal().num_slots() - INTERNAL_SAVE_PASSWORD_SLOTS)) {
+        SE_LOG_DEBUG(NULL, "not using KWallet");
         return false;
     }
 
@@ -227,6 +234,8 @@ bool KWalletSavePasswordSlot(const InitStateTri &keyring,
     if (!write_success) {
         SyncContext::throwError("Saving " + passwordName + " in KWallet failed.");
     }
+    SE_LOG_DEBUG(NULL, "stored password in KWallet using %s",
+                 key.toString().c_str());
     return write_success;
 }
 
