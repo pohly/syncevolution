@@ -413,6 +413,9 @@ class Server : public GDBusCXX::DBusObjectHelper
     /** called 1 minute after last client detached from a session */
     static void sessionExpired(const boost::shared_ptr<Session> &session);
 
+    /** hooked into m_idleSignal, controls auto-termination */
+    void onIdleChange(bool idle);
+
 public:
     Server(GMainLoop *loop,
            bool &shutdownRequested,
@@ -434,7 +437,7 @@ public:
     /** true iff no work is pending */
     bool isIdle() const { return !m_activeSession && m_workQueue.empty(); }
 
-    /** isIdle() might have changed its value, current value included */
+    /** isIdle() has changed its value, current value included */
     typedef boost::signals2::signal<void (bool isIdle)> IdleSignal_t;
     IdleSignal_t m_idleSignal;
 

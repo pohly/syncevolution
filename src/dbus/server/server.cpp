@@ -43,9 +43,14 @@ using namespace GDBusCXX;
 
 SE_BEGIN_CXX
 
-static void logIdle(bool idle)
+void Server::onIdleChange(bool idle)
 {
     SE_LOG_DEBUG(NULL, "server is %s", idle ? "idle" : "not idle");
+    if (idle) {
+        autoTermUnref();
+    } else {
+        autoTermRef();
+    }
 }
 
 class ServerLogger : public Logger
@@ -397,8 +402,9 @@ Server::Server(GMainLoop *loop,
     add(infoRequest);
     add(m_logOutputSignal);
 
-    // log entering and leaving idle state
-    m_idleSignal.connect(boost::bind(logIdle, _1));
+    // Log entering and leaving idle state and
+    // allow/prevent auto-termination.
+    m_idleSignal.connect(boost::bind(&Server::onIdleChange, this, _1));
 
     // connect ConfigChanged signal to source for that information
     m_configChangedSignal.connect(boost::bind(boost::ref(configChanged)));
@@ -729,6 +735,7 @@ void Server::checkQueue()
             // activate the session
             m_activeSession = session.get();
             m_activeSessionRef = session;
+            SE_LOG_DEBUG(NULL, "activating session %p", m_activeSession);
             session->activateSession();
             sessionChanged(session->getPath(), true);
             return;
