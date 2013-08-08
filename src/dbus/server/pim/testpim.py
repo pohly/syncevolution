@@ -317,15 +317,7 @@ class Watchdog():
           if self.started == started:
                self.started = None
 
-class TestContacts(DBusUtil, unittest.TestCase):
-    """Tests for org._01.pim.contacts API.
-
-The tests use the system's EDS, which must be >= 3.6.
-They create additional databases in EDS under the normal
-location. This is necessary because the tests cannot
-tell the EDS source registry daemon to run with a different
-XDG root.
-"""
+class TestPIMUtil(DBusUtil, unittest.TestCase):
 
     def setUp(self):
         self.cleanup = []
@@ -521,7 +513,7 @@ VERSION:3.0\r?
                               'phone@' + self.managerPrefix + uid,
                               'addressbook'])
 
-    def run(self, result):
+    def run(self, result, serverArgs=[]):
         # No errors must be logged. During testRead, libphonenumber used to print
         #   [ERROR] Number too short to be viable: 8
         #   [ERROR] The string supplied did not seem to be a phone number.
@@ -604,11 +596,24 @@ VERSION:3.0\r?
         # of the need to check an additional process. Allow
         # a lot more time when running under valgrind.
         self.runTest(result, own_xdg=False, own_home=False,
+                     serverArgs=serverArgs,
                      defTimeout=usingValgrind() and 600 or 20)
 
     def currentSources(self):
         '''returns current set of EDS sources as set of UIDs, without the .source suffix'''
         return set([os.path.splitext(x)[0] for x in (os.path.exists(self.sourcedir) and os.listdir(self.sourcedir) or [])])
+
+
+
+def TestContacts(TestPIMUtil):
+    """Tests for org._01.pim.contacts API.
+
+The tests use the system's EDS, which must be >= 3.6.
+They create additional databases in EDS under the normal
+location. This is necessary because the tests cannot
+tell the EDS source registry daemon to run with a different
+XDG root.
+"""
 
     def testUIDError(self):
         '''TestContacts.testUIDError - check that invalid UID is properly detected and reported'''
@@ -4116,6 +4121,32 @@ END:VCARD''',
         self.assertEqual([('quiescent',)],
                          self.view.events)
         self.view.close()
+
+class TestSlowSync(TestPIMUtil):
+    """Test PIM Manager Sync"""
+
+    def run(self, result):
+         TestPIMUtil.run(self, result, serverArgs=['-d', '10'])
+
+    @timeout(60)
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=20")
+    def testSlowSync(self):
+        '''TestSlowSync.testSlowSync - run a sync which takes longer than the 10 second inactivity duration'''
+
+        # dummy peer directory
+        contacts = os.path.abspath(os.path.join(xdg_root, 'contacts'))
+        os.makedirs(contacts)
+
+        # add foo
+        peers = {}
+        uid = self.uidPrefix + 'foo'
+        peers[uid] = {'protocol': 'files',
+                      'address': contacts}
+        self.manager.SetPeer(uid,
+                             peers[uid],
+                             timeout=self.timeout)
+        self.manager.SyncPeer(uid,
+                              timeout=self.timeout)
 
 
 if __name__ == '__main__':
