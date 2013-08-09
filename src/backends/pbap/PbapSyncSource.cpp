@@ -200,15 +200,16 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
         std::string status = boost::get<std::string>(it->second);
         SE_LOG_DEBUG(NULL, "OBEXD transfer %s: %s",
                      path.c_str(), status.c_str());
-        Completion completion = Completion::now();
-        SE_LOG_DEBUG(NULL, "obexd transfer %s: %s", path.c_str(), status.c_str());
-        if (status == "error") {
-            // We have to make up some error descriptions. The Bluez
-            // 5 API no longer seems to provide that.
-            completion.m_transferErrorCode = "transfer failed";
-            completion.m_transferErrorMsg = "reason unknown";
+        if (status == "complete" || status == "error") {
+            Completion completion = Completion::now();
+            if (status == "error") {
+                // We have to make up some error descriptions. The Bluez
+                // 5 API no longer seems to provide that.
+                completion.m_transferErrorCode = "transfer failed";
+                completion.m_transferErrorMsg = "reason unknown";
+            }
+            m_transfers[path] = completion;
         }
-        m_transfers[path] = completion;
     }
 }
 
