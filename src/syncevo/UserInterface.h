@@ -54,6 +54,9 @@ struct ConfigPasswordKey {
     std::string authtype;
     /** the network port */
     unsigned int port;
+
+    /** a description of the password, for error messages */
+    std::string description;
 };
 
 /**

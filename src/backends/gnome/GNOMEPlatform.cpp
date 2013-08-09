@@ -103,6 +103,16 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
         return false;
     }
 
+    // Cannot store a password for just a user, that's ambiguous.
+    // Also, a password without server ("user=foo") somehow removes
+    // the password with server ("user=foo server=bar").
+    if (key.user.empty() ||
+        (key.domain.empty() && key.server.empty() && key.object.empty())) {
+        SE_THROW(StringPrintf("%s: cannot store password in GNOME keyring, not enough attributes (%s). Try setting syncURL or remoteDeviceID if this is a sync password.",
+                              key.description.c_str(),
+                              key.toString().c_str()));
+    }
+
     guint32 itemId;
     GnomeKeyringResult result;
     // write password to keyring

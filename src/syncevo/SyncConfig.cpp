@@ -1379,15 +1379,12 @@ public:
 
         bool peerIsClient = syncPropPeerIsClient.getPropertyValue(globalConfigNode);
         key.server = syncPropSyncURL.getProperty(globalConfigNode);
+        key.description = StringPrintf("sync password for %s", descr.c_str());
         if (peerIsClient && key.server.empty()) {
             /**
              * Fall back to username/remoteDeviceId as key.
              */
             key.server = syncPropRemoteDevID.getProperty(globalConfigNode);
-            if (key.server.empty()) {
-                SE_THROW(StringPrintf("cannot store password in keyring for a %s config without a syncURL or a remoteDeviceId that identify the peer",
-                                      peerIsClient ? "server" : "client"));
-            }
         } else {
             /**
              * Here we use server sync url without protocol prefix and
@@ -1400,9 +1397,6 @@ public:
             /* we don't preserve protocol prefix for it may change */
             if (start != key.server.npos) {
                 key.server = key.server.substr(start + 3);
-            }
-            if (key.server.empty()) {
-                SE_THROW("cannot store password in keyring for a client config without a syncURL that identifies the server");
             }
         }
         key.user = getUsername(syncPropUsername, globalConfigNode);
@@ -1474,6 +1468,7 @@ public:
         ConfigPasswordKey key;
         key.server = syncPropProxyHost.getProperty(globalConfigNode);
         key.user = getUsername(syncPropProxyUsername, globalConfigNode);
+        key.description = StringPrintf("proxy password for %s", descr.c_str());
         return key;
     }
 } syncPropProxyPassword;
@@ -2749,6 +2744,8 @@ public:
         key.object += " ";
         key.object += sourceName;
         key.object += " backend";
+        key.description = StringPrintf("databasePassword for %s in source %s",
+                                       descr.c_str(), sourceName.c_str());
         return key;
     }
     virtual const std::string getDescr(const std::string &serverName,
