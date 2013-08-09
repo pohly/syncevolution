@@ -317,7 +317,7 @@ class Watchdog():
           if self.started == started:
                self.started = None
 
-class TestPIMUtil(DBusUtil, unittest.TestCase):
+class TestPIMUtil(DBusUtil):
 
     def setUp(self):
         self.cleanup = []
@@ -605,7 +605,7 @@ VERSION:3.0\r?
 
 
 
-def TestContacts(TestPIMUtil):
+class TestContacts(TestPIMUtil, unittest.TestCase):
     """Tests for org._01.pim.contacts API.
 
 The tests use the system's EDS, which must be >= 3.6.
@@ -4122,13 +4122,13 @@ END:VCARD''',
                          self.view.events)
         self.view.close()
 
-class TestSlowSync(TestPIMUtil):
+class TestSlowSync(TestPIMUtil, unittest.TestCase):
     """Test PIM Manager Sync"""
 
     def run(self, result):
          TestPIMUtil.run(self, result, serverArgs=['-d', '10'])
 
-    @timeout(60)
+    @timeout(usingValgrind() and 600 or 60)
     @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=20")
     def testSlowSync(self):
         '''TestSlowSync.testSlowSync - run a sync which takes longer than the 10 second inactivity duration'''
