@@ -46,7 +46,7 @@
  N:marks;quotation;;;
  X-EVOLUTION-FILE-AS:marks\, quotation
  END:VCARD
-@@ -59,17 +53,15 @@
+@@ -59,17 +53,16 @@
  BEGIN:VCARD
  VERSION:3.0
  NICKNAME:user15
@@ -57,6 +57,7 @@
 +NOTE:Special BDAY with UTC
 +BDAY:2006-01-09T23:59:59Z
 +N:bday;special UTC offset;;;
++X-EVOLUTION-FILE-AS:bday\, special UTC offset
  END:VCARD
  
  BEGIN:VCARD
@@ -67,7 +68,7 @@
  N:set;char;;;
  X-EVOLUTION-FILE-AS:set\, char
  END:VCARD
-@@ -92,8 +84,7 @@
+@@ -92,8 +85,7 @@
   \\\n\nThe same\, in the middle of a line:\ncomma \, comma\ncolon : col
   on\nsemicolon \; semicolon\nbackslash \\ backslash\n\nA tab 	tab done\n	
   line starts with tab
@@ -77,7 +78,7 @@
  X-EVOLUTION-FILE-AS:Ü\, Ä
  CATEGORIES:Business
  X-EVOLUTION-BLOG-URL:
-@@ -101,7 +92,7 @@
+@@ -101,7 +93,7 @@
  FBURL:
  X-EVOLUTION-VIDEO-URL:
  X-MOZILLA-HTML:FALSE
@@ -86,7 +87,7 @@
  LABEL;TYPE=HOME:Umlaut Ä in Line 1\nLine 2\n\ntest 1\, test 3\ntest 2\ntest 5\ntest 4
  UID:pas-id-43C0EF0A00000002
  END:VCARD
-@@ -116,7 +107,6 @@
+@@ -116,7 +108,6 @@
  NICKNAME:user8
  X-EVOLUTION-SPOUSE:
  NOTE:Here are some special characters: comma \, colon : semicolon \;
@@ -94,7 +95,7 @@
  N:characters;special;;;
  X-EVOLUTION-FILE-AS:characters\, special
  X-EVOLUTION-BLOG-URL:
-@@ -139,7 +129,6 @@
+@@ -139,7 +130,6 @@
  NOTE:This test case uses line breaks. This is line 1.\nLine 2.\n\nLine brea
   ks in vcard 2.1 are encoded as =0D=0A.\nThat means the = has to be encod
   ed itself...
@@ -102,7 +103,7 @@
  N:breaks;line;;;
  X-EVOLUTION-FILE-AS:breaks\, line
  X-EVOLUTION-BLOG-URL:
-@@ -147,7 +136,7 @@
+@@ -147,7 +137,7 @@
  FBURL:
  X-EVOLUTION-VIDEO-URL:
  X-MOZILLA-HTML:FALSE
@@ -111,7 +112,7 @@
  LABEL;TYPE=HOME:Address Line 1\nAddress Line 2\nAddress Line 3
  UID:pas-id-43C15DFB000001AB
  END:VCARD
-@@ -167,49 +156,32 @@
+@@ -167,49 +157,32 @@
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
@@ -176,7 +177,7 @@
  END:VCARD
  
  BEGIN:VCARD
-@@ -222,8 +194,7 @@
+@@ -222,8 +195,7 @@
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
  NOTE:image in JPG format
@@ -186,7 +187,7 @@
  X-EVOLUTION-FILE-AS:JPG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -258,8 +229,7 @@
+@@ -258,8 +230,7 @@
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
  NOTE:image in PNG format
@@ -196,7 +197,7 @@
  X-EVOLUTION-FILE-AS:PNG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -289,8 +259,7 @@
+@@ -289,8 +260,7 @@
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
@@ -206,7 +207,7 @@
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -310,8 +279,7 @@
+@@ -310,8 +280,7 @@
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
  NOTE:image in GIF format
@@ -216,7 +217,7 @@
  X-EVOLUTION-FILE-AS:GIF
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -430,7 +398,6 @@
+@@ -430,7 +399,6 @@
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
