@@ -1,8 +1,8 @@
-src/dbus/interfaces/%.xml: src/dbus/interfaces/%-full.xml
+src/dbus/interfaces/%.xml: src/dbus/interfaces/%-full.xml src/dbus/interfaces/.stamp
 	$(AM_V_GEN)$(XSLT) -o $@ $(top_srcdir)/src/dbus/interfaces/spec-strip-docs.xsl $<
 
 if COND_DOC
-src/dbus/interfaces/%-doc.xml: src/dbus/interfaces/%-full.xml
+src/dbus/interfaces/%-doc.xml: src/dbus/interfaces/%-full.xml src/dbus/interfaces/.stamp
 	$(AM_V_GEN)$(XSLT) -o $@ $(top_srcdir)/src/dbus/interfaces/spec-to-docbook.xsl $<
 
 src/dbus/interfaces/syncevo-dbus-api-doc.xml: src/dbus/interfaces/syncevo-server-doc.xml src/dbus/interfaces/syncevo-session-doc.xml src/dbus/interfaces/syncevo-connection-doc.xml
@@ -14,8 +14,16 @@ src/dbus/interfaces/syncevo-dbus-api-doc.xml: src/dbus/interfaces/syncevo-server
 	done; \
 	echo '</reference>' >>$@
 
-src/dbus/interfaces/syncevo-dbus-api-doc.html: src/dbus/interfaces/syncevo-dbus-api-doc.xml build/xsl/html/docbook.xsl
+src/dbus/interfaces/syncevo-dbus-api-doc.html: src/dbus/interfaces/syncevo-dbus-api-doc.xml build/xsl/html/docbook.xsl src/dbus/interfaces/.stamp
 	$(AM_V_GEN)$(XSLT) -o $@ $(top_srcdir)/build/xsl/html/docbook.xsl $<
+
+# This serializes the creation of src/dbus/interfaces when using
+# out-of-tree builds. xsltproc does this as part of its -o
+# implementation, but that failed once when using parallel make (race
+# condition?).
+src/dbus/interfaces/.stamp:
+	mkdir -p $(@D)
+	touch $@
 
 doc_DATA += src/dbus/interfaces/syncevo-dbus-api-doc.html
 
@@ -34,7 +42,10 @@ endif
 
 BUILT_SOURCES += $(src_dbus_interfaces_built_sources)
 
-CLEANFILES += $(src_dbus_interfaces_built_sources)
+CLEANFILES += \
+	$(src_dbus_interfaces_built_sources) \
+	src/dbus/interfaces/.stamp \
+	$(NONE)
 
 dist_noinst_DATA += \
 	src/dbus/interfaces/spec-strip-docs.xsl \
