@@ -557,10 +557,6 @@ class DBusUtil(Timeout):
                 gdbinit = []
             DBusUtil.pserver = subprocess.Popen([debugger] + gdbinit + ['--args'] + server,
                                                 env=env)
-
-            while not bus.name_has_owner('org.syncevolution'):
-                time.sleep(1)
-            print "\nfound org.syncevolution on session bus, starting test"
         else:
             if os.environ.get("SYNCEVOLUTION_DEBUG", None):
                 logfile = None
@@ -581,13 +577,14 @@ class DBusUtil(Timeout):
                                                 env=env,
                                                 stdout=logfile,
                                                 stderr=subprocess.STDOUT)
-            if logfile != None:
-                while self.isServerRunning() and not bus.name_has_owner('org.syncevolution'):
-                    time.sleep(1)
-            else:
-                print "test-dbus.py: giving syncevo-dbus-server time to start"
-                time.sleep(5)
-                print "test-dbus.py: starting test"
+
+        # Don't use D-Bus auto-activation. Instead wait for our process to show up.
+        while self.isServerRunning() and not bus.name_has_owner('org.syncevolution'):
+            time.sleep(1)
+        # In addition, ensure that it is fully running by calling one method.
+        dbus.Interface(bus.get_object('org.syncevolution',
+                                      '/org/syncevolution/Server'),
+                       'org.syncevolution.Server').GetVersions(timeout=self.dbusTimeout)
 
         # pserver.pid is not necessarily the pid of syncevo-dbus-server.
         # It might be the child of the pserver process.
@@ -4925,6 +4922,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
 
     def modifyServerFile(self):
         """rename server executable to trigger shutdown"""
+        logging.printf('touching server file %s to trigger shutdown', self.serverexe)
         os.rename(self.serverexe, self.serverexe + ".bak")
         os.rename(self.serverexe + ".bak", self.serverexe)        
 
