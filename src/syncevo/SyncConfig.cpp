@@ -1333,6 +1333,23 @@ static ConfigProperty syncPropUsername("username",
                                        "user name used for authorization with the SyncML server",
                                        "");
 
+static BoolConfigProperty syncPropPeerIsClient("PeerIsClient",
+                                          "Indicates whether this configuration is about a\n"
+                                          "client peer or server peer.\n",
+                                          "FALSE");
+static SafeConfigProperty syncPropRemoteDevID("remoteDeviceId",
+                                              "SyncML ID of our peer, empty if unknown; must be set only when\n"
+                                              "the peer is a SyncML client contacting us via HTTP.\n"
+                                              "Clients contacting us via OBEX/Bluetooth can be identified\n"
+                                              "either via this remoteDeviceId property or by their MAC\n"
+                                              "address, if that was set in the syncURL property.\n"
+                                              "\n"
+                                              "If this property is empty and the peer synchronizes with\n"
+                                              "this configuration chosen by some other means, then its ID\n"
+                                              "is recorded here automatically and later used to verify that\n"
+                                              "the configuration is not accidentally used by a different\n"
+                                              "peer.");
+
 static class SyncPasswordConfigProperty : public PasswordConfigProperty
 {
 public:
@@ -1358,17 +1375,36 @@ public:
                                      FilterConfigNode &globalConfigNode,
                                      const string &sourceName,
                                      const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
-        /** here we use server sync url without protocol prefix and
-         * user account name as the key in the keyring */
         ConfigPasswordKey key;
 
+        bool peerIsClient = syncPropPeerIsClient.getPropertyValue(globalConfigNode);
         key.server = syncPropSyncURL.getProperty(globalConfigNode);
-        size_t start = key.server.find("://");
-        /* we don't preserve protocol prefix for it may change */
-        if (start != key.server.npos) {
-            key.server = key.server.substr(start + 3);
+        if (peerIsClient && key.server.empty()) {
+            /**
+             * Fall back to username/remoteDeviceId as key.
+             */
+            key.server = syncPropRemoteDevID.getProperty(globalConfigNode);
+            if (key.server.empty()) {
+                SE_THROW(StringPrintf("cannot store password in keyring for a %s config without a syncURL or a remoteDeviceId that identify the peer",
+                                      peerIsClient ? "server" : "client"));
+            }
+        } else {
+            /**
+             * Here we use server sync url without protocol prefix and
+             * user account name as the key in the keyring.
+             * The URL must not be empty, otherwise we end up
+             * overwriting the password of some other service just
+             * because it happens to have the same username.
+             */
+            size_t start = key.server.find("://");
+            /* we don't preserve protocol prefix for it may change */
+            if (start != key.server.npos) {
+                key.server = key.server.substr(start + 3);
+            }
+            if (key.server.empty()) {
+                SE_THROW("cannot store password in keyring for a client config without a syncURL that identifies the server");
+            }
         }
-
         key.user = getUsername(syncPropUsername, globalConfigNode);
         return key;
     }
@@ -1552,10 +1588,6 @@ static SecondsConfigProperty syncPropRetryInterval("RetryInterval",
                                           "to obtain the initial delay (default: 2m => 5s), which is then\n"
                                           "doubled for each retry."
                                           ,"2M");
-static BoolConfigProperty syncPropPeerIsClient("PeerIsClient",
-                                          "Indicates whether this configuration is about a\n"
-                                          "client peer or server peer.\n",
-                                          "FALSE");
 static SafeConfigProperty syncPropPeerName("PeerName",
                                            "An arbitrary name for the peer referenced by this config.\n"
                                            "Might be used by a GUI. The command line tool always uses the\n"
@@ -1667,19 +1699,6 @@ static ConfigProperty syncPropPeerType("peerType",
 static ULongConfigProperty syncPropHashCode("HashCode", "used by the SyncML library internally; do not modify");
 
 static ConfigProperty syncPropConfigDate("ConfigDate", "used by the SyncML library internally; do not modify");
-
-static SafeConfigProperty syncPropRemoteDevID("remoteDeviceId",
-                                              "SyncML ID of our peer, empty if unknown; must be set only when\n"
-                                              "the peer is a SyncML client contacting us via HTTP.\n"
-                                              "Clients contacting us via OBEX/Bluetooth can be identified\n"
-                                              "either via this remoteDeviceId property or by their MAC\n"
-                                              "address, if that was set in the syncURL property.\n"
-                                              "\n"
-                                              "If this property is empty and the peer synchronizes with\n"
-                                              "this configuration chosen by some other means, then its ID\n"
-                                              "is recorded here automatically and later used to verify that\n"
-                                              "the configuration is not accidentally used by a different\n"
-                                              "peer.");
 
 static SafeConfigProperty syncPropNonce("lastNonce",
                                         "MD5 nonce of our peer, empty if not set yet; do not edit, used internally");
