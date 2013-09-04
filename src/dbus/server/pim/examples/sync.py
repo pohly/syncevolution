@@ -150,8 +150,13 @@ def run():
         print error
         print
     return result
+async_args = {
+    'reply_handler': done,
+    'error_handler': failed,
+    'timeout': 100000,   # very large, infinite doesn't seem to be supported by Python D-Bus bindings
+}
 
-manager.GetAllPeers(reply_handler=done, error_handler=failed)
+manager.GetAllPeers(**async_args)
 peers = strip_dbus(run())
 print 'peers: %s' % peers
 print 'available databases: %s' % ([''] + ['peer-' + uid for uid in peers.keys()])
@@ -160,20 +165,17 @@ if not error and options.configure:
     peer = {'protocol': 'PBAP',
             'address': options.mac}
     print 'adding peer config %s = %s' % (uid, peer)
-    manager.SetPeer(uid, peer,
-                    reply_handler=done, error_handler=failed)
+    manager.SetPeer(uid, peer, **async_args)
     run()
 
 if not error and options.sync:
     print 'syncing peer %s' % uid
-    manager.SyncPeer(uid,
-                     reply_handler=done, error_handler=failed)
+    manager.SyncPeer(uid, **async_args)
     run()
 
 if not error and options.remove:
     print 'removing peer %s' % uid
-    manager.RemovePeer(uid,
-                       reply_handler=done, error_handler=failed)
+    manager.RemovePeer(uid, **async_args)
     run()
 
 if options.debug:
