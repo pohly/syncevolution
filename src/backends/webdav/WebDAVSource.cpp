@@ -194,16 +194,23 @@ void ContextSettings::lookupAuthProvider()
     InitStateString password;
 
     // prefer source config if anything is set there
+    const char *credentialsFrom;
     if (m_sourceConfig) {
         identity = m_sourceConfig->getUser();
         password = m_sourceConfig->getPassword();
+        credentialsFrom = "source config";
     }
 
     // fall back to context
     if (m_context && !identity.wasSet() && !password.wasSet()) {
         identity = m_context->getSyncUser();
         password = m_context->getSyncPassword();
+        credentialsFrom = "source context";
     }
+    SE_LOG_DEBUG(NULL, "using username '%s' from %s for WebDAV, password %s",
+                 identity.toString().c_str(),
+                 credentialsFrom,
+                 password.wasSet() ? "was set" : "not set");
 
     // lookup actual authentication method instead of assuming username/password
     m_authProvider = AuthProvider::create(identity, password);

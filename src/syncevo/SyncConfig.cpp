@@ -1993,10 +1993,18 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
     }
     FilterConfigNode &configNode = sourceConfigNode ? *sourceConfigNode : *globalConfigNode;
     InitStateString username = usernameProperty.getProperty(configNode);
-    SE_LOG_DEBUG(NULL, "checking password property '%s' in config '%s' with user identity '%s'",
-                 getMainName().c_str(),
-                 serverName.c_str(),
-                 username.c_str());
+    if (sourceName.empty()) {
+        SE_LOG_DEBUG(NULL, "checking password property '%s' in config '%s' with user identity '%s'",
+                     getMainName().c_str(),
+                     serverName.c_str(),
+                     username.c_str());
+    } else {
+        SE_LOG_DEBUG(NULL, "checking password property '%s' in source '%s' of config '%s' with user identity '%s'",
+                     getMainName().c_str(),
+                     sourceName.c_str(),
+                     serverName.c_str(),
+                     username.c_str());
+    }
     UserIdentity identity(UserIdentity::fromString(username));
 
     InitStateString passwordToSave;
@@ -2039,6 +2047,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
         string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
         if (password == "-") {
             ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
+            SE_LOG_DEBUG(NULL, "loading password from keyring with key %s", key.toString().c_str());
             std::string uiPassword = ui.askPassword(getMainName(),descr, key);
             // Empty means "no response". askPassword() pre-dates the
             // InitStateString class, and probably should be changed
@@ -2052,6 +2061,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
                   boost::ends_with(password, "}")) {
             string envname = password.substr(2, password.size() - 3);
             const char *envval = getenv(envname.c_str());
+            SE_LOG_DEBUG(NULL, "using password from env var %s", envname.c_str());
             if (!envval) {
                 SyncContext::throwError(string("the environment variable '") +
                                         envname +
@@ -2121,15 +2131,27 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
     InitStateString username = usernameProperty.getProperty(configNode);
     // In checkPassword() we retrieve from background storage and store as temporary value.
     // Here we use the temporary value and move it in the background storage.
+    // We allow empty passwords to be stored in the config although
+    // that might leak some information, because that is how SyncEvolution
+    // traditionally worked. Changing this now breaks tests and possibly
+    // causes problems for users depending on the old behavior.
     InitStateString password = getProperty(configNode);
-    if (!password.wasSet()) {
+    if (!password.wasSet() || password.empty()) {
         return;
     }
 
-    SE_LOG_DEBUG(NULL, "saving password property '%s' in config '%s' with user identity '%s'",
-                 getMainName().c_str(),
-                 serverName.c_str(),
-                 username.c_str());
+    if (sourceName.empty()) {
+        SE_LOG_DEBUG(NULL, "possibly saving password property '%s' in config '%s' with user identity '%s'",
+                     getMainName().c_str(),
+                     serverName.c_str(),
+                     username.c_str());
+    } else {
+        SE_LOG_DEBUG(NULL, "possibly saving password property '%s' in source '%s' of config '%s' with user identity '%s'",
+                     getMainName().c_str(),
+                     sourceName.c_str(),
+                     serverName.c_str(),
+                     username.c_str());
+    }
     UserIdentity identity(UserIdentity::fromString(username));
 
 
@@ -2175,9 +2197,11 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
         if (password == "-" || password == "" ||
             (boost::starts_with(password, "${") && boost::ends_with(password, "}"))) {
             // Nothing to do, leave it as is.
+            SE_LOG_DEBUG(NULL, "no need to save, interactive or env var password");
         } else {
             string descr = getDescr(serverName,*globalConfigNode,sourceName,sourceConfigNode);
             ConfigPasswordKey key = getPasswordKey(descr,serverName,*globalConfigNode,sourceName,sourceConfigNode);
+            SE_LOG_DEBUG(NULL, "saving password in keyring with key %s", key.toString().c_str());
             if (ui.savePassword(getMainName(), password, key)) {
                 passwordToSave = "-";
                 updatePassword = true;
