@@ -62,7 +62,7 @@ if options.configure or options.sync or options.remove:
 
     # Use MAC address as UID of peer, but with underscores instead of colons
     # and all in lower case. See https://bugs.freedesktop.org/show_bug.cgi?id=56436
-    uid = options.mac.replace(':', '_').lower()
+    uid = options.mac.replace(':', '').lower()
 
 DBusGMainLoop(set_as_default=True)
 bus = dbus.SessionBus()
