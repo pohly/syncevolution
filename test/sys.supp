@@ -830,7 +830,7 @@
    ...
    fun:gcry_mpi_snew
    ...
-   fun:gnome_keyring_set_network_password*
+   fun:gnome_keyring_*_network_password*
    fun:*GNOME*Password*
 }
 
