@@ -1,4 +1,7 @@
-dist_noinst_DATA += src/backends/pbap/configure-sub.in
+dist_noinst_DATA += \
+  src/backends/pbap/configure-sub.in \
+  src/backends/pbap/README \
+  $(NONE)
 
 src_backends_pbap_lib = src/backends/pbap/syncpbap.la
 MOSTLYCLEANFILES += $(src_backends_pbap_lib)
