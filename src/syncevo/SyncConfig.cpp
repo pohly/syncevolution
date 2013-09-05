@@ -1729,14 +1729,11 @@ static ConfigProperty globalPropKeyring("keyring",
                                         "yes/true/1\n  pick one automatically\n"
                                         "no/false/0\n  store passwords in SyncEvolution config files\n"
                                         "\n"
-                                        "If unset, the default is to pick one automatically in\n"
-                                        "the D-Bus server and not use any keyring in the command\n"
-                                        "tool when running without that D-Bus server (because the\n"
-                                        "keyring might not be usable without a desktop session).\n"
-                                        "If support for only storage was compiled and installed,\n"
-                                        "then that is the one which gets picked. Otherwise the\n"
-                                        "default is to use GNOME Keyring (because distinguishing\n"
-                                        "between KDE and GNOME sessions automatically is tricky).\n"
+                                        "If unset, the default is to pick one automatically if support\n"
+                                        "for any kind of password storage was enabled and use the config files\n"
+                                        "otherwise. When choosing automatically, GNOME keyring is tried\n"
+                                        "first because distinguishing between KDE and GNOME sessions\n"
+                                        "automatically is tricky.\n"
                                         "\n"
                                         "Note that using this option applies to *all* passwords in\n"
                                         "a configuration and that the --keyring command line option\n"
@@ -1747,12 +1744,17 @@ static ConfigProperty globalPropKeyring("keyring",
                                         "\n"
                                         "     --keyring --configure proxyPassword=foo\n"
                                         "\n"
-                                        "When passwords were stored in the keyring, their value is set to a single\n"
+                                        "When passwords were stored in a safe storage, their value is set to a single\n"
                                         "hyphen (\"-\") in the configuration. This means that when running a\n"
-                                        "synchronization without the --keyring argument, the password has to be\n"
+                                        "synchronization without using the storage, the password has to be\n"
                                         "entered interactively. The --print-config output always shows \"-\" instead\n"
                                         "of retrieving the password from the keyring.\n",
-                                        "yes");
+#ifdef HAVE_KEYRING
+                                        "yes"
+#else
+                                        "no"
+#endif
+                                        );
 
 static StringConfigProperty syncPropAutoSync("autoSync",
                                              "Controls automatic synchronization. Currently,\n"

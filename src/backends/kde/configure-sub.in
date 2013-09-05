@@ -38,6 +38,7 @@ AC_ARG_ENABLE(kwallet,
               [use_kde_kwallet="no"])
 
 if test "$use_kde_kwallet" = "yes"; then
+    have_keyring=yes
     # conditional compilation in preprocessor
     AC_DEFINE(USE_KDE_KWALLET, 1, [KWallet available])
     # link into static executables, similar to a SyncSource

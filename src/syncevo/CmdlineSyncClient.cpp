@@ -40,8 +40,7 @@ string CmdlineSyncClient::askPassword(const string &passwordName,
     InitStateString password;
 
     // try to use keyring, if allowed
-    if (useKeyring() &&
-        GetLoadPasswordSignal()(getKeyring(), passwordName, descr, key,  password) &&
+    if (GetLoadPasswordSignal()(getKeyring(), passwordName, descr, key,  password) &&
         password.wasSet()) {
         // succcess
         return password;
@@ -73,8 +72,7 @@ bool CmdlineSyncClient::savePassword(const string &passwordName,
                                      const string &password,
                                      const ConfigPasswordKey &key)
 {
-    if (useKeyring() &&
-        GetSavePasswordSignal()(getKeyring(), passwordName, password, key)) {
+    if (GetSavePasswordSignal()(getKeyring(), passwordName, password, key)) {
         // saved!
         return true;
     }
@@ -88,14 +86,6 @@ void CmdlineSyncClient::readStdin(string &content)
     if (!ReadFile(cin, content)) {
         throwError("stdin", errno);
     }
-}
-
-bool CmdlineSyncClient::useKeyring()
-{
-    InitStateTri keyring = getKeyring();
-    return keyring.wasSet() &&
-        keyring.getValue() != InitStateTri::VALUE_FALSE &&
-        keyring.get() != "";
 }
 
 SE_END_CXX

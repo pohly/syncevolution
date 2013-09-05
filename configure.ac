@@ -1077,6 +1077,12 @@ AC_SUBST(SYNCEVOLUTION_LIBS)
 # invoking syncevolution binary is allowed to fail when cross-compiling
 AM_CONDITIONAL([COND_CROSS_COMPILING], [test "$cross_compiling" = "yes"])
 
+# Set by any of the backends providing a keyring, determines the
+# default for the "keyring" option.
+if test "$have_keyring" = "yes"; then
+   AC_DEFINE(HAVE_KEYRING, 1, [some kind of secure credential store is available])
+fi
+
 AC_CONFIG_FILES([
   Makefile
   src/syncevo/syncevolution.pc

@@ -46,14 +46,6 @@ class CmdlineSyncClient : public SyncContext, private UserInterface {
 
     /** read from real stdin */
     virtual void readStdin(string &content);
-
- private:
-    /**
-     * special semantic of --daemon=no command line:
-     * don't use keyring if option is unset or
-     * explicitly false
-     */
-    bool useKeyring();
 };
 
 /**
