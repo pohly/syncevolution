@@ -38,30 +38,17 @@ using namespace std;
 SE_BEGIN_CXX
 
 FileConfigTree::FileConfigTree(const string &root,
-                               const string &peer,
                                SyncConfig::Layout layout) :
     m_root(root),
-    m_peer(peer),
     m_layout(layout),
     m_readonly(false)
 {
-}
-
-string FileConfigTree::getRootPath() const
-{
-    return normalizePath(m_root + "/" + m_peer);
 }
 
 void FileConfigTree::flush()
 {
     BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
         node.second->flush();
-    }
-    if (m_layout == SyncConfig::SHARED_LAYOUT) {
-        // ensure that "peers" directory exists for new-style configs,
-        // not created by flushing nodes for pure context configs but
-        // needed to detect new-syle configs
-        mkdir_p(getRootPath() + "/peers");
     }
 }
 

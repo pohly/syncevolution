@@ -40,21 +40,18 @@ class FileConfigTree : public ConfigTree {
     /**
      * @param root              absolute filesystem path for
      *                          .syncj4/evolution or .config/syncevolution
-     * @param peer              the relative path to the peer configuration
      * @param layout            determines file names to be used;
-     *                          HTTP_SERVER_LAYOUT and SHARED_LAYOUT are the same except
-     *                          that SHARED_LAYOUT creates the "peers" directory during
-     *                          flushing
+     *                          HTTP_SERVER_LAYOUT and SHARED_LAYOUT are the same,
+     *                          whereas SYNC4J_LAYOUT activates some backward-compatibility code
      */
     FileConfigTree(const std::string &root,
-                   const std::string &peer,
                    SyncConfig::Layout layout);
 
     void setReadOnly(bool readonly) { m_readonly = readonly; }
     bool getReadOnly() const { return m_readonly; }
+    std::string getRoot() const { return m_root; }
 
     /* ConfigTree API */
-    virtual std::string getRootPath() const;
     virtual void flush();
     virtual void reload();
     virtual void remove(const std::string &path);
@@ -75,7 +72,6 @@ class FileConfigTree : public ConfigTree {
 
  private:
     const std::string m_root;
-    const std::string m_peer;
     SyncConfig::Layout m_layout;
     bool m_readonly;
 

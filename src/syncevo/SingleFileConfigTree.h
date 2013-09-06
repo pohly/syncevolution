@@ -62,7 +62,6 @@ class SingleFileConfigTree : public ConfigTree {
     boost::shared_ptr<ConfigNode> open(const std::string &filename);
 
     /* ConfigTree API */
-    virtual std::string getRootPath() const { return m_data->getName(); }
     virtual void flush();
     virtual void reload();
     virtual void remove(const std::string &path);

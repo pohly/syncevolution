@@ -330,6 +330,7 @@ SyncConfig::SyncConfig() :
 void SyncConfig::makeVolatile()
 {
     m_tree.reset(new VolatileConfigTree());
+    m_fileTree.reset();
     m_peerNode.reset(new VolatileConfigNode());
     m_hiddenPeerNode = m_peerNode;
     m_globalNode = m_peerNode;
@@ -381,6 +382,7 @@ SyncConfig::SyncConfig(const string &peer,
         if (!access((path + "/spds/syncml/config.txt").c_str(), F_OK)) {
             m_layout = SYNC4J_LAYOUT;
         } else {
+            m_layout = SHARED_LAYOUT;
             root = getNewRoot();
             path = root + "/" + m_peerPath;
             if (!access((path + "/config.ini").c_str(), F_OK) &&
@@ -396,9 +398,8 @@ SyncConfig::SyncConfig(const string &peer,
                 }
             }
         }
-        m_tree.reset(new FileConfigTree(root,
-                                        m_peerPath.empty() ? m_contextPath : m_peerPath,
-                                        m_layout));
+        m_fileTree.reset(new FileConfigTree(root, m_layout));
+        m_tree = m_fileTree;
     }
 
     string path;
@@ -656,13 +657,16 @@ void SyncConfig::migrate(const std::string &config)
 
 string SyncConfig::getRootPath() const
 {
-    return m_tree->getRootPath();
+    return m_fileTree ?
+        normalizePath(m_fileTree->getRoot() + "/" +
+                      ((m_layout == SYNC4J_LAYOUT || hasPeerProperties()) ? m_peerPath : m_contextPath)) :
+        "";
 }
 
 void SyncConfig::addPeers(const string &root,
                           const std::string &configname,
                           SyncConfig::ConfigList &res) {
-    FileConfigTree tree(root, "", SyncConfig::HTTP_SERVER_LAYOUT);
+    FileConfigTree tree(root, SyncConfig::HTTP_SERVER_LAYOUT);
     list<string> servers = tree.getChildren("");
     BOOST_FOREACH(const string &server, servers) {
         // sanity check: only list server directories which actually
@@ -930,8 +934,11 @@ list<string> SyncConfig::getPeers() const
     list<string> res;
 
     if (!hasPeerProperties()) {
-        FileConfigTree tree(getRootPath(), "", SHARED_LAYOUT);
-        res = tree.getChildren("peers");
+        std::string rootPath = getRootPath();
+        if (!rootPath.empty()) {
+            FileConfigTree tree(getRootPath(), SHARED_LAYOUT);
+            res = tree.getChildren("peers");
+        }
     }
 
     return res;
@@ -964,6 +971,13 @@ void SyncConfig::preFlush(UserInterface &ui)
 void SyncConfig::flush()
 {
     if (!isEphemeral()) {
+        if (m_fileTree && m_layout == SHARED_LAYOUT && !hasPeerProperties()) {
+            // Ensure that "peers" directory exists for new-style
+            // configs.  It would not get created when flushing nodes
+            // for pure context configs otherwise (it's empty), and we
+            // need it to detect new-syle configs.
+            mkdir_p(m_fileTree->getRoot() + "/" + m_contextPath + "/peers");
+        }
         m_tree->flush();
     }
 }
@@ -1098,8 +1112,14 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
             serverNode = node;
     } else {
         // Here we assume that m_tree is a FileConfigTree. Otherwise getRootPath()
-        // will not point into a normal file system.
-        cacheDir = m_tree->getRootPath() + "/" + peerPath + "/.cache";
+        // will not point into a normal file system. We fall back to not allowing
+        // the usage of a cache dir by using /dev/null in that case.
+        std::string rootPath = getRootPath();
+        if (rootPath.empty()) {
+            cacheDir = "/dev/null";
+        } else {
+            cacheDir = rootPath + "/" + peerPath + "/.cache";
+        }
 
         node = m_tree->open(peerPath, ConfigTree::visible);
         if (compatMode) {

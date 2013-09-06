@@ -52,7 +52,7 @@ boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const string &filename)
         return entry;
     }
 
-    string name = getRootPath() + " - " + normalized;
+    string name = m_data->getName() + " - " + normalized;
     boost::shared_ptr<DataBlob> data; 
 
     BOOST_FOREACH(const FileContent_t::value_type &file, m_content) {

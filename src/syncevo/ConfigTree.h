@@ -81,9 +81,6 @@ class ConfigTree {
      */
     virtual void remove(const std::string &path) = 0;
 
-    /** a string identifying the root of the configuration - exact meaning varies */
-    virtual std::string getRootPath() const = 0;
-
     /**
      * Selects which node attached to a path name is to be used.
      * This is similar in concept to multiple data forks in a file.

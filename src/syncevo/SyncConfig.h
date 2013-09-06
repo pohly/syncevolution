@@ -39,6 +39,8 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+class FileConfigTree;
+
 /**
  * @defgroup ConfigHandling Configuration Handling
  * @{
@@ -973,7 +975,7 @@ class SyncConfig {
      */
     void prepareConfigForWrite();
 
-   /** absolute directory name of the configuration root */
+   /** absolute directory name of the configuration root, empty if unknown or not available */
     std::string getRootPath() const;
 
     typedef std::list< std::pair<std::string, std::string> > ConfigList;
@@ -1652,6 +1654,11 @@ private:
 
     /** holds all config nodes relative to the root that we found */
     boost::shared_ptr<ConfigTree> m_tree;
+
+    /**
+     * Same instance as m_tree, except that we know that it is a FileConfigTree.
+     */
+    boost::shared_ptr<FileConfigTree> m_fileTree;
 
     /** access to global sync properties, independent of
         the context (for example, "defaultPeer") */
