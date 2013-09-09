@@ -482,6 +482,11 @@ void Cmdline::makeObsolete(boost::shared_ptr<SyncConfig> &from)
     } else {
         newConfigName = oldContext + suffix;
     }
+
+    // Clear old pointer first. That frees cached data in SyncConfig,
+    // which otherwise fails to notice that we moved files on disk
+    // around.
+    from.reset();
     from.reset(new SyncConfig(newConfigName));
 }
 

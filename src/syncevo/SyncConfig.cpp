@@ -347,6 +347,99 @@ void SyncConfig::makeEphemeral()
     // m_contextHiddenNode = m_hiddenPeerNode;
 }
 
+/**
+ * The goal is to have only one FileConfigTree instance per file system
+ * location. This ensures that in-memory representations remain in sync
+ * when instantiating a SyncConfig is created multiple times. In addition,
+ * FilterConfigNodes also must only exit once per underlying node. This
+ * allows sharing cached passwords between configs when using indirect
+ * password lookup.
+ *
+ * The implementation in both cases is the same: keep a cache with
+ * weak pointers. When asked for an instance, consult the cache first.
+ * If the instance still exists, we can return that shared pointer. If
+ * not, we create a new one.
+ *
+ * It is necessary to garbage-collect obsolete entries, because the
+ * lookup parameters might never be used again.
+ */
+class ConfigCache
+{
+    typedef std::map< std::pair<std::string, SyncConfig::Layout>, boost::weak_ptr<FileConfigTree> > TreeMap;
+    TreeMap m_trees;
+    typedef std::map< ConfigNode *,  boost::weak_ptr<FilterConfigNode> > NodeMap;
+    NodeMap m_nodes;
+
+    template<class M> void purge(M &map)
+    {
+        typename M::iterator it = map.begin();
+        while (it != map.end()) {
+            if (!it->second.lock()) {
+                typename M::iterator next = it;
+                ++next;
+                map.erase(it);
+                it = next;
+            } else {
+                ++it;
+            }
+        }
+    }
+    void purge();
+
+public:
+    boost::shared_ptr<FileConfigTree> createTree(const std::string &root,
+                                                 SyncConfig::Layout layout);
+    /**
+     * The filter is only installed when creating a new node. It is
+     * assumed to be the same when reusing the node.
+     */
+    boost::shared_ptr<FilterConfigNode> createNode(const boost::shared_ptr<ConfigNode> &node,
+                                                   const FilterConfigNode::ConfigFilter &filter = FilterConfigNode::ConfigFilter());
+    static ConfigCache &singleton();
+};
+
+ConfigCache &ConfigCache::singleton()
+{
+    static ConfigCache instance;
+    return instance;
+}
+
+void ConfigCache::purge()
+{
+    purge(m_trees);
+    purge(m_nodes);
+}
+
+boost::shared_ptr<FileConfigTree> ConfigCache::createTree(const std::string &root,
+                                                          SyncConfig::Layout layout)
+{
+    TreeMap::mapped_type &entry = m_trees[TreeMap::key_type(root, layout)];
+    boost::shared_ptr<FileConfigTree> result;
+    result = entry.lock();
+    if (!result) {
+        result.reset(new FileConfigTree(root, layout));
+        entry = result;
+    }
+
+    purge();
+    return result;
+}
+
+boost::shared_ptr<FilterConfigNode> ConfigCache::createNode(const boost::shared_ptr<ConfigNode> &node,
+                                                            const FilterConfigNode::ConfigFilter &filter)
+{
+    NodeMap::mapped_type &entry = m_nodes[node.get()];
+    boost::shared_ptr<FilterConfigNode> result;
+    result = entry.lock();
+    if (!result) {
+        result.reset(new FilterConfigNode(node, filter));
+        entry = result;
+    }
+
+    purge();
+    return result;
+}
+
 SyncConfig::SyncConfig(const string &peer,
                        boost::shared_ptr<ConfigTree> tree,
                        const string &redirectPeerRootPath) :
@@ -398,7 +491,7 @@ SyncConfig::SyncConfig(const string &peer,
                 }
             }
         }
-        m_fileTree.reset(new FileConfigTree(root, m_layout));
+        m_fileTree = ConfigCache::singleton().createTree(root, m_layout);
         m_tree = m_fileTree;
     }
 
@@ -409,7 +502,7 @@ SyncConfig::SyncConfig(const string &peer,
         // all properties reside in the same node
         path = m_peerPath + "/spds/syncml";
         node = m_tree->open(path, ConfigTree::visible);
-        m_peerNode.reset(new FilterConfigNode(node));
+        m_peerNode = ConfigCache::singleton().createNode(node);
         m_globalNode =
             m_contextNode = m_peerNode;
         m_hiddenPeerNode =
@@ -417,7 +510,7 @@ SyncConfig::SyncConfig(const string &peer,
             m_globalHiddenNode =
             node;
         m_props[false] = m_peerNode;
-        m_props[true].reset(new FilterConfigNode(m_hiddenPeerNode));
+        m_props[true] = ConfigCache::singleton().createNode(m_hiddenPeerNode);
         break;
     case HTTP_SERVER_LAYOUT: {
         // properties which are normally considered shared are
@@ -425,13 +518,13 @@ SyncConfig::SyncConfig(const string &peer,
         // except for global ones
         path = "";
         node = m_tree->open(path, ConfigTree::visible);
-        m_globalNode.reset(new FilterConfigNode(node));
+        m_globalNode = ConfigCache::singleton().createNode(node);
         node = m_tree->open(path, ConfigTree::hidden);
         m_globalHiddenNode = node;
 
         path = m_peerPath;      
         node = m_tree->open(path, ConfigTree::visible);
-        m_peerNode.reset(new FilterConfigNode(node));
+        m_peerNode = ConfigCache::singleton().createNode(node);
         m_contextNode = m_peerNode;
         m_hiddenPeerNode =
             m_contextHiddenNode =
@@ -466,7 +559,7 @@ SyncConfig::SyncConfig(const string &peer,
         // really use different nodes for everything
         path = "";
         node = m_tree->open(path, ConfigTree::visible);
-        m_globalNode.reset(new FilterConfigNode(node));
+        m_globalNode = ConfigCache::singleton().createNode(node);
         node = m_tree->open(path, ConfigTree::hidden);
         m_globalHiddenNode = node;
 
@@ -484,7 +577,7 @@ SyncConfig::SyncConfig(const string &peer,
         } else {
             node = m_tree->open(path, ConfigTree::visible);
         }
-        m_peerNode.reset(new FilterConfigNode(node));
+        m_peerNode = ConfigCache::singleton().createNode(node);
         if (path.empty()) {
             m_hiddenPeerNode = m_peerNode;
         } else {
@@ -493,7 +586,7 @@ SyncConfig::SyncConfig(const string &peer,
 
         path = m_contextPath;
         node = m_tree->open(path, ConfigTree::visible);
-        m_contextNode.reset(new FilterConfigNode(node));
+        m_contextNode = ConfigCache::singleton().createNode(node);
         m_contextHiddenNode = m_tree->open(path, ConfigTree::hidden);
 
         // Instantiate multiplexer with the most specific node name in
@@ -1106,7 +1199,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
 
     if (peerPath.empty()) {
         node.reset(new DevNullConfigNode(m_contextPath + " without peer configuration"));
-        peerNode.reset(new FilterConfigNode(node));
+        peerNode = ConfigCache::singleton().createNode(node);
         hiddenPeerNode =
             trackingNode =
             serverNode = node;
@@ -1138,7 +1231,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
             }
             node = compat;
         }
-        peerNode.reset(new FilterConfigNode(node, m_sourceFilters.createSourceFilter(name)));
+        peerNode = ConfigCache::singleton().createNode(node, m_sourceFilters.createSourceFilter(name));
         hiddenPeerNode = m_tree->open(peerPath, ConfigTree::hidden);
         trackingNode = m_tree->open(peerPath, ConfigTree::other, changeId);
         serverNode = m_tree->open(peerPath, ConfigTree::server, changeId);
@@ -1162,7 +1255,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         boost::shared_ptr<ConfigNode> node(new IniHashConfigNode(path,
                                                                  ".internal.ini",
                                                                  false));
-        hiddenPeerNode.reset(new FilterConfigNode(node));
+        hiddenPeerNode = ConfigCache::singleton().createNode(node);
         hiddenPeerNode = boost::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
         if (peerPath.empty()) {
             hiddenPeerNode = peerNode;
@@ -1181,7 +1274,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
                               InitStateString(sourceType.m_backend, !sourceType.m_backend.empty()));
             node = compat;
         }
-        sharedNode.reset(new FilterConfigNode(node, m_sourceFilters.createSourceFilter(name)));
+        sharedNode = ConfigCache::singleton().createNode(node, m_sourceFilters.createSourceFilter(name));
     }
 
     SyncSourceNodes nodes(!peerPath.empty(), sharedNode, peerNode, hiddenPeerNode, trackingNode, serverNode, cacheDir);
