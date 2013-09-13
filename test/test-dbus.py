@@ -470,9 +470,6 @@ class DBusUtil(Timeout):
     pserver = None
     pmonitor = None
     storedenv = {}
-    # Choose a very long timeout for method calls;
-    # 'infinite' doesn't seem to be documented for Python.
-    dbusTimeout = 100000
 
     def getTestProperty(self, key, default):
         """retrieve values set with @property()"""
@@ -606,7 +603,7 @@ class DBusUtil(Timeout):
         # In addition, ensure that it is fully running by calling one method.
         dbus.Interface(bus.get_object('org.syncevolution',
                                       '/org/syncevolution/Server'),
-                       'org.syncevolution.Server').GetVersions(timeout=self.dbusTimeout)
+                       'org.syncevolution.Server').GetVersions()
 
         # pserver.pid is not necessarily the pid of syncevo-dbus-server.
         # It might be the child of the pserver process.
@@ -974,9 +971,9 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         If wait=True, then this call blocks until the session is ready.
         """
         if flags:
-            sessionpath = self.server.StartSessionWithFlags(config, flags, timeout=self.dbusTimeout)
+            sessionpath = self.server.StartSessionWithFlags(config, flags)
         else:
-            sessionpath = self.server.StartSession(config, timeout=self.dbusTimeout)
+            sessionpath = self.server.StartSession(config)
 
         def session_ready(object, ready):
             if self.running and ready and object == sessionpath:
@@ -993,7 +990,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 sessionpath),
                                  'org.syncevolution.Session')
-        status, error, sources = session.GetStatus(utf8_strings=True, timeout=self.dbusTimeout)
+        status, error, sources = session.GetStatus(utf8_strings=True)
         if wait and status == "queueing":
             # wait for signal
             loop.run()
@@ -1139,8 +1136,8 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         config["source/addressbook"] = addressbook
         if enableCalendar:
             config["source/calendar"] = calendar
-        self.session.SetConfig(False, False, config, timeout=self.dbusTimeout)
-        self.session.Detach(timeout=self.dbusTimeout)
+        self.session.SetConfig(False, False, config)
+        self.session.Detach()
         self.setUpSession("server")
         config = {"" : { "loglevel": "4",
                          "syncURL": "local://@client",
@@ -1157,7 +1154,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                           "backend": "file",
                                           "databaseFormat": "text/calendar",
                                           "database": "file://" + xdg_root + "/server-calendar" }
-        self.session.SetConfig(False, False, config, timeout=self.dbusTimeout)
+        self.session.SetConfig(False, False, config)
 
     def setUpFiles(self, snapshot):
         """ Copy reference directory trees from
@@ -2311,11 +2308,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     def clearAllConfig(self):
         """ clear a server config. All should be removed. Used internally. """
         emptyConfig = {}
-        self.session.SetConfig(False, False, emptyConfig, utf8_strings=True, timeout=self.dbusTimeout)
+        self.session.SetConfig(False, False, emptyConfig, utf8_strings=True)
 
     def setupConfig(self):
         """ create a server with full config. Used internally. """
-        self.session.SetConfig(False, False, self.config, utf8_strings=True, timeout=self.dbusTimeout)
+        self.session.SetConfig(False, False, self.config, utf8_strings=True)
 
     def testTemporaryConfig(self):
         """TestSessionAPIsDummy.testTemporaryConfig - various temporary config changes"""
@@ -5581,7 +5578,7 @@ class CmdlineUtil(DBusUtil):
             pass
         if sessionFlags != None:
             self.assertTrue(self.session)
-            self.assertEqual(self.session.GetFlags(timeout=self.dbusTimeout), sessionFlags)
+            self.assertEqual(self.session.GetFlags(), sessionFlags)
 
         return (out, err, s.returncode)
 
@@ -9145,7 +9142,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
             config[""]["RetryDuration"] = retryDuration
         if retryInterval != None:
             config[""]["RetryInterval"] = retryInterval
-        self.session.SetNamedConfig("client", False, False, config, timeout=self.dbusTimeout)
+        self.session.SetNamedConfig("client", False, False, config)
         config = {"" : { "loglevel": "4",
                          "peerIsClient": "1",
                          "deviceId": clientID, # Has to be repeated because it is shared.
@@ -9168,7 +9165,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
                   }
         if requestMaxTime != None:
             config[""]["SyncMLVersion"] = "requestmaxtime=%d" % requestMaxTime
-        self.session.SetNamedConfig("server", False, False, config, timeout=self.dbusTimeout)
+        self.session.SetNamedConfig("server", False, False, config)
         self.session.Detach()
 
     @timeout(200)
@@ -9317,7 +9314,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
 
         # We need to abort syncevo-dbus-server. Aborting the client via SIGTERM
         # would not abort the server.
-        self.session.Abort(timeout=self.dbusTimeout)
+        self.session.Abort()
 
         # The HTTP client should see a network error.
         out, err, code = self.finishCmdline(s, expectSuccess=False, sessionFlags=None)
@@ -9334,7 +9331,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertIn('continue opening file source', self.messages)
 
         # Finally, also check server session status.
-        status, error, sources = self.session.GetStatus(timeout=self.dbusTimeout)
+        status, error, sources = self.session.GetStatus()
         self.assertEqual(('done', 20017), (status, error))
 
 if __name__ == '__main__':

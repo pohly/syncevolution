@@ -115,14 +115,13 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
 
      def search(self, filter):
           '''Start a search.'''
-          self.viewPath = self.manager.Search(filter, self.path,
-                                              timeout=100000)
+          self.viewPath = self.manager.Search(filter, self.path)
           self.view = dbus.Interface(bus.get_object(self.manager.bus_name,
                                                     self.viewPath),
                                      'org._01.pim.contacts.ViewControl')
 
      def close(self):
-          self.view.Close(timeout=100000)
+          self.view.Close()
 
      def getIDs(self, start, count):
           '''Return just the IDs for a range of contacts in the current view.'''
@@ -245,7 +244,6 @@ class ContactsView(dbus.service.Object, unittest.TestCase):
                if start < len(ids):
                     end = min(start + 50, len(ids))
                     self.view.ReadContacts(ids[start:end],
-                                           timeout=100000,
                                            reply_handler=lambda contacts: step(contacts, end),
                                            error_handler=lambda error: self.errors.append(x))
           step([], 0)
@@ -299,8 +297,7 @@ class Watchdog():
                # takes to reply, even if it is too long.
                started = time.time()
                self.started = started
-               self.manager.GetAllPeers(timeout=1000,
-                                        reply_handler=lambda peers: self._done(started, self.results, None),
+               self.manager.GetAllPeers(reply_handler=lambda peers: self._done(started, self.results, None),
                                         error_handler=lambda error: self._done(started, self.results, error))
           return True
 
@@ -334,10 +331,6 @@ class TestPIMUtil(DBusUtil):
 
         # SyncEvolution uses a local temp dir.
         self.configdir = os.path.join(xdg_root, "syncevolution")
-
-        # Choose a very long timeout for method calls;
-        # 'infinite' doesn't seem to be documented for Python.
-        self.timeout = 100000
 
         # Common prefix for peer UIDs. Use different prefixes in each test,
         # because evolution-addressbook-factory keeps the old instance
@@ -387,10 +380,9 @@ class TestPIMUtil(DBusUtil):
              self.peers[uid] = {'protocol': 'PBAP',
                                 'address': 'xxx'}
              self.manager.SetPeer(uid,
-                                  self.peers[uid],
-                                  timeout=self.timeout)
+                                  self.peers[uid])
              self.expected.add(self.managerPrefix + uid)
-             self.assertEqual(self.peers, self.manager.GetAllPeers(timeout=self.timeout))
+             self.assertEqual(self.peers, self.manager.GetAllPeers())
              self.assertEqual(self.expected, self.currentSources())
 
              # Delete local data in the cache.
@@ -406,8 +398,8 @@ class TestPIMUtil(DBusUtil):
              logging.log('deleting all items of system address book')
              self.runCmdline(['--delete-items', 'backend=evolution-contacts', '--luids', '*'])
 
-        self.manager.SetActiveAddressBooks(addressbooks, timeout=self.timeout)
-        self.assertEqual(addressbooks, self.manager.GetActiveAddressBooks(timeout=self.timeout),
+        self.manager.SetActiveAddressBooks(addressbooks)
+        self.assertEqual(addressbooks, self.manager.GetActiveAddressBooks(),
                          sortLists=True)
 
         # Start view.
@@ -620,8 +612,7 @@ XDG root.
         with self.assertRaisesRegexp(dbus.DBusException,
                                      'invalid peer uid: CAPITAL-LETTERS-NOT-ALLOWED'):
             self.manager.SetPeer('CAPITAL-LETTERS-NOT-ALLOWED',
-                                 {},
-                                 timeout=self.timeout)
+                                 {})
 
     @property("snapshot", "simple-sort")
     def testConfig(self):
@@ -635,10 +626,9 @@ XDG root.
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'xxx'}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # PIM Manager must not allow overwriting an existing config.
@@ -646,8 +636,7 @@ XDG root.
         with self.assertRaisesRegexp(dbus.DBusException,
                                      'org._01.pim.contacts.Manager.AlreadyExists: uid ' + uid + ' is already in use') as cm:
              self.manager.CreatePeer(uid,
-                                     peers[uid],
-                                     timeout=self.timeout)
+                                     peers[uid])
         self.assertEqual('org._01.pim.contacts.Manager.AlreadyExists', cm.exception.get_dbus_name())
 
         # TODO: work around EDS bug: e_source_remove_sync() quickly after
@@ -663,9 +652,8 @@ XDG root.
         # remove foo
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
-        self.manager.RemovePeer(uid,
-                                timeout=self.timeout)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.manager.RemovePeer(uid)
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # add and remove foo again
@@ -673,17 +661,15 @@ XDG root.
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'xxx'}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
         time.sleep(2)
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
-        self.manager.RemovePeer(uid,
-                                timeout=self.timeout)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.manager.RemovePeer(uid)
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # add foo, bar, xyz
@@ -691,30 +677,27 @@ XDG root.
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'xxx'}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         uid = self.uidPrefix + 'bar'
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'yyy'}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         uid = self.uidPrefix + 'xyz'
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'zzz'}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # EDS workaround
@@ -723,9 +706,8 @@ XDG root.
         # remove yxz, bar, foo
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
-        self.manager.RemovePeer(uid,
-                                timeout=self.timeout)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.manager.RemovePeer(uid)
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # EDS workaround
@@ -734,9 +716,8 @@ XDG root.
         uid = self.uidPrefix + 'bar'
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
-        self.manager.RemovePeer(uid,
-                                timeout=self.timeout)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.manager.RemovePeer(uid)
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # EDS workaround
@@ -745,9 +726,8 @@ XDG root.
         uid = self.uidPrefix + 'foo2'
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
-        self.manager.RemovePeer(uid,
-                                timeout=self.timeout)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.manager.RemovePeer(uid)
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # EDS workaround
@@ -819,10 +799,9 @@ XDG root.
             peers[uid] = {'protocol': 'files',
                           'address': contacts}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # Clear data in the phone.
@@ -857,8 +836,7 @@ XDG root.
         # locally, because the database of the peer might have existed
         # from previous tests.
         duration, res = timeFunction(self.manager.SyncPeer,
-                                     uid,
-                                     timeout=self.timeout)
+                                     uid)
         progress('clear', duration)
         # TODO: check that syncPhone() really used PBAP - but how?
 
@@ -983,8 +961,7 @@ END:VCARD
         self.syncPhone(phone, uid)
         syncProgress = []
         duration, result = timeFunction(self.manager.SyncPeer,
-                                        uid,
-                                        timeout=self.timeout)
+                                        uid)
         progress('import', duration)
         incrementalSync = phone and os.environ.get('SYNCEVOLUTION_PBAP_SYNC', 'incremental') == 'incremental'
         if incrementalSync:
@@ -1020,12 +997,10 @@ END:VCARD
              peers[uid]['logdir'] = logdir
              peers[uid]['maxsessions'] = '1'
              self.manager.SetPeer(uid,
-                                  peers[uid],
-                                  timeout=self.timeout)
+                                  peers[uid])
              files = listsyncevo(exclude=exclude)
              syncProgress = []
-             result = self.manager.SyncPeer(uid,
-                                            timeout=self.timeout)
+             result = self.manager.SyncPeer(uid)
              expectedResult = {'modified': False,
                                'added': 0,
                                'updated': 0,
@@ -1040,8 +1015,7 @@ END:VCARD
         # No changes.
         syncProgress = []
         duration, result = timeFunction(self.manager.SyncPeer,
-                                        uid,
-                                        timeout=self.timeout)
+                                        uid)
         progress('match', duration)
         expectedResult = {'modified': False,
                           'added': 0,
@@ -1058,12 +1032,10 @@ END:VCARD
              # And now prune none.
              peers[uid]['maxsessions'] = '0'
              self.manager.SetPeer(uid,
-                                  peers[uid],
-                                  timeout=self.timeout)
+                                  peers[uid])
              files = listsyncevo(exclude=exclude)
              syncProgress = []
-             result = self.manager.SyncPeer(uid,
-                                            timeout=self.timeout)
+             result = self.manager.SyncPeer(uid)
              expectedResult = {'modified': False,
                                'added': 0,
                                'updated': 0,
@@ -1088,8 +1060,7 @@ END:VCARD'''
              output.close()
              self.syncPhone(phone, uid)
              syncProgress = []
-             result = self.manager.SyncPeer(uid,
-                                            timeout=self.timeout)
+             result = self.manager.SyncPeer(uid)
              checkSync({'modified': True,
                         'added': 0,
                         'updated': 1,
@@ -1106,8 +1077,7 @@ END:VCARD'''
         self.syncPhone(phone, uid)
         syncProgress = []
         duration, result = timeFunction(self.manager.SyncPeer,
-                                        uid,
-                                        timeout=self.timeout)
+                                        uid)
         progress('remove', duration)
         expectedResult = {'modified': True,
                           'added': 0,
@@ -1124,8 +1094,7 @@ END:VCARD'''
                   self.manager.SetPeer(uid,
                                        {'protocol': 'PBAP',
                                         'address': 'foo',
-                                        'maxsessions': '-1'},
-                                       timeout=self.timeout)
+                                        'maxsessions': '-1'})
              self.assertEqual(files, listsyncevo(exclude=exclude))
 
              with self.assertRaisesRegexp(dbus.DBusException,
@@ -1133,8 +1102,7 @@ END:VCARD'''
                   self.manager.SetPeer(uid,
                                        {'protocol': 'PBAP',
                                         'address': 'foo',
-                                        'maxsessions': '1000000000000000000000000000000000000000000000'},
-                                       timeout=self.timeout)
+                                        'maxsessions': '1000000000000000000000000000000000000000000000'})
 
         self.assertEqual(files, listsyncevo(exclude=exclude))
 
@@ -1162,10 +1130,9 @@ END:VCARD'''
         peers[uid] = {'protocol': 'files',
                       'address': contacts}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
+                             peers[uid])
         expected.add(self.managerPrefix + uid)
-        self.assertEqual(peers, self.manager.GetAllPeers(timeout=self.timeout))
+        self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
         # Start a sync. Because of SYNCEVOLUTION_SYNC_DELAY, this will block until
@@ -1188,12 +1155,10 @@ END:VCARD'''
         try:
              self.manager.SyncPeer(uid,
                                    reply_handler=lambda: result(0, True),
-                                   error_handler=lambda x: result(0, x),
-                                   timeout=self.timeout)
+                                   error_handler=lambda x: result(0, x))
              self.manager.SyncPeer(uid,
                                    reply_handler=lambda: result(1, True),
-                                   error_handler=lambda x: result(1, x),
-                                   timeout=self.timeout)
+                                   error_handler=lambda x: result(1, x))
              self.runUntil('both syncs done',
                            check=lambda: True,
                            until=lambda: not False in syncCompleted)
@@ -1503,14 +1468,13 @@ END:VCARD''')
         self.setUpView()
 
         # Locale-aware "first/last" sorting from "first-last-sort" config.
-        self.assertEqual("first/last", self.manager.GetSortOrder(timeout=self.timeout))
+        self.assertEqual("first/last", self.manager.GetSortOrder())
 
         # Expect an error, no change to sort order.
         with self.assertRaisesRegexp(dbus.DBusException,
                                      'sort order.*not supported'):
-             self.manager.SetSortOrder('no-such-order',
-                                       timeout=self.timeout)
-        self.assertEqual("first/last", self.manager.GetSortOrder(timeout=self.timeout))
+             self.manager.SetSortOrder('no-such-order')
+        self.assertEqual("first/last", self.manager.GetSortOrder())
 
         # Insert new contacts.
         #
@@ -1561,11 +1525,10 @@ END:VCARD''']):
         self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
 
         # Invert sort order.
-        self.manager.SetSortOrder("last/first",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("last/first")
 
         # Check that order was adapted and stored permanently.
-        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
+        self.assertEqual("last/first", self.manager.GetSortOrder())
         self.assertIn("sort = last/first\n",
                       open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
                            "r").readlines())
@@ -1587,8 +1550,7 @@ END:VCARD''']):
         self.assertEqual('Zoo', self.view.contacts[2]['structured-name']['family'])
 
         # Sort by FN or <first last> as fallback.
-        self.manager.SetSortOrder("fullname",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("fullname")
         self.runUntil('reordered',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 3 and \
@@ -1874,18 +1836,18 @@ END:VCARD
     def testStop(self):
         '''TestContacts.testStop - stop a started server'''
         # Auto-start.
-        self.assertEqual(False, self.manager.IsRunning(timeout=self.timeout))
+        self.assertEqual(False, self.manager.IsRunning())
         self.setUpView(peers=['foo'])
-        self.assertEqual(True, self.manager.IsRunning(timeout=self.timeout))
+        self.assertEqual(True, self.manager.IsRunning())
 
         # Must not stop now.
-        self.manager.Stop(timeout=self.timeout)
+        self.manager.Stop()
         self.view.read(0, 0)
 
         # It may stop after closing the view.
-        self.view.view.Close(timeout=self.timeout)
-        self.manager.Stop(timeout=self.timeout)
-        self.assertEqual(False, self.manager.IsRunning(timeout=self.timeout))
+        self.view.view.Close()
+        self.manager.Stop()
+        self.assertEqual(False, self.manager.IsRunning())
 
     @timeout(60)
     @property("snapshot", "simple-sort")
@@ -1974,7 +1936,7 @@ END:VCARD'''
         contactsPerPeer = int(os.environ.get('TESTPIM_TEST_ACTIVE_NUM', 10))
 
         self.assertEqual(['', 'peer-' + self.uidPrefix + 'a', 'peer-' + self.uidPrefix + 'c'],
-                         self.manager.GetActiveAddressBooks(timeout=self.timeout),
+                         self.manager.GetActiveAddressBooks(),
                          sortLists=True)
 
         withLogging = (contactsPerPeer <= 10)
@@ -2012,7 +1974,7 @@ END:VCARD'''
 
         # Check that active databases were adapted and stored permanently.
         self.assertEqual(['', 'peer-' + self.uidPrefix + 'a', 'peer-' + self.uidPrefix + 'b', 'peer-' + self.uidPrefix + 'c'],
-                         self.manager.GetActiveAddressBooks(timeout=self.timeout),
+                         self.manager.GetActiveAddressBooks(),
                          sortLists=True)
         # Order mirrors the one of SetActiveAddressBooks() in setUpView(),
         # assuming that the PIM Manager preserves that order (not really guaranteed
@@ -2118,8 +2080,7 @@ END:VCARD''' % {'peer': peer, 'index': index})
                        for b in [None, 'b']
                        for c in [None, 'c']]:
              logging.printf('changing address books %s -> %s', current, active)
-             self.manager.SetActiveAddressBooks([x != '' and 'peer-' + self.uidPrefix + x or x for x in active],
-                                                timeout=self.timeout)
+             self.manager.SetActiveAddressBooks([x != '' and 'peer-' + self.uidPrefix + x or x for x in active])
              self.runUntil('contacts %s' % str(active),
                            check=lambda: self.assertEqual([], self.view.errors),
                            until=haveExpectedView,
@@ -2135,13 +2096,11 @@ END:VCARD''' % {'peer': peer, 'index': index})
         self.setUpView()
 
         # Can refine full view. Doesn't change anything here.
-        self.view.view.RefineSearch([],
-                                    timeout=self.timeout)
+        self.view.view.RefineSearch([])
 
         # Override default sorting.
-        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.assertEqual("last/first", self.manager.GetSortOrder())
+        self.manager.SetSortOrder("first/last")
 
         # Insert new contacts.
         #
@@ -2215,8 +2174,7 @@ END:VCARD''']):
         self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
 
         # We can expand the search with ReplaceSearch().
-        view.view.ReplaceSearch([], False,
-                                timeout=self.timeout)
+        view.view.ReplaceSearch([], False)
         self.runUntil('expanded view with three contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 3)
@@ -2279,8 +2237,7 @@ END:VCARD''']):
         # Refine search without actually changing the result.
         for refine in [True, False]:
              view.quiescentCount = 0
-             view.view.ReplaceSearch([['any-contains', 'am']], refine,
-                                     timeout=self.timeout)
+             view.view.ReplaceSearch([['any-contains', 'am']], refine)
              self.runUntil('end of search refinement',
                            check=lambda: self.assertEqual([], view.errors),
                            until=lambda: view.quiescentCount > 0)
@@ -2290,8 +2247,7 @@ END:VCARD''']):
         # Restrict search to Benjamin. The result is a view
         # which has different indices than the full view.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'Benjamin']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'Benjamin']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -2300,8 +2256,7 @@ END:VCARD''']):
 
         # Refine again, without changes.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'Benjamin']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'Benjamin']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -2310,8 +2265,7 @@ END:VCARD''']):
 
         # Refine to empty view.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'XXXBenjamin']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'XXXBenjamin']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -2741,8 +2695,7 @@ END:VCARD
         '''TestContacts.testFilterLive - check that filtering works while adding contacts'''
         self.setUpView()
 
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("first/last")
 
         # Find Charly by his FN (case insensitive by default).
         view = ContactsView(self.manager)
@@ -2914,8 +2867,7 @@ END:VCARD''')
 
         # Invert sort order.
         check1 = view.setCheck(None)
-        self.manager.SetSortOrder("last/first",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("last/first")
         self.runUntil('reordering',
                       check=check,
                       until=lambda: self.view.haveNoData(0) and \
@@ -2936,8 +2888,7 @@ END:VCARD''')
         self.assertEqual(u'Abraham', self.view.contacts[2]['structured-name']['given'])
 
         # And back again.
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("first/last")
         self.runUntil('reordering, II',
                       check=check,
                       until=lambda: self.view.haveNoData(0) and \
@@ -3002,9 +2953,8 @@ END:VCARD''')
         self.setUpView()
 
         # Override default sorting.
-        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.assertEqual("last/first", self.manager.GetSortOrder())
+        self.manager.SetSortOrder("first/last")
 
         # Insert new contacts.
         #
@@ -3095,13 +3045,11 @@ END:VCARD''']):
         # Changing the limit is not supported.
         with self.assertRaisesRegexp(dbus.DBusException,
                                      r'.*: refining the search must not change the maximum number of results$'):
-             view.view.RefineSearch([['limit', '3'], ['any-contains', 'foo']],
-                                    timeout=self.timeout)
+             view.view.RefineSearch([['limit', '3'], ['any-contains', 'foo']])
 
         # Refine search without actually changing the result.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'am'], ['limit', '1']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'am'], ['limit', '1']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -3112,8 +3060,7 @@ END:VCARD''']):
         # stays active automatically. Abraham drops out of the view
         # and Benjamin enters the result subset.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'Benjamin']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'Benjamin']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -3127,8 +3074,7 @@ END:VCARD''']):
 
         # Refine again, without changes.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'Benjamin']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'Benjamin']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -3137,8 +3083,7 @@ END:VCARD''']):
 
         # Refine to empty view.
         view.quiescentCount = 0
-        view.view.RefineSearch([['any-contains', 'XXXBenjamin']],
-                               timeout=self.timeout)
+        view.view.RefineSearch([['any-contains', 'XXXBenjamin']])
         self.runUntil('end of search refinement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -3146,8 +3091,7 @@ END:VCARD''']):
 
         # Expand back to view with Benjamin.
         view.quiescentCount = 0
-        view.view.ReplaceSearch([['any-contains', 'Benjamin']], False,
-                                timeout=self.timeout)
+        view.view.ReplaceSearch([['any-contains', 'Benjamin']], False)
         self.runUntil('end of search replacement',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
@@ -3164,8 +3108,7 @@ END:VCARD''']):
         '''TestContacts.testFilterLiveLimit - check that filtering works while modifying contacts, with a maximum number of results'''
         self.setUpView()
 
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("first/last")
 
         # Find Abraham and Benjamin, but limit results to first one.
         view = ContactsView(self.manager)
@@ -3293,8 +3236,7 @@ END:VCARD''')
 
         # Invert sort order.
         check1 = view.setCheck(None)
-        self.manager.SetSortOrder("last/first",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("last/first")
         self.runUntil('reordering',
                       check=check,
                       until=lambda: self.view.haveNoData(0) and \
@@ -3314,8 +3256,7 @@ END:VCARD''')
         self.assertEqual(u'Abraham', self.view.contacts[2]['structured-name']['given'])
 
         # And back again.
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("first/last")
         self.runUntil('reordering, II',
                       check=check,
                       until=lambda: self.view.haveNoData(0) and \
@@ -3375,8 +3316,7 @@ END:VCARD''')
         '''TestContacts.testFilterLiveLimitInverted - check that filtering works while modifying contacts, with a maximum number of results, and inverted sort order'''
         self.setUpView()
 
-        self.manager.SetSortOrder("last/first",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("last/first")
 
         # Find Benjamin and Abraham, but limit results to first one.
         view = ContactsView(self.manager)
@@ -3449,8 +3389,7 @@ END:VCARD''']):
         '''TestContacts.testFilterLiveLimitRemove - check that filtering works while removing a contact, with a maximum number of results'''
         self.setUpView()
 
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.manager.SetSortOrder("first/last")
 
         # Find Abraham and Benjamin, but limit results to first one.
         view = ContactsView(self.manager)
@@ -3624,12 +3563,10 @@ END:VCARD''']):
         with self.assertRaisesRegexp(dbus.DBusException,
                                      r'.*: only the system address book is writable'):
              self.manager.AddContact('no-such-address-book',
-                                     john,
-                                     timeout=self.timeout)
+                                     john)
 
         # Add new contact.
-        localID = self.manager.AddContact('', john,
-                                          timeout=self.timeout)
+        localID = self.manager.AddContact('', john)
         john['source'] = [('', unicode(localID))]
 
         self.runUntil('view with one contact',
@@ -3648,8 +3585,7 @@ END:VCARD''']):
                                      r'''.*: contact with local ID 'no-such-local-id' not found in system address book'''):
              self.manager.ModifyContact('',
                                         'no-such-local-id',
-                                        john,
-                                        timeout=self.timeout)
+                                        john)
 
         # Update the contact.
         john = {
@@ -3717,8 +3653,7 @@ END:VCARD''']):
                   ('web log 2', ['x-blog']),
                   ],
              }
-        self.manager.ModifyContact('', localID, john,
-                                   timeout=self.timeout)
+        self.manager.ModifyContact('', localID, john)
         self.runUntil('modified contact',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 1 and self.view.haveNoData(0))
@@ -3752,8 +3687,7 @@ END:VCARD''']):
                   'given': 'nobody',
                   },
              }
-        self.manager.ModifyContact('', localID, john,
-                                   timeout=self.timeout)
+        self.manager.ModifyContact('', localID, john)
         self.runUntil('modified contact',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 1 and self.view.haveNoData(0))
@@ -3770,8 +3704,7 @@ END:VCARD''']):
                       until=lambda: len(view.contacts) == 0)
 
         # Remove the contact.
-        self.manager.RemoveContact('', localID,
-                                   timeout=self.timeout)
+        self.manager.RemoveContact('', localID)
         self.runUntil('empty view',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: len(self.view.contacts) == 0)
@@ -3788,9 +3721,8 @@ END:VCARD''']):
         self.setUpView(search=None)
 
         # Override default sorting.
-        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.assertEqual("last/first", self.manager.GetSortOrder())
+        self.manager.SetSortOrder("first/last")
 
         # Insert new contacts.
         #
@@ -3865,9 +3797,8 @@ END:VCARD''']):
         self.setUpView(search=None)
 
         # Override default sorting.
-        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.assertEqual("last/first", self.manager.GetSortOrder())
+        self.manager.SetSortOrder("first/last")
 
         # Insert new contacts.
         #
@@ -3977,9 +3908,8 @@ END:VCARD''']):
         self.setUpView(search=None, peers=['0', '1', '2'])
 
         # Override default sorting.
-        self.assertEqual("last/first", self.manager.GetSortOrder(timeout=self.timeout))
-        self.manager.SetSortOrder("first/last",
-                                  timeout=self.timeout)
+        self.assertEqual("last/first", self.manager.GetSortOrder())
+        self.manager.SetSortOrder("first/last")
 
         # Insert new contacts.
         #
@@ -4143,10 +4073,8 @@ class TestSlowSync(TestPIMUtil, unittest.TestCase):
         peers[uid] = {'protocol': 'files',
                       'address': contacts}
         self.manager.SetPeer(uid,
-                             peers[uid],
-                             timeout=self.timeout)
-        self.manager.SyncPeer(uid,
-                              timeout=self.timeout)
+                             peers[uid])
+        self.manager.SyncPeer(uid)
 
 
 if __name__ == '__main__':
