@@ -861,6 +861,43 @@
    obj:*libgnome-keyring.so*
 }
 
+# ==28350== 727 (184 direct, 543 indirect) bytes in 1 blocks are definitely lost in loss record 2,542 of 2,693
+# ==28350==    at 0x4C272B8: calloc (vg_replace_malloc.c:566)
+# ==28350==    by 0xE6293A5: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0xE62CE0B: dbus_message_new_error (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0xE62F8C5: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0xE620DF1: dbus_connection_send_with_reply (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0xE621090: dbus_connection_send_with_reply_and_block (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0xE61C78B: dbus_bus_register (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0xE61CA4E: ??? (in /lib/x86_64-linux-gnu/libdbus-1.so.3.7.2)
+# ==28350==    by 0x5974EE6: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==28350==    by 0x5976614: ??? (in /usr/lib/x86_64-linux-gnu/libgnome-keyring.so.0.2.0)
+# ==28350==    by 0x913B82: SyncEvo::GNOMELoadPasswordSlot(SyncEvo::InitStateTri const&, std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&, SyncEvo::InitState<std::string>&) (GNOMEPlatform.cpp:85)
+# ==28350==    by 0x8EF789: boost::signals2::detail::signal5_impl<bool, SyncEvo::InitStateTri const&, std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&, SyncEvo::InitState<std::string>&, SyncEvo::TrySlots, int, std::less<int>, boost::function<bool ()(SyncEvo::InitStateTri const&, std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&, SyncEvo::InitState<std::string>&)>, boost::function<bool ()(boost::signals2::connection const&, SyncEvo::InitStateTri const&, std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&, SyncEvo::InitState<std::string>&)>, boost::signals2::mutex>::operator()(SyncEvo::InitStateTri const&, std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&, SyncEvo::InitState<std::string>&) (function_template.hpp:760)
+# ==28350==    by 0x8EF9DB: SyncEvo::SimpleUserInterface::askPassword(std::string const&, std::string const&, SyncEvo::ConfigPasswordKey const&) (signal_template.hpp:695)
+# ==28350==    by 0xA93370: SyncEvo::PasswordConfigProperty::checkPassword(SyncEvo::UserInterface&, SyncEvo::SyncConfig&, int, SyncEvo::ConfigProperty const&, std::string const&) const (SyncConfig.cpp:2053)
+# ==28350==    by 0xA7EBD8: SyncEvo::PasswordConfigProperty::checkPasswords(SyncEvo::UserInterface&, SyncEvo::SyncConfig&, int, std::list<std::string, std::allocator<std::string> > const&) (SyncConfig.cpp:2106)
+# ==28350==    by 0x8E768A: SyncEvo::(anonymous namespace)::WebDAVTest::createSource(std::string const&, bool) const (WebDAVSourceRegister.cpp:308)
+# ==28350==    by 0x8E8AA3: SyncEvo::(anonymous namespace)::WebDAVTestSingleton::WebDAVList::push_back(boost::shared_ptr<SyncEvo::(anonymous namespace)::WebDAVTest> const&) (WebDAVSourceRegister.cpp:382)
+# ==28350==    by 0x8E9CB5: SyncEvo::(anonymous namespace)::WebDAVTestSingleton::init() const (WebDAVSourceRegister.cpp:451)
+# ==28350==    by 0x6F5364: SyncEvo::TestEvolution::init() (client-test-app.cpp:147)
+# ==28350==    by 0x6F8618: SyncEvo::TestEvolution::getNumLocalSources() (client-test-app.cpp:277)
+# ==28350==    by 0x8B3DC5: SyncEvo::ClientTestFactory::makeTest() (ClientTest.cpp:6019)
+# ==28350==    by 0x75470E1: CppUnit::TestFactoryRegistry::addTestToSuite(CppUnit::TestSuite*) (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==28350==    by 0x7547158: CppUnit::TestFactoryRegistry::makeTest() (in /usr/lib/libcppunit-1.12.so.1.0.0)
+# ==28350==    by 0x6E6DB1: main (client-test-main.cpp:303)
+# ==28350== 
+{
+   keyring + D-Bus error
+   Memcheck:Leak
+   fun:calloc
+   obj:*/libdbus*
+   fun:dbus_message_new_error
+   ...
+   obj:*/libgnome-keyring.so*
+   fun:*GNOME*PasswordSlot*
+}
+
 # ==10804== 363 (120 direct, 243 indirect) bytes in 3 blocks are definitely lost in loss record 1,844 of 2,014
 # ==10804==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
 # ==10804==    by 0x7FABC02: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3000.2)

@@ -5034,7 +5034,7 @@
    fun:g_malloc
    fun:g_slice_alloc
    fun:g_list_prepend
-   fun:g_key_file_add_group
+   fun:g_key_file_*
    ...
    fun:e_source_new
    ...
