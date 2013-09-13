@@ -202,6 +202,22 @@ SavePasswordSignal &GetSavePasswordSignal();
 
 static const int INTERNAL_SAVE_PASSWORD_SLOTS = 2;
 
+class SimpleUserInterface : public UserInterface
+{
+    InitStateTri m_useKeyring;
+
+ public:
+    SimpleUserInterface(InitStateTri useKeyring) : m_useKeyring(useKeyring) {}
+    virtual std::string askPassword(const std::string &passwordName, const std::string &descr, const ConfigPasswordKey &key) {
+        InitStateString password;
+        // Try to use keyring, if allowed.
+        GetLoadPasswordSignal()(m_useKeyring, passwordName, descr, key,  password);
+        return password;
+    }
+    virtual bool savePassword(const std::string &passwordName, const std::string &password, const ConfigPasswordKey &key) { return false; }
+    virtual void readStdin(std::string &content) { content.clear(); }
+};
+
 SE_END_CXX
 
 #endif // INCL_USERINTERFACE
