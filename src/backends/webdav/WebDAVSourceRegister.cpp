@@ -7,6 +7,8 @@
 #include "CalDAVVxxSource.h"
 #include "CardDAVSource.h"
 #include <syncevo/SyncSource.h>
+#include <syncevo/UserInterface.h>
+#include <syncevo/SyncConfig.h>
 #ifdef ENABLE_UNIT_TESTS
 #include "test.h"
 #endif
@@ -16,6 +18,7 @@
 
 #include <boost/bind.hpp>
 #include <boost/tokenizer.hpp>
+#include <boost/assign.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -297,6 +300,12 @@ public:
         // same settings.
         std::string peerName = std::string(server ? server : "no-such-server")  + "_" + clientID;
         boost::shared_ptr<SyncConfig> peer(new SyncConfig(peerName));
+        // Resolve credentials.
+        SimpleUserInterface ui(peer->getKeyring());
+        PasswordConfigProperty::checkPasswords(ui,
+                                               *peer,
+                                               PasswordConfigProperty::CHECK_PASSWORD_ALL,
+                                               boost::assign::list_of(name));
         SyncSourceNodes peerNodes = peer->getSyncSourceNodes(name);
         SE_LOG_DEBUG(NULL, "overriding testing source %s properties with the ones from config %s = %s",
                      name.c_str(),
