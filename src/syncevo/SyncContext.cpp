@@ -1541,16 +1541,8 @@ UserInterface &SyncContext::getUserInterfaceNonNull()
     if (m_userInterface) {
         return *m_userInterface;
     } else {
-        static class DummyUserInterface : public UserInterface
-        {
-        public:
-            virtual std::string askPassword(const std::string &passwordName, const std::string &descr, const ConfigPasswordKey &key) { return ""; }
-
-            virtual bool savePassword(const std::string &passwordName, const std::string &password, const ConfigPasswordKey &key) { return false; }
-
-            virtual void readStdin(std::string &content) { content.clear(); }
-        } dummy;
-
+        // Doesn't use keyring.
+        static SimpleUserInterface dummy("0");
         return dummy;
     }
 }
