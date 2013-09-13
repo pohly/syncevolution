@@ -1,0 +1,112 @@
+Google CalDAV/CardDAV via OAuth2 with GNOME Online Accounts (GOA)
+=================================================================
+
+Setup
+-----
+
+SyncEvolution depends on a GNOME Online Accounts with CalDAV *and*
+CardDAV enabled for Google. This is hard-coded in the source code, so
+recompiling is the only (sane) way to change that. CalDAV has been
+enabled for a while, CardDAV is recent (>= 3.10).
+
+It is possible to patch 3.8 without recompiling (see below). Versions
+older than 3.8 do not work because they lack OAuth2 support.
+
+SyncEvolution needs an active account for Google in the GNOME Control
+Center, under "online accounts". Enable the different data categories
+if and only if you want to access the data with the core GNOME
+apps. SyncEvolution ignores these settings.
+
+
+Usage
+-----
+
+OAuth2 authentication with GNOME Online Accounts is enabled by setting
+username or databaseUser to a string of the format
+   goa:<GOA account presentation ID = email address | account ID>
+
+Typically there is only one account using a Google email address, so
+that can be used to select the account. SyncEvolution checks if it is
+really unique and if not, provides a list of all accounts with their
+account ID. Then the unique account ID should be used instead.
+
+The base URL for each service currently needs to be given via syncURL:
+
+  syncevolution --print-databases \
+                backend=carddav \
+                username=goa:john.doe@gmail.com \
+                syncURL=https://www.googleapis.com/.well-known/carddav
+
+  src/syncevolution --print-databases \
+                    backend=caldav \
+                    username=goa:john.doe@gmail.com \
+                    syncURL=https://apidata.googleusercontent.com/caldav/v2
+
+Once that works, follow the "CalDAV and CardDAV" instructions from the
+README with the different username and syncURL.
+
+
+Debugging
+---------
+
+Add --daemon=no to the command line to prevent shifting the actual
+command executing into syncevo-dbus-server and (from there)
+syncevo-dbus-helper.
+
+Set SYNCEVOLUTION_DEBUG=1 to see all debug messages and increase the
+loglevel to see HTTP requests:
+
+  SYNCEVOLUTION_DEBUG=1 syncevolution --daemon=no \
+                        loglevel=4 \
+                        --print-databases \
+                        ...
+
+Known Problems
+--------------
+
+When accessing CardDAV:
+
+status-line] < HTTP/1.1 401 Unauthorized
+[hdr] WWW-Authenticate: AuthSub realm="https://www.google.com/accounts/AuthSubRequest" allowed-scopes="https://www.googleapis.com/auth/carddav"
+...
+<?xml version="1.0" encoding="UTF-8"?>
+<errors xmlns="http://schemas.google.com/g/2005">
+ <error>
+  <domain>GData</domain>
+  <code>authError</code>
+  <location type="header">Authorization</location>
+  <internalReason>Invalid Credentials</internalReason>
+ </error>
+</errors>
+...
+[INFO] operation temporarily (?) failed, going to retry in 5.0s before giving up in 295.8s: PROPFIND: Neon error code 3 = NE_AUTH, HTTP status 401: Could not authenticate to server: ignored AuthSub challenge
+...
+
+This happens when using a GNOME Online Accounts which does (or did)
+not request CardDAV access when logging into Google. Install GNOME
+Online Accounts >= 3.10 or patch it (see below), "killall goa-daemon",
+then re-create the account in the GNOME Control Center.
+
+Patching GOA 3.8
+----------------
+
+It is possible to add CardDAV support to 3.8 without recompiling GNOME
+Online Accounts. However, the downside is that this approach has to
+disable access to some other kind of data and breaks when updating or
+reinstalling GOA.
+
+1. Locate libgoa-backend-1.0.so.0.0.0: typically it is in /usr/lib or /usr/lib64.
+2. Open it in a text editor which can handle binary data (like emacs).
+3. Switch to "overwrite mode".
+4. Find the string starting with https://www.googleapis.com/auth/userinfo.email
+6. Overwrite the part which you don't need with https://www.googleapis.com/auth/carddav
+   and spaces.
+
+For example, if Google Docs access is not needed, replace
+"https://docs.google.com/feeds/ https://docs.googleusercontent.com/ https://spreadsheets.google.com/feeds/ "
+with
+"https://www.googleapis.com/auth/carddav                                                                   "
+
+Here's a perl command which replaces Google Docs with CardDAV:
+
+perl -pi -e 's;https://docs.google.com/feeds/ https://docs.googleusercontent.com/ https://spreadsheets.google.com/feeds/ ;https://www.googleapis.com/auth/carddav                                                                   ;' /usr/lib*/libgoa-backend-1.0.so.0.0.0

@@ -1,0 +1,15 @@
+AC_ARG_ENABLE(goa,
+              AS_HELP_STRING([--disable-goa],
+                             [enables or disables support for the GNOME Online Account single-sign-on system; default is on]),
+              [enable_goa="$enableval"
+               test "$enable_goa" = "yes" || test "$enable_goa" = "no" || AC_MSG_ERROR([invalid value for --enable-goa: $enable_goa])
+              ],
+              enable_goa="yes")
+if test $enable_goa = "yes"; then
+    AC_DEFINE(USE_GOA, 1, [use GNOME Online Accounts])
+    # link into static executables, similar to a SyncSource
+    SYNCSOURCES="$SYNCSOURCES src/backends/goa/providergoa.la"
+fi
+
+# conditional compilation in make
+AM_CONDITIONAL([USE_GOA], [test "$use_goa" = "yes"])

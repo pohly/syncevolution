@@ -1,0 +1,26 @@
+dist_noinst_DATA += src/backends/goa/configure-sub.in \
+  src/backends/goa/README \
+  $(NONE)
+
+src_backends_goa_lib = src/backends/goa/providergoa.la
+MOSTLYCLEANFILES += $(src_backends_goa_lib)
+
+src_backends_goa_providergoa_la_SOURCES = \
+  src/backends/goa/goa.h \
+  src/backends/goa/goa.cpp \
+  $(NONE)
+
+if ENABLE_MODULES
+src_backends_goa_backenddir = $(BACKENDS_DIRECTORY)
+src_backends_goa_backend_LTLIBRARIES = $(src_backends_goa_lib)
+src_backends_goa_providergoa_la_SOURCES += \
+  src/backends/goa/GOARegister.cpp
+else
+noinst_LTLIBRARIES += $(src_backends_goa_lib)
+endif
+
+src_backends_goa_providergoa_la_LIBADD = $(SYNCEVOLUTION_LIBS) $(gdbus_build_dir)/libgdbussyncevo.la $(DBUS_LIBS)
+src_backends_goa_providergoa_la_LDFLAGS = -module -avoid-version
+src_backends_goa_providergoa_la_CXXFLAGS = $(SYNCEVOLUTION_CFLAGS) $(SYNCEVO_WFLAGS) $(DBUS_CFLAGS)
+src_backends_goa_providergoa_la_CPPFLAGS = -I$(gdbus_dir) -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
+src_backends_goa_providergoa_la_DEPENDENCIES = src/syncevo/libsyncevolution.la
