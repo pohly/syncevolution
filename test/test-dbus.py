@@ -142,6 +142,28 @@ atexit.register(os.kill, child, 9)
 bus = dbus.SessionBus()
 loop = gobject.MainLoop()
 
+# Override the default Connection.send_message_with_reply() with a
+# version that uses a very large timeout. That saves us the trouble of
+# putting a timeout=<large value> whenever we call a D-Bus method. We
+# don't want the default timeout because we may be debugging
+# interactively, which can slow down call processing longer than the
+# default timeout.
+#
+# See http://dbus.freedesktop.org/doc/dbus-python/api/dbus.connection-pysrc.html#Connection.call_async
+#
+real_send_message_with_reply = bus.send_message_with_reply
+real_send_message_with_reply_and_block = bus.send_message_with_reply_and_block
+def my_send_message_with_reply(msg, reply_handler, timeout_s=-1, require_main_loop=False):
+    if timeout_s == -1:
+        timeout_s = 100000
+    return real_send_message_with_reply(msg, reply_handler, timeout_s, require_main_loop=require_main_loop)
+bus.send_message_with_reply = my_send_message_with_reply
+def my_send_message_with_reply_and_block(msg, timeout_s):
+    if timeout_s == -1:
+        timeout_s = 100000
+    return real_send_message_with_reply_and_block(msg, timeout_s)
+bus.send_message_with_reply_and_block = my_send_message_with_reply_and_block
+
 # log to .dbus.log of a test and to stdout, if running a debugger
 class Logging(dbus.service.Object):
     def __init__(self):
