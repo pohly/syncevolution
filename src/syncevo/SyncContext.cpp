@@ -3698,14 +3698,21 @@ SyncMLStatus SyncContext::doSync()
             // no profile exists  yet, create default profile
             profile = m_engine.OpenSubkey(profiles, sysync::KEYVAL_ID_NEW_DEFAULT);
         }
-         
-        m_engine.SetStrValue(profile, "serverURI", getUsedSyncURL());
-        UserIdentity id = getSyncUser();
-        Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
-        const std::string &user = cred.m_username;
-        const std::string &password = cred.m_password;
-        m_engine.SetStrValue(profile, "serverUser", user);
-        m_engine.SetStrValue(profile, "serverPassword", password);
+        if (!m_localSync) {
+            // Not needed for local sync and might even be
+            // impossible/wrong because username could refer to an
+            // identity provider which cannot return a plain string.
+            SE_LOG_DEBUG(NULL, "copying syncURL, username, password to Synthesis engine");
+            m_engine.SetStrValue(profile, "serverURI", getUsedSyncURL());
+            UserIdentity syncUser = getSyncUser();
+            InitStateString syncPassword = getSyncPassword();
+            boost::shared_ptr<AuthProvider> provider = AuthProvider::create(syncUser, syncPassword);
+            Credentials cred = provider->getCredentials();
+            const std::string &user = cred.m_username;
+            const std::string &password = cred.m_password;
+            m_engine.SetStrValue(profile, "serverUser", user);
+            m_engine.SetStrValue(profile, "serverPassword", password);
+        }
         m_engine.SetInt32Value(profile, "encoding",
                                getWBXML() ? 1 /* WBXML */ : 2 /* XML */);
 
