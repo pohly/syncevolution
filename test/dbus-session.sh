@@ -24,7 +24,7 @@ createxdg "$XDG_DATA_HOME"
 # explicitly.
 # See https://launchpad.net/bugs/525642 and
 # https://bugzilla.redhat.com/show_bug.cgi?id=572137
-/usr/bin/gnome-keyring-daemon --start --foreground --components=secrets &
+/usr/bin/gnome-keyring-daemon --start --foreground --components=secrets 1>&2 &
 KEYRING_PID=$!
 
 # kill all programs started by us
@@ -61,15 +61,15 @@ case "$@" in *test-dbus.py\ *) akonadi=;;
 esac
 
 if [ "$DBUS_SESSION_SH_AKONADI" ] && [ "$akonadi" ]; then
-    akonadictl start
+    akonadictl start 1>&2
     SLEEP=5
 else
     DBUS_SESSION_SH_AKONADI=
 fi
 if [ "$DBUS_SESSION_SH_EDS_BASE" ] && [ "$prefix" ]; then
-    $prefix $DBUS_SESSION_SH_EDS_BASE/evolution-calendar-factory --keep-running &
+    $prefix $DBUS_SESSION_SH_EDS_BASE/evolution-calendar-factory --keep-running 1>&2 &
     E_CAL_PID=$!
-    $prefix $DBUS_SESSION_SH_EDS_BASE/evolution-addressbook-factory --keep-running &
+    $prefix $DBUS_SESSION_SH_EDS_BASE/evolution-addressbook-factory --keep-running 1>&2 &
     E_BOOK_PID=$!
 
     # give daemons some time to start and register with D-Bus
