@@ -527,6 +527,7 @@ VERSION:3.0\r?
 
         # We have to clean the xdg_root ourselves. We have to be nice
         # to EDS and can't just wipe out the entire directory.
+        # Same for GNOME Online Accounts.
         items = list(os.walk(xdg_root))
         items.reverse()
         for dirname, dirs, files in items:
@@ -534,7 +535,9 @@ VERSION:3.0\r?
             for dir in dirs:
                 # evolution-source-registry gets confused when we remove
                 # the "sources" directory itself.
-                if reldir == 'config/evolution' and dir == 'sources':
+                # GNOME Online Accounts settings must survive.
+                if (reldir == 'config/evolution' and dir == 'sources') or \
+                         (reldir == 'config' and dir.startswith('goa')):
                     continue
                 dest = os.path.join(dirname, dir)
                 try:
@@ -548,7 +551,8 @@ VERSION:3.0\r?
                 # evolution-addressbook-factory and that we may still need.
                 # Other DBs can be removed because we are not going to depend on
                 # them anymore thanks to the per-test uid prefix.
-                if reldir == 'data/evolution/addressbook/system':
+                if reldir == 'data/evolution/addressbook/system' or \
+                         reldir.startswith('config/goa'):
                     continue
                 os.unlink(dest)
 

@@ -19,6 +19,7 @@ import shlex
 import subprocess
 import fnmatch
 import copy
+import errno
 
 try:
     import gzip
@@ -48,6 +49,11 @@ def findInPaths(name, dirs):
     return fullname
 
 def del_dir(path):
+    # Preserve XDG dirs, if we were set up like that by caller.
+    # These dirs might already contain some relevant data.
+    xdgdirs = list(os.environ.get(x, None) for x in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"))
+    if path in xdgdirs:
+        return
     if not os.access(path, os.F_OK):
         return
     for file in os.listdir(path):
@@ -58,8 +64,12 @@ def del_dir(path):
             del_dir(file_or_dir) #it's a directory recursive call to function again
         else:
             os.remove(file_or_dir) #it's a file, delete it
-    os.rmdir(path)
-
+    # We might have skipped deleting something, allow that.
+    try:
+        os.rmdir(path)
+    except OSError, ex:
+        if ex.errno != errno.ENOTEMPTY:
+            raise
 
 def copyLog(filename, dirname, htaccess, lineFilter=None):
     """Make a gzipped copy (if possible) with the original time stamps and find the most severe problem in it.
@@ -575,6 +585,7 @@ class AutotoolsBuild(Action):
         self.builddir = os.path.join(context.tmpdir, "build")
 
     def execute(self):
+        print "removing builddir: %s" % self.builddir
         del_dir(self.builddir)
         cd(self.builddir)
         context.runCommand("%s %s/configure %s" % (self.runner, self.src, self.configargs))
