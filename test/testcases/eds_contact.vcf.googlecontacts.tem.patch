@@ -1,4 +1,20 @@
-@@ -95,7 +95,6 @@
+@@ -67,15 +67,6 @@
+ 
+ BEGIN:VCARD
+ VERSION:3.0
+-NICKNAME:user9
+-NOTE;CHARSET="UTF-8":Tests charset specification with quotation marks.
+-FN:charset
+-N:set;char;;;
+-X-EVOLUTION-FILE-AS:set\, char
+-END:VCARD
+-
+-BEGIN:VCARD
+-VERSION:3.0
+ URL:
+ TITLE:
+ ROLE:
+@@ -95,7 +86,6 @@
  FN:Umlaut Ä Ö Ü ß
  N:Ü;Ä;Ö;Umlaut;ß
  X-EVOLUTION-FILE-AS:Ü\, Ä
@@ -6,7 +22,7 @@
  X-EVOLUTION-BLOG-URL:
  CALURI:
  FBURL:
-@@ -156,8 +155,7 @@
+@@ -156,8 +146,7 @@
  VERSION:3.0
  URL:http://john.doe.com
  TITLE:Senior Tester
@@ -16,7 +32,7 @@
  X-EVOLUTION-MANAGER:John Doe Senior
  X-EVOLUTION-ASSISTANT:John Doe Junior
  NICKNAME:user1
-@@ -170,11 +168,7 @@
+@@ -170,11 +159,7 @@
  FN:John Doe
  N:Doe;John;;;
  X-EVOLUTION-FILE-AS:Doe\, John
