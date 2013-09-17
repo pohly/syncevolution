@@ -1760,6 +1760,12 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
             // multiple times; not so CardDAV.  We are not even told
             // the path of that other contact...  Detect this by
             // checking whether the item really exists.
+            //
+            // Google also returns an etag without a href. However,
+            // Google really creates a new item. We cannot tell here
+            // whether merging took place. As we are supporting Google
+            // but not Yahoo at the moment, let's assume that a new item
+            // was created.
             RevisionMap_t revisions;
             bool failed = false;
             m_session->propfindURI(luid2path(new_uid), 0, getetag,
@@ -1777,7 +1783,8 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
                              new_uid.c_str(),
                              revisions.begin()->first.c_str());
                 new_uid = revisions.begin()->first;
-                state = ITEM_REPLACED;
+                // This would have to be uncommented for Yahoo.
+                // state = ITEM_REPLACED;
             }
         }
     } else {
