@@ -1130,6 +1130,18 @@ test = SyncEvolutionTest("googlecalendar", compile,
                          testPrefix=options.testprefix)
 context.add(test)
 
+test = SyncEvolutionTest("googlecontacts", compile,
+                         "", options.shell,
+                         "Client::Sync::eds_contact::testItems Client::Source::google_carddav",
+                         [ "google_carddav", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='google carddav testcases=testcases/eds_contact.vcf' "
+                         "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
+                         "CLIENT_TEST_MODE=server " # for Client::Sync
+                         "CLIENT_TEST_FAILURES="
+                         ,
+                         testPrefix=options.testprefix)
+context.add(test)
+
 test = SyncEvolutionTest("yahoo", compile,
                          "", options.shell,
                          "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::yahoo_caldav Client::Source::yahoo_carddav",
