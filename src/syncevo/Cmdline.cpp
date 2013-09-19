@@ -1230,6 +1230,24 @@ bool Cmdline::run() {
                     // take some time, so allow the user to abort
                     SE_LOG_INFO(NULL, "%s: looking for databases...",
                                 source.c_str());
+                    // Even if the peer config does not exist yet
+                    // (fromScratch == true), the source config itself
+                    // may already exist with a username/password
+                    // using the keyring. Need to retrieve that
+                    // password before using the source.
+                    //
+                    // We need to check for databases again here,
+                    // because otherwise we don't know whether the
+                    // source is usable. The "database" property can
+                    // be empty in a usable source, and the "sync"
+                    // property in some potential other peer config
+                    // is not accessible.
+                    PasswordConfigProperty::checkPasswords(to->getUserInterfaceNonNull(),
+                                                           *to,
+                                                           PasswordConfigProperty::CHECK_PASSWORD_SOURCE|
+                                                           PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_PASSWORD|
+                                                           PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_USERNAME,
+                                                           boost::assign::list_of(source));
                     SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
                     auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
                     if (syncSource.get() == NULL) {
