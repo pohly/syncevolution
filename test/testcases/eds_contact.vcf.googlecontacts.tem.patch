@@ -111,9 +111,11 @@
  FN:line breaks
  N:breaks;line;;;
  X-EVOLUTION-FILE-AS:breaks\, line
-@@ -156,8 +123,7 @@
+@@ -154,10 +121,8 @@
+ 
+ BEGIN:VCARD
  VERSION:3.0
- URL:http://john.doe.com
+-URL:http://john.doe.com
  TITLE:Senior Tester
 -ORG:Test Inc.;Testing;test#1
 -ROLE:professional test case
@@ -121,7 +123,7 @@
  X-EVOLUTION-MANAGER:John Doe Senior
  X-EVOLUTION-ASSISTANT:John Doe Junior
  NICKNAME:user1
-@@ -166,15 +132,10 @@
+@@ -166,15 +131,10 @@
  X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
@@ -137,7 +139,7 @@
  X-EVOLUTION-VIDEO-URL:chat
  X-MOZILLA-HTML:TRUE
  ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
-@@ -221,7 +182,6 @@
+@@ -221,7 +181,6 @@
  X-EVOLUTION-ASSISTANT:
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
@@ -145,7 +147,7 @@
  FN:Ms. JPG
  N:;JPG;;Ms.;
  X-EVOLUTION-FILE-AS:JPG
-@@ -257,7 +217,6 @@
+@@ -257,7 +216,6 @@
  X-EVOLUTION-ASSISTANT:
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
@@ -153,7 +155,7 @@
  FN:Mrs. PNG
  N:;PNG;;Mrs.;
  X-EVOLUTION-FILE-AS:PNG
-@@ -288,7 +247,6 @@
+@@ -288,7 +246,6 @@
  X-EVOLUTION-ASSISTANT:
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
@@ -161,7 +163,7 @@
  FN:Mr. First \; special \; middle Last
  N:Last;First \; special \;;middle;Mr.;
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
-@@ -309,7 +267,6 @@
+@@ -309,7 +266,6 @@
  X-EVOLUTION-ASSISTANT:
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
@@ -169,7 +171,7 @@
  FN:Mr. GIF
  N:;GIF;;Mr.;
  X-EVOLUTION-FILE-AS:GIF
-@@ -329,107 +286,6 @@
+@@ -329,107 +285,6 @@
  VERSION:3.0
  NICKNAME:user10
  X-EVOLUTION-SPOUSE:
