@@ -208,6 +208,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
     sourceServers = ['evolution',
                      'evolution-prebuilt-build',
                      'yahoo',
+                     'owndrive',
                      'davical',
                      'googlecalendar',
                      'googlecontacts',

@@ -1142,6 +1142,17 @@ test = SyncEvolutionTest("googlecontacts", compile,
                          testPrefix=options.testprefix)
 context.add(test)
 
+test = SyncEvolutionTest("owndrive", compile,
+                         "", options.shell,
+                         "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::owndrive_caldav Client::Source::owndrive_carddav",
+                         [ "owndrive_caldav", "owndrive_carddav", "eds_event", "eds_contact" ],
+                         "CLIENT_TEST_WEBDAV='owndrive caldav carddav' "
+                         "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
+                         "CLIENT_TEST_MODE=server " # for Client::Sync
+                         ,
+                         testPrefix=options.testprefix)
+context.add(test)
+
 test = SyncEvolutionTest("yahoo", compile,
                          "", options.shell,
                          "Client::Sync::eds_contact::testItems Client::Sync::eds_event::testItems Client::Source::yahoo_caldav Client::Source::yahoo_carddav",
