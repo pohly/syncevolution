@@ -3181,8 +3181,13 @@ private:
         CPPUNIT_ASSERT_EQUAL(std::string("foobar@default"),
                              SyncConfig::normalizeConfigString("FooBar", SyncConfig::NORMALIZE_LONG_FORMAT));
 
-        // test config lookup
+        // Test config lookup. We expect all of these to exist on disk, so
+        // set some property. Empty configs do not get written to disk.
+        // This allows testing for existance.
         SyncConfig foo_default("foo"), foo_other("foo@other"), bar("bar@other");
+        foo_default.setLogLevel(10);
+        foo_other.setLogLevel(10);
+        bar.setLogLevel(10);
         foo_default.flush();
         foo_other.flush();
         bar.flush();
