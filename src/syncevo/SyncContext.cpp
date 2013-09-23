@@ -4504,19 +4504,39 @@ string SyncContext::readSessionInfo(const string &dir, SyncReport &report)
  * With that setup and a fake SyncContext it is possible to simulate
  * sessions and test the resulting logdirs.
  */
-class LogDirTest : public CppUnit::TestFixture, private SyncContext, public Logger
+class LogDirTest : public CppUnit::TestFixture
 {
+    class LogContext : public SyncContext, public Logger
+    {
+    public:
+        LogContext() :
+            SyncContext("nosuchconfig@nosuchcontext")
+        {}
+
+        ostringstream m_out;
+
+        /** capture output produced while test ran */
+        void messagev(const MessageOptions &options,
+                      const char *format,
+                      va_list args)
+        {
+            std::string str = StringPrintfV(format, args);
+            m_out << '[' << levelToStr(options.m_level) << ']' << str;
+            if (!boost::ends_with(str, "\n")) {
+                m_out << std::endl;
+            }
+        }
+    };
+
+    boost::shared_ptr<LogContext> m_logContext;
+
 public:
     LogDirTest() :
-        SyncContext("nosuchconfig@nosuchcontext"),
         m_maxLogDirs(10)
     {
-        // suppress output by redirecting into m_out
-        addLogger(boost::shared_ptr<Logger>(this, NopDestructor()));
     }
 
     ~LogDirTest() {
-        removeLogger(this);
     }
 
     void setUp() {
@@ -4598,8 +4618,16 @@ public:
 
         mkdir_p(getLogDir());
         m_maxLogDirs = 0;
-        m_out.clear();
-        m_out.str("");
+
+        // Suppress output by redirecting into LogContext::m_out.
+        // It's not tested at the moment.
+        m_logContext.reset(new LogContext);
+        Logger::addLogger(m_logContext);
+    }
+
+    void tearDown() {
+        Logger::removeLogger(m_logContext.get());
+        m_logContext.reset();
     }
 
 private:
@@ -4607,8 +4635,6 @@ private:
     string getLogData() { return "LogDirTest/data"; }
     virtual InitStateString getLogDir() const { return "LogDirTest/cache/syncevolution"; }
     int m_maxLogDirs;
-
-    ostringstream m_out;
 
     void dump(const char *dir, const char *file, const char *data) {
         string name = getLogData();
@@ -4619,18 +4645,6 @@ private:
         name += file;
         ofstream out(name.c_str());
         out << data;
-    }
-
-    /** capture output produced while test ran */
-    void messagev(const MessageOptions &options,
-                  const char *format,
-                  va_list args)
-    {
-        std::string str = StringPrintfV(format, args);
-        m_out << '[' << levelToStr(options.m_level) << ']' << str;
-        if (!boost::ends_with(str, "\n")) {
-            m_out << std::endl;
-        }
     }
 
     CPPUNIT_TEST_SUITE(LogDirTest);
@@ -4653,7 +4667,7 @@ private:
      */
     string session(bool changeServer, SyncMLStatus status, ...) {
         Logger::Level level = Logger::instance().getLevel();
-        SourceList list(*this, true);
+        SourceList list(*m_logContext, true);
         list.setLogLevel(SourceList::LOGGING_QUIET);
         SyncReport report;
         list.startSession("", m_maxLogDirs, 0, &report);
