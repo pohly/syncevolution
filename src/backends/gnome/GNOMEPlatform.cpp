@@ -33,6 +33,15 @@ extern "C" {
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+// Occasionally, libgnome-keyring fails with the following error messages:
+// Gkr: received an invalid, unencryptable, or non-utf8 secret
+// Gkr: call to daemon returned an invalid response: (null).(null)
+//
+// We work around that by retrying the operation a few times, for at
+// most this period of time. Didn't really help, so disable it for now
+// by using a zero duration.
+static const double GNOMEKeyringRetryDuration = 0; // seconds
+static const double GNOMEKeyringRetryInterval = 0.1; // seconds
 
 /**
  * GNOME keyring distinguishes between empty and unset
@@ -72,17 +81,29 @@ bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
         return false;
     }
 
-    GnomeKeyringResult result;
+    GnomeKeyringResult result = GNOME_KEYRING_RESULT_OK;
     GList* list;
-
-    result = gnome_keyring_find_network_password_sync(passwdStr(key.user),
-                                                      passwdStr(key.domain),
-                                                      passwdStr(key.server),
-                                                      passwdStr(key.object),
-                                                      passwdStr(key.protocol),
-                                                      passwdStr(key.authtype),
-                                                      key.port,
-                                                      &list);
+    Timespec start = Timespec::monotonic();
+    double sleepSecs = 0;
+    do {
+        if (sleepSecs != 0) {
+            SE_LOG_DEBUG(NULL, "%s: previous attempt to load password '%s' from GNOME keyring failed, will try again: %s",
+                         key.description.c_str(),
+                         key.toString().c_str(),
+                         gnome_keyring_result_to_message(result));
+            Sleep(sleepSecs);
+        }
+        result = gnome_keyring_find_network_password_sync(passwdStr(key.user),
+                                                          passwdStr(key.domain),
+                                                          passwdStr(key.server),
+                                                          passwdStr(key.object),
+                                                          passwdStr(key.protocol),
+                                                          passwdStr(key.authtype),
+                                                          key.port,
+                                                          &list);
+        sleepSecs = GNOMEKeyringRetryInterval;
+    } while (result != GNOME_KEYRING_RESULT_OK &&
+             (Timespec::monotonic() - start).duration() < GNOMEKeyringRetryDuration);
 
     // if find password stored in gnome keyring
     if(result == GNOME_KEYRING_RESULT_OK && list && list->data ) {
@@ -90,15 +111,16 @@ bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
         key_data = (GnomeKeyringNetworkPasswordData*)list->data;
         password = std::string(key_data->password);
         gnome_keyring_network_password_list_free(list);
-        SE_LOG_DEBUG(NULL, "loaded password from GNOME keyring using %s", key.toString().c_str());
+        SE_LOG_DEBUG(NULL, "%s: loaded password from GNOME keyring using %s",
+                     key.description.c_str(),
+                     key.toString().c_str());
     } else {
         SE_LOG_DEBUG(NULL, "password not in GNOME keyring using %s: %s",
                      key.toString().c_str(),
                      result == GNOME_KEYRING_RESULT_NO_MATCH ? "no match" :
-                     result != GNOME_KEYRING_RESULT_OK ? "error using keyring" :
+                     result != GNOME_KEYRING_RESULT_OK ? gnome_keyring_result_to_message(result) :
                      "empty result list");
     }
-
 
     return true;
 }
@@ -124,28 +146,36 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
     }
 
     guint32 itemId;
-    GnomeKeyringResult result;
+    GnomeKeyringResult result = GNOME_KEYRING_RESULT_OK;
     // write password to keyring
-    result = gnome_keyring_set_network_password_sync(NULL,
-                                                     passwdStr(key.user),
-                                                     passwdStr(key.domain),
-                                                     passwdStr(key.server),
-                                                     passwdStr(key.object),
-                                                     passwdStr(key.protocol),
-                                                     passwdStr(key.authtype),
-                                                     key.port,
-                                                     password.c_str(),
-                                                     &itemId);
-    /* if set operation is failed */
-    if(result != GNOME_KEYRING_RESULT_OK) {
-#ifdef GNOME_KEYRING_220
-        SyncContext::throwError("Try to save " + passwordName + " in gnome-keyring but get an error. " + gnome_keyring_result_to_message(result));
-#else
-        /** if gnome-keyring version is below 2.20, it doesn't support 'gnome_keyring_result_to_message'. */
-        stringstream value;
-        value << (int)result;
-        SyncContext::throwError("Try to save " + passwordName + " in gnome-keyring but get an error. The gnome-keyring error code is " + value.str() + ".");
-#endif
+    Timespec start = Timespec::monotonic();
+    double sleepSecs = 0;
+    do {
+        if (sleepSecs != 0) {
+            SE_LOG_DEBUG(NULL, "%s: previous attempt to save password '%s' in GNOME keyring failed, will try again: %s",
+                         key.description.c_str(),
+                         key.toString().c_str(),
+                         gnome_keyring_result_to_message(result));
+            Sleep(sleepSecs);
+        }
+        result = gnome_keyring_set_network_password_sync(NULL,
+                                                         passwdStr(key.user),
+                                                         passwdStr(key.domain),
+                                                         passwdStr(key.server),
+                                                         passwdStr(key.object),
+                                                         passwdStr(key.protocol),
+                                                         passwdStr(key.authtype),
+                                                         key.port,
+                                                         password.c_str(),
+                                                         &itemId);
+        sleepSecs = GNOMEKeyringRetryInterval;
+    } while (result != GNOME_KEYRING_RESULT_OK &&
+             (Timespec::monotonic() - start).duration() < GNOMEKeyringRetryDuration);
+    if (result != GNOME_KEYRING_RESULT_OK) {
+        SyncContext::throwError(StringPrintf("%s: saving password '%s' in GNOME keyring failed: %s",
+                                             key.description.c_str(),
+                                             key.toString().c_str(),
+                                             gnome_keyring_result_to_message(result)));
     }
     SE_LOG_DEBUG(NULL, "saved password in GNOME keyring using %s", key.toString().c_str());
 
