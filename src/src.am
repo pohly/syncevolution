@@ -233,6 +233,24 @@ src_client_test_SOURCES = \
   $(CORE_SOURCES)
 nodist_src_client_test_SOURCES = test/test.cpp
 
+# Compiling ClientTest.cpp with autotool's default CXXFLAGS (usually
+# -g -O2) is expensive (due to many templates and the large file size)
+# and unnecessary - it is much better for debugging when optimization
+# is off.
+#
+# Therefore use GNU make's "Target-specific Variable Values" to
+# override CXXFLAGS for that special file. We assume that the compiler
+# knows the -g flag.
+#
+# We have to get the target name right. The worst that happens if we
+# don't is that it gets compiled with the normal CXXFLAGS. Because
+# we don't know if GNU make is used, use a configure check and only
+# enable this when found during configure.
+#
+# Note that src_client_test_CXXFLAGS cannot be used to remove
+# -O2, because CXXFLAGS comes later in the final compile command.
+@ifGNUmake@ $(foreach e, $(foreach i, $(src_client_test_SOURCES), $(dir $(i))src_client_test-$(basename $(notdir $i))), $(e).o $(e).lo $(e).obj) : CXXFLAGS = -g
+
 # list of test file base files
 #
 # Generated files (testcases/eds_event.ics.funambol.tem) are derived from

@@ -47,6 +47,7 @@ fi
 AM_INIT_AUTOMAKE([1.11.1 tar-ustar silent-rules subdir-objects -Wno-portability])
 
 AM_PROG_CC_C_O
+AX_CHECK_GNU_MAKE
 
 AM_MAINTAINER_MODE([enable]) # needed for nightly builds where reconfiguration fails under certain chroots
 AC_CONFIG_MACRO_DIR([m4])
