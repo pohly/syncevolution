@@ -1101,6 +1101,41 @@
    obj:*libsoup-2.4.so*
 }
 
+# ==25864== 42 (16 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 667 of 1,425
+# ==25864==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
+# ==25864==    by 0x999F180: g_malloc (gmem.c:159)
+# ==25864==    by 0x99B41E2: g_slice_alloc (gslice.c:1003)
+# ==25864==    by 0x9985A6C: g_error_new_literal (gerror.c:456)
+# ==25864==    by 0x9985CD4: g_set_error_literal (gerror.c:595)
+# ==25864==    by 0x93DEF31: g_cancellable_set_error_if_cancelled (gcancellable.c:315)
+# ==25864==    by 0x941BEB2: g_socket_condition_timed_wait (gsocket.c:3474)
+# ==25864==    by 0x941C442: g_socket_accept (gsocket.c:2151)
+# ==25864==    by 0x94233B9: accept_ready (gsocketlistener.c:694)
+# ==25864==    by 0x941A285: socket_source_dispatch (gsocket.c:3165)
+# ==25864==    by 0x99993D4: g_main_context_dispatch (gmain.c:3054)
+# ==25864==    by 0x9999717: g_main_context_iterate.isra.22 (gmain.c:3701)
+# ==25864==    by 0x99997D3: g_main_context_iteration (gmain.c:3762)
+# ==25864==    by 0x6CCAAE: main (sync-helper.cpp:202)
+# ==25864== 
+#
+# First appeared in GNOME 3.8. Seems to be timing dependent. The code
+# path is not reached when not running under valgrind.
+{
+   GIO socket error leak
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_slice_alloc
+   fun:g_error_new_literal
+   fun:g_set_error_literal
+   fun:g_cancellable_set_error_if_cancelled
+   fun:g_socket_condition_timed_wait
+   fun:g_socket_accept
+   fun:accept_ready
+   fun:socket_source_dispatch
+   fun:g_main_context_dispatch
+}
+
 ### KDE ###
 
 # ==21052== 1,040 bytes in 26 blocks are possibly lost in loss record 5,184 of 5,271
