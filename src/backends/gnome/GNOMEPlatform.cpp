@@ -40,8 +40,34 @@ SE_BEGIN_CXX
 // We work around that by retrying the operation a few times, for at
 // most this period of time. Didn't really help, so disable it for now
 // by using a zero duration.
-static const double GNOMEKeyringRetryDuration = 0; // seconds
+static const double GNOMEKeyringRetryDuration = 2; // seconds
 static const double GNOMEKeyringRetryInterval = 0.1; // seconds
+
+/**
+ * libgnome-keyring has an internal gkr_reset_session()
+ * method which gets called when the "org.freedesktop.secrets"
+ * disconnects from the D-Bus session bus.
+ *
+ * We cannot call that method directly, but we can get it called by
+ * faking the "disconnect" signal. That works because
+ * on_connection_filter() in gkr-operation.c doesn't check who the
+ * sender of the signal is.
+ *
+ * Once gkr_reset_session() got called, the next operation will
+ * re-establish the connection. After the failure above, the second
+ * attempt usually works.
+ *
+ * Any other client using libgnome-keyring will also be tricked into
+ * disconnecting temporarily. That should be fine, any running
+ * operation will continue to run and complete (?).
+ */
+static void FlushGNOMEKeyring()
+{
+    // Invoking dbus-send is easier than writing this in C++.
+    // Besides, it ensures that the signal comes from some other
+    // process. Not sure whether signals are sent back to the sender.
+    system("dbus-send --session --type=signal /org/freedesktop/DBus org.freedesktop.DBus.NameOwnerChanged string:'org.freedesktop.secrets' string:':9.99' string:''");
+}
 
 /**
  * GNOME keyring distinguishes between empty and unset
@@ -91,6 +117,7 @@ bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
                          key.description.c_str(),
                          key.toString().c_str(),
                          gnome_keyring_result_to_message(result));
+            FlushGNOMEKeyring();
             Sleep(sleepSecs);
         }
         result = gnome_keyring_find_network_password_sync(passwdStr(key.user),
@@ -156,6 +183,7 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
                          key.description.c_str(),
                          key.toString().c_str(),
                          gnome_keyring_result_to_message(result));
+            FlushGNOMEKeyring();
             Sleep(sleepSecs);
         }
         result = gnome_keyring_set_network_password_sync(NULL,
