@@ -249,7 +249,7 @@ syncevo_session_init (SyncevoSession *session)
                                        G_TYPE_BOXED,
                                        G_TYPE_INVALID);
     /* StatusChanged */
-    dbus_g_object_register_marshaller (syncevo_marshal_VOID__UINT_UINT_BOXED,
+    dbus_g_object_register_marshaller (syncevo_marshal_VOID__STRING_UINT_BOXED,
                                        G_TYPE_NONE,
                                        G_TYPE_STRING,
                                        G_TYPE_UINT,
