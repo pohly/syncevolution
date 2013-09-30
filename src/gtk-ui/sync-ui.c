@@ -2476,9 +2476,9 @@ find_updated_source_progress (const char *name,
                               SyncevoSourcePhase phase,
                               source_progress_data *prog_data)
 {
-    GHashTable *configs = prog_data->data->current_service->source_configs;
+    GHashTable *configs = prog_data->data->current_service ? prog_data->data->current_service->source_configs : NULL;
     source_config *config;
-    config = g_hash_table_lookup (configs, name);
+    config = configs ? g_hash_table_lookup (configs, name) : NULL;
     if (config) {
         if (phase != config->phase) {
             config->phase = phase;
