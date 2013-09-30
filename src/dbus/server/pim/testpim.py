@@ -2397,26 +2397,40 @@ END:VCARD''']):
 
         # Find Abraham via caller ID for 089/7888-99 (country is Germany).
         view = ContactsView(self.manager)
-        view.search([['phone', '+49897888']])
-        self.runUntil('"+49897888" search results',
+        view.search([['phone', '+4989788899']])
+        self.runUntil('"+4989788899" search results',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
-        self.runUntil('+49897888 data',
+        self.runUntil('+4989788899 data',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.haveData(0))
+        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+
+        # Find Abraham via caller ID for +44 89 7888-99 (Abraham has no country code
+        # set and matches, whereas Benjamin has +1 as country code and does not match).
+        view = ContactsView(self.manager)
+        view.search([['phone', '+4489788899']])
+        self.runUntil('"+4489788899" search results',
+                      check=lambda: self.assertEqual([], view.errors),
+                      until=lambda: view.quiescentCount > 0)
+        self.assertEqual(1, len(view.contacts))
+        view.read(0, 1)
+        self.runUntil('+4489788899 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via 089/7888-99 (not a full caller ID, but at least a valid phone number).
         view = ContactsView(self.manager)
-        view.search([['phone', '0897888']])
-        self.runUntil('"0897888" search results',
+        view.search([['phone', '089788899']])
+        self.runUntil('"089788899" search results',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
         view.read(0, 1)
-        self.runUntil('0897888 data',
+        self.runUntil('089788899 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
         self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])

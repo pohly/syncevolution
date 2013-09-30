@@ -29,6 +29,18 @@
 
 SE_BEGIN_CXX
 
+std::string SimpleE164::toString() const
+{
+    std::ostringstream out;
+    if (m_countryCode) {
+        out << "+" << m_countryCode;
+    }
+    if (m_nationalNumber) {
+        out << m_nationalNumber;
+    }
+    return out.str();
+}
+
 class Filter2StringVisitor : public boost::static_visitor<void>
 {
     std::ostringstream m_out;

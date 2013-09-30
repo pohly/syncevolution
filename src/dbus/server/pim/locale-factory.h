@@ -39,6 +39,39 @@ SE_BEGIN_CXX
 class IndividualCompare;
 class IndividualFilter;
 
+/**
+ * Normalized phone numbers (E164). A subset of the full
+ * i18n::phonenumbers::PhoneNumber data.
+ */
+class SimpleE164
+{
+ public:
+    SimpleE164() : m_countryCode(0), m_nationalNumber(0) {}
+
+    typedef int32_t CountryCode_t;
+    typedef uint64_t NationalNumber_t;
+
+    /**
+     * Country code (for example, 49 for the +49 prefix of Germany),
+     * 0 if unknown/unset.
+     */
+    CountryCode_t m_countryCode;
+
+    /**
+     * Phone number after the country code as it would appear in E.164
+     * after the +<country> prefix, again given as binary value,
+     * 0 if unknown/unset.
+     */
+    NationalNumber_t m_nationalNumber;
+
+    /**
+     * +<country><national> if country code and national number are set,
+     * +<country> if only country code is set,
+     * <national> if only national number is set,
+     * empty string if both are unset.
+     */
+    std::string toString() const;
+};
 
 /**
  * Factory for everything related to the current locale: sorting and
@@ -114,11 +147,7 @@ class LocaleFactory
      */
     struct Precomputed
     {
-        /**
-         * Normalized phone numbers (E164). Contains only + and digits.
-         * TODO (?): store in more compact format.
-         */
-        std::vector<std::string> m_phoneNumbers;
+        std::vector<SimpleE164> m_phoneNumbers;
     };
 
     /**
