@@ -380,7 +380,13 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
     EBookClientView *view;
 
     EBookQueryCXX allItemsQuery(e_book_query_any_field_contains(""), TRANSFER_REF);
-    PlainGStr sexp(e_book_query_to_string (allItemsQuery.get()));
+    PlainGStr buffer(e_book_query_to_string (allItemsQuery.get()));
+    const char *sexp = getenv("SYNCEVOLUTION_EBOOK_QUERY");
+    if (sexp) {
+        SE_LOG_INFO(NULL, "restricting item set to items matching %s", sexp);
+    } else {
+        sexp = buffer;
+    }
 
     if (!e_book_client_get_view_sync(m_addressbook, sexp, &view, NULL, gerror)) {
         throwError( "getting the view" , gerror);
