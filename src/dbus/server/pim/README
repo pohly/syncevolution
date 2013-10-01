@@ -187,12 +187,26 @@ Supported searches:
 
     Except for 'phones/value', all values are treated as text values.
     For text values, the default search without explicit flags is
-    case-insensitive and accent-sensitive. Spaces between words
-    matter. This behavior can be modified by giving additional,
+    very tolerant, meaning that it ignores quite a few differences
+    between search term and value. The default search:
+    - transliterates any foreign script in search term and values
+      to Latin before comparison, thus finding 江 when searching
+      for Jiang and vice-versa
+    - is case-insensitive
+    - is accent-insensitive
+
+    Case and accent differences get removed after the optional
+    transliteration. Spaces between words always matter.
+
+    This behavior can be modified by giving additional,
     optional flags after the search value:
     'case-insensitive' - force case-insensitive search (available for the sake
     of consistency and just in case, should the default ever change)
     'case-sensitive' - force case-sensitive search
+    'accent-insensitive', 'accent-sensitive' - same for accents
+    'transliteration' - force transliteration, i.e. explicitly choose the
+    current default
+    'no-transliteration' - disable transliteration
 
     For telephone numbers, only digits are compared. Latin alphabetic
     characters are treated as aliases for digits as they typically

@@ -34,6 +34,7 @@
 #include <unicode/unistr.h>
 #include <unicode/translit.h>
 #include <unicode/bytestream.h>
+#include <unicode/locid.h>
 
 SE_GLIB_TYPE(EBookQuery, e_book_query)
 
@@ -111,6 +112,8 @@ std::string CompareBoost::transform(const char *string) const
 
 std::string CompareBoost::transform(const std::string &string) const
 {
+    // TODO: use e_collator_generate_key
+
     if (m_trans.get()) {
         // std::string result;
         // m_trans->transliterate(icu::StringPiece(string), icu::StringByteSink<std::string>(&result));
@@ -206,30 +209,61 @@ class AnyContainsBoost : public IndividualFilter
 {
 public:
     enum Mode {
-        CASE_SENSITIVE,
-        CASE_INSENSITIVE
+        EXACT = 0,
+        CASE_INSENSITIVE = 1<<0,
+        ACCENT_INSENSITIVE = 1<<1,
+        TRANSLITERATE = 1<<2,
+        ALL =
+        CASE_INSENSITIVE|
+        ACCENT_INSENSITIVE|
+        TRANSLITERATE|
+        0
     };
 
     AnyContainsBoost(const std::locale &locale,
                      const std::string &searchValue,
-                     Mode mode) :
+                     int mode) :
         m_locale(locale),
+        // For performance reasons we use ICU directly and thus need
+        // an ICU::Locale.
+        //         m_ICULocale(std::use_facet<boost::locale::info>(m_locale).language().c_str(),
+        //            std::use_facet<boost::locale::info>(m_locale).country().c_str(),
+        //            std::use_facet<boost::locale::info>(m_locale).variant().c_str()),
         // m_collator(std::use_facet<boost::locale::collator>(locale)),
         m_searchValue(searchValue),
         m_mode(mode)
     {
+        if (mode & TRANSLITERATE) {
+            UErrorCode status = U_ZERO_ERROR;
+            m_transliterator.reset(Transliterator::createInstance ("Any-Latin", UTRANS_FORWARD, status));
+            if (!m_transliterator ||
+                U_FAILURE(status)) {
+                SE_LOG_WARNING(NULL, "creating ICU Any-Latin Transliterator failed, error code %s; falling back to not transliterating", u_errorName(status));
+                m_transliterator.reset();
+                mode ^= TRANSLITERATE;
+                m_mode = mode;
+            }
+        }
+
         switch (mode) {
-        case CASE_SENSITIVE:
-            // Search directly, no preprocessing.
+        case EXACT:
             break;
-        case CASE_INSENSITIVE:
-            // Locale-aware conversion to fold case (= case
-            // independent) representation before search.
-            m_searchValueTransformed = boost::locale::fold_case(m_searchValue, m_locale);
+        default:
+            m_searchValueTransformed = transform(m_searchValue);
             break;
         }
         m_searchValueTel = normalizePhoneText(m_searchValue.c_str());
     }
+
+    /**
+     * Turn filter arguments into bit field.
+     */
+    static int getFilterMode(const std::vector<LocaleFactory::Filter_t> &terms,
+                             size_t start);
+
+    /** simplify according to mode */
+    std::string transform(const char *in) const;
+    std::string transform(const std::string &in) const { return transform(in.c_str()); }
 
     /**
      * The search text is not necessarily a full phone number,
@@ -272,12 +306,12 @@ public:
             return false;
         }
         switch (m_mode) {
-        case CASE_SENSITIVE:
+        case EXACT:
             return boost::contains(text, m_searchValue);
             break;
-        case CASE_INSENSITIVE: {
-            std::string lower(boost::locale::fold_case(text, m_locale));
-            return boost::contains(lower, m_searchValueTransformed);
+        default: {
+            std::string transformed = transform(text);
+            return boost::contains(transformed, m_searchValueTransformed);
             break;
         }
         }
@@ -297,12 +331,12 @@ public:
             return false;
         }
         switch (m_mode) {
-        case CASE_SENSITIVE:
+        case EXACT:
             return boost::equals(text, m_searchValue);
             break;
-        case CASE_INSENSITIVE: {
-            std::string lower(boost::locale::fold_case(text, m_locale));
-            return boost::equals(lower, m_searchValueTransformed);
+        default: {
+            std::string transformed = transform(text);
+            return boost::equals(transformed, m_searchValueTransformed);
             break;
         }
         }
@@ -322,12 +356,12 @@ public:
             return false;
         }
         switch (m_mode) {
-        case CASE_SENSITIVE:
+        case EXACT:
             return boost::starts_with(text, m_searchValue);
             break;
-        case CASE_INSENSITIVE: {
-            std::string lower(boost::locale::fold_case(text, m_locale));
-            return boost::starts_with(lower, m_searchValueTransformed);
+        default:  {
+            std::string transformed = transform(text);
+            return boost::starts_with(transformed, m_searchValueTransformed);
             break;
         }
         }
@@ -347,12 +381,12 @@ public:
             return false;
         }
         switch (m_mode) {
-        case CASE_SENSITIVE:
+        case EXACT:
             return boost::ends_with(text, m_searchValue);
             break;
-        case CASE_INSENSITIVE: {
-            std::string lower(boost::locale::fold_case(text, m_locale));
-            return boost::ends_with(lower, m_searchValueTransformed);
+        default: {
+            std::string transformed = transform(text);
+            return boost::ends_with(transformed, m_searchValueTransformed);
             break;
         }
         }
@@ -417,12 +451,61 @@ public:
 
 private:
     std::locale m_locale;
+    // icu::Locale m_ICULocale;
+    boost::shared_ptr<icu::Transliterator> m_transliterator;
     std::string m_searchValue;
     std::string m_searchValueTransformed;
     std::string m_searchValueTel;
-    Mode m_mode;
+    int m_mode;
     // const bool (*m_contains)(const std::string &, const std::string &, const std::locale &);
 };
+
+std::string AnyContainsBoost::transform(const char *in) const
+{
+    icu::UnicodeString unicode = icu::UnicodeString::fromUTF8(in);
+    if (m_mode & TRANSLITERATE) {
+        m_transliterator->transliterate(unicode);
+    }
+    if (m_mode & CASE_INSENSITIVE) {
+        unicode.foldCase();
+    }
+    std::string utf8;
+    unicode.toUTF8String(utf8);
+    if (m_mode & ACCENT_INSENSITIVE) {
+        // Haven't found an easy way to do this with ICU.
+        // Use e_util_utf8_remove_accents(), which also ensures
+        // consistency with EDS.
+        PlainGStr res = e_util_utf8_remove_accents(utf8.c_str());
+        return std::string(res);
+    } else {
+        return utf8;
+    }
+}
+
+int AnyContainsBoost::getFilterMode(const std::vector<LocaleFactory::Filter_t> &terms,
+                                    size_t start)
+{
+    int mode = ALL;
+    for (size_t i = start; i < terms.size(); i++) {
+        const std::string flag = LocaleFactory::getFilterString(terms[i], "any-contains flag");
+        if (flag == "case-sensitive") {
+            mode &= ~CASE_INSENSITIVE;
+        } else if (flag == "case-insensitive") {
+            mode |= CASE_INSENSITIVE;
+        } else if (flag == "accent-sensitive") {
+            mode &= ~ACCENT_INSENSITIVE;
+        } else if (flag == "accent-insensitive") {
+            mode |= ACCENT_INSENSITIVE;
+        } else if (flag == "no-transliteration") {
+            mode &= ~TRANSLITERATE;
+        } else if (flag == "transliteration") {
+            mode |= TRANSLITERATE;
+        } else {
+            SE_THROW("unsupported filter flag: " + flag);
+        }
+    }
+    return mode;
+}
 
 class FilterFullName : public AnyContainsBoost
 {
@@ -431,7 +514,7 @@ class FilterFullName : public AnyContainsBoost
 public:
     FilterFullName(const std::locale &locale,
                    const std::string &searchValue,
-                   Mode mode,
+                   int mode,
                    bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -454,7 +537,7 @@ class FilterNickname : public AnyContainsBoost
 public:
     FilterNickname(const std::locale &locale,
                    const std::string &searchValue,
-                   Mode mode,
+                   int mode,
                    bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -477,7 +560,7 @@ class FilterFamilyName : public AnyContainsBoost
 public:
     FilterFamilyName(const std::locale &locale,
                      const std::string &searchValue,
-                     Mode mode,
+                     int mode,
                      bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -505,7 +588,7 @@ class FilterGivenName : public AnyContainsBoost
 public:
     FilterGivenName(const std::locale &locale,
                     const std::string &searchValue,
-                    Mode mode,
+                    int mode,
                     bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -533,7 +616,7 @@ class FilterAdditionalName : public AnyContainsBoost
 public:
     FilterAdditionalName(const std::locale &locale,
                          const std::string &searchValue,
-                         Mode mode,
+                         int mode,
                          bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -561,7 +644,7 @@ class FilterEmails : public AnyContainsBoost
 public:
     FilterEmails(const std::locale &locale,
                  const std::string &searchValue,
-                 Mode mode,
+                 int mode,
                  bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -592,7 +675,7 @@ public:
     FilterTel(const std::locale &locale,
               const std::string &searchValue,
               bool (AnyContainsBoost::*operation)(const char *text) const) :
-        AnyContainsBoost(locale, searchValue, CASE_SENSITIVE /* doesn't matter */),
+        AnyContainsBoost(locale, searchValue, 0 /* doesn't matter */),
         m_operation(operation)
     {
     }
@@ -621,7 +704,7 @@ protected:
 public:
     FilterAddr(const std::locale &locale,
                const std::string &searchValue,
-               Mode mode,
+               int mode,
                bool (AnyContainsBoost::*operation)(const char *text) const) :
         AnyContainsBoost(locale, searchValue, mode),
         m_operation(operation)
@@ -651,7 +734,7 @@ class FilterAddrPOBox : public FilterAddr
 public:
     FilterAddrPOBox(const std::locale &locale,
                     const std::string &searchValue,
-                    Mode mode,
+                    int mode,
                     bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -669,7 +752,7 @@ class FilterAddrExtension : public FilterAddr
 public:
     FilterAddrExtension(const std::locale &locale,
                         const std::string &searchValue,
-                        Mode mode,
+                        int mode,
                         bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -687,7 +770,7 @@ class FilterAddrStreet : public FilterAddr
 public:
     FilterAddrStreet(const std::locale &locale,
                      const std::string &searchValue,
-                     Mode mode,
+                     int mode,
                      bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -705,7 +788,7 @@ class FilterAddrLocality : public FilterAddr
 public:
     FilterAddrLocality(const std::locale &locale,
                        const std::string &searchValue,
-                       Mode mode,
+                       int mode,
                        bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -723,7 +806,7 @@ class FilterAddrRegion : public FilterAddr
 public:
     FilterAddrRegion(const std::locale &locale,
                      const std::string &searchValue,
-                     Mode mode,
+                     int mode,
                      bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -741,7 +824,7 @@ class FilterAddrPostalCode : public FilterAddr
 public:
     FilterAddrPostalCode(const std::locale &locale,
                          const std::string &searchValue,
-                         Mode mode,
+                         int mode,
                          bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -759,7 +842,7 @@ class FilterAddrCountry : public FilterAddr
 public:
     FilterAddrCountry(const std::locale &locale,
                       const std::string &searchValue,
-                      Mode mode,
+                      int mode,
                       bool (AnyContainsBoost::*operation)(const char *text) const) :
         FilterAddr(locale, searchValue, mode, operation)
     {
@@ -919,23 +1002,6 @@ public:
     }
 };
 
-static AnyContainsBoost::Mode getFilterMode(const std::vector<LocaleFactory::Filter_t> &terms,
-                                            size_t start)
-{
-    AnyContainsBoost::Mode mode = AnyContainsBoost::CASE_INSENSITIVE;
-    for (size_t i = start; i < terms.size(); i++) {
-        const std::string flag = LocaleFactory::getFilterString(terms[i], "any-contains flag");
-        if (flag == "case-sensitive") {
-            mode = AnyContainsBoost::CASE_SENSITIVE;
-        } else if (flag == "case-insensitive") {
-            mode = AnyContainsBoost::CASE_INSENSITIVE;
-        } else {
-            SE_THROW("unsupported filter flag: " + flag);
-        }
-    }
-    return mode;
-}
-
 class LocaleFactoryBoost : public LocaleFactory
 {
     const i18n::phonenumbers::PhoneNumberUtil &m_phoneNumberUtil;
@@ -1056,7 +1122,7 @@ public:
                                                 func == &AnyContainsBoost::endsWithSearchText ? &AnyContainsBoost::endsWithSearchTel :
                                                 func));
                     } else {
-                        AnyContainsBoost::Mode mode = getFilterMode(terms, 3);
+                        int mode = AnyContainsBoost::getFilterMode(terms, 3);
                         if (field == "full-name") {
                             res.reset(new FilterFullName(m_locale, value, mode, func));
                         } else if (field == "nickname") {
@@ -1092,7 +1158,7 @@ public:
                         SE_THROW("missing search value");
                     }
                     const std::string &value = getFilterString(terms[1], "search string");
-                    AnyContainsBoost::Mode mode = getFilterMode(terms, 2);
+                    int mode = AnyContainsBoost::getFilterMode(terms, 2);
                     res.reset(new AnyContainsBoost(m_locale, value, mode));
                 } else if (operation == "phone") {
                     if (terms.size() != 2) {

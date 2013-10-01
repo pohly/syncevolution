@@ -2535,13 +2535,19 @@ END:VCARD
          self.doFilter(# Names of all contacts, sorted as expected.
                        # 江 = jiāng = Jiang when using Pinyin and thus after Jeffries and before Meadows.
                        # 鳥 = niǎo before 女性 = nǚ xìng (see FDO #66618)
-                       ('Adams', 'Jeffries', u'江', 'Meadows', u'鳥', u'女性' ),
-                       # 'J' not expected to find Jiang; searching
-                       # is meant to use Chinese letters.
-                       (([['any-contains', 'J']], ('Jeffries',)),
-                        ([['any-contains', u'江']], (u'江',)),
-                        ([['any-contains', u'jiāng']], ()),
-                        ([['any-contains', u'Jiang']], ()),
+                       ('Adams', 'Jeffries', u'江', 'jiang', 'Meadows', u'鳥', u'女性' ),
+                       # 'J' may or may not match Jiang; by default, it matches.
+                       (([['any-contains', 'J']], ('Jeffries', u'江', 'jiang')),
+                        ([['any-contains', 'J', 'no-transliteration']], ('Jeffries', 'jiang')),
+                        ([['any-contains', 'J', 'no-transliteration', 'case-sensitive']], ('Jeffries',)),
+                        ([['any-contains', u'江']], (u'江', 'jiang')),
+                        ([['any-contains', u'jiang']], (u'江', 'jiang')),
+                        ([['any-contains', u'jiāng']], (u'江', 'jiang')),
+                        ([['any-contains', u'jiāng', 'no-transliteration']], ('jiang',)),
+                        ([['any-contains', u'jiāng', 'accent-sensitive']], (u'江',)),
+                        ([['any-contains', u'jiāng', 'accent-sensitive', 'case-sensitive']], (u'江',)),
+                        ([['any-contains', u'Jiāng', 'accent-sensitive', 'case-sensitive']], ()),
+                        ([['any-contains', u'Jiang']], (u'江', 'jiang')),
                         ),
                        )
 
