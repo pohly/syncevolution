@@ -84,10 +84,12 @@ void LoggerStdout::messagev(const MessageOptions &options,
                             const char *format,
                             va_list args)
 {
-    write(m_file, options.m_level, getLevel(),
-          options.m_prefix,
-          options.m_processName,
-          format, args);
+    if (!(options.m_flags & MessageOptions::ONLY_GLOBAL_LOG)) {
+        write(m_file, options.m_level, getLevel(),
+              options.m_prefix,
+              options.m_processName,
+              format, args);
+    }
 }
 
 SE_END_CXX

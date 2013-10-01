@@ -4317,7 +4317,7 @@ END:VCARD''')
                                                 'sending message to child failed: The connection is closed'))
         self.assertSyncStatus('target_+config@client', 22002, 'synchronization process died prematurely')
 
-    @timeout(200)
+    @timeout(600)
     def testServerFailure(self):
         """TestLocalSync.testServerFailure - check that D-Bus helper detects when server dies"""
         self.setUpConfigs(childPassword="-")

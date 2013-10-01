@@ -49,6 +49,8 @@ src_syncevo_sources = \
   \
   src/syncevo/Logging.h \
   src/syncevo/Logging.cpp \
+  src/syncevo/LogDLT.h \
+  src/syncevo/LogDLT.cpp \
   src/syncevo/LogStdout.h \
   src/syncevo/LogStdout.cpp \
   src/syncevo/LogRedirect.h \
@@ -212,6 +214,7 @@ src_syncevo_libsyncevolution_la_LIBADD = \
   $(TRANSPORT_LIBS) \
   @LIBS@ \
   $(src_syncevo_ldadd) \
+  $(DLT_LIBS) \
   $(DBUS_LIBS) \
   $(NSS_LIBS)
 if ENABLE_MODULES
@@ -228,6 +231,7 @@ src_syncevo_libsyncevolution_la_CFLAGS = \
   $(SYNCEVO_WFLAGS)
 src_syncevo_libsyncevolution_la_CPPFLAGS = \
   $(src_syncevo_cppflags) \
+  $(DLT_CFLAGS) \
   $(DBUS_CFLAGS) \
   -DDATA_DIR=\""$(pkgdatadir)"\" \
   -DXML_CONFIG_DIR=\""$(datadir)/syncevolution/xml"\" \

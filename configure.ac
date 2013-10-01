@@ -290,6 +290,30 @@ AC_ARG_ENABLE(libsoup,
 # SoupTransportAgent depends on glib
 case "$TRANSPORT" in *libsoup*) need_glib=yes;; esac
 
+AC_ARG_ENABLE(dlt,
+              AS_HELP_STRING([--enable-dlt],
+                             [enable logging via GENIVI Diagnostic Log and Trace (DLT)]),
+              [enable_dlt=$enableval
+               test $enable_dlt = "yes" || test $enable_dlt = "no" || AC_ERROR([invalid value of --enable-dlt: $enableval])],
+              [enable_dlt="no"])
+if test "$enable_dlt" = "yes"; then
+    PKG_CHECK_MODULES(DLT, automotive-dlt,
+                      [USE_DLT=1],
+                      [AC_ERROR([dlt not found, required for --enable-dlt])])
+    AC_DEFINE(USE_DLT, 1, "optionally use GENIVI Diagnostic Log and Trace for logging")
+    AC_ARG_WITH([dlt-syncevolution],
+                AS_HELP_STRING([--with-dlt-syncevolution=SYNS,SYNH,SYNL],
+                               [controls the application IDs used by syncevo-dbus-server, syncevo-dbus-helper and syncevo-local-sync]),
+                [with_dlt_ids="$withval"],
+                [with_dlt_ids="SYNS,SYNH,SYNL"])
+    syns=`echo $with_dlt_ids | cut -d , -f 1`
+    synh=`echo $with_dlt_ids | cut -d , -f 2`
+    synl=`echo $with_dlt_ids | cut -d , -f 3`
+    AC_DEFINE_UNQUOTED(DLT_SYNCEVO_DBUS_SERVER_ID, "$syns", "DLT app ID for syncevo-dbus-server")
+    AC_DEFINE_UNQUOTED(DLT_SYNCEVO_DBUS_HELPER_ID, "$synh", "DLT app ID for syncevo-dbus-helper")
+    AC_DEFINE_UNQUOTED(DLT_SYNCEVO_LOCAL_HELPER_ID, "$synl", "DLT app ID for syncevo-local-helper")
+fi
+
 bluetooth_disabled=no
 AC_ARG_ENABLE(bluetooth,
               AS_HELP_STRING([--enable-bluetooth],

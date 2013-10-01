@@ -255,13 +255,15 @@ Logger::MessageOptions::MessageOptions(Level level,
                                        const std::string *prefix,
                                        const char *file,
                                        int line,
-                                       const char *function) :
+                                       const char *function,
+                                       int flags) :
     m_level(level),
     m_prefix(prefix),
     m_file(file),
     m_line(line),
     m_function(function),
-    m_processName(NULL)
+    m_processName(NULL),
+    m_flags(flags)
 {
 }
 

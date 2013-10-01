@@ -247,16 +247,18 @@ void LogRedirect::messagev(const MessageOptions &options,
 
     // check for other output first
     process();
-    // Choose output channel: SHOW goes to original stdout,
-    // everything else to stderr.
-    LoggerStdout::write(options.m_level == SHOW ?
-                        (m_out ? m_out : stdout) :
-                        (m_err ? m_err : stderr),
-                        options.m_level, getLevel(),
-                        options.m_prefix,
-                        options.m_processName,
-                        format,
-                        args);
+    if (!(options.m_flags & MessageOptions::ONLY_GLOBAL_LOG)) {
+        // Choose output channel: SHOW goes to original stdout,
+        // everything else to stderr.
+        LoggerStdout::write(options.m_level == SHOW ?
+                            (m_out ? m_out : stdout) :
+                            (m_err ? m_err : stderr),
+                            options.m_level, getLevel(),
+                            options.m_prefix,
+                            options.m_processName,
+                            format,
+                            args);
+    }
 }
 
 void LogRedirect::redirect(int original, FDs &fds) throw()

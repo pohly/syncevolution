@@ -31,6 +31,10 @@
 #include <syncevo/SyncContext.h>
 #include <syncevo/BoostHelper.h>
 
+#ifdef USE_DLT
+#include <syncevo/LogDLT.h>
+#endif
+
 #include <memory>
 
 #include <boost/foreach.hpp>
@@ -793,6 +797,11 @@ void Session::useHelperAsync(const SimpleResult &result)
             args.push_back("--dbus-verbosity");
             args.push_back(StringPrintf("%d", m_server.getDBusLogLevel()));
             m_forkExecParent = SyncEvo::ForkExecParent::create("syncevo-dbus-helper", args);
+#ifdef USE_DLT
+            if (getenv("SYNCEVOLUTION_USE_DLT")) {
+                m_forkExecParent->addEnvVar("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel()));
+            }
+#endif
             // We own m_forkExecParent, so the "this" pointer for
             // onConnect will live longer than the signal in
             // m_forkExecParent -> no need for resource
@@ -884,6 +893,7 @@ static void Logging2Server(Server &server,
         // there is considered an error.
         Logger::MessageOptions options(Logger::strToLevel(strLevel.c_str()));
         options.m_processName = &procname;
+        options.m_flags = Logger::MessageOptions::ALREADY_LOGGED;
         Logging2ServerAndStdout(server, path, options, "%s", explanation.c_str());
     }
 }

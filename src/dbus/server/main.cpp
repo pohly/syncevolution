@@ -33,7 +33,12 @@
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/LogSyslog.h>
+#include <syncevo/LogDLT.h>
 #include <syncevo/GLibSupport.h>
+
+#ifdef USE_DLT
+# include <dlt.h>
+#endif
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
@@ -100,6 +105,9 @@ int main(int argc, char **argv, char **envp)
         int logLevelDBus = 2;
         gboolean stdoutEnabled = false;
         gboolean syslogEnabled = true;
+#ifdef USE_DLT
+        gboolean dltEnabled = false;
+#endif
 #ifdef ENABLE_DBUS_PIM
         gboolean startPIM = false;
 #endif
@@ -115,6 +123,9 @@ int main(int argc, char **argv, char **envp)
               "Enable printing to stdout (result of operations) and stderr (errors/info/debug).",
               NULL },
             { "no-syslog", 's', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &syslogEnabled, "Disable printing to syslog.", NULL },
+#ifdef USE_DLT
+            { "dlt", 0, 0, G_OPTION_ARG_NONE, &dltEnabled, "Enable logging via GENIVI Diagnostic Log and Trace.", NULL },
+#endif
 #ifdef ENABLE_DBUS_PIM
             { "start-pim", 'p', 0, G_OPTION_ARG_NONE, &startPIM,
               "Activate the PIM Manager (= unified address book) immediately.",
@@ -154,6 +165,20 @@ int main(int argc, char **argv, char **envp)
         // Redirect output and optionally log to syslog.
         PushLogger<LogRedirect> redirect(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));
         redirect->setLevel(stdoutEnabled ? level : Logger::NONE);
+#ifdef USE_DLT
+        PushLogger<LoggerDLT> loggerdlt;
+        if (dltEnabled) {
+            // DLT logging with default log level DLT_LOG_WARN.  This
+            // default was chosen because DLT's own default,
+            // DLT_LOG_INFO, leads to too much output given that a lot
+            // of the standard messages in SyncEvolution and
+            // libsynthesis are labelled informational.
+            setenv("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", DLT_LOG_WARN).c_str(), true);
+            loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_DBUS_SERVER_ID, "SyncEvolution D-Bus server"));
+        } else {
+            unsetenv("SYNCEVOLUTION_USE_DLT");
+        }
+#endif
         PushLogger<LoggerSyslog> syslogger;
         if (syslogEnabled && level > Logger::NONE) {
             syslogger.reset(new LoggerSyslog(execName));

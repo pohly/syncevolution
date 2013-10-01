@@ -199,13 +199,29 @@ class Logger
         const char *m_function;
         /** name of the process which originally created the message, if different from current one */
         const std::string *m_processName;
+        /** additional flags */
+        int m_flags;
+
+        enum {
+            /**
+             * The message was written into a global log (syslog, dlt, ...)
+             * already. Such a message must not be logged again.
+             */
+            ALREADY_LOGGED = 1<<0,
+            /**
+             * The message must be written into a global log,
+             * but not to stdout.
+             */
+            ONLY_GLOBAL_LOG = 1<<1
+        };
 
         MessageOptions(Level level);
         MessageOptions(Level level,
                        const std::string *prefix,
                        const char *file,
                        int line,
-                       const char *function);
+                       const char *function,
+                       int flags = 0);
     };
 
     /**

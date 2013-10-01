@@ -85,8 +85,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
  public:
     SessionHelper(GMainLoop *loop,
                   const GDBusCXX::DBusConnectionPtr &conn,
-                  const boost::shared_ptr<ForkExecChild> &forkexec,
-                  const boost::shared_ptr<LogRedirect> &parentLogger);
+                  const boost::shared_ptr<ForkExecChild> &forkexec);
     ~SessionHelper();
 
     void setDBusLogLevel(Logger::Level level);

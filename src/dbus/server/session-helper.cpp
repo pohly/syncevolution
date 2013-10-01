@@ -42,14 +42,13 @@ static void dumpString(const std::string &output)
  */
 class SessionHelperLogger : public Logger
 {
-    boost::shared_ptr<LogRedirect> m_parentLogger;
+    Handle m_parentLogger;
     boost::shared_ptr<SessionHelper> m_helper;
     Level m_dbusLogLevel;
 
 public:
-    SessionHelperLogger(const boost::shared_ptr<LogRedirect> &parentLogger,
-                        const boost::shared_ptr<SessionHelper> &helper):
-        m_parentLogger(parentLogger),
+    SessionHelperLogger(const boost::shared_ptr<SessionHelper> &helper):
+        m_parentLogger(Logger::instance()),
         m_helper(helper),
         m_dbusLogLevel(DEBUG)
     {
@@ -84,7 +83,7 @@ public:
             va_list argsCopy;
             va_copy(argsCopy, args);
             if (m_parentLogger) {
-                m_parentLogger->messagev(options, format, argsCopy);
+                m_parentLogger.messagev(options, format, argsCopy);
             } else {
                 formatLines(options.m_level, DEBUG,
                             options.m_processName,
@@ -94,10 +93,16 @@ public:
             }
             va_end(argsCopy);
         } else if (m_parentLogger) {
-            // Only flush parent logger, to capture output sent to
-            // stdout/stderr by some library and send it via D-Bus
-            // (recursively!)  before printing out own, new output.
-            m_parentLogger->flush();
+            // Pass through to parent, but marked in such a way that
+            // only the DLT and syslog logger will react to it, but
+            // not LogStdout. That's necessary because
+            // syncevo-dbus-server handles stdout for us.
+            va_list argsCopy;
+            va_copy(argsCopy, args);
+            MessageOptions buffer(options);
+            buffer.m_flags |= MessageOptions::ONLY_GLOBAL_LOG;
+            m_parentLogger.messagev(buffer, format, argsCopy);
+            va_end(argsCopy);
         }
 
         if (m_helper &&
@@ -117,8 +122,7 @@ public:
 
 SessionHelper::SessionHelper(GMainLoop *loop,
                              const GDBusCXX::DBusConnectionPtr &conn,
-                             const boost::shared_ptr<ForkExecChild> &forkexec,
-                             const boost::shared_ptr<LogRedirect> &parentLogger) :
+                             const boost::shared_ptr<ForkExecChild> &forkexec) :
     GDBusCXX::DBusObjectHelper(conn,
                                std::string(SessionCommon::HELPER_PATH) + "/" + forkexec->getInstance(),
                                SessionCommon::HELPER_IFACE,
@@ -127,7 +131,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     m_loop(loop),
     m_conn(conn),
     m_forkexec(forkexec),
-    m_logger(new SessionHelperLogger(parentLogger, boost::shared_ptr<SessionHelper>(this, NopDestructor()))),
+    m_logger(new SessionHelperLogger(boost::shared_ptr<SessionHelper>(this, NopDestructor()))),
     emitLogOutput(*this, "LogOutput"),
     emitSyncProgress(*this, "SyncProgress"),
     emitSourceProgress(*this, "SourceProgress"),

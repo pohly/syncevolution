@@ -73,6 +73,10 @@ using namespace std;
 #include <synthesis/SDK_util.h>
 #include <synthesis/san.h>
 
+#ifdef USE_DLT
+# include <dlt.h>
+#endif
+
 #include "test.h"
 
 #include <syncevo/declarations.h>
@@ -279,6 +283,9 @@ class LogDirLogger : public Logger
 {
     Logger::Handle m_parentLogger;     /**< the logger which was active before we started to intercept messages */
     boost::weak_ptr<LogDir> m_logdir;  /**< grants access to report and Synthesis engine */
+#ifdef USE_DLT
+    bool m_useDLT;                     /**< SyncEvolution and libsynthesis are logging to DLT */
+#endif
 
 public:
     LogDirLogger(const boost::weak_ptr<LogDir> &logdir);
@@ -930,6 +937,9 @@ private:
 LogDirLogger::LogDirLogger(const boost::weak_ptr<LogDir> &logdir) :
     m_parentLogger(Logger::instance()),
     m_logdir(logdir)
+#ifdef USE_DLT
+    , m_useDLT(getenv("SYNCEVOLUTION_USE_DLT") != NULL)
+#endif
 {
 }
 
@@ -958,8 +968,16 @@ void LogDirLogger::messagev(const MessageOptions &options,
     m_parentLogger.messagev(options, format, argscopy);
     va_end(argscopy);
 
-    boost::shared_ptr<LogDir> logdir = m_logdir.lock();
-    if (logdir) {
+    // Special handling of our own messages: include in sync report
+    // (always, because that is how we did it traditionally) and write
+    // to our own syncevolution-log.html (if not already logged).
+    //
+    // The TestLocalSync.testServerFailure and some others check that
+    // we record the child's error message in our sync report. If we
+    // don't then it shows up later marked as an "error on the target
+    // side", which is probably not what we want.
+    boost::shared_ptr<LogDir> logdir;
+    if ((bool)(logdir = m_logdir.lock())) {
         if (logdir->m_report &&
             options.m_level <= ERROR &&
             logdir->m_report->getError().empty()) {
@@ -971,7 +989,14 @@ void LogDirLogger::messagev(const MessageOptions &options,
             logdir->m_report->setError(error);
         }
 
-        if (logdir->m_client.getEngine().get()) {
+        if (!(options.m_flags & MessageOptions::ALREADY_LOGGED) &&
+#ifdef USE_DLT
+            // Don't send to  libsynthesis if using DLT,
+            // because then it would end up getting logged
+            // in DLT twice.
+            !m_useDLT &&
+#endif
+            logdir->m_client.getEngine().get()) {
             va_list argscopy;
             va_copy(argscopy, args);
             // Once to Synthesis log, with full debugging.
@@ -2646,23 +2671,77 @@ void SyncContext::getConfigXML(string &xml, string &configname)
         stringstream debug;
         bool logging = !m_sourceListPtr->getLogdir().empty();
         int loglevel = getLogLevel();
+#ifdef USE_DLT
+        const char *useDLT = getenv("SYNCEVOLUTION_USE_DLT");
+#else
+        static const char *useDLT = NULL;
+#endif
 
         debug <<
             "  <debug>\n"
             // logpath is a config variable set by SyncContext::doSync()
             "    <logpath>$(logpath)</logpath>\n"
-            "    <filename>" <<
-            LogfileBasename << "</filename>" <<
+            "    <filename>" << (useDLT ? "" : LogfileBasename) << "</filename>" <<
             "    <logflushmode>flush</logflushmode>\n"
-            "    <logformat>html</logformat>\n"
-            "    <folding>auto</folding>\n"
-            "    <timestamp>yes</timestamp>\n"
-            "    <timestampall>yes</timestampall>\n"
+            "    <logformat>" << (useDLT ? "dlt" : "html") << "</logformat>\n"
+            "    <folding>auto</folding>\n" <<
+            (useDLT ?
+             "    <timestamp>no</timestamp>\n"
+             "    <timestampall>no</timestampall>\n" :
+             "    <timestamp>yes</timestamp>\n"
+             "    <timestampall>yes</timestampall>\n") <<
             "    <timedsessionlognames>no</timedsessionlognames>\n"
             "    <subthreadmode>separate</subthreadmode>\n"
             "    <logsessionstoglobal>yes</logsessionstoglobal>\n"
             "    <singlegloballog>yes</singlegloballog>\n";
-        if (logging) {
+#ifdef USE_DLT
+        if (useDLT) {
+            const char *contexts[] = {
+                "PROT",
+                "SESS",
+                "ADMN",
+                "DATA",
+                "REMI",
+                "PARS",
+                "GEN",
+                "TRNS",
+                "SMLT",
+                "SYS"
+            };
+            BOOST_FOREACH (const char *context, contexts) {
+                // Help libsynthesis debuglogger.cpp set default log levels,
+                // based on our own one.
+                SE_LOG_DEBUG(NULL, "default libsynthesis DLT logging of %s = %s",
+                             context, useDLT);
+                setenv((std::string("LIBSYNTHESIS_") + context).c_str(),
+                       useDLT,
+                       false);
+            }
+
+            debug <<
+                // We have to enable all logging inside libsynthesis.
+                // The actual filtering then takes place inside DLT.
+                // Message logging is not supported.
+                "    <enable option=\"all\"/>\n"
+                // Allow logging outside of sessions.
+                "    <globallogs>yes</globallogs>\n"
+                // Don't try per-session logging, it all goes to DLT anyway.
+                "    <sessionlogs>yes</sessionlogs>\n"
+                ;
+
+            // Be extra verbose if currently enabled. Cannot be changed later on.
+            if (atoi(useDLT) > DLT_LOG_DEBUG) {
+                debug <<
+                    "    <enable option=\"userdata\"/>\n"
+                    "    <enable option=\"scripts\"/>\n";
+            }
+            if (atoi(useDLT) > DLT_LOG_DEBUG) {
+                debug <<
+                    "    <enable option=\"exotic\"/>\n";
+            }
+        } else
+#endif // USE_DLT
+            if (logging) {
             debug <<
                 "    <sessionlogs>yes</sessionlogs>\n"
                 "    <globallogs>yes</globallogs>\n";

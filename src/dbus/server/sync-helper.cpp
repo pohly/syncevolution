@@ -28,6 +28,7 @@
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/SyncContext.h>
 #include <syncevo/LogRedirect.h>
+#include <syncevo/LogDLT.h>
 
 using namespace SyncEvo;
 using namespace GDBusCXX;
@@ -45,11 +46,10 @@ namespace {
     }
 
     void onConnect(const DBusConnectionPtr &conn,
-                   const boost::shared_ptr<LogRedirect> &parentLogger,
                    const boost::shared_ptr<ForkExecChild> &forkexec,
                    boost::shared_ptr<SessionHelper> &helper)
     {
-        helper.reset(new SessionHelper(loop, conn, forkexec, parentLogger));
+        helper.reset(new SessionHelper(loop, conn, forkexec));
         helper->activate();
         helper->setDBusLogLevel(Logger::Level(logLevelDBus));
     }
@@ -107,6 +107,14 @@ int main(int argc, char **argv, char **envp)
         redirect.reset(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));
         pushRedirect.reset(redirect);
     }
+#ifdef USE_DLT
+    // Set by syncevo-dbus-server for us.
+    bool useDLT = getenv("SYNCEVOLUTION_USE_DLT") != NULL;
+    PushLogger<LoggerDLT> loggerdlt;
+    if (useDLT) {
+        loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_DBUS_HELPER_ID, "SyncEvolution local sync helper"));
+    }
+#endif
     setvbuf(stderr, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -140,7 +148,7 @@ int main(int argc, char **argv, char **envp)
 
         boost::shared_ptr<SessionHelper> helper;
         bool failed = false;
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1, redirect,
+        forkexec->m_onConnect.connect(boost::bind(onConnect, _1,
                                                   boost::cref(forkexec),
                                                   boost::ref(helper)));
         forkexec->m_onFailure.connect(boost::bind(onFailure, _2, boost::ref(failed)));

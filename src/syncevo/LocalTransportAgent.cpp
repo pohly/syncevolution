@@ -27,6 +27,7 @@
 #include <syncevo/DBusTraits.h>
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/LogRedirect.h>
+#include <syncevo/LogDLT.h>
 #include <syncevo/BoostHelper.h>
 
 #include <synthesis/syerror.h>
@@ -100,6 +101,11 @@ void LocalTransportAgent::start()
     }
     m_status = ACTIVE;
     m_forkexec = ForkExecParent::create("syncevo-local-sync");
+#ifdef USE_DLT
+    if (getenv("SYNCEVOLUTION_USE_DLT")) {
+        m_forkexec->addEnvVar("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel()));
+    }
+#endif
     m_forkexec->m_onConnect.connect(boost::bind(&LocalTransportAgent::onChildConnect, this, _1));
     // fatal problems, including quitting child with non-zero status
     m_forkexec->m_onFailure.connect(boost::bind(&LocalTransportAgent::onFailure, this, _2));
@@ -177,6 +183,9 @@ void LocalTransportAgent::logChildOutput(const std::string &level, const std::st
 {
     Logger::MessageOptions options(Logger::strToLevel(level.c_str()));
     options.m_processName = &m_clientContext;
+    // Child should have written this into its own log file and/or syslog/dlt already.
+    // Only pass it on to a user of the command line interface.
+    options.m_flags = Logger::MessageOptions::ALREADY_LOGGED;
     SyncEvo::Logger::instance().messageWithOptions(options, "%s", message.c_str());
 }
 
@@ -1146,6 +1155,16 @@ int LocalTransportMain(int argc, char **argv)
             Logger::Handle handle(child->createLogger());
             logger.reset(handle);
         }
+
+#ifdef USE_DLT
+        // Set by syncevo-dbus-server for us.
+        bool useDLT = getenv("SYNCEVOLUTION_USE_DLT") != NULL;
+        PushLogger<LoggerDLT> loggerdlt;
+        if (useDLT) {
+            loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_LOCAL_HELPER_ID, "SyncEvolution local sync helper"));
+        }
+#endif
+
         child->run();
         int ret = child->getReturnCode();
         logger.reset();
