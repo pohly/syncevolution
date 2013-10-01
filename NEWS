@@ -1,3 +1,234 @@
+SyncEvolution 1.3.99.5, 01.10.2013
+==================================
+
+SyncEvolution now supports Google CalDAV/CardDAV with OAuth2
+authentication. These are the open protocol that Google currently and
+thus the recommended way of syncing with Google, replacing ActiveSync
+and SyncML (both no longer available to all Google customers).
+
+Support for Google CardDAV is new. Because of a vCard encoding issue
+on the server side, spaces in long notes may get removed. Like
+Evolution, SyncEvolution does not yet support some of the advanced
+features of the server, in particular custom labels for phone numbers,
+emails and addresses. Likewise, some client properties are not
+supported by the server: CALURI, CATEGORIES, FBURL, GEO and ROLE are
+not supported. Of ORG, only the first two components are supported.
+Currently, properties not supported by one side get lost in a full
+roundtrip sync.
+
+SyncEvolution depends on external components for OAuth2. It can be
+compiled to use gSSO [1] or GNOME Online Accounts. GNOME Online
+Accounts >= 3.10 works out of the box for CalDAV and CardDAV, 3.8 only
+for CardDAV (but the GNOME Online Accounts binary can be patched to
+also support CalDAV, see [2]), anything older than 3.8 does not
+work. Support for Ubuntu Online Accounts should not be hard to add,
+but is not available yet [3].
+
+[1] https://01.org/gsso and
+    http://cgit.freedesktop.org/SyncEvolution/syncevolution/plain/src/backends/signon/README
+[2] http://cgit.freedesktop.org/SyncEvolution/syncevolution/plain/src/backends/goa/README
+[3] http://thread.gmane.org/gmane.comp.mobile.syncevolution/4353/focus=4490
+
+
+Details:
+
+* GTK UI: fixed two crashes - running a sync with no service selected
+  and a 64 bit pointer problem recently discovered by Tino Keitel when
+  compiling the Debian package with -fPIE.
+
+* password handling: fix usage of GNOME Keyring and KWallet (FDO #66110)
+
+  When clients like the GTK sync-ui stored a password, it was always
+  stored as plain text in the config.ini file by the
+  syncevo-dbus-server. The necessary code for redirecting the password
+  storage in a keyring (GNOME or KWallet) simply wasn't called in that
+  case.
+
+  The command line tool, even when using the D-Bus server to run the
+  operation, had the necessary code active and thus was not affected.
+  Now all SyncEvolution components use the same default: use safe
+  password storage if either GNOME Keyring or KWallet were enabled
+  during compilation, don't use it if not.
+
+  Fixing this revealed other problems, like not being able to store
+  certain passwords that lacked the necessary lookup criteria (like
+  syncURL and/or username). To address this, the lookup criteria where
+  extended and a new check was added to avoid accidentally removing
+  other passwords. As a result, it may be possible that SyncEvolution
+  no longer finds passwords that were stored with older versions of
+  SyncEvolution. In such a case the passwords must be set again.
+
+* GNOME: clean up keyring access and require libgnome-keyring >= 2.20
+
+  The updated error messages now always include information about the
+  password and libgnome-keyring error texts.
+
+  A workaround is used for the "Error communicating with
+  gnome-keyring-daemon" problem that started to appear fairly
+  frequently in the automated testing once the keyring was actually
+  used. The problem shows up with some additional debug messages:
+
+    Gkr: received an invalid, unencryptable, or non-utf8 secret
+    Gkr: call to daemon returned an invalid response: (null).(null)()
+
+  It seems that sometimes setting up a session with GNOME keyring
+  fails such that all further communication leads to decoding problem.
+
+  There is an internal method to reset the session, but it cannot be
+  called directly. As a workaround, fake the death of the GNOME
+  keyring daemon and thus trigger a reconnect when retrying the GNOME
+  keyring access. This is done by sending a D-Bus message, which will
+  also affect other clients of GNOME keyring, but hopefully without
+  user-visible effects.
+
+* config: enhanced password handling
+
+  It is possible to configure a plain username/password combination
+  once in SyncEvolution and then use references to it in other
+  configurations, instead of having to set (and update) the
+  credentials in different places. This is useful in particular with
+  WebDAV, where credentials had to be repeated several times (target
+  config, in each database when used as part of SyncML) or when using
+  a service which requires several configs (Google via SyncML and
+  CalDAV).
+
+  To use this, create a sync config for a normal peer or a dedicated
+  config just for the credentials, with "username/password/syncURL"
+  set. The "syncURL" must be set to something identifying the peer if
+  GNOME Keyring is used for the password storage.
+
+  Then set "username", "databaseUser" and "proxyUser" properties to
+  "id:<name of config with credentials>" and all read and write access
+  to those properties will be redirected by SyncEvolution into that
+  other configuration. This even works in the GTK UI.
+
+  For user names which contain colons, the new "user:<user name>" format
+  must be used. Strings without colons are assumed to be normal user
+  names, so most old configurations should continue to work.
+
+* signon: new backend using libgsignond-glib + libaccounts-glib
+
+  The code works with gSSO (https://01.org/gsso). With some tweaks to
+  the configure check and some ifdefs it probably could be made to work
+  with Ubuntu Online Accounts.
+
+  The code depends on an account accessible via libaccounts-glib which
+  has a provider and and (optionally) services enabled for that
+  provider. It is not necessary that the account already has a signon
+  identity ID, the backend will create that for the provider (and thus
+  shared between all services) if necessary.
+
+  Therefore it is possible to use the ag-tool to create and enable the
+  account and services. Provider and service templates are in the next
+  commit.
+
+* WebDAV: support OAuth2
+
+  If given an authentication configuration which can handle OAuth2,
+  then OAuth2 is used instead of plain username/password
+  authentication.
+
+* WebDAV: support Google CardDAV, break Yahoo
+
+  Google CardDAV has one peculiarity: it renames new contacts during PUT without
+  returning the new path to the client. See also
+  http://lists.calconnect.org/pipermail/caldeveloper-l/2013-July/000524.html
+
+  SyncEvolution already had a workaround for that (PROPGET on old path, extract
+  new path from response) which happened to work. This workaround was originally
+  added for Yahoo, which sometimes merges contacts into existing ones. In
+  contrast to Yahoo, Google really seems to create new items.
+
+  Without some server specific hacks, the client cannot tell what happened.
+  Because Google is currently supported and Yahoo is not, let's change the
+  hard-coded behavior to "renamed items are new".
+
+* WebDAV: started testing with owndrive.com = OwnCloud
+
+* GOA: get OAuth2 tokens out of GNOME Online Accounts
+
+  "username = goa:..." selects an account in GOA and retrieves the
+  OAuth2 token from that.
+
+  The implementation uses the GOA D-Bus API directly, because our C++
+  D-Bus bindings are easier to use and this avoids an additional library
+  dependency.
+
+* PIM: fix UID usage in sync.py example
+
+  Using the underscore in the UID has been wrong all along, it only
+  happened to work because UID sanity checking was missing. After adding
+  it, the example broke.
+
+  Now simply remove the colon. It makes the UID less readable, but it
+  doesn't have to be, and ensures that file names and database names
+  contain the UID as-is.
+
+* PIM: if busy, don't shut down
+
+  While there are sessions pending or active, the server should not shut down.
+  It did that while executing a long-running PIM Manager SyncPeer() operations,
+  by default after 10 minutes.
+
+  This was not a problem elsewhere because other operations are associated with
+  a client, whose presence also prevents shutdowns. Perhaps PIM Manager should
+  also track the caller and treat it like a client.
+
+* PBAP: do not end Bluez5 transfer prematurely
+
+  A transfer was marked as finished prematurely when encountering the
+  "active" Status value, which can happen for longer transfers.
+
+* PBAP: add support for obexd 0.48
+
+  obexd 0.48 is almost the same as obexd 0.47, except that it dropped
+  the SetFilter and SetFormat methods in favor of passing a Bluex 5-style
+  filter parameter to PullAll.
+
+  SyncEvolution now supports 4, in words, four different obexd
+  APIs. Sigh.
+
+* updated tests
+
+
+Upgrading from releases <= 1.3.99.4:
+
+If the value of "username/databaseUser/proxyUser" contains a colon,
+the "user:" prefix must be added to the value, to continue treating it
+like a plain user name and not some reference to an unknown identity
+provider (like "id:", "goa:", "signon:", etc.).
+
+The lookup of passwords in GNOME Keyring was updated slightly in
+1.3.99.5. It may be necessary to set passwords anew if the old one is
+no longer found.
+
+Upgrading from release 1.2.x:
+
+The sync format of existing configurations for Mobical (aka Everdroid)
+must be updated manually, because the server has encoding problems when
+using vCard 3.0 (now the default for Evolution contacts):
+   syncevolution --configure \
+                 syncFormat=text/x-vcard \
+                 mobical addressbook
+
+The Funambol template explicitly enables usage of the
+"refresh-from-server" sync mode to avoid getting throttled with 417
+'retry later' errors. The same must be added to existing configs
+manually:
+   syncevolution --configure \
+                 enableRefreshSync=TRUE \
+                 funambol
+
+Upgrading from releases before 1.2:
+
+Old configurations can still be read. But writing, as it happens
+during a sync, must migrate the configuration first. Releases >= 1.2
+automatically migrates configurations. The old configurations
+will still be available (see "syncevolution --print-configs") but must
+be renamed manually to use them again under their original names with
+older SyncEvolution releases.
+
+
 SyncEvolution 1.3.99.4, 12.07.2013
 ==================================
 
