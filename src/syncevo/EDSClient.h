@@ -22,6 +22,8 @@
 
 #include <config.h>
 
+#include <boost/shared_ptr.hpp>
+
 #if defined(HAVE_EDS) && defined(USE_EDS_CLIENT)
 
 #include <syncevo/GLibSupport.h>
@@ -29,6 +31,8 @@
 #include <libedataserver/libedataserver.h>
 #include <boost/function.hpp>
 #include <boost/utility.hpp>
+#include <boost/bind.hpp>
+#include <boost/lambda/core.hpp>
 #include <list>
 
 typedef SyncEvo::GListCXX<ESource, GList, SyncEvo::GObjectDestructor> ESourceListCXX;
@@ -36,8 +40,24 @@ SE_GOBJECT_TYPE(ESourceRegistry)
 SE_GOBJECT_TYPE(ESource)
 SE_GOBJECT_TYPE(EClient)
 
+#endif // HAVE_EDS && USE_EDS_CLIENT
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
+
+// This code must always be compiled into libsyncevolution.
+// It may get used by backends which were compiled against
+// EDS >= 3.6 even when the libsyncevolution itself wasn't.
+class EDSRegistryLoader;
+EDSRegistryLoader &EDSRegistryLoaderSingleton(const boost::shared_ptr<EDSRegistryLoader> &loader);
+
+// The following code implements EDSRegistryLoader.
+// For the sake of simplicity, its all in the header file,
+// so all users of it end up with a copy of the code and
+// then they can activate that code when instantiating the object
+// and passing it to EDSRegistryLoaderSingleton().
+
+#if defined(HAVE_EDS) && defined(USE_EDS_CLIENT)
 
 /**
  * Creates ESourceRegistry on demand and shares it inside
@@ -53,12 +73,18 @@ class EDSRegistryLoader : private boost::noncopyable
      * Callback gets invoked exactly once. If the registry pointer is empty,
      * then the error will explain why.
      */
-    static void getESourceRegistryAsync(const Callback_t &cb);
+    static void getESourceRegistryAsync(const Callback_t &cb)
+    {
+        EDSRegistryLoaderSingleton(boost::shared_ptr<EDSRegistryLoader>(new EDSRegistryLoader)).async(cb);
+    }
 
     /**
      * Returns shared ESourceRegistry, throws error if creation failed.
      */
-    static ESourceRegistryCXX getESourceRegistry();
+    static ESourceRegistryCXX getESourceRegistry()
+    {
+        return EDSRegistryLoaderSingleton(boost::shared_ptr<EDSRegistryLoader>(new EDSRegistryLoader)).sync();
+    }
 
  private:
     Bool m_loading;
@@ -66,13 +92,59 @@ class EDSRegistryLoader : private boost::noncopyable
     GErrorCXX m_gerror;
     std::list<Callback_t> m_pending;
 
-    static EDSRegistryLoader &singleton();
-    void async(const Callback_t &cb);
-    ESourceRegistryCXX sync();
-    void created(ESourceRegistry *registry, const GError *gerror) throw ();
+    void async(const Callback_t &cb)
+    {
+        if (m_registry || m_gerror) {
+            cb(m_registry, m_gerror);
+        } else {
+            m_pending.push_back(cb);
+            m_loading = true;
+            SYNCEVO_GLIB_CALL_ASYNC(e_source_registry_new,
+                                    boost::bind(&EDSRegistryLoader::created,
+                                                this,
+                                                _1, _2),
+                                    NULL);
+        }
+    }
+
+    ESourceRegistryCXX sync()
+    {
+        if (!m_loading) {
+            m_loading = true;
+            SYNCEVO_GLIB_CALL_ASYNC(e_source_registry_new,
+                                    boost::bind(&EDSRegistryLoader::created,
+                                                this,
+                                                _1, _2),
+                                    NULL);
+        }
+
+        GRunWhile(!boost::lambda::var(m_registry) && !boost::lambda::var(m_gerror));
+        if (m_registry) {
+            return m_registry;
+        }
+        if (m_gerror) {
+            m_gerror.throwError("creating source registry");
+        }
+        return m_registry;
+    }
+
+
+    void created(ESourceRegistry *registry, const GError *gerror) throw ()
+    {
+        try {
+            m_registry = ESourceRegistryCXX::steal(registry);
+            m_gerror = gerror;
+            BOOST_FOREACH (const Callback_t &cb, m_pending) {
+                cb(m_registry, m_gerror);
+            }
+        } catch (...) {
+            Exception::handle(HANDLE_EXCEPTION_FATAL);
+        }
+    }
 };
+
+#endif // HAVE_EDS && USE_EDS_CLIENT
 
 SE_END_CXX
 
-#endif // HAVE_EDS && USE_EDS_CLIENT
 #endif // INCL_SYNCEVO_EDS_CLIENT

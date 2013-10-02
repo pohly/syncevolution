@@ -295,11 +295,13 @@ public:
         }
         boost::shared_ptr<ReadDir> dir (new ReadDir (backend_dir, false));
         string dirpath (backend_dir);
+        // Base name (= no dir, no .so suffix) mapping to full file
+        // name (including .so).
+        std::map<std::string, std::string> candidates;
         // scan directories for matching module names
         do {
             debug<<"Scanning backend libraries in " <<dirpath <<endl;
             BOOST_FOREACH (const string &entry, *dir) {
-                void *dlhandle;
                 if (isDir (dirpath + '/' + entry)) {
                     /* This is a 2-level dir, this corresponds to loading
                      * backends from current building directory. The library
@@ -311,25 +313,10 @@ public:
                     }
                     continue;
                 }
-                if (entry.rfind(".so") == entry.length()-3){
-
-                    // Open the shared object so that backend can register
-                    // itself. We keep that pointer, so never close the
-                    // module!
+                if (boost::ends_with(entry, ".so")) {
                     string fullpath = dirpath + '/' + entry;
                     fullpath = normalizePath(fullpath);
-                    // RTLD_LAZY is needed for the WebDAV backend, which
-                    // needs to do an explicit dlopen() of libneon in compatibility
-                    // mode before any of the neon functions can be resolved.
-                    dlhandle = dlopen(fullpath.c_str(), RTLD_LAZY|RTLD_GLOBAL);
-                    // remember which modules were found and which were not
-                    if (dlhandle) {
-                        debug<<"Loading backend library "<<entry<<endl;
-                        info<<"Loading backend library "<<fullpath<<endl;
-                        m_available.push_back(entry);
-                    } else {
-                        debug<<"Loading backend library "<<entry<<"failed "<< dlerror()<<endl;
-                    }
+                    candidates[entry.substr(0, entry.size() - 3)] = fullpath;
                 }
             }
             if (!dirs.empty()){
@@ -340,6 +327,53 @@ public:
                 break;
             }
         } while (true);
+
+        // Look at foo-<version> before foo. If there is more than
+        // one version and the version sorts lexically, the "highest"
+        // one will be checked first, too.
+        //
+        // The intention is to try loading syncebook-2 (with explicit
+        // library dependencies) first, then skip syncebook if loading
+        // of syncebook-2 succeeded. If loading of syncebook-2 fails
+        // due to missing libraries, we proceed to use syncebook.
+        BOOST_REVERSE_FOREACH (const StringPair &entry, candidates) {
+            const std::string &basename = entry.first;
+            const std::string &fullpath = entry.second;
+            std::string replacement;
+            std::string modname;
+            size_t offset = basename.rfind('-');
+            if (offset != basename.npos) {
+                modname = basename.substr(offset);
+            } else {
+                modname = basename;
+            }
+            BOOST_FOREACH (const std::string &l, m_available) {
+                if (boost::starts_with(l, modname)) {
+                    replacement = l;
+                    break;
+                }
+            }
+            if (!replacement.empty()) {
+                debug << "Skipping " << basename << " = " << fullpath << " because a more recent version of it was already loaded: " << replacement;
+                continue;
+            }
+
+            // Open the shared object so that backend can register
+            // itself. We keep that pointer, so never close the
+            // module!
+            // RTLD_LAZY is needed for the WebDAV backend, which
+            // needs to do an explicit dlopen() of libneon in compatibility
+            // mode before any of the neon functions can be resolved.
+            void *dlhandle = dlopen(fullpath.c_str(), RTLD_LAZY|RTLD_GLOBAL);
+            // remember which modules were found and which were not
+            if (dlhandle) {
+                debug<<"Loading backend library "<<basename<<endl;
+                info<<"Loading backend library "<<fullpath<<endl;
+                m_available.push_back(basename);
+            } else {
+                debug<<"Loading backend library "<<basename<<"failed "<< dlerror()<<endl;
+            }
+        }
 #endif
     }
     list<string> m_available;

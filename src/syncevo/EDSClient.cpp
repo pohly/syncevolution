@@ -21,84 +21,17 @@
 
 #include <config.h>
 
-#if defined(HAVE_EDS) && defined(USE_EDS_CLIENT)
-
-#include <boost/bind.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-EDSRegistryLoader &EDSRegistryLoader::singleton()
+EDSRegistryLoader &EDSRegistryLoaderSingleton(const boost::shared_ptr<EDSRegistryLoader> &loader)
 {
-    static EDSRegistryLoader self;
-    return self;
-}
-
-void EDSRegistryLoader::getESourceRegistryAsync(const Callback_t &cb)
-{
-    singleton().async(cb);
-}
-
-void EDSRegistryLoader::async(const Callback_t &cb)
-{
-    if (m_registry || m_gerror) {
-        cb(m_registry, m_gerror);
-    } else {
-        m_pending.push_back(cb);
-        m_loading = true;
-        SYNCEVO_GLIB_CALL_ASYNC(e_source_registry_new,
-                                boost::bind(&EDSRegistryLoader::created,
-                                            this,
-                                            _1, _2),
-                                NULL);
+    static boost::shared_ptr<EDSRegistryLoader> singleton;
+    if (!singleton) {
+        singleton = loader;
     }
-}
-
-ESourceRegistryCXX EDSRegistryLoader::getESourceRegistry()
-{
-    return singleton().sync();
-}
-
-ESourceRegistryCXX EDSRegistryLoader::sync()
-{
-    if (!m_loading) {
-        m_loading = true;
-        SYNCEVO_GLIB_CALL_ASYNC(e_source_registry_new,
-                                boost::bind(&EDSRegistryLoader::created,
-                                            this,
-                                            _1, _2),
-                                NULL);
-    }
-
-    while (true) {
-        if (m_registry) {
-            return m_registry;
-        }
-        if (m_gerror) {
-            m_gerror.throwError("creating source registry");
-        }
-        // Only master thread can drive the event processing.
-	if (g_main_context_is_owner(g_main_context_default())) {
-            g_main_context_iteration(NULL, true);
-        } else {
-            Sleep(0.1);
-        }
-    }
-}
-
-void EDSRegistryLoader::created(ESourceRegistry *registry, const GError *gerror) throw ()
-{
-    try {
-        m_registry = ESourceRegistryCXX::steal(registry);
-        m_gerror = gerror;
-        BOOST_FOREACH (const Callback_t &cb, m_pending) {
-            cb(m_registry, m_gerror);
-        }
-    } catch (...) {
-        Exception::handle(HANDLE_EXCEPTION_FATAL);
-    }
+    return *singleton;
 }
 
 SE_END_CXX
 
-#endif // HAVE_EDS && USE_EDS_CLIENT
