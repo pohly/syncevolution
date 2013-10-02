@@ -2,9 +2,10 @@ SyncEvolution 1.3.99.5, 01.10.2013
 ==================================
 
 SyncEvolution now supports Google CalDAV/CardDAV with OAuth2
-authentication. These are the open protocol that Google currently and
-thus the recommended way of syncing with Google, replacing ActiveSync
-and SyncML (both no longer available to all Google customers).
+authentication. These are the open protocol that Google currently
+supports and thus the recommended way of syncing with Google,
+replacing ActiveSync and SyncML (both no longer available to all
+Google customers).
 
 Support for Google CardDAV is new. Because of a vCard encoding issue
 on the server side, spaces in long notes may get removed. Like
