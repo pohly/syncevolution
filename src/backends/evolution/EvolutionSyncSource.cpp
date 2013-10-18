@@ -160,7 +160,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
         gerror.throwError("listing keys in main section");
     }
     for (int i = 0; keys.at(i); i++) {
-        if (boost::starts_with(keys[i], "DisplayName[")) {
+        if (boost::starts_with(keys.at(i), "DisplayName[")) {
             if (!g_key_file_remove_key(keyfile, mainSection, keys.at(i), gerror)) {
                 gerror.throwError("remove key");
             }
