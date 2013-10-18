@@ -636,6 +636,11 @@ class PlainGStrArray : public boost::shared_ptr<gchar *>
         PlainGStrArray(const PlainGStrArray &other) : boost::shared_ptr<char *>(other) {}
         operator gchar * const *() const { return &**this; }
         gchar * &at(size_t index) { return get()[index]; }
+ private:
+        // Hide this operator because boost::shared_ptr has problems with it,
+        // probably because of missing traits for a pointer type. Instead use
+        // at().
+        gchar * operator[] (size_t index);
 };
 
 // empty template, need specialization based on parameter and return types
