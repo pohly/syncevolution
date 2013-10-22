@@ -128,7 +128,7 @@ src_dbus_server_autostart_DATA = $(src_dbus_server_desktop)
 
 libexec_SCRIPTS += $(src_dbus_server_script)
 $(src_dbus_server_script): $(src_dbus_server_script_in)
-	@sed -e "s|\@libexecdir\@|$(libexecdir)|" $< >$@
+	@sed -e "s|\@libexecdir\@|$(libexecdir)|" -e "s|\@SYNCEVO_DBUS_SERVER_ARGS\@|$(SYNCEVO_DBUS_SERVER_ARGS)|" $< >$@
 $(src_dbus_server_desktop): $(src_dbus_server_desktop_in)
 	@sed -e "s|\@libexecdir\@|$(libexecdir)|" $< >$@
 
@@ -137,7 +137,7 @@ src_dbus_server_service_files = $(src_dbus_server_service_files_in:.service.in=.
 src_dbus_server_servicedir = $(DBUS_SERVICES_DIR)
 src_dbus_server_service_DATA = $(src_dbus_server_service_files)
 src/dbus/server/%.service: src/dbus/server/%.service.in
-	@sed -e "s|\@libexecdir\@|$(libexecdir)|" $< >$@
+	@sed -e "s|\@libexecdir\@|$(libexecdir)|" -e "s|\@SYNCEVO_DBUS_SERVER_ARGS\@|$(SYNCEVO_DBUS_SERVER_ARGS)|" $< >$@
 
 if COND_DBUS_PIM
 src_dbus_server_service_files_in += \

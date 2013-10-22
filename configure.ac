@@ -465,16 +465,24 @@ AC_ARG_ENABLE(core,
 AM_CONDITIONAL([COND_CORE], [test "$enable_core" = "yes"])
 
 AC_ARG_ENABLE(dbus-service,
-              AS_HELP_STRING([--enable-dbus-service],
-                             [enables building the dbus service executable and all related features
-                             (the DBus wrapper library, command line usage of server, etc).]),
+              AS_HELP_STRING([--enable-dbus-service=args],
+                             [Enables building the dbus service executable and all related features
+                             (the DBus wrapper library, command line usage of server, etc).
+                             The optional arguments are syncevo-dbus-server command line arguments
+                             that are used when auto-starting via D-Bus or .desktop file. By default,
+                             the daemon logs to syslog. This can be changed via command line arguments.
+                             ]),
               enable_dbus_service="$enableval",
               [if test $enable_gui = "no"; then
                   enable_dbus_service="no"
                else
                   enable_dbus_service="yes"
                fi])
-AM_CONDITIONAL([COND_DBUS], [test "$enable_dbus_service" = "yes"])
+AM_CONDITIONAL([COND_DBUS], [test "$enable_dbus_service" != "no"])
+if test "$enable_dbus_service" != "no" && test "$enable_dbus_service" != "yes"; then
+   SYNCEVO_DBUS_SERVER_ARGS="$enable_dbus_service"
+fi
+AC_SUBST(SYNCEVO_DBUS_SERVER_ARGS)
 
 AC_ARG_WITH([gio-gdbus],
             AS_HELP_STRING([--with-gio-gdbus],
@@ -504,7 +512,7 @@ AS_IF([test "x$with_gio_gdbus" = "xyes"],
                     AC_DEFINE(NEED_DBUS_WATCH_GET_UNIX_FD, 1,
                     [Define to 1 if you need the dbus_watch_get_unix_fd() function.]))])
 
-if test $enable_dbus_service = "yes"; then
+if test "$enable_dbus_service" != "no"; then
     if test -z "$XSLT"; then
        AC_MSG_ERROR([xsltproc not found, is required for D-Bus service])
     fi
@@ -627,7 +635,7 @@ DBUS_SERVICES_DIR="${datadir}/dbus-1/services"
 AC_SUBST(DBUS_SERVICES_DIR)
 AC_DEFINE_UNQUOTED(DBUS_SERVICES_DIR, "$DBUS_SERVICES_DIR", [Location of D-Bus services directory])
 
-if test $enable_gui != "no" || test $enable_dbus_service = "yes"; then
+if test "$enable_gui" != "no" || test "$enable_dbus_service" != "no"; then
     IT_PROG_INTLTOOL([0.37.1])
     GETTEXT_PACKAGE=syncevolution
     AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE, "$GETTEXT_PACKAGE", [The gettext package name])
@@ -691,7 +699,7 @@ if test $enable_gui != "no"; then
 
     PKG_CHECK_MODULES(GUI, $gui_modules)
 
-elif test "$enable_dbus_service" = "yes"; then
+elif test "$enable_dbus_service" != "no"; then
     # syncevo-dbus-server needs localization
     :
 else
