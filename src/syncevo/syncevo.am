@@ -233,7 +233,7 @@ src_syncevo_libsyncevolution_la_CPPFLAGS = \
   -DXML_CONFIG_DIR=\""$(datadir)/syncevolution/xml"\" \
   -DTEMPLATE_DIR=\""$(datadir)/syncevolution/templates"\" \
   -DLIBDIR=\""$(libdir)"\"
-src_syncevo_libsyncevolution_la_DEPENDENCIES = $(SYNTHESIS_DEP) $(src_syncevo_ldadd)
+src_syncevo_libsyncevolution_la_DEPENDENCIES = $(SYNTHESIS_DEP) $(filter %.la, $(src_syncevo_ldadd))
 
 # rule which is only relevant when compiling Synthesis in subdirectory
 src/build-synthesis/libsynthesissdk.la: $(SYNTHESIS_SUBDIR)/all
