@@ -992,11 +992,17 @@ if options.prebuilt:
     compile.builddir = options.prebuilt
     compile.installdir = os.path.join(options.prebuilt, "../install")
 else:
-    compile = SyncEvolutionBuild("compile",
-                                 sync.basedir,
-                                 "%s %s" % (options.configure, " ".join(source)),
-                                 options.shell,
-                                 [ libsynthesis.name, sync.name ])
+    if enabled["compile"] == "no-tests":
+        # Regular build.
+        build = AutotoolsBuild
+    else:
+        # Also build client-test.
+        build = SyncEvolutionBuild
+    compile = build("compile",
+                    sync.basedir,
+                    "%s %s" % (options.configure, " ".join(source)),
+                    options.shell,
+                    [ libsynthesis.name, sync.name ])
 context.add(compile)
 
 class SyncEvolutionCross(AutotoolsBuild):
