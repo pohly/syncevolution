@@ -163,8 +163,6 @@ void *findSymbols(const char *libname, int minver, int maxver,
 
 }
 
-#endif // EVOLUTION_COMPATIBILITY
-
 int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
 int EDSAbiHaveIcal;
 int SyncEvoHaveLibbluetooth;
@@ -179,7 +177,6 @@ extern "C" void EDSAbiWrapperInit()
         initialized = true;
     }
 
-#ifdef EVOLUTION_COMPATIBILITY
 # ifdef HAVE_EDS
     edshandle =
     findSymbols("libedataserver-1.2.so", 7, 16,
@@ -412,24 +409,8 @@ extern "C" void EDSAbiWrapperInit()
     }
     SyncEvoHaveLibbluetooth = EDSAbiWrapperSingleton.sdp_connect != 0;
 # endif
-#else // EVOLUTION_COMPATIBILITY
-# ifdef HAVE_EDS
-    EDSAbiHaveEdataserver = true;
-# endif
-# ifdef ENABLE_EBOOK
-    EDSAbiHaveEbook = true;
-# endif
-# ifdef ENABLE_ECAL
-    EDSAbiHaveEcal = true;
-# endif
-# ifdef ENABLE_ICAL
-    EDSAbiHaveIcal = true;
-# endif
-# ifdef ENABLE_BLUETOOTH
-    SyncEvoHaveLibbluetooth = true;
-# endif
-#endif // EVOLUTION_COMPATIBILITY
 }
+#endif // EVOLUTION_COMPATIBILITY
 
 extern "C" const char *EDSAbiWrapperInfo() { EDSAbiWrapperInit(); return lookupInfo.c_str(); }
 extern "C" const char *EDSAbiWrapperDebug() { EDSAbiWrapperInit(); return lookupDebug.c_str(); }
