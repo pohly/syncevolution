@@ -308,10 +308,12 @@ if ENABLE_EVOLUTION_COMPATIBILITY
 # (relevant in that case and for static builds) for dependencies on
 # problematic libraries and symbols
 #
+# Exclude *-2.so, these are EXTRA_BACKENDS for which other rules apply.
+#
 # ical_strdup is an exception because it is in SyncEvolution.
 all_local_installchecks += toplevel_so_check
 toplevel_so_check:
-	for i in `find $(DESTDIR)/$(libdir)/syncevolution $(DESTDIR)/$(libdir)/libsyncevo* $(DESTDIR)/$(libdir)/libsynthesis* -name *.so` $(DESTDIR)/$(bindir)/syncevolution; \
+	for i in `find $(DESTDIR)/$(libdir)/syncevolution $(DESTDIR)/$(libdir)/libsyncevo* $(DESTDIR)/$(libdir)/libsynthesis* -name *.so | grep -v -2.so` $(DESTDIR)/$(bindir)/syncevolution; \
 	do \
 	  if objdump -T -C $$i | grep -v :: | grep '\*UND\*' | sort | grep -v -w ical_strdup | grep -e ical -e " e_"; then \
 	    echo "$$i should not depend on EDS, libical or libbluetooth"; \
@@ -416,8 +418,15 @@ dist-hook: $(all_dist_hooks)
 # Force sequential installation. This is a workaround for relinking failures
 # during concurrent distcheck (a backend was relinked against not yet installed
 # libsyncevolution.la).
+#
+# Also used to add additional backends.
 install-am: all-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-data-am
+	for i in $(EXTRA_BACKENDS); do $(INSTALL) $$i $(DESTDIR)/$(BACKENDS_DIRECTORY)/`basename $$i .so`-2.so; done
+
+# Necessary for "make distcheck": must not leave files behind.
+uninstall-local:
+	rm -f $(DESTDIR)/$(BACKENDS_DIRECTORY)/*-2.so
 
 .DELETE_ON_ERROR:
