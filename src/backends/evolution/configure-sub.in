@@ -68,9 +68,9 @@ if test "$enable_evo" = "yes"; then
         # Only the EClient code supports the API in EDS 3.5.x.
         PKG_CHECK_MODULES(EDS_VERSION, [libedataserver-1.2 >= 3.5],
                           [AC_DEFINE(USE_EDS_CLIENT, 1, [use e_book/cal_client_* calls])
-                           # When using it, then we also need libebook-contacts-1.2
-                           # for the ESourceBackendSummary extension.
-                           PKG_CHECK_MODULES(EBOOKCONTACTS, libebook-contacts-1.2)
+                           # Was used for a while (ESourceBackendSummarySetup), but not anymore.
+                           # Don't depend on it, it wasn't in 3.6 yet.
+                           # PKG_CHECK_MODULES(EBOOKCONTACTS, libebook-contacts-1.2)
                            AC_CHECK_LIB(ebook-1.2, e_book_client_new_direct,
                                         [AC_DEFINE(HAVE_E_BOOK_CLIENT_NEW_DIRECT, 1, [use e_book_client_new_direct])],
                                         [true],
