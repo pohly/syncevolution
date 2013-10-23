@@ -22,7 +22,7 @@
 
 #include "read-operations.h"
 
-#include <boost/signals.hpp>
+#include <boost/signals2.hpp>
 
 SE_BEGIN_CXX
 
