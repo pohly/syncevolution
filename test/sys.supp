@@ -1362,6 +1362,47 @@
    obj:*libfontconfig*
 }
 
+# ==2302== Syscall param write(buf) points to uninitialised byte(s)
+# ==2302==    at 0x7E273A0: __write_nocancel (syscall-template.S:81)
+# ==2302==    by 0x1276A697: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x127711F3: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x1276D4FA: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x1276D5AA: FcConfigBuildFonts (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x12775D4A: FcInitLoadConfigAndFonts (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x12775F08: FcInit (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0xBD08876: ??? (in /usr/lib/x86_64-linux-gnu/libQtGui.so.4.8.6)
+# ==2302==    by 0xBC9A3A9: QApplicationPrivate::construct(_XDisplay*, unsigned long, unsigned long) (in /usr/lib/x86_64-linux-gnu/libQtGui.so.4.8.6)
+# ==2302==    by 0xBC9A748: QApplication::QApplication(int&, char**, bool, int) (in /usr/lib/x86_64-linux-gnu/libQtGui.so.4.8.6)
+# ==2302==    by 0x5DDD6A7: KApplication::KApplication(bool) (in /usr/lib/libkdeui.so.5.10.5)
+# ==2302==    by 0x72709E: SyncEvo::KDEInitMainSlot(char const*) (KDEPlatform.cpp:107)
+# ==2302==    by 0x7FC653: boost::signals2::detail::signal1_impl<void, char const*, boost::signals2::optional_last_value<void>, int, std::less<int>, boost::function<void (char const*)>, boost::function<void (boost::signals2::connection const&, char const*)>, boost::signals2::mutex>::operator()(char const*) (function_template.hpp:767)
+# ==2302==    by 0x7E7013: SyncEvo::SyncContext::initMain(char const*) (signal_template.hpp:695)
+# ==2302==    by 0x63950A: main (main.cpp:158)
+# ==2302==  Address 0x17674e5c is 716 bytes inside a block of size 94,448 alloc'd
+# ==2302==    at 0x4C2935B: malloc (vg_replace_malloc.c:270)
+# ==2302==    by 0x12769E5C: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x127711E0: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x1276D4FA: ??? (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x1276D5AA: FcConfigBuildFonts (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x12775D4A: FcInitLoadConfigAndFonts (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0x12775F08: FcInit (in /usr/lib/x86_64-linux-gnu/libfontconfig.so.1.6.2)
+# ==2302==    by 0xBD08876: ??? (in /usr/lib/x86_64-linux-gnu/libQtGui.so.4.8.6)
+# ==2302==    by 0xBC9A3A9: QApplicationPrivate::construct(_XDisplay*, unsigned long, unsigned long) (in /usr/lib/x86_64-linux-gnu/libQtGui.so.4.8.6)
+# ==2302==    by 0xBC9A748: QApplication::QApplication(int&, char**, bool, int) (in /usr/lib/x86_64-linux-gnu/libQtGui.so.4.8.6)
+# ==2302==    by 0x5DDD6A7: KApplication::KApplication(bool) (in /usr/lib/libkdeui.so.5.10.5)
+# ==2302==    by 0x72709E: SyncEvo::KDEInitMainSlot(char const*) (KDEPlatform.cpp:107)
+# ==2302==    by 0x7FC653: boost::signals2::detail::signal1_impl<void, char const*, boost::signals2::optional_last_value<void>, int, std::less<int>, boost::function<void (char const*)>, boost::function<void (boost::signals2::connection const&, char const*)>, boost::signals2::mutex>::operator()(char const*) (function_template.hpp:767)
+# ==2302==    by 0x7E7013: SyncEvo::SyncContext::initMain(char const*) (signal_template.hpp:695)
+# ==2302==    by 0x63950A: main (main.cpp:158)
+# ==2302== 
+{
+   fontconfig write
+   Memcheck:Param
+   write(buf)
+   ...
+   obj:*/libfontconfig.so*
+}
+
 # ==10153== Conditional jump or move depends on uninitialised value(s)
 # ==10153==    at 0x9758290: inflateReset2 (in /usr/lib/libz.so.1.2.3.4)
 # ==10153==    by 0x975837F: inflateInit2_ (in /usr/lib/libz.so.1.2.3.4)
