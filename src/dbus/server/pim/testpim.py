@@ -799,6 +799,12 @@ XDG root.
         # EDS workaround
         time.sleep(2)
 
+    @property("snapshot", "broken-config")
+    def testBrokenConfig(self):
+        '''TestContacts.testBrokenConfig - start with broken pim-manager.ini'''
+        self.manager.Start()
+        self.assertEqual("last/first", self.manager.GetSortOrder())
+
     @timeout(os.environ.get('TESTPIM_TEST_SYNC_TESTCASES', False) and 300000 or 300)
     @property("snapshot", "simple-sort")
     def testSync(self):
