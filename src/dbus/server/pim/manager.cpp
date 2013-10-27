@@ -132,7 +132,16 @@ void Manager::init()
         }
     }
     initFolks();
-    initSorting(m_sortOrder);
+    try {
+        initSorting(m_sortOrder);
+    } catch (...) {
+        std::string explanation;
+        Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
+        SE_LOG_WARNING(NULL, "Restoring sort order from config failed, falling back to default: %s",
+                       explanation.c_str());
+        m_sortOrder = "last/first";
+        initSorting(m_sortOrder);
+    }
     initDatabases();
 
     add(this, &Manager::start, "Start");
