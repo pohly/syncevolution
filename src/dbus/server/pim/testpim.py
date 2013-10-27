@@ -602,6 +602,16 @@ VERSION:3.0\r?
         return set([os.path.splitext(x)[0] for x in (os.path.exists(self.sourcedir) and os.listdir(self.sourcedir) or [])])
 
 
+    def readManagerIni(self):
+         '''returns content of manager.ini file, split into lines and sorted, None if not found'''
+         filename = os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini")
+         if os.path.exists(filename):
+              lines = open(filename, "r").readlines()
+              lines.sort()
+              return lines
+         else:
+              return None
+
 
 class TestContacts(TestPIMUtil, unittest.TestCase):
     """Tests for org._01.pim.contacts API.
@@ -636,6 +646,18 @@ XDG root.
         expected.add(self.managerPrefix + uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['sort =\n'],
+                         self.readManagerIni())
+
+        # Check effect of SetActiveAddressBooks() on pim-manager.ini.
+        self.manager.SetActiveAddressBooks(['peer-' + uid])
+        self.assertEqual(['active = pim-manager-' + uid + '\n',
+                          'sort =\n'],
+                         self.readManagerIni())
+        self.manager.SetActiveAddressBooks([])
+        self.assertEqual(['active = \n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         # PIM Manager must not allow overwriting an existing config.
         # Uses the new name for SetPeer().
@@ -661,14 +683,21 @@ XDG root.
         self.manager.RemovePeer(uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = \n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
-        # add and remove foo again
+        # add and remove foo again, this time while its address book is active
         uid = self.uidPrefix + 'foo4' # work around EDS bug with reusing UID
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'xxx'}
         self.manager.SetPeer(uid,
                              peers[uid])
         expected.add(self.managerPrefix + uid)
+        self.manager.SetActiveAddressBooks(['peer-' + uid])
+        self.assertEqual(['active = pim-manager-' + uid + '\n',
+                          'sort =\n'],
+                         self.readManagerIni())
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
         time.sleep(2)
@@ -677,9 +706,14 @@ XDG root.
         self.manager.RemovePeer(uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = \n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         # add foo, bar, xyz
+        addressbooks = []
         uid = self.uidPrefix + 'foo2'
+        addressbooks.append('peer-' + uid)
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'xxx'}
         self.manager.SetPeer(uid,
@@ -687,8 +721,12 @@ XDG root.
         expected.add(self.managerPrefix + uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = \n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         uid = self.uidPrefix + 'bar'
+        addressbooks.append('peer-' + uid)
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'yyy'}
         self.manager.SetPeer(uid,
@@ -698,6 +736,7 @@ XDG root.
         self.assertEqual(expected, self.currentSources())
 
         uid = self.uidPrefix + 'xyz'
+        addressbooks.append('peer-' + uid)
         peers[uid] = {'protocol': 'PBAP',
                       'address': 'zzz'}
         self.manager.SetPeer(uid,
@@ -705,6 +744,15 @@ XDG root.
         expected.add(self.managerPrefix + uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = \n',
+                          'sort =\n'],
+                         self.readManagerIni())
+
+        self.manager.SetActiveAddressBooks(addressbooks)
+        addressbooks.sort()
+        self.assertEqual(['active = ' + ' '.join([x.replace('peer-', 'pim-manager-') for x in addressbooks]) + '\n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         # EDS workaround
         time.sleep(2)
@@ -712,9 +760,13 @@ XDG root.
         # remove yxz, bar, foo
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
+        addressbooks.remove('peer-' + uid)
         self.manager.RemovePeer(uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = ' + ' '.join([x.replace('peer-', 'pim-manager-') for x in addressbooks]) + '\n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         # EDS workaround
         time.sleep(2)
@@ -722,9 +774,13 @@ XDG root.
         uid = self.uidPrefix + 'bar'
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
+        addressbooks.remove('peer-' + uid)
         self.manager.RemovePeer(uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = ' + ' '.join([x.replace('peer-', 'pim-manager-') for x in addressbooks]) + '\n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         # EDS workaround
         time.sleep(2)
@@ -732,9 +788,13 @@ XDG root.
         uid = self.uidPrefix + 'foo2'
         expected.remove(self.managerPrefix + uid)
         del peers[uid]
+        addressbooks.remove('peer-' + uid)
         self.manager.RemovePeer(uid)
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
+        self.assertEqual(['active = ' + ' '.join([x.replace('peer-', 'pim-manager-') for x in addressbooks]) + '\n',
+                          'sort =\n'],
+                         self.readManagerIni())
 
         # EDS workaround
         time.sleep(2)
@@ -1536,8 +1596,7 @@ END:VCARD''']):
         # Check that order was adapted and stored permanently.
         self.assertEqual("last/first", self.manager.GetSortOrder())
         self.assertIn("sort = last/first\n",
-                      open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
-                           "r").readlines())
+                      self.readManagerIni())
 
         # Contact in the middle may or may not become invalidated.
         self.runUntil('reordered',
@@ -1986,8 +2045,7 @@ END:VCARD'''
         # assuming that the PIM Manager preserves that order (not really guaranteed
         # by the API, but is how it is implemented).
         self.assertIn('active = pim-manager-' + self.uidPrefix + 'a pim-manager-' + self.uidPrefix + 'b pim-manager-' + self.uidPrefix + 'c system-address-book\n',
-                      open(os.path.join(xdg_root, "config", "syncevolution", "pim-manager.ini"),
-                           "r").readlines())
+                      self.readManagerIni())
 
         for peer in active:
              for index in range(0, contactsPerPeer):
