@@ -1328,7 +1328,7 @@ void Manager::doRemovePeer(const boost::shared_ptr<Session> &session,
     // doing so doesn't hurt.
     m_enabledEBooks.erase(localDatabaseName);
     initDatabases();
-    m_configNode->writeProperty(MANAGER_CONFIG_SORT_PROPERTY,
+    m_configNode->writeProperty(MANAGER_CONFIG_ACTIVE_ADDRESS_BOOKS_PROPERTY,
                                 InitStateString(boost::join(m_enabledEBooks, " "), true));
     m_configNode->flush();
 
