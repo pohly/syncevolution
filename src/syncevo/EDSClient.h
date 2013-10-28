@@ -98,17 +98,25 @@ class EDSRegistryLoader : private boost::noncopyable
             cb(m_registry, m_gerror);
         } else {
             m_pending.push_back(cb);
+#if 0
             m_loading = true;
             SYNCEVO_GLIB_CALL_ASYNC(e_source_registry_new,
                                     boost::bind(&EDSRegistryLoader::created,
                                                 this,
                                                 _1, _2),
                                     NULL);
+#else
+	    ESourceRegistry *registry;
+	    GErrorCXX gerror;
+	    registry = e_source_registry_new_sync(NULL, gerror);
+	    created(registry, gerror);
+#endif
         }
     }
 
     ESourceRegistryCXX sync()
     {
+#if 0
         if (!m_loading) {
             m_loading = true;
             SYNCEVO_GLIB_CALL_ASYNC(e_source_registry_new,
@@ -119,6 +127,15 @@ class EDSRegistryLoader : private boost::noncopyable
         }
 
         GRunWhile(!boost::lambda::var(m_registry) && !boost::lambda::var(m_gerror));
+#else
+        if (!m_registry) {
+            ESourceRegistry *registry;
+            GErrorCXX gerror;
+            registry = e_source_registry_new_sync(NULL, gerror);
+            created(registry, gerror);
+        }
+#endif
+
         if (m_registry) {
             return m_registry;
         }
