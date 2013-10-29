@@ -124,7 +124,6 @@ void Manager::init()
         "last/first";
     InitStateString active = m_configNode->readProperty(MANAGER_CONFIG_ACTIVE_ADDRESS_BOOKS_PROPERTY);
     m_enabledEBooks.clear();
-    typedef boost::split_iterator<string::iterator> string_split_iterator;
     BOOST_FOREACH(const std::string &entry,
                   boost::tokenizer< boost::char_separator<char> >(active, boost::char_separator<char>(", \t"))) {
         if (!entry.empty()) {
