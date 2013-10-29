@@ -1,3 +1,114 @@
+SyncEvolution 1.3.99.6, xxxxxxxxxx
+==================================
+
+This update focuses on SyncEvolution in IVI again. It adds support for
+GENIVI Diagnostic Log and Trace (DLT) and enhances searching in the
+unified address book.
+
+Binaries on syncevolution.org now work with EDS < 3.6 *and* >= 3.6.
+
+Details:
+
+* libsynthesis: avoid redundant (and sometimes slow) getaddrbyname() (FDO #70771)
+
+  The network lookup of the hostname can be slow (10 second delay when
+  not connected) and shouldn't be necessary anyway, so disable it.
+
+* PIM Manager: case-insensitive and transliterated search (FDO #56524)
+
+* PIM: accent-insensitive and transliterated search (FDO #56524)
+
+  Accent-insensitive search ignores accents, using the same code as in
+  EDS.  Transliterated search ignores foreign scripts by transliterating
+  search term and contact properties to Latin first. That one is using
+  ICU directly in the same way as EDS, but doesn't use the EDS
+  ETransliterator class to avoid extra string copying.
+
+  This commit changes the default behavior such that searching is by
+  default most permissive (case- and accent-insensitive, does
+  transliteration). Flags exist to restore more restrictive matching.
+
+* PIM: relax phone number matching
+
+  Previously, the current default country was used to turn phone numbers
+  without an explicit country code into full E164 numbers, which then
+  had to match the search term when doing a caller ID lookup.
+
+  This was inconsistent with EDS, where a weaker
+  EQUALS_NATIONAL_PHONE_NUMBER was done. The difference is that a
+  comparison between a number with country code matches one without if
+  the national number of the same, regardless of the current default
+  country. This is better because it reduces the influence of the hard
+  to guess default country on matching.
+
+  Another advantage of this change is the lower memory consumption and
+  faster comparison, because strings are now stored in 4 + 8 byte
+  numbers instead of strings of varying length.
+
+* PIM: fix incorrect write into pim-manager.ini (FDO #70772)
+
+  Removing a peer accidentally wrote the updated list of active
+  address books into the "sort" property of pim-manager.ini, which
+  then prevented starting the PIM Manager.
+
+* PIM: ignore broken sort order in config (FDO #70772)
+
+  Failure to set the sort order from pim-manager.ini should not
+  prevent the startup of the PIM Manager because the client cannot
+  really diagnose and fix the problem. It is better to try again with
+  the default sort order.
+
+* PIM: adapt to locale changes at runtime (FDO #66618)
+
+  Listen to signals from localed D-Bus system service and update all
+  internal state which depends on the current locale. This state includes:
+  - pre-computed data in all loaded contacts
+  - filtering (for example, case sensitivity is locale dependent)
+  - the sort order
+
+  This feature can be controlled by setting the SYNCEVOLUTION_LOCALED
+  env variable:
+  - "session" - use a localed instance on the D-Bus session bus instead
+    of the system instance. This was originally meant for
+    testing, but might also be useful for per-user setting changes.
+  - "none" - disables the feature
+
+* D-Bus server: support DLT (FDO #66769)
+
+  Diagnostic Log and Trace (DLT) manages a sequence of log messages,
+  with remote controllable level of detail. SyncEvolution optionally
+  (can be chosen at compile time and again at runtime) uses DLT
+  instead of its own syncevolution-log.html files. See README-DLT.rst
+  for more information.
+
+  To use the feature, configure SyncEvolution with
+  "--enable-dbus-server=--dlt --no-syslog"
+
+* EDS: enhanced compatibility mode
+
+  SyncEvolution compiled for EDS < 3.6 can now also load EDS backends
+  compiled for EDS >= 3.6. The packaging for syncevolution.org uses
+  that to bundle EDS backends compiled on different distros in the
+  same package.
+
+* EDS: SYNCEVOLUTION_EBOOK_QUERY env variable
+
+  Setting the SYNCEVOLUTION_EBOOK_QUERY env variable to a valid EBook
+  query string limits the results to contacts matching that
+  query. Useful only in combination with --print-items or
+  --export. Only implemented for EDS >= 3.6.
+
+* EDS: fix compile problem with boost and EDS > 3.36
+
+  This fixes the following problem, seen with Boost 1.53.0 on altlinux
+  when compiling for EDS >= 3.6:
+
+    /usr/include/boost/smart_ptr/shared_ptr.hpp: In instantiation of 'typename boost::detail::sp_array_access<T>::type boost::shared_ptr<T>::operator[](std::ptrdiff_t) const [with T = char*; typename boost::detail::sp_array_access<T>::type = void; std::ptrdiff_t = long int]':
+    src/backends/evolution/EvolutionSyncSource.cpp:163:38: required from here
+    /usr/include/boost/smart_ptr/shared_ptr.hpp:663:22: error: return-statement with a value, in function returning 'void' [-fpermissive]
+    make[2]: *** [src/backends/evolution/src_backends_evolution_syncecal_la-EvolutionSyncSource.lo]
+
+
 SyncEvolution 1.3.99.5, 01.10.2013
 ==================================
 
