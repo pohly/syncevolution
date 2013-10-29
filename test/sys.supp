@@ -746,6 +746,32 @@
    fun:gnutls_certificate_set_x509_trust_file
 }
 
+# ==24318== Syscall param sendmsg(mmsg[0].msg_hdr) points to uninitialised byte(s)
+# ==24318==    at 0xA352FFB: sendmmsg (sendmmsg.c:36)
+# ==24318==    by 0x113B12DE: __libc_res_nsend (res_send.c:1140)
+# ==24318==    by 0x113AEB8B: __libc_res_nquery (res_query.c:226)
+# ==24318==    by 0x113AF147: __libc_res_nquerydomain (res_query.c:582)
+# ==24318==    by 0x113AF74E: __libc_res_nsearch (res_query.c:378)
+# ==24318==    by 0x1C5F6A55: _nss_dns_gethostbyname4_r (dns-host.c:314)
+# ==24318==    by 0xA32CEF1: gaih_inet (getaddrinfo.c:849)
+# ==24318==    by 0xA3302D3: getaddrinfo (getaddrinfo.c:2473)
+# ==24318==    by 0x7E61812: do_lookup_by_name (gthreadedresolver.c:81)
+# ==24318==    by 0x7E5F044: g_task_thread_pool_thread (gtask.c:1242)
+# ==24318==    by 0x8600B95: g_thread_pool_thread_proxy (gthreadpool.c:309)
+# ==24318==    by 0x86001D4: g_thread_proxy (gthread.c:798)
+# ==24318==    by 0x983DE0D: start_thread (pthread_create.c:311)
+# ==24318==    by 0xA3519EC: clone (clone.S:113)
+# ==24318==  Address 0x1c3e3ef0 is on thread 3's stack
+# ==24318== 
+{
+   getaddrinfo + dns
+   Memcheck:Param
+   sendmsg(mmsg[0].msg_hdr)
+   fun:sendmmsg
+   ...
+   fun:getaddrinfo
+}
+
 # ==25419== 21 bytes in 1 blocks are definitely lost in loss record 157 of 649
 # ==25419==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
 # ==25419==    by 0xA182881: strdup (strdup.c:43)
