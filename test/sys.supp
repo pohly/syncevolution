@@ -966,6 +966,16 @@
    fun:g_main_loop_run
    fun:clone
 }
+# This occurred with self-compiled glib on Debian Testing after Debian Wheezy:
+# stack backtrace stops above parse_value_from_blob(). This is unfortunately
+# very broad :-(
+{
+   GIO thread leak, variant 2
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:parse_value_from_blob
+}
 
 # ==12501== 168 (64 direct, 104 indirect) bytes in 1 blocks are definitely lost in loss record 1,124 of 1,317
 # ==12501==    at 0x4C272B8: calloc (vg_replace_malloc.c:566)
