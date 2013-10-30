@@ -1174,6 +1174,36 @@
    obj:*libsoup-2.4.so*
 }
 
+# ==1308== 38 (12 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 1,695 of 3,005
+# ==1308==    at 0x4029A28: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==1308==    by 0x5447932: g_malloc (gmem.c:159)
+# ==1308==    by 0x545DEC1: g_slice_alloc (gslice.c:1003)
+# ==1308==    by 0x542DD03: g_error_new_literal (gerror.c:456)
+# ==1308==    by 0x542DFC3: g_set_error_literal (gerror.c:595)
+# ==1308==    by 0x52714D2: g_cancellable_set_error_if_cancelled (gcancellable.c:315)
+# ==1308==    by 0x52B043B: g_socket_condition_timed_wait (gsocket.c:3474)
+# ==1308==    by 0x52B06F7: g_socket_condition_wait (gsocket.c:3427)
+# ==1308==    by 0x52B07A4: g_socket_accept (gsocket.c:2151)
+# ==1308==    by 0x52B867D: accept_ready (gsocketlistener.c:694)
+# ==1308==    by 0x52AEAC0: socket_source_dispatch (gsocket.c:3165)
+# ==1308==    by 0x5441CDD: g_main_context_dispatch (gmain.c:3054)
+# ==1308==    by 0x5442087: g_main_context_iterate.isra.21 (gmain.c:3701)
+# ==1308==    by 0x5442147: g_main_context_iteration (gmain.c:3762)
+# ==1308==    by 0x55838C4: (below main) (libc-start.c:260)
+# ==1308== 
+{
+   g_socket_accept + cancel
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_cancellable_set_error_if_cancelled
+   ...
+   fun:g_socket_accept
+   fun:accept_ready
+   fun:socket_source_dispatch
+   fun:g_main_context_dispatch
+}
+
 # ==25864== 42 (16 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 667 of 1,425
 # ==25864==    at 0x4C28BED: malloc (vg_replace_malloc.c:263)
 # ==25864==    by 0x999F180: g_malloc (gmem.c:159)
