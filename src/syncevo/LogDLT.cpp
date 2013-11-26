@@ -60,6 +60,7 @@ LoggerDLT::LoggerDLT(const char *appid, const char *description) :
 LoggerDLT::~LoggerDLT()
 {
     DLT_UNREGISTER_CONTEXT(*(DltContext *)m_dltContext);
+    free(m_dltContext);
     DLT_UNREGISTER_APP();
     LoggerDLTInstance = NULL;
 }
