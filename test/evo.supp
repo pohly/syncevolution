@@ -2076,6 +2076,111 @@
    fun:icalparser_parse_string
 }
 
+# ==21503== 2,032 bytes in 1 blocks are definitely lost in loss record 10,657 of 10,880
+# ==21503==    at 0x4C2B514: calloc (vg_replace_malloc.c:593)
+# ==21503==    by 0x87FB998: g_malloc0 (gmem.c:189)
+# ==21503==    by 0x87C88C8: thread_memory_from_self.part.12 (gslice.c:512)
+# ==21503==    by 0x88115E4: g_slice_alloc (gslice.c:1561)
+# ==21503==    by 0x88119DD: g_slice_alloc0 (gslice.c:1029)
+# ==21503==    by 0x87F53EC: g_main_context_push_thread_default (gmain.c:728)
+# ==21503==    by 0x5908DDD: cal_client_dbus_thread (in /usr/lib/libecal-1.2.so.15.0.0)
+# ==21503==    by 0x881A1D4: g_thread_proxy (gthread.c:798)
+# ==21503==    by 0x9A5BE0D: start_thread (pthread_create.c:311)
+# ==21503==    by 0xA56F9EC: clone (clone.S:113)
+# ==21503== 
+#
+# ==21503== 48 (24 direct, 24 indirect) bytes in 1 blocks are definitely lost in loss record 6,004 of 10,880
+# ==21503==    at 0x4C2935B: malloc (vg_replace_malloc.c:270)
+# ==21503==    by 0x87FB940: g_malloc (gmem.c:159)
+# ==21503==    by 0x881149D: g_slice_alloc (gslice.c:1003)
+# ==21503==    by 0x88119DD: g_slice_alloc0 (gslice.c:1029)
+# ==21503==    by 0x87F53EC: g_main_context_push_thread_default (gmain.c:728)
+# ==21503==    by 0x19210A08: ??? (in /usr/lib/x86_64-linux-gnu/gio/modules/libdconfsettings.so)
+# ==21503==    by 0x881A1D4: g_thread_proxy (gthread.c:798)
+# ==21503==    by 0x9A5BE0D: start_thread (pthread_create.c:311)
+# ==21503==    by 0xA56F9EC: clone (clone.S:113)
+# ==21503== 
+#
+# Seen with GNOME 3.8.
+{
+   g_main_context_push_thread_default
+   Memcheck:Leak
+   ...
+   fun:g_main_context_push_thread_default
+}
+
+# ==21503== 16 bytes in 1 blocks are definitely lost in loss record 2,071 of 10,880
+# ==21503==    at 0x4C2935B: malloc (vg_replace_malloc.c:270)
+# ==21503==    by 0x87FB940: g_malloc (gmem.c:159)
+# ==21503==    by 0x881149D: g_slice_alloc (gslice.c:1003)
+# ==21503==    by 0x88119DD: g_slice_alloc0 (gslice.c:1029)
+# ==21503==    by 0x87F3019: get_dispatch (gmain.c:2705)
+# ==21503==    by 0x87F5DA4: g_main_context_dispatch (gmain.c:2997)
+# ==21503==    by 0x87F61F7: g_main_context_iterate.isra.22 (gmain.c:3701)
+# ==21503==    by 0x87F65F9: g_main_loop_run (gmain.c:3895)
+# ==21503==    by 0x54AF732: book_client_dbus_thread (in /usr/lib/libebook-1.2.so.14.3.1)
+# ==21503==    by 0x881A1D4: g_thread_proxy (gthread.c:798)
+# ==21503==    by 0x9A5BE0D: start_thread (pthread_create.c:311)
+# ==21503==    by 0xA56F9EC: clone (clone.S:113)
+# ==21503== 
+# ==21503== 16 bytes in 1 blocks are definitely lost in loss record 2,072 of 10,880
+# ==21503==    at 0x4C2B514: calloc (vg_replace_malloc.c:593)
+# ==21503==    by 0x87FB998: g_malloc0 (gmem.c:189)
+# ==21503==    by 0x87F6471: g_main_loop_new (gmain.c:3790)
+# ==21503==    by 0x5908DE7: cal_client_dbus_thread (in /usr/lib/libecal-1.2.so.15.0.0)
+# ==21503==    by 0x881A1D4: g_thread_proxy (gthread.c:798)
+# ==21503==    by 0x9A5BE0D: start_thread (pthread_create.c:311)
+# ==21503==    by 0xA56F9EC: clone (clone.S:113)
+# ==21503== 
+# Seen with various dbus threads in GNOME 3.8.
+{
+   glib inside dbus thread
+   Memcheck:Leak
+   ...
+   fun:g_main_*
+   fun:*_dbus_thread
+   fun:g_thread_proxy
+}
+{
+   glib inside libdconfsettings.so thread
+   Memcheck:Leak
+   ...
+   fun:g_main_*
+   obj:*/libdconfsettings.so
+   fun:g_thread_proxy
+}
+
+# ==6435== 16 bytes in 1 blocks are definitely lost in loss record 2,063 of 10,849
+# ==6435==    at 0x4C2935B: malloc (vg_replace_malloc.c:270)
+# ==6435==    by 0x87FB940: g_malloc (gmem.c:159)
+# ==6435==    by 0x881149D: g_slice_alloc (gslice.c:1003)
+# ==6435==    by 0x88119DD: g_slice_alloc0 (gslice.c:1029)
+# ==6435==    by 0x87F3019: get_dispatch (gmain.c:2705)
+# ==6435==    by 0x87F5DA4: g_main_context_dispatch (gmain.c:2997)
+# ==6435==    by 0x87F61F7: g_main_context_iterate.isra.22 (gmain.c:3701)
+# ==6435==    by 0x87F65F9: g_main_loop_run (gmain.c:3895)
+# ==6435==    by 0x80C5608: initable_init (gdbusproxy.c:1994)
+# ==6435==    by 0x80575B9: g_initable_new_valist (ginitable.c:231)
+# ==6435==    by 0x805769B: g_initable_new (ginitable.c:149)
+# ==6435==    by 0x80C6D38: g_dbus_proxy_new_sync (gdbusproxy.c:2172)
+# ==6435==    by 0x80D3903: initable_init (gdbusobjectmanagerclient.c:1339)
+# ==6435==    by 0x80575B9: g_initable_new_valist (ginitable.c:231)
+# ==6435==    by 0x805769B: g_initable_new (ginitable.c:149)
+# ==6435==    by 0x749616C: e_dbus_object_manager_client_new_for_bus_sync (in /usr/lib/libedataserver-1.2.so.17.0.0)
+# ==6435==    by 0x747E55B: source_registry_object_manager_thread (in /usr/lib/libedataserver-1.2.so.17.0.0)
+# ==6435==    by 0x881A1D4: g_thread_proxy (gthread.c:798)
+# ==6435==    by 0x9A5BE0D: start_thread (pthread_create.c:311)
+# ==6435==    by 0xA56F9EC: clone (clone.S:113)
+# ==6435== 
+{
+   source registry thread
+   Memcheck:Leak
+   ...
+   fun:e_dbus_object_manager_client_new_for_bus_sync
+   fun:source_registry_object_manager_thread
+}
+
+
 ##### evolution-data-server ####
 
 # ==32292== Syscall param pwrite64(buf) points to uninitialised byte(s)

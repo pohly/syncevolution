@@ -771,6 +771,14 @@
    ...
    fun:getaddrinfo
 }
+{
+   getaddrinfo + dns (with stack unwinding stopping in libc)
+   Memcheck:Param
+   sendmsg(mmsg[0].msg_hdr)
+   fun:sendmmsg
+   ...
+   fun:__libc_res_nquerydomain
+}
 
 # ==25419== 21 bytes in 1 blocks are definitely lost in loss record 157 of 649
 # ==25419==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
@@ -857,7 +865,6 @@
    fun:gcry_mpi_snew
    ...
    fun:gnome_keyring_*_network_password*
-   fun:*GNOME*Password*
 }
 
 # ==5221== 280 (24 direct, 256 indirect) bytes in 1 blocks are definitely lost in loss record 2,234 of 2,429
@@ -1142,6 +1149,29 @@
    fun:g_slice_alloc0
    fun:g_main_context_push_thread_default
    fun:gdbus_shared_thread_func
+}
+
+# ==19386== 88 (32 direct, 56 indirect) bytes in 1 blocks are definitely lost in loss record 3,956 of 4,373
+# ==19386==    at 0x402B9B5: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==19386==    by 0x5C3299A: g_malloc0 (gmem.c:189)
+# ==19386==    by 0x5AFFAF5: _g_socket_read_with_control_messages (gdbusprivate.c:183)
+# ==19386==    by 0x5AFFCAC: _g_dbus_worker_do_read_unlocked (gdbusprivate.c:861)
+# ==19386==    by 0x5B0219B: _g_dbus_worker_do_read_cb (gdbusprivate.c:745)
+# ==19386==    by 0x5A98BB4: g_simple_async_result_complete (gsimpleasyncresult.c:777)
+# ==19386==    by 0x5A98C1A: complete_in_idle_cb (gsimpleasyncresult.c:789)
+# ==19386==    by 0x5C299EF: g_idle_dispatch (gmain.c:5205)
+# ==19386==    by 0x5C2CCDD: g_main_context_dispatch (gmain.c:3054)
+# ==19386==    by 0x5C2D087: g_main_context_iterate.isra.21 (gmain.c:3701)
+# ==19386==    by 0x5C2D4EA: g_main_loop_run (gmain.c:3895)
+# ==19386==    by 0x5E4408D: clone (clone.S:131)
+# ==19386== 
+{
+   _g_socket_read_with_control_messages
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:_g_socket_read_with_control_messages
+   fun:_g_dbus_worker_do_read_unlocked
 }
 
 # ==10677== 40 (16 direct, 24 indirect) bytes in 1 blocks are definitely lost in loss record 1,236 of 2,449
@@ -1728,4 +1758,120 @@
    ...
    fun:gnutls_session_get_data2
    fun:ne_sock_connect_ssl
+}
+
+# ==15770== 38 (12 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 1,210 of 2,105
+# ==15770==    at 0x4029A28: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==15770==    by 0x5447932: g_malloc (gmem.c:159)
+# ==15770==    by 0x545DEC1: g_slice_alloc (gslice.c:1003)
+# ==15770==    by 0x542DD03: g_error_new_literal (gerror.c:456)
+# ==15770==    by 0x542DFC3: g_set_error_literal (gerror.c:595)
+# ==15770==    by 0x52714D2: g_cancellable_set_error_if_cancelled (gcancellable.c:315)
+# ==15770==    by 0x52BBCA2: g_task_propagate_error (gtask.c:1433)
+# ==15770==    by 0x52BC5EE: g_task_propagate_pointer (gtask.c:1508)
+# ==15770==    by 0x5279DA7: g_dummy_proxy_resolver_lookup_finish (gdummyproxyresolver.c:116)
+# ==15770==    by 0x52A9399: g_proxy_resolver_lookup_finish (gproxyresolver.c:196)
+# ==15770==    by 0x52A8972: proxy_lookup_cb (gproxyaddressenumerator.c:494)
+# ==15770==    by 0x52BBA90: g_task_return_now (gtask.c:1105)
+# ==15770==    by 0x52BBACA: complete_in_idle_cb (gtask.c:1114)
+# ==15770==    by 0x543E9EF: g_idle_dispatch (gmain.c:5205)
+# ==15770==    by 0x5441CDD: g_main_context_dispatch (gmain.c:3054)
+# ==15770==    by 0x5442087: g_main_context_iterate.isra.21 (gmain.c:3701)
+# ==15770==    by 0x54424EA: g_main_loop_run (gmain.c:3895)
+# ==15770==    by 0x83BC85B: SyncEvo::SyncContext::doSync() (SyncContext.cpp:4157)
+# ==15770==    by 0x83C645A: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3414)
+# ==15770==    by 0x8246973: SyncEvo::SessionHelper::doSync(SyncEvo::SessionCommon::SyncParams const&, boost::shared_ptr<GDBusCXX::Result2<bool, SyncEvo::SyncReport> > const&) (session-helper.cpp:221)
+# ==15770==    by 0xA7455AB: ???
+# ==15770== 
+#
+# Seen with GNOME 3.8 on Debian Testing post Wheezy.
+{
+   dummy proxy error
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_error_new_literal
+   ...
+   fun:g_cancellable_set_error_if_cancelled
+   ...
+   fun:g_dummy_proxy_resolver_lookup_finish
+}
+
+# ==17128== 38 (12 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 1,206 of 2,123
+# ==17128==    at 0x4029A28: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==17128==    by 0x5447932: g_malloc (gmem.c:159)
+# ==17128==    by 0x545DEC1: g_slice_alloc (gslice.c:1003)
+# ==17128==    by 0x542DE05: g_error_copy (gerror.c:499)
+# ==17128==    by 0x5161125: got_addresses (soup-address.c:1126)
+# ==17128==    by 0x5160D1C: complete_resolve_async (soup-address.c:657)
+# ==17128==    by 0x5160E3A: lookup_resolved (soup-address.c:699)
+# ==17128==    by 0x52BBA90: g_task_return_now (gtask.c:1105)
+# ==17128==    by 0x52BC1B5: g_task_return (gtask.c:1158)
+# ==17128==    by 0x53BCCF8: g_cclosure_marshal_VOID__VOIDv (gmarshal.c:115)
+# ==17128==    by 0x53BB2ED: _g_closure_invoke_va (gclosure.c:840)
+# ==17128==    by 0x53D3AFC: g_signal_emit_valist (gsignal.c:3234)
+# ==17128==    by 0x53D4672: g_signal_emit (gsignal.c:3384)
+# ==17128==    by 0x527176C: g_cancellable_cancel (gcancellable.c:507)
+# ==17128==    by 0x51936CD: soup_session_real_cancel_message (soup-session.c:2203)
+# ==17128==    by 0x5197D62: soup_session_async_cancel_message (soup-session-async.c:111)
+# ==17128==    by 0x5193CA7: soup_session_cancel_message (soup-session.c:2259)
+# ==17128==    by 0x5193D46: soup_session_real_flush_queue (soup-session.c:2284)
+# ==17128==    by 0x5193F4E: soup_session_abort (soup-session.c:2340)
+# ==17128==    by 0x1101: ???
+# ==17128== 
+#
+# GNOME 3.8
+{
+   soup session cancel error
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_error_copy
+   fun:got_addresses
+   ...
+   fun:soup_session_real_cancel_message
+}
+
+# ==17128== 38 (12 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 1,207 of 2,123
+# ==17128==    at 0x4029A28: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==17128==    by 0x5447932: g_malloc (gmem.c:159)
+# ==17128==    by 0x545DEC1: g_slice_alloc (gslice.c:1003)
+# ==17128==    by 0x542DD03: g_error_new_literal (gerror.c:456)
+# ==17128==    by 0x542DFC3: g_set_error_literal (gerror.c:595)
+# ==17128==    by 0x52714D2: g_cancellable_set_error_if_cancelled (gcancellable.c:315)
+# ==17128==    by 0x52BBCA2: g_task_propagate_error (gtask.c:1433)
+# ==17128==    by 0x52BC5EE: g_task_propagate_pointer (gtask.c:1508)
+# ==17128==    by 0x5160563: soup_address_address_enumerator_next_finish (soup-address.c:1162)
+# ==17128==    by 0x52B44FD: g_socket_address_enumerator_next_finish (gsocketaddressenumerator.c:176)
+# ==17128==    by 0x52A8809: address_enumerate_cb (gproxyaddressenumerator.c:461)
+# ==17128==    by 0x52BBA90: g_task_return_now (gtask.c:1105)
+# ==17128==    by 0x52BC1B5: g_task_return (gtask.c:1158)
+# ==17128==    by 0x5161131: got_addresses (soup-address.c:1126)
+# ==17128==    by 0x5160D1C: complete_resolve_async (soup-address.c:657)
+# ==17128==    by 0x5160E3A: lookup_resolved (soup-address.c:699)
+# ==17128==    by 0x52BBA90: g_task_return_now (gtask.c:1105)
+# ==17128==    by 0x52BC1B5: g_task_return (gtask.c:1158)
+# ==17128==    by 0x53BCCF8: g_cclosure_marshal_VOID__VOIDv (gmarshal.c:115)
+# ==17128==    by 0x53BB2ED: _g_closure_invoke_va (gclosure.c:840)
+# ==17128==    by 0x53D3AFC: g_signal_emit_valist (gsignal.c:3234)
+# ==17128==    by 0x53D4672: g_signal_emit (gsignal.c:3384)
+# ==17128==    by 0x527176C: g_cancellable_cancel (gcancellable.c:507)
+# ==17128==    by 0x51936CD: soup_session_real_cancel_message (soup-session.c:2203)
+# ==17128==    by 0x5197D62: soup_session_async_cancel_message (soup-session-async.c:111)
+# ==17128==    by 0x5193CA7: soup_session_cancel_message (soup-session.c:2259)
+# ==17128==    by 0x5193D46: soup_session_real_flush_queue (soup-session.c:2284)
+# ==17128==    by 0x5193F4E: soup_session_abort (soup-session.c:2340)
+# ==17128==    by 0x1101: ???
+# ==17128== 
+# GNOME 3.8
+{
+   soup session cancel error II
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:g_error_new_literal
+   ...
+   fun:soup_address_address_enumerator_next_finish
+   ...
+   fun:soup_session_real_cancel_message
 }
