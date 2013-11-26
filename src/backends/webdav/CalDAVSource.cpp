@@ -868,12 +868,6 @@ void CalDAVSource::readSubItem(const std::string &davLUID, const std::string &su
                         if (tzid) {
                             icalproperty_add_parameter(exdate, icalparameter_new_clone(tzid));
                         }
-#if 0
-                        // not needed
-                        if (icalproperty_get_recurrenceid(exdate).is_date) {
-                            icalproperty_add_parameter(exdate, icalparameter_new_value(ICAL_VALUE_DATE));
-                        }
-#endif
                         icalcomponent_add_property(parent, exdate);
                     }
                 }
