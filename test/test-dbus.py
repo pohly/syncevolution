@@ -662,7 +662,7 @@ class DBusUtil(Timeout):
         # SIGTERM and SIGTERM depends on how much work still needs to
         # be done after being asked to quit. valgrind leak checking
         # can take a while.
-        unresponsive = self.killChildren(usingValgrind() and 60 or 20)
+        unresponsive = self.killChildren(usingValgrind() and 120 or 20)
         if unresponsive:
             error = "/".join(unresponsive) + " had to be killed with SIGKILL"
             print "   ", error
