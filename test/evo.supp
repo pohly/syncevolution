@@ -5104,3 +5104,43 @@
    fun:g_static_rec_mutex_lock
    fun:folks_avatar_cache_dup
 }
+
+# === SyncEvolution + libsynthesis ===
+
+# ==25261== 160 bytes in 1 blocks are definitely lost in loss record 1,157 of 1,363
+# ==25261==    at 0x4C2935B: malloc (vg_replace_malloc.c:270)
+# ==25261==    by 0x90ABB6C: dlt_register_context_ll_ts (dlt_user.c:853)
+# ==25261==    by 0x7DE71D: sysync::ManageContexts::registerContext(DltContext*, char const*, char const*) (debuglogger.cpp:80)
+# ==25261==    by 0x7DE81B: sysync::ManageContexts::registerContexts() (debuglogger.cpp:94)
+# ==25261==    by 0x7DF30D: sysync::TDebugLoggerBase::DebugStartOutput() (debuglogger.cpp:1518)
+# ==25261==    by 0x7DFF66: sysync::TDebugLoggerBase::DebugPuts(unsigned int, char const*, unsigned long, bool) (debuglogger.cpp:870)
+# ==25261==    by 0x7DE491: sysync::TDebugLoggerBase::DebugVPrintf(unsigned int, char const*, __va_list_tag*) [clone .part.10] (debuglogger.cpp:632)
+# ==25261==    by 0x7DEBEE: sysync::TDebugLoggerBase::DebugPrintfLastMask(char const*, ...) (debuglogger.cpp:652)
+# ==25261==    by 0x88C8A3: sysync::TScriptContext::showVarDefs(char const*) (scriptcontext.cpp:3457)
+# ==25261==    by 0x88EB0A: sysync::TScriptContext::ResolveIdentifiers(std::string&, sysync::TFieldListConfig*, bool, std::string*, bool) (scriptcontext.cpp:3396)
+# ==25261==    by 0x88F147: sysync::TScriptContext::TokenizeAndResolveFunction(sysync::TSyncAppBase*, int, char const*, sysync::TUserScriptFunction&) (scriptcontext.cpp:2915)
+# ==25261==    by 0x84975A: sysync::TConfigElement::endElement(char const*, bool) (configelement.cpp:785)
+# ==25261==    by 0x84906D: sysync::TConfigElement::endElement(char const*, bool) (configelement.cpp:627)
+# ==25261==    by 0x7EAA96: endElement (syncappbase.cpp:1614)
+# ==25261==    by 0x7AB1CEF: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.6.0)
+# ==25261==    by 0x7AB264D: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.6.0)
+# ==25261==    by 0x7AB274B: ??? (in /lib/x86_64-linux-gnu/libexpat.so.1.6.0)
+# ==25261==    by 0x7AB45DE: XML_ParseBuffer (in /lib/x86_64-linux-gnu/libexpat.so.1.6.0)
+# ==25261==    by 0x7EAC22: sysync::TSyncAppBase::readXMLConfigStream(int (*)(char*, unsigned long, unsigned long*, void*), void*) (syncappbase.cpp:1664)
+# ==25261==    by 0x7EADE7: sysync::TSyncAppBase::readXMLConfigConstant(char const*) (syncappbase.cpp:1792)
+# ==25261==    by 0x7E5425: sysync::TEngineInterface::InitEngineXML(char const*) (engineinterface.cpp:1217)
+# ==25261==    by 0x77A4E8: SyncEvo::SharedEngine::InitEngineXML(std::string const&) (SynthesisEngine.cpp:48)
+# ==25261==    by 0x6F0169: SyncEvo::SyncContext::initEngine(bool) (SyncContext.cpp:3100)
+# ==25261==    by 0x7005AD: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3364)
+# ==25261==    by 0x677203: SyncEvo::LocalTransportAgentChild::run() (LocalTransportAgent.cpp:948)
+# ==25261==    by 0x66E2A1: SyncEvo::LocalTransportMain(int, char**) (LocalTransportAgent.cpp:1168)
+# ==25261==    by 0xA6F0994: (below main) (libc-start.c:260)
+# ==25261== 
+{
+   leaked DLT context names
+   Memcheck:Leak
+   fun:malloc
+   fun:dlt_register_context_ll_ts
+   ...
+   fun:_ZN6sysync16TDebugLoggerBase16DebugStartOutputEv
+}
