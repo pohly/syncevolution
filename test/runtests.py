@@ -261,7 +261,7 @@ class Context:
         if dumpCommands:
             cmdstr = "set -x; " + cmdstr
         print "*** ( cd %s; export %s; %s )" % (os.getcwd(),
-                                                " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH" ])),
+                                                " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH", "PATH" ])),
                                                 cmdstr)
         sys.stdout.flush()
         result = os.system(cmdstr)
@@ -672,7 +672,7 @@ class SyncEvolutionTest(Action):
                       "CLIENT_TEST_LOG=%(log)s " \
                       "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
                       "%(runner)s " \
-                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs:gdbus/.libs:gdbusxx/.libs:$LD_LIBRARY_PATH PATH=backends/webdav:.:$PATH %(testprefix)s " \
+                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs:gdbus/.libs:gdbusxx/.libs:$LD_LIBRARY_PATH PATH=backends/webdav:.:\\$PATH %(testprefix)s " \
                       "%(testbinary)s" % \
                       { "server": self.serverName,
                         "sources": ",".join(self.sources),

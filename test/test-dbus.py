@@ -77,7 +77,13 @@ if os.environ.get("TEST_DBUS_QUIET", False):
     level = 0
 else:
     level = 3
-server = ("syncevo-dbus-server --no-syslog --stdout --verbosity=%d --dbus-verbosity=%d" % (level, level)).split()
+
+usingDLT = os.environ.get("TEST_DBUS_DLT", False)
+if usingDLT:
+    logging = '--no-syslog --stdout --dlt'
+else:
+    logging = '--no-syslog --stdout'
+server = ("syncevo-dbus-server %s --verbosity=%d --dbus-verbosity=%d" % (logging, level, level)).split()
 
 # primarily for XDG files, but also other temporary files
 xdg_root = "temp-test-dbus"
@@ -566,6 +572,18 @@ class DBusUtil(Timeout):
         self.pmonitor = subprocess.Popen(useGZip and ['sh', '-c', 'dbus-monitor | gzip'] or ['dbus-monitor'],
                                          stdout=open(dbuslog, "w"),
                                          stderr=subprocess.STDOUT)
+        if usingDLT:
+            dltlog = self.testname + ".dlt.log"
+            # dlt-receive buffers output and doesn't flush when killed.
+            # Trick it into writing each line immediately by pretending that
+            # it runs interactively. 'script' had side-effects on the calling
+            # terminal, 'unbuffer' (from expect-dev on Debian) worked better.
+            self.pdlt = subprocess.Popen(# ['script', '-q', '-c', 'dlt-receive -a localhost', '/dev/null'],
+                                         'unbuffer dlt-receive -a localhost'.split(),
+                                         stdout=open(dltlog, "w"),
+                                         stderr=subprocess.STDOUT)
+        else:
+            self.pdlt = None
 
         if debugger:
             print "\n%s: %s\n" % (self.id(), self.shortDescription())
@@ -681,6 +699,10 @@ class DBusUtil(Timeout):
             print "   dbus-monitor had to be killed with SIGKILL"
             result.errors.append((self,
                                   "dbus-monitor had to be killed with SIGKILL"))
+        if self.pdlt and not ShutdownSubprocess(self.pdlt, 5):
+            print "   dlt-receive had to be killed with SIGKILL"
+            result.errors.append((self,
+                                  "dlt-receive had to be killed with SIGKILL"))
 
         # If reading the dbus-monitor output, then read it completely.
         # The runTestDBusCheck callbacks expect that and it is confusing
@@ -693,6 +715,8 @@ class DBusUtil(Timeout):
             monitorout = dbuslog + ':\n' + open(dbuslog).read()
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
+        if usingDLT and not debugger:
+            dltout = dltlog + ':\n' + open(dltlog).read()
         runTestDBusCheck = getattr(self, 'runTestDBusCheck', None)
         if runTestDBusCheck:
             try:
@@ -709,6 +733,14 @@ class DBusUtil(Timeout):
                 # only append report if not part of some other error below
                 result.errors.append((self,
                                       "server stdout failed check: %s\n%s" % (sys.exc_info()[1], (not hasfailed and report) or "")))
+        runTestDLTCheck = getattr(self, 'runTestDLTCheck', None)
+        if runTestDLTCheck:
+            try:
+                runTestDLTCheck(self, dltout)
+            except:
+                # only append report if not part of some other error below
+                result.errors.append((self,
+                                      "dlt-receive output failed check: %s\n%s" % (sys.exc_info()[1], (not hasfailed and report) or "")))
         # detect the expected "killed by signal TERM" both when
         # running syncevo-dbus-server directly (negative value) and
         # when valgrindcheck.sh returns the error code 128 + 15 = 143
