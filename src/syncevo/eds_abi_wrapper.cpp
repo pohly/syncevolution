@@ -165,6 +165,7 @@ void *findSymbols(const char *libname, int minver, int maxver,
 
 int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
 int EDSAbiHaveIcal;
+int EDSAbiHaveIcal1;
 int SyncEvoHaveLibbluetooth;
 
 extern "C" void EDSAbiWrapperInit()
@@ -307,7 +308,11 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.icaltimezone_new, "icaltimezone_new", \
                 &EDSAbiWrapperSingleton.icaltimezone_set_component, "icaltimezone_set_component",
 
+    // icalparameter_new_scheduleagent was added in libical.so.1. We
+    // use it only to detect the libical 1.0 ABI. This works because
+    // all methods in EDS_ABI_WRAPPER_ICAL_R are considered optional.
 #define EDS_ABI_WRAPPER_ICAL_R \
+                &EDSAbiWrapperSingleton.icalparameter_new_scheduleagent, "icalparameter_new_scheduleagent", \
                 &EDSAbiWrapperSingleton.icalcomponent_as_ical_string_r, "icalcomponent_as_ical_string_r", \
                 &EDSAbiWrapperSingleton.icaltime_as_ical_string_r, "icaltime_as_ical_string_r", \
                 &EDSAbiWrapperSingleton.icalproperty_get_value_as_string_r, "icalproperty_get_value_as_string_r",
@@ -354,17 +359,18 @@ extern "C" void EDSAbiWrapperInit()
         // libecal not found above (or not enabled), but libical
         // might still be available, so check for it separately
         ecalhandle =
-            findSymbols("libical.so", 0, 0,
+            findSymbols("libical.so", 0, 1,
                         FIND_SYMBOLS_NEED_ALL, NULL,
                         EDS_ABI_WRAPPER_ICAL_BASE
                         (void *)0);
         ecalhandle =
-            findSymbols("libical.so", 0, 0,
+            findSymbols("libical.so", 0, 1,
                         0, NULL,
                         EDS_ABI_WRAPPER_ICAL_R
                         (void *)0);
     }
     EDSAbiHaveIcal = EDSAbiWrapperSingleton.icalcomponent_add_component != 0;
+    EDSAbiHaveIcal1 = EDSAbiWrapperSingleton.icalparameter_new_scheduleagent != 0;
 # endif // ENABLE_ICAL
 
 # ifdef ENABLE_BLUETOOTH

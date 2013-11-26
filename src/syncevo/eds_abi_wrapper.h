@@ -98,6 +98,7 @@ extern "C" {
 /** libebook, libecal, libedataserver available (currently checks for e_book_new/e_cal_new/e_source_group_peek_sources) */
 extern int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
 extern int EDSAbiHaveIcal;
+extern int EDSAbiHaveIcal1; // libical.so.1
 
 /** libbluetooth available (checks sdp_connect()) */
 extern int SyncEvoHaveLibbluetooth;
@@ -250,6 +251,10 @@ struct EDSAbiWrapper {
     char* (*icaltimezone_get_tzid) (icaltimezone *zone);
     icaltimezone *(*icaltimezone_new) (void);
     int (*icaltimezone_set_component) (icaltimezone *zone, icalcomponent *comp);
+
+    // Optional, added in libical.so.1. Can't be called be like this,
+    // we merely check for the method to detect the ABI.
+    void (*icalparameter_new_scheduleagent)(void);
 
     // optional variants which allocate the returned string for us
     const char* (*icaltime_as_ical_string_r) (const struct icaltimetype tt);

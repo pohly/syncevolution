@@ -149,7 +149,7 @@ else
 REQUIRES_deb_neon =
 endif
 if ENABLE_ICAL
-REQUIRES_deb_ical = , libical0
+REQUIRES_deb_ical = , libical0 | libical1
 endif
 VERSION_deb = 1:$(STABLE_VERSION)$(VERSION)
 VERSION_rpm = `echo $(VERSION) | sed -e s/-/_/g`
