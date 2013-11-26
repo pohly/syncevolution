@@ -374,7 +374,8 @@ void Logger::glogFunc(const gchar *logDomain,
 {
     Level level =
         (logLevel & (G_LOG_LEVEL_ERROR|G_LOG_LEVEL_CRITICAL)) ? ERROR :
-        (logLevel & G_LOG_LEVEL_WARNING) ? WARNING :
+        // glib warnings are usually not relevant for users, only for developers.
+        (logLevel & G_LOG_LEVEL_WARNING) ? DEV :
         (logLevel & (G_LOG_LEVEL_MESSAGE|G_LOG_LEVEL_INFO)) ? SHOW :
         DEBUG;
 
