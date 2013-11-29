@@ -64,6 +64,10 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
         if (params.m_mode == "ephemeral") {
             makeEphemeral();
         } else if (params.m_mode == "pbap") {
+            // Batched writing is off by default, explicitly enable it for PBAP.
+            SE_LOG_DEBUG(NULL, "enabling SYNCEVOLUTION_EDS_ACCESS_MODE=batched");
+            setenv("SYNCEVOLUTION_EDS_ACCESS_MODE", "batched", true);
+
             // "pbap" may only be used by caller when it knows that
             // the mode is safe to use.
             makeEphemeral();

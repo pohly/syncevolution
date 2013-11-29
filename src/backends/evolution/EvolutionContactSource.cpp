@@ -569,10 +569,10 @@ bool EvolutionContactSource::getContact(const string &luid, EContact **contact, 
     // Use switch and let compiler tell us when we don't cover a case.
     switch (m_accessMode) {
     case SYNCHRONOUS:
+    case DEFAULT:
         order = READ_NONE;
         break;
     case BATCHED:
-    case DEFAULT:
         order = m_readAheadOrder;
         break;
     };
@@ -1032,6 +1032,7 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
         invalidateCachedContact(uid);
         switch (m_accessMode) {
         case SYNCHRONOUS:
+        case DEFAULT:
             if (uid.empty()) {
                 gchar* newuid;
                 if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid, NULL, gerror)) {
@@ -1049,7 +1050,6 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
             }
             break;
         case BATCHED:
-        case DEFAULT:
             std::string name = StringPrintf("%s: %s operation #%d",
                                             getDisplayName().c_str(),
                                             uid.empty() ? "add" : ("insert " + uid).c_str(),
