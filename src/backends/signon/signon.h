@@ -27,8 +27,8 @@
 SE_BEGIN_CXX
 
 class AuthProvider;
-boost::shared_ptr<AuthProvider> createGSSOAuthProvider(const InitStateString &username,
-                                                       const InitStateString &password);
+boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
+                                                         const InitStateString &password);
 
 SE_END_CXX
 #endif

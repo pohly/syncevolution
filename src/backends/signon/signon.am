@@ -24,10 +24,14 @@ dist_accounts_service_types_DATA = \
   src/backends/signon/accounts/carddav.service-type \
   $(NONE)
 
+if USE_GSSO
 src_backends_signon_lib = src/backends/signon/providergsso.la
+else
+src_backends_signon_lib = src/backends/signon/provideruoa.la
+endif
 MOSTLYCLEANFILES += $(src_backends_signon_lib)
 
-src_backends_signon_providergsso_la_SOURCES = \
+src_backends_signon_common_sources = \
   src/backends/signon/signon.h \
   src/backends/signon/signon.cpp \
   $(NONE)
@@ -35,15 +39,33 @@ src_backends_signon_providergsso_la_SOURCES = \
 if ENABLE_MODULES
 src_backends_signon_backenddir = $(BACKENDS_DIRECTORY)
 src_backends_signon_backend_LTLIBRARIES = $(src_backends_signon_lib)
-src_backends_signon_providergsso_la_SOURCES += \
+src_backends_signon_common_sources += \
   src/backends/signon/signonRegister.cpp
 else
 noinst_LTLIBRARIES += $(src_backends_signon_lib)
 endif
 
-src_backends_signon_providergsso_la_LIBADD = $(GSSO_LIBS) $(SYNCEVOLUTION_LIBS) 
-src_backends_signon_providergsso_la_LDFLAGS = -module -avoid-version
-src_backends_signon_providergsso_la_CXXFLAGS = $(GSSO_CFLAGS) $(SYNCEVOLUTION_CFLAGS)
-src_backends_signon_providergsso_la_CPPFLAGS = -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
-src_backends_signon_providergsso_la_DEPENDENCIES = src/syncevo/libsyncevolution.la
+src_backends_signon_common_libadd = $(SYNCEVOLUTION_LIBS) 
+src_backends_signon_common_ldflags = -module -avoid-version
+src_backends_signon_common_cxxflags = $(SYNCEVOLUTION_CFLAGS)
+src_backends_signon_common_cppflags = -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
+src_backends_signon_common_dependencies = src/syncevo/libsyncevolution.la
+
+if USE_GSSO
+src_backends_signon_providergsso_la_SOURCES = $(src_backends_signon_common_sources)
+src_backends_signon_providergsso_la_LIBADD = $(GSSO_LIBS) $(src_backends_signon_common_libadd) 
+src_backends_signon_providergsso_la_LDFLAGS = $(src_backends_signon_common_ldflags)
+src_backends_signon_providergsso_la_CXXFLAGS = $(GSSO_CFLAGS) $(src_backends_signon_common_cxxflags)
+src_backends_signon_providergsso_la_CPPFLAGS = $(src_backends_signon_common_cppflags)
+src_backends_signon_providergsso_la_DEPENDENCIES = $(src_backends_signon_common_dependencies)
+endif
+
+if USE_UOA
+src_backends_signon_provideruoa_la_SOURCES = $(src_backends_signon_common_sources)
+src_backends_signon_provideruoa_la_LIBADD = $(UOA_LIBS) $(src_backends_signon_common_libadd)
+src_backends_signon_provideruoa_la_LDFLAGS = $(src_backends_signon_common_ldflags)
+src_backends_signon_provideruoa_la_CXXFLAGS = $(UOA_CFLAGS) $(src_backends_signon_common_cxxflags)
+src_backends_signon_provideruoa_la_CPPFLAGS = $(src_backends_signon_common_cppflags)
+src_backends_signon_provideruoa_la_DEPENDENCIES = $(src_backends_signon_common_dependencies)
+endif
 
