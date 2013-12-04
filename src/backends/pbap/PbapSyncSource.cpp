@@ -567,6 +567,13 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
         state->m_session = m_self.lock();
     } else {
         // < 0.47
+        //
+        // This only works once. Incremental syncing with the same
+        // session leads to a "PullAll method with no arguments not
+        // found" error from obex-client. Looks like a bug/limitation
+        // of obex-client < 0.47. Not sure what we should do about
+        // this: disable incremental sync for old obex-client?  Reject
+        // it?  Catch the error and add a better exlanation?
         GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
         state->m_buffer = pullall();
         state->addVCards(0, state->m_buffer);
