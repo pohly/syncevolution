@@ -215,7 +215,7 @@ boost::shared_ptr<AuthProvider> createGOAAuthProvider(const InitStateString &use
     // Because we share the connection, hopefully this won't be too expensive.
     GDBusCXX::DBusErrorCXX err;
     GDBusCXX::DBusConnectionPtr conn = dbus_get_bus_connection("SESSION",
-                                                               "",
+                                                               NULL,
                                                                false,
                                                                &err);
     if (!conn) {
