@@ -20,7 +20,7 @@ fi
 # conditional compilation in make
 AM_CONDITIONAL([USE_GSSO], [test "$use_gsso" = "yes"])
 
-PKG_CHECK_MODULES(UOA, [libsignon-glib libaccounts-glib], HAVE_UOA=yes, HAVE_UOA=no)
+PKG_CHECK_MODULES(UOA, [libsignon-glib >= 1.7 libaccounts-glib >= 1.8], HAVE_UOA=yes, HAVE_UOA=no)
 
 AC_ARG_ENABLE(uoa,
               AS_HELP_STRING([--enable-uoa],
