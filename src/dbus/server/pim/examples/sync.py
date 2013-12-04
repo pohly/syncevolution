@@ -62,7 +62,7 @@ if options.configure or options.sync or options.remove:
 
     # Use MAC address as UID of peer, but with underscores instead of colons
     # and all in lower case. See https://bugs.freedesktop.org/show_bug.cgi?id=56436
-    uid = options.mac.replace(':', '').lower()
+    peername = options.mac.replace(':', '').lower()
 
 DBusGMainLoop(set_as_default=True)
 bus = dbus.SessionBus()
@@ -164,18 +164,18 @@ print 'available databases: %s' % ([''] + ['peer-' + uid for uid in peers.keys()
 if not error and options.configure:
     peer = {'protocol': 'PBAP',
             'address': options.mac}
-    print 'adding peer config %s = %s' % (uid, peer)
-    manager.SetPeer(uid, peer, **async_args)
+    print 'adding peer config %s = %s' % (peername, peer)
+    manager.SetPeer(peername, peer, **async_args)
     run()
 
 if not error and options.sync:
-    print 'syncing peer %s' % uid
-    manager.SyncPeer(uid, **async_args)
+    print 'syncing peer %s' % peername
+    manager.SyncPeer(peername, **async_args)
     run()
 
 if not error and options.remove:
-    print 'removing peer %s' % uid
-    manager.RemovePeer(uid, **async_args)
+    print 'removing peer %s' % peername
+    manager.RemovePeer(peername, **async_args)
     run()
 
 if options.debug:
