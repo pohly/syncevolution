@@ -167,7 +167,7 @@ public:
                                m_authSession, sessionDataVar, m_mechanism.c_str(), NULL);
         buffer.reset(resultDataVar ? g_variant_print(resultDataVar, true) : NULL);
         SE_LOG_DEBUG(NULL, "OAuth2 token result: %s, %s",
-                     buffer ? buffer.get() : "<<null>>",
+                     buffer.get() ? buffer.get() : "<<null>>",
                      gerror ? gerror->message : "???");
         if (!resultDataVar || gerror) {
             SE_THROW_EXCEPTION_STATUS(StatusException,
