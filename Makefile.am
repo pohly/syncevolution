@@ -361,6 +361,10 @@ if NEON_COMPATIBILITY
 # libneon is intentionally not linked against, to choose between
 # GNUTLS and OpenSSL at runtime.
 LINK_CHECK_ALLOWED += -e 'symbol ne_.*syncdav.so'
+# Allow undefined references to libstdcxx. This happens when
+# adding backends compiled on more recent Linux distros into
+# the release archive.
+LINK_CHECK_ALLOWED += -e '@GLIBCXX_[^ ]* used by'
 endif
 
 # Be strict about running 'syncevolution' only when not doing
