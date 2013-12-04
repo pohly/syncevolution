@@ -24,12 +24,14 @@ dist_accounts_service_types_DATA = \
   src/backends/signon/accounts/carddav.service-type \
   $(NONE)
 
+src_backends_signon_libs =
 if USE_GSSO
-src_backends_signon_lib = src/backends/signon/providergsso.la
-else
-src_backends_signon_lib = src/backends/signon/provideruoa.la
+src_backends_signon_libs += src/backends/signon/providergsso.la
 endif
-MOSTLYCLEANFILES += $(src_backends_signon_lib)
+if USE_UOA
+src_backends_signon_libs += src/backends/signon/provideruoa.la
+endif
+MOSTLYCLEANFILES += $(src_backends_signon_libs)
 
 src_backends_signon_common_sources = \
   src/backends/signon/signon.h \
@@ -38,11 +40,11 @@ src_backends_signon_common_sources = \
 
 if ENABLE_MODULES
 src_backends_signon_backenddir = $(BACKENDS_DIRECTORY)
-src_backends_signon_backend_LTLIBRARIES = $(src_backends_signon_lib)
+src_backends_signon_backend_LTLIBRARIES = $(src_backends_signon_libs)
 src_backends_signon_common_sources += \
   src/backends/signon/signonRegister.cpp
 else
-noinst_LTLIBRARIES += $(src_backends_signon_lib)
+noinst_LTLIBRARIES += $(src_backends_signon_libs)
 endif
 
 src_backends_signon_common_libadd = $(SYNCEVOLUTION_LIBS) 
