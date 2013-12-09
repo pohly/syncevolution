@@ -116,15 +116,15 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     s = fout.read()
     result.write(indent+s)
     result.write(indent+'''</osinfo>\n''')
-    if 'schroot' in shellprefix:
-        result.write(indent+'''<chrootinfo>\n''')
-        fout,fin=popen2.popen2(shellprefix.replace('schroot', 'schroot -i'))
-        s = ""
-        for line in fout:
-            if line.startswith("  Name ") or line.startswith("  Description "):
-                 s = s + line
-        result.write(indent+s)
-        result.write(indent+'''</chrootinfo>\n''')
+    # if 'schroot' in shellprefix:
+    #     result.write(indent+'''<chrootinfo>\n''')
+    #     fout,fin=popen2.popen2(shellprefix.replace('schroot', 'schroot -i').replace(' -r ', ' ').replace(' --run ', ' ')
+    #     s = ""
+    #     for line in fout:
+    #         if line.startswith("  Name ") or line.startswith("  Description "):
+    #              s = s + line
+    #     result.write(indent+s)
+    #     result.write(indent+'''</chrootinfo>\n''')
     result.write(indent+'''<libraryinfo>\n''')
     libs = ['libsoup-2.4', 'evolution-data-server-1.2', 'glib-2.0','dbus-glib-1']
     s=''

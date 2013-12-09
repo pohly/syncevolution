@@ -260,7 +260,18 @@ class Context:
         cmdstr = " ".join(map(lambda x: (' ' in x or '(' in x or '\\' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x, cmd))
         if dumpCommands:
             cmdstr = "set -x; " + cmdstr
-        print "*** ( cd %s; export %s; %s )" % (os.getcwd(),
+
+        cwd = os.getcwd()
+        # Most commands involving schroot need to run with paths as seen inside the chroot.
+        # Detect that in a hackish way by checking for "schroot" and then adapting
+        # paths with search/replace. Exception is resultchecker.py, which runs outside
+        # the chroot, but gets passed "schroot" as parameter.
+        if 'schroot ' in cmdstr and options.schrootdir and not 'resultchecker.py' in cmdstr:
+            if cwd.startswith(options.schrootdir):
+                relcwd = cwd[len(options.schrootdir):]
+                cmdstr = cmdstr.replace('schroot ', 'schroot -d %s ' % relcwd)
+            cmdstr = cmdstr.replace(options.schrootdir + '/', '/')
+        print "*** ( cd %s; export %s; %s )" % (cwd,
                                                 " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH", "PATH" ])),
                                                 cmdstr)
         sys.stdout.flush()
@@ -761,6 +772,9 @@ parser.add_option("", "--resulturi",
 parser.add_option("", "--shell",
                   type="string", dest="shell", default="",
                   help="a prefix which is put in front of a command to execute it (can be used for e.g. run_garnome)")
+parser.add_option("", "--schrootdir",
+                  type="string", dest="schrootdir", default="",
+                  help="the path to the root of the chroot when using schroot in --shell; --resultdir already includes the path")
 parser.add_option("", "--test-prefix",
                   type="string", dest="testprefix", default="",
                   help="a prefix which is put in front of client-test (e.g. valgrind)")
