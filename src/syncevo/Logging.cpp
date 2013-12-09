@@ -247,7 +247,8 @@ Logger::MessageOptions::MessageOptions(Level level) :
     m_file(NULL),
     m_line(0),
     m_function(NULL),
-    m_processName(NULL)
+    m_processName(NULL),
+    m_flags(0)
 {
 }
 
