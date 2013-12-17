@@ -855,18 +855,7 @@ class SyncEvolutionTest(Action):
             context.runCommand(cmd)
 
             # proxy must be set in test config! Necessary because not all tests work with the env proxy (local CalDAV, for example).
-            basecmd = "http_proxy= " \
-                      "CLIENT_TEST_SERVER=%(server)s " \
-                      "CLIENT_TEST_SOURCES=%(sources)s " \
-                      "SYNC_EVOLUTION_EVO_CALENDAR_DELAY=1 " \
-                      "CLIENT_TEST_ALARM=%(alarm)d " \
-                      "%(env)s %(installenv)s " \
-                      "CLIENT_TEST_LOG=%(log)s " \
-                      "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
-                      "%(runner)s " \
-                      "env LD_LIBRARY_PATH=build-synthesis/src/.libs:.libs:syncevo/.libs:gdbus/.libs:gdbusxx/.libs:$LD_LIBRARY_PATH PATH=backends/webdav:.:\\$PATH %(testprefix)s " \
-                      "%(testbinary)s" % \
-                      { "server": self.serverName,
+            options = { "server": self.serverName,
                         "sources": ",".join(self.sources),
                         "alarm": self.alarmSeconds,
                         "env": self.testenv,
@@ -876,6 +865,28 @@ class SyncEvolutionTest(Action):
                         "runner": self.runner,
                         "testbinary": self.testBinary,
                         "testprefix": self.testPrefix }
+            basecmd = "http_proxy= " \
+                      "CLIENT_TEST_SERVER=%(server)s " \
+                      "CLIENT_TEST_SOURCES=%(sources)s " \
+                      "SYNC_EVOLUTION_EVO_CALENDAR_DELAY=1 " \
+                      "CLIENT_TEST_ALARM=%(alarm)d " \
+                      "%(env)s %(installenv)s " \
+                      "CLIENT_TEST_LOG=%(log)s " \
+                      "CLIENT_TEST_EVOLUTION_PREFIX=%(evoprefix)s " \
+                      "%(runner)s " \
+                      % options
+            additional = []
+            for var, value in (('LD_LIBRARY_PATH', 'build-synthesis/src/.libs:.libs:syncevo/.libs:gdbus/.libs:gdbusxx/.libs:'),
+                               ('PATH', 'backends/webdav:.:\\$PATH:')):
+                if ' ' + var + '=' in basecmd:
+                    # Prepend to existing assignment, instead of overwriting it
+                    # as we would when appending another "env" invocation.
+                    basecmd = basecmd.replace(' ' + var + '=', ' ' + var + '=' + value)
+                else:
+                    additional.append(var + '=' + value)
+            if additional:
+                basecmd = basecmd + 'env ' + ' '.join(additional)
+            basecmd = basecmd +  (" %(testprefix)s %(testbinary)s" % options)
             enabled = context.enabled.get(self.name)
             if not enabled:
                 enabled = self.tests
