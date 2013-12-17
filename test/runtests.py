@@ -1034,7 +1034,7 @@ parser.add_option("", "--setup-command",
                   type="string", dest="setupcmd",
                   help="invoked with <test name> <args to start syncevolution>, should setup local account for the test")
 parser.add_option("", "--make-command",
-                  type="string", dest="makecmd", default="make",
+                  type="string", dest="makecmd", default="nice make",
                   help="command to use instead of plain make, for example 'make -j'")
 parser.add_option("", "--sanity-checks",
                   action="store_true", dest="sanitychecks", default=False,
