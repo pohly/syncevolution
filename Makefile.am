@@ -418,6 +418,8 @@ CLEANFILES += README.html
 installcheck-local: $(all_local_installchecks) ;
 
 dist-hook: $(all_dist_hooks)
+install-exec-hook: $(all_install_exec_hooks)
+uninstall-hook: $(all_uninstall_hooks)
 
 # Force sequential installation. This is a workaround for relinking failures
 # during concurrent distcheck (a backend was relinked against not yet installed

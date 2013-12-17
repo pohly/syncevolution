@@ -5765,10 +5765,13 @@ class TestCmdline(CmdlineUtil, unittest.TestCase):
         '''Parses the SyncConfig.h file to get a version number
         described by versionName.'''
         if not versionName in TestCmdline.cachedVersions:
-            # Get the absolute path of the current python file.
-            scriptpath = os.path.abspath(os.path.expanduser(os.path.expandvars(sys.argv[0])))
-            # Get the path to SyncConfig.h
-            header = os.path.join(os.path.dirname(scriptpath), '..', 'src', 'syncevo', 'SyncConfig.h')
+            # Get the path to SyncConfig.h. Start with current directory,
+            # where it will be in the installed test suite.
+            header = './SyncConfig.h'
+            if not os.path.exists(header):
+                # Fall back to uninstalled source, found via the test-dbus.py path.
+                scriptpath = os.path.abspath(os.path.expanduser(os.path.expandvars(sys.argv[0])))
+                header = os.path.join(os.path.dirname(scriptpath), '..', 'src', 'syncevo', 'SyncConfig.h')
             # do not care about escaping the versionName variable.
             # this function is only used from some version getters and
             # those are passing some simple strings with no regexp
@@ -6650,10 +6653,10 @@ spds/sources/todo/config.txt:# evolutionpassword =
         self.assertEqualDiff(filterConfig(internalToIni(self.FunambolConfig())),
                              injectValues(filterConfig(out)))
 
-    # Use local copy of templates in build dir (no need to install);
+    # Use local copy of templates in build dir if they exist (no need to install);
     # this assumes that test-dbus.py is run in the build "src"
     # directory.
-    @property("ENV", "SYNCEVOLUTION_TEMPLATE_DIR=./templates")
+    @property("ENV", os.path.exists('./templates') and "SYNCEVOLUTION_TEMPLATE_DIR=./templates" or "" )
     @property("debug", False)
     def testPrintFileTemplates(self):
         """TestCmdline.testPrintFileTemplates - print file templates"""
@@ -6673,7 +6676,12 @@ spds/sources/todo/config.txt:# evolutionpassword =
         # doesn't point to it).
         os.makedirs(xdg_root + "/config")
         # Use same "./templates" as in testPrintFileTemplates().
-        os.symlink("../../templates", xdg_root + "/config/syncevolution-templates")
+        systemtemplates = "/usr/share/syncevolution/templates"
+        xdgtemplates = xdg_root + "/config/syncevolution-templates"
+        if os.path.exists("./templates"):
+            os.symlink("../../templates", xdgtemplates)
+        elif os.path.exists(systemtemplates):
+            os.symlink(systemtemplates, xdgtemplates)
         self.doPrintFileTemplates()
 
     @property("debug", False)
@@ -6811,20 +6819,17 @@ sources/xyz/config.ini:# databasePassword = """)
         self.expectUsageError(out, err,
                               "[ERROR] a property name must be given in '=1'\n")
 
-    # TODO: scan output from "backend=?" to determine whether CalDAV/CardDAV are enabled
+    # scan output from "backend=?" to determine whether CalDAV/CardDAV are enabled
     def isWebDAVEnabled(self):
-        '''Checks config.h for existence of '#define ENABLE_DAV' or
-        '/* #undef ENABLE_DAV*/'. It assumes that the test is being
-        run in $(top_builddir)/src, which is the same assumption like
-        some tests already have.'''
-        configfile = open('../config.h', 'r')
-
-        for line in configfile:
-            if line == '#define ENABLE_DAV 1\n':
-                return True
-            if line == '/* #undef ENABLE_DAV */\n':
-                return False
-        self.fail('Could not find out whether DAV is enabled or not.')
+        '''scan output from "backend=?" to determine whether CalDAV/CardDAV are enabled'''
+        out, err, code = self.runCmdline(["backend=?"],
+                                         sessionFlags=None,
+                                         expectSuccess = True)
+        inactive = re.search(r'Currently inactive:.*   CalDAV', out, re.DOTALL)
+        active = re.search(r'   CalDAV.*Currently inactive:', out, re.DOTALL)
+        # Verify regex and indirectly the output.
+        self.assertTrue(inactive or active)
+        return active
 
     @property("debug", False)
     def testWebDAV(self):

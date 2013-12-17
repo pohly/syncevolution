@@ -17,6 +17,15 @@ MOSTLYCLEANFILES =
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA =
 
+# Install test suite (client-test, test-dbus.py, testpim.py, etc.).
+testparentdir = $(libdir)/syncevolution
+# Must end in "/test" so that we can use nobase_testparent_DATA=test/...
+testdir = $(testparentdir)/test
+test_DATA =
+nobase_test_DATA =
+test_PROGRAMS =
+test_SCRIPTS =
+nobase_testparent_DATA =
 
 # standard variables with standard prefixes
 dist_doc_DATA =
@@ -40,6 +49,8 @@ nodist_bin_SCRIPTS =
 
 # other
 all_dist_hooks =
+all_install_exec_hooks =
+all_uninstall_hooks =
 all_local_installchecks =
 all_phonies =
 BUILT_SOURCES =

@@ -365,8 +365,7 @@ class Context:
                                         os.path.join(self.resultdir, file))
 
         # run testresult checker
-        #calculate the src dir where client-test can be located
-        srcdir = os.path.join(compile.builddir, "src")
+        testdir = compile.testdir
         backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
         # resultchecker doesn't need valgrind, remove it
         shell = re.sub(r'\S*valgrind\S*', '', options.shell)
@@ -378,7 +377,10 @@ class Context:
         commands = []
 
         # produce nightly.xml from plain text log files
-        commands.append(resultchecker + " " +self.resultdir+" "+"'"+",".join(run_servers)+"'"+" "+uri +" "+srcdir + " '" + shell + " " + testprefix +" '"+" '" +backenddir +"'")
+        if options.schrootdir:
+            backenddir = backenddir.replace(options.schrootdir + '/', '/')
+            testdir = testdir.replace(options.schrootdir + '/', '/')
+        commands.append(resultchecker + " " +self.resultdir+" "+"\""+",".join(run_servers)+"\""+" "+uri +" "+testdir + " \"" + shell + " " + testprefix +" \""+" \"" +backenddir + "\"")
         previousxml = os.path.join(self.lastresultdir, "nightly.xml")
 
         if os.path.exists(previousxml):
@@ -594,6 +596,7 @@ class AutotoolsBuild(Action):
         self.dependencies = dependencies
         self.installdir = os.path.join(context.tmpdir, "install")
         self.builddir = os.path.join(context.tmpdir, "build")
+        self.testdir = os.path.join(self.builddir, "src")
 
     def execute(self):
         print "removing builddir: %s" % self.builddir
@@ -610,7 +613,7 @@ class SyncEvolutionTest(Action):
         Action.__init__(self, name)
         self.isserver = True
         self.build = build
-        self.srcdir = os.path.join(build.builddir, "src")
+        self.testdir = build.testdir
         self.serverlogs = serverlogs
         self.runner = runner
         self.tests = tests
@@ -631,7 +634,7 @@ class SyncEvolutionTest(Action):
         os.chdir(self.build.builddir)
         # clear previous test results
         context.runCommand("%s %s testclean" % (self.runner, context.make))
-        os.chdir(self.srcdir)
+        os.chdir(self.testdir)
         try:
             # use installed backends if available
             backenddir = os.path.join(self.build.installdir, "usr/lib/syncevolution/backends")
@@ -653,22 +656,23 @@ class SyncEvolutionTest(Action):
                 # fallback works for bluetooth_products.ini but will fail for other files
                 datadir = os.path.join(sync.basedir, "src/dbus/server")
 
-            installenv = \
-                "SYNCEVOLUTION_DATA_DIR=%s "\
-                "SYNCEVOLUTION_TEMPLATE_DIR=%s " \
-                "SYNCEVOLUTION_XML_CONFIG_DIR=%s " \
-                "SYNCEVOLUTION_BACKEND_DIR=%s " \
-                % ( datadir, templatedir, confdir, backenddir )
-
-            # Translations have no fallback, they must be installed. Leave unset
-            # if not found.
-            localedir = os.path.join(self.build.installdir, "usr/share/locale")
-            print localedir
-            if os.access(localedir, os.F_OK):
-                installenv = installenv + \
-                    ("SYNCEVOLUTION_LOCALE_DIR=%s " % localedir)
+            if self.build.installed:
+                # No need for special env variables.
+                installenv = ""
             else:
-                print 'locale dir not found'
+                installenv = \
+                    "SYNCEVOLUTION_DATA_DIR=%s "\
+                    "SYNCEVOLUTION_TEMPLATE_DIR=%s " \
+                    "SYNCEVOLUTION_XML_CONFIG_DIR=%s " \
+                    "SYNCEVOLUTION_BACKEND_DIR=%s " \
+                    % ( datadir, templatedir, confdir, backenddir )
+
+                # Translations have no fallback, they must be installed. Leave unset
+                # if not found.
+                localedir = os.path.join(self.build.installdir, "usr/share/locale")
+                if os.access(localedir, os.F_OK):
+                    installenv = installenv + \
+                        ("SYNCEVOLUTION_LOCALE_DIR=%s " % localedir)
 
             cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
             context.runCommand(cmd)
@@ -716,7 +720,7 @@ class SyncEvolutionTest(Action):
             tocopy = re.compile(r'.*\.log|.*\.client.[AB]|.*\.(cpp|h|c)\.html|.*\.log\.html')
             toconvert = re.compile(r'Client_.*\.log')
             htaccess = file(os.path.join(resdir, ".htaccess"), "a")
-            for f in os.listdir(self.srcdir):
+            for f in os.listdir(self.testdir):
                 if tocopy.match(f):
                     error = copyLog(f, resdir, htaccess, self.lineFilter)
                     if toconvert.match(f):
@@ -999,12 +1003,49 @@ if options.synthesistag:
 if options.activesyncdtag:
     source.append("--with-activesyncd-src=%s" % activesyncd.basedir)
 
+class InstallPackage(Action):
+    def __init__(self, name, package, runner):
+        """Runs configure from the src directory with the given arguments.
+        runner is a prefix for the configure command and can be used to setup the
+        environment."""
+        Action.__init__(self, name)
+        self.package = package
+        self.runner = runner
+
+    def execute(self):
+        # Assume .deb file(s) here.
+        if self.package == '':
+            raise Exception('No prebuilt packages available. Compilation failed?')
+        context.runCommand("%s env PATH=/sbin:/usr/sbin:$PATH fakeroot dpkg -i %s" % (self.runner, self.package))
+
 # determine where binaries come from:
 # either compile anew or prebuilt
-if options.prebuilt:
-    compile = NopAction("compile")
-    compile.builddir = options.prebuilt
-    compile.installdir = os.path.join(options.prebuilt, "../install")
+if options.prebuilt != None:
+    if os.path.isdir(options.prebuilt):
+        # Use build directory. Relies on bind mounting in chroots such
+        # that all platforms see the same file system (paths and
+        # content).
+        compile = NopAction("compile")
+        # For running tests.
+        compile.testdir = os.path.join(options.prebuilt, "src")
+        # For "make testclean".
+        compile.builddir = options.prebuilt
+        # For runtime paths.
+        compile.installdir = os.path.join(options.prebuilt, "../install")
+        compile.installed = False
+    else:
+        # Use dist package(s). Copy them first into our own work directory,
+        # in case that runtest.py has access to it outside of a chroot but not
+        # the dpkg inside it.
+        pkgs = []
+        for pkg in options.prebuilt.split():
+            shutil.copy(pkg, context.workdir)
+            pkgs.append(os.path.join(context.workdir, os.path.basename(pkg)))
+        compile = InstallPackage("compile", ' '.join(pkgs), options.shell)
+        compile.testdir = os.path.join(options.schrootdir, "usr", "lib", "syncevolution", "test")
+        compile.builddir = compile.testdir
+        compile.installdir = options.schrootdir
+        compile.installed = True
 else:
     if enabled["compile"] == "no-tests":
         # Regular build.
@@ -1017,6 +1058,8 @@ else:
                     "%s %s" % (options.configure, " ".join(source)),
                     options.shell,
                     [ libsynthesis.name, sync.name ])
+    compile.installed = False
+
 context.add(compile)
 
 class SyncEvolutionCross(AutotoolsBuild):
@@ -1035,7 +1078,8 @@ class SyncEvolutionCross(AutotoolsBuild):
                                 ( oedir, host, oedir ),
                                 dependencies)
         self.builddir = os.path.join(context.tmpdir, host)
-        
+        self.testdir = os.path.join(self.builddir, "src")
+
     def execute(self):
         AutotoolsBuild.execute(self)
 
@@ -1246,6 +1290,14 @@ class ActiveSyncTest(SyncEvolutionTest):
             tests.append("Client::Source::eas_event")
         if "eas_contact" in sources:
             tests.append("Client::Source::eas_contact")
+
+        # Find activesyncd. It doesn't exist anywhere yet, but will be
+        # created during compile. We have to predict the location here.
+        if compile.installed:
+            self.activesyncd = os.path.join(compile.installdir, "usr", "libexec", "activesyncd")
+        else:
+            self.activesyncd =  os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "libexec", "activesyncd")
+
         SyncEvolutionTest.__init__(self, name,
                                    compile,
                                    "", options.shell,
@@ -1285,7 +1337,7 @@ class ActiveSyncTest(SyncEvolutionTest):
                                    testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.log",
                                                         os.path.join(sync.basedir, "test", "wrappercheck.sh"),
                                                         options.testprefix,
-                                                        os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "libexec", "activesyncd"),
+                                                        self.activesyncd,
                                                         "--",
                                                         options.testprefix)))
 
@@ -1294,7 +1346,7 @@ class ActiveSyncTest(SyncEvolutionTest):
         args = []
         if options.testprefix:
             args.append(options.testprefix)
-        args.append(os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "libexec", "activesyncd"))
+        args.append(self.activesyncd)
         env = copy.deepcopy(os.environ)
         env['EAS_SOUP_LOGGER'] = '1'
         env['EAS_DEBUG'] = '5'

@@ -143,7 +143,30 @@ src/dbus/server/%.service: src/dbus/server/%.service.in
 if COND_DBUS_PIM
 src_dbus_server_service_files_in += \
   src/dbus/server/pim/org._01.pim.contacts.service.in
-endif
+
+if ENABLE_TESTING
+test_SCRIPTS += \
+	src/dbus/server/pim/testpim.py \
+	$(NOP)
+
+# It would be nice if we could use the nobase_ prefix here, but we
+# can't because we want to replace parts of the path. Instead we have
+# to spell out the desired install dir completely for each file.
+src_dbus_server_testdbusdir = $(testdir)/test-dbus
+
+src_dbus_server_testdbus_broken_configdir = $(src_dbus_server_testdbusdir)/broken-config/config/syncevolution
+src_dbus_server_testdbus_broken_config_DATA = src/dbus/server/pim/test-dbus/broken-config/config/syncevolution/pim-manager.ini
+
+src_dbus_server_testdbus_db_activedir = $(src_dbus_server_testdbusdir)/db-active/config/syncevolution
+src_dbus_server_testdbus_db_active_DATA = src/dbus/server/pim/test-dbus/db-active/config/syncevolution/pim-manager.ini
+
+src_dbus_server_testdbus_first_last_sortdir = $(src_dbus_server_testdbusdir)/first-last-sort/config/syncevolution
+src_dbus_server_testdbus_first_last_sort_DATA = src/dbus/server/pim/test-dbus/first-last-sort/config/syncevolution/pim-manager.ini
+
+src_dbus_server_testdbus_simple_sortdir = $(src_dbus_server_testdbusdir)/simple-sort/config/syncevolution
+src_dbus_server_testdbus_simple_sort_DATA = src/dbus/server/pim/test-dbus/simple-sort/config/syncevolution/pim-manager.ini
+endif # ENABLE_TESTING
+endif # COND_DBUS_PIM
 
 dist_noinst_DATA += \
   $(src_dbus_server_service_files_in) \

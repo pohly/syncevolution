@@ -52,3 +52,83 @@ test_dbus_client_server_SOURCES += test/test.cpp
 endif
 
 endif
+
+if ENABLE_TESTING
+test_SCRIPTS += \
+	test/__init__.py \
+	test/test-dbus.py \
+	test/testdbus.py \
+	$(NOP)
+
+# Install symbolic links, to ensure that testing in the testdir
+# uses the right SyncEvolution without depending on the PATH.
+# client-test should have been installed in testdir already as
+# normal executable, see src.am.
+all_install_exec_hooks += install-test-files
+install-test-files:
+	mkdir -p $(DESTDIR)/$(testdir)
+	ln -f -s $(bindir)/syncevolution $(DESTDIR)/$(testdir)
+	ln -f -s $(bindir)/synccompare $(DESTDIR)/$(testdir)
+	ln -f -s $(libexecdir)/syncevo-dbus-server $(DESTDIR)/$(testdir)
+	cp config.h $(top_srcdir)/src/syncevo/SyncConfig.h $(DESTDIR)/$(testdir) # needed by test-dbus.py
+
+all_uninstall_hooks += uninstall-test-files
+uninstall-test-files:
+	rm -f $(DESTDIR)/$(testdir)/syncevolution \
+		$(DESTDIR)/$(testdir)/synccompare \
+		$(DESTDIR)/$(testdir)/syncevo-dbus-server \
+		$(DESTDIR)/$(testdir)/SyncConfig.h \
+		$(DESTDIR)/$(testdir)/config.h \
+		$(NOP)
+
+test_DATA += \
+	test/Makefile \
+	$(NOP)
+
+nobase_testparent_DATA += \
+	test/test-dbus/templates/templates/clients/phone/nokia/S40/7210c.ini \
+	test/test-dbus/templates/templates/clients/SyncEvolution.ini \
+	test/test-dbus/auto-sync/config/syncevolution/.internal.ini \
+	test/test-dbus/auto-sync/config/syncevolution/default/.internal.ini \
+	test/test-dbus/auto-sync/config/syncevolution/default/config.ini \
+	test/test-dbus/auto-sync/config/syncevolution/default/peers/scheduleworld/.internal.ini \
+	test/test-dbus/auto-sync/config/syncevolution/default/peers/scheduleworld/config.ini \
+	test/test-dbus/auto-sync/config/syncevolution/config.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/todo.after.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/todo.current/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/addressbook.before.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.before.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/todo.current.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.current.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.after/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.after/2 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/status.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.before/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/todo.after/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/addressbook.current/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.after.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.after/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.after/3 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.after/2 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.after.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.before.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/addressbook.current.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/addressbook.after/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.current/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/memo.current/2 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/addressbook.after.ini \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.before/1 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.before/3 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/calendar.before/2 \
+	test/test-dbus/restore/cache/syncevolution/dummy_+test-2009-12-21-13-19/todo.before.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy_+test-2009-11-18-12-57/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy-2009-11-18-13-00/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy_+test-2009-11-18-12-55/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy_+test-2009-11-18-13-01/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy_+test-2009-11-18-12-59/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy_+test-2009-11-18-12-58/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy_+test@context-2010-01-20-10-10/status.ini \
+	test/test-dbus/reports/cache/syncevolution/dummy__test-2009-11-18-12-56/status.ini \
+	$(NOP)
+
+endif # ENABLE_TESTING

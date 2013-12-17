@@ -391,9 +391,8 @@ src/templates:
 
 # distribute test system?
 if ENABLE_TESTING
-# yes: install client-test in bindir, test files in datadir
-TESTS += test/run_src_client_test.sh
-bin_PROGRAMS += src/client-test
+# yes: install client-test and test files in testdir
+test_PROGRAMS += src/client-test
 include $(top_srcdir)/src/testcases.am
 else
 # The "all" dependency causes a rebuild even if the actual input files
