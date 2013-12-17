@@ -27,6 +27,30 @@ def log(format, *args):
 log.start = time.time()
 log.latest = log.start
 
+# Murphy support: as a first step, lock one resource named like the
+# test before running the test.
+gobject = None
+try:
+    import gobject
+except ImportError:
+    try:
+         from gi.repository import GObject as gobject
+    except ImportError:
+         pass
+import dbus
+from dbus.mainloop.glib import DBusGMainLoop
+DBusGMainLoop(set_as_default=True)
+if 'DBUS_SESSION_BUS_ADDRESS' in os.environ:
+    bus = dbus.SessionBus()
+    loop = gobject.MainLoop()
+    murphy = dbus.Interface(bus.get_object('org.Murphy', '/org/murphy/resource'), 'org.murphy.manager')
+    log('using murphy')
+else:
+    bus = None
+    loop = None
+    murphy = None
+    log('not using murphy')
+
 try:
     import gzip
     havegzip = True
@@ -171,6 +195,8 @@ class Action:
             oldout = sys.stdout
             olderr = sys.stderr
         cwd = os.getcwd()
+        resourceset = None
+        locked = False
         try:
             subdirname = "%d-%s" % (step, self.name)
             del_dir(subdirname)
@@ -183,6 +209,48 @@ class Action:
                 os.dup2(fd, 2)
                 sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
                 sys.stderr = sys.stdout
+            if murphy:
+                log('=== locking resource %s ===', self.name)
+                resourcesetpath = murphy.createResourceSet()
+                resourceset = dbus.Interface(bus.get_object('org.Murphy', resourcesetpath), 'org.murphy.resourceset')
+                resourcepath = resourceset.addResource(self.name)
+                # Allow sharing of the resource. Only works if the resource
+                # was marked as "shareable" in the murphy config, otherwise
+                # we get exclusive access.
+                resource = dbus.Interface(bus.get_object('org.Murphy', resourcepath), 'org.murphy.resource')
+                resource.setProperty('shared', dbus.Boolean(True, variant_level=1))
+
+                # Track pending request separately, because status == 'pending'
+                # either means something else ('unknown'?) or is buggy/unreliable.
+                # See https://github.com/01org/murphy/issues/5
+                pending = False
+                def propertyChanged(prop, value):
+                    global pending
+                    log('property changed: %s = %s', prop, value)
+                    if prop == 'status':
+                        if value == 'acquired':
+                            # Success!
+                            loop.quit()
+                        elif value == 'lost':
+                            # Not yet?!
+                            log('Murphy request failed, waiting for resource to become available.')
+                            pending = False
+                        elif value == 'pending':
+                            pass
+                        elif value == 'available':
+                            if not pending:
+                                log('Murphy request may succeed now, try again.')
+                                resourceset.request()
+                                pending = True
+                        else:
+                            log('Unexpected status: %s', value)
+                try:
+                    match = bus.add_signal_receiver(propertyChanged, 'propertyChanged', 'org.murphy.resourceset', 'org.Murphy', resourcesetpath)
+                    resourceset.request()
+                    pending = True
+                    loop.run()
+                finally:
+                    match.remove()
             log('=== starting %s ===', self.name)
             self.execute()
             self.status = Action.DONE
@@ -191,6 +259,18 @@ class Action:
             traceback.print_exc()
             self.status = Action.FAILED
             self.summary = str(inst)
+        finally:
+            try:
+                if locked:
+                    log('=== unlocking resource %s ===', self.name)
+                    resourceset.release()
+                if resourceset:
+                    log('=== deleting resource set %s ===', self.name)
+                    resourceset.delete()
+                if locked or resourceset:
+                    log('=== done with Murphy ===')
+            except Exception:
+                traceback.print_exc()
 
         log('\n=== %s: %s ===', self.name, self.status)
         sys.stdout.flush()
