@@ -18,10 +18,11 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  02110-1301  USA
 '''
-import sys,os,glob,datetime,popen2
+import sys,os,glob,datetime
 import re
 import fnmatch
 import cgi
+import subprocess
 
 """ 
 resultcheck.py: tranverse the test result directory, generate an XML
@@ -40,7 +41,7 @@ def check (resultdir, serverlist,resulturi, srcdir, shellprefix, backenddir):
         servers = serverlist.split(",")
     else:
         servers = []
-    result = open("nightly.xml","w")
+    result = open("%s/nightly.xml" % resultdir,"w")
     result.write('''<?xml version="1.0" encoding="utf-8" ?>\n''')
     result.write('''<nightly-test>\n''')
     indents=[space]
@@ -102,43 +103,40 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     indent =indents[-1]+space
     indents.append(indent)
     result.write(indent+'''<cpuinfo>\n''')
-    fout,fin=popen2.popen2('cat /proc/cpuinfo|grep "model name" |uniq')
-    s = fout.read()
-    result.write(indent+s)
+    fout=subprocess.check_output('cat /proc/cpuinfo|grep "model name" |uniq', shell=True)
+    result.write(indent+fout)
     result.write(indent+'''</cpuinfo>\n''')
     result.write(indent+'''<memoryinfo>\n''')
-    fout,fin=popen2.popen2('cat /proc/meminfo|grep "Mem"')
-    for s in fout:
+    fout=subprocess.check_output('cat /proc/meminfo|grep "Mem"', shell=True)
+    for s in fout.split('\n'):
         result.write(indent+s)
     result.write(indent+'''</memoryinfo>\n''')
     result.write(indent+'''<osinfo>\n''')
-    fout,fin=popen2.popen2('uname -osr')
-    s = fout.read()
-    result.write(indent+s)
+    fout=subprocess.check_output('uname -osr'.split())
+    result.write(indent+fout)
     result.write(indent+'''</osinfo>\n''')
-    # if 'schroot' in shellprefix:
-    #     result.write(indent+'''<chrootinfo>\n''')
-    #     fout,fin=popen2.popen2(shellprefix.replace('schroot', 'schroot -i').replace(' -r ', ' ').replace(' --run ', ' ')
-    #     s = ""
-    #     for line in fout:
-    #         if line.startswith("  Name ") or line.startswith("  Description "):
-    #              s = s + line
-    #     result.write(indent+s)
-    #     result.write(indent+'''</chrootinfo>\n''')
+    if 'schroot' in shellprefix:
+        result.write(indent+'''<chrootinfo>\n''')
+        # Don't make assumption about the schroot invocation. Instead
+        # extract the schroot name from the environment of the shell.
+        name=subprocess.check_output(shellprefix + "sh -c 'echo $SCHROOT_CHROOT_NAME'",
+                                     shell=True)
+        info = re.sub(r'schroot .*', 'schroot -i -c ' + name, shellprefix)
+        fout=subprocess.check_output(info, shell=True)
+        s = []
+        for line in fout.split('\n'):
+            m = re.match(r'^\s+(Name|Description)\s+(.*)', line)
+            if m:
+                s.append(indent + m.group(1) + ': ' + m.group(2))
+        result.write('\n'.join(s))
+        result.write(indent+'''</chrootinfo>\n''')
     result.write(indent+'''<libraryinfo>\n''')
     libs = ['libsoup-2.4', 'evolution-data-server-1.2', 'glib-2.0','dbus-glib-1']
     s=''
-    #change to a dir so that schroot will change to an available directory, without this
-    #schroot will fail which in turn causes the following cmd has no chance to run
-    oldpath = os.getcwd()  
-    tmpdir = srcdir
-    while (os.path.exists(tmpdir) == False):
-        tmpdir = os.path.dirname(tmpdir)
-    os.chdir(tmpdir)
     for lib in libs:
-        fout,fin=popen2.popen2(shellprefix+' pkg-config --modversion '+lib +' |grep -v pkg-config')
-        s = s + lib +': '+fout.read() +'  '
-    os.chdir(oldpath)
+        fout=subprocess.check_output(shellprefix+' pkg-config --modversion '+lib +' |grep -v pkg-config',
+                                     shell=True)
+        s = s + lib +': '+fout +'  '
     result.write(indent+s)
     result.write(indent+'''</libraryinfo>\n''')
     indents.pop()
@@ -152,8 +150,8 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
             'syncevolution':'syncevolution-fetch-config','compile':'compile','dist':'dist'}
     for tag in tags:
         result.write(indent+'''<'''+tagsp[tag])
-        fout,fin=popen2.popen2('find `dirname '+input+'` -type d -name *'+tag)
-        s = fout.read().rpartition('/')[2].rpartition('\n')[0]
+        fout=subprocess.check_output('find `dirname '+input+'` -type d -name *'+tag, shell=True)
+        s = fout.rpartition('/')[2].rpartition('\n')[0]
         result.write(' path ="'+s+'">')
 	'''check the result'''
         if(not os.system("grep -q '^"+tag+".* disabled in configuration$' "+input)):
@@ -188,12 +186,13 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
         cmd='sed -n '
         for server in servers:
             cmd+= '-e /^'+server+'/p '
-        fout,fin=popen2.popen2(cmd +resultdir+'/output.txt')
-        for line in fout:
+        cmd = cmd +resultdir+'/output.txt'
+        fout=subprocess.check_output(cmd, shell=True)
+        for line in fout.split('\n'):
             for server in servers:
                 # find first line with "foobar successful" or "foobar: <command failure>"
                 if (line.startswith(server + ":") or line.startswith(server + " ")) and server not in params:
-                    t = line.partition(server)[2].rpartition('\n')[0]
+                    t = line.partition(server)[2]
                     if(t.startswith(':')):
                         t=t.partition(':')[2]
                     params[server]=t
@@ -271,11 +270,9 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 # then get added at the end.
                 clientSync = re.compile(r' +Client::Sync::(.*?)::(?:(Suspend|Resend|Retry)::)?([^:]+)')
                 for source in ('file_task', 'file_event', 'file_contact', 'eds_contact', 'eds_event'):
-                    os.chdir (srcdir)
-                    cmd = shellprefix + " env LD_LIBRARY_PATH=build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR="+backenddir +" CLIENT_TEST_PEER_CAN_RESTART=1 CLIENT_TEST_RETRY=t CLIENT_TEST_RESEND=t CLIENT_TEST_SUSPEND=t CLIENT_TEST_SOURCES="+source+" ./client-test -h"
-                    fout,fin=popen2.popen2(cmd)
-                    os.chdir(oldpath)
-                    for line in fout:
+                    cmd = shellprefix + " env LD_LIBRARY_PATH=%s/build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR=%s CLIENT_TEST_PEER_CAN_RESTART=1 CLIENT_TEST_RETRY=t CLIENT_TEST_RESEND=t CLIENT_TEST_SUSPEND=t CLIENT_TEST_SOURCES=%s %s/client-test -h" % (srcdir, backenddir, source, srcdir)
+                    fout=subprocess.check_output(cmd, shell=True)
+                    for line in fout.split('\n'):
                         m = clientSync.match(line)
                         if m:
                             if m.group(2):
@@ -529,6 +526,8 @@ span.hl { color: #c02020 }
 
 if(__name__ == "__main__"):
     if (len(sys.argv)!=7):
+        # srcdir and basedir must be usable inside the shell started by shellprefix (typically
+        # the chroot).
         print "usage: python resultchecker.py resultdir servers resulturi srcdir shellprefix backenddir"
     else:
-        check(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
+        check(*sys.argv[1:])

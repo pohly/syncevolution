@@ -369,6 +369,9 @@ class Context:
         backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
         # resultchecker doesn't need valgrind, remove it
         shell = re.sub(r'\S*valgrind\S*', '', options.shell)
+        # When using schroot, run it in /tmp, because the host's directory might
+        # not exist in the chroot.
+        shell = shell.replace('schroot ', 'schroot -d /tmp ', 1)
         prefix = re.sub(r'\S*valgrind\S*', '', options.testprefix)
         uri = self.uri or ("file:///" + self.resultdir)
         resultchecker = self.findTestFile("resultchecker.py")
