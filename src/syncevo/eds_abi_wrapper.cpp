@@ -194,7 +194,7 @@ extern "C" void EDSAbiWrapperInit()
 
 # ifdef ENABLE_EBOOK
     static const int libebookMinVersion = 5,
-        libebookMaxVersion = 13;
+        libebookMaxVersion = 13; // EDS 3.4
     ebookhandle =
     findSymbols("libebook-1.2.so", libebookMinVersion, libebookMaxVersion,
                 FIND_SYMBOLS_NEED_ALL, NULL,
@@ -319,7 +319,7 @@ extern "C" void EDSAbiWrapperInit()
 
 # ifdef ENABLE_ECAL
     static const int libecalMinVersion = 3,
-        libecalMaxVersion = 11;
+        libecalMaxVersion = 11; // EDS 3.4
     ecalhandle =
     findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
                 FIND_SYMBOLS_NEED_ALL, NULL,
