@@ -68,9 +68,17 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
     }
     mc = CMulticalendar::MCInstance();
     cal = NULL;
+    conv = NULL;
     if (!mc) {
         throwError("Could not connect to Maemo Calendar backend");
     }
+}
+
+MaemoCalendarSource::~MaemoCalendarSource()
+{
+    // Don't rely on close() getting called to free resources. There's
+    // no hard guarantee that it gets called in all cases.
+    MaemoCalendarSource::close();
 }
 
 std::string MaemoCalendarSource::getMimeType() const

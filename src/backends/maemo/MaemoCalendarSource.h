@@ -46,7 +46,7 @@ class MaemoCalendarSource : public TrackingSyncSource, public SyncSourceLogging,
   public:
     MaemoCalendarSource(int EntryType, int EntryFormat,
                         const SyncSourceParams &params);
-
+    ~MaemoCalendarSource();
 
  protected:
     /* implementation of SyncSource interface */
