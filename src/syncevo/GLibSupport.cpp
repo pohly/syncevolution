@@ -340,7 +340,7 @@ class GLibTest : public CppUnit::TestFixture {
             out << "hello";
             out.close();
             g_main_loop_run(loop.get());
-            CPPUNIT_ASSERT(events.size() > 0);
+            CPPUNIT_ASSERT(!events.empty());
         }
 
         {
@@ -349,7 +349,7 @@ class GLibTest : public CppUnit::TestFixture {
             out.close();
             GLibEvent id(g_timeout_add_seconds(5, timeout, loop.get()), "timeout");
             g_main_loop_run(loop.get());
-            CPPUNIT_ASSERT(events.size() > 0);
+            CPPUNIT_ASSERT(!events.empty());
         }
 
         {
@@ -357,7 +357,7 @@ class GLibTest : public CppUnit::TestFixture {
             unlink(name);
             GLibEvent id(g_timeout_add_seconds(5, timeout, loop.get()), "timeout");
             g_main_loop_run(loop.get());
-            CPPUNIT_ASSERT(events.size() > 0);
+            CPPUNIT_ASSERT(!events.empty());
         }
     }
 };

@@ -429,7 +429,7 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
 
     if (error) {
         string backends;
-        if (scannedModules.m_available.size()) {
+        if (!scannedModules.m_available.empty()) {
             backends += "by any of the backend modules (";
             backends += boost::join(scannedModules.m_available, ", ");
             backends += ") ";
