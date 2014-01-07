@@ -376,7 +376,7 @@ class SyncContext : public SyncConfig {
      *
      * @param error     a string describing the error
      */
-    static void throwError(const string &error);
+    static void throwError(const string &error) SE_NORETURN;
 
     /**
      * throw an exception with a specific status code after an operation failed and
@@ -389,7 +389,7 @@ class SyncContext : public SyncConfig {
      *                   as a fatal local error
      * @param action     a string describing what was attempted *and* how it failed
      */
-    static void throwError(SyncMLStatus status, const string &failure);
+    static void throwError(SyncMLStatus status, const string &failure) SE_NORETURN;
 
     /**
      * throw an exception after an operation failed and
@@ -400,7 +400,7 @@ class SyncContext : public SyncConfig {
      * @Param action   a string describing the operation or object involved
      * @param error    the errno error code for the failure
      */
-    static void throwError(const string &action, int error);
+    static void throwError(const string &action, int error) SE_NORETURN;
 
     /**
      * An error handler which prints the error message and then
@@ -409,7 +409,7 @@ class SyncContext : public SyncConfig {
      * The API was chosen so that it can be used as libebook/libecal
      * "backend-dies" signal handler.
      */
-    static void fatalError(void *object, const char *error);
+    static void fatalError(void *object, const char *error) SE_NORETURN;
 
     /**
      * When using Evolution this function starts a background thread
