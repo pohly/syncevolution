@@ -75,7 +75,10 @@ def extractPatchSummary(patchfile):
 def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     '''Step1 of the result checking, collect system information and 
     check the preparation steps (fetch, compile)'''
+
+    # Always keep checking, even if any of the preparation steps failed.
     cont = True
+
     input = os.path.join(resultdir, "output.txt")
     indent =indents[-1]+space
     indents.append(indent)
@@ -148,22 +151,27 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     result.write(indent+'''<prepare>\n''')
     indent =indent+space
     indents.append(indent)
-    tags=['libsynthesis', 'syncevolution', 'compile', 'dist']
-    tagsp={'libsynthesis':'libsynthesis-fetch-config',
-            'syncevolution':'syncevolution-fetch-config','compile':'compile','dist':'dist'}
+    tags=['libsynthesis', 'syncevolution', 'activesyncd', 'compile', 'dist']
+    tagsp={'libsynthesis':'libsynthesis-source',
+           'syncevolution':'syncevolution-source',
+           'activesyncd':'activesyncd-source',
+           'compile':'compile',
+           'dist':'dist'}
     for tag in tags:
         result.write(indent+'''<'''+tagsp[tag])
         fout=subprocess.check_output('find `dirname '+input+'` -type d -name *'+tag, shell=True)
         s = fout.rpartition('/')[2].rpartition('\n')[0]
         result.write(' path ="'+s+'">')
 	'''check the result'''
-        if(not os.system("grep -q '^"+tag+".* disabled in configuration$' "+input)):
-            result.write("skipped")
-        elif(os.system ("grep -q '^"+tag+" successful' "+input)):
+        if 0 == os.system("grep -q '^"+tag+": .*: failed' "+input):
             result.write("failed")
-            cont = False
-        else:
+        elif 0 == os.system ("grep -q '^"+tag+" successful' "+input):
             result.write("okay")
+        elif 0 == os.system("grep -q '^"+tag+".* disabled in configuration$' "+input):
+            result.write("skipped")
+        else:
+            # Not listed at all? Fail.
+            result.write("failed")
         result.write('''</'''+tagsp[tag]+'''>\n''')
     indents.pop()
     indent = indents[-1]
@@ -189,17 +197,22 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
         cmd='sed -n '
         for server in servers:
             cmd+= '-e /^'+server+'/p '
+        print "Analyzing overall result %s" % (resultdir+'/output.txt')
         cmd = cmd +resultdir+'/output.txt'
         fout=subprocess.check_output(cmd, shell=True)
         for line in fout.split('\n'):
             for server in servers:
-                # find first line with "foobar successful" or "foobar: <command failure>"
+                # Find first line with "foobar successful" or "foobar: <command failure>",
+                # ignore "skipped".
                 if (line.startswith(server + ":") or line.startswith(server + " ")) and server not in params:
                     t = line.partition(server)[2]
                     if(t.startswith(':')):
                         t=t.partition(':')[2]
-                    params[server]=t
-    
+                    t = t.strip()
+                    if t != 'skipped: disabled in configuration':
+                        print "Result for %s: %s" % (server, t)
+                        params[server]=t
+
     indent =indents[-1]+space
     indents.append(indent)
     '''start of testcase results '''
