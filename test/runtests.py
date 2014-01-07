@@ -2099,4 +2099,5 @@ if options.list:
     for action in context.todo:
         print action.name
 else:
+    log('Ready to run. I have PID %d.', os.getpid())
     context.execute()
