@@ -979,6 +979,9 @@ parser.add_option("", "--test-prefix",
 parser.add_option("", "--sourcedir",
                   type="string", dest="sourcedir", default=None,
                   help="directory which contains 'syncevolution' and 'libsynthesis' code repositories; if given, those repositories will be used as starting point for testing instead of checking out directly")
+parser.add_option("", "--cppcheck",
+                  action="store_true", dest="cppcheck", default=False,
+                  help="enable running of cppcheck on all source checkouts; only active with --no-sourcedir-copy")
 parser.add_option("", "--no-sourcedir-copy",
                   action="store_true", dest="nosourcedircopy", default=False,
                   help="instead of copying the content of --sourcedir and integrating patches automatically, use the content directly")
@@ -1154,9 +1157,88 @@ class NopSource(GitCheckoutBase, NopAction):
         NopAction.__init__(self, name)
         GitCheckoutBase.__init__(self, name, sourcedir)
 
+class CppcheckSource(GitCheckoutBase, Action):
+    def __init__(self, name, sourcedir, cppcheckflags):
+        Action.__init__(self, name)
+        GitCheckoutBase.__init__(self, name, sourcedir)
+        self.cppcheckflags = cppcheckflags
+        # During normal, parallel testing we want to parallelize
+        # by running other things besides cppcheck, because that
+        # makes better use of the CPUs. Allocating a large number
+        # of jobs for cppcheck blocks using them for a certain
+        # period until enough CPUs are free. This can be overriden
+        # with an env variable.
+        self.numjobs = int(os.environ.get("RUNTESTS_CPPCHECK_JOBS", "4"))
+        self.sources = self.basedir
+
+    def execute(self):
+        context.runCommand("%s %s --force -j%d %s %s" % (options.shell,
+                                                         os.path.join(sync.basedir,
+                                                                      "test",
+                                                                      "cppcheck-wrapper.sh"),
+                                                         self.numjobs,
+                                                         self.cppcheckflags,
+                                                         self.sources))
+
 if options.sourcedir:
     if options.nosourcedircopy:
-        libsynthesis = NopSource("libsynthesis", options.sourcedir)
+        if options.cppcheck:
+            # Checking libsynthesis must avoid define combinations
+            # which are invalid.  We cannot exclude invalid define
+            # combinations specifically, so we have to limit the set
+            # of combinations by setting or unsetting single defines.
+            # We focus on the Linux port here.
+            libsynthesis = CppcheckSource("libsynthesis", options.sourcedir,
+                                          " ".join([ "-i %s/%s" % (options.sourcedir, x) for x in
+                                                     [
+                                                       # No files need to be excluded at the moment.
+                                                       ]
+                                                     ] +
+                                                   [ "-USYSYNC_TOOL",
+                                                     "-U__EPOC_OS__",
+                                                     "-U__MC68K__",
+                                                     "-U__MWERKS__",
+                                                     "-U__PALM_OS__",
+                                                     "-D__GNUC__",
+                                                     "-D__cplusplus",
+                                                     "-UEXPIRES_AFTER_DAYS",
+                                                     "-USYSER_REGISTRATION",
+                                                     "-UEXPIRES_AFTER_DATE",
+                                                     "-UODBC_SUPPORT", # obsolete
+                                                     "-DSQLITE_SUPPORT", # enabled on Linux
+                                                     "-DLINUX",
+                                                     "-DNOWSM",
+                                                     "-DENGINEINTERFACE_SUPPORT",
+                                                     "-UDIRECT_APPBASE_GLOBALACCESS",
+                                                     "-DUSE_SML_EVALUATION",
+                                                     "-DDESKTOP_CLIENT",
+                                                     "-DCOPY_SEND",
+                                                     "-DCOPY_RECEIVE",
+                                                     "-DSYSYNC_CLIENT",
+                                                     "-DSYSYNC_SERVER",
+                                                     "-DENGINE_LIBRARY",
+                                                     "-DCHANGEDETECTION_AVAILABLE",
+                                                     "-UHARDCODED_TYPE_SUPPORT",
+                                                     "-UHARD_CODED_SERVER_URI",
+                                                     "-UAUTOSYNC_SUPPORT",
+                                                     "-UBINFILE_ALWAYS_ACTIVE",
+                                                     "-DOBJECT_FILTERING",
+                                                     "-DCLIENTFEATURES_2008",
+                                                     "-DENHANCED_PROFILES_2004", # binfileimplds.h:395: error: #error "non-enhanced profiles and profile version <6 no longer supported!"
+                                                     "-UMEMORY_PROFILING", # linux/profiling.cpp:26: error: #error "No memory  profiling for linux yet"
+                                                     "-UTIME_PROFILING", # linux/profiling.cpp:19: error: #error "No time profiling for linux yet"
+                                                     "-UNUMERIC_LOCALIDS",
+
+                                                     # http://sourceforge.net/apps/trac/cppcheck/ticket/5316:
+                                                     # Happens with cppcheck 1.61: Analysis failed. If the code is valid then please report this failure.
+                                                     "--suppress=cppcheckError:*/localengineds.cpp",
+                                                     ]))
+            # Be more specific about which sources we check. We are not interested in
+            # pcre and expat, for example.
+            libsynthesis.sources = " ".join("%s/src/%s" % (libsynthesis.sources, x) for x in
+                                            "sysync DB_interfaces sysync_SDK/Sources Transport_interfaces/engine platform_adapters".split())
+        else:
+            libsynthesis = NopSource("libsynthesis", options.sourcedir)
     else:
         libsynthesis = GitCopy("libsynthesis",
                                options.workdir,
@@ -1169,7 +1251,16 @@ context.add(libsynthesis)
 
 if options.sourcedir:
     if options.nosourcedircopy:
-        activesyncd = NopSource("activesyncd", options.sourcedir)
+        if options.cppcheck:
+            activesyncd = CppcheckSource("activesyncd", options.sourcedir,
+                                         # Several (all?) of the GObject priv pointer accesses
+                                         # trigger a 'Possible null pointer dereference: priv'
+                                         # error. We could add inline suppressions, but that's
+                                         # a bit intrusive, so let's be more lenient for activesyncd
+                                         # and ignore the error altogether.
+                                         "--suppress=nullPointer")
+        else:
+            activesyncd = NopSource("activesyncd", options.sourcedir)
     else:
         activesyncd = GitCopy("activesyncd",
                               options.workdir,
@@ -1182,7 +1273,11 @@ context.add(activesyncd)
 
 if options.sourcedir:
     if options.nosourcedircopy:
-        sync = NopSource("syncevolution", options.sourcedir)
+        if options.cppcheck:
+            sync = CppcheckSource("syncevolution", options.sourcedir,
+                                  "--enable=warning,performance,portability --inline-suppr")
+        else:
+            sync = NopSource("syncevolution", options.sourcedir)
     else:
         sync = GitCopy("syncevolution",
                        options.workdir,
