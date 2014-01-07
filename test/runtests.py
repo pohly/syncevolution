@@ -272,12 +272,15 @@ class Action:
         jobs = 0
         try:
             subdirname = "%d-%s" % (step, self.name)
-            del_dir(subdirname)
             sys.stderr.flush()
             sys.stdout.flush()
             cd(subdirname)
             if logs:
-                fd = os.open("output.txt", os.O_WRONLY|os.O_CREAT|os.O_TRUNC)
+                # Append, in case that we run multiple times for the same platform.
+                # The second run will typically have fake libsynthesis/syncevolution/compile
+                # runs which must not overwrite previous results. The new operations must
+                # be added at the end of main output.txt, too.
+                fd = os.open("output.txt", os.O_WRONLY|os.O_CREAT|os.O_APPEND)
                 os.dup2(fd, 1)
                 os.dup2(fd, 2)
                 sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
@@ -466,7 +469,8 @@ class Context:
 
     def execute(self):
         cd(self.resultdir)
-        s = open("output.txt", "w+")
+        # Append instead of overwriting, as for other output.txt files, too.
+        s = open("output.txt", "a+")
         status = Action.DONE
 
         step = 0
