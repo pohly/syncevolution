@@ -194,7 +194,7 @@ void ContextSettings::lookupAuthProvider()
     InitStateString password;
 
     // prefer source config if anything is set there
-    const char *credentialsFrom;
+    const char *credentialsFrom = "undefined";
     if (m_sourceConfig) {
         identity = m_sourceConfig->getUser();
         password = m_sourceConfig->getPassword();
