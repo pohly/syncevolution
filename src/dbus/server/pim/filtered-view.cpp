@@ -78,7 +78,7 @@ void FilteredView::doStart()
     m_parent->m_removedSignal.connect(ChangeSignal_t::slot_type(boost::bind(&FilteredView::removeIndividual, this, _1, _2)).track(m_self));
 }
 
-bool FilteredView::isFull(const Entries_t local2parent,
+bool FilteredView::isFull(const Entries_t &local2parent,
                           const boost::shared_ptr<IndividualFilter> &filter)
 {
     size_t newEndIndex = local2parent.end() - local2parent.begin();

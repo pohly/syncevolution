@@ -1106,7 +1106,7 @@ private:
     string m_previousLogdir; /**< remember previous log dir before creating the new one */
 
     /** create name in current (if set) or previous logdir */
-    string databaseName(SyncSource &source, const string suffix, string logdir = "") {
+    string databaseName(SyncSource &source, const string &suffix, string logdir = "") {
         if (!logdir.size()) {
             logdir = m_logdir->getLogdir();
         }

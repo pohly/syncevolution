@@ -49,7 +49,7 @@ class FilteredView : public IndividualView
     void init(const boost::shared_ptr<FilteredView> &self);
 
     bool isFull() const { return isFull(m_local2parent, m_filter); }
-    static bool isFull(const Entries_t local2parent,
+    static bool isFull(const Entries_t &local2parent,
                        const boost::shared_ptr<IndividualFilter> &filter);
 
     /**

@@ -93,7 +93,7 @@ public:
         }
     }
 
-    void setURL(const std::string url) { initializeFlags(url); m_url = url; }
+    void setURL(const std::string &url) { initializeFlags(url); m_url = url; }
     virtual std::string getURL() { return m_url; }
 
     virtual bool verifySSLHost()

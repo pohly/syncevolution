@@ -110,7 +110,7 @@ bool Cmdline::parse()
 /**
  * Detects "--sync foo", "--sync=foo", "-s foo".
  */
-static bool IsKeyword(const std::string arg,
+static bool IsKeyword(const std::string &arg,
                       const char *longWord,
                       const char *shortWord)
 {

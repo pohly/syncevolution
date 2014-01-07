@@ -386,7 +386,7 @@ public:
      * the sync starts and overwriting it when the connection
      * closes.
      */
-    void setStubConnectionError(const std::string error) { m_connectionError = error; }
+    void setStubConnectionError(const std::string &error) { m_connectionError = error; }
     std::string getStubConnectionError() { return m_connectionError; }
 
     Server &getServer() { return m_server; }
