@@ -19,6 +19,7 @@ import subprocess
 import fnmatch
 import copy
 import errno
+import signal
 
 def log(format, *args):
     now = time.time()
@@ -158,6 +159,71 @@ def ShutdownSubprocess(popen, timeout):
         return False
     return True
 
+class Jobserver:
+    '''Allocates the given number of job slots from the "make -j"
+    jobserver, then runs the command and finally returns the slots.
+    See http://mad-scientist.net/make/jobserver.html'''
+    def __init__(self):
+        self.havejobserver = False
+        self.allocated = 0
+
+        # MAKEFLAGS= --jobserver-fds=3,4 -j
+        flags = os.environ.get('MAKEFLAGS', '')
+        m = re.search(r'--jobserver-fds=(\d+),(\d+)', flags)
+        if m:
+            self.receiveslots = int(m.group(1))
+            self.returnslots = int(m.group(2))
+            self.blocked = {}
+            self.havejobserver = True
+            log('using jobserver')
+        else:
+            log('not using jobserver')
+
+    def active(self):
+        return self.havejobserver
+
+    def alloc(self, numjobs = 1):
+        if not self.havejobserver:
+            return
+        n = 0
+        self._block()
+        try:
+            while n < numjobs:
+                os.read(self.receiveslots, 1)
+                n += 1
+            self.allocated += n
+            n = 0
+        except:
+            os.write(self.returnslots, ' ' * n)
+            raise
+        finally:
+            self._unblock()
+
+    def free(self, numjobs = 1):
+        if not self.havejobserver:
+            return
+        try:
+            self.allocated -= numjobs
+            os.write(self.returnslots, ' ' * numjobs)
+        finally:
+            self._unblock()
+
+    def _block(self):
+        '''Block signals if not already done.'''
+        if not self.blocked:
+            for sig in [ signal.SIGINT, signal.SIGTERM ]:
+                self.blocked[sig] = signal.signal(sig, signal.SIG_IGN)
+
+    def _unblock(self):
+        '''Unblock signals if blocked and we currently own no slots.'''
+        if self.blocked and not self.allocated:
+            for sig, handler in self.blocked.items():
+                signal.signal(sig, handler)
+            self.blocked = {}
+
+jobserver = Jobserver()
+
+
 class Action:
     """Base class for all actions to be performed."""
 
@@ -174,6 +240,12 @@ class Action:
         self.summary = ""
         self.dependencies = []
         self.isserver = False;
+        # Assume that each action requires one job slot. Exceptions
+        # are nops (need no slot) and possible test runs (might need
+        # more than one, although at the moment we still approximate
+        # that with one, because most tests involving more than one
+        # process do not have those processes active in parallel).
+        self.numjobs = 1
 
     def execute(self):
         """Runs action. Throws an exeception if anything fails.
@@ -197,6 +269,7 @@ class Action:
         cwd = os.getcwd()
         resourceset = None
         locked = False
+        jobs = 0
         try:
             subdirname = "%d-%s" % (step, self.name)
             del_dir(subdirname)
@@ -251,6 +324,10 @@ class Action:
                     loop.run()
                 finally:
                     match.remove()
+            if jobserver.active() and self.numjobs:
+                log('=== allocating %d job slots ===', self.numjobs)
+                jobserver.alloc(self.numjobs)
+                jobs = self.numjobs
             log('=== starting %s ===', self.name)
             self.execute()
             self.status = Action.DONE
@@ -260,6 +337,12 @@ class Action:
             self.status = Action.FAILED
             self.summary = str(inst)
         finally:
+            if jobs:
+                try:
+                    jobserver.free(jobs)
+                except:
+                    traceback.print_exc()
+
             try:
                 if locked:
                     log('=== unlocking resource %s ===', self.name)
@@ -693,6 +776,10 @@ class AutotoolsBuild(Action):
         del_dir(self.builddir)
         cd(self.builddir)
         context.runCommand("%s %s/configure %s" % (self.runner, self.src, self.configargs))
+        # We have permission to run one job, obtained for us by
+        # tryexecution(). Pass that right on to make, which will then
+        # run in parallel mode thanks to env variables and ask for
+        # more jobs at runtime.
         context.runCommand("%s %s install DESTDIR=%s" % (self.runner, context.make, self.installdir))
 
 
@@ -1043,6 +1130,7 @@ class NopAction(Action):
         Action.__init__(self, name)
         self.status = Action.DONE
         self.execute = self.nop
+        self.numjobs = 0
 
 class NopSource(GitCheckoutBase, NopAction):
     def __init__(self, name, sourcedir):
