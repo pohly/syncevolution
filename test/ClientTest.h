@@ -492,9 +492,6 @@ public:
     /** helper funclets to create sources */
     CreateSource createSourceA, createSourceB;
 
-    /** if set, then this will be called at the end of testing */
-    void (*cleanupSources)();
-
     LocalTests(const std::string &name, ClientTest &cl, int sourceParam, ClientTest::Config &co) :
         CppUnit::TestSuite(name),
         client(cl),

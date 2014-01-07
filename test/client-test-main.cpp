@@ -106,7 +106,10 @@ public:
 class ClientListener : public CppUnit::TestListener {
 public:
     ClientListener() :
-        m_failed(false)
+        m_failed(false),
+        // Not really necessary, will be initialized once the test starts.
+        // Set it anyway, to keep cppcheck happy.
+        m_testFailed(false)
     {
 #ifdef HAVE_SIGNAL_H
         // install signal handler which turns an alarm signal into a runtime exception
@@ -238,7 +241,9 @@ private:
     set<string> m_allowedFailures;
     bool m_failed, m_testFailed;
     string m_currentTest;
+#ifdef HAVE_SIGNAL_H
     int m_alarmSeconds;
+#endif
     PushLogger<Logger> m_logger;
     CppUnit::TestResultCollector m_failures;
 
