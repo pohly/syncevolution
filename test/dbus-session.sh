@@ -4,6 +4,7 @@
 # running a program and kills the D-Bus daemon when done.
 
 # start D-Bus session
+unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID
 eval `dbus-launch`
 export DBUS_SESSION_BUS_ADDRESS
 
@@ -39,9 +40,10 @@ fi
 
 # kill all programs started by us
 atexit() {
-    [ ! "$KEYRING_PID" ] || kill $KEYRING_PID
-    [ ! "$DBUS_SYSTEM_BUS_PID" ] || kill $DBUS_SYSTEM_BUS_PID
-    kill $DBUS_SESSION_BUS_PID
+    set -x
+    [ ! "$KEYRING_PID" ] || ( echo >&2 "dbus-session.sh $$: killing keyring pid $KEYRING_PID"; kill -9 $KEYRING_PID )
+    [ ! "$DBUS_SESSION_SH_SYSTEM_BUS" ] || [ ! "$DBUS_SYSTEM_BUS_PID" ] || ( echo >&2 "dbus-session.sh $$: killing system bus daemon $DBUS_SYSTEM_BUS_PID"; kill -9 $DBUS_SYSTEM_BUS_PID )
+    [ ! $DBUS_SESSION_BUS_PID ] || ( echo >&2 "dbus-session.sh $$: killing session bus daemon $DBUS_SESSION_BUS_PID"; kill -9 $DBUS_SESSION_BUS_PID )
 }
 trap atexit EXIT
 
