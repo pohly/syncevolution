@@ -871,10 +871,11 @@ template <class T> class DBusVector {
     void push_back(const T &element) {
         if (m_entries + 1 >= m_size) {
             size_t newSize = m_size ? m_size * 2 : 16;
-            m_elements = static_cast<T *>(realloc(m_elements, newSize * sizeof(T)));
-            if (!m_elements) {
+            T *elements = static_cast<T *>(realloc(m_elements, newSize * sizeof(T)));
+            if (!elements) {
                 throw std::bad_alloc();
             }
+            m_elements = elements;
             m_size = newSize;
         }
         m_elements[m_entries] = element;
