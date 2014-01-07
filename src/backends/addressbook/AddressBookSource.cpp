@@ -585,6 +585,7 @@ private:
         if (!value || !value[0]) {
             return;
         }
+        // cppcheck-suppress invalidscanf
         if (sscanf(value, "%d-%d-%d", &year, &month, &day) == 3) {
             CFGregorianDate date;
             memset(&date, 0, sizeof(date));
