@@ -2978,7 +2978,7 @@ void SyncTests::deleteAll(DeleteAllMode mode) {
 
 /** get both clients in sync with empty server, then copy one item from client A to B */
 void SyncTests::doCopy() {
-    SyncPrefix("copy", *this);
+    SyncPrefix copy("copy", *this);
 
     // check requirements
     CT_ASSERT(accessClientB);
