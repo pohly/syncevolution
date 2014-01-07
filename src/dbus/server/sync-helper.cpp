@@ -79,6 +79,9 @@ int main(int argc, char **argv, char **envp)
         // the process is running.
         void *dummy = malloc(1);
         free(dummy);
+        // cppcheck-suppress deallocDealloc
+        // cppcheck-suppress doubleFree
+        // cppcheck-suppress uninitvar
         free(dummy);
     }
 

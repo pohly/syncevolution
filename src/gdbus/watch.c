@@ -248,6 +248,8 @@ guint b_dbus_add_service_watch(DBusConnection *connection, const char *name,
 	return watch->id;
 
 error:
+        // Doesn't look valid: Possible null pointer dereference: watch - otherwise it is redundant to check it against null.
+        // cppcheck-suppress nullPointer
 	if (watch != NULL) {
 		g_free(watch->name);
 		g_free(watch->match);
@@ -518,6 +520,8 @@ guint b_dbus_add_signal_watch(DBusConnection *connection, const char *rule,
 	return signal->id;
 
 error:
+        // Doesn't look valid: Possible null pointer dereference: signal - otherwise it is redundant to check it against null.
+        // cppcheck-suppress nullPointer
         if (signal)
 		g_free(signal->match);
 	g_free(signal);

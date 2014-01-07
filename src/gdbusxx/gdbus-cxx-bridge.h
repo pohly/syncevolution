@@ -1077,6 +1077,8 @@ struct MethodHandler
         // unref 'invocation' immediately after referencing the underlying message.
         DBusMessagePtr msg(g_dbus_method_invocation_get_message(invocation), true);
         g_object_unref(invocation);
+        // Set to NULL, just to be sure we remember that it is gone.
+        // cppcheck-suppress uselessAssignmentPtrArg
         invocation = NULL;
 
         // We are calling callback because we want to keep server alive as long
@@ -4581,6 +4583,8 @@ struct Ret1Traits : public TraitsBase<boost::function<void (const R1 &, const st
             data->m_callback(r, error_msg);
         }
         delete data;
+        // cppcheck-suppress nullPointer
+        // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
         if (error != NULL) {
             g_error_free (error);
         }
@@ -4621,6 +4625,8 @@ struct Ret2Traits : public TraitsBase<boost::function<void (const R1 &, const R2
             data->m_callback(r1, r2, error_msg);
         }
         delete data;
+        // cppcheck-suppress nullPointer
+        // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
         if (error != NULL) {
             g_error_free (error);
         }
@@ -4662,6 +4668,8 @@ struct Ret3Traits : public TraitsBase<boost::function<void (const R1 &, const R2
             data->m_callback(r1, r2, r3, error_msg);
         }
         delete data;
+        // cppcheck-suppress nullPointer
+        // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
         if (error != NULL) {
             g_error_free (error);
         }

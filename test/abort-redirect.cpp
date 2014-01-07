@@ -47,9 +47,15 @@ int main(int argc, char **argv)
     // segfault
     void *small = malloc(1);
     free(small);
+    // cppcheck-suppress deallocDealloc
+    // cppcheck-suppress doubleFree
+    // cppcheck-suppress uninitvar
     free(small);
     void *large = malloc(1024 * 1024);
     free(large);
+    // cppcheck-suppress deallocDealloc
+    // cppcheck-suppress doubleFree
+    // cppcheck-suppress uninitvar
     free(large);
 
     return 0;
