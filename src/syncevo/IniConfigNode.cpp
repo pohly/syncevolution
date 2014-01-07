@@ -218,7 +218,7 @@ void IniFileConfigNode::removeProperty(const string &property)
             it = m_lines.erase(it);
             m_modified = true;
         } else {
-            it++;
+            ++it;
         }
     }
 }

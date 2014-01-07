@@ -401,7 +401,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
     // Update m_allLUIDs
     m_allLUIDs.clear();
     RevisionMap_t::iterator it;
-    for(it = revisions.begin(); it != revisions.end(); it++) {
+    for(it = revisions.begin(); it != revisions.end(); ++it) {
         m_allLUIDs.insertLUID(it->first);
     }
 #else

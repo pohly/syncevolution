@@ -99,7 +99,7 @@ void XMLRPCSyncSource::listAllItems(RevisionMap_t &revisions)
             static_cast<map<string, xmlrpc_c::value> >(tmp));
         map<string, xmlrpc_c::value>::const_iterator it;
 
-        for(it = resultMap.begin(); it != resultMap.end(); it++)
+        for(it = resultMap.begin(); it != resultMap.end(); ++it)
             revisions[(*it).first] = xmlrpc_c::value_string((*it).second);
 
     }

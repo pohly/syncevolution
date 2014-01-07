@@ -164,12 +164,12 @@ static void copyProperty(const StringPair &keyvalue,
 static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
 {
     ReadOperations::Config_t::const_iterator it;
-    for (it = config.begin(); it != config.end(); it++) {
+    for (it = config.begin(); it != config.end(); ++it) {
         map<string, string>::const_iterator sit;
         string name = it->first;
         if (name.empty()) {
             ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
-            for (sit = it->second.begin(); sit != it->second.end(); sit++) {
+            for (sit = it->second.begin(); sit != it->second.end(); ++sit) {
                 // read-only properties can (and have to be) ignored
                 static const char *init[] = {
                     "configName",
@@ -191,7 +191,7 @@ static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNo
             name = name.substr(strlen("source/"));
             FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
             ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-            for (sit = it->second.begin(); sit != it->second.end(); sit++) {
+            for (sit = it->second.begin(); sit != it->second.end(); ++sit) {
                 copyProperty(*sit, registry, sourceFilter);
             }
         } else {
@@ -312,7 +312,7 @@ void Session::setNamedConfig(const std::string &configName,
         /* apply user settings */
         from->setConfigFilter(true, "", syncFilter);
         map<string, FilterConfigNode::ConfigFilter>::iterator it;
-        for ( it = sourceFilters.begin(); it != sourceFilters.end(); it++ ) {
+        for (it = sourceFilters.begin(); it != sourceFilters.end(); ++it) {
             from->setConfigFilter(false, it->first, it->second);
         }
 

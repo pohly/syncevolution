@@ -272,7 +272,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
         }
         vector< CComponent * >::iterator it = comps.begin();
         if (comps.size() > 1) {
-            for (; it != comps.end(); it++) {
+            for (; it != comps.end(); ++it) {
                 delete (*it);
             }
             throwError(string("too many events in ical: ") + item);
