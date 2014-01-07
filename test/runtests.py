@@ -21,6 +21,13 @@ import fnmatch
 import copy
 import errno
 
+def log(format, *args):
+    now = time.time()
+    print time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
+    log.latest = now
+log.start = time.time()
+log.latest = log.start
+
 try:
     import gzip
     havegzip = True
@@ -157,7 +164,7 @@ class Action:
 
     def tryexecution(self, step, logs):
         """wrapper around execute which handles exceptions, directories and stdout"""
-        print "*** running action %s" % self.name
+        log('*** running action %s', self.name)
         if logs:
             fd = -1
             oldstdout = os.dup(1)
@@ -177,7 +184,7 @@ class Action:
                 os.dup2(fd, 2)
                 sys.stdout = os.fdopen(fd, "w")
                 sys.stderr = sys.stdout
-            print "=== starting %s ===" % (self.name)
+            log('=== starting %s ===', self.name)
             self.execute()
             self.status = Action.DONE
             self.summary = "okay"
@@ -186,7 +193,7 @@ class Action:
             self.status = Action.FAILED
             self.summary = str(inst)
 
-        print "\n=== %s: %s ===" % (self.name, self.status)
+        log('\n=== %s: %s ===', self.name, self.status)
         sys.stdout.flush()
         os.chdir(cwd)
         if logs:
@@ -271,9 +278,10 @@ class Context:
                 relcwd = cwd[len(options.schrootdir):]
                 cmdstr = cmdstr.replace('schroot ', 'schroot -d %s ' % relcwd)
             cmdstr = cmdstr.replace(options.schrootdir + '/', '/')
-        print "*** ( cd %s; export %s; %s )" % (cwd,
-                                                " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH", "PATH" ])),
-                                                cmdstr)
+        log('*** ( cd %s; export %s; %s )',
+            cwd,
+            " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH", "PATH" ])),
+            cmdstr)
         sys.stdout.flush()
         result = os.system(cmdstr)
         if result != 0:
@@ -420,10 +428,10 @@ class Context:
 
             failed = server.sendmail(self.sender, self.recipients, body.getvalue())
             if failed:
-                print "could not send to: %s" % (failed)
+                log('could not send to: %s', failed)
                 sys.exit(1)
         else:
-            print "\n".join(self.summary), "\n"
+            log('%s\n', '\n'.join(self.summary))
 
         if status in Action.COMPLETED:
             sys.exit(0)
@@ -602,7 +610,7 @@ class AutotoolsBuild(Action):
         self.testdir = os.path.join(self.builddir, "src")
 
     def execute(self):
-        print "removing builddir: %s" % self.builddir
+        log('removing builddir: %s', self.builddir)
         del_dir(self.builddir)
         cd(self.builddir)
         context.runCommand("%s %s/configure %s" % (self.runner, self.src, self.configargs))
@@ -855,7 +863,7 @@ parser.add_option("", "--sanity-checks",
 
 (options, args) = parser.parse_args()
 if options.recipients and not options.sender:
-    print "sending email also requires sender argument"
+    log('sending email also requires sender argument')
     sys.exit(1)
 
 # accept --enable foo[=args]
