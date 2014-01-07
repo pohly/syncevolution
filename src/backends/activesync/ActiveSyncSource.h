@@ -180,9 +180,8 @@ class ActiveSyncSource :
     void setStartSyncKey(const std::string &startSyncKey) { m_startSyncKey = startSyncKey; }
     std::string getCurrentSyncKey() { return m_currentSyncKey; }
     void setCurrentSyncKey(const std::string &currentSyncKey) { m_currentSyncKey = currentSyncKey; }
-    void findCollections(const std::string account, bool force_update);
-    std::string getCollectionPath(const std::string parentId, const std::string name);
-    std::string lookupFolder(std::string folder);
+    void findCollections(const std::string &account, bool force_update);
+    std::string lookupFolder(const std::string &folder);
 
     boost::shared_ptr<ConfigNode> m_itemNode;
 
@@ -229,7 +228,11 @@ class ActiveSyncSource :
 	bool pathFound;
 	ActiveSyncSource *source;
 
-	Collection() {pathFound = false;}
+        Collection() :
+            type(0),
+            pathFound(false),
+            source(NULL)
+        {}
 
 	int getFolderType();
 	bool collectionIsDefault();
@@ -237,7 +240,8 @@ class ActiveSyncSource :
 
     } collection;
     std::map<std::string, Collection> m_collections; // Indexed by collectionID
-    std::map<std::string, std::string> m_folderPaths; // Maps pathName to collectionId
+    typedef std::map<std::string, std::string> FolderPaths;
+    FolderPaths m_folderPaths; // Maps pathName to collectionId
 };
 
 class ActiveSyncContactSource : public ActiveSyncSource

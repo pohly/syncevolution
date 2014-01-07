@@ -69,7 +69,7 @@ std::string ActiveSyncSource::Collection::fullPath() {
     return pathName;
 }
 
-void ActiveSyncSource::findCollections(const std::string account, const bool force_update)
+void ActiveSyncSource::findCollections(const std::string &account, const bool force_update)
 {
     GErrorCXX gerror;
     EasSyncHandlerCXX handler;
@@ -179,15 +179,23 @@ ActiveSyncSource::Databases ActiveSyncSource::getDatabases()
     return result;
 }
 
-std::string ActiveSyncSource::lookupFolder(std::string folder) {
+std::string ActiveSyncSource::lookupFolder(const std::string &folder) {
     // If folder matches a collectionId, use that
     if (m_collections.find(folder) != m_collections.end()) return folder;
 
     // If folder begins with /, drop it
-    if (folder[0] == '/') folder.erase(0,1);
+    std::string key;
+    if (!folder.empty() && folder[0] == '/') {
+        key = folder.substr(1);
+    } else {
+        key = folder;
+    }
 
     // Lookup folder name
-    if (m_folderPaths.find(folder) != m_folderPaths.end()) return m_folderPaths[folder];
+    FolderPaths::const_iterator entry = m_folderPaths.find(key);
+    if (entry != m_folderPaths.end()) {
+        return entry->second;
+    }
 
     // Not found
     return "";
