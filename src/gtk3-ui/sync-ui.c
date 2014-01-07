@@ -1181,7 +1181,7 @@ static void
 autosync_toggle_cb (GtkWidget *widget, gpointer x, app_data *data)
 {
     if (data->current_service && data->current_service->config) {
-        gboolean new_active, old_active = FALSE;
+        gboolean new_active, old_active;
         char *autosync = NULL;
 
         new_active = gtk_switch_get_active (GTK_SWITCH (widget));
