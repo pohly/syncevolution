@@ -6053,7 +6053,6 @@ public:
             }
         }
         alltests->addTest(FilterTest(tests));
-        tests = 0;
 
         // create sync tests with just one source
         tests = new CppUnit::TestSuite(alltests->getName() + "::Sync");
