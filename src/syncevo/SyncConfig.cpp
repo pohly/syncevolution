@@ -1252,13 +1252,10 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
                                                  ".other.ini",
                                                  false));
         trackingNode = m_tree->add(path + "/.other.ini", trackingNode);
-        boost::shared_ptr<ConfigNode> node(new IniHashConfigNode(path,
-                                                                 ".internal.ini",
-                                                                 false));
-        hiddenPeerNode = ConfigCache::singleton().createNode(node);
-        hiddenPeerNode = boost::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
         if (peerPath.empty()) {
             hiddenPeerNode = peerNode;
+        } else {
+            hiddenPeerNode = boost::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
         }
     }
 
