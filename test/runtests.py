@@ -1242,7 +1242,7 @@ if options.prebuilt != None:
         compile.installdir = options.schrootdir
         compile.installed = True
 else:
-    if enabled["compile"] == "no-tests":
+    if enabled.get("compile", None) == "no-tests":
         # Regular build.
         build = AutotoolsBuild
     else:
