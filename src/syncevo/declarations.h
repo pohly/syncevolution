@@ -28,6 +28,12 @@
 #define SE_BEGIN_CXX namespace SyncEvo {
 #define SE_END_CXX }
 
+#ifdef __GNUC__
+# define SE_NORETURN __attribute__((noreturn))
+#else
+# define SE_NORETURN
+#endif
+
 SE_BEGIN_CXX
 /*
  * SyncEvolution should never use standard IO directly. Either use the
