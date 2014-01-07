@@ -1,5 +1,4 @@
-#!/usr/bin/python
-
+#!/usr/bin/python -u
 
 """
 The general idea is that tests to run are defined as a list of
@@ -182,7 +181,7 @@ class Action:
                 fd = os.open("output.txt", os.O_WRONLY|os.O_CREAT|os.O_TRUNC)
                 os.dup2(fd, 1)
                 os.dup2(fd, 2)
-                sys.stdout = os.fdopen(fd, "w")
+                sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
                 sys.stderr = sys.stdout
             log('=== starting %s ===', self.name)
             self.execute()
@@ -212,7 +211,7 @@ class Context:
 
     def __init__(self, tmpdir, resultdir, uri, workdir, mailtitle, sender, recipients, mailhost, enabled, skip, nologs, setupcmd, make, sanitychecks, lastresultdir, datadir):
         # preserve normal stdout because stdout/stderr will be redirected
-        self.out = os.fdopen(os.dup(1), "w")
+        self.out = os.fdopen(os.dup(1), "w", 0) # unbuffered
         self.todo = []
         self.actions = {}
         self.tmpdir = abspath(tmpdir)
