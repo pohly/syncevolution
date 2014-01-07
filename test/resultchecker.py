@@ -134,9 +134,12 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     libs = ['libsoup-2.4', 'evolution-data-server-1.2', 'glib-2.0','dbus-glib-1']
     s=''
     for lib in libs:
-        fout=subprocess.check_output(shellprefix+' pkg-config --modversion '+lib +' |grep -v pkg-config',
-                                     shell=True)
-        s = s + lib +': '+fout +'  '
+        try:
+            fout=subprocess.check_output(shellprefix+' pkg-config --modversion '+lib +' |grep -v pkg-config',
+                                         shell=True)
+            s = s + lib +': '+fout +'  '
+        except subprocess.CalledProcessError:
+            pass
     result.write(indent+s)
     result.write(indent+'''</libraryinfo>\n''')
     indents.pop()
