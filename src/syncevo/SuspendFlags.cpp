@@ -279,15 +279,15 @@ void SuspendFlags::handleSignal(int sig)
     // can't use logging infrastructure in signal handler,
     // not reentrant
 
-    unsigned char msg;
+    unsigned char msg[2];
     switch (sig) {
     case SIGTERM:
         switch (me.m_state) {
         case ABORT:
-            msg = ABORT_AGAIN;
+            msg[1] = ABORT_AGAIN;
             break;
         default:
-            msg = me.m_state = ABORT;
+            msg[1] = me.m_state = ABORT;
             break;
         }
         break;
@@ -297,36 +297,36 @@ void SuspendFlags::handleSignal(int sig)
         switch (me.m_state) {
         case NORMAL:
             // first time suspend or already aborted
-            msg = me.m_state = SUSPEND;
+            msg[1] = me.m_state = SUSPEND;
             me.m_lastSuspend = current;
             break;
         case SUSPEND:
             // turn into abort?
             if (current - me.m_lastSuspend < ABORT_INTERVAL) {
-                msg = me.m_state = ABORT;
+                msg[1] = me.m_state = ABORT;
             } else {
                 me.m_lastSuspend = current;
-                msg = SUSPEND_AGAIN;
+                msg[1] = SUSPEND_AGAIN;
             }
             break;
         case ABORT:
-            msg = ABORT_AGAIN;
+            msg[1] = ABORT_AGAIN;
             break;
         case ABORT_AGAIN:
         case SUSPEND_AGAIN:
         case ABORT_MAX:
             // shouldn't happen
-            msg = ABORT_MAX;
+            msg[1] = ABORT_MAX;
             break;
         }
     default:
-        msg = ABORT_MAX;
+        msg[1] = ABORT_MAX;
         break;
     }
     }
     if (me.m_senderFD >= 0) {
-        unsigned char msg2[2] = { (unsigned char)(ABORT_MAX + sig), msg };
-        write(me.m_senderFD, msg2, msg == ABORT_MAX ? 1 : 2);
+        msg[0] = (unsigned char)(ABORT_MAX + sig);
+        write(me.m_senderFD, msg, msg[1] == ABORT_MAX ? 1 : 2);
     }
 }
 
