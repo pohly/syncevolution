@@ -3337,7 +3337,9 @@ void SyncTests::doRestartSync(SyncMode mode)
     }
 
     // update item while the sync runs
+#ifndef __clang_analyzer__
     needToConnect = true;
+#endif
     startCount = 0;
     results.clear();
     end =
@@ -3395,7 +3397,9 @@ void SyncTests::doRestartSync(SyncMode mode)
     }
 
     // delete item while the sync runs
+#ifndef __clang_analyzer__
     needToConnect = true;
+#endif
     startCount = 0;
     results.clear();
     end =
