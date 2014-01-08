@@ -96,6 +96,13 @@ std::string Connection::buildDescription(const StringMap &peer)
     return buffer;
 }
 
+static bool IsSyncML(const std::string &messageType)
+{
+    return messageType == TransportAgent::m_contentTypeSyncML ||
+        messageType == TransportAgent::m_contentTypeSyncWBXML;
+}
+
+
 void Connection::process(const Caller_t &caller,
                          const GDBusCXX::DBusArray<uint8_t> &message,
                          const std::string &message_type)
@@ -245,8 +252,7 @@ void Connection::process(const Caller_t &caller,
                 }
                 // TODO: use the session ID set by the server if non-null
             } else if (// relaxed checking for XML: ignore stuff like "; CHARSET=UTF-8"
-                       message_type.substr(0, message_type.find(';')) == TransportAgent::m_contentTypeSyncML ||
-                       message_type == TransportAgent::m_contentTypeSyncWBXML) {
+                       IsSyncML(message_type.substr(0, message_type.find(';')))) {
                 // run a new SyncML session as server
                 serverMode = true;
                 if (m_peer.find("config") == m_peer.end() &&
