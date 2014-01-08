@@ -265,9 +265,10 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
     string creationTime;
     string first, last;
 
-    int numparams = 0;
     stringstream cols;
     stringstream values;
+
+    // scan-build: value stored to 'numparams' is never read.
 
     std::list<string> insValues;
     for (int i = 0; i<LAST_COL; i++) {
@@ -278,7 +279,6 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
             insValues.push_back (string (data.get()));
             cols << m_sqlite.getMapping(i).colname << ", ";
             values <<"?, ";
-            numparams ++;
             if (field == "N_FIRST") {
                 first = insValues.back();
             } else if (field == "N_LAST") {
@@ -295,7 +295,6 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
 
     cols << "FirstSort, LastSort";
     values << "?, ?";
-    numparams += 2;
     insValues.push_back(firstsort);
     insValues.push_back(lastsort);
 
@@ -304,11 +303,9 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
         creationTime = m_sqlite.findColumn("ABPerson", "ROWID", uid.c_str(), "CreationDate", "");
         cols << ", ROWID";
         values << ", ?";
-        numparams++;
     }
     cols << ", CreationDate, ModificationDate";
     values << ", ?, ?";
-    numparams += 2;
 
     // delete complete row so that we can recreate it
     if (uid.size()) {
