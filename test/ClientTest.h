@@ -892,11 +892,11 @@ protected:
     void doSync(const char *file, int line,
                 const char *logPrefix,
                 const SyncOptions &options) {
-        CT_WRAP_ASSERT(file, line, doSync(logPrefix, options));
+        CT_WRAP_ASSERT(file, line, doSync(logPrefix, options), true);
     }
     void doSync(const char *file, int line,
                 const SyncOptions &options) {
-        CT_WRAP_ASSERT(file, line, doSync(options));
+        CT_WRAP_ASSERT(file, line, doSync(options), true);
     }
     virtual void postSync(int res, const std::string &logname);
 

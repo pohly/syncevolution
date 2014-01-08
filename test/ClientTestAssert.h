@@ -61,7 +61,10 @@ class CTException : public CppUnit::Exception
     }
 };
 
-static void inline ClientTestExceptionHandle(const char *file, int line, const std::string &message = "")
+// Avoid clang 'error: attributes are not allowed on a function-definition' by putting the SE_NORETURN
+// into a separate declaration.
+static void ClientTestExceptionHandle(const char *file, int line, const std::string &message = "") SE_NORETURN;
+static void ClientTestExceptionHandle(const char *file, int line, const std::string &message)
 {
     CppUnit::SourceLine here(file, line);
     try {
@@ -96,18 +99,25 @@ static void inline ClientTestExceptionHandle(const char *file, int line, const s
     }
 }
 
-#define CT_WRAP_ASSERT(_file, _line, _assert) \
+// The only purpose of this here is to teach clang's scan-build that CT_ASSERT
+// doesn't continue unless the condition is true
+// (http://clang-analyzer.llvm.org/annotations.html#custom_assertions).
+// The code never actually gets called.
+#define CT_ASSERT_TRUE(_expression) if (!(_expression)) { exit(1); }
+
+#define CT_WRAP_ASSERT(_file, _line, _assert, _expression) \
     do { \
        try { \
            SE_LOG_DEBUG(NULL, "%s:%d: starting %s", getBasename(_file).c_str(), _line, #_assert); \
            _assert; \
+           CT_ASSERT_TRUE(_expression); \
            SE_LOG_DEBUG(NULL, "%s:%d: ending %s", getBasename(_file).c_str(), _line, #_assert); \
        } catch (...) { \
            ClientTestExceptionHandle(_file, _line); \
        } \
     } while (false)
 
-#define CT_WRAP_ASSERT_MESSAGE(_file, _line, _message, _assert)  \
+#define CT_WRAP_ASSERT_MESSAGE(_file, _line, _message, _assert, _expression) \
     do { \
        try { \
            SE_LOG_DEBUG(NULL, "%s:%d: starting %s %s", \
@@ -115,21 +125,22 @@ static void inline ClientTestExceptionHandle(const char *file, int line, const s
                         std::string(_message).c_str(), \
                         #_assert); \
            _assert; \
+           CT_ASSERT_TRUE(_expression); \
            SE_LOG_DEBUG(NULL, "%s:%d: ending %s", getBasename(_file).c_str(), _line, #_assert); \
        } catch (...) { \
            ClientTestExceptionHandle(_file, _line, _message); \
        } \
     } while (false)
 
-#define CT_ASSERT(condition) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT(condition))
-#define CT_ASSERT_NO_THROW(expression) CT_WRAP_ASSERT(__FILE__, __LINE__, expression)
-#define CT_ASSERT_NO_THROW_MESSAGE(message, expression) CT_WRAP_ASSERT_MESSAGE(__FILE__, __LINE__, message, expression)
-#define CT_ASSERT_MESSAGE(message,condition) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_MESSAGE(message,condition))
+#define CT_ASSERT(condition) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT(condition), (condition))
+#define CT_ASSERT_NO_THROW(expression) CT_WRAP_ASSERT(__FILE__, __LINE__, expression, true)
+#define CT_ASSERT_NO_THROW_MESSAGE(message, expression) CT_WRAP_ASSERT_MESSAGE(__FILE__, __LINE__, message, (expression), true)
+#define CT_ASSERT_MESSAGE(message,condition) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_MESSAGE(message, (condition)), (condition))
 #define CT_FAIL(message) CPPUNIT_FAIL(message)
-#define CT_ASSERT_EQUAL(expected,actual) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_EQUAL(expected,actual))
-#define CT_ASSERT_EQUAL_MESSAGE(message,expected,actual) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_EQUAL_MESSAGE(message,expected,actual))
-#define CT_ASSERT_DOUBLES_EQUAL(expected,actual,delta) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_DOUBLES_EQUAL(expected,actual,delta))
-#define CT_ASSERT_DOUBLES_EQUAL_MESSAGE(message,expected,actual,delta) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_DOUBLES_EQUAL_MESSAGE(__FILE__, __LINE__, message,expected,actual,delta))
+#define CT_ASSERT_EQUAL(expected,actual) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_EQUAL((expected),(actual)), ((expected) == (actual)))
+#define CT_ASSERT_EQUAL_MESSAGE(message,expected,actual) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_EQUAL_MESSAGE(message,(expected),(actual)), ((expected) == (actual)))
+#define CT_ASSERT_DOUBLES_EQUAL(expected,actual,delta) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_DOUBLES_EQUAL((expected),(actual),(delta)), true)
+#define CT_ASSERT_DOUBLES_EQUAL_MESSAGE(message,expected,actual,delta) CT_WRAP_ASSERT(__FILE__, __LINE__, CPPUNIT_ASSERT_DOUBLES_EQUAL_MESSAGE(__FILE__, __LINE__, message,(expected),(actual),(delta)), true)
 
 SE_END_CXX
 
