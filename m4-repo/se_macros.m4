@@ -31,11 +31,12 @@ m4_define([_SE_VERSIONS],
 ## SE_CHECK_FOR_STABLE_RELEASE
 ##
 ## No-op if STABLE_RELEASE is already defined.
-## Defines STABLE_RELEASE to 'yes' if nano and micro versions are greater or
-## equal 99.5. (So 1.1.99.5b is counted as table release.)
-## If above condition is not true then STABLE_RELEASE is defined to 'yes' if
-## current version is not dirty (nothing is appended by gen-git-version.sh).
-## If above fails, then STABLE_RELEASE is defined to 'no'.
+##
+## Defines STABLE_RELEASE to 'no' if the nano version is 99 (1.1.99.5 is
+## an unstable, pre-release version) or the current version is dirty
+## (something is appended by gen-git-version.sh).
+##
+## If above fails, then STABLE_RELEASE is defined to 'yes'.
 ##
 AC_DEFUN([SE_CHECK_FOR_STABLE_RELEASE],
          [m4_ifndef([STABLE_RELEASE],
@@ -55,11 +56,11 @@ AC_DEFUN([SE_CHECK_FOR_STABLE_RELEASE],
                      m4_if(se_test_micro_version, [99],
                            [dnl if part
                             m4_define([se_test_nano_number], m4_translit(se_test_nano_version, [A-Za-z]))
-                            m4_if(m4_eval(se_test_nano_number [>= 5]), [1],
-                                  [dnl if part
-                                   m4_define([STABLE_RELEASE], [yes])
-                                  ]
-                                 )
+                            dnl m4_if(m4_eval(se_test_nano_number [>= 5]), [1],
+                            dnl      [dnl if part
+                            dnl       m4_define([STABLE_RELEASE], [yes])
+                            dnl      ]
+                            dnl     )
                            ],
                            [dnl else part
                             m4_ifndef([se_test_dirty_version],
