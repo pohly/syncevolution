@@ -111,7 +111,7 @@ int main(int argc, char **argv, char **envp)
 #ifdef ENABLE_DBUS_PIM
         gboolean startPIM = false;
 #endif
-        static GOptionEntry entries[] = {
+        GOptionEntry entries[] = {
             { "duration", 'd', 0, G_OPTION_ARG_STRING, &durationString, "Shut down automatically when idle for this duration", "seconds/'unlimited'" },
             { "verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevel,
               "Choose amount of output, 0 = no output, 1 = errors, 2 = info, 3 = debug; default is 1.",
