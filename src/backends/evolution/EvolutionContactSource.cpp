@@ -564,9 +564,17 @@ void EvolutionContactSource::invalidateCachedContact(boost::shared_ptr<ContactCa
 bool EvolutionContactSource::getContact(const string &luid, EContact **contact, GErrorCXX &gerror)
 {
     SE_LOG_DEBUG(getDisplayName(), "reading: getting contact %s", luid.c_str());
-    ReadAheadOrder order = m_readAheadOrder;
 
     // Use switch and let compiler tell us when we don't cover a case.
+    ReadAheadOrder order
+#ifndef __clang_analyzer__
+        // scan-build would complain: value stored to 'order' during
+        // its initialization is never read.  But we need to keep it
+        // otherwise, to avoid: 'order' may be used uninitialized in
+        // this function [-Werror=maybe-uninitialized]
+        = m_readAheadOrder
+#endif
+        ;
     switch (m_accessMode) {
     case SYNCHRONOUS:
     case DEFAULT:
