@@ -60,7 +60,7 @@ button_clicked (GtkButton *button, gpointer user_data)
 	const char *bdaddr;
 	pid_t midman;
 	pid_t syncui;
-	char args[sizeof (SYNCUI_ARG) + sizeof ("FF:FF:FF:FF:FF:FF") - 1];
+	char args[sizeof (SYNCUI_ARG) + sizeof ("FF:FF:FF:FF:FF:FF")];
 
 	bdaddr = g_object_get_data (G_OBJECT (button), "bdaddr");
 	midman = fork ();
