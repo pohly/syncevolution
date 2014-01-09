@@ -26,6 +26,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+#if defined(USE_GSSO) || defined(USE_UOA)
 static class SignonProvider : public IdentityProvider
 {
 public:
@@ -63,5 +64,7 @@ public:
         return provider;
     }
 } gsso;
+
+#endif // USE_GSSO || USE_UOA
 
 SE_END_CXX
