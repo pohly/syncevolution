@@ -19,7 +19,9 @@
 
 
 #include <cstdio>
+#include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 
@@ -27,9 +29,11 @@
 #include <glib/gstdio.h>
 
 #include "TmpFile.h"
+#include "util.h"
 
 
 TmpFile::TmpFile() :
+    m_type(FILE),
     m_fd(-1),
     m_mapptr(0),
     m_mapsize(0)
@@ -42,6 +46,10 @@ TmpFile::~TmpFile()
     try {
         unmap();
         close();
+        if (m_type == PIPE &&
+            !m_filename.empty()) {
+            unlink(m_filename.c_str());
+        }
     } catch (std::exception &x) {
         fprintf(stderr, "TmpFile::~TmpFile(): %s\n", x.what());
     } catch (...) {
@@ -50,7 +58,7 @@ TmpFile::~TmpFile()
 }
 
 
-void TmpFile::create()
+void TmpFile::create(Type type)
 {
     gchar *filename = NULL;
     GError *error = NULL;
@@ -66,6 +74,33 @@ void TmpFile::create()
     }
     m_filename = filename;
     g_free(filename);
+    m_type = type;
+    if (type == PIPE) {
+        // We merely use the normal file to get a temporary file name which
+        // is guaranteed to be unique. There's a slight chance for a denial-of-service
+        // attack when someone creates a link or normal file directly after we remove
+        // the file, but because mknod neither overwrites an existing entry nor follows
+        // symlinks, the effect is smaller compared to opening a file.
+        unlink(m_filename.c_str());
+        if (mknod(m_filename.c_str(), S_IFIFO|S_IRWXU, 0)) {
+            m_filename = "";
+            throw TmpFileException(SyncEvo::StringPrintf("mknod(%s): %s",
+                                                         m_filename.c_str(),
+                                                         strerror(errno)));
+        }
+        // Open without blocking. Necessary because otherwise we end up
+        // waiting here. Opening later also does not work, because then
+        // obexd gets stuck in its open() call while we wait for it to
+        // acknowledge the start of the transfer.
+        m_fd = open(m_filename.c_str(), O_RDONLY|O_NONBLOCK, 0);
+        if (m_fd < 0) {
+            throw TmpFileException(SyncEvo::StringPrintf("open(%s): %s",
+                                                         m_filename.c_str(),
+                                                         strerror(errno)));
+        }
+        // From now on, block on the pipe.
+        fcntl(m_fd, F_SETFL, fcntl(m_fd, F_GETFL) & ~O_NONBLOCK);
+    }
 }
 
 

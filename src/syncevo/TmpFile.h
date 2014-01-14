@@ -40,27 +40,30 @@ class TmpFileException : public std::runtime_error
 
 /**
  * Class for handling temporary files, either read/write access
- * or memory mapped.
+ * or memory mapped. Optionally creates a pipe instead of a plain file.
+ *
+ * Reading is done mapping the plain file into memory (file) or simply
+ * reading from the file descriptor (file or pipe).
  *
  * Closing and removing a mapped file is supported by calling close()
  * after map().
  */
 class TmpFile
 {
-    protected:
-        int m_fd;
-        void *m_mapptr;
-        size_t m_mapsize;
-        std::string m_filename;
-
     public:
+        enum Type {
+            FILE,
+            PIPE
+        };
+
         TmpFile();
         virtual ~TmpFile();
 
         /**
-         * Create a temporary file.
+         * Create a temporary file or pipe.
          */
-        void create();
+        void create(Type type = FILE);
+
         /**
          * Map a view of file and optionally return pointer and/or size.
          *
@@ -70,10 +73,22 @@ class TmpFile
          * @param mapsize Pointer to variable for mapped size. (can be NULL)
          */
         void map(void **mapptr = 0, size_t *mapsize = 0);
+
         /**
          * Unmap a view of file.
          */
         void unmap();
+
+        /**
+         * File descriptor, ready for reading from start of file or pipe
+         * after create().
+         */
+        int getFD() const { return m_fd; }
+
+        /**
+         * FILE by default, otherwise the value given to create().
+         */
+        Type getType() const { return m_type; }
 
         /**
          * Returns amount of bytes not mapped into memory yet, zero if none.
@@ -134,6 +149,14 @@ class TmpFile
          * @return pcrecpp::StringPiece of the mapped view
          */
         pcrecpp::StringPiece stringPiece();
+
+    protected:
+        Type m_type;
+        int m_fd;
+        void *m_mapptr;
+        size_t m_mapsize;
+        std::string m_filename;
+
 };
 
 #endif  // INCL_SYNCEVOLUTION_TMPFILE
