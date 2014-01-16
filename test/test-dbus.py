@@ -293,7 +293,7 @@ class Timeout:
         DBusUtil.quit_events before calling loop.quit() caused
         a KeyboardInterrupt"""
         if glib and use_glib:
-            return glib.timeout_add(delay_seconds, callback)
+            return glib.timeout_add(delay_seconds * 1000, callback)
         else:
             now = time.time()
             if cls.debugTimeout:
