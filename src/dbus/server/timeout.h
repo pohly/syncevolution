@@ -130,15 +130,20 @@ private:
     {
         Timeout *me = static_cast<Timeout *>(data);
         bool runAgain = false;
+        uint tag = me->m_tag;
         try {
-            runAgain = me->m_callback();
+            // Be extra careful and don't trigger a deactivated callback.
+            if (me->m_callback) {
+                runAgain = me->m_callback();
+            }
         } catch (...) {
             // Something unexpected went wrong, can only shut down.
             Exception::handle(HANDLE_EXCEPTION_FATAL);
         }
-        if (!runAgain) {
-            // Returning false will automatically deactivate the source,
-            // remember that.
+        if (!runAgain && // Returning false will automatically deactivate the source, remember that.
+            me->m_tag == tag // Beware that the callback may have already reused the Timeout instance.
+                             // In that case, we must not reset the new tag and callback.
+            ) {
             me->m_tag = 0;
             me->m_callback = 0;
         }
