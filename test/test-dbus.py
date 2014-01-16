@@ -3141,7 +3141,9 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorQuiet - test that auto-sync is triggered for local sync, fails due to permanent config error here, with no notification"""
         self.doAutoSyncLocalConfigError(0)
 
-    def doAutoSyncLocalSuccess(self, notifyLevel, repeat=False):
+    def doAutoSyncLocalSuccess(self, notifyLevel, repeat=False,
+                               afterSession=lambda step: 0,
+                               atSessionChanged=lambda path, ready: 0):
         # create @foobar config
         self.session.Detach()
         self.setUpSession("target-config@foobar")
@@ -3168,17 +3170,29 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         # must be small enough (otherwise test runs a long time)
         # but not too small (otherwise the next sync already starts
         # before we can check the result and kill the daemon)
-        config[""]["autoSyncInterval"] = usingValgrind() and "60s" or "10s"
+        autoSyncIntervalSeconds = usingValgrind() and 60 or 10
+        autoSyncIntervalAccuracy = 3
+        config[""]["autoSyncInterval"] = '%ds' % autoSyncIntervalSeconds
         config["source/addressbook"]["uri"] = "addressbook"
         self.session.SetConfig(False, False, config, utf8_strings=True)
 
         def session_ready(object, ready):
+            if self.running and ready:
+                logging.printf('session ready')
+                session_ready.sessionStart.append(time.time())
             if self.running and object != self.sessionpath and \
+                not atSessionChanged(object, ready) and \
                 (self.auto_sync_session_path == None and ready or \
                  self.auto_sync_session_path == object):
                 self.auto_sync_session_path = object
                 DBusUtil.quit_events.append("session " + object + (ready and " ready" or " done"))
                 loop.quit()
+
+        # Track time of "session started" signal. We need that when
+        # sessions get started concurrently, which affects our
+        # expected start time of the auto sync interval (see
+        # testAutoSyncLocalMultiple).
+        session_ready.sessionStart = []
 
         signal = bus.add_signal_receiver(session_ready,
                                          'SessionChanged',
@@ -3190,12 +3204,18 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
 
         # shut down current session, will allow auto-sync
         self.session.Detach()
+        afterSession(0)
+
+        # Remember when auto-sync countdown started.
+        session_ready.sessionStart.append(time.time())
 
         # wait for start and end of auto-sync session
         def run(operation, numSyncs):
             logging.log(operation)
             loop.run()
+            logging.printf('%s: session ready' % operation)
             loop.run()
+            logging.printf('%s: session done' % operation)
             self.assertEqual(DBusUtil.quit_events, ["session " + self.auto_sync_session_path + " ready",
                                                     "session " + self.auto_sync_session_path + " done"])
             session = dbus.Interface(bus.get_object(self.server.bus_name,
@@ -3212,6 +3232,14 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.auto_sync_session_path = None
 
         run('waiting for first auto sync', 1)
+        afterSession(1)
+
+        # Actual delay should have been roughly the configured delay,
+        # give or take a few seconds.
+        self.assertLessEqual(2, len(session_ready.sessionStart))
+        self.assertLess(session_ready.sessionStart[-2], session_ready.sessionStart[-1])
+        self.assertAlmostEqual(session_ready.sessionStart[-1] - session_ready.sessionStart[-2], autoSyncIntervalSeconds,
+                               delta=autoSyncIntervalAccuracy) # seconds
 
         # check that org.freedesktop.Notifications.Notify was called
         # when starting and completing the sync
@@ -3253,6 +3281,9 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         if repeat:
             for i in range(1,3):
                 run('waiting for auto sync #%d' % i, i + 1)
+                self.assertLess(session_ready.sessionStart[-2], session_ready.sessionStart[-1])
+                self.assertAlmostEqual(session_ready.sessionStart[-1] - session_ready.sessionStart[-2], autoSyncIntervalSeconds,
+                                       delta=autoSyncIntervalAccuracy) # seconds
         else:
             # done as part of post-processing in runTest()
             self.runTestDBusCheck = checkDBusLog
@@ -3272,8 +3303,62 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     @timeout(240)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalMultiple(self):
-        """TestSessionAPIsDummy.testAutoSyncLocalMultiple - test that auto-sync is done successfully for local sync between file backends, several times"""
-        self.doAutoSyncLocalSuccess(1, repeat=True)
+        """TestSessionAPIsDummy.testAutoSyncLocalMultiple - test that auto-sync is done successfully for local sync between file backends, several times, despite additional work going on"""
+
+        # Simulate concurrent command line session as in FDO #73562.
+        # syncevo-dbus-server used to die when that happened.
+        class FakeConfigSession:
+            def __init__(self, server):
+                self.server = server
+                self.ran = None
+
+            def start(self):
+                self.ran = 0
+                logging.printf('intermediate session starting')
+                self.server.StartSessionWithFlags('dummy-test', ['no-sync'])
+
+            def atSessionStatusChange(self, status, error, sources):
+                if not status in ['queueing', 'idle', 'running']:
+                    logging.printf('intermediate session stopping: %s, %d, %s', status, error, sources)
+                    self.session.Detach()
+                    self.ran = True
+
+            def atSessionChanged(self, path, ready):
+                if ready and self.ran == 0:
+                    # This must be our session, even if StartSessionWithFlags()
+                    # hasn't returned yet.
+                    logging.printf('intermediate session ready')
+                    self.session = dbus.Interface(bus.get_object(self.server.bus_name,
+                                                                 path),
+                                                  'org.syncevolution.Session')
+                    bus.add_signal_receiver(self.atSessionStatusChange,
+                                            'StatusChanged',
+                                            'org.syncevolution.Session',
+                                            self.server.bus_name,
+                                            path,
+                                            byte_arrays=True,
+                                            utf8_strings=True)
+                    self.session.Execute(['syncevolution', '-q', '--print-config', 'dummy-test'], [])
+                    self.ran = 1
+                    return True
+                else:
+                    return False
+
+
+            def afterSession(self, step):
+                logging.printf('step %d' % step)
+                if step == 0:
+                    # Read-only access to the auto-sync config in five seconds.
+                    # Simulates a usage pattern which caused syncevo-dbus-server
+                    # to abort when misusing the timeout callbacks (FDO #73562).
+                    Timeout.addTimeout(5, self.start)
+
+        fakeConfigSession = FakeConfigSession(self.server)
+
+        self.doAutoSyncLocalSuccess(1, repeat=True,
+                                    afterSession=fakeConfigSession.afterSession,
+                                    atSessionChanged=fakeConfigSession.atSessionChanged)
+        self.assertEqual(fakeConfigSession.ran, True)
 
 class TestSessionAPIsReal(DBusUtil, unittest.TestCase):
     """ This class is used to test those unit tests of session APIs, depending on doing sync.
