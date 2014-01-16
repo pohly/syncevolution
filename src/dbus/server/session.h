@@ -115,8 +115,9 @@ class Session : public GDBusCXX::DBusObjectHelper,
      * run the operation (see runOperation()). When it terminates, the
      * session is either considered "done" or "failed", depending on
      * whether the operation has completed already.
+     * @param env  additional env variables to be set in the helper process
      */
-    void useHelperAsync(const SimpleResult &result);
+    void useHelperAsync(const SimpleResult &result, const StringMap &env = StringMap());
 
     /**
      * Finish the work started by useHelperAsync once helper has
@@ -234,7 +235,8 @@ class Session : public GDBusCXX::DBusObjectHelper,
      * to execute a specific operation (sync, command line, ...).
      */
     void runOperationAsync(SessionCommon::RunOperation op,
-                           const SuccessCb_t &helperReady);
+                           const SuccessCb_t &helperReady,
+                           const StringMap &env = StringMap());
 
     /**
      * A Session can be used for exactly one of the operations.  This
@@ -410,7 +412,12 @@ public:
                         const ReadOperations::Config_t &config);
 
     /** Session.Sync() */
-    void sync(const std::string &mode, const SessionCommon::SourceModes_t &sourceModes);
+    void sync(const std::string &mode, const SessionCommon::SourceModes_t &sourceModes) {
+        syncExtended(mode, sourceModes, StringMap());
+    }
+
+    void syncExtended(const std::string &mode, const SessionCommon::SourceModes_t &sourceModes,
+                      const StringMap &env);
 
     /**
      * finish the work started by sync once helper is ready (invoked

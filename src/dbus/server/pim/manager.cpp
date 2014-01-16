@@ -155,6 +155,7 @@ void Manager::init()
     add(this, &Manager::createPeer, "CreatePeer"); // Strict version: uid must be new.
     add(this, &Manager::removePeer, "RemovePeer");
     add(this, &Manager::syncPeer, "SyncPeer");
+    add(this, &Manager::syncPeerWithFlags, "SyncPeerWithFlags");
     add(this, &Manager::stopSync, "StopSync");
     add(this, &Manager::getAllPeers, "GetAllPeers");
     add(this, &Manager::addContact, "AddContact");
@@ -1390,7 +1391,21 @@ void Manager::syncPeer(const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &
                               uid.c_str()),
                  Server::SESSION_FLAG_NO_SYNC,
                  result,
-                 boost::bind(&Manager::doSyncPeer, this, _1, result, uid));
+                 boost::bind(&Manager::doSyncPeer, this, _1, result, uid, SyncFlags()));
+}
+
+void Manager::syncPeerWithFlags(const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
+                                const std::string &uid,
+                                const SyncFlags &flags)
+{
+    checkPeerUID(uid);
+    runInSession(StringPrintf("%s@%s%s",
+                              MANAGER_LOCAL_CONFIG,
+                              MANAGER_PREFIX,
+                              uid.c_str()),
+                 Server::SESSION_FLAG_NO_SYNC,
+                 result,
+                 boost::bind(&Manager::doSyncPeer, this, _1, result, uid, flags));
 }
 
 static Manager::SyncResult SyncReport2Result(const SyncReport &report)
@@ -1426,7 +1441,8 @@ static void doneSyncPeer(const boost::shared_ptr<GDBusCXX::Result1<Manager::Sync
 
 void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
                          const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
-                         const std::string &uid)
+                         const std::string &uid,
+                         const SyncFlags &flags)
 {
     // Keep client informed about progress.
     emitSyncProgress(uid, "started", SyncResult());
@@ -1444,10 +1460,28 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
         syncMode = "pbap";
     }
 
+    StringMap env;
+    BOOST_FOREACH (const SyncFlags::value_type &entry, flags) {
+        if (entry.first == "pbap-sync") {
+            const std::string *value = boost::get<const std::string>(&entry.second);
+            if (!value) {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag 'pbap-sync' expects a string value"));
+            }
+            if (*value != "text" &&
+                *value != "all" &&
+                *value != "incremental") {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag 'pbap-sync' expects one of 'text', 'all', or 'incremental': %s", value->c_str()));
+            }
+            env["SYNCEVOLUTION_PBAP_SYNC"] = *value;
+        } else {
+            SE_THROW(StringPrintf("invalid SyncPeerWithFlags flag: %s", entry.first.c_str()));
+        }
+    }
+
     // After sync(), the session is tracked as the active sync session
     // by the server. It was removed from our own m_pending list by
     // doSession().
-    session->sync(syncMode, SessionCommon::SourceModes_t());
+    session->syncExtended(syncMode, SessionCommon::SourceModes_t(), env);
     // Relay result to caller when done.
     session->m_doneSignal.connect(boost::bind(doneSyncPeer, result, _1, _2));
 }

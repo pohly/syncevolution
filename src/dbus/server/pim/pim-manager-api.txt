@@ -254,6 +254,12 @@ Methods:
          updated. The caller needs to check the local cache to find out
          what it contains.
 
+    dict SyncPeerWithFlags(string uid, dict flags)
+
+         Same as SyncPeer() with additional control over the sync via
+         optional flags. The flags and their values are
+         implementation-dependent.
+
     void StopSync(string uid)
 
          Stop any running sync for the given peer. The SyncPeer() method
