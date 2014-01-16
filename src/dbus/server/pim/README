@@ -326,8 +326,9 @@ Not supported via the API at the moment:
 Syncing
 =======
 
-SetSync() in SyncEvolution will return a dict with all of the
-following entries set:
+SyncPeer() and SyncPeerWithFlags() in SyncEvolution will return a dict
+with all of the following entries set:
+
     "modified": boolean - data was modified
     "added" : integer - number of new contacts
     "updated" : integer - number of updated contacts
@@ -336,6 +337,23 @@ following entries set:
 In other words, the caller can reliably detect when nothing changed,
 but when contacts were modified or added, it needs to read them to
 determine which kind of properties were modified or added.
+
+It is possible that the same contact gets counted twice, for example
+when adding it in the first text-only cycle and later updating it with
+photo data in the second cycle, or updating some text first and the
+photo later.
+
+Additional control over syncing is possible via the flags dictionary
+in SyncPeerWithFlags(). The following keys are possible:
+
+    "pbap-sync": string "text"|"all"|"incremental" - synchronize only
+    text properties, all properties or first text, then all. The default is
+    taken from SYNCEVOLUTION_PBAP_SYNC if set, otherwise it is "incremental".
+
+When doing text syncing, local photo data is preserved. The
+incremental sync has the same effect as a text-only sync followed by
+an all-properties sync. The only difference is that it looks and
+behaves like a single sync of the peer.
 
 The SyncProgress is triggered by SyncEvolution with three different
 keys (in this order, with "modified" occuring zero or more times):

@@ -1121,6 +1121,45 @@ END:VCARD
              self.assertEqual(files, listsyncevo(exclude=exclude))
              self.assertEqual(4, len(os.listdir(logdir)))
 
+        # Test incremental sync API. Only possible with real phone.
+        if phone:
+             expectedResult = {'modified': False,
+                               'added': 0,
+                               'updated': 0,
+                               'removed': 0}
+
+             syncProgress = []
+             result = self.manager.SyncPeerWithFlags(uid, { 'pbap-sync': 'text' })
+             # TODO: check that we actually do text-only sync
+             checkSync(expectedResult,
+                       result,
+                       None)
+
+             syncProgress = []
+             result = self.manager.SyncPeerWithFlags(uid, { 'pbap-sync': 'all' })
+             expectedResult = {'modified': False,
+                               'added': 0,
+                               'updated': 0,
+                               'removed': 0}
+             # TODO: check that we actually do complete sync
+             checkSync(expectedResult,
+                       result,
+                       None)
+
+             syncProgress = []
+             result = self.manager.SyncPeerWithFlags(uid, { 'pbap-sync': 'incremental' })
+             expectedResult = {'modified': False,
+                               'added': 0,
+                               'updated': 0,
+                               'removed': 0}
+             # TODO: check that we actually do incremental sync *without* relying on
+             # "modified" begin emitted at the end of the first cycle despite there being
+             # no changes.
+             checkSync(expectedResult,
+                       result,
+                       expectedResult)
+
+
         # Cannot update data when using pre-defined test cases.
         if not testcases:
              # Update contact, removing extra properties.

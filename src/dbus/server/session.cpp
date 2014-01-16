@@ -360,7 +360,8 @@ void Session::initServer(SharedBuffer data, const std::string &messageType)
     m_initialMessageType = messageType;
 }
 
-void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &sourceModes)
+void Session::syncExtended(const std::string &mode, const SessionCommon::SourceModes_t &sourceModes,
+                           const StringMap &env)
 {
     PushLogger<Logger> guard(m_me);
     if (m_runOperation == SessionCommon::OP_SYNC) {
@@ -378,7 +379,8 @@ void Session::sync(const std::string &mode, const SessionCommon::SourceModes_t &
     // caller. Starting the helper (if needed) and making it
     // execute the sync is part of "running sync".
     runOperationAsync(SessionCommon::OP_SYNC,
-                      boost::bind(&Session::sync2, this, mode, sourceModes));
+                      boost::bind(&Session::sync2, this, mode, sourceModes),
+                      env);
 }
 
 void Session::sync2(const std::string &mode, const SessionCommon::SourceModes_t &sourceModes)
@@ -764,7 +766,8 @@ static void raiseChildTermError(int status, const SimpleResult &result)
 }
 
 void Session::runOperationAsync(SessionCommon::RunOperation op,
-                                const SuccessCb_t &helperReady)
+                                const SuccessCb_t &helperReady,
+                                const StringMap &env)
 {
     PushLogger<Logger> guard(m_me);
     m_server.addSyncSession(this);
@@ -774,10 +777,11 @@ void Session::runOperationAsync(SessionCommon::RunOperation op,
     fireStatus(true);
 
     useHelperAsync(SimpleResult(helperReady,
-                                boost::bind(&Session::failureCb, this)));
+                                boost::bind(&Session::failureCb, this)),
+                   env);
 }
 
-void Session::useHelperAsync(const SimpleResult &result)
+void Session::useHelperAsync(const SimpleResult &result, const StringMap &env)
 {
     PushLogger<Logger> guard(m_me);
     try {
@@ -802,6 +806,11 @@ void Session::useHelperAsync(const SimpleResult &result)
                 m_forkExecParent->addEnvVar("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel()));
             }
 #endif
+            BOOST_FOREACH (const StringPair &entry, env) {
+                SE_LOG_DEBUG(NULL, "running helper with env variable %s=%s",
+                             entry.first.c_str(), entry.second.c_str());
+                m_forkExecParent->addEnvVar(entry.first, entry.second);
+            }
             // We own m_forkExecParent, so the "this" pointer for
             // onConnect will live longer than the signal in
             // m_forkExecParent -> no need for resource
