@@ -585,10 +585,11 @@ syncevo-http-server itself is installed""")
         if not options.cert:
             logger.error("need server certificate for https")
             exit(1)
-        reactor.listenSSL(url.port, site,
-                          ChainedOpenSSLContextFactory(options.key or options.cert, options.cert))
+        port = reactor.listenSSL(url.port, site,
+                                 ChainedOpenSSLContextFactory(options.key or options.cert, options.cert))
     else:
-        reactor.listenTCP(url.port, site)
+        port = reactor.listenTCP(url.port, site)
+    logger.info("listening on port %d", port.getHost().port)
     reactor.run()
 
 if __name__ == '__main__':
