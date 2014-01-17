@@ -2677,6 +2677,8 @@ END:VCARD
                   raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
              else:
                   raise
+         finally:
+              daemon.remove_from_connection()
 
     @timeout(60)
     # Must disable usage of pre-computed phone numbers from EDS, because we can't tell EDS
@@ -2723,6 +2725,8 @@ END:VCARD
                   raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
              else:
                   raise
+         finally:
+              daemon.remove_from_connection()
 
     # Not supported correctly by ICU?
     # See icu-support "Subject: Austrian phone book sorting"
