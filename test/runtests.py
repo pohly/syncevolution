@@ -1605,7 +1605,7 @@ syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
                          "--daemon-log", "syncevohttp.log",
                          os.path.join(compile.installdir, "usr", "bin", "syncevo-http-server"),
                          "--quiet",
-                         "http://127.0.0.1:9999/syncevolution",
+                         "http://127.0.0.1:<httpport>/syncevolution",
                          "--",
                          options.testprefix])
 
@@ -1632,7 +1632,7 @@ test = SyncEvolutionTest("edsfile",
                          "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
                          "CLIENT_TEST_SKIP="
                          ,
-                         testPrefix=syncevoPrefix)
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9900'))
 context.add(test)
 
 # The test uses EDS on the client and server server side.
@@ -1655,7 +1655,7 @@ test = SyncEvolutionTest("edseds",
                          "CLIENT_TEST_PEER_CAN_RESTART=1 "
                          "CLIENT_TEST_SKIP="
                          ,
-                         testPrefix=syncevoPrefix)
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9901'))
 context.add(test)
 
 # The test uses EDS on the clients and a server config with file
@@ -1679,7 +1679,7 @@ test = SyncEvolutionTest("edsxfile",
                          "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
                          "CLIENT_TEST_SKIP="
                          ,
-                         testPrefix=syncevoPrefix)
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9902'))
 # a lot of syncs per test
 test.alarmSeconds = 6000
 context.add(test)
@@ -1708,7 +1708,7 @@ test = SyncEvolutionTest("davfile",
                          "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
                          "CLIENT_TEST_SKIP="
                          ,
-                         testPrefix=syncevoPrefix)
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9903'))
 context.add(test)
 
 # EDS on client side, DAV on server.
@@ -1731,7 +1731,7 @@ test = SyncEvolutionTest("edsdav",
                          "CLIENT_TEST_PEER_CAN_RESTART=1 "
                          "CLIENT_TEST_SKIP="
                          ,
-                         testPrefix=syncevoPrefix)
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9904'))
 context.add(test)
 
 scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
