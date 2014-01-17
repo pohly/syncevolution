@@ -400,7 +400,7 @@ class Context:
         generated source of the current test, then the bootstrapping code"""
         return findInPaths(name, (os.path.join(sync.basedir, "test"), self.datadir))
 
-    def runCommand(self, cmdstr, dumpCommands=False):
+    def runCommand(self, cmdstr, dumpCommands=False, runAsIs=False):
         """Log and run the given command, throwing an exception if it fails."""
         cmd = shlex.split(cmdstr)
         if "valgrindcheck.sh" in cmdstr:
@@ -426,7 +426,8 @@ class Context:
             # use env.
             cmd.insert(0, 'env')
 
-        cmdstr = " ".join(map(lambda x: (' ' in x or '(' in x or '\\' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x, cmd))
+        if not runAsIs:
+            cmdstr = " ".join(map(lambda x: (' ' in x or '(' in x or '\\' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x, cmd))
         if dumpCommands:
             cmdstr = "set -x; " + cmdstr
 
@@ -435,7 +436,7 @@ class Context:
         # Detect that in a hackish way by checking for "schroot" and then adapting
         # paths with search/replace. Exception is resultchecker.py, which runs outside
         # the chroot, but gets passed "schroot" as parameter.
-        if 'schroot ' in cmdstr and options.schrootdir and not 'resultchecker.py' in cmdstr:
+        if not runAsIs and 'schroot ' in cmdstr and options.schrootdir and not 'resultchecker.py' in cmdstr:
             if cwd.startswith(options.schrootdir):
                 relcwd = cwd[len(options.schrootdir):]
                 cmdstr = cmdstr.replace('schroot ', 'schroot -d %s ' % relcwd)
@@ -687,7 +688,8 @@ class GitCheckout(GitCheckoutBase, Action):
                            "((git tag -l | grep -w -q %(rev)s) && git checkout %(rev)s ||"
                            "((git branch -l | grep -w -q %(rev)s) && git checkout %(rev)s || git checkout -b %(rev)s origin/%(rev)s) && git merge origin/%(rev)s)" %
                            {"dir": self.basedir,
-                            "rev": self.revision})
+                            "rev": self.revision},
+                           runAsIs=True)
         os.chdir(self.basedir)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
@@ -753,7 +755,7 @@ class GitCopy(GitCheckoutBase, Action):
                 '( git status | grep -q "working directory clean" && echo "working directory clean" || ( echo "working directory dirty" && ( echo From: nightly testing ; echo Subject: [PATCH 1/1] uncommitted changes ; echo ; git status; echo; git diff HEAD ) >../%(name)s-1000-unstaged.patch ) ) >>%(patchlog)s'
                 ]) % self
 
-        context.runCommand(cmd, dumpCommands=True)
+        context.runCommand(cmd, dumpCommands=True, runAsIs=True)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
