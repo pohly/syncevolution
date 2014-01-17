@@ -1775,8 +1775,8 @@ static StringConfigProperty syncPropAutoSync("autoSync",
                                              "0");
 
 static SecondsConfigProperty syncPropAutoSyncInterval("autoSyncInterval",
-                                                      "This is the minimum number of seconds between two\n"
-                                                      "synchronizations that has to pass before starting\n"
+                                                      "This is the minimum number of seconds since the start of\n"
+                                                      "the last synchronization that has to pass before starting\n"
                                                       "an automatic synchronization. Can be specified using\n"
                                                       "a 1h30m5s format.\n"
                                                       "\n"
