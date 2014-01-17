@@ -385,6 +385,19 @@ void ForkExecParent::checkCompletion() throw ()
                     // not an error when the child dies because we killed it
                     return;
                 }
+                if (WIFSIGNALED(m_status) &&
+                    WTERMSIG(m_status) == SIGKILL &&
+                    m_sigTermSent) {
+                    // This started to happen on Debian Testing after the Wheezy release:
+                    // everything seems to shut down normally, and yet the exit status
+                    // of the helper shows SIGKILL instead of SIGTERM as the reason for
+                    // quitting. valgrind is involved, too. Not sure where this new (?)
+                    // behavior comes from. It seems to be harmless, so accept that
+                    // additional exit code without complaining (which would break unit
+                    // testing).
+                    SE_LOG_DEBUG(NULL, "ForkExecParent: ignoring unexpected exit signal SIGKILL of child %ld", (long)m_childPid);
+                    return;
+                }
                 std::string error = "child process quit";
                 if (!m_hasConnected) {
                     error += " unexpectedly";
