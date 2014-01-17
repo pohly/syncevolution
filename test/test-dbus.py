@@ -506,6 +506,7 @@ class DBusUtil(Timeout):
         DBusUtil.quit_events = []
         DBusUtil.reply = None
         self.pserverpid = None
+        self.additional_logs = []
 
         # allow arbitrarily long diffs in Python unittest
         self.maxDiff = None
@@ -715,6 +716,14 @@ class DBusUtil(Timeout):
             monitorout = dbuslog + ':\n' + open(dbuslog).read()
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
+
+        # Also include any test-specific log files (like syncevo-http-server.log, see TestHTTP).
+        for logfile in self.additional_logs:
+            try:
+                report = report + ('\n\n%s:\n' % logfile) + open(logfile).read()
+            except:
+                pass
+
         if usingDLT and not debugger:
             dltout = dltlog + ':\n' + open(dltlog).read()
         runTestDBusCheck = getattr(self, 'runTestDBusCheck', None)
@@ -9228,6 +9237,12 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertIn('REQUESTMAXTIME=', out)
         self.assertEqual(0, code)
         self.haveMultithreadedSyncEvo = 'is thread-safe' in out
+        self.httpserver = None
+
+    def tearDown(self):
+        if self.httpserver:
+            self.httpserver.kill()
+            self.httpserver.wait()
 
     def run(self, result):
         # Runtime varies a lot when using valgrind, because
@@ -9237,22 +9252,25 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
                      defTimeout=usingValgrind() and 600 or 20)
 
     def runHTTPServer(self):
-        '''Pick port dynamically by running syncevo-http-server and checking whether it can listen on the port.'''
-        for port in range(9000, 10000):
-            httpserver = subprocess.Popen(['syncevo-http-server', '-q', 'http://127.0.0.1:%d' % port],
-                                          stderr=subprocess.PIPE)
-            while True:
-                if httpserver.poll() != None:
-                    error = httpserver.stderr.read()
-                    self.assertIn('twisted.internet.error.CannotListenError', error)
+        '''Pick port dynamically by running syncevo-http-server with port 0 and parsing its output.'''
+        logname = self.testname + '.syncevo-http-server.log'
+        self.additional_logs.append(logname)
+        self.httpserver = subprocess.Popen(['syncevo-http-server', '-d', 'http://127.0.0.1:0'],
+                                           stdout=open(logname, 'w'),
+                                           stderr=subprocess.STDOUT)
+        self.port = 0
+        while self.port == 0:
+            res = self.httpserver.poll()
+            if self.httpserver.poll() != None:
+                self.fail('syncevo-http-server failed to start, return code %d' % res)
+            regex = re.compile(r'listening on port (\d+)')
+            for line in open(logname, 'r'):
+                m = regex.search(line)
+                if m:
+                    self.port = int(m.group(1))
                     break
-                http = httplib.HTTPConnection('127.0.0.1', port)
-                try:
-                    http.connect()
-                    return port
-                except socket.error, ex:
-                    self.assertEqual(errno.ECONNREFUSED, ex.errno)
-                    time.sleep(0.5)
+            time.sleep(0.1)
+        return self.port
 
     def setUpConfigs(self,
                      port,
