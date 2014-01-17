@@ -58,7 +58,7 @@ if testFolder not in sys.path:
 # Rely on the glib/gobject compatibility import code in test-dbus.py.
 from testdbus import glib, gobject
 
-from testdbus import DBusUtil, timeout, property, usingValgrind, xdg_root, bus, logging, NullLogging, loop
+from testdbus import DBusUtil, timeout, Timeout, property, usingValgrind, xdg_root, bus, logging, NullLogging, loop
 import testdbus
 
 def timeFunction(func, *args1, **args2):
@@ -2681,13 +2681,25 @@ END:VCARD
               daemon.remove_from_connection()
 
     @timeout(60)
-    # Must disable usage of pre-computed phone numbers from EDS, because we can't tell EDS
-    # when locale is meant to change.
+    # Must disable usage of pre-computed phone numbers from EDS, because although we can
+    # tell EDS about locale changes, it currently crashes when we do that (https://bugs.freedesktop.org/show_bug.cgi?id=59571#c20).
+    #
+    # Remove the SYNCEVOLUTION_PIM_EDS_NO_E164=1 part from ENV to test and use EDS.
     @property("ENV", "LANG=en_US.UTF-8 SYNCEVOLUTION_PIM_EDS_NO_E164=1")
     def testLocaledPhone(self):
          # Parsing of 1234-5 depends on locale: US drops the 1 from 1234
          # Germany (and other countries) don't. Use that to match (or not match)
          # a contact.
+
+         usingEDS = not 'SYNCEVOLUTION_PIM_EDS_NO_E164=1' in self.getTestProperty("ENV", "")
+
+         if usingEDS:
+              daemon = localed.Localed()
+              daemon.SetLocale(['LANG=en_US.UTF-8'], True)
+              # Give EDS some time to notice the new daemon and it's en_US setting.
+              Timeout.addTimeout(5, loop.quit)
+              loop.run()
+
          testcases = (('Doe', '''BEGIN:VCARD
 VERSION:3.0
 FN:Doe
@@ -2700,8 +2712,11 @@ END:VCARD
          view = self.doFilter(testcases,
                               (([['phone', '+12345']], ('Doe',)),))
 
-         daemon = localed.Localed()
          msg = None
+         if not usingEDS:
+              # Don't do that too early, otherwise EDS also sees the daemon
+              # and crashes (https://bugs.freedesktop.org/show_bug.cgi?id=59571#c20).
+              daemon = localed.Localed()
          try:
               # Contact no longer matched because it's phone number normalization
               # becomes different.
