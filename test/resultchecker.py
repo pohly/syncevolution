@@ -151,11 +151,12 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     result.write(indent+'''<prepare>\n''')
     indent =indent+space
     indents.append(indent)
-    tags=['libsynthesis', 'syncevolution', 'activesyncd', 'compile', 'dist']
+    tags=['libsynthesis', 'syncevolution', 'activesyncd', 'compile', 'dist', 'distcheck']
     tagsp={'libsynthesis':'libsynthesis-source',
            'syncevolution':'syncevolution-source',
            'activesyncd':'activesyncd-source',
            'compile':'compile',
+           'distcheck': 'distcheck',
            'dist':'dist'}
     for tag in tags:
         result.write(indent+'''<'''+tagsp[tag])

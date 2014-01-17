@@ -1302,12 +1302,6 @@ class SyncEvolutionDist(AutotoolsBuild):
 			break
         if self.binsuffix:
             context.runCommand("%s %s BINSUFFIX=%s distbin" % (self.runner, context.make, self.binsuffix))
-        if enabled["dist"] == None:
-            context.runCommand("%s %s distcheck" % (self.runner, context.make))
-            context.runCommand("%s %s DISTCHECK_CONFIGURE_FLAGS=--enable-gui distcheck" % (self.runner, context.make))
-            context.runCommand("%s %s 'DISTCHECK_CONFIGURE_FLAGS=--disable-ecal --disable-ebook' distcheck" % (self.runner, context.make))
-        else:
-            context.runCommand("%s %s 'DISTCHECK_CONFIGURE_FLAGS=%s' distcheck" % (self.runner, context.make, enabled["dist"]))
 
 dist = SyncEvolutionDist("dist",
                          options.binsuffix,
@@ -1315,6 +1309,25 @@ dist = SyncEvolutionDist("dist",
                          options.shell,
                          [ compile.name ])
 context.add(dist)
+
+class SyncEvolutionDistcheck(AutotoolsBuild):
+    def __init__(self, name, binrunner, dependencies):
+        """Does 'distcheck' in a directory where SyncEvolution was configured and compiled before."""
+        AutotoolsBuild.__init__(self, name, "", "", binrunner, dependencies)
+
+    def execute(self):
+        cd(self.builddir)
+        if enabled["distcheck"] == None:
+            context.runCommand("%s %s distcheck" % (self.runner, context.make))
+            context.runCommand("%s %s DISTCHECK_CONFIGURE_FLAGS=--enable-gui distcheck" % (self.runner, context.make))
+            context.runCommand("%s %s 'DISTCHECK_CONFIGURE_FLAGS=--disable-ecal --disable-ebook' distcheck" % (self.runner, context.make))
+        else:
+            context.runCommand("%s %s 'DISTCHECK_CONFIGURE_FLAGS=%s' distcheck" % (self.runner, context.make, enabled["dist"]))
+
+distcheck = SyncEvolutionDistcheck("distcheck",
+                                   options.shell,
+                                   [ compile.name ])
+context.add(distcheck)
 
 evolutiontest = SyncEvolutionTest("evolution", compile,
                                   "", options.shell,
