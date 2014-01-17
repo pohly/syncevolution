@@ -1465,6 +1465,18 @@ status: idle, 0, {}
         '''Reduce custom dbus types to the corresponding Python type, to simplify the output in the error message.'''
         unittest.TestCase.assertEqual(self, self.stripDBus(a, sortLists), self.stripDBus(b, sortLists), msg)
 
+    def assertLessCustom(self, a, b, msg=None):
+        self.assertTrue(a < b, msg=msg)
+
+    def assertLessEqualCustom(self, a, b, msg=None):
+        self.assertTrue(a <= b, msg=msg)
+
+    def assertAlmostEqualCustom(self, a, b,  places=7, msg=None, delta=None):
+        if delta != None:
+            self.assertTrue(abs(a - b) < delta, msg=msg)
+        else:
+            self.assertTrue(round(a-b, places) == 0, msg=msg)
+
     # always use our own compare
     assertEqual = assertEqualCustom
 
@@ -1477,6 +1489,14 @@ status: idle, 0, {}
 
     if not 'assertNotIn' in dir(unittest.TestCase):
         assertNotIn = assertNotInCustom
+
+    if not 'assertLess' in dir(unittest.TestCase):
+        assertLess = assertLessCustom
+        # Can't check for delta parameter in assertAlmostEqual. Assume it's missing when assertLess is missing.
+        assertAlmostEqual = assertAlmostEqualCustom
+
+    if not 'assertLessEqual' in dir(unittest.TestCase):
+        assertLessEqual = assertLessEqualCustom
 
 class TestDBusServer(DBusUtil, unittest.TestCase):
     """Tests for the read-only Server API."""
