@@ -168,7 +168,9 @@ PKGS = $(addprefix syncevolution-evolution-, 2.6 2.8 2.12)
 # after the lib and its major version, which holds for libsmltk and
 # libsynthesis in Debian.
 deb rpm : checkinstall/dist/$(distdir) checkinstall/dist/debian/control
-	(echo "SyncEvolution - synchronizing personal information management data" && cat $(srcdir)/description) >description-pak
+	(echo "SyncEvolution - synchronizing personal information management data" && cat $(srcdir)/description) >checkinstall/description-pak
+	 echo "/sbin/ldconfig" >checkinstall/postremove-pak
+	 echo "/sbin/ldconfig" >checkinstall/postinstall-pak
 	conflicts=`ls -1 checkinstall/dist/$(distdir)/usr/lib/*.so.[0123456789] | sed -e 's;.*/;;' -e 's/\.so\.//' -e 's/$$/, /'` && \
 	tmpdir=`mktemp -d $$HOME/syncevolution.XXXXXXXXXX` && \
 	trap "rm -rf $$tmpdir" EXIT && \
