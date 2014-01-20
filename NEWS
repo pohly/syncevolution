@@ -1,3 +1,72 @@
+SyncEvolution 1.3.99.7, 22.01.2014
+==================================
+
+Final release candidate for 1.4. No further changes planned unless
+new problems are found.
+
+Details:
+
+* SSO: support Ubuntu Online Accounts
+
+  When compiling from source on recent Ubuntu it becomes possible to
+  use Ubuntu Online Accounts for authenticating against Google's
+  CalDAV and CardDAV servers.
+
+* D-Bus server: fix abort when mixing auto-sync and manual operations (FDO #73562)
+
+  When enabling auto-sync for a config and then accessing or syncing the
+  config manually via the command line tool, the server would abort at
+  the time when the auto-sync was originally scheduled.
+
+* D-Bus server: accept WBXML with charset in incoming connections
+
+  A user reported via email that the Nokia 515 sends
+  'application/vnd.syncml+wbxml; charset=UTF-8' as type of its messages
+  this tripped up the syncevo-http-server, leading to:
+
+    [ERROR] syncevo-dbus-server: /org/syncevolution/Server: message type 'application/vnd.syncml+wbxml; charset=UT
+
+  We need to strip the '; charset=UTF-8' suffix also when checking for
+  WBXML.
+
+* packaging: compatible with EDS up to and including 3.10
+
+  The packages now contain three versions of syncecal.so:
+    - one for EDS < 3.6
+    - one for EDS >= 3.6 < 3.10
+    - one for EDS >= 3.10 with the libecal-1.2 soname patched
+
+  The third flavor became necessary because EDS 3.10 accidentally
+  changed the soname. The API and ABI actually is the same.
+
+  Package meta-data was fixed to reflect the extended range of
+  compatible EDS libraries, so syncevolution-evolution can be installed
+  again with recent EDS.
+
+* packaging: update syncevolution-kde dependencies
+
+  kdebase-runtime became kde-runtime in Debian Wheezy. Accept both
+  as prerequisite of syncevolution-kde to allow installation on
+  newer distros without pulling in the transitional kdebase-runtime
+  package.
+
+* packaging: fix rpm (FDO #73347)
+
+  After installing the syncevolution.org rpm on OpenSUSE,
+  SyncEvolution was not starting because its shared libraries were not
+  found unless "ldconfig" was called manually. Now the package does
+  that automatically.
+
+* packaging: fix description
+
+  The syncevolution-bundle description of both rpm and deb
+  packagesaccidentally used the same description as
+  syncevolution-evolution.
+
+
+* test improvements, integration of cppcheck and clang's scan-build
+
+
 SyncEvolution 1.3.99.6, 04.12.2013
 ==================================
 
