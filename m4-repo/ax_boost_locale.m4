@@ -89,7 +89,7 @@ AC_DEFUN([AX_BOOST_LOCALE],
                                  [link_locale="no"])
 				done
                 if test "x$link_locale" != "xyes"; then
-                for libextension in `ls $BOOSTLIBDIR/boost_locale*.dll* $BOOSTLIBDIR/boost_locale*.a* 2>/dev/null | sed 's,.*/,,' | sed -e 's;^\(boost_locale.*\)\.dll.*$;\1;' -e 's;^\(boost_locale.*\)\.a.*$;\1;'` ; do
+                for libextension in `ls $BOOSTLIBDIR/boost_locale*.dll* $BOOSTLIBDIR/boost_locale*.a* 2>/dev/null | sed 's,.*/,,' | sed -e 's;^\(boost_locale.*\)\.dll.*$;\1;' -e 's;^\(boost_locale.*\)\.a.*$;\1;'` boost_locale; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
                                  [BOOST_LOCALE_LIB="-l$ax_lib"; AC_SUBST(BOOST_LOCALE_LIB) link_locale="yes"; break],
