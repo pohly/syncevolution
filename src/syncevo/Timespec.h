@@ -71,6 +71,9 @@ class Timespec : public timespec
 
     static Timespec monotonic() { Timespec res; clock_gettime(CLOCK_MONOTONIC, &res); return res; }
     static Timespec system() { Timespec res; clock_gettime(CLOCK_REALTIME, &res); return res; }
+
+    void resetMonotonic() { clock_gettime(CLOCK_MONOTONIC, this); }
+    void resetSystem() { clock_gettime(CLOCK_REALTIME, this); }
 };
 
 SE_END_CXX
