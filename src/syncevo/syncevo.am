@@ -25,6 +25,9 @@ src_syncevo_sources = \
   src/syncevo/IdentityProvider.h \
   src/syncevo/IdentityProvider.cpp \
   \
+  src/syncevo/gsignond-pipe-stream.h \
+  src/syncevo/gsignond-pipe-stream.cpp \
+  \
   src/syncevo/ConfigTree.h \
   src/syncevo/ConfigFilter.h \
   src/syncevo/ConfigFilter.cpp \
@@ -214,6 +217,7 @@ nodist_src_syncevo_libsyncevolution_la_SOURCES = src/syncevo/SyncEvolutionXML.c
 CLEANFILES += src/syncevo/SyncEvolutionXML.c
 src_syncevo_libsyncevolution_la_LIBADD = \
   @GIO_LIBS@ \
+  $(GIOUNIX_LIBS) \
   @GTHREAD_LIBS@ \
   @GLIB_LIBS@ \
   $(SYNTHESIS_LIBS) \
@@ -228,6 +232,7 @@ if ENABLE_MODULES
 src_syncevo_libsyncevolution_la_LIBADD += -ldl
 endif
 src_syncevo_libsyncevolution_la_CXXFLAGS = \
+  $(GIOUNIX_CFLAGS) \
   $(PCRECPP_CFLAGS) \
   $(TRANSPORT_CFLAGS) \
   $(src_syncevo_cxxflags) \

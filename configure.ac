@@ -990,6 +990,7 @@ if test "$need_glib" = "yes"; then
         PKG_CHECK_MODULES(GTHREAD, "gthread-2.0", , GLIBFOUND=no)
         PKG_CHECK_MODULES(GOBJECT, "gobject-2.0", , GLIBFOUND=no)
         PKG_CHECK_MODULES(GIO, "gio-2.0", , GLIBFOUND=no)
+        PKG_CHECK_MODULES(GIOUNIX, "gio-unix-2.0", , GLIBFOUND=no)
 
         if  test "x${GLIBFOUND}" = "xyes"; then
             AC_DEFINE(HAVE_GLIB, 1, [glib found])
