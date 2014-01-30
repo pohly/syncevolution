@@ -81,8 +81,19 @@ class Session : public GDBusCXX::DBusObjectHelper,
         SYNC_ILLEGAL
     };
 
+    /** Part of D-Bus API. */
     typedef std::map<std::string, SourceStatus> SourceStatuses_t;
-    typedef std::map<std::string, SourceProgress> SourceProgresses_t;
+    /** Part of D-Bus API. */
+    typedef std::map<std::string, APISourceProgress> APISourceProgresses_t;
+
+    /** Internal, with automatic conversion to APISourceProgresses_t when needed. */
+    struct SourceProgresses_t : public std::map<std::string, SourceProgress> {
+        operator APISourceProgresses_t () const {
+            APISourceProgresses_t to;
+            to.insert(begin(), end());
+            return to;
+        }
+    };
 
  private:
     Server &m_server;
@@ -211,6 +222,8 @@ class Session : public GDBusCXX::DBusObjectHelper,
 
     uint32_t m_error;
     SourceProgresses_t m_sourceProgress;
+    Timespec m_lastProgressTimestamp;
+    SourceProgresses_t m_lastProgress;
 
     // syncProgress() and sourceProgress() turn raw data from helper
     // into usable information on D-Bus server side
@@ -254,6 +267,20 @@ class Session : public GDBusCXX::DBusObjectHelper,
      */
     SessionCommon::RunOperation m_cmdlineOp;
 
+    // parameters from syncExtended()
+    std::string m_syncMode;
+    StringMap m_syncEnv;
+
+    typedef std::map<std::string, SyncSourceReport> SyncSourceReports;
+    static void StoreSyncSourceReport(SyncSourceReports &reports, const std::string &name, const SyncSourceReport &report) { reports[name] = report; }
+    /** Recorded during a sync for getSyncSourceReport. */
+    SyncSourceReports m_syncSourceReports;
+
+ public:
+    SessionCommon::RunOperation getOperation() const { return m_runOperation; }
+    std::string getSyncMode() const { return m_syncMode; }
+    StringMap getSyncEnv() const { return m_syncEnv; }
+
     /** Session.Attach() */
     void attach(const GDBusCXX::Caller_t &caller);
 
@@ -265,8 +292,16 @@ class Session : public GDBusCXX::DBusObjectHelper,
                    uint32_t &error,
                    SourceStatuses_t &sources);
     /** Session.GetProgress() */
+    void getAPIProgress(int32_t &progress,
+                        APISourceProgresses_t &sources);
+    /** Internal, with more information. */
     void getProgress(int32_t &progress,
                      SourceProgresses_t &sources);
+
+    /** Timestamp is set each time that m_progressSignal is triggered. */
+    Timespec getLastProgressTimestamp() const { return m_lastProgressTimestamp; }
+    /** SourceProgresses_t is set each time that m_progressSignal is triggered. */
+    void getLastProgress(Session::SourceProgresses_t &progress) const { progress = m_lastProgress; }
 
     /** Session.Restore() */
     void restore(const string &dir, bool before, const std::vector<std::string> &sources);
@@ -279,6 +314,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
     void execute(const vector<string> &args, const map<string, string> &vars);
     void execute2(const vector<string> &args, const map<string, string> &vars);
 
+ private:
     /**
      * Must be called each time that properties changing the
      * overall status are changed (m_syncStatus, m_error, m_sourceStatus).
@@ -294,14 +330,31 @@ class Session : public GDBusCXX::DBusObjectHelper,
     /** like fireStatus() for progress information */
     void fireProgress(bool flush = false);
 
-public:
     /** Session.StatusChanged */
     GDBusCXX::EmitSignal3<const std::string &,
                           uint32_t,
                           const SourceStatuses_t &> emitStatus;
     /** Session.ProgressChanged */
     GDBusCXX::EmitSignal2<int32_t,
-                          const SourceProgresses_t &> emitProgress;
+                          const APISourceProgresses_t &> emitProgress;
+public:
+    boost::signals2::signal<void (const std::string &,
+                                  uint32_t,
+                                  const SourceStatuses_t &)> m_statusSignal;
+    boost::signals2::signal<void (int32_t,
+                                  const SourceProgresses_t &)> m_progressSignal;
+
+    /**
+     * Sets minimum period of time in milliseconds between progress
+     * signals. Events coming to short after the previous one get
+     * skipped, to ensure that if an event gets emitted, it gets
+     * emitted at the time of the change.
+     *
+     * There is no guarantee that progress can be emitted very
+     * frequently (say, every second). In practice it gets updated at
+     * the end of processing each SyncML message.
+     */
+    void setProgressTimeout(unsigned long ms) { m_progressTimer.setTimeout(ms); }
 
     /**
      * Sessions must always be held in a shared pointer
@@ -458,6 +511,9 @@ public:
     /** a source was synced, emitted multiple times during a multi-cycle sync */
     typedef boost::signals2::signal<void (const std::string &, const SyncSourceReport &)> SourceSyncedSignal_t;
     SourceSyncedSignal_t m_sourceSynced;
+
+    /** gets latest SyncSourceReport of a source, returns false if none available yet */
+    bool getSyncSourceReport(const std::string &sourceName, SyncSourceReport &report) const;
 
     /**
      * Called by server when the session is ready to run.

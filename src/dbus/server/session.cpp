@@ -375,6 +375,9 @@ void Session::syncExtended(const std::string &mode, const SessionCommon::SourceM
         SE_THROW_EXCEPTION(InvalidCall, "session is not active, call not allowed at this time");
     }
 
+    m_syncMode = mode;
+    m_syncEnv = env;
+
     // Turn session into "running sync" now, before returning to
     // caller. Starting the helper (if needed) and making it
     // execute the sync is part of "running sync".
@@ -513,12 +516,31 @@ void Session::getStatus(std::string &status,
     sources = m_sourceStatus;
 }
 
+void Session::getAPIProgress(int32_t &progress,
+                             APISourceProgresses_t &sources)
+{
+    PushLogger<Logger> guard(m_me);
+    progress = m_progData.getProgress();
+    sources = m_sourceProgress;
+}
+
 void Session::getProgress(int32_t &progress,
                           SourceProgresses_t &sources)
 {
     PushLogger<Logger> guard(m_me);
     progress = m_progData.getProgress();
     sources = m_sourceProgress;
+}
+
+bool Session::getSyncSourceReport(const std::string &sourceName, SyncSourceReport &report) const
+{
+    SyncSourceReports::const_iterator it = m_syncSourceReports.find(sourceName);
+    if (it != m_syncSourceReports.end()) {
+        report = it->second;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void Session::fireStatus(bool flush)
@@ -535,7 +557,7 @@ void Session::fireStatus(bool flush)
     m_statusTimer.reset();
 
     getStatus(status, error, sources);
-    emitStatus(status, error, sources);
+    m_statusSignal(status, error, sources);
 }
 
 void Session::fireProgress(bool flush)
@@ -551,7 +573,7 @@ void Session::fireProgress(bool flush)
     m_progressTimer.reset();
 
     getProgress(progress, sources);
-    emitProgress(progress, sources);
+    m_progressSignal(progress, sources);
 }
 
 boost::shared_ptr<Session> Session::createSession(Server &server,
@@ -563,6 +585,11 @@ boost::shared_ptr<Session> Session::createSession(Server &server,
     boost::shared_ptr<Session> me(new Session(server, peerDeviceID, config_name, session, flags));
     me->m_me = me;
     return me;
+}
+
+static void SetProgress(Session::SourceProgresses_t &to, const Session::SourceProgresses_t &from)
+{
+    to = from;
 }
 
 Session::Session(Server &server,
@@ -591,6 +618,7 @@ Session::Session(Server &server,
     m_stepIsWaiting(false),
     m_priority(PRI_DEFAULT),
     m_error(0),
+    m_lastProgressTimestamp(Timespec::monotonic()),
     m_statusTimer(100),
     m_progressTimer(50),
     m_restoreSrcTotal(0),
@@ -616,12 +644,16 @@ Session::Session(Server &server,
     add(this, &Session::abort, "Abort");
     add(this, &Session::suspend, "Suspend");
     add(this, &Session::getStatus, "GetStatus");
-    add(this, &Session::getProgress, "GetProgress");
+    add(this, &Session::getAPIProgress, "GetProgress");
     add(this, &Session::restore, "Restore");
     add(this, &Session::checkPresence, "CheckPresence");
     add(this, &Session::execute, "Execute");
     add(emitStatus);
     add(emitProgress);
+    m_statusSignal.connect(boost::bind(boost::ref(emitStatus), _1, _2, _3));
+    m_progressSignal.connect(boost::bind(&Timespec::resetMonotonic, &m_lastProgressTimestamp));
+    m_progressSignal.connect(boost::bind(SetProgress, boost::ref(m_lastProgress), _2));
+    m_progressSignal.connect(boost::bind(boost::ref(emitProgress), _1, _2));
 
     SE_LOG_DEBUG(NULL, "session %s created", getPath());
 }
@@ -962,6 +994,7 @@ void Session::onConnect(const GDBusCXX::DBusConnectionPtr &conn) throw ()
         m_helper->m_syncProgress.activate(boost::bind(&Session::syncProgress, this, _1, _2, _3, _4));
         m_helper->m_sourceProgress.activate(boost::bind(&Session::sourceProgress, this, _1, _2, _3, _4, _5, _6));
         m_helper->m_sourceSynced.activate(boost::bind(boost::ref(m_sourceSynced), _1, _2));
+        m_sourceSynced.connect(boost::bind(StoreSyncSourceReport, boost::ref(m_syncSourceReports), _1, _2));
         m_helper->m_waiting.activate(boost::bind(&Session::setWaiting, this, _1));
         m_helper->m_syncSuccessStart.activate(boost::bind(boost::ref(Session::m_syncSuccessStartSignal)));
         m_helper->m_configChanged.activate(boost::bind(boost::ref(m_server.m_configChangedSignal), ""));
@@ -1193,11 +1226,25 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
                 progress.m_receiveCount = extra1;
                 progress.m_receiveTotal = extra2;
                 m_progData.itemReceive(sourceName, extra1, extra2);
-                fireProgress(true);
+                fireProgress();
             }
+            break;
+        case sysync::PEV_ITEMPROCESSED:
+            progress.m_added = extra1;
+            progress.m_updated = extra2;
+            progress.m_deleted = extra3;
+            // Do not fireProgress() here! We are going to get a
+            // PEV_ITEMRECEIVED directly afterwards (see
+            // dbus-sync.cpp).
             break;
         case sysync::PEV_ALERTED:
             if (sourceSyncMode != SYNC_NONE) {
+                // Reset item counts, must be set (a)new.
+                // Relevant in multi-cycle syncing.
+                progress.m_receiveCount = -1;
+                progress.m_receiveTotal = -1;
+                progress.m_sendCount = -1;
+                progress.m_sendTotal = -1;
                 status.set(PrettyPrintSyncMode(sourceSyncMode), "running", 0);
                 fireStatus(true);
                 m_progData.setStep(ProgressData::PRO_SYNC_DATA);

@@ -25,9 +25,10 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-struct SourceProgress
+/** Part of the D-Bus API, see GetProgress() and ProgressChanged. */
+struct APISourceProgress
 {
-    SourceProgress() :
+    APISourceProgress() :
         m_phase(""),
         m_prepareCount(-1), m_prepareTotal(-1),
         m_sendCount(-1), m_sendTotal(-1),
@@ -40,18 +41,38 @@ struct SourceProgress
     int32_t m_receiveCount, m_receiveTotal;
 };
 
+/** Used internally. */
+struct SourceProgress : public APISourceProgress
+{
+    SourceProgress() :
+        m_added(0), m_updated(0), m_deleted(0)
+    {}
+
+    // Statistics from actual SyncSource operations. May differ
+    // from item operations processed and counted by the sync engine.
+    int32_t m_added, m_updated, m_deleted;
+};
+
 SE_END_CXX
 namespace GDBusCXX {
 using namespace SyncEvo;
+template<> struct dbus_traits<APISourceProgress> :
+    public dbus_struct_traits<APISourceProgress,
+                              dbus_member<APISourceProgress, std::string, &APISourceProgress::m_phase,
+                              dbus_member<APISourceProgress, int32_t, &APISourceProgress::m_prepareCount,
+                              dbus_member<APISourceProgress, int32_t, &APISourceProgress::m_prepareTotal,
+                              dbus_member<APISourceProgress, int32_t, &APISourceProgress::m_sendCount,
+                              dbus_member<APISourceProgress, int32_t, &APISourceProgress::m_sendTotal,
+                              dbus_member<APISourceProgress, int32_t, &APISourceProgress::m_receiveCount,
+                              dbus_member_single<APISourceProgress, int32_t, &APISourceProgress::m_receiveTotal> > > > > > > >
+{};
+
 template<> struct dbus_traits<SourceProgress> :
     public dbus_struct_traits<SourceProgress,
-                              dbus_member<SourceProgress, std::string, &SourceProgress::m_phase,
-                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_prepareCount,
-                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_prepareTotal,
-                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_sendCount,
-                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_sendTotal,
-                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_receiveCount,
-                              dbus_member_single<SourceProgress, int32_t, &SourceProgress::m_receiveTotal> > > > > > > >
+                              dbus_base<SourceProgress, APISourceProgress,
+                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_added,
+                              dbus_member<SourceProgress, int32_t, &SourceProgress::m_updated,
+                              dbus_member_single<SourceProgress, int32_t, &SourceProgress::m_deleted> > > > >
 {};
 }
 

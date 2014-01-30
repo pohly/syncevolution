@@ -1917,6 +1917,8 @@ bool SyncContext::displaySourceProgress(SyncSource &source,
                     SharedKey contextKey = m_engine.OpenKeyByPath(sessionKey, "/sessionvars");
                     m_engine.SetInt32Value(contextKey, "keepPhotoData", false);
                 }
+                // Reset "started" flags for PEV_SYNCSTART.
+                m_sourceStarted.clear();
             }
         } else {
             SE_LOG_INFO(NULL, "%s: restore from backup", source.getDisplayName().c_str());
@@ -1926,9 +1928,12 @@ bool SyncContext::displaySourceProgress(SyncSource &source,
     }
     case sysync::PEV_SYNCSTART:
         /* sync started */
-        /* Get's triggered by libsynthesis frequently. Not very useful. */
-        /* SE_LOG_INFO(NULL, "%s: started",
-           source.getDisplayName().c_str()); */
+        /* Get's triggered by libsynthesis frequently. Limit it to once per sync cycle. */
+        if (m_sourceStarted.find(source.getName()) == m_sourceStarted.end()) {
+            SE_LOG_INFO(NULL, "%s: started",
+                        source.getDisplayName().c_str());
+            m_sourceStarted.insert(source.getName());
+        }
         break;
     case sysync::PEV_ITEMRECEIVED:
         /* item received, extra1=current item count,

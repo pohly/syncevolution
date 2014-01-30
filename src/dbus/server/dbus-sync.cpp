@@ -164,6 +164,16 @@ bool DBusSync::displaySourceProgress(SyncSource &source,
 {
     bool cached = SyncContext::displaySourceProgress(source, event, flush);
     if (!cached) {
+        // Tell parent about current source statistics directly before
+        // PEV_ITEMRECEIVED. The PIM Manager relies on that extra
+        // information.
+        if (event.m_type == sysync::PEV_ITEMRECEIVED) {
+            m_helper.emitSourceProgress(sysync::PEV_ITEMPROCESSED, source.getName(),
+                                        source.getFinalSyncMode(),
+                                        source.getAdded(),
+                                        source.getUpdated(),
+                                        source.getDeleted());
+        }
         m_helper.emitSourceProgress(event.m_type, source.getName(), source.getFinalSyncMode(),
                                     event.m_extra1, event.m_extra2, event.m_extra3);
     }

@@ -346,6 +346,8 @@ photo later.
 Additional control over syncing is possible via the flags dictionary
 in SyncPeerWithFlags(). The following keys are possible:
 
+    "progress-frequency": double - desired frequency in Hz (= events
+    per second) of the SyncProgress "progress" event. Default is 1/s.
     "pbap-sync": string "text"|"all"|"incremental" - synchronize only
     text properties, all properties or first text, then all. The default is
     taken from SYNCEVOLUTION_PBAP_SYNC if set, otherwise it is "incremental".
@@ -357,12 +359,73 @@ behaves like a single sync of the peer.
 
 The SyncProgress is triggered by SyncEvolution with three different
 keys (in this order, with "modified" occuring zero or more times):
-  "started" "modified"* "done"
+"started" ("modified" | "progress")* "done"
 
 "started" and "done" send an empty data dictionary. "modified" sends
-the same dictionary as the one returned by SyncPeer(), if contact data
-was modified. So by definition, "modified" will be True in the
-dictionary, but is included anyway for the sake of consistency.
+the same dictionary as the one returned by SyncPeer(), if and only if
+contact data was modified. So by definition, "modified" will be True
+in the dictionary, but is included anyway for the sake of consistency.
+
+"progress" sends a dictionary with these keys:
+
+  - "percent": double - value from 0 (start of sync) to 1 (end of sync)
+  - "modified": undefined value - set if the database was modified since the
+    last "progress" event. Detecting the exact moment when a change is made can
+    be hard, so the implementation may err on the side of caution and
+    signal a change more often than strictly necessary. The recipient must
+    check the database anyway to determine what changed. The value is
+    intentionally undefined at the moment and the recipient must not make
+    assumptions about it. Instead it should just check for the presence
+    of the entry. In the future, more specific information about what was
+    modified might be included as value.
+  - "sync-cycle": string - describes in what phase the sync is at the moment,
+    see "pbap-sync" in SyncPeerWithFlags()
+    - "text" - text-only sync active
+    - "all" - non-incremental text and picture sync active
+    - "incremental-text" - incremental sync active, currently syncing text
+    - "incremental-picture" - incremental sync active, done with text, now syncing pictures
+    - "" - some other kind of sync (non-PBAP, for example)
+
+"progress" is guaranteed to be emitted at the end of each cycle. In
+contrast to "modified", it will also be sent throughout the sync *if
+and only if* progress has been made, regardless whether that progress
+led to contact data changes or an increase in the completion
+percentage. That way, the event also serves as a heartbeat mechanism.
+
+The completion percentage is based purely on the number of contacts on
+the peer, which is the only thing known about the peer at the start of
+a sync. In a simple sync involving just one cycle, the percentage is
+"number of processed contacts / total contacts".
+
+In a sync involving two cycles, it is "number of processed contacts /
+2 / total contacts". Because each contact gets processed once per
+cycle, that gives 50% completion at the end of the first cycle and
+100% at the end of the second.
+
+Note that progress will not be linear over time even for a simple
+sync, because some contacts will take more time to download and
+process than others. For an incremental sync, the first cycle is
+likely to be much faster than the second one because the second one
+includes photo data.
+
+Progress events get emitted at the time when progress is made. If that
+is too close in time to the last progress event (see
+"progress-frequency"), the event is skipped. Events are not simply
+sent at regular intervals because that would emit events even when
+syncing is not making progress and distort the timing information (for
+example, 50% reached and recorded at time t, actual event with 50%
+sent at t + delta). In practice, the number of progress events is
+limited by various chunk sizes in the implementation (internal SyncML
+message size, amount of new data that must come in via PBAP before
+processing it), leading to a refresh rate during Bluetooth transfers
+which is closer to every two seconds.
+
+GetPeerStatus() returns two additional entries in the dictionary:
+
+    "progress": same dictionary as the SyncProgress "progress" value
+    "last-progress": double - time in seconds since the last "progress"
+    event. This is included to let a polling client determine whether
+    the sync is still alive.
 
 
 Contact Data

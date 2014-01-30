@@ -1926,6 +1926,15 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     virtual void close() = 0;
 
     /**
+     * Number of InsertItem operations, regardless whether the
+     * operation succeeded or failed. Operations which get suspended
+     * are counted again each time they are resumed.
+     */
+    int32_t getAdded() const { return m_added; }
+    int32_t getUpdated() const { return m_updated; }
+    int32_t getDeleted() const { return m_deleted; }
+
+    /**
      * return Synthesis API pointer, if one currently is available
      * (between SyncEvolution_Module_CreateContext() and
      * SyncEvolution_Module_DeleteContext())
@@ -2046,6 +2055,11 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * (RemoveAllItems()) count the removals itself.
      */
     long m_numDeleted;
+
+    /**
+     * Counter for InsertItem operations. Updated by hooking into the operation.
+     */
+    int32_t m_added, m_updated, m_deleted;
 
     bool m_forceSlowSync;
 
