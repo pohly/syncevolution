@@ -836,7 +836,7 @@ XDG root.
                   pass
 
         syncProgress = []
-        signal = bus.add_signal_receiver(lambda uid, event, data: (logging.printf('received SyncProgress: %s, %s, %s', uid, event, data), syncProgress.append((uid, event, data)), logging.printf('progress %s' % syncProgress)),
+        signal = bus.add_signal_receiver(lambda uid, event, data: (logging.printf('received SyncProgress: %s, %s, %s', self.stripDBus(uid, sortLists=False), self.stripDBus(event, sortLists=False), self.stripDBus(data, sortLists=False)), syncProgress.append((uid, event, data)), logging.printf('progress %s' % self.stripDBus(syncProgress, sortLists=False))),
                                          'SyncProgress',
                                          'org._01.pim.contacts.Manager',
                                          None, #'org._01.pim.contacts',
@@ -852,7 +852,7 @@ XDG root.
                   progress.append((uid, 'modified', intermediateResult))
              progress.append((uid, 'modified', expectedResult))
              progress.append((uid, 'done', {}))
-             self.assertEqual(progress, syncProgress)
+             self.assertEqual(progress, [(u, e, d) for u, e, d in syncProgress if e != 'progress'])
 
 
         # Must be the Bluetooth MAC address (like A0:4E:04:1E:AD:30)
@@ -1136,14 +1136,14 @@ END:VCARD
                                'removed': 0}
 
              syncProgress = []
-             result = self.manager.SyncPeerWithFlags(uid, { 'pbap-sync': 'text' })
+             duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'text' })
              # TODO: check that we actually do text-only sync
              checkSync(expectedResult,
                        result,
                        None)
 
              syncProgress = []
-             result = self.manager.SyncPeerWithFlags(uid, { 'pbap-sync': 'all' })
+             duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'all' })
              expectedResult = {'modified': False,
                                'added': 0,
                                'updated': 0,
@@ -1154,7 +1154,7 @@ END:VCARD
                        None)
 
              syncProgress = []
-             result = self.manager.SyncPeerWithFlags(uid, { 'pbap-sync': 'incremental' })
+             duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'incremental' })
              expectedResult = {'modified': False,
                                'added': 0,
                                'updated': 0,

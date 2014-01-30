@@ -191,14 +191,25 @@ string SyncSourceBase::getNativeDatatypeName()
     return info.m_native;
 }
 
+static void BumpCounter(int32_t &counter)
+{
+    counter++;
+}
+
 SyncSource::SyncSource(const SyncSourceParams &params) :
     SyncSourceConfig(params.m_name, params.m_nodes),
     m_numDeleted(0),
+    m_added(0),
+    m_updated(0),
+    m_deleted(0),
     m_forceSlowSync(false),
     m_database("", ""),
     m_name(params.getDisplayName()),
     m_needChanges(true)
 {
+    m_operations.m_insertItemAsKey.getPreSignal().connect(boost::bind(BumpCounter, boost::ref(m_added)));
+    m_operations.m_updateItemAsKey.getPreSignal().connect(boost::bind(BumpCounter, boost::ref(m_updated)));
+    m_operations.m_deleteItem.getPreSignal().connect(boost::bind(BumpCounter, boost::ref(m_deleted)));
 }
 
 SDKInterface *SyncSource::getSynthesisAPI() const

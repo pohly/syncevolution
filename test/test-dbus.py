@@ -8311,7 +8311,9 @@ Comparison was impossible.
 *** @default/addressbook ***
 Comparison was impossible.
 
+[INFO] @default/addressbook: started
 [INFO] @default/addressbook: sent 1
+[INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
 [INFO] @default/addressbook: first time sync done successfully
 [INFO @client] @client/addressbook: first time sync done successfully
@@ -8404,6 +8406,8 @@ no changes
 *** @default/addressbook ***
 no changes
 
+[INFO] @default/addressbook: started
+[INFO @client] @client/addressbook: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
 [INFO @client] creating complete data backup after sync (enabled with dumpData and needed for printChanges)
@@ -8493,7 +8497,9 @@ VERSION:3.0                              VERSION:3.0
 END:VCARD                                END:VCARD                             
 -------------------------------------------------------------------------------
 
+[INFO] @default/addressbook: started
 [INFO] @default/addressbook: sent 1
+[INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
 [INFO] @default/addressbook: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
@@ -8587,7 +8593,9 @@ VERSION:3.0                            <
 END:VCARD                              <
 -------------------------------------------------------------------------------
 
+[INFO] @default/addressbook: started
 [INFO] @default/addressbook: sent 1
+[INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
 [INFO] @default/addressbook: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
@@ -8692,12 +8700,16 @@ Comparison was impossible.
 *** @default/addressbook ***
 Comparison was impossible.
 
+[INFO] @default/addressbook: started
 [INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 Comparison was impossible.
 
+[INFO] @default/calendar: started
 [INFO] @default/addressbook: sent 1
+[INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
+[INFO @client] @client/calendar: started
 [INFO] @default/addressbook: first time sync done successfully
 [INFO] @default/calendar: first time sync done successfully
 [INFO @client] @client/addressbook: first time sync done successfully
@@ -8804,10 +8816,14 @@ no changes
 *** @default/addressbook ***
 no changes
 
+[INFO] @default/addressbook: started
 [INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 no changes
 
+[INFO] @default/calendar: started
+[INFO @client] @client/addressbook: started
+[INFO @client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO] @default/calendar: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
@@ -8917,12 +8933,16 @@ VERSION:3.0                              VERSION:3.0
 END:VCARD                                END:VCARD                             
 -------------------------------------------------------------------------------
 
+[INFO] @default/addressbook: started
 [INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 no changes
 
+[INFO] @default/calendar: started
 [INFO] @default/addressbook: sent 1
+[INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
+[INFO @client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO] @default/calendar: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
@@ -9035,12 +9055,16 @@ VERSION:3.0                            <
 END:VCARD                              <
 -------------------------------------------------------------------------------
 
+[INFO] @default/addressbook: started
 [INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 no changes
 
+[INFO] @default/calendar: started
 [INFO] @default/addressbook: sent 1
+[INFO @client] @client/addressbook: started
 [INFO @client] @client/addressbook: received 1/1
+[INFO @client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO] @default/calendar: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
@@ -9139,6 +9163,8 @@ no changes
 *** @default/addressbook ***
 no changes
 
+[INFO] @default/addressbook: started
+[INFO @client] @client/addressbook: started
 [INFO] @default/addressbook: normal sync done successfully
 [INFO @client] @client/addressbook: normal sync done successfully
 [INFO @client] creating complete data backup after sync (enabled with dumpData and needed for printChanges)

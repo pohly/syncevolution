@@ -742,6 +742,7 @@ class SyncContext : public SyncConfig {
     // Cache for use in displaySourceProgress().
     SyncSource *m_sourceProgress;
     SyncSourceEvent m_sourceEvent;
+    std::set<std::string> m_sourceStarted;
 
 public:
     /**

@@ -51,6 +51,10 @@ address book. That information is passed via D-Bus as a
 string-to-string dict, with keys and their values being defined by the
 implementation.
 
+For the sake of API and implementation simplicity, a peer can have
+only one running sync at a time. The API uses the peer ID for
+information about such a running sync (see "SyncProgress" signal).
+
 Address books
 -------------
 
@@ -265,6 +269,18 @@ Methods:
          Stop any running sync for the given peer. The SyncPeer() method
          which started such a sync will return with an "aborted" error
          once the sync was stopped.
+
+    dict GetPeerStatus(string uid)
+
+         Returns information about the peer and its sync status. The returned
+         dictionary contains:
+
+         "status": string "idle", "syncing" - describes whether
+         a sync is currently running. Idle means "no active sync"; there might
+         be a pending SyncPeer().
+
+         Implementations can also provide information similar to the data
+         provided by the SyncProgress signal.
 
     dict of UID to string key/value dict GetAllPeers()
 
