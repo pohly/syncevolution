@@ -63,9 +63,15 @@ import testdbus
 
 def timeFunction(func, *args1, **args2):
      start = time.time()
-     res = func(*args1, **args2)
+     res = { }
+     args2['reply_handler'] = lambda x: (res.__setitem__('okay', x), loop.quit())
+     args2['error_handler'] = lambda x: (res.__setitem__('failed', x), loop.quit())
+     func(*args1, **args2)
+     loop.run()
      end = time.time()
-     return (end - start, res)
+     if 'failed' in res:
+          raise res['failed']
+     return (end - start, res['okay'])
 
 @unittest.skip("not a real test")
 class ContactsView(dbus.service.Object, unittest.TestCase):
