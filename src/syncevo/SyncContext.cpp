@@ -1901,8 +1901,9 @@ bool SyncContext::displaySourceProgress(SyncSource &source,
     }
     case sysync::PEV_SYNCSTART:
         /* sync started */
-        SE_LOG_INFO(NULL, "%s: started",
-                    source.getDisplayName().c_str());
+        /* Get's triggered by libsynthesis frequently. Not very useful. */
+        /* SE_LOG_INFO(NULL, "%s: started",
+           source.getDisplayName().c_str()); */
         break;
     case sysync::PEV_ITEMRECEIVED:
         /* item received, extra1=current item count,
