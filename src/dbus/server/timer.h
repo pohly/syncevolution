@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <sys/time.h>
 
+#include <syncevo/Timespec.h>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -32,24 +34,8 @@ SE_BEGIN_CXX
  * user's setting. Timeout is calculated in milliseconds
  */
 class Timer {
-    timeval m_startTime;  ///< start time
+    Timespec m_startTime;  ///< start time
     unsigned long m_timeoutMs; ///< timeout in milliseconds, set by user
-
-    /**
-     * calculate duration between now and start time
-     * return value is in milliseconds
-     */
-    unsigned long duration(const timeval &minuend, const timeval &subtrahend)
-    {
-        unsigned long result = 0;
-        if(minuend.tv_sec > subtrahend.tv_sec ||
-                (minuend.tv_sec == subtrahend.tv_sec && minuend.tv_usec > subtrahend.tv_usec)) {
-            result = minuend.tv_sec - subtrahend.tv_sec;
-            result *= 1000;
-            result += (minuend.tv_usec - subtrahend.tv_usec) / 1000;
-        }
-        return result;
-    }
 
  public:
     /**
@@ -62,9 +48,14 @@ class Timer {
     }
 
     /**
+     * Change the default timeout.
+     */
+    void setTimeout(unsigned long ms) { m_timeoutMs = ms; }
+
+    /**
      * reset the timer and mark start time as current time
      */
-    void reset() { gettimeofday(&m_startTime, NULL); }
+    void reset() { m_startTime.resetMonotonic(); }
 
     /**
      * check whether it is timeout
@@ -79,9 +70,7 @@ class Timer {
      */
     bool timeout(unsigned long timeoutMs)
     {
-        timeval now;
-        gettimeofday(&now, NULL);
-        return duration(now, m_startTime) >= timeoutMs;
+        return (Timespec::monotonic() - m_startTime).duration() * 1000 >= timeoutMs;
     }
 };
 
