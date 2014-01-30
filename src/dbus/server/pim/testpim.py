@@ -1028,7 +1028,8 @@ END:VCARD
                   item = os.path.join(contacts, '%d.vcf' % i)
                   output = open(item, "w")
                   output.write(data)
-                  numPhotos = numPhotos + 1
+                  if hasPhoto.search(data):
+                       numPhotos = numPhotos + 1
                   output.close()
              numItems = i + 1
         else:
