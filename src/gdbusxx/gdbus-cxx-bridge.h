@@ -2373,6 +2373,32 @@ template<class K, class V, V K::*m, class M> struct dbus_member
 };
 
 /**
+ * The base class of type V of a struct K, followed by another dbus_member
+ * or dbus_member_single to end the chain
+ */
+template<class K, class V, class M> struct dbus_base
+{
+    static std::string getType()
+    {
+        return dbus_traits<V>::getType() + M::getType();
+    }
+    typedef V host_type;
+
+    static void get(ExtractArgs &context,
+                    GVariantIter &iter, K &val)
+    {
+        dbus_traits<V>::get(context, iter, val);
+        M::get(context, iter, val);
+    }
+
+    static void append(GVariantBuilder &builder, const K &val)
+    {
+        dbus_traits<V>::append(builder, val);
+        M::append(builder, val);
+    }
+};
+
+/**
  * a helper class which implements dbus_traits for
  * a class, use with:
  * struct foo { int a; std::string b;  };
