@@ -158,6 +158,8 @@ void Manager::init()
     add(this, &Manager::syncPeerWithFlags, "SyncPeerWithFlags");
     add(this, &Manager::stopSync, "StopSync");
     add(this, &Manager::getPeerStatus, "GetPeerStatus");
+    add(this, &Manager::suspendSync, "SuspendSync");
+    add(this, &Manager::resumeSync, "ResumeSync");
     add(this, &Manager::getAllPeers, "GetAllPeers");
     add(this, &Manager::addContact, "AddContact");
     add(this, &Manager::modifyContact, "ModifyContact");
@@ -1343,7 +1345,7 @@ Manager::PeerStatus Manager::getPeerStatus(const std::string &uid)
     if (session) {
         std::string configName = session->getConfigName();
         if (configName == syncConfigName) {
-            status["status"] = "syncing";
+            status["status"] = session->getFreeze() ? "suspended" : "syncing";
             int32_t percent;
             Session::SourceProgresses_t sources;
             session->getProgress(percent, sources);
@@ -1657,6 +1659,55 @@ void Manager::stopSync(const boost::shared_ptr<GDBusCXX::Result0> &result,
         result->done();
     }
 }
+
+void Manager::setFreeze(const boost::shared_ptr< GDBusCXX::Result1<bool> > &result,
+                        const std::string &uid,
+                        bool freeze)
+{
+    checkPeerUID(uid);
+
+    // Fully qualified peer config name. Only used for sync sessions
+    // and thus good enough to identify them.
+    std::string syncConfigName = StringPrintf("%s@%s%s",
+                                              MANAGER_LOCAL_CONFIG,
+                                              MANAGER_PREFIX,
+                                              uid.c_str());
+
+    // Remove all pending sessions of the peer. Make a complete
+    // copy of the list, to avoid issues with modifications of the
+    // underlying list while we iterate over it.
+    //
+    // Cancel pending syncs. This is similar to how we handle suspending of
+    // queued obex transfers: those can't be suspended either and therefore
+    // cancelling them is the simplest solution.
+    BOOST_FOREACH (const Pending_t::value_type &entry, Pending_t(m_pending)) {
+        std::string configName = entry.second->getConfigName();
+        if (configName == syncConfigName) {
+            entry.first->failed(GDBusCXX::dbus_error(MANAGER_ERROR_ABORTED, "pending sync aborted by StopSync()"));
+            m_pending.remove(entry);
+        }
+    }
+
+    // Freeze the currently running sync if it is for the peer.
+    boost::shared_ptr<Session> session = m_server->getSyncSession();
+    bool freezing = false;
+    if (session) {
+        std::string configName = session->getConfigName();
+        if (configName == syncConfigName) {
+            // Return to caller later, when aborting is done.
+            session->setFreezeAsync(freeze,
+                                    Result<void (bool)>(boost::bind(&GDBusCXX::Result1<bool>::done,
+                                                                    result,
+                                                                    _1),
+                                                        createDBusErrorCb(result)));
+            freezing = true;
+        }
+    }
+    if (!freezing) {
+        result->done(false);
+    }
+}
+
 
 void Manager::addContact(const boost::shared_ptr< GDBusCXX::Result1<std::string> > &result,
                          const std::string &addressbook,

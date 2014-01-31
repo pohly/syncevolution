@@ -1227,10 +1227,10 @@ END:VCARD'''
         self.assertEqual(files, listsyncevo(exclude=exclude))
 
     @timeout(100)
-    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=200")
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=5") # first parent sleeps, then child -> total delay 10s
     @property("snapshot", "simple-sort")
-    def testSyncAbort(self):
-        '''TestContacts.testSyncAbort - test StopSync()'''
+    def testSyncSuspend(self):
+        '''TestContacts.testSyncSuspend - test Suspend/ResumeSync()'''
         self.setUpServer()
         sources = self.currentSources()
         expected = sources.copy()
@@ -1255,17 +1255,31 @@ END:VCARD'''
         self.assertEqual(peers, self.manager.GetAllPeers())
         self.assertEqual(expected, self.currentSources())
 
-        # Start a sync. Because of SYNCEVOLUTION_SYNC_DELAY, this will block until
-        # we kill it.
-        syncCompleted = [ False, False ]
-        self.aborted = False
+        # Can't suspend or resume. Not an error, though.
+        self.assertEqual(False, self.manager.SuspendSync(uid))
+        self.assertEqual(False, self.manager.ResumeSync(uid))
+
+        # Start a sync. Because of SYNCEVOLUTION_SYNC_DELAY, this will block long
+        # enough for us to suspend the sync. Normally, the delay would be small.
+        # When suspending, we resume after the end of the delay and thus can
+        # detect that suspending really worked by looking at timing.
+        syncCompleted = [ False ]
+        self.suspended = None
+        self.resumed = None
+        self.syncStarted = None
         def result(index, res):
              syncCompleted[index] = res
         def output(path, level, text, procname):
-            if self.running and not self.aborted and text == 'ready to sync':
-                logging.printf('aborting sync')
-                self.manager.StopSync(uid)
-                self.aborted = True
+            if self.running and text == 'ready to sync':
+                logging.printf('suspending sync')
+                self.syncStarted = time.time()
+                self.suspended = self.manager.SuspendSync(uid)
+                self.suspended2 = self.manager.SuspendSync(uid)
+                logging.printf('waiting 20 seconds')
+                time.sleep(20)
+                logging.printf('resuming sync')
+                self.resumed = self.manager.ResumeSync(uid)
+                self.resumed2 = self.manager.ResumeSync(uid)
         receiver = bus.add_signal_receiver(output,
                                            'LogOutput',
                                            'org.syncevolution.Server',
@@ -1274,22 +1288,22 @@ END:VCARD'''
                                            utf8_strings=True)
         try:
              self.manager.SyncPeer(uid,
-                                   reply_handler=lambda: result(0, True),
+                                   reply_handler=lambda x: result(0, True),
                                    error_handler=lambda x: result(0, x))
-             self.manager.SyncPeer(uid,
-                                   reply_handler=lambda: result(1, True),
-                                   error_handler=lambda x: result(1, x))
-             self.runUntil('both syncs done',
+             self.runUntil('sync done',
                            check=lambda: True,
                            until=lambda: not False in syncCompleted)
+             self.syncEnded = time.time()
         finally:
             receiver.remove()
 
-        # Check for specified error.
-        self.assertIsInstance(syncCompleted[0], dbus.DBusException)
-        self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[0].get_dbus_name())
-        self.assertIsInstance(syncCompleted[1], dbus.DBusException)
-        self.assertEqual('org._01.pim.contacts.Manager.Aborted', syncCompleted[1].get_dbus_name())
+        # Check for successful sync, with intermediate suspend/resume.
+        self.assertEqual(True, self.suspended)
+        self.assertEqual(False, self.suspended2)
+        self.assertEqual(True, self.resumed)
+        self.assertEqual(False, self.resumed2)
+        self.assertEqual(True, syncCompleted[0])
+        self.assertLess(20, self.syncEnded - self.syncStarted)
 
     @timeout(60)
     @property("snapshot", "simple-sort")

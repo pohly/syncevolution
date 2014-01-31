@@ -146,6 +146,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     add(this, &SessionHelper::sync, "Sync");
     add(this, &SessionHelper::restore, "Restore");
     add(this, &SessionHelper::execute, "Execute");
+    add(this, &SessionHelper::setFreeze, "SetFreeze");
     add(this, &SessionHelper::passwordResponse, "PasswordResponse");
     add(this, &SessionHelper::storeMessage, "StoreMessage");
     add(this, &SessionHelper::connectionState, "ConnectionState");
@@ -331,5 +332,14 @@ void SessionHelper::passwordResponse(bool timedOut, bool aborted, const std::str
         SE_LOG_DEBUG(NULL, "discarding obsolete password response");
     }
 }
+
+bool SessionHelper::setFreeze(bool frozen)
+{
+    return m_sync ?
+        m_sync->setFreeze(frozen) :
+        false;
+}
+
+
 
 SE_END_CXX

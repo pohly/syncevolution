@@ -270,12 +270,33 @@ Methods:
          which started such a sync will return with an "aborted" error
          once the sync was stopped.
 
+    bool SuspendSync(string uid)
+
+         Suspend any running sync for the given peer. The SyncPeer()
+         method which started such a sync will continue to run. If
+         suspending is not possible for some reason, the sync will
+         automatically abort or fail (depending on the peer). It is
+         okay to suspend twice. Suspend and resume calls are not
+         nested, so a suspended sync resumes after one ResumeSync(),
+         regardless how often SuspendSync() was called.
+
+         Returns true if and only the suspend state changed, otherwise
+         false.
+
+    bool ResumeSync(string uid)
+
+         Resume a previously suspended sync. It is not an error to call
+         this when there is no sync running or it was not suspended.
+
+         Returns true if and only the suspend state changed, otherwise
+         false.
+
     dict GetPeerStatus(string uid)
 
          Returns information about the peer and its sync status. The returned
          dictionary contains:
 
-         "status": string "idle", "syncing" - describes whether
+         "status": string "idle", "syncing", "suspended" - describes whether
          a sync is currently running. Idle means "no active sync"; there might
          be a pending SyncPeer().
 
