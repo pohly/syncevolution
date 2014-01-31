@@ -59,6 +59,7 @@ public:
          /* m_checkSource      (*this, "CheckSource"), */
          /* m_getDatabases     (*this, "GetDatabases"), */
     m_sync(*this, "Sync"),
+    m_setFreeze(*this, "SetFreeze"),
     m_restore(*this, "Restore"),
     m_execute(*this, "Execute"),
     m_passwordResponse(*this, "PasswordResponse"),
@@ -93,6 +94,7 @@ public:
     /* GDBusCXX::DBusClientCall0                                    m_checkSource; */
     /* GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases; */
     GDBusCXX::DBusClientCall2<bool, SyncReport> m_sync;
+    GDBusCXX::DBusClientCall1<bool> m_setFreeze;
     GDBusCXX::DBusClientCall1<bool> m_restore;
     GDBusCXX::DBusClientCall1<bool> m_execute;
     /* GDBusCXX::DBusClientCall0                                    m_serverShutdown; */
@@ -470,6 +472,49 @@ void Session::abort()
     }
 }
 
+void Session::setFreezeAsync(bool freeze, const Result<void (bool)> &result)
+{
+    PushLogger<Logger> guard(m_me);
+    SE_LOG_DEBUG(NULL, "session %s: SetFreeze(%s), %s",
+                 getPath(),
+                 freeze ? "freeze" : "thaw",
+                 m_forkExecParent ? "send to helper" : "no effect, because no helper");
+    if (m_forkExecParent) {
+        m_helper->m_setFreeze.start(freeze,
+                                    boost::bind(&Session::setFreezeDone,
+                                                m_me,
+                                                _1, _2,
+                                                freeze,
+                                                result));
+    } else {
+        // Had no effect.
+        result.done(false);
+    }
+}
+
+void Session::setFreezeDone(bool changed, const std::string &error,
+                            bool freeze,
+                            const Result<void (bool)> &result)
+{
+    PushLogger<Logger> guard(m_me);
+    try {
+        SE_LOG_DEBUG(NULL, "session %s: SetFreeze(%s) returned from helper %s, error %s",
+                     getPath(),
+                     freeze ? "freeze" : "thaw",
+                     changed ? "changed freeze state" : "no effect",
+                     error.c_str());
+        if (!error.empty()) {
+            Exception::tryRethrowDBus(error);
+        }
+        if (changed) {
+            m_freeze = freeze;
+        }
+        result.done(changed);
+    } catch (...) {
+        result.failed();
+    }
+}
+
 void Session::suspend()
 {
     PushLogger<Logger> guard(m_me);
@@ -619,6 +664,7 @@ Session::Session(Server &server,
     m_priority(PRI_DEFAULT),
     m_error(0),
     m_lastProgressTimestamp(Timespec::monotonic()),
+    m_freeze(false),
     m_statusTimer(100),
     m_progressTimer(50),
     m_restoreSrcTotal(0),

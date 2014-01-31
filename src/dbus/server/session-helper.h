@@ -82,6 +82,9 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     /** SessionHelper.PasswordResponse */
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
 
+    /** SessionHelper.SetFreeze */
+    bool setFreeze(bool frozen);
+
  public:
     SessionHelper(GMainLoop *loop,
                   const GDBusCXX::DBusConnectionPtr &conn,

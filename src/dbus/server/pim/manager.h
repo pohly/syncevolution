@@ -183,6 +183,23 @@ class Manager : public GDBusCXX::DBusObjectHelper
     /** Manager.GetPeerStatus() */
     PeerStatus getPeerStatus(const std::string &uid);
 
+    /** Manager.SuspendSync() */
+    void suspendSync(const boost::shared_ptr< GDBusCXX::Result1<bool> > &result,
+                     const std::string &uid) {
+        setFreeze(result, uid, true);
+    }
+
+    /** Manager.ResumeSync() */
+    void resumeSync(const boost::shared_ptr< GDBusCXX::Result1<bool> > &result,
+                    const std::string &uid) {
+        setFreeze(result, uid, false);
+    }
+
+    /** internal */
+    void setFreeze(const boost::shared_ptr< GDBusCXX::Result1<bool> > &result,
+                   const std::string &uid,
+                   bool freeze);
+
     typedef std::map<std::string, StringMap> PeersMap;
     /** Manager.GetAllPeers() */
     PeersMap getAllPeers();

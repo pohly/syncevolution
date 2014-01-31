@@ -224,6 +224,7 @@ class Session : public GDBusCXX::DBusObjectHelper,
     SourceProgresses_t m_sourceProgress;
     Timespec m_lastProgressTimestamp;
     SourceProgresses_t m_lastProgress;
+    bool m_freeze;
 
     // syncProgress() and sourceProgress() turn raw data from helper
     // into usable information on D-Bus server side
@@ -487,6 +488,11 @@ public:
     /** Session.Suspend() */
     void suspend();
 
+    /** Change freeze state, trigger result once done. */
+    void setFreezeAsync(bool freeze, const Result<void (bool)> &result);
+
+    bool getFreeze() const { return m_freeze; }
+
      /**
      * step info for engine: whether the engine is blocked by something
      * If yes, 'waiting' will be appended as specifiers in the status string.
@@ -535,6 +541,10 @@ private:
     virtual bool setFilters(SyncConfig &config);
 
     void dbusResultCb(const std::string &operation, bool success, const SyncReport &report, const std::string &error) throw();
+
+    void setFreezeDone(bool changed, const std::string &error,
+                       bool freeze,
+                       const Result<void (bool)> &result);
 
     /**
      * to be called inside a catch() clause: returns error for any
