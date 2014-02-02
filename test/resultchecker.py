@@ -310,8 +310,13 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
             indents.append(indent)
             result.write(indent+'<'+server+' path="' +rserver+'" ')
             #valgrind check resutls
-            if(params[server].find('return code ') !=-1):
-                result.write('result="'+params[server].partition('return code ')[2].partition(')')[0]+'" ')
+            if not params.get(server, None):
+                # Unknown result, treat as failure.
+                result.write('result="1"')
+            else:
+                m = re.search(r'return code (\d+)', params[server])
+                if m:
+                    result.write('result="%s"' % m.group(1))
             result.write('>\n')
             # sort files by creation time, to preserve run order
             logs = map(lambda file: (os.stat(file).st_mtime, file),
