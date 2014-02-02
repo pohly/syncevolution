@@ -70,7 +70,8 @@ install-test-files:
 	ln -f -s $(bindir)/syncevolution $(DESTDIR)/$(testdir)
 	ln -f -s $(bindir)/synccompare $(DESTDIR)/$(testdir)
 	ln -f -s $(libexecdir)/syncevo-dbus-server $(DESTDIR)/$(testdir)
-	cp config.h $(top_srcdir)/src/syncevo/SyncConfig.h $(DESTDIR)/$(testdir) # needed by test-dbus.py
+	ln -f -s $(bindir)/synclog2html $(DESTDIR)/$(testdir)
+	cp config.h $(top_srcdir)/src/syncevo/SyncConfig.h src/ClientTest.cpp.html $(DESTDIR)/$(testdir) # needed by test-dbus.py
 
 all_uninstall_hooks += uninstall-test-files
 uninstall-test-files:
@@ -78,6 +79,7 @@ uninstall-test-files:
 		$(DESTDIR)/$(testdir)/synccompare \
 		$(DESTDIR)/$(testdir)/syncevo-dbus-server \
 		$(DESTDIR)/$(testdir)/SyncConfig.h \
+		$(DESTDIR)/$(testdir)/ClientTests.cpp.html \
 		$(DESTDIR)/$(testdir)/config.h \
 		$(NOP)
 

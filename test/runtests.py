@@ -920,7 +920,10 @@ class SyncEvolutionTest(Action):
                     if toconvert.match(f):
                         # also convert client-test log files to HTML
                         tohtml = os.path.join(resdir, f + ".html")
-                        os.system("env PATH=.:$PATH synclog2html %s >%s" % (f, tohtml))
+                        synclog2html = os.path.join(self.build.installdir, "usr", "bin", "synclog2html")
+                        if not os.access(synclog2html, os.F_OK):
+                            synclog2html = os.path.join(sync.basedir, "src", "synclog2html")
+                        os.system("%s %s >%s" % (synclog2html, f, tohtml))
                         basehtml = f + ".html"
                         if os.path.exists(basehtml):
                             os.unlink(basehtml)
