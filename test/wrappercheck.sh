@@ -18,6 +18,7 @@ trap "kill -TERM $PIDS" TERM
 trap "kill -INT $PIDS" INT
 
 DAEMON_LOG=
+WAIT_FOR_DAEMON_OUTPUT=
 
 declare -a BACKGROUND
 declare -a ENV
@@ -27,6 +28,10 @@ while [ $# -gt 1 ] && [ "$1" != "--" ] ; do
         --daemon-log)
             shift
             DAEMON_LOG="$1"
+            ;;
+        --wait-for-daemon-output)
+            shift
+            WAIT_FOR_DAEMON_OUTPUT="$1"
             ;;
         *=*)
             ENV[${#ENV[*]}]="$1"
@@ -49,10 +54,26 @@ shift
 BACKGROUND_PID=$!
 PIDS+="$BACKGROUND_PID"
 
-set +e
-(set -x; "$@")
-RET=$?
-set -e
+if [ "$DAEMON_LOG" ] && [ "$WAIT_FOR_DAEMON_OUTPUT" ]; then
+    ( set +x; echo >&2 "*** waiting for daemon to write '$WAIT_FOR_DAEMON_OUTPUT' into $DAEMON_LOG"
+        while ! grep -q -e "$WAIT_FOR_DAEMON_OUTPUT" "$DAEMON_LOG"; do
+            if ! kill -0 $BACKGROUND_PID 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+    )
+fi
+
+if kill -0 $BACKGROUND_PID 2>/dev/null; then
+    set +e
+    (set -x; "$@")
+    RET=$?
+    set -e
+else
+    echo >&2 "*** ${BACKGROUND[0]} terminated prematurely"
+    RET=1
+fi
 
 ( set +x; echo >&2 "*** killing and waiting for ${BACKGROUND[0]}" )
 kill -INT $BACKGROUND_PID && kill -TERM $BACKGROUND_PID || true
