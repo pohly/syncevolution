@@ -8660,7 +8660,7 @@ no changes
         self.checkSync(numReports=4)
 
     @property("debug", False)
-    @timeout(200)
+    @timeout(usingValgrind() and 600 or 200)
     def testSyncOutput2(self):
         """TestCmdline.testSyncOutput2 - run syncs between local dirs and check output, with two sources"""
         self.setUpLocalSyncConfigs(enableCalendar=True)
