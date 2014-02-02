@@ -1696,13 +1696,16 @@ syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
                              [ "--daemon-log", "syncevohttp.log" ] ) +
                        [ options.testprefix,
                          os.path.join(compile.installdir, "usr", "libexec", "syncevo-dbus-server"),
+                         '--dbus-verbosity=1', # Only errors from syncevo-dbus-server and syncing.
+                         '--stdout', '--no-syslog', # Write into same syncevohttp.log as syncevo-http-server.
+                         '--duration=unlimited', # Never shut down, even if client is inactive for a while.
                          "--",
                          os.path.join(sync.basedir, "test", "wrappercheck.sh"),
                          # also redirect additional syncevo-http-server
                          # output into the same file
                          "--daemon-log", "syncevohttp.log",
+                         "--wait-for-daemon-output", "syncevo-http:.listening.on.port.<httpport>",
                          os.path.join(compile.installdir, "usr", "bin", "syncevo-http-server"),
-                         "--quiet",
                          "http://127.0.0.1:<httpport>/syncevolution",
                          "--",
                          options.testprefix])
