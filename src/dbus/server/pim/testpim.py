@@ -537,8 +537,9 @@ VERSION:3.0\r?
             for dir in dirs:
                 # evolution-source-registry gets confused when we remove
                 # the "sources" directory itself.
-                # GNOME Online Accounts settings must survive.
+                # GNOME Online Accounts settings and GNOME keyrings must survive.
                 if (reldir == 'config/evolution' and dir == 'sources') or \
+                         (reldir == 'data' and dir == 'keyrings') or \
                          (reldir == 'config' and dir.startswith('goa')):
                     continue
                 dest = os.path.join(dirname, dir)
@@ -554,6 +555,7 @@ VERSION:3.0\r?
                 # Other DBs can be removed because we are not going to depend on
                 # them anymore thanks to the per-test uid prefix.
                 if reldir == 'data/evolution/addressbook/system' or \
+                         reldir == 'data/keyrings' or \
                          reldir.startswith('config/goa'):
                     continue
                 os.unlink(dest)
@@ -4283,20 +4285,20 @@ class TestSlowSync(TestPIMUtil, unittest.TestCase):
 
 
 if __name__ == '__main__':
-    xdg = (os.path.join(os.path.abspath('.'), 'temp-testpim', 'config'),
-           os.path.join(os.path.abspath('.'), 'temp-testpim', 'data'),
-           os.path.join(os.path.abspath('.'), 'temp-testpim', 'cache'))
-
-    # Tell test-dbus.py about the temporary directory that we expect
-    # to use. It'll wipe it clean for us because we run with own_xdg=true.
-    # However, we have EDS daemons continuing to run while we do that.
-    # evolution-source-registry copes by watching for file changes.
-    xdg_root = os.path.join(os.path.abspath('.'), 'temp-testpim')
-    testdbus.xdg_root = xdg_root
     error = ''
-    if (os.environ.get('XDG_CONFIG_HOME', None), os.environ.get('XDG_DATA_HOME', None), os.environ.get('XDG_CACHE_HOME', None)) != xdg:
-         # Don't allow user of the script to erase his normal EDS data.
-         error = error + 'testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME=%s XDG_DATA_HOME=%s XDG_CACHE_HOME=%s because it will modify system EDS databases there.\n' % xdg
+    paths = [ (os.path.dirname(x), os.path.basename(x)) for x in \
+              [ os.environ.get(y, '') for y in ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME'] ] ]
+    xdg_root = paths[0][0]
+    print paths
+    if not xdg_root or xdg_root != paths[1][0] or xdg_root != paths[2][0] or \
+             paths[0][1] != 'config' or paths[1][1] != 'data' or  paths[2][1] != 'cache':
+         # Don't allow user of the script to erase his normal EDS data and enforce
+         # common basedir with well-known names for each xdg home.
+         error = error + 'testpim.py must be started in a D-Bus session with XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_CACHE_HOME set to temporary directories <foo>/config, <foo>/data, <foo>/cache because it will modify system EDS databases there and relies on a known, flat layout underneath a common directory.\n'
+    else:
+         # Tell test-dbus.py about the temporary directory that we expect
+         # to use. It'll wipe it clean for us because we run with own_xdg=true.
+         testdbus.xdg_root = xdg_root
     if os.environ.get('LANG', '') != 'de_DE.utf-8':
          error = error + 'EDS daemon must use the same LANG=de_DE.utf-8 as tests to get phone number normalization right.\n'
     if error:

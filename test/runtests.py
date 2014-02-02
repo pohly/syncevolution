@@ -20,6 +20,7 @@ import fnmatch
 import copy
 import errno
 import signal
+import stat
 
 def log(format, *args):
     now = time.time()
@@ -27,30 +28,6 @@ def log(format, *args):
     log.latest = now
 log.start = time.time()
 log.latest = log.start
-
-# Murphy support: as a first step, lock one resource named like the
-# test before running the test.
-gobject = None
-try:
-    import gobject
-except ImportError:
-    try:
-         from gi.repository import GObject as gobject
-    except ImportError:
-         pass
-import dbus
-from dbus.mainloop.glib import DBusGMainLoop
-DBusGMainLoop(set_as_default=True)
-if 'DBUS_SESSION_BUS_ADDRESS' in os.environ:
-    bus = dbus.SessionBus()
-    loop = gobject.MainLoop()
-    murphy = dbus.Interface(bus.get_object('org.Murphy', '/org/murphy/resource'), 'org.murphy.manager')
-    log('using murphy')
-else:
-    bus = None
-    loop = None
-    murphy = None
-    log('not using murphy')
 
 try:
     import gzip
@@ -223,6 +200,8 @@ class Jobserver:
 
 jobserver = Jobserver()
 
+# must be set before instantiating some of the following classes
+context = None
 
 class Action:
     """Base class for all actions to be performed."""
@@ -232,6 +211,7 @@ class Action:
     FAILED = "2 FAILED"
     TODO = "3 TODO"
     SKIPPED = "4 SKIPPED"
+    RUNNING = "5 RUNNING"
     COMPLETED = (DONE, WARNINGS)
 
     def __init__(self, name):
@@ -240,12 +220,11 @@ class Action:
         self.summary = ""
         self.dependencies = []
         self.isserver = False;
-        # Assume that each action requires one job slot. Exceptions
-        # are nops (need no slot) and possible test runs (might need
-        # more than one, although at the moment we still approximate
-        # that with one, because most tests involving more than one
-        # process do not have those processes active in parallel).
-        self.numjobs = 1
+        # Assume that the action does not need its own HOME directory.
+        self.needhome = False
+        # Child PID of forked process executing the action while it is
+        # running.
+        self.worker_pid = None
 
     def execute(self):
         """Runs action. Throws an exeception if anything fails.
@@ -259,118 +238,95 @@ class Action:
 
     def tryexecution(self, step, logs):
         """wrapper around execute which handles exceptions, directories and stdout"""
-        log('*** running action %s', self.name)
-        if logs:
-            fd = -1
-            oldstdout = os.dup(1)
-            oldstderr = os.dup(2)
-            oldout = sys.stdout
-            olderr = sys.stderr
-        cwd = os.getcwd()
-        resourceset = None
-        locked = False
-        jobs = 0
+        log('*** starting action %s', self.name)
+        sys.stderr.flush()
+        sys.stdout.flush()
+        child = None
+        res = 0
         try:
-            subdirname = "%d-%s" % (step, self.name)
-            sys.stderr.flush()
-            sys.stdout.flush()
-            cd(subdirname)
-            if logs:
-                # Append, in case that we run multiple times for the same platform.
-                # The second run will typically have fake libsynthesis/syncevolution/compile
-                # runs which must not overwrite previous results. The new operations must
-                # be added at the end of main output.txt, too.
-                fd = os.open("output.txt", os.O_WRONLY|os.O_CREAT|os.O_APPEND)
-                os.dup2(fd, 1)
-                os.dup2(fd, 2)
-                sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
-                sys.stderr = sys.stdout
-            if murphy:
-                log('=== locking resource %s ===', self.name)
-                resourcesetpath = murphy.createResourceSet()
-                resourceset = dbus.Interface(bus.get_object('org.Murphy', resourcesetpath), 'org.murphy.resourceset')
-                resourcepath = resourceset.addResource(self.name)
-                # Allow sharing of the resource. Only works if the resource
-                # was marked as "shareable" in the murphy config, otherwise
-                # we get exclusive access.
-                resource = dbus.Interface(bus.get_object('org.Murphy', resourcepath), 'org.murphy.resource')
-                resource.setProperty('shared', dbus.Boolean(True, variant_level=1))
-
-                # Track pending request separately, because status == 'pending'
-                # either means something else ('unknown'?) or is buggy/unreliable.
-                # See https://github.com/01org/murphy/issues/5
-                pending = False
-                def propertyChanged(prop, value):
-                    global pending
-                    log('property changed: %s = %s', prop, value)
-                    if prop == 'status':
-                        if value == 'acquired':
-                            # Success!
-                            loop.quit()
-                        elif value == 'lost':
-                            # Not yet?!
-                            log('Murphy request failed, waiting for resource to become available.')
-                            pending = False
-                        elif value == 'pending':
-                            pass
-                        elif value == 'available':
-                            if not pending:
-                                log('Murphy request may succeed now, try again.')
-                                resourceset.request()
-                                pending = True
-                        else:
-                            log('Unexpected status: %s', value)
+            child = os.fork()
+            if child == 0:
+                # We are the child executing the action.
                 try:
-                    match = bus.add_signal_receiver(propertyChanged, 'propertyChanged', 'org.murphy.resourceset', 'org.Murphy', resourcesetpath)
-                    resourceset.request()
-                    pending = True
-                    loop.run()
-                finally:
-                    match.remove()
-            if jobserver.active() and self.numjobs:
-                log('=== allocating %d job slots ===', self.numjobs)
-                jobserver.alloc(self.numjobs)
-                jobs = self.numjobs
-            log('=== starting %s ===', self.name)
-            self.execute()
-            self.status = Action.DONE
-            self.summary = "okay"
+                    subdirname = "%d-%s" % (step, self.name)
+                    cd(subdirname)
+                    if logs:
+                        # Append, in case that we run multiple times for the same platform.
+                        # The second run will typically have fake libsynthesis/syncevolution/compile
+                        # runs which must not overwrite previous results. The new operations must
+                        # be added at the end of main output.txt, too.
+                        fd = os.open("output.txt", os.O_WRONLY|os.O_CREAT|os.O_APPEND)
+                        os.dup2(fd, 1)
+                        os.dup2(fd, 2)
+                        sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
+                        sys.stderr = sys.stdout
+                    if self.needhome and context.home_template:
+                        home = os.path.join(context.tmpdir, 'home', self.name)
+                        if not os.path.isdir(home):
+                            # Ignore special files like sockets (for example,
+                            # .cache/keyring-5sj9Qz/control).
+                            def ignore(path, entries):
+                                exclude = []
+                                for entry in entries:
+                                    mode = os.lstat(os.path.join(path, entry)).st_mode
+                                    if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)):
+                                        exclude.append(entry)
+                                return exclude
+                            shutil.copytree(context.home_template, home,
+                                            symlinks=True,
+                                            ignore=ignore)
+                        os.environ['HOME'] = context.stripSchrootDir(home)
+                        for old, new, name in [('.cache', 'cache', 'XDG_CACHE_HOME'),
+                                               ('.config', 'config', 'XDG_CONFIG_HOME'),
+                                               ('.local/share', 'data', 'XDG_DATA_HOME')]:
+                            newdir = os.path.join(home, new)
+                            olddir = os.path.join(home, old)
+                            if not os.path.isdir(olddir):
+                                os.makedirs(olddir)
+                            # Use simpler directory layout to comply with testpim.py expectations.
+                            print 'old', olddir, 'new', newdir
+                            os.rename(olddir, newdir)
+                            # Keep the old names as symlinks, just in case.
+                            os.symlink(newdir, olddir)
+                            # Now use it via XDG env var *without* the schrootdir.
+                            os.environ[name] = context.stripSchrootDir(newdir)
+                    log('=== starting %s ===', self.name)
+                    self.execute()
+                except:
+                    traceback.print_exc()
+                    # We can't just exit() here because that ends up raising an exception
+                    # which would get caught in the outer try/except.
+                    res = 1
+            else:
+                # Parent.
+                self.worker_pid = child
+                self.status = Action.RUNNING
+                # Can we really parallelize?
+                if self.needhome and not context.home_template:
+                    self.wait_for_completion()
+
         except Exception, inst:
+            # fork() error handling in parent.
             traceback.print_exc()
             self.status = Action.FAILED
             self.summary = str(inst)
-        finally:
-            if jobs:
-                try:
-                    jobserver.free(jobs)
-                except:
-                    traceback.print_exc()
 
-            try:
-                if locked:
-                    log('=== unlocking resource %s ===', self.name)
-                    resourceset.release()
-                if resourceset:
-                    log('=== deleting resource set %s ===', self.name)
-                    resourceset.delete()
-                if locked or resourceset:
-                    log('=== done with Murphy ===')
-            except Exception:
-                traceback.print_exc()
+        if child == 0:
+            # Child must quit.
+            exit(res)
+        else:
+            # Parent must return.
+            return self.status
 
-        log('\n=== %s: %s ===', self.name, self.status)
-        sys.stdout.flush()
-        os.chdir(cwd)
-        if logs:
-            if fd >= 0:
-                sys.stdout.close()
-                os.dup2(oldstdout, 1)
-                os.dup2(oldstderr, 2)
-                sys.stderr = olderr
-                sys.stdout = oldout
-                os.close(oldstdout)
-                os.close(oldstderr)
-        return self.status
+    def wait_for_completion(self):
+        log('*** waiting for %s (pid %d)', self.name, self.worker_pid)
+        pid, exitcode = os.waitpid(self.worker_pid, 0)
+        log('*** %s: %d', self.name, exitcode)
+        if exitcode == 0:
+            self.status = Action.DONE
+        else:
+            self.status = Action.FAILED
+            self.summary = 'return code %d: failed' % exitcode
 
 class Context:
     """Provides services required by actions and handles running them."""
@@ -397,13 +353,20 @@ class Context:
         self.sanitychecks = sanitychecks
         self.lastresultdir = lastresultdir
         self.datadir = datadir
+        self.schrootdir = None
+
+    def stripSchrootDir(self, path):
+        if self.schrootdir and path.startswith(self.schrootdir + '/'):
+            return path[len(self.schrootdir):]
+        else:
+            return path
 
     def findTestFile(self, name):
         """find item in SyncEvolution test directory, first using the
         generated source of the current test, then the bootstrapping code"""
         return findInPaths(name, (os.path.join(sync.basedir, "test"), self.datadir))
 
-    def runCommand(self, cmdstr, dumpCommands=False, runAsIs=False):
+    def runCommand(self, cmdstr, dumpCommands=False, runAsIs=False, resources=[], jobs=1):
         """Log and run the given command, throwing an exception if it fails."""
         cmd = shlex.split(cmdstr)
         if "valgrindcheck.sh" in cmdstr:
@@ -444,9 +407,25 @@ class Context:
                 relcwd = cwd[len(options.schrootdir):]
                 cmdstr = cmdstr.replace('schroot ', 'schroot -d %s ' % relcwd)
             cmdstr = cmdstr.replace(options.schrootdir + '/', '/')
-        log('*** ( cd %s; export %s; %s )',
+        if jobs or resources:
+            helper = self.findTestFile("resources.py")
+            cmdstr = helper + \
+                (jobs and (' -j %d' % jobs) or '') + \
+                ''.join([' -r ' + resource for resource in resources]) + \
+                ' -- ' + \
+                cmdstr
+        relevantenv = [
+            "LD_LIBRARY_PATH",
+            "PATH",
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+            ]
+        log('*** ( cd %s; export %s; unset %s; %s )',
             cwd,
-            " ".join(map(lambda x: "'%s=%s'" % (x, os.getenv(x, "")), [ "LD_LIBRARY_PATH", "PATH" ])),
+            " ".join(["'%s=%s'" % (x, os.getenv(x)) for x in relevantenv if  os.getenv(x, None) is not None]),
+            " ".join([x for x in relevantenv if os.getenv(x, None) is None]),
             cmdstr)
         sys.stdout.flush()
         result = os.system(cmdstr)
@@ -474,7 +453,21 @@ class Context:
         status = Action.DONE
 
         step = 0
-        run_servers=[];
+        run_servers = []
+        started = []
+
+        def check_action(action, global_status):
+            if action.status == Action.FAILED:
+                result = ': %s' % action.summary
+            elif action.status == Action.WARNINGS:
+                result = ' done, but check the warnings'
+            else:
+                result = ' successful'
+            log('*** action %s completed, status%s', action.name, result)
+            if action.status > global_status:
+                global_status = action.status
+            self.summary.append('%s%s' % (action.name, result))
+            return global_status
 
         while len(self.todo) > 0:
             try:
@@ -496,30 +489,30 @@ class Context:
                     self.summary.append("%s assumed to be done: requested by configuration" % (action.name))
                 else:
                     # check dependencies
+                    log('*** checking dependencies %s of %s', action.dependencies, action.name)
                     for depend in action.dependencies:
+                        while self.actions[depend].status == Action.RUNNING:
+                            self.actions[depend].wait_for_completion()
+                            status = check_action(self.actions[depend], status)
                         if not self.actions[depend].status in Action.COMPLETED:
                             action.status = Action.SKIPPED
                             self.summary.append("%s skipped: required %s has not been executed" % (action.name, depend))
                             break
-
-                if action.status == Action.SKIPPED:
-                    continue
-
-                # execute it
-                if action.isserver:
-                    run_servers.append(action.name);
-                action.tryexecution(step, not self.nologs)
-                if action.status > status:
-                    status = action.status
-                if action.status == Action.FAILED:
-                    self.summary.append("%s: %s" % (action.name, action.summary))
-                elif action.status == Action.WARNINGS:
-                    self.summary.append("%s done, but check the warnings" % action.name)
-                else:
-                    self.summary.append("%s successful" % action.name)
+                    if action.status != Action.SKIPPED:
+                        # execute it
+                        if action.isserver:
+                            run_servers.append(action.name);
+                        action.tryexecution(step, not self.nologs)
+                        started.append(action)
             except Exception, inst:
                 traceback.print_exc()
                 self.summary.append("%s failed: %s" % (action.name, inst))
+
+        # Now wait for each running action.
+        for action in started:
+            if action.status == Action.RUNNING:
+                action.wait_for_completion()
+            status = check_action(action, status)
 
         # append all parameters to summary
         self.summary.append("")
@@ -555,9 +548,8 @@ class Context:
         commands = []
 
         # produce nightly.xml from plain text log files
-        if options.schrootdir:
-            backenddir = backenddir.replace(options.schrootdir + '/', '/')
-            testdir = testdir.replace(options.schrootdir + '/', '/')
+        backenddir = context.stripSchrootDir(backenddir)
+        testdir = context.stripSchrootDir(testdir)
         commands.append(resultchecker + " " +self.resultdir+" "+"\""+",".join(run_servers)+"\""+" "+uri +" "+testdir + " \"" + shell + " " + testprefix +" \""+" \"" +backenddir + "\"")
         previousxml = os.path.join(self.lastresultdir, "nightly.xml")
 
@@ -605,9 +597,6 @@ class Context:
         else:
             sys.exit(1)
 
-# must be set before instantiating some of the following classes
-context = None
-        
 class CVSCheckout(Action):
     """Does a CVS checkout (if directory does not exist yet) or an update (if it does)."""
     
@@ -782,10 +771,8 @@ class AutotoolsBuild(Action):
         del_dir(self.builddir)
         cd(self.builddir)
         context.runCommand("%s %s/configure %s" % (self.runner, self.src, self.configargs))
-        # We have permission to run one job, obtained for us by
-        # tryexecution(). Pass that right on to make, which will then
-        # run in parallel mode thanks to env variables and ask for
-        # more jobs at runtime.
+        # Before invoking make recursively, the parent must obtain
+        # one job token. make then may allocate more.
         context.runCommand("%s %s install DESTDIR=%s" % (self.runner, context.make, self.installdir))
 
 
@@ -811,13 +798,30 @@ class SyncEvolutionTest(Action):
             self.serverName = name
         self.testBinary = testBinary
         self.alarmSeconds = 1200
+        self.needhome = True
 
     def execute(self):
         resdir = os.getcwd()
-        os.chdir(self.build.builddir)
-        # clear previous test results
-        context.runCommand("%s %s testclean" % (self.runner, context.make))
-        os.chdir(self.testdir)
+        # Run inside a new directory which links to all files in the build dir.
+        # That way different actions are independent of each other while still
+        # sharing the same test binaries and files.
+        actiondir = os.path.join(context.tmpdir, 'tests', self.name)
+        if not os.path.isdir(actiondir):
+            os.makedirs(actiondir)
+        # The symlinks must be usable inside a chroot, so
+        # remove the chroot prefix that is only visible here
+        # outside the chroot. For copying the original file,
+        # we must remember the file name outside of the chroot.
+        hosttargetdir = self.testdir
+        targetdir = context.stripSchrootDir(hosttargetdir)
+        links = {}
+        for entry in os.listdir(self.testdir):
+            if not entry.startswith('.'):
+                target = os.path.join(targetdir, entry)
+                name = os.path.join(actiondir, entry)
+                os.symlink(target, name)
+                links[entry] = os.path.join(hosttargetdir, entry)
+        os.chdir(actiondir)
         try:
             # use installed backends if available
             backenddir = os.path.join(self.build.installdir, "usr/lib/syncevolution/backends")
@@ -858,7 +862,7 @@ class SyncEvolutionTest(Action):
                         ("SYNCEVOLUTION_LOCALE_DIR=%s " % localedir)
 
             cmd = "%s %s %s %s %s ./syncevolution" % (self.testenv, installenv, self.runner, context.setupcmd, self.name)
-            context.runCommand(cmd)
+            context.runCommand(cmd, resources=[self.name])
 
             # proxy must be set in test config! Necessary because not all tests work with the env proxy (local CalDAV, for example).
             options = { "server": self.serverName,
@@ -907,16 +911,18 @@ class SyncEvolutionTest(Action):
                         tests.append("Client::Sync::%s::testItems" % self.sources[0])
                     else:
                         tests.append(test)
-                context.runCommand("%s %s" % (basecmd, " ".join(tests)))
+                context.runCommand("%s %s" % (basecmd, " ".join(tests)),
+                                   resources=[self.name])
             else:
-                context.runCommand(basecmd)
+                context.runCommand(basecmd,
+                                   resources=[self.name])
         finally:
             tocopy = re.compile(r'.*\.log|.*\.client.[AB]|.*\.(cpp|h|c)\.html|.*\.log\.html')
             toconvert = re.compile(r'Client_.*\.log')
             htaccess = file(os.path.join(resdir, ".htaccess"), "a")
-            for f in os.listdir(self.testdir):
+            for f in os.listdir(actiondir):
                 if tocopy.match(f):
-                    error = copyLog(f, resdir, htaccess, self.lineFilter)
+                    error = copyLog(f in links and links[f] or f, resdir, htaccess, self.lineFilter)
                     if toconvert.match(f):
                         # also convert client-test log files to HTML
                         tohtml = os.path.join(resdir, f + ".html")
@@ -952,6 +958,8 @@ parser.add_option("-s", "--skip",
 parser.add_option("", "--tmp",
                   type="string", dest="tmpdir", default="",
                   help="temporary directory for intermediate files")
+parser.add_option("", "--home-template", default=None,
+                  help="Copied entirely to set up temporary home directories while running tests in parallel. Leaving this empty disables parallel testing.")
 parser.add_option("", "--workdir",
                   type="string", dest="workdir", default=None,
                   help="directory for files which might be reused between runs")
@@ -1069,6 +1077,8 @@ context = Context(options.tmpdir, options.resultdir, options.uri, options.workdi
                   enabled, options.skip, options.nologs, options.setupcmd,
                   options.makecmd, options.sanitychecks, options.lastresultdir, options.datadir)
 context.databasePrefix = options.databasePrefix
+context.home_template = options.home_template
+context.schrootdir = options.schrootdir
 
 class EvoSvn(Action):
     """Builds Evolution from SVN using Paul Smith's Evolution Makefile."""
@@ -1181,7 +1191,8 @@ class CppcheckSource(GitCheckoutBase, Action):
                                                                       "cppcheck-wrapper.sh"),
                                                          self.numjobs,
                                                          self.cppcheckflags,
-                                                         self.sources))
+                                                         self.sources),
+                           jobs=self.numjobs)
 
 if options.sourcedir:
     if options.nosourcedircopy:
