@@ -201,8 +201,7 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           DBusErrorCXX *err);
 
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
-                                          DBusErrorCXX *err,
-                                          bool delayed = false);
+                                          DBusErrorCXX *err);
 
 void dbus_bus_connection_undelay(const DBusConnectionPtr &conn);
 
@@ -224,14 +223,10 @@ class DBusServerCXX : private boost::noncopyable
      */
     typedef boost::function<void (DBusServerCXX &, DBusConnectionPtr &)> NewConnection_t;
 
-    void setNewConnectionCallback(const NewConnection_t &newConnection) { m_newConnection = newConnection; }
-    NewConnection_t getNewConnectionCallback() const { return m_newConnection; }
-
     /**
-     * Start listening for new connections on the given address, like unix:abstract=myaddr.
-     * Address may be empty, in which case a new, unused address will chosen.
+     * Start listening for new connections on an unused address.
      */
-    static boost::shared_ptr<DBusServerCXX> listen(const std::string &address, DBusErrorCXX *err);
+    static boost::shared_ptr<DBusServerCXX> listen(const NewConnection_t &newConnection, DBusErrorCXX *err);
 
     /**
      * address used by the server

@@ -63,8 +63,7 @@ void DBusConnectionPtr::setDisconnect(const Disconnect_t &func)
 }
 
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
-                                          DBusErrorCXX *err,
-                                          bool /*delayed*/ /*= false*/)
+                                          DBusErrorCXX *err)
 {
     DBusConnectionPtr conn(dbus_connection_open_private(address.c_str(), err), false);
     if (conn) {
@@ -79,26 +78,20 @@ void dbus_bus_connection_undelay(const DBusConnectionPtr &/*ptr*/)
     // no op
 }
 
-boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &address, DBusErrorCXX *err)
+boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &newConnection, DBusErrorCXX *err)
 {
     DBusServer *server = NULL;
-    const char *realAddr = address.c_str();
-    char buffer[80];
+    char address[80];
 
-    if (address.empty()) {
-        realAddr = buffer;
-        buffer[0] = 0;
-        for (int counter = 1; counter < 100 && !server; counter++) {
-            if (*err) {
-                g_debug("dbus_server_listen(%s) failed, trying next candidate: %s",
-                        buffer, err->message);
-                dbus_error_init(err);
-            }
-            sprintf(buffer, "unix:abstract=gdbuscxx-%d", counter);
-            server = dbus_server_listen(realAddr, err);
+    address[0] = 0;
+    for (int counter = 1; counter < 100 && !server; counter++) {
+        if (*err) {
+            g_debug("dbus_server_listen(%s) failed, trying next candidate: %s",
+                    address, err->message);
+            dbus_error_init(err);
         }
-    } else {
-        server = dbus_server_listen(realAddr, err);
+        sprintf(address, "unix:abstract=gdbuscxx-%d", counter);
+        server = dbus_server_listen(address, err);
     }
 
     if (!server) {
@@ -106,8 +99,9 @@ boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &addres
     }
 
     b_dbus_setup_server(server);
-    boost::shared_ptr<DBusServerCXX> res(new DBusServerCXX(server, realAddr));
-    dbus_server_set_new_connection_function(server, newConnection, res.get(), NULL);
+    boost::shared_ptr<DBusServerCXX> res(new DBusServerCXX(server, address));
+    res->m_newConnection = newConnection;
+    dbus_server_set_new_connection_function(server, DBusServerCXX::newConnection, res.get(), NULL);
     return res;
 }
 

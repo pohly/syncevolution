@@ -19,16 +19,27 @@
 
 #include "gdbus-cxx-bridge.h"
 #include <stdio.h>
+#include <syncevo/gsignond-pipe-stream.h>
+#include <syncevo/GuardFD.h>
+#include <syncevo/GLibSupport.h>
+#include <syncevo/util.h>
+
+#include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+
+SE_GOBJECT_TYPE(GSignondPipeStream)
 
 void intrusive_ptr_add_ref(GDBusConnection *con)  { g_object_ref(con); }
 void intrusive_ptr_release(GDBusConnection *con)  { g_object_unref(con); }
 void intrusive_ptr_add_ref(GDBusMessage    *msg)  { g_object_ref(msg); }
 void intrusive_ptr_release(GDBusMessage    *msg)  { g_object_unref(msg); }
-static void intrusive_ptr_add_ref(GDBusServer *server) { g_object_ref(server); }
-static void intrusive_ptr_release(GDBusServer *server) { g_object_unref(server); }
-
 
 namespace GDBusCXX {
+
+using namespace SyncEvo;
 
 MethodHandler::MethodMap MethodHandler::m_methodMap;
 boost::function<void (void)> MethodHandler::m_callback;
@@ -211,28 +222,25 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
 }
 
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
-                                          DBusErrorCXX *err,
-                                          bool delayed /*= false*/)
+                                          DBusErrorCXX *err)
 {
-    GError* error = NULL;
-    int flags = G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT;
-
-    if (delayed) {
-        flags |= G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING;
-    }
-
-    DBusConnectionPtr conn(g_dbus_connection_new_for_address_sync(address.c_str(),
-                                                                  static_cast<GDBusConnectionFlags>(flags),
-                                                                  NULL, /* GDBusAuthObserver */
-                                                                  NULL, /* GCancellable */
-                                                                  &error),
-                           false);
+    // "address" needs to be the file descriptor number set up
+    // by DBusServerCXX::listen().
+    GuardFD fd(atoi(address.c_str()));
+    GSignondPipeStreamCXX stream(gsignond_pipe_stream_new(fd, fd, true),
+                                 TRANSFER_REF);
+    fd.release();
+    GErrorCXX gerror;
+    GDBusCXX::DBusConnectionPtr
+        conn(g_dbus_connection_new_sync(G_IO_STREAM(stream.get()),
+                                        NULL,
+                                        G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
+                                        NULL,
+                                        NULL,
+                                        gerror));
     if (!conn && err) {
-        err->set(error);
-    } else {
-        g_clear_error(&error);
+        err->set(gerror.release());
     }
-
     return conn;
 }
 
@@ -268,109 +276,96 @@ void DBusConnectionPtr::setDisconnect(const Disconnect_t &func)
                              true);
 }
 
-boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const std::string &address, DBusErrorCXX *err)
+boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &newConnection, DBusErrorCXX *)
 {
-    GDBusServer *server = NULL;
-    const char *realAddr = address.c_str();
-    char buffer[80];
-
-    gchar *guid = g_dbus_generate_guid();
-    GError *error = NULL;
-    if (address.empty()) {
-        realAddr = buffer;
-        for (int counter = 1; counter < 100 && !server; counter++) {
-            if (error) {
-                // previous attempt failed
-                g_debug("setting up D-Bus server on %s failed, trying next address: %s",
-                        realAddr,
-                        error->message);
-                g_clear_error(&error);
-            }
-            sprintf(buffer, "unix:abstract=gdbuscxx-%d", counter);
-            server = g_dbus_server_new_sync(realAddr,
-                                            G_DBUS_SERVER_FLAGS_NONE,
-                                            guid,
-                                            NULL, /* GDBusAuthObserver */
-                                            NULL, /* GCancellable */
-                                            &error);
-        }
-    } else {
-        server = g_dbus_server_new_sync(realAddr,
-                                        G_DBUS_SERVER_FLAGS_NONE,
-                                        guid,
-                                        NULL, /* GDBusAuthObserver */
-                                        NULL, /* GCancellable */
-                                        &error);
+    // Create two fds connected via a two-way stream. The parent
+    // keeps fd[0] which gets closed automatically when the child
+    // execs. The parent closes the child's fd[1] after forking.
+    int fds[2];
+    int retval = socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, fds);
+    if (retval) {
+        SE_THROW(StringPrintf("socketpair: %s", strerror(errno)));
     }
-    g_free(guid);
+    GuardFD parentfd(fds[0]);
+    GuardFD childfd(fds[1]);
 
-    if (!server) {
-        if (err) {
-            err->set(error);
-        } else {
-            g_clear_error(&error);
-        }
-        return boost::shared_ptr<DBusServerCXX>();
+    // Child must inherit its fd.
+    int fdflags;
+    if ((fdflags = fcntl(childfd, F_GETFD)) == -1 ||
+        fcntl(childfd, F_SETFD, fdflags & ~FD_CLOEXEC)) {
+        SE_THROW(StringPrintf("fcntl: %s", strerror(errno)));
     }
 
-    // steals reference to 'server'
-    boost::shared_ptr<DBusServerCXX> res(new DBusServerCXX(server, realAddr));
-    g_signal_connect(server,
-                     "new-connection",
-                     G_CALLBACK(DBusServerCXX::newConnection),
-                     res.get());
+    // Out listen "address" is the FD number.
+    std::string address = StringPrintf("%d", childfd.get());
+
+    // Transfer ownership of parent fd.
+    GSignondPipeStreamCXX stream(gsignond_pipe_stream_new(parentfd, parentfd, true),
+                                 TRANSFER_REF);
+    parentfd.release();
+
+    GErrorCXX gerror;
+    GDBusCXX::DBusConnectionPtr
+        connection(g_dbus_connection_new_sync(G_IO_STREAM(stream.get()),
+                                              NULL,
+                                              G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
+                                              NULL,
+                                              NULL,
+                                              gerror),
+                   false);
+    if (!connection) {
+        gerror.throwError("creating GIO D-Bus connection");
+    }
+
+    // A fake DBusServerCXX which does nothing more than return the address, aka
+    // our FD number, and store data for the idle callback.
+    boost::shared_ptr<DBusServerCXX> res(new DBusServerCXX(address));
+    res->m_newConnection = newConnection;
+    res->m_connection = connection;
+    // Will be freed in the idle callback. Caller must have forked by then.
+    res->m_childfd = childfd.release();
+
+    // The caller must have some time to set up connection handling and fork.
+    // Delay the newConnection() callback until we enter the main event loop
+    // again. Callback must be removed when destructing prematurely because it
+    // has a plain "this" pointer.
+    res->m_connectionIdle = g_idle_add(onIdleOnce, &*res);
+
     return res;
 }
 
-gboolean DBusServerCXX::newConnection(GDBusServer *server, GDBusConnection *newConn, void *data) throw()
-{
-    DBusServerCXX *me = static_cast<DBusServerCXX *>(data);
-    if (me->m_newConnection) {
-        GCredentials *credentials;
-        std::string credString;
-
-        credentials = g_dbus_connection_get_peer_credentials(newConn);
-        if (credentials == NULL) {
-            credString = "(no credentials received)";
-        } else {
-            gchar *s = g_credentials_to_string(credentials);
-            credString = s;
-            g_free(s);
-        }
-        g_debug("Client connected.\n"
-                "Peer credentials: %s\n"
-                "Negotiated capabilities: unix-fd-passing=%d\n",
-                credString.c_str(),
-                g_dbus_connection_get_capabilities(newConn) & G_DBUS_CAPABILITY_FLAGS_UNIX_FD_PASSING);
-
-        try {
-            // Ref count of connection has to be increased if we want to handle it.
-            // Something inside m_newConnection has to take ownership of connection,
-            // because conn increases ref count only temporarily.
-            DBusConnectionPtr conn(newConn, true);
-            me->m_newConnection(*me, conn);
-        } catch (...) {
-            g_error("handling new D-Bus connection failed with C++ exception");
-            return FALSE;
-        }
-
-        return TRUE;
-    } else {
-        return FALSE;
-    }
-}
-
-DBusServerCXX::DBusServerCXX(GDBusServer *server, const std::string &address) :
-    m_server(server, false), // steal reference
+DBusServerCXX::DBusServerCXX(const std::string &address) :
+    m_connectionIdle(0),
+    m_childfd(-1),
     m_address(address)
 {
-    g_dbus_server_start(server);
 }
 
 DBusServerCXX::~DBusServerCXX()
 {
-    g_dbus_server_stop(m_server.get());
+    if (m_connectionIdle) {
+        g_source_remove(m_connectionIdle);
+    }
+    if (m_childfd >= 0) {
+        close(m_childfd);
+    }
 }
+
+gboolean DBusServerCXX::onIdleOnce(gpointer custom)
+{
+    DBusServerCXX *me = static_cast<DBusServerCXX *>(custom);
+    me->m_connectionIdle = 0;
+    me->m_newConnection(*me, me->m_connection);
+    me->m_connection.reset();
+    close(me->m_childfd);
+    me->m_childfd = -1;
+
+    // not again
+    return false;
+}
+
+
+
 
 void Watch::nameOwnerChanged(GDBusConnection *connection,
                              const gchar *sender_name,

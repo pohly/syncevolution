@@ -23,6 +23,9 @@
 
 #if defined(HAVE_GLIB)
 
+#include <unistd.h>
+#include <fcntl.h>
+
 #include <pcrecpp.h>
 #include <ctype.h>
 #include "test.h"
@@ -182,11 +185,10 @@ void ForkExecParent::start()
     GDBusCXX::DBusErrorCXX dbusError;
 
     SE_LOG_DEBUG(NULL, "ForkExecParent: preparing for child process %s", m_helper.c_str());
-    m_server = GDBusCXX::DBusServerCXX::listen("", &dbusError);
+    m_server = GDBusCXX::DBusServerCXX::listen(boost::bind(&ForkExecParent::newClientConnection, this, _2), &dbusError);
     if (!m_server) {
         dbusError.throwFailure("starting server");
     }
-    m_server->setNewConnectionCallback(boost::bind(&ForkExecParent::newClientConnection, this, _2));
 
     // look for helper binary
     std::string helper;
@@ -246,7 +248,7 @@ void ForkExecParent::start()
     if (!g_spawn_async_with_pipes(NULL, // working directory
                                   static_cast<gchar **>(m_argv.get()),
                                   static_cast<gchar **>(m_env.get()),
-                                  flags,
+                                  (GSpawnFlags)(flags | G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
                                   // child setup function: redirect stdout to stderr, undo LogRedirect
                                   forked, this,
                                   &m_childPid,
@@ -276,6 +278,10 @@ void ForkExecParent::setupPipe(GIOChannel *&channel, guint &sourceID, int fd)
         // nop
         return;
     }
+
+    // Other program executed by us shall not inherit a copy of this
+    // file descriptor.
+    fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC);
 
     channel = g_io_channel_unix_new(fd);
     if (!channel) {
@@ -438,6 +444,7 @@ void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) thro
         m_api.reset(new ForkExecParentDBusAPI(conn, getInstance()));
 #endif
         m_onConnect(conn);
+        dbus_bus_connection_undelay(conn);
     } catch (...) {
         std::string explanation;
         SyncMLStatus status = Exception::handle(explanation);
@@ -533,8 +540,7 @@ void ForkExecChild::connect()
                  address);
     GDBusCXX::DBusErrorCXX dbusError;
     GDBusCXX::DBusConnectionPtr conn = dbus_get_bus_connection(address,
-                                                               &dbusError,
-                                                               true /* always delay message processing */);
+                                                               &dbusError);
     if (!conn) {
         dbusError.throwFailure("connecting to server");
     }

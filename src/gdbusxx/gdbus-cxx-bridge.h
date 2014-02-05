@@ -314,8 +314,7 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           DBusErrorCXX *err);
 
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
-                                          DBusErrorCXX *err,
-                                          bool delayed = false);
+                                          DBusErrorCXX *err);
 
 inline void dbus_bus_connection_undelay(const DBusConnectionPtr &conn) { conn.undelay(); }
 
@@ -333,18 +332,22 @@ class DBusServerCXX : private boost::noncopyable
      * Called for each new connection. Callback must store the DBusConnectionPtr,
      * otherwise it will be unref'ed after the callback returns.
      * If the new connection is not wanted, then it is good style to close it
-     * explicitly in the callback.
+     * explicitly in the callback. Message processing is delayed on the new
+     * connection, so the callback can set up objects and then must undelay
+     * the connection.
      */
     typedef boost::function<void (DBusServerCXX &, DBusConnectionPtr &)> NewConnection_t;
 
-    void setNewConnectionCallback(const NewConnection_t &newConnection) { m_newConnection = newConnection; }
-    NewConnection_t getNewConnectionCallback() const { return m_newConnection; }
-
     /**
-     * Start listening for new connections on the given address, like unix:abstract=myaddr.
-     * Address may be empty, in which case a new, unused address will chosen.
+     * Start listening for new connections. Mimics the libdbus DBusServer API, but
+     * underneath sets up a single connection via pipes. The caller must fork
+     * the process which calls dbus_get_bus_connection() before entering the main
+     * event loop again because that is when the DBusServerCXX will finish
+     * the connection setup (close child fd, call newConnection).
+     *
+     * All errors are reported via exceptions, not "err".
      */
-    static boost::shared_ptr<DBusServerCXX> listen(const std::string &address, DBusErrorCXX *err);
+    static boost::shared_ptr<DBusServerCXX> listen(const NewConnection_t &newConnection, DBusErrorCXX *err);
 
     /**
      * address used by the server
@@ -352,12 +355,14 @@ class DBusServerCXX : private boost::noncopyable
     std::string getAddress() const { return m_address; }
 
  private:
-    DBusServerCXX(GDBusServer *server, const std::string &address);
-    static gboolean newConnection(GDBusServer *server, GDBusConnection *newConn, void *data) throw();
-
+    DBusServerCXX(const std::string &address);
+    DBusConnectionPtr m_connection;
     NewConnection_t m_newConnection;
-    boost::intrusive_ptr<GDBusServer> m_server;
+    guint m_connectionIdle;
+    int m_childfd;
     std::string m_address;
+
+    static gboolean onIdleOnce(gpointer custom);
 };
 
 /**
