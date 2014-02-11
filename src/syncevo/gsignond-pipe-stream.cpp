@@ -70,12 +70,12 @@ _gsignond_pipe_stream_finalize (GObject *gobject)
     /* g_io_stream needs streams to be valid in its dispose still
      */
     if (stream->priv->input_stream) {
-        g_clear_object (&stream->priv->input_stream);
+        g_object_unref (stream->priv->input_stream);
         stream->priv->input_stream = NULL;
     }
 
     if (stream->priv->output_stream) {
-        g_clear_object (&stream->priv->output_stream);
+        g_object_unref (stream->priv->output_stream);
         stream->priv->output_stream = NULL;
     }
 
