@@ -782,6 +782,11 @@ double Sleep(double seconds)
                               "glib timeout");
             GRunWhile(! boost::lambda::var(triggered) &&
                       boost::lambda::bind(&SuspendFlags::getState, boost::ref(s)) == SuspendFlags::NORMAL);
+            // SleepTimeout already removed the source if it was triggered
+            // and returned false. No need to auto-destruct it again.
+            if (triggered) {
+                timeout.release();
+            }
             // done
             return 0;
         }

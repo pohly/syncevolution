@@ -333,11 +333,14 @@ gboolean ForkExecParent::outputReady(GIOChannel *source,
             // Will remove event source from main loop.
             cont = false;
 
-            // Free channel.
+            // Free channel and forget source tag (source will be freed
+            // by caller when we return false).
             if (source == me->m_out) {
                 me->m_out = NULL;
+                me->m_outID = 0;
             } else {
                 me->m_err = NULL;
+                me->m_errID = 0;
             }
             g_io_channel_unref(source);
 
