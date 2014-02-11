@@ -25,9 +25,6 @@ src_syncevo_sources = \
   src/syncevo/IdentityProvider.h \
   src/syncevo/IdentityProvider.cpp \
   \
-  src/syncevo/gsignond-pipe-stream.h \
-  src/syncevo/gsignond-pipe-stream.cpp \
-  \
   src/syncevo/ConfigTree.h \
   src/syncevo/ConfigFilter.h \
   src/syncevo/ConfigFilter.cpp \
@@ -144,6 +141,13 @@ src_syncevo_sources = \
   \
   src/syncevo/TrackingSyncSource.h \
   src/syncevo/TrackingSyncSource.cpp
+
+if COND_GIO_GDBUS
+# Only useful in combination with GDBus GIO.
+src_syncevo_sources += \
+  src/syncevo/gsignond-pipe-stream.h \
+  src/syncevo/gsignond-pipe-stream.cpp
+endif
 
 if ENABLE_ICAL
 src_syncevo_sources += \
