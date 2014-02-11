@@ -2119,6 +2119,11 @@ memotootest = SyncEvolutionTest("memotoo", compile,
                                   "eds_memo" ],
                                 "CLIENT_TEST_NOCHECK_SYNCMODE=1 "
                                 "CLIENT_TEST_NUM_ITEMS=10 "
+                                "CLIENT_TEST_FAILURES="
+                                # Server merges conflicting two items, but drops the
+                                # X-AIM from the first one.
+                                "Client::Sync::.*eds_contact.*::testMerge,"
+                                " "
                                 "CLIENT_TEST_SKIP="
                                 # server duplicates items in add<->add conflict because it
                                 # does not check UID
