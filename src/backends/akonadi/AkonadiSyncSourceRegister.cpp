@@ -133,10 +133,17 @@ static RegisterSyncSource registerMe("KDE Contact/Calendar/Task List/Memos",
 class AkonadiTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE(AkonadiTest);
     CPPUNIT_TEST(testInstantiate);
+
+    // There is no default database in Akonadi:
     // CPPUNIT_TEST(testOpenDefaultCalendar);
     // CPPUNIT_TEST(testOpenDefaultTodo);
     // CPPUNIT_TEST(testOpenDefaultMemo);
-    CPPUNIT_TEST(testTimezones);
+
+    // Besides, don't enable tests which depend on running Akonadi,
+    // because that would cause "client-test SyncEvolution" unless
+    // Akonadi was started first:
+    // CPPUNIT_TEST(testTimezones);
+
     CPPUNIT_TEST_SUITE_END();
 
 protected:
