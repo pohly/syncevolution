@@ -2997,20 +2997,20 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         # done as part of post-processing in runTest()
         self.runTestDBusCheck = checkDBusLog
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncNetworkFailure(self):
         """TestSessionAPIsDummy.testAutoSyncNetworkFailure - test that auto-sync is triggered, fails due to (temporary?!) network error here"""
         self.doAutoSyncNetworkFailure()
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=session "
                      "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncNoNetworkManager(self):
         """TestSessionAPIsDummy.testAutoSyncNoNetworkManager - test that auto-sync is triggered despite having neither NetworkManager nor Connman, fails due to (temporary?!) network error here"""
         self.doAutoSyncNetworkFailure()
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     def doAutoSyncLocalConfigError(self, notifyLevel,
                                    notification=
                                    '   string "SyncEvolution"\n'
@@ -3112,13 +3112,13 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         # done as part of post-processing in runTest()
         self.runTestDBusCheck = checkDBusLog
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalConfigError(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigError - test that auto-sync is triggered for local sync, fails due to permanent config error here"""
         self.doAutoSyncLocalConfigError(3)
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     @property("ENV", "LC_ALL=de_DE.UTF-8 LANGUAGE=de_DE:de")
     def testAutoSyncLocalConfigErrorGerman(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorGerman - test that auto-sync is triggered for local sync, fails due to permanent config error here"""
@@ -3138,13 +3138,13 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                         '   ]\n'
                                         '   int32 -1\n')
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalConfigErrorEssential(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorEssential - test that auto-sync is triggered for local sync, fails due to permanent config error here, with only the essential error notification"""
         self.doAutoSyncLocalConfigError(1)
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalConfigErrorQuiet(self):
         """TestSessionAPIsDummy.testAutoSyncLocalConfigErrorQuiet - test that auto-sync is triggered for local sync, fails due to permanent config error here, with no notification"""
@@ -3297,19 +3297,19 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             # done as part of post-processing in runTest()
             self.runTestDBusCheck = checkDBusLog
 
-    @timeout(120)
+    @timeout(usingValgrind() and 400 or 120)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalSuccess(self):
         """TestSessionAPIsDummy.testAutoSyncLocalSuccess - test that auto-sync is done successfully for local sync between file backends, with notifications"""
         self.doAutoSyncLocalSuccess(3)
 
-    @timeout(120)
+    @timeout(usingValgrind() and 400 or 120)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalSuccessQuiet(self):
         """TestSessionAPIsDummy.testAutoSyncLocalSuccessQuiet - test that auto-sync is done successfully for local sync between file backends, without notifications"""
         self.doAutoSyncLocalSuccess(1)
 
-    @timeout(240)
+    @timeout(usingValgrind() and 400 or 240)
     @property("ENV", "LC_ALL=en_US.UTF-8 LANGUAGE=en_US")
     def testAutoSyncLocalMultiple(self):
         """TestSessionAPIsDummy.testAutoSyncLocalMultiple - test that auto-sync is done successfully for local sync between file backends, several times, despite additional work going on"""
@@ -3539,9 +3539,11 @@ class TestConnection(DBusUtil, unittest.TestCase):
                                                 }
                        }
 
-    def setupConfig(self, name="dummy-test", deviceId="sc-api-nat"):
+    def setupConfig(self, name="dummy-test", deviceId="sc-api-nat", retryDuration=None):
         self.setUpSession(name)
         self.config[""]["remoteDeviceId"] = deviceId
+        if retryDuration is not None:
+            self.config[""]["RetryDuration"] = retryDuration
         self.session.SetConfig(False, False, self.config, utf8_strings=True)
         self.session.Detach()
         # SyncEvolution <= 1.2.2 delayed the "Session.StatusChanged"
@@ -3701,7 +3703,7 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.assertEqual(DBusUtil.quit_events, ["connection " + conpath + " aborted",
                                                     "session done"])
 
-    @timeout(60)
+    @timeout(usingValgrind() and 200 or 60)
     def testStartSyncTwice(self):
         """TestConnection.testStartSyncTwice - send the same SyncML message twice, starting two sessions"""
         self.setupConfig()
@@ -3749,12 +3751,12 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.assertEqual(DBusUtil.quit_events, ["connection " + conpath2 + " aborted",
                                                     "session done"])
 
-    @timeout(60)
+    @timeout(usingValgrind() and 120 or 60)
     def testKillInactive(self):
         """TestConnection.testKillInactive - block server with client A, then let client B connect twice"""
         #set up 2 configs
-        self.setupConfig()
-        self.setupConfig("dummy", "sc-pim-ppc")
+        self.setupConfig(retryDuration="120")
+        self.setupConfig("dummy", "sc-pim-ppc", retryDuration="120")
         conpath, connection = self.getConnection()
         connection.Process(TestConnection.message1, 'application/vnd.syncml+xml')
         loop.run()
@@ -4708,7 +4710,7 @@ END:VCARD'''
         self.assertEqual("0", report.get('source-addressbook-stat-local-removed-total', "0"))
         self.session.Detach()
 
-    @timeout(100)
+    @timeout(usingValgrind() and 200 or 100)
     def testItemRemoval(self):
         """TestLocalCache.testItemRemoval - ensure that extra item on server gets removed"""
         self.setUpConfigs()
@@ -4940,47 +4942,47 @@ END:VCARD'''
             numReports = numReports + 1
 
 
-    @timeout(100)
+    @timeout(usingValgrind() and 200 or 100)
     def testItemAdd(self):
         """TestLocalCache.testItemAdd - ensure that new item from client gets added in initial slow sync"""
         self.doItemChange()
 
-    @timeout(200)
+    @timeout(usingValgrind() and 400 or 200)
     def testItemAdd100(self):
         """TestLocalCache.testItemAdd100 - ensure that new item from client gets added in initial slow sync while leaving 100 items unchanged"""
         self.doItemChange(numAdditional=100)
 
-    @timeout(100)
+    @timeout(usingValgrind() and 200 or 100)
     def testSyncMode(self):
         """TestLocalCache.testSyncMode - ensure that requesting specific caching sync works"""
         self.doItemChange(change="Add+Slow")
 
-    @timeout(100)
+    @timeout(usingValgrind() and 300 or 100)
     def testItemAddIncremental(self):
         """TestLocalCache.testItemAddIncremental - ensure that new item from client gets added in incremental sync"""
         self.doItemChange(syncFirst=True)
 
-    @timeout(200)
+    @timeout(usingValgrind() and 400 or 200)
     def testItemAdd100Incremental(self):
         """TestLocalCache.testItemAdd100Incremental - ensure that new item from client gets added in incremental while leaving 100 items unchanged"""
         self.doItemChange(numAdditional=100, syncFirst=True)
 
-    @timeout(100)
+    @timeout(usingValgrind() and 200 or 100)
     def testItemUpdate(self):
         """TestLocalCache.testItemUpdate - ensure that an item can be updated incrementally"""
         self.doItemChange(change="Update")
 
-    @timeout(200)
+    @timeout(usingValgrind() and 400 or 200)
     def testItemUpdate100(self):
         """TestLocalCache.testItemUpdate100 - ensure that an item can be updated incrementally while leaving 100 items unchanged"""
         self.doItemChange(change="Update", numAdditional=100)
 
-    @timeout(100)
+    @timeout(usingValgrind() and 200 or 100)
     def testItemDelete(self):
         """TestLocalCache.testItemUpdate - ensure that an item can be deleted incrementally"""
         self.doItemChange(change="Delete")
 
-    @timeout(200)
+    @timeout(usingValgrind() and 400 or 200)
     def testItemDelete100(self):
         """TestLocalCache.testItemUpdate100 - ensure that an item can be deleted incrementally while leaving 100 items unchanged"""
         self.doItemChange(change="Delete", numAdditional=100)
@@ -5110,32 +5112,32 @@ END:VCARD'''
         self.assertEqual(0, sub.returncode,
                          msg=stdout)
 
-    @timeout(100)
+    @timeout(usingValgrind() and 300 or 100)
     def testPropertyRemovalSlow(self):
         """TestLocalCache.testPropertyRemovalSlow - ensure that obsolete item properties are removed during slow sync"""
         self.doPropertyRemoval()
 
-    @timeout(200)
+    @timeout(usingValgrind() and 600 or 200)
     def testPropertyRemovalSlow100(self):
         """TestLocalCache.testPropertyRemovalSlow100 - ensure that obsolete item properties are removed during slow sync while leaving 100 items unchanged"""
         self.doPropertyRemoval(numAdditional=100)
 
-    @timeout(100)
+    @timeout(usingValgrind() and 300 or 100)
     def testPropertyRemovalSecondSlow(self):
         """TestLocalCache.testPropertyRemovalSecondSlow - ensure that obsolete item properties are removed during non-initial slow sync"""
         self.doPropertyRemoval(step=1)
 
-    @timeout(200)
+    @timeout(usingValgrind() and 600 or 200)
     def testPropertyRemovalSecondSlow100(self):
         """TestLocalCache.testPropertyRemovalSecondSlow100 - ensure that obsolete item properties are removed during non-initial slow sync while leaving 100 items unchanged"""
         self.doPropertyRemoval(step=1, numAdditional=100)
 
-    @timeout(100)
+    @timeout(usingValgrind() and 300 or 100)
     def testPropertyRemovalIncremental(self):
         """TestLocalCache.testPropertyRemovalIncremental - ensure that obsolete item properties are removed during incremental sync"""
         self.doPropertyRemoval(step=2)
 
-    @timeout(200)
+    @timeout(usingValgrind() and 600 or 200)
     def testPropertyRemovalIncremental100(self):
         """TestLocalCache.testPropertyRemovalIncremental100 - ensure that obsolete item properties are removed during incremental sync while leaving 100 items unchanged"""
         self.doPropertyRemoval(step=2, numAdditional=100)
@@ -8049,7 +8051,7 @@ END:VCARD
         return p.sub('| start xxx, duration a:bcmin |', out)
 
     @property("debug", False)
-    @timeout(200)
+    @timeout(usingValgrind() and 600 or 200)
     def testSyncOutputErrors(self):
         """TestCmdline.testSyncOutputErrors - check error messages for sync operations"""
         self.setUpLocalSyncConfigs()
@@ -8277,7 +8279,7 @@ First ERROR encountered: sending message to child failed: The connection is clos
 ''')
 
     @property("debug", False)
-    @timeout(200)
+    @timeout(usingValgrind() and 600 or 200)
     def testSyncOutput(self):
         """TestCmdline.testSyncOutput - run syncs between local dirs and check output"""
         self.setUpLocalSyncConfigs()
@@ -9414,11 +9416,11 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(0, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=40")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=%d" % (usingValgrind() and 80 or 40))
     def testThreadedOpenQuick(self):
         """TestHTTP.testThreadedOpenQuick - slow down server in open, let server send keep-alive messages at faster rate"""
         port = self.runHTTPServer()
-        self.setUpConfigs(port, slowServer=True, retryDuration="30s", retryInterval="5m",
+        self.setUpConfigs(port, slowServer=True, retryDuration=(usingValgrind() and "60s" or "30s"), retryInterval="5m",
                           requestMaxTime=10)
         out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
                                          sessionFlags=None,
@@ -9427,12 +9429,12 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(err, None)
         self.assertEqual(0, code)
 
-    @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=40")
+    @timeout(usingValgrind() and 400 or 200)
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=%d" % (usingValgrind() and 80 or 40))
     def testThreadedListAllQuick(self):
         """TestHTTP.testThreadedListAllQuick - slow down server in listAll, let server send keep-alive messages at faster rate"""
         port = self.runHTTPServer()
-        self.setUpConfigs(port, slowServer=True, retryDuration="30s", retryInterval="5m",
+        self.setUpConfigs(port, slowServer=True, retryDuration=(usingValgrind() and "60s" or "30s"), retryInterval="5m",
                           requestMaxTime=10)
         out, err, code = self.runCmdline(["--sync", "slow", "--daemon=no", "client"],
                                          sessionFlags=None,
