@@ -142,7 +142,7 @@ AC_ARG_ENABLE(static-cxx,
 
 AC_ARG_ENABLE(evolution-compatibility,
               AS_HELP_STRING([--enable-evolution-compatibility],
-                             [build executables which only call Evolution via dlopen/dlsym: this avoids all hard dependencies on EDS shared objects, but might lead to crashes when their ABI changes]),
+                             [build executables which only call Evolution via dlopen/dlsym: this avoids all hard dependencies on EDS shared objects, but might lead to crashes when their ABI changes; use --enable-evolution-compatibility=ical to enable a weaker mode where linking is done normally and only libical.so.0/1 enum differences are worked around (allows patching resulting executables to use either of these two)]),
               enable_evolution_compatibility="$enableval", enable_evolution_compatibility="no")
 
 AC_ARG_ENABLE(developer-mode,
@@ -1046,6 +1046,9 @@ if test "$enable_evolution_compatibility" = "yes"; then
    EBOOK_LIBS=
    EPACKAGE_LIBS=
    BLUEZ_LIBS=
+fi
+if test "$enable_evolution_compatibility" = "ical" || test "$enable_evolution_compatibility" = "yes"; then
+   AC_DEFINE(EVOLUTION_ICAL_COMPATIBILITY, 1, [work with both libical.so.0 and libical.so.1])
 fi
 AM_CONDITIONAL([ENABLE_EVOLUTION_COMPATIBILITY], [test "$enable_evolution_compatibility" = "yes"])
 PKG_CHECK_MODULES(LIBICAL_AVAILABLE,

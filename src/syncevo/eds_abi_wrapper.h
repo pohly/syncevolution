@@ -93,18 +93,23 @@
 extern "C" {
 #endif
 
+#if defined(EVOLUTION_COMPATIBILITY) || defined(EVOLUTION_ICAL_COMPATIBILITY)
+extern int EDSAbiHaveIcal1; // 1 for libical.so.1, 0 for libical.so.0; numeric value matters, see defines below.
+
+/** initialize pointers to EDS functions, if necessary; can be called multiple times */
+void EDSAbiWrapperInit();
+#else
+# define EDSAbiWrapperInit()
+#endif
+
 #ifdef EVOLUTION_COMPATIBILITY
 
 /** libebook, libecal, libedataserver available (currently checks for e_book_new/e_cal_new/e_source_group_peek_sources) */
 extern int EDSAbiHaveEbook, EDSAbiHaveEcal, EDSAbiHaveEdataserver;
 extern int EDSAbiHaveIcal;
-extern int EDSAbiHaveIcal1; // libical.so.1
 
 /** libbluetooth available (checks sdp_connect()) */
 extern int SyncEvoHaveLibbluetooth;
-
-/** initialize pointers to EDS functions, if necessary; can be called multiple times */
-void EDSAbiWrapperInit();
 
 /**
  * This is a struct instead of a namespace because that allows
@@ -466,9 +471,6 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 # define EDSAbiHaveIcal EDS_ABI_HACK_TRUE
 # define SyncEvoHaveLibbluetooth EDS_ABI_HACK_TRUE
 
-
-# define EDSAbiWrapperInit()
-
 # if !defined(EDS_ABI_WRAPPER_NO_REDEFINE) && defined(HAVE_LIBICAL_R)
 #  ifdef ENABLE_ICAL
 #   ifndef LIBICAL_MEMFIXES
@@ -481,6 +483,230 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #  endif /* ENABLE_ICAL */
 # endif /* EDS_ABI_WRAPPER_NO_REDEFINE */
 #endif /* EVOLUTION_COMPATIBILITY */
+
+#if defined(EVOLUTION_ICAL_COMPATIBILITY) && defined(ENABLE_ICAL)
+/*
+ * libical.so.1 inserted a new ICAL_ACKNOWLEDGED_PROPERTY at the start of the enum,
+ * causing a renumbering of the constants. We need to map the names to the right constants
+ * at runtime.
+ *
+ * Opening libical.so.1 instead of libical.so.0 is orthogonal to this:
+ * it can be done either via dlopen() with EVOLUTION_COMPATIBILITY, or
+ * by patching a shared library which was originally linked against
+ * libical.so.0.
+ *
+ * unchanged: ICAL_ANY_PROPERTY = 0,
+ * new, cannot depend on it: ICAL_ACKNOWLEDGED_PROPERTY,
+ *
+ * These are the original enum values from libical.so.0:
+ */
+    enum {
+        EDSABI_ICAL_ACTION_PROPERTY = 1,
+        EDSABI_ICAL_ALLOWCONFLICT_PROPERTY,
+        EDSABI_ICAL_ATTACH_PROPERTY,
+        EDSABI_ICAL_ATTENDEE_PROPERTY,
+        EDSABI_ICAL_CALID_PROPERTY,
+        EDSABI_ICAL_CALMASTER_PROPERTY,
+        EDSABI_ICAL_CALSCALE_PROPERTY,
+        EDSABI_ICAL_CAPVERSION_PROPERTY,
+        EDSABI_ICAL_CARLEVEL_PROPERTY,
+        EDSABI_ICAL_CARID_PROPERTY,
+        EDSABI_ICAL_CATEGORIES_PROPERTY,
+        EDSABI_ICAL_CLASS_PROPERTY,
+        EDSABI_ICAL_CMD_PROPERTY,
+        EDSABI_ICAL_COMMENT_PROPERTY,
+        EDSABI_ICAL_COMPLETED_PROPERTY,
+        EDSABI_ICAL_COMPONENTS_PROPERTY,
+        EDSABI_ICAL_CONTACT_PROPERTY,
+        EDSABI_ICAL_CREATED_PROPERTY,
+        EDSABI_ICAL_CSID_PROPERTY,
+        EDSABI_ICAL_DATEMAX_PROPERTY,
+        EDSABI_ICAL_DATEMIN_PROPERTY,
+        EDSABI_ICAL_DECREED_PROPERTY,
+        EDSABI_ICAL_DEFAULTCHARSET_PROPERTY,
+        EDSABI_ICAL_DEFAULTLOCALE_PROPERTY,
+        EDSABI_ICAL_DEFAULTTZID_PROPERTY,
+        EDSABI_ICAL_DEFAULTVCARS_PROPERTY,
+        EDSABI_ICAL_DENY_PROPERTY,
+        EDSABI_ICAL_DESCRIPTION_PROPERTY,
+        EDSABI_ICAL_DTEND_PROPERTY,
+        EDSABI_ICAL_DTSTAMP_PROPERTY,
+        EDSABI_ICAL_DTSTART_PROPERTY,
+        EDSABI_ICAL_DUE_PROPERTY,
+        EDSABI_ICAL_DURATION_PROPERTY,
+        EDSABI_ICAL_EXDATE_PROPERTY,
+        EDSABI_ICAL_EXPAND_PROPERTY,
+        EDSABI_ICAL_EXRULE_PROPERTY,
+        EDSABI_ICAL_FREEBUSY_PROPERTY,
+        EDSABI_ICAL_GEO_PROPERTY,
+        EDSABI_ICAL_GRANT_PROPERTY,
+        EDSABI_ICAL_ITIPVERSION_PROPERTY,
+        EDSABI_ICAL_LASTMODIFIED_PROPERTY,
+        EDSABI_ICAL_LOCATION_PROPERTY,
+        EDSABI_ICAL_MAXCOMPONENTSIZE_PROPERTY,
+        EDSABI_ICAL_MAXDATE_PROPERTY,
+        EDSABI_ICAL_MAXRESULTS_PROPERTY,
+        EDSABI_ICAL_MAXRESULTSSIZE_PROPERTY,
+        EDSABI_ICAL_METHOD_PROPERTY,
+        EDSABI_ICAL_MINDATE_PROPERTY,
+        EDSABI_ICAL_MULTIPART_PROPERTY,
+        EDSABI_ICAL_NAME_PROPERTY,
+        EDSABI_ICAL_ORGANIZER_PROPERTY,
+        EDSABI_ICAL_OWNER_PROPERTY,
+        EDSABI_ICAL_PERCENTCOMPLETE_PROPERTY,
+        EDSABI_ICAL_PERMISSION_PROPERTY,
+        EDSABI_ICAL_PRIORITY_PROPERTY,
+        EDSABI_ICAL_PRODID_PROPERTY,
+        EDSABI_ICAL_QUERY_PROPERTY,
+        EDSABI_ICAL_QUERYLEVEL_PROPERTY,
+        EDSABI_ICAL_QUERYID_PROPERTY,
+        EDSABI_ICAL_QUERYNAME_PROPERTY,
+        EDSABI_ICAL_RDATE_PROPERTY,
+        EDSABI_ICAL_RECURACCEPTED_PROPERTY,
+        EDSABI_ICAL_RECUREXPAND_PROPERTY,
+        EDSABI_ICAL_RECURLIMIT_PROPERTY,
+        EDSABI_ICAL_RECURRENCEID_PROPERTY,
+        EDSABI_ICAL_RELATEDTO_PROPERTY,
+        EDSABI_ICAL_RELCALID_PROPERTY,
+        EDSABI_ICAL_REPEAT_PROPERTY,
+        EDSABI_ICAL_REQUESTSTATUS_PROPERTY,
+        EDSABI_ICAL_RESOURCES_PROPERTY,
+        EDSABI_ICAL_RESTRICTION_PROPERTY,
+        EDSABI_ICAL_RRULE_PROPERTY,
+        EDSABI_ICAL_SCOPE_PROPERTY,
+        EDSABI_ICAL_SEQUENCE_PROPERTY,
+        EDSABI_ICAL_STATUS_PROPERTY,
+        EDSABI_ICAL_STORESEXPANDED_PROPERTY,
+        EDSABI_ICAL_SUMMARY_PROPERTY,
+        EDSABI_ICAL_TARGET_PROPERTY,
+        EDSABI_ICAL_TRANSP_PROPERTY,
+        EDSABI_ICAL_TRIGGER_PROPERTY,
+        EDSABI_ICAL_TZID_PROPERTY,
+        EDSABI_ICAL_TZNAME_PROPERTY,
+        EDSABI_ICAL_TZOFFSETFROM_PROPERTY,
+        EDSABI_ICAL_TZOFFSETTO_PROPERTY,
+        EDSABI_ICAL_TZURL_PROPERTY,
+        EDSABI_ICAL_UID_PROPERTY,
+        EDSABI_ICAL_URL_PROPERTY,
+        EDSABI_ICAL_VERSION_PROPERTY,
+        EDSABI_ICAL_X_PROPERTY,
+        EDSABI_ICAL_XLICCLASS_PROPERTY,
+        EDSABI_ICAL_XLICCLUSTERCOUNT_PROPERTY,
+        EDSABI_ICAL_XLICERROR_PROPERTY,
+        EDSABI_ICAL_XLICMIMECHARSET_PROPERTY,
+        EDSABI_ICAL_XLICMIMECID_PROPERTY,
+        EDSABI_ICAL_XLICMIMECONTENTTYPE_PROPERTY,
+        EDSABI_ICAL_XLICMIMEENCODING_PROPERTY,
+        EDSABI_ICAL_XLICMIMEFILENAME_PROPERTY,
+        EDSABI_ICAL_XLICMIMEOPTINFO_PROPERTY,
+        EDSABI_ICAL_NO_PROPERTY
+    };
+
+/*
+ * The defines rely on EDSAbiHaveIcal1 == 0 for libical.so.0 (= original enum value used
+ * unchanged) and EDSAbiHaveIcal1 == 1 for libical.so.1 (original value has to be incremented
+ * by one).
+ */
+#  define ICAL_ACTION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_ACTION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_ALLOWCONFLICT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_ALLOWCONFLICT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_ATTACH_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_ATTACH_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_ATTENDEE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_ATTENDEE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CALID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CALID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CALMASTER_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CALMASTER_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CALSCALE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CALSCALE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CAPVERSION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CAPVERSION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CARLEVEL_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CARLEVEL_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CARID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CARID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CATEGORIES_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CATEGORIES_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CLASS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CLASS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CMD_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CMD_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_COMMENT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_COMMENT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_COMPLETED_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_COMPLETED_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_COMPONENTS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_COMPONENTS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CONTACT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CONTACT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CREATED_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CREATED_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_CSID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_CSID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DATEMAX_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DATEMAX_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DATEMIN_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DATEMIN_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DECREED_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DECREED_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DEFAULTCHARSET_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DEFAULTCHARSET_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DEFAULTLOCALE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DEFAULTLOCALE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DEFAULTTZID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DEFAULTTZID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DEFAULTVCARS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DEFAULTVCARS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DENY_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DENY_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DESCRIPTION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DESCRIPTION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DTEND_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DTEND_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DTSTAMP_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DTSTAMP_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DTSTART_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DTSTART_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DUE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DUE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_DURATION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_DURATION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_EXDATE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_EXDATE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_EXPAND_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_EXPAND_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_EXRULE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_EXRULE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_FREEBUSY_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_FREEBUSY_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_GEO_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_GEO_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_GRANT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_GRANT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_ITIPVERSION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_ITIPVERSION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_LASTMODIFIED_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_LASTMODIFIED_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_LOCATION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_LOCATION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_MAXCOMPONENTSIZE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_MAXCOMPONENTSIZE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_MAXDATE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_MAXDATE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_MAXRESULTS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_MAXRESULTS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_MAXRESULTSSIZE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_MAXRESULTSSIZE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_METHOD_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_METHOD_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_MINDATE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_MINDATE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_MULTIPART_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_MULTIPART_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_NAME_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_NAME_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_ORGANIZER_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_ORGANIZER_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_OWNER_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_OWNER_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_PERCENTCOMPLETE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_PERCENTCOMPLETE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_PERMISSION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_PERMISSION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_PRIORITY_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_PRIORITY_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_PRODID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_PRODID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_QUERY_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_QUERY_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_QUERYLEVEL_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_QUERYLEVEL_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_QUERYID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_QUERYID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_QUERYNAME_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_QUERYNAME_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RDATE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RDATE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RECURACCEPTED_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RECURACCEPTED_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RECUREXPAND_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RECUREXPAND_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RECURLIMIT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RECURLIMIT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RECURRENCEID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RECURRENCEID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RELATEDTO_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RELATEDTO_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RELCALID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RELCALID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_REPEAT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_REPEAT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_REQUESTSTATUS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_REQUESTSTATUS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RESOURCES_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RESOURCES_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RESTRICTION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RESTRICTION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_RRULE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_RRULE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_SCOPE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_SCOPE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_SEQUENCE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_SEQUENCE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_STATUS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_STATUS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_STORESEXPANDED_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_STORESEXPANDED_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_SUMMARY_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_SUMMARY_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TARGET_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TARGET_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TRANSP_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TRANSP_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TRIGGER_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TRIGGER_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TZID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TZID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TZNAME_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TZNAME_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TZOFFSETFROM_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TZOFFSETFROM_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TZOFFSETTO_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TZOFFSETTO_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_TZURL_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_TZURL_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_UID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_UID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_URL_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_URL_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_VERSION_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_VERSION_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_X_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_X_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICCLASS_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICCLASS_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICCLUSTERCOUNT_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICCLUSTERCOUNT_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICERROR_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICERROR_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICMIMECHARSET_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICMIMECHARSET_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICMIMECID_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICMIMECID_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICMIMECONTENTTYPE_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICMIMECONTENTTYPE_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICMIMEENCODING_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICMIMEENCODING_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICMIMEFILENAME_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICMIMEFILENAME_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_XLICMIMEOPTINFO_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_XLICMIMEOPTINFO_PROPERTY + EDSAbiHaveIcal1))
+#  define ICAL_NO_PROPERTY ((icalproperty_kind)(EDSABI_ICAL_NO_PROPERTY + EDSAbiHaveIcal1))
+#endif /* EVOLUTION_ICAL_COMPATIBILITY && ENABLE_ICAL */
 
 const char *EDSAbiWrapperInfo();
 const char *EDSAbiWrapperDebug();

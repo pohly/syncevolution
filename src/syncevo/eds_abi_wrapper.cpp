@@ -227,7 +227,7 @@ extern "C" void EDSAbiWrapperInit()
                 (void *)0);
     EDSAbiHaveEbook = EDSAbiWrapperSingleton.e_book_new != 0;
     findSymbols("libebook-1.2.so", libebookMinVersion, libebookMaxVersion,
-                FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                0, NULL,
                 &EDSAbiWrapperSingleton.e_contact_inline_local_photos, "e_contact_inline_local_photos",
                 (void *)0);
 
@@ -349,7 +349,7 @@ extern "C" void EDSAbiWrapperInit()
     EDSAbiHaveEcal = EDSAbiWrapperSingleton.e_cal_new != 0;
     ecalhandle =
         findSymbols("libecal-1.2.so", libecalMinVersion, libecalMaxVersion,
-                FIND_SYMBOLS_LENIENT_MAX_VERSION, NULL,
+                0, NULL,
                 EDS_ABI_WRAPPER_ICAL_R
                 (void *)0);
 # endif // ENABLE_ECAL
@@ -415,6 +415,33 @@ extern "C" void EDSAbiWrapperInit()
     }
     SyncEvoHaveLibbluetooth = EDSAbiWrapperSingleton.sdp_connect != 0;
 # endif
+}
+#elif defined(EVOLUTION_ICAL_COMPATIBILITY)
+// Simpler version of the ABI wrapper which only checks for
+// libical.so.1. To be used with normal linking against libical.so.0
+// and then patching the resulting files to be used with libical.so.1
+// instead.
+int EDSAbiHaveIcal1;
+
+void EDSAbiWrapperInit()
+{
+    static bool initialized;
+
+    if (initialized) {
+        return;
+    } else {
+        initialized = true;
+    }
+
+    static const char *soname = "libical.so.1";
+    void *dlhandle = dlopen(soname, RTLD_GLOBAL|RTLD_LAZY);
+    if (dlhandle) {
+        lookupInfo += "using ";
+        lookupInfo += soname;
+        lookupInfo += "\n";
+        EDSAbiHaveIcal1 = 1;
+        dlclose(dlhandle);
+    }
 }
 #endif // EVOLUTION_COMPATIBILITY
 
