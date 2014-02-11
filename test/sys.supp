@@ -1875,3 +1875,99 @@
    ...
    fun:soup_session_real_cancel_message
 }
+
+# ==21426== 54 (24 direct, 30 indirect) bytes in 1 blocks are definitely lost in loss record 4,770 of 8,459
+# ==21426==    at 0x4C2B514: calloc (vg_replace_malloc.c:593)
+# ==21426==    by 0x8808998: g_malloc0 (gmem.c:189)
+# ==21426==    by 0x87E05A9: g_get_charset (gcharset.c:188)
+# ==21426==    by 0x882019E: g_strerror (gstrfuncs.c:1245)
+# ==21426==    by 0x8072961: g_pollable_input_stream_default_read_nonblocking (gpollableinputstream.c:152)
+# ==21426==    by 0x8064AD4: read_async_pollable (ginputstream.c:1118)
+# ==21426==    by 0x8064C4E: g_input_stream_real_read_async (ginputstream.c:1167)
+# ==21426==    by 0x806583A: g_input_stream_read_async (ginputstream.c:631)
+# ==21426==    by 0x80D4CD2: _g_dbus_worker_do_read_unlocked (gdbusprivate.c:850)
+# ==21426==    by 0x80D4CFC: _g_dbus_worker_do_initial_read (gdbusprivate.c:879)
+# ==21426==    by 0x8802EA5: g_main_context_dispatch (gmain.c:3054)
+# ==21426==    by 0x88031F7: g_main_context_iterate.isra.22 (gmain.c:3701)
+# ==21426==    by 0x88035F9: g_main_loop_run (gmain.c:3895)
+# ==21426==    by 0x80D4D25: gdbus_shared_thread_func (gdbusprivate.c:278)
+# ==21426==    by 0x88271D4: g_thread_proxy (gthread.c:798)
+# ==21426==    by 0x9A6BE0D: start_thread (pthread_create.c:311)
+# ==21426==    by 0xA5800FC: clone (clone.S:113)
+# ==21426==
+#
+# Seen with glib 2.36.4 on Debian Testing > Wheezy.
+# Can't be a real leak, the pointer is properly stored in a
+# GPrivate with destructor. Probably the thread doesn't terminate
+# normally and valgrind treats its thread-private data as leaked.
+{
+   glib GPrivate charset cache
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_get_charset
+}
+
+# ==2646== 2,032 bytes in 1 blocks are definitely lost in loss record 8,320 of 8,484
+# ==2646==    at 0x4C2B514: calloc (vg_replace_malloc.c:593)
+# ==2646==    by 0x8808998: g_malloc0 (gmem.c:189)
+# ==2646==    by 0x87D58C8: thread_memory_from_self.part.12 (gslice.c:512)
+# ==2646==    by 0x881E5E4: g_slice_alloc (gslice.c:1561)
+# ==2646==    by 0x87EF76B: g_error_new_valist (gerror.c:393)
+# ==2646==    by 0x87EFB1C: g_set_error (gerror.c:560)
+# ==2646==    by 0x809EFE6: g_unix_input_stream_close (gunixinputstream.c:434)
+# ==2646==    by 0x8066281: g_input_stream_close (ginputstream.c:509)
+# ==2646==    by 0x80681C0: g_io_stream_real_close (giostream.c:340)
+# ==2646==    by 0x8067E47: close_async_thread (giostream.c:544)
+# ==2646==    by 0x8086044: g_task_thread_pool_thread (gtask.c:1242)
+# ==2646==    by 0x8827B95: g_thread_pool_thread_proxy (gthreadpool.c:309)
+# ==2646==    by 0x88271D4: g_thread_proxy (gthread.c:798)
+# ==2646==    by 0x9A6BE0D: start_thread (pthread_create.c:311)
+# ==2646==    by 0xA5800FC: clone (clone.S:113)
+# ==2646== 
+#
+# Hmm, should we free the error that gets created here?
+# Seen with glib 2.36.4 on Debian Testing > Wheezy after
+# enabling D-Bus over sockets.
+{
+   GIO stream error
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   ...
+   fun:g_slice_alloc
+   fun:g_error_new_valist
+   fun:g_set_error
+   fun:g_unix_input_stream_close
+}
+
+# ==1786== 38 (12 direct, 26 indirect) bytes in 1 blocks are definitely lost in loss record 2,573 of 4,270
+# ==1786==    at 0x4029A28: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+# ==1786==    by 0x5C61982: g_malloc (gmem.c:159)
+# ==1786==    by 0x5C78011: g_slice_alloc (gslice.c:1003)
+# ==1786==    by 0x5C47D23: g_error_new_literal (gerror.c:456)
+# ==1786==    by 0x5C47FE3: g_set_error_literal (gerror.c:595)
+# ==1786==    by 0x5A6D502: g_cancellable_set_error_if_cancelled (gcancellable.c:315)
+# ==1786==    by 0x5AB8BC5: g_task_return_error_if_cancelled (gtask.c:1707)
+# ==1786==    by 0x5A9252F: read_async_pollable (ginputstream.c:1115)
+# ==1786==    by 0x5A9270F: read_async_pollable_ready (ginputstream.c:1103)
+# ==1786==    by 0x5AA2958: pollable_source_dispatch (gpollableutils.c:66)
+# ==1786==    by 0x5C5BD21: g_main_context_dispatch (gmain.c:3054)
+# ==1786==    by 0x5C5C0D7: g_main_context_iterate.isra.21 (gmain.c:3701)
+# ==1786==    by 0x5C5C53A: g_main_loop_run (gmain.c:3895)
+# ==1786==    by 0x5E97C3D: clone (clone.S:131)
+# ==1786== 
+#
+# Same as previous one.
+{
+   GIO stream error, II
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_slice_alloc
+   fun:g_error_new_literal
+   fun:g_set_error_literal
+   fun:g_cancellable_set_error_if_cancelled
+   fun:g_task_return_error_if_cancelled
+   fun:read_async_pollable
+}
