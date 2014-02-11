@@ -1566,6 +1566,13 @@ void LocalTests::testRemoveProperties() {
     // compare
     TestingSyncSourcePtr copy;
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceA(), TestingSyncSourcePtr::SLOW));
+    std::auto_ptr<ScopedEnvChange> envProps;
+    if (currentServer() == "googlecontacts") {
+        // Google CardDAV server does not remove X- properties when
+        // they are not sent at all. TODO (?): send them as empty
+        // properties.
+        envProps.reset(new ScopedEnvChange("CLIENT_TEST_STRIP_PROPERTIES", "(X-.*)"));
+    }
     bool equal = compareDatabases(updated.c_str(), *copy.get(), false);
     CT_ASSERT_NO_THROW(source.reset());
 
