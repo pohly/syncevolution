@@ -4524,49 +4524,70 @@ END:VCARD''')
         self.assertSyncStatus('server', 22003, "error code from SyncEvolution password request timed out (local, status 22003): Could not get the 'addressbook backend' password from user.")
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_LOCAL_CHILD_DELAY=10") # allow killing syncevo-dbus-server in middle of sync
+    @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=10") # allow killing syncevo-dbus-server in middle of sync
     def testNoParent(self):
         """TestLocalSync.testNoParent - check that sync helper can continue without parent"""
         self.setUpConfigs()
         self.setUpListeners(self.sessionpath)
         pid = self.serverPid()
         serverPid = DBusUtil.pserver.pid
-        def killServer(*args, **keywords):
+        self.killTimeout = None
+        self.syncProcesses = {}
+        def killServer():
+            self.syncProcesses = self.getChildren()
             if pid != serverPid:
                 logging.printf('killing syncevo-dbus-server wrapper with pid %d', serverPid)
                 os.kill(serverPid, signal.SIGKILL)
+                if serverPid in self.syncProcesses:
+                    del self.syncProcesses[serverPid]
             logging.printf('killing syncevo-dbus-server with pid %d', pid)
-            os.kill(pid, signal.SIGKILL)
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError, ex:
+                if ex.errno != errno.ESRCH:
+                    logging.printf('unexpected error killing syncevo-dbus-server with pid %d: %s', pid, ex)
+            if pid in self.syncProcesses:
+                del self.syncProcesses[pid]
             DBusUtil.pserver.wait()
             DBusUtil.pserver = None
             loop.quit()
-        self.progressChanged = killServer
+            # Remove timeout by returning false.
+            self.killTimeout = None
+            return False
+        def progressChanged(*args, **keywords):
+            # Now give sync some more time to get started. Less than
+            # the 10 seconds that the child process gets delayed,
+            # enough to get it started.
+            delay = 1
+            logging.printf('killing syncevo-dbus-server in %d seconds', delay)
+            self.killTimeout = Timeout.addTimeout(delay, killServer)
+            # Don't call me again.
+            self.progressChanged = None
+        # Wait for first sign of a running sync.
+        self.progressChanged = progressChanged
 
         self.session.Sync("slow", {})
         loop.run()
+        if self.killTimeout is not None:
+            Timeout.removeTimeout(self.killTimeout)
 
         # Should have killed server.
         self.assertFalse(DBusUtil.pserver)
 
-        # Give syncevo-dbus-helper and syncevo-local-sync some time to shut down.
-        time.sleep(usingValgrind() and 60 or 20)
-        logging.log('sync should be done now')
-
-        # Remove syncevo-dbus-server zombie process(es).
-        try:
-            while True:
-                res = os.waitpid(-1, os.WNOHANG)
-                if res[0]:
-                    logging.printf('got status %d for pid %d', res[1], res[0])
-                else:
-                    break
-        except OSError, ex:
-            if ex.errno != errno.ECHILD:
-                raise ex
-
-        # Now no processes should be left in the process group
-        # of the syncevo-dbus-server.
-        self.assertEqual({}, self.getChildren())
+        # Wait for syncevo-dbus-helper and syncevo-local-sync to shut down.
+        logging.printf('waiting for sync process(es): %s', str(self.syncProcesses))
+        while self.syncProcesses:
+            for pid, process in self.syncProcesses.items():
+                logging.printf('checking sync process %d', pid)
+                try:
+                    os.kill(pid, 0)
+                except OSError, ex:
+                    if ex.errno == errno.ESRCH:
+                        logging.printf('has terminated: sync process %d = %s', pid, process)
+                        del self.syncProcesses[pid]
+                    else:
+                        raise
+            time.sleep(2)
 
         # Sync should have succeeded.
         self.assertSyncStatus('server', 200, None)
