@@ -4289,7 +4289,6 @@ if __name__ == '__main__':
     paths = [ (os.path.dirname(x), os.path.basename(x)) for x in \
               [ os.environ.get(y, '') for y in ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME'] ] ]
     xdg_root = paths[0][0]
-    print paths
     if not xdg_root or xdg_root != paths[1][0] or xdg_root != paths[2][0] or \
              paths[0][1] != 'config' or paths[1][1] != 'data' or  paths[2][1] != 'cache':
          # Don't allow user of the script to erase his normal EDS data and enforce
