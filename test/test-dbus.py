@@ -1660,7 +1660,8 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
             time.sleep(4)
             try:
                 self.server.GetConfigs(True, utf8_strings=True)
-            except dbus.DBusException:
+            except dbus.DBusException, ex:
+                logging.printf('GetConfigs failed: %s', ex)
                 self.fail("dbus server should work correctly")
 
     @timeout(100)
