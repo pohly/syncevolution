@@ -337,7 +337,9 @@ sub NormalizeItem {
         # Strip trailing digits from TZID. They are appended by
         # Evolution and SyncEvolution to distinguish VTIMEZONE
         # definitions which have the same TZID, but different rules.
-        s/(^TZID:|;TZID=)([^;:]*?) \d+/$1$2/gm;
+        # This appending of digits may even get repeated, leading to:
+        # TZID=EST/EDT 1 1
+        s/(^TZID:|;TZID=)([^;:]*?)( \d+)+/$1$2/gm;
 
         # Strip trailing -(Standard) from TZID. Evolution 2.24.5 adds
         # that (not sure exactly where that comes from).
