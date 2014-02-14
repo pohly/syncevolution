@@ -1,3 +1,701 @@
+SyncEvolution 1.3.2 -> 1.4, 16.02.2014
+======================================
+
+The 1.4 relase of SyncEvolution is the first stable version with the
+in-vehicle infotainment (IVI) PIM Manager included. GENIVI Diagnostic
+Log and Trace (DLT) is also supported. For more information about this
+aspect of SyncEvolution, see the PBAP and PIM entries in the 1.3.99.x
+release notes and
+https://syncevolution.org/blogs/pohly/2013/pim-its-all-about-contacts
+
+The biggest change for normal Linux users is Google CalDAV/CardDAV
+authentication with OAuth2. These are the open protocol that Google
+currently supports and thus the recommended way of syncing with
+Google, replacing ActiveSync and SyncML (both no longer available to
+all Google customers).
+
+Support for Google CardDAV is new. Like Evolution, SyncEvolution does
+not yet support some of the advanced features of the server, in
+particular custom labels for phone numbers, emails and
+addresses. Likewise, some client properties are not supported by the
+server: CALURI, CATEGORIES, FBURL, GEO and ROLE are not supported. Of
+ORG, only the first two components are supported.  Currently,
+properties not supported by one side get lost in a full roundtrip
+sync.
+
+SyncEvolution depends on external components for OAuth2. It can be
+compiled to use gSSO [1] or GNOME Online Accounts [2]. The latter is
+enabled in binaries from syncevolution.org. GNOME Online Accounts >=
+3.10 works out of the box for CalDAV and CardDAV. 3.8 is guaranteed to
+work for CardDAV and may also work for CalDAV, if the Linux
+distribution ships a patched version (like Debian Wheezy does). If it
+does not, then GNOME Online Accounts 3.8 binary can be patched to also
+support CalDAV, see [2]. Anything older than 3.8 does not
+work. Support for Ubuntu Online Accounts is available when compiling
+from source. For setup instructions see these READMEs.
+
+[1] https://01.org/gsso and
+    http://cgit.freedesktop.org/SyncEvolution/syncevolution/plain/src/backends/signon/README
+[2] http://cgit.freedesktop.org/SyncEvolution/syncevolution/plain/src/backends/goa/README
+
+Binary packages of 1.4 on syncevolution.org have enhanced support for
+recent distros. They now work with EDS >= 3.6 *and* < 3.6. Distros
+with libical1 like Ubuntu Saucy are also supported.
+
+The HTTP server became better at handling message resends when the
+server is slow with processing a message. The server is able to keep a
+sync session alive while loading the initial data set by sending
+acknowledgement replies before the client times out.
+
+Some issues in CalDAV, WebDAV and SyncML were fixed.
+
+Graham R. Cobb contributed several patches for enhancing ActiveSync
+support and making it work with Exchange 2010. Guido Günther provided
+some patches addressing problems when compiling SyncEvolution for
+Maemo.
+
+
+Details:
+
+* D-Bus server: support DLT (FDO #66769)
+
+  Diagnostic Log and Trace (DLT) manages a sequence of log messages,
+  with remote controllable level of detail. SyncEvolution optionally
+  (can be chosen at compile time and again at runtime) uses DLT
+  instead of its own syncevolution-log.html files. See README-DLT.rst
+  for more information.
+
+  To use the feature, configure SyncEvolution with
+  "--enable-dbus-server=--dlt --no-syslog"
+
+* D-Bus server: fix abort when mixing auto-sync and manual operations (FDO #73562)
+
+  When enabling auto-sync for a config and then accessing or syncing the
+  config manually via the command line tool, the server would abort at
+  the time when the auto-sync was originally scheduled.
+
+* D-Bus server: accept WBXML with charset in incoming connections
+
+  A user reported via email that the Nokia 515 sends
+  'application/vnd.syncml+wbxml; charset=UTF-8' as type of its messages
+  this tripped up the syncevo-http-server, leading to:
+
+    [ERROR] syncevo-dbus-server: /org/syncevolution/Server: message type
+    'application/vnd.syncml+wbxml; charset=UTF-8' not supported for starting
+    a sync
+
+* D-Bus server: command line options for controlling output and startup
+
+  The system log is used by default now. New command line options can be
+  used to change this:
+
+  -d, --duration=seconds/'unlimited'    Shut down automatically
+                                        when idle for this duration (default 300 seconds)
+  -v, --verbosity=level                 Choose amount of output, 0 = no output,
+                                        1 = errors, 2 = info, 3 = debug; default is 1.
+  --dbus-verbosity=level                Choose amount of output via D-Bus signals, 0 = no output,
+                                        1 = errors, 2 = info, 3 = debug; default is 2.
+  -o, --stdout                          Enable printing to stdout (result of operations)
+                                        and stderr (errors/info/debug).
+  -s, --no-syslog                       Disable printing to syslog.
+  -p, --start-pim                       Activate the PIM Manager (= unified address book)
+                                        immediately.
+
+* D-Bus: missing out parameters in D-Bus introspection XML (FDO #57292)
+
+  The problem was in the C++ D-Bus binding. If the method that gets bound
+  to D-Bus returns a value, that value was ignored in the signature:
+    int foo() => no out parameter
+
+  It works when the method was declared as having a retval:
+    void foo (int &result) => integer out parameter
+
+  This problem existed for both the libdbus and the GIO D-Bus
+  bindings. In SyncEvolution it affected methods like GetVersions().
+
+* D-Bus server: avoid progress outside of 0-100% range
+
+  For example in the new TestLocalCache.testItemDelete100, the
+  percentage value in the ProgressChanged signal become larger
+  than 100 and then revert to 100 at the end of the sync.
+
+  Seems the underlying calculation is faulty or simply inaccurate.
+  This is not fixed. Instead the result is just clipped to the valid
+  range.
+
+* sync: less verbose output, shorter runtime
+
+  For each incoming change, one INFO line with "received x[/out of y]"
+  was printed, immediately followed by another line with total counts
+  "added x, updated y, removed z". For each outgoing change, a "sent
+  x[/out of y]" was printed.
+
+  In addition, these changes were forwarded to the D-Bus server where a
+  "percent complete" was calculated and broadcasted to clients. All of
+  that caused a very high overhead for every single change, even if the
+  actual logging was off. The syncevo-dbus-server was constantly
+  consuming CPU time during a sync when it should have been mostly idle.
+
+  To avoid this overhead, the updated received/sent numbers that come
+  from the Synthesis engine are now cached and only processed when done
+  with a SyncML message or some other event happens (whatever happens
+  first).
+
+  To keep the implementation simple, the "added x, updated y, removed z"
+  information is ignored completely and no longer appears in the output.
+
+* command line: implement --create/remove-database
+
+  Creating a database is only possible with a chosen name. The UID is
+  chosen automatically by the storage. Only implemented in the EDS
+  backend.
+
+* command line: execute --export and --print-items while the source is still reading
+
+  Instead of reading all item IDs, then iterating over them, process
+  each new ID as soon as it is available. With sources that support
+  incremental reading (only the PBAP source at the moment) that provides
+  output sooner and is a bit more memory efficient.
+
+* command line: recover from slow sync with new sync modes
+
+  The error message for an unexpected slow sync still mentioned
+  the old and obsolete "refresh-from-client/server" sync modes.
+  Better mention "refresh-from-local/remote".
+
+* command line: show backend error when listing databases fails
+
+  The command line swallowed errors thrown by the backend while listing
+  databases. Instead it just showed "<backend name>: backend failed". The goal
+  was to not distract users who accidentally access a non-functional backend.
+  But the result is that operations like --configure or --print-databases could
+  fail without giving the user any hint about the root cause of the issue.
+
+  Now the error explanation in all its gory details is included.
+
+  For example, not having activesyncd running leads to:
+  INFO] eas_contact: backend failed: fetching folder list:
+  GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name
+  org.meego.activesyncd was not provided by any .service files
+
+  And running activesyncd without the necessary gconf keys shows up as:
+  [INFO] eas_contact: backend failed: fetching folder list:
+  GDBus.Error:org.meego.activesyncd.Error.AccountNotFound: Failed to find
+  account [syncevolution@lists.intel.com]
+
+* password handling: fix usage of GNOME Keyring and KWallet (FDO #66110)
+
+  When clients like the GTK sync-ui stored a password, it was always
+  stored as plain text in the config.ini file by the
+  syncevo-dbus-server. The necessary code for redirecting the password
+  storage in a keyring (GNOME or KWallet) simply wasn't called in that
+  case.
+
+  The command line tool, even when using the D-Bus server to run the
+  operation, had the necessary code active and thus was not affected.
+  Now all SyncEvolution components use the same default: use safe
+  password storage if either GNOME Keyring or KWallet were enabled
+  during compilation, don't use it if not.
+
+  Fixing this revealed other problems, like not being able to store
+  certain passwords that lacked the necessary lookup criteria (like
+  syncURL and/or username). To address this, the lookup criteria where
+  extended and a new check was added to avoid accidentally removing
+  other passwords. As a result, it may be possible that SyncEvolution
+  no longer finds passwords that were stored with older versions of
+  SyncEvolution. In such a case the passwords must be set again.
+
+* GNOME: clean up keyring access and require libgnome-keyring >= 2.20
+
+  The updated error messages now always include information about the
+  password and libgnome-keyring error texts.
+
+  A workaround is used for the "Error communicating with
+  gnome-keyring-daemon" problem that started to appear fairly
+  frequently in the automated testing once the keyring was actually
+  used. The problem shows up with some additional debug messages:
+
+    Gkr: received an invalid, unencryptable, or non-utf8 secret
+    Gkr: call to daemon returned an invalid response: (null).(null)()
+
+  It seems that sometimes setting up a session with GNOME keyring
+  fails such that all further communication leads to decoding problem.
+
+  There is an internal method to reset the session, but it cannot be
+  called directly. As a workaround, fake the death of the GNOME
+  keyring daemon and thus trigger a reconnect when retrying the GNOME
+  keyring access. This is done by sending a D-Bus message, which will
+  also affect other clients of GNOME keyring, but hopefully without
+  user-visible effects.
+
+* config: enhanced password handling
+
+  It is possible to configure a plain username/password combination
+  once in SyncEvolution and then use references to it in other
+  configurations, instead of having to set (and update) the
+  credentials in different places. This is useful in particular with
+  WebDAV, where credentials had to be repeated several times (target
+  config, in each database when used as part of SyncML) or when using
+  a service which requires several configs (Google via SyncML and
+  CalDAV).
+
+  To use this, create a sync config for a normal peer or a dedicated
+  config just for the credentials, with "username/password/syncURL"
+  set. The "syncURL" must be set to something identifying the peer if
+  GNOME Keyring is used for the password storage.
+
+  Then set "username", "databaseUser" and "proxyUser" properties to
+  "id:<name of config with credentials>" and all read and write access
+  to those properties will be redirected by SyncEvolution into that
+  other configuration. This even works in the GTK UI.
+
+  For user names which contain colons, the new "user:<user name>" format
+  must be used. Strings without colons are assumed to be normal user
+  names, so most old configurations should continue to work.
+
+* signon: new backend using libgsignond-glib + libaccounts-glib
+
+  The code works with gSSO (https://01.org/gsso) and Ubuntu Online
+  Accounts.
+
+* GOA: get OAuth2 tokens out of GNOME Online Accounts
+
+  "username = goa:..." selects an account in GOA and retrieves the
+  OAuth2 token from that.
+
+* WebDAV: support OAuth2
+
+  If given an authentication configuration which can handle OAuth2,
+  then OAuth2 is used instead of plain username/password
+  authentication.
+
+* WebDAV: support Google CardDAV, break Yahoo
+
+  Google CardDAV has one peculiarity: it renames new contacts during PUT without
+  returning the new path to the client. See also
+  http://lists.calconnect.org/pipermail/caldeveloper-l/2013-July/000524.html
+
+  SyncEvolution already had a workaround for that (PROPGET on old path, extract
+  new path from response) which happened to work. This workaround was originally
+  added for Yahoo, which sometimes merges contacts into existing ones. In
+  contrast to Yahoo, Google really seems to create new items.
+
+  Without some server specific hacks, the client cannot tell what happened.
+  Because Google is currently supported and Yahoo is not, let's change the
+  hard-coded behavior to "renamed items are new".
+
+* WebDAV: started testing with owndrive.com = OwnCloud
+
+* WebDAV: avoid segfault during collection lookup
+
+  Avoid referencing pathProps->second when the set of paths that
+  PROPFINDs returns is empty. Apparently this can happen in combination
+  with Calypso.
+
+* CalDAV: more workarounds for Google CalDAV + unique IDs
+
+  Google became even more strict about checking REV. Tests which
+  reused a UID after deleting the original item started to fail sometime
+  since middle of December 2012.
+
+* CalDAV: work around Google server regression (undeclared namespace prefix in XML)
+
+  Google CalDAV for a while (December 2012 till January 2013) sent
+  invalid XML back when asked to include CardDAV properties in a
+  PROPFIND. This got rejected in the XML parser, which prevents
+  syncing calendar data:
+
+     Neon error code 1: XML parse error at line 55: undeclared namespace prefix
+
+  In the meantime Google fixed the issue in response to a bug report
+  via email. But the workaround, only asking for the properties which
+  are really needed, still makes sense and thus is kept.
+
+* WebDAV: auto-discovery fix
+
+  With Google Contact + CardDAV the auto-discovery failed after
+  finding the default address book, without reporting that result.
+
+* WebDAV: don't send Basic Auth via http proactively (FDO #57248)
+
+  Sending basic authentication headers via http is insecure. Only do
+  it proactively when the connection is encrypted and thus protects
+  the information or when the server explicitly asks for it.
+
+* file backend: sub-second mod time stamps
+
+  Change tracking in the file backend used to be based on the
+  modification time in seconds. When running many syncs quickly (as in
+  testing), that can lead to changes not being detected when they happen
+  within a second. Now the file backend also includes the sub-second part of the
+  modification time stamp, if available.
+
+  This change is relevant when upgrading SyncEvolution: most of the
+  items will be considered "updated" once during the first sync after
+  the upgrade (or a downgrade) because the revision strings get
+  calculated differently.
+
+* GTK UI: fixed two crashes - running a sync with no service selected
+  and a 64 bit pointer problem recently discovered by Tino Keitel when
+  compiling the Debian package with -fPIE.
+
+* packaging: compatible with EDS up to and including 3.10 and both
+  libical.so.0 and libical.so.1
+
+  The binary packages now contain different versions of syncecal.so
+  and syncebooks.so to cover different combinations of EDS and libical.
+
+* libical: compatibiliy mode for libical.so.0 and libical.so.1
+
+  libical 1.0 broke the ABI, leading to libical.so.1. The only relevant change
+  for SyncEvolution is the renumbering of ICAL_*_PROPERTY enum values. We can
+  adapt to that change at runtime, which allows us to compile once with
+  libical.so.0, then patch executables or use dynamic loading to run with the
+  more recent libical.so.1 if we add 1 to the known constants.
+
+* packaging: fix rpm (FDO #73347)
+
+  After installing the syncevolution.org rpm on OpenSUSE,
+  SyncEvolution was not starting because its shared libraries were not
+  found unless "ldconfig" was called manually. Now the package does
+  that automatically.
+
+* packaging: fix description
+
+  The syncevolution-bundle description of both rpm and deb
+  packagesaccidentally used the same description as
+  syncevolution-evolution.
+
+* glib: fix double-free of source tags
+
+  glib 2.39.0 (aka GNOME 3.10) as found in Ubuntu Trusty introduces
+  warnings when g_source_remove() is passed an unknown tag. SyncEvolution
+  did this in two cases: in both, the source callback returned false and thus
+  caused the source to be removed by the caller. In that case, the explicit
+  g_source_remove() is redundant and must be avoided.
+
+  Such a call is faulty and might accidentally remove a new source with the same
+  tag (unlikely though, given that tags seem to get assigned incrementally).
+
+  The only noticable effect were additional error messages with different
+  numbers:
+
+  [ERROR] GLib: Source ID 9 was not found when attempting to remove it
+
+* EDS: fix compile problem with boost and EDS > 3.36
+
+  This fixes the following problem, seen with Boost 1.53.0 on altlinux
+  when compiling for EDS >= 3.6:
+
+    /usr/include/boost/smart_ptr/shared_ptr.hpp: In instantiation of 'typename boost::detail::sp_array_access<T>::type boost::shared_ptr<T>::operator[](std::ptrdiff_t) const [with T = char*; typename boost::detail::sp_array_access<T>::type = void; std::ptrdiff_t = long int]':
+    src/backends/evolution/EvolutionSyncSource.cpp:163:38: required from here
+    /usr/include/boost/smart_ptr/shared_ptr.hpp:663:22: error: return-statement with a value, in function returning 'void' [-fpermissive]
+    make[2]: *** [src/backends/evolution/src_backends_evolution_syncecal_la-EvolutionSyncSource.lo]
+
+* EDS contacts: avoid unnecessary DB writes during slow sync
+
+  Traditionally, contacts were modified shortly before writing into EDS
+  to match with Evolution expectations (must have N, only one CELL TEL,
+  VOICE flag must be set). During a slow sync, the engine compare the
+  modified contacts with the unmodified, incoming one. This led to
+  mismatches and/or merge operations which end up not changing anything
+  in the DB because the only difference would be removed again before
+  writing.
+
+* EDS contacts: read-ahead cache
+
+  Performance is improved by requesting multiple contacts at once and
+  overlapping reading with processing. On a fast system (SSD, CPU fast
+  enough to not be the limiting factor), testpim.py's testSync takes 8
+  seconds for a "match" sync where 1000 contacts get loaded and compared
+  against the same set of contacts. Read-ahead with only 1 contact per
+  query speeds that up to 6.7s due to overlapping IO and
+  processing. Read-ahead with the default 50 contacts per query takes
+  5.5s. It does not get much faster with larger queries.
+
+* PBAP: add support for obexd 0.47, 0.48 and Bluez 5
+
+  obexd 0.48 is almost the same as obexd 0.47, except that it dropped
+  the SetFilter and SetFormat methods in favor of passing a Bluex 5-style
+  filter parameter to PullAll.
+
+* PBAP: various enhancements for efficient caching of contacts
+
+* HTTP server: handle message resends
+
+  If a client gave up waiting for the server's response and resent its message
+  while the server was still processing the message, syncing failed with
+  "protocol error: already processing a message" raised by the
+  syncevo-dbus-server because it wasn't prepared to handle that situation.
+
+  The right place to handle this is inside the syncevo-http-server, because it
+  depends on the protocol (HTTP in this case) whether resending is valid or
+  not. It handles that now by tracking the message that is currently in
+  processing and matching it against each new message. If it matches, the new
+  request replaces the obsolete one without sending the message again to
+  syncevo-dbus-server. When syncevo-dbus-server replies to the old message, the
+  reply is used to finish the newer request.
+
+* engine: prevent timeouts in HTTP server mode
+
+  HTTP SyncML clients give up after a certain timeout (SyncEvolution
+  after RetryDuration = 5 minutes by default, Nokia e51 after 15
+  minutes) when the server fails to respond.
+
+  This can happen with SyncEvolution as server when it uses a slow
+  storage with many items, for example via WebDAV. In the case of slow
+  session startup, multithreading is now used to run the storage
+  initializing in parallel to sending regular "keep-alive" SyncML
+  replies to the client.
+
+  By default, these replies are sent every 2 minutes. This can be
+  configured with another extensions of the SyncMLVersion property:
+    SyncMLVersion = REQUESTMAXTIME=5m
+
+  Other modes do not use multithreading by default, but it can be
+  enabled by setting REQUESTMAXTIME explicitly. It can be disabled
+  by setting the time to zero.
+
+  The new feature depends on a libsynthesis with multithreading enabled
+  and glib >= 2.32.0, which is necessary to make SyncEvolution itself
+  thread-safe. With an older glib, multithreading is disabled, but can
+  be enabled as a stop-gap measure by setting REQUESTMAXTIME explicitly.
+
+* Various testing and stability enhancements. SyncEvolution had to
+  be made thread-safe for the HTTP timeout prevention.
+
+* Nokia: always add TYPE=INTERNET to EMAIL (FDO #61784)
+
+  Without the explicit TYPE=INTERNET, email addresses sent to a Nokia
+  e51 were not shown by the phone and even got lost eventually (when
+  syncing back).
+
+  This commit ensures that the type is set for all emails sent to any
+  Nokia phone, because there may be other phones which need it and
+  phones which don't, shouldn't mind. This was spot-checked with a N97
+  mini, which works fine with and without the INTERNET type.
+
+  This behavior can be disabled again for specific Nokia phones by
+  adding a remote rule which sets the addInternetEmail session variable
+  to FALSE again.
+
+  Non-Nokia phones can enable the feature in a similar way, by setting
+  the variable to TRUE.
+
+* SyncML: config option for broken peers
+
+  Some peers have problems with meta data (CtCap, old Nokia phones)
+  and the sync mode extensions required for advertising the restart
+  capability (Oracle Beehive). The default in SyncEvolution is to
+  advertise the capability, so manual configuration is necessary when
+  working with a peer that fails in that mode.
+
+  Because the problem occurs when SyncEvolution contacts the peers
+  before it gets the device information from the peer, dynamic rules
+  based on the peer identifiers cannot be used. Instead the local config
+  must already disable these extra features in advance.
+
+  The "SyncMLVersion" property gets extended for this. Instead of just
+  "SyncMLVersion = 1.0" (as before) it now becomes possible to say
+  "SyncMLVersion = 1.0, noctcap, norestart".
+
+  "noctcap" disables sending CtCap. "norestart" disables the sync mode
+  extensions and thus doing multiple sync cycles in the same session
+  (used between SyncEvolution instances in some cases to get client and
+  server into sync in one session).
+
+  Both keywords are case-insensitive. There's no error checking for
+  typos, so beware!
+
+  The "SyncMLVersion" property was chosen because it was already in use
+  for configuring SyncML compatibility aspects and adding a new property
+  would have been harder.
+
+* ActiveSync: added support for specifying folder names
+
+  Previously, the database field was interpreted as a Collection ID.  This adds
+  logic to allow the database to be interpreted as a folder path.  The logic is:
+
+  1) If the database is an empty string, pass it through (this is the most
+  common case as it is interpreted as "use the default folder for the
+  source type").
+  2) If the database matches a Collection ID, use the ID (this is the same as
+  the previous behaviour).
+  3) If the database matches a folder path name, with an optional leading "/",
+  use the Collection ID for the matching folder.
+  4) Otherwise, force a FolderSync to get the latest folder changes from the
+  server and repeat steps 2 and 3
+  5) If still no match, throw an error.
+
+* ActiveSync: support for listing databases
+
+  Now --print-databases scans folders on the ActiveSync server and
+  shows suitable folders for the ActiveSync backends instead of the
+  previous, hard-coded help text.
+
+  Invoking --print-databases can be used as a workaround for
+  "SyncFolder error: Invalid synchronization key" errors. A better
+  solution would be to do that automatically, but there was no time
+  to implement that. See FDO #61869 and "[SyncEvolution] Activesync server losing state"
+  http://thread.gmane.org/gmane.comp.mobile.syncevolution/4295
+
+* SyncML: workarounds for broken peers
+
+  Some peers have problems with meta data (CtCap, old Nokia phones) and
+  the sync mode extensions required for advertising the restart
+  capability (Oracle Beehive).
+
+  Because the problem occurs when SyncEvolution contacts the peers
+  before it gets the device information from the peer, dynamic rules
+  based on the peer identifiers cannot be used. Instead the local config
+  must already disable these extra features in advance.
+
+  The "SyncMLVersion" property gets extended for this. Instead of just
+  "SyncMLVersion = 1.0" (as before) it now becomes possible to say
+  "SyncMLVersion = 1.0, noctcap, norestart".
+
+  "noctcap" disables sending CtCap. "norestart" disables the sync mode
+  extensions and thus doing multiple sync cycles in the same session
+  (used between SyncEvolution instances in some cases to get client and
+  server into sync in one session).
+
+  Both keywords are case-insensitive. There's no error checking for
+  typos, so beware!
+
+  The "SyncMLVersion" property was chosen because it was already in use
+  for configuring SyncML compatibility aspects and adding a new property
+  would have been harder.
+
+* engine: local cache sync mode
+
+  This patch  introduces support for true one-way syncing ("caching"):
+  the local datastore is meant to be an exact copy of the data on the
+  remote side. The assumption is that no modifications are ever made
+  locally outside of syncing. This is different from one-way sync modes,
+  which allows local changes and only temporarily disables sending them
+  to the remote side.
+
+  Another goal of the new mode is to avoid data writes as much as
+  possible.
+
+  This new mode only works on the server side of a sync, where the
+  engine has enough control over the data flow. Setting "sync" to:
+  - "local-cache-incremental" will do an incremental sync (if possible)
+    or a slow sync (otherwise). This is usually the right mode to use,
+    and thus has "local-cache" as alias.
+  - "local-cache-slow" will always do a slow sync. Useful for
+    debugging or after (accidentally) making changes on the local side.
+    An incremental sync will ignore such changes because they are not
+    meant to happen, aren't checked for to improve performance and
+    thus will leave client and server out-of-sync!
+
+  Both modes are recorded in the sync report of the local side. The
+  target side is the client and records the normal "two-way" or "slow"
+  sync modes.
+
+  With the current SyncEvolution contact field list, first, middle and
+  last name are used to find matches for contacts. For events, tasks
+  and memos, time, summary and description are used.
+
+* Minor memory leak fix when using GDBus GIO: GDBusMethodInfo
+
+  Also depends on a glib fix, see https://bugzilla.gnome.org/show_bug.cgi?id=695376
+
+* build fixes
+
+  Avoid -lrt in make dependencies. Add missing pcre libs to
+  syncevo-dbus-server. sqlite backend needs "#include <stdio.h>"
+  (patch from Mario Kicherer).
+
+* autotools: fix temp file vulnerability during compilation (CVE-2014-1639)
+
+  We must use the temporary file that was created for us securily, not
+  a temp file named after that file. This caused a temp file vulnerability
+  and the real temporary files were not deleted by the script.
+
+* workarounds for warnings from g++ 4.5
+
+
+Upgrading from releases <= 1.3.99.4:
+
+If the value of "username/databaseUser/proxyUser" contains a colon,
+the "user:" prefix must be added to the value, to continue treating it
+like a plain user name and not some reference to an unknown identity
+provider (like "id:", "goa:", "signon:", etc.).
+
+The lookup of passwords in GNOME Keyring was updated slightly in
+1.3.99.5. It may be necessary to set passwords anew if the old one is
+no longer found.
+
+Upgrading from release 1.2.x:
+
+The sync format of existing configurations for Mobical (aka Everdroid)
+must be updated manually, because the server has encoding problems when
+using vCard 3.0 (now the default for Evolution contacts):
+   syncevolution --configure \
+                 syncFormat=text/x-vcard \
+                 mobical addressbook
+
+The Funambol template explicitly enables usage of the
+"refresh-from-server" sync mode to avoid getting throttled with 417
+'retry later' errors. The same must be added to existing configs
+manually:
+   syncevolution --configure \
+                 enableRefreshSync=TRUE \
+                 funambol
+
+Upgrading from releases before 1.2:
+
+Old configurations can still be read. But writing, as it happens
+during a sync, must migrate the configuration first. Releases >= 1.2
+automatically migrates configurations. The old configurations
+will still be available (see "syncevolution --print-configs") but must
+be renamed manually to use them again under their original names with
+older SyncEvolution releases.
+
+
+SyncEvolution 1.3.99.7 -> 1.4, 16.02.2014
+=========================================
+
+Compared to the pre-release, 1.4 mostly just enhanced the testing.
+Compatibility with GNOME 3.10 and a glib-related issue that existed
+almost forever without causing obvious problems were
+fixed. syncevolution.org binaries now finally work with distros using
+libical.so.1 (for example, Ubuntu Saucy and Trusty).
+
+Details:
+
+* autotools: fix temp file vulnerability during compilation (CVE-2014-1639)
+
+  We must use the temporary file that was created for us securily, not
+  a temp file named after that file. This caused a temp file vulnerability
+  and the real temporary files were not deleted by the script.
+
+* glib: fix double-free of source tags
+
+  glib 2.39.0 (aka GNOME 3.10) as found in Ubuntu Trusty introduces
+  warnings when g_source_remove() is passed an unknown tag. SyncEvolution
+  did this in two cases: in both, the source callback returned false and thus
+  caused the source to be removed by the caller. In that case, the explicit
+  g_source_remove() is redundant and must be avoided.
+
+  Such a call is faulty and might accidentally remove a new source with the same
+  tag (unlikely though, given that tags seem to get assigned incrementally).
+
+  The only noticable effect were additional error messages with different
+  numbers:
+
+  [ERROR] GLib: Source ID 9 was not found when attempting to remove it
+
+* libical: compatibiliy mode for libical.so.0 and libical.so.1
+
+  libical 1.0 broke the ABI, leading to libical.so.1. The only relevant change
+  for SyncEvolution is the renumbering of ICAL_*_PROPERTY enum values. We can
+  adapt to that change at runtime, which allows us to compile once with
+  libical.so.0, then patch executables or use dynamic loading to run with the
+  more recent libical.so.1 if we add 1 to the known constants.
+
+
 SyncEvolution 1.3.99.7, 22.01.2014
 ==================================
 
