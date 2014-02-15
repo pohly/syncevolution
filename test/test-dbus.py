@@ -1656,8 +1656,8 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         """The server should stay alive because we have dbus call within
         the duration. The loop is to make sure the total time is longer 
         than duration and the dbus server still stays alive for dbus calls.""" 
-        for i in range(0, 4):
-            time.sleep(4)
+        for i in range(0, 16):
+            time.sleep(1)
             try:
                 self.server.GetConfigs(True, utf8_strings=True)
             except dbus.DBusException, ex:
