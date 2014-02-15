@@ -4,12 +4,14 @@
 
 set -ex
 
-TMPFILE=`mktemp`
-TMPFILE_CXX=`mktemp`.cxx
-TMPFILE_O=`mktemp`.o
+DIR=`mktemp -d`
+TMPFILE_CXX=$DIR/installcheck-local.cpp
+TMPFILE_O=$DIR/installcheck-local.o
+TMPFILE=$DIR/installcheck-local
 
 rmtmp () {
     rm -f $TMPFILE $TMPFILE_CXX $TMPFILE_O
+    rmdir $DIR
 }
 trap rmtmp EXIT
 
