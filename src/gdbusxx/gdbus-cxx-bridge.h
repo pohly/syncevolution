@@ -58,6 +58,7 @@
 #define INCL_GDBUS_CXX_BRIDGE
 #include "gdbus-cxx.h"
 
+#include <stdint.h>
 #include <gio/gio.h>
 
 #include <map>
