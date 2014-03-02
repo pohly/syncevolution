@@ -10,7 +10,7 @@ AKONADIFOUND=yes
 if ! test "$KDEPIM_CFLAGS"; then
    KDEPIM_CFLAGS="-I`kde4-config --path include` -I`kde4-config --path include`/KDE"
    if test "$QMAKE"; then
-      KDEPIM_CFLAGS="$KDEPIM_CFLAGS -I`$QMAKE -query QT_INSTALL_HEADERS`"
+      KDEPIM_CFLAGS="$KDEPIM_CFLAGS -I`$QMAKE -query QT_INSTALL_HEADERS` -I`$QMAKE -query QT_INSTALL_HEADERS`/QtCore"
    fi
 fi
 if ! test "$KDEPIM_LIBS"; then
