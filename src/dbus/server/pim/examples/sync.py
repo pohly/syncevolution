@@ -257,7 +257,7 @@ if not error and options.sync:
     # Wait for completion of sync.
     run()
 
-    # Stop polling, in case that remove the peer.
+    # Stop polling, in case that we remove the peer.
     if timeout:
         timeout.destroy()
 
