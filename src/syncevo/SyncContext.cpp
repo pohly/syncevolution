@@ -3734,6 +3734,16 @@ bool SyncContext::setFreeze(bool freeze)
                      freeze ? "freeze" : "thaw",
                      SyncFreezeName(m_syncFreeze),
                      SyncFreezeName(newSyncFreeze));
+        if (m_agent) {
+            SE_LOG_DEBUG(NULL, "SyncContext::setFreeze(): transport agent");
+            m_agent->setFreeze(freeze);
+        }
+        if (m_sourceListPtr) {
+            BOOST_FOREACH (SyncSource *source, *m_sourceListPtr) {
+                SE_LOG_DEBUG(NULL, "SyncContext::setFreeze(): source %s", source->getDisplayName().c_str());
+                source->setFreeze(freeze);
+            }
+        }
         m_syncFreeze = newSyncFreeze;
         return true;
     }

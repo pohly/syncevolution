@@ -70,6 +70,19 @@ class TransportAgent
     virtual void shutdown() = 0;
 
     /**
+     * A hint to the transport that syncing will stop processing data
+     * for a while (freeze = true) or resume processing (freeze =
+     * false).
+     *
+     * If the transport needs to change its own state to accomodate
+     * the new freeze state of the sync and that change fails, then
+     * the transport must throw an error in setFreeze() and enter an
+     * error state. The caller will not check for a failed transport
+     * while frozen.
+     */
+    virtual void setFreeze(bool freeze) {}
+
+    /**
      * start sending message
      *
      * Memory must remain valid until reply is received or

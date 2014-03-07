@@ -137,6 +137,7 @@ public:
     Timespec transferComplete() const;
     void resetTransfer();
     void shutdown(void);
+    void setFreeze(bool freeze);
 
 private:
     PbapSession(PbapSyncSource &parent);
@@ -820,6 +821,42 @@ void PbapSession::shutdown(void)
     SE_LOG_DEBUG(NULL, "PBAP session closed");
 }
 
+void PbapSession::setFreeze(bool freeze)
+{
+    SE_LOG_DEBUG(NULL, "PbapSession::setFreeze(%s", freeze ? "freeze" : "thaw");
+    if (m_client.get()) {
+        if (m_obexAPI == OBEXD_OLD) {
+            SE_THROW("freezing OBEX transfer not possible with old obexd");
+        }
+        // Suspend/Resume implemented since Bluez 5.15. If not
+        // implemented, we will get a D-Bus exception that is returned
+        // to the caller as error, which will abort the sync.
+        GDBusCXX::DBusRemoteObject transfer(m_client->getConnection(),
+                                            m_currentTransfer,
+                                            OBC_TRANSFER_INTERFACE_NEW5,
+                                            OBC_SERVICE_NEW5,
+                                            true);
+        try {
+            if (freeze) {
+                GDBusCXX::DBusClientCall0(transfer, "Suspend")();
+            } else {
+                GDBusCXX::DBusClientCall0(transfer, "Resume")();
+            }
+        } catch (...) {
+            // Abort the transfer if suspending is not possible.
+            GDBusCXX::DBusClientCall0(transfer, "Cancel")();
+            // Bluez does not change the transfer status when cancelling it,
+            // so our propChangedCb() doesn't get called. We need to record
+            // the end of the transfer directly to stop the syncing.
+            Completion completion = Completion::now();
+            completion.m_transferErrorCode = "cancelled";
+            completion.m_transferErrorMsg = "transfer cancelled because suspending not possible";
+            m_transfers[m_currentTransfer] = completion;
+            throw;
+        }
+    }
+}
+
 PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     SyncSource(params)
 {
@@ -880,6 +917,14 @@ void PbapSyncSource::close()
 {
     m_session->shutdown();
 }
+
+void PbapSyncSource::setFreeze(bool freeze)
+{
+    if (m_session) {
+        m_session->setFreeze(freeze);
+    }
+}
+
 
 PbapSyncSource::Databases PbapSyncSource::getDatabases()
 {

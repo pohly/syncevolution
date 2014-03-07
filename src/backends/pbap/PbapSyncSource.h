@@ -48,6 +48,7 @@ class PbapSyncSource : virtual public SyncSource, virtual public SyncSourceSessi
     virtual void open();
     virtual bool isEmpty();
     virtual void close();
+    virtual void setFreeze(bool freeze);
     virtual Databases getDatabases();
     virtual void enableServerMode();
     virtual bool serverModeEnabled() const;

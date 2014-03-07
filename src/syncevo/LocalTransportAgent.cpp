@@ -150,12 +150,14 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
     static const char *interface() { return "org.syncevolution.localtransport.child"; }
     static const char *destination() { return "local.destination"; }
     static const char *logOutputName() { return "LogOutput"; }
+    static const char *setFreezeName() { return "SetFreeze"; }
     static const char *startSyncName() { return "StartSync"; }
     static const char *sendMsgName() { return "SendMsg"; }
 
     LocalTransportChild(const GDBusCXX::DBusConnectionPtr &conn) :
         GDBusCXX::DBusRemoteObject(conn, path(), interface(), destination()),
         m_logOutput(*this, logOutputName(), false),
+        m_setFreeze(*this, setFreezeName()),
         m_startSync(*this, startSyncName()),
         m_sendMsg(*this, sendMsgName())
     {}
@@ -172,11 +174,12 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
     /** log output with level and message; process name will be added by parent */
     GDBusCXX::SignalWatch2<string, string> m_logOutput;
 
+    /** LocalTransportAgentChild::setFreeze() */
+    GDBusCXX::DBusClientCall0 m_setFreeze;
     /** LocalTransportAgentChild::startSync() */
     GDBusCXX::DBusClientCall2<std::string, GDBusCXX::DBusArray<uint8_t> > m_startSync;
     /** LocalTransportAgentChild::sendMsg() */
     GDBusCXX::DBusClientCall2<std::string, GDBusCXX::DBusArray<uint8_t> > m_sendMsg;
-
 };
 
 void LocalTransportAgent::logChildOutput(const std::string &level, const std::string &message)
@@ -340,6 +343,14 @@ void LocalTransportAgent::shutdown()
         m_forkexec.reset();
         m_parent.reset();
         m_child.reset();
+    }
+}
+
+void LocalTransportAgent::setFreeze(bool freeze)
+{
+    // Relay to other side, check for error exception synchronously.
+    if (m_child) {
+        m_child->m_setFreeze(freeze);
     }
 }
 
@@ -701,6 +712,7 @@ class LocalTransportAgentChild : public TransportAgent
 
         // provide our own API
         m_child.reset(new LocalTransportChildImpl(conn));
+        m_child->add(this, &LocalTransportAgentChild::setFreezeLocalSync, LocalTransportChild::setFreezeName());
         m_child->add(this, &LocalTransportAgentChild::startSync, LocalTransportChild::startSyncName());
         m_child->add(this, &LocalTransportAgentChild::sendMsg, LocalTransportChild::sendMsgName());
         m_child->activate();
@@ -877,6 +889,16 @@ class LocalTransportAgentChild : public TransportAgent
         } else {
             reply->failed(GDBusCXX::dbus_error("org.syncevolution.localtransport.error",
                                                "child not expecting any message"));
+        }
+    }
+
+    // Must not be named setFreeze(), that is a virtual method in
+    // TransportAgent that we don't want to override!
+    void setFreezeLocalSync(bool freeze)
+    {
+        SE_LOG_DEBUG(NULL, "local transport child: setFreeze(%s)", freeze ? "true" : "false");
+        if (m_client) {
+            m_client->setFreeze(freeze);
         }
     }
 

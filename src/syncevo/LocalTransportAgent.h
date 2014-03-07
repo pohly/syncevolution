@@ -98,6 +98,7 @@ class LocalTransportAgent : public TransportAgent
     virtual void setURL(const std::string &url) {}
     virtual void setContentType(const std::string &type);
     virtual void shutdown();
+    virtual void setFreeze(bool freeze);
     virtual void send(const char *data, size_t len);
     virtual void cancel();
     virtual Status wait(bool noReply = false);
