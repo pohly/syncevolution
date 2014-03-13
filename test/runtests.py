@@ -261,24 +261,57 @@ class Action:
                         sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
                         sys.stderr = sys.stdout
                     if self.needhome and context.home_template:
+                        # Clone home directory template?
                         home = os.path.join(context.tmpdir, 'home', self.name)
-                        if not os.path.isdir(home):
+                        mapping = [('.cache', 'cache', 'XDG_CACHE_HOME'),
+                                   ('.config', 'config', 'XDG_CONFIG_HOME'),
+                                   ('.local/share', 'data', 'XDG_DATA_HOME')]
+                        if not os.path.isdir(home):\
+                            # Files that we need to handle ourselves.
+                            manual = []
                             # Ignore special files like sockets (for example,
                             # .cache/keyring-5sj9Qz/control).
                             def ignore(path, entries):
                                 exclude = []
                                 for entry in entries:
                                     mode = os.lstat(os.path.join(path, entry)).st_mode
-                                    if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)):
+                                    if entry in ('akonadi.db',
+                                                 'akonadiserverrc'):
+                                        manual.append((path, entry))
+                                        exclude.append(entry)
+                                    # Copy only regular files. Ignore process id files created
+                                    # inside the home by a concurrent Akonadi instance.
+                                    # Some files need special processing (see below).
+                                    elif not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)) \
+                                            or entry.endswith('.pid'):
                                         exclude.append(entry)
                                 return exclude
                             shutil.copytree(context.home_template, home,
                                             symlinks=True,
                                             ignore=ignore)
+
+                            for path, entry in manual:
+                                source = os.path.join(path, entry)
+                                target = os.path.join(home, os.path.relpath(path, context.home_template), entry)
+                                if entry == 'akonadi.db':
+                                    # Replace XDG_DATA_HOME paths inside the sqlite3 db.
+                                    # This runs *outside* of the chroot. It relies on
+                                    # compatibility between the sqlite3 inside and outside the chroots.
+                                    subprocess.call("sqlite3 '%s' .dump | sed -e 's;%s;%s;g' | sqlite3 '%s'" %
+                                                    (source,
+                                                     os.path.expanduser('~/.local/share/'),
+                                                     os.path.join(context.stripSchrootDir(home), 'data'),
+                                                     target),
+                                                    shell=True)
+                                elif entry == 'akonadiserverrc':
+                                    # Replace hard-coded path to XDG dirs.
+                                    content = open(source).read()
+                                    for old, new, name in mapping:
+                                        content = content.replace(os.path.expanduser('~/%s/' % old),
+                                                                  os.path.join(context.stripSchrootDir(home), new, ''))
+                                    open(target, 'w').write(content)
                         os.environ['HOME'] = context.stripSchrootDir(home)
-                        for old, new, name in [('.cache', 'cache', 'XDG_CACHE_HOME'),
-                                               ('.config', 'config', 'XDG_CONFIG_HOME'),
-                                               ('.local/share', 'data', 'XDG_DATA_HOME')]:
+                        for old, new, name in mapping:
                             newdir = os.path.join(home, new)
                             olddir = os.path.join(home, old)
                             if not os.path.isdir(olddir):
