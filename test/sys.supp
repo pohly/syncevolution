@@ -1971,3 +1971,22 @@
    fun:g_task_return_error_if_cancelled
    fun:read_async_pollable
 }
+
+# ==6180== 129 bytes in 1 blocks are definitely lost in loss record 4,587 of 5,318
+# ==6180==    at 0x4C2A067: operator new[](unsigned long) (vg_replace_malloc.c:363)
+# ==6180==    by 0x68330C: SyncEvo::mkdir_p(std::string const&) (util.cpp:147)
+# ==6180==    by 0x70EBFD: SyncEvo::SourceList::dumpDatabases(std::string const&, SyncEvo::BackupReport SyncEvo::SyncSourceReport::*, std::string const&) (SyncContext.cpp:1223)
+# ==6180==    by 0x7112AD: SyncEvo::SourceList::syncDone(SyncEvo::SyncMLStatus, SyncEvo::SyncReport*) (SyncContext.cpp:1430)
+# ==6180==    by 0x6FCD44: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3492)
+# ==6180==    by 0x672E03: SyncEvo::LocalTransportAgentChild::run() (LocalTransportAgent.cpp:948)
+# ==6180==    by 0x669FA1: SyncEvo::LocalTransportMain(int, char**) (LocalTransportAgent.cpp:1168)
+# ==6180==    by 0xA6FB994: (below main) (libc-start.c:276)
+# ==6180==
+# This can't be a real leak (?!), the allocated buffer directly gets stored
+# in a boost::scoped_array<char>.
+{
+   boost::scoped_array + mkdir_p
+   Memcheck:Leak
+   ...
+   fun:_ZN7SyncEvo7mkdir_pERKSs
+}

@@ -2180,6 +2180,33 @@
    fun:source_registry_object_manager_thread
 }
 
+# ==12176== 24 bytes in 1 blocks are definitely lost in loss record 1,684 of 4,453
+# ==12176==    at 0x4C2B514: calloc (vg_replace_malloc.c:593)
+# ==12176==    by 0xB66E228: g_malloc0 (gmem.c:189)
+# ==12176==    by 0xAD17E79: g_dbus_connection_send_message_with_reply_sync (gdbusconnection.c:2226)
+# ==12176==    by 0xAD182FE: g_dbus_connection_call_sync_internal (gdbusconnection.c:5564)
+# ==12176==    by 0xAD23DC2: g_dbus_proxy_call_sync_internal (gdbusproxy.c:2910)
+# ==12176==    by 0xAD251E2: g_dbus_proxy_call_sync (gdbusproxy.c:3102)
+# ==12176==    by 0x6BB9254: e_dbus_source_manager_call_allow_auth_prompt_all_sync (e-dbus-source-manager.c:562)
+# ==12176==    by 0x6B9F604: source_registry_initable_init (e-source-registry.c:1378)
+# ==12176==    by 0xAC91070: async_init_thread (gasyncinitable.c:260)
+# ==12176==    by 0xACD6AE4: g_task_thread_pool_thread (gtask.c:1242)
+# ==12176==    by 0xB68D1AB: g_thread_pool_thread_proxy (gthreadpool.c:309)
+# ==12176==    by 0xB68C7F4: g_thread_proxy (gthread.c:798)
+# ==12176==    by 0xB94FE0D: start_thread (pthread_create.c:311)
+# ==12176==    by 0xC35A0FC: clone (clone.S:113)
+# ==12176== 
+{
+   source registry init
+   Memcheck:Leak
+   fun:calloc
+   fun:g_malloc0
+   fun:g_dbus_connection_send_message_with_reply_sync
+   ...
+   fun:e_dbus_source_manager_call_allow_auth_prompt_all_sync
+   fun:source_registry_initable_init
+}
+
 
 ##### evolution-data-server ####
 
