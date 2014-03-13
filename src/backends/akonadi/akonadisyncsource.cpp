@@ -37,6 +37,12 @@
 #include <Akonadi/Control>
 #include <kurl.h>
 
+#include <syncevo/util.h>
+
+#include <boost/lambda/lambda.hpp>
+#include <boost/lambda/bind.hpp>
+#include <boost/bind.hpp>
+
 #include <QtCore/QDebug>
 
 SE_BEGIN_CXX
@@ -67,6 +73,12 @@ AkonadiSyncSource::~AkonadiSyncSource()
 
 bool AkonadiSyncSource::isEmpty()
 {
+    if (!GRunIsMain()) {
+        bool result;
+        GRunInMain(boost::lambda::var(result) = boost::lambda::bind(&AkonadiSyncSource::isEmpty, this));
+        return result;
+    }
+
     //To Check if the respective collection is Empty, without actually loading the collections
     std::auto_ptr<CollectionStatisticsJob> statisticsJob(DisableAutoDelete(new CollectionStatisticsJob(m_collection)));
     if (!statisticsJob->exec()) {
@@ -77,7 +89,12 @@ bool AkonadiSyncSource::isEmpty()
 
 void AkonadiSyncSource::start()
 {
-    // Start The Akonadi Server if not already Running.
+    if (!GRunIsMain()) {
+        GRunInMain(boost::bind(&AkonadiSyncSource::start, this));
+        return;
+    }
+
+    // Check for Akonadi server.
     if (!Akonadi::ServerManager::isRunning()) {
         // Don't try to start it. A normal KDE user should have it already
         // running. Users of other desktop systems probably don't want it
@@ -98,6 +115,12 @@ void AkonadiSyncSource::start()
 
 SyncSource::Databases AkonadiSyncSource::getDatabases()
 {
+    if (!GRunIsMain()) {
+        Databases result;
+        GRunInMain(boost::lambda::var(result) = boost::lambda::bind(&AkonadiSyncSource::getDatabases, this));
+        return result;
+    }
+
     start();
 
     Databases res;
@@ -133,6 +156,11 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
 
 void AkonadiSyncSource::open()
 {
+    if (!GRunIsMain()) {
+        GRunInMain(boost::bind(&AkonadiSyncSource::open, this));
+        return;
+    }
+
     start();
 
     // the "evolutionsource" property, empty for default,
@@ -167,9 +195,13 @@ void AkonadiSyncSource::open()
 
 void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisions)
 {
+    if (!GRunIsMain()) {
+        GRunInMain(boost::bind(&AkonadiSyncSource::listAllItems, this, boost::ref(revisions)));
+        return;
+    }
+
     // copy all local IDs and the corresponding revision
     std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(m_collection)));
-
     if (!fetchJob->exec()) {
         throwError("listing items");
     }
@@ -190,6 +222,12 @@ void AkonadiSyncSource::close()
 
 TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::string &luid, const std::string &data, bool raw)
 {
+    if (!GRunIsMain()) {
+        InsertItemResult result;
+        GRunInMain(boost::lambda::var(result) = boost::lambda::bind(&AkonadiSyncSource::insertItem, this, boost::cref(luid), boost::cref(data), raw));
+        return result;
+    }
+
     Item item;
 
     if (luid.empty()) {
@@ -230,6 +268,11 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
 
 void AkonadiSyncSource::removeItem(const string &luid)
 {
+    if (!GRunIsMain()) {
+        GRunInMain(boost::bind(&AkonadiSyncSource::removeItem, this, boost::cref(luid)));
+        return;
+    }
+
     Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
 
     // Delete the item from our collection
@@ -242,6 +285,11 @@ void AkonadiSyncSource::removeItem(const string &luid)
 
 void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, bool raw)
 {
+    if (!GRunIsMain()) {
+        GRunInMain(boost::bind(&AkonadiSyncSource::readItem, this, boost::cref(luid), boost::ref(data), raw));
+        return;
+    }
+
     Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
 
     std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(Item(syncItemId))));
