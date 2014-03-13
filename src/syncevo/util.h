@@ -677,5 +677,46 @@ std::string getCurrentTime();
 #define SE_THROW_EXCEPTION_STATUS(_class,  _what, _status) \
     throw _class(__FILE__, __LINE__, _what, _status)
 
+
+// GRunWhile(), GRunInMain(), GRunIsMain() depend on glib support,
+// which pretty much is a hard requirement of SyncEvolution these days.
+// Different implementations would be possible and the APIs do not depend
+// on glib types, therefore they are defined here. The glib implemention
+// is in GLibSupport.cpp.
+
+/**
+ * Process events in the default context while the callback returns
+ * true.
+ *
+ * This must be used instead of g_main_context_iterate() by code which
+ * may get called in other threads. In that case the check is
+ * transferred to the main thread which does the actual event
+ * processing. g_main_context_iterate() would just block because we
+ * register the main thread as permanent owner of the default context,
+ * or would suffer from race conditions if we didn't.
+ *
+ * The main thread must also be running GRunWhile().
+ *
+ * Exceptions in the check code are fatal and should be avoided.
+ *
+ * The check code will be called in the current thread once if checkFirst
+ * is true, otherwise it will only be invoked in the main thread. Use that
+ * latter mode for code which must run in the main thread.
+ */
+void GRunWhile(const boost::function<bool ()> &check, bool checkFirst = true);
+
+/**
+ * Runs the action in the main thread once, then returns.  Any
+ * exception thrown by the action will be caught and rethrown in the
+ * calling thread.
+ */
+void GRunInMain(const boost::function<void ()> &action);
+
+/**
+ * True iff the calling thread is handling the main event loop.  Can
+ * be used to avoid GRunInMain().
+ */
+bool GRunIsMain();
+
 SE_END_CXX
 #endif // INCL_SYNCEVOLUTION_UTIL
