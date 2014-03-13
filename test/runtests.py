@@ -1886,6 +1886,103 @@ test = SyncEvolutionTest("edsdav",
                          testPrefix=syncevoPrefix.replace('<httpport>', '9904'))
 context.add(test)
 
+# The test uses plain files on clients and a server config with EDS
+# backend. This can be used to send test items to SyncEvoltion which have
+# not gone through the EDS import step first.
+test = SyncEvolutionTest("fileeds",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::file_event Client::Sync::file_contact",
+                         [ "file_event", "file_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=100 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # Slow, and running many syncs still fails when using
+                         # valgrind. Tested separately below in "edsxfile".
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9905'))
+context.add(test)
+
+# The test uses plain files on clients and server. This allows checking of
+# content without having transformations inside EDS involved at all.
+test = SyncEvolutionTest("filefile",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::file_event Client::Sync::file_contact",
+                         [ "file_event", "file_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=100 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # Slow, and running many syncs still fails when using
+                         # valgrind. Tested separately below in "edsxfile".
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         # server cannot detect pairs based on UID/RECURRENCE-ID
+                         "CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9906'))
+context.add(test)
+
+# The test uses Akonadi on the client and server server side.
+test = SyncEvolutionTest("kdekde",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::kde_event Client::Sync::kde_contact",
+                         [ "kde_event", "kde_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=100 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # Slow, and running many syncs still fails when using
+                         # valgrind. Tested separately below in "edsxfile".
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9907'))
+context.add(test)
+
+# The test uses files on the client and KDE on the server server side.
+test = SyncEvolutionTest("filekde",
+                         compile,
+                         "", options.shell,
+                         "Client::Sync::file_event Client::Sync::file_contact",
+                         [ "file_event", "file_contact" ],
+                         "CLIENT_TEST_NUM_ITEMS=100 "
+                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         # Slow, and running many syncs still fails when using
+                         # valgrind. Tested separately below in "edsxfile".
+                         # "CLIENT_TEST_RETRY=t "
+                         # "CLIENT_TEST_RESEND=t "
+                         # "CLIENT_TEST_SUSPEND=t "
+                         # server supports refresh-from-client, use it for
+                         # more efficient test setup
+                         "CLIENT_TEST_DELETE_REFRESH=1 "
+                         # server supports multiple cycles inside the same session
+                         "CLIENT_TEST_PEER_CAN_RESTART=1 "
+                         "CLIENT_TEST_SKIP="
+                         ,
+                         testPrefix=syncevoPrefix.replace('<httpport>', '9908'))
+context.add(test)
+
 scheduleworldtest = SyncEvolutionTest("scheduleworld", compile,
                                       "", options.shell,
                                       "Client::Sync",
