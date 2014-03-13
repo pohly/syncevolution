@@ -1156,7 +1156,7 @@ class SyncEvolutionBuild(AutotoolsBuild):
         # - The wrapper script is invokved for the first time
         #   on some other platform, it tries to link, but fails
         #   because libs are different.
-        context.runCommand("%s %s src/client-test CXXFLAGS='-O0 -g' LDFLAGS=-no-install" % (self.runner, context.make))
+        context.runCommand("%s %s src/client-test CXXFLAGS='-O0 -g' ADDITIONAL_LDFLAGS=-no-install" % (self.runner, context.make))
 
 class NopAction(Action):
     def __init__(self, name):
