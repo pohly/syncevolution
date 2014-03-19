@@ -481,7 +481,8 @@ void LocalTests::addTests() {
                     ADD_TEST_TO_SUITE(linked, LocalTests, testLinkedItemsChild);
                 }
                 ADD_TEST_TO_SUITE(linked, LocalTests, testLinkedItemsParentChild);
-                if (items[1].find("RECURRENCE-ID") != items[1].npos) {
+                if (items[1].find("RECURRENCE-ID") != items[1].npos &&
+                    config.m_sourceKnowsItemSemantic) {
                     ADD_TEST_TO_SUITE(linked, LocalTests, testLinkedItemsInsertBothUpdateChildNoIDs);
                 }
                 if (config.m_linkedItemsRelaxedSemantic) {
@@ -503,7 +504,8 @@ void LocalTests::addTests() {
                 ADD_TEST_TO_SUITE(linked, LocalTests, testLinkedItemsParentUpdate);
                 if (config.m_linkedItemsRelaxedSemantic) {
                     ADD_TEST_TO_SUITE(linked, LocalTests, testLinkedItemsUpdateChild);
-                    if (items[1].find("RECURRENCE-ID") != items[1].npos) {
+                    if (items[1].find("RECURRENCE-ID") != items[1].npos &&
+                        config.m_sourceKnowsItemSemantic) {
                         ADD_TEST_TO_SUITE(linked, LocalTests, testLinkedItemsUpdateChildNoIDs);
                     }
                 }
