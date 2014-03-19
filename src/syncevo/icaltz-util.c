@@ -20,10 +20,24 @@
  * Boston, MA 02110-1301, USA.
  */
 
+/*
+ * Compile with
+ * gcc -c -Wall -DDISABLE_ICALTZUTIL_GET_ZONE_DIRECTORY  -DICALTZ_UTIL_MAIN -DHAVE_UNISTD_H  -DHAVE_ENDIAN_H -DHAVE_BYTESWAP_H $(pkg-config --cflags --libs libical) -o icaltz-util icaltz-util.c
+ * to get an utility which will print the VTIMEZONE definition of
+ * a certain location, for example "Europe/Berlin".
+ *
+ * With -DDISABLE_ICALTZUTIL_GET_ZONE_DIRECTORY the
+ * icaltzutil_get_zone_directory() from libical will be used.
+ */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <string.h>
+
+#ifdef ICALTZ_UTIL_MAIN
+#include <stdio.h>
+#endif
 
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
@@ -98,7 +112,7 @@
 #include <unistd.h>
 #endif
 #include <libical/icalerror.h>
-#include <icaltz-util.h>
+#include "icaltz-util.h"
 
 typedef struct 
 {
@@ -112,8 +126,10 @@ typedef struct
 
 static int r_pos [] = {1, 2, 3, -2, -1};
 
+#ifndef DISABLE_ICALTZUTIL_GET_ZONE_DIRECTORY
 static char *search_paths [] = {"/usr/share/zoneinfo","/usr/lib/zoneinfo","/etc/zoneinfo","/usr/share/lib/zoneinfo"};
 static char *zdir = NULL;
+#endif
 
 #define NUM_SEARCH_PATHS (sizeof (search_paths)/ sizeof (search_paths [0]))
 #define EFREAD(buf,size,num,fs) \
@@ -229,6 +245,7 @@ find_transidx (time_t *transitions, ttinfo *types, int *trans_idx, long int num_
 	return;
 }
 
+#ifndef DISABLE_ICALTZUTIL_GET_ZONE_DIRECTORY
 static void
 set_zonedir (void)
 {
@@ -254,6 +271,7 @@ icaltzutil_get_zone_directory (void)
 
 	return zdir;
 }
+#endif
 
 /* Calculate the relative position of the week in a month from a date */
 static int
@@ -542,10 +560,13 @@ error:
 	return tz_comp;
 }
 
-/*
+#ifdef ICALTZ_UTIL_MAIN
 int 
 main (int argc, char *argv [])
 {
-	tzutil_fetch_timezone (argv [1]);
+	icalcomponent *comp = icaltzutil_fetch_timezone (argv [1]);
+	const char *str = comp ? icalcomponent_as_ical_string(comp) : "no such zone";
+	puts(str);
 	return 0;
-}*/
+}
+#endif

@@ -24,8 +24,8 @@
 #define ICALTZUTIL_H
 
 #include <stdio.h> 
-#include "icaltime.h"
-#include "icalcomponent.h"
+#include "libical/icaltime.h"
+#include "libical/icalcomponent.h"
 
 #if defined(sun) && defined(__SVR4)
 #define ZONES_TAB_SYSTEM_FILENAME "tab/zone_sun.tab"
