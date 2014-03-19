@@ -39,6 +39,12 @@
 #include <stdio.h>
 #endif
 
+#ifdef EVOLUTION_ICAL_COMPATIBILITY
+# include "eds_abi_wrapper.h"
+# else
+# include <libical/icaltimezone.h>
+#endif
+
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -155,7 +161,9 @@ typedef struct
 	long int change;
 } leap;
 
+#ifndef EVOLUTION_ICAL_COMPATIBILITY
 extern const char *ical_tzid_prefix;
+#endif
 
 static int
 decode (const void *ptr)
@@ -332,7 +340,9 @@ icaltzutil_fetch_timezone (const char *location)
 	icaltimetype dtstart, icaltime;
 	struct icalrecurrencetype ical_recur;
 	const char *basedir;
-	       
+
+	/* if (!location) return NULL; */
+
 	basedir = icaltzutil_get_zone_directory();
 	if (!basedir) {
 		icalerror_set_errno (ICAL_FILE_ERROR);
@@ -562,6 +572,92 @@ error:
 
 	return tz_comp;
 }
+
+/*
+ * What follows is copied and slightly simplified (not thread-safe!)
+ * code from icaltimezone.c.
+ *
+ * This is necessary because otherwise, when libsynthesis.so calls
+ * icaltimezone_get_component(), libical.1.so uses its own builtin
+ * icaltzutil_fetch_timezone().  Apparently it exports that without
+ * looking it up via the dynamic linker itself. Therefore we have to
+ * redirect the original icaltimezone_get_component() call.
+ */
+
+static void
+icaltimezone_load_builtin_timezone	(icaltimezone *zone)
+{
+    icalcomponent *subcomp;
+    const char *location;
+
+    /* If the location isn't set, it isn't a builtin timezone. */
+    location = icaltimezone_get_location(zone);
+    if (!location || !location[0])
+	return;
+
+    subcomp = icaltzutil_fetch_timezone (location);
+
+    if (!subcomp) {
+	icalerror_set_errno(ICAL_PARSE_ERROR);
+	return;
+    }
+
+    icaltimezone_set_component(zone, subcomp);
+}
+
+#undef icaltimezone_get_component
+icalcomponent *icaltimezone_get_component(icaltimezone *zone)
+{
+	icalcomponent *comp;
+	/* If this is a floating time, without a timezone, return NULL. */
+	if (!zone)
+		return NULL;
+
+	/*
+	 * Without this check, icaltimezone_set_component() in
+	 * icaltimezone_load_builtin_timezone() will discard the
+	 * already loaded component of builtin timezones and replace
+	 * it with the new one, so there is no leak. It's just
+	 * inefficient.
+	 *
+	 * However, this method also gets called for non-internal
+	 * timezones which were created from a VTIMEZONE and in
+	 * that case not using the existing component is wrong.
+	 *
+	 * Hack: duplicate the internal _icaltimezone struct (from
+	 * icaltimezoneimpl.h).
+	 */
+	struct _my_icaltimezone {
+		char *tzid;
+		char *location;
+		char *tznames;
+		double latitude;
+		double longitude;
+		icalcomponent *component;
+	};
+	comp = ((struct _my_icaltimezone *)zone)->component;
+	if (!comp) {
+		icaltimezone_load_builtin_timezone (zone);
+		comp = ((struct _my_icaltimezone *)zone)->component;
+	}
+
+	return comp;
+}
+
+/*
+ * For including the .o file in binaries via -Wl,-usyncevo_fetch_timezone.
+ * We cannot use -Wl,-uicaltzutil_fetch_timezone because that gets satisfied by
+ * libical itself.
+ */
+int syncevo_fetch_timezone;
+
+/*
+ * Avoid lazy resolution of the methods that we export. client-test otherwise
+ * ends up calling the libical version of the methods despite having its own
+ * copy compiled into the executable, at least on Ubuntu Saucy and Trusty.
+ */
+/* void *syncevo_fetch_timezone_p = &icaltzutil_fetch_timezone; */
+/* void *syncevo_get_component_p = &icaltimezone_get_component; */
 
 #ifdef ICALTZ_UTIL_MAIN
 int 

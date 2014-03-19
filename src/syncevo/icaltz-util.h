@@ -23,9 +23,11 @@
 #ifndef ICALTZUTIL_H
 #define ICALTZUTIL_H
 
-#include <stdio.h> 
-#include "libical/icaltime.h"
-#include "libical/icalcomponent.h"
+#include <libical/ical.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #if defined(sun) && defined(__SVR4)
 #define ZONES_TAB_SYSTEM_FILENAME "tab/zone_sun.tab"
@@ -33,7 +35,14 @@
 #define ZONES_TAB_SYSTEM_FILENAME "zone.tab"
 #endif
 
+#if !defined(EVOLUTION_COMPATIBILITY) || !defined(ENABLE_ICAL)
 const char *icaltzutil_get_zone_directory (void);
+extern const char *ical_tzid_prefix;
+#endif
 icalcomponent *icaltzutil_fetch_timezone (const char *location);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif 

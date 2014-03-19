@@ -95,6 +95,13 @@ CORE_LDADD = $(SYNCEVOLUTION_LDADD) src/syncevo/libsyncevolution.la $(GLIB_LIBS)
 CORE_DEP = $(SYNCEVOLUTION_DEP) src/syncevo/libsyncevolution.la $(SYNTHESIS_DEP)
 CORE_LD_FLAGS = -Wl,-uSyncEvolution_Module_Version -Wl,--export-dynamic $(CPPUNIT_LDFLAGS) $(ADDITIONAL_LDFLAGS)
 
+if ENABLE_ICALTZ_UTIL
+# Force inclusion of our own icaltz-util.o into binaries even though
+# we do not call the icaltzutil_fetch_timezone directly ourself.
+# That way it is there if or when libical needs it.
+CORE_LD_FLAGS += -Wl,-usyncevo_fetch_timezone
+endif
+
 # put link to static c++ library into current directory, needed if compiling with --enable-static-c++
 src/libstdc++.a :
 	$(AM_V_GEN)path=`$(CXX) $(CORE_LDADD) $(LD_FLAGS) -print-file-name=src/libstdc++.a` && ln -s $$path .

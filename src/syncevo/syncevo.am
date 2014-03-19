@@ -148,6 +148,14 @@ src_syncevo_sources += \
   src/syncevo/icalstrdup.h
 endif
 
+if ENABLE_ICALTZ_UTIL
+src_syncevo_sources += \
+  src/syncevo/icaltz-util.c \
+  src/syncevo/icaltz-util.h
+if !ENABLE_EVOLUTION_COMPATIBILITY
+src_syncevo_ldadd += $(LIBICAL_LIBS)
+endif
+endif
 
 src_syncevo_libsyncevolution_includedir= $(includedir)/syncevo
 src_syncevo_libsyncevolution_include_HEADERS = \
