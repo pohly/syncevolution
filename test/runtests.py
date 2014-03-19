@@ -1978,6 +1978,13 @@ test = SyncEvolutionTest("filekde",
                          "CLIENT_TEST_DELETE_REFRESH=1 "
                          # server supports multiple cycles inside the same session
                          "CLIENT_TEST_PEER_CAN_RESTART=1 "
+
+                         "CLIENT_TEST_FAILURES="
+                         # Different vcard flavor, need different test data (just as
+                         # in testImport).
+                         "Client::Sync::file_contact::testItems,"
+                         " "
+
                          "CLIENT_TEST_SKIP="
                          ,
                          testPrefix=syncevoPrefix.replace('<httpport>', '9908'))
