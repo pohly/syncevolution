@@ -249,6 +249,7 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.icalcomponent_get_summary, "icalcomponent_get_summary", \
                 &EDSAbiWrapperSingleton.icalcomponent_get_uid, "icalcomponent_get_uid", \
                 &EDSAbiWrapperSingleton.icalcomponent_get_dtstart, "icalcomponent_get_dtstart", \
+                &EDSAbiWrapperSingleton.icalcomponent_set_dtstart, "icalcomponent_set_dtstart", \
                 &EDSAbiWrapperSingleton.icalcomponent_isa, "icalcomponent_isa", \
                 &EDSAbiWrapperSingleton.icalcomponent_new_clone, "icalcomponent_new_clone", \
                 &EDSAbiWrapperSingleton.icalcomponent_new_from_string, "icalcomponent_new_from_string", \
@@ -307,7 +308,26 @@ extern "C" void EDSAbiWrapperInit()
                 &EDSAbiWrapperSingleton.icaltimezone_get_component, "icaltimezone_get_component", \
                 &EDSAbiWrapperSingleton.icaltimezone_get_tzid, "icaltimezone_get_tzid", \
                 &EDSAbiWrapperSingleton.icaltimezone_new, "icaltimezone_new", \
-                &EDSAbiWrapperSingleton.icaltimezone_set_component, "icaltimezone_set_component",
+                &EDSAbiWrapperSingleton.icaltimezone_set_component, "icaltimezone_set_component", \
+                &EDSAbiWrapperSingleton.icaltimezone_get_location, "icaltimezone_get_location", \
+                &EDSAbiWrapperSingleton.ical_tzid_prefix, "ical_tzid_prefix", \
+                &EDSAbiWrapperSingleton.icalerror_set_errno, "icalerror_set_errno", \
+                &EDSAbiWrapperSingleton.icalproperty_new_dtstart, "icalproperty_new_dtstart", \
+                &EDSAbiWrapperSingleton.icalproperty_new_rrule, "icalproperty_new_rrule", \
+                &EDSAbiWrapperSingleton.icalproperty_new_tzid, "icalproperty_new_tzid", \
+                &EDSAbiWrapperSingleton.icalproperty_new_tzname, "icalproperty_new_tzname", \
+                &EDSAbiWrapperSingleton.icalproperty_new_tzoffsetfrom, "icalproperty_new_tzoffsetfrom", \
+                &EDSAbiWrapperSingleton.icalproperty_new_tzoffsetto, "icalproperty_new_tzoffsetto", \
+                &EDSAbiWrapperSingleton.icalproperty_new_x, "icalproperty_new_x", \
+                &EDSAbiWrapperSingleton.icalproperty_set_x_name, "icalproperty_set_x_name", \
+                &EDSAbiWrapperSingleton.icalrecur_iterator_free, "icalrecur_iterator_free", \
+                &EDSAbiWrapperSingleton.icalrecur_iterator_new, "icalrecur_iterator_new", \
+                &EDSAbiWrapperSingleton.icalrecur_iterator_next, "icalrecur_iterator_next", \
+                &EDSAbiWrapperSingleton.icalrecurrencetype_clear, "icalrecurrencetype_clear", \
+                &EDSAbiWrapperSingleton.icaltime_day_of_week, "icaltime_day_of_week", \
+                &EDSAbiWrapperSingleton.icaltime_days_in_month, "icaltime_days_in_month", \
+                &EDSAbiWrapperSingleton.icaltzutil_get_zone_directory, "icaltzutil_get_zone_directory", \
+
 
     // icalparameter_new_scheduleagent was added in libical.so.1. We
     // use it only to detect the libical 1.0 ABI. This works because

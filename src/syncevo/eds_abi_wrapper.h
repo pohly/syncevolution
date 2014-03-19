@@ -194,6 +194,7 @@ struct EDSAbiWrapper {
     const char* (*icalcomponent_get_summary) (icalcomponent* comp);
     const char* (*icalcomponent_get_uid) (icalcomponent* comp);
     struct icaltimetype (*icalcomponent_get_dtstart)(icalcomponent* comp);
+    void (*icalcomponent_set_dtstart)(icalcomponent* comp, struct icaltimetype v);
     icalcomponent_kind (*icalcomponent_isa) (const icalcomponent* component);
     icalcomponent* (*icalcomponent_new_clone) (icalcomponent* component);
     icalcomponent* (*icalcomponent_new_from_string) (char* str);
@@ -237,6 +238,22 @@ struct EDSAbiWrapper {
     const char* (*icalproperty_get_value_as_string)(const icalproperty* prop);
     const char* (*icalproperty_get_x_name)(icalproperty* prop);
     icalproperty* (*icalproperty_new_from_string)(const char* str);
+    icalproperty* (*icalproperty_new_dtstart)(struct icaltimetype v);
+    icalproperty* (*icalproperty_new_rrule)(struct icalrecurrencetype v);
+    icalproperty* (*icalproperty_new_tzid)(const char* v);
+    icalproperty* (*icalproperty_new_tzname)(const char* v);
+    icalproperty* (*icalproperty_new_tzoffsetfrom)(int v);
+    icalproperty* (*icalproperty_new_tzoffsetto)(int v);
+    icalproperty* (*icalproperty_new_x)(const char* v);
+    void (*icalproperty_set_x_name)(icalproperty* prop, const char* name);
+
+    void (*icalrecur_iterator_free)(icalrecur_iterator*);
+    icalrecur_iterator* (*icalrecur_iterator_new)(struct icalrecurrencetype rule, struct icaltimetype dtstart);
+    struct icaltimetype (*icalrecur_iterator_next)(icalrecur_iterator*);
+
+    void (*icalrecurrencetype_clear)(struct icalrecurrencetype *r);
+    int (*icaltime_day_of_week)(const struct icaltimetype t);
+    int (*icaltime_days_in_month)(const int month, const int year);
 
     int (*icaltime_is_null_time)(const struct icaltimetype t);
     int (*icaltime_is_utc)(const struct icaltimetype t);
@@ -256,6 +273,11 @@ struct EDSAbiWrapper {
     char* (*icaltimezone_get_tzid) (icaltimezone *zone);
     icaltimezone *(*icaltimezone_new) (void);
     int (*icaltimezone_set_component) (icaltimezone *zone, icalcomponent *comp);
+    const char* (*icaltimezone_get_location) (icaltimezone *zone);
+
+    void (*icalerror_set_errno)(icalerrorenum x);
+    const char *(*icaltzutil_get_zone_directory)(void);
+    const char **ical_tzid_prefix;
 
     // Optional, added in libical.so.1. Can't be called be like this,
     // we merely check for the method to detect the ABI.
@@ -374,6 +396,7 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define icalcomponent_get_summary EDSAbiWrapperSingleton.icalcomponent_get_summary
 #   define icalcomponent_get_uid EDSAbiWrapperSingleton.icalcomponent_get_uid
 #   define icalcomponent_get_dtstart EDSAbiWrapperSingleton.icalcomponent_get_dtstart
+#   define icalcomponent_set_dtstart EDSAbiWrapperSingleton.icalcomponent_set_dtstart
 #   define icalcomponent_isa EDSAbiWrapperSingleton.icalcomponent_isa
 #   define icalcomponent_new_clone EDSAbiWrapperSingleton.icalcomponent_new_clone
 #   define icalcomponent_new_from_string EDSAbiWrapperSingleton.icalcomponent_new_from_string
@@ -433,6 +456,26 @@ extern struct EDSAbiWrapper EDSAbiWrapperSingleton;
 #   define icaltimezone_get_tzid EDSAbiWrapperSingleton.icaltimezone_get_tzid
 #   define icaltimezone_new EDSAbiWrapperSingleton.icaltimezone_new
 #   define icaltimezone_set_component EDSAbiWrapperSingleton.icaltimezone_set_component
+#   define icaltimezone_get_location EDSAbiWrapperSingleton.icaltimezone_get_location
+
+#   define ical_tzid_prefix (*EDSAbiWrapperSingleton.ical_tzid_prefix)
+#   define icalerror_set_errno EDSAbiWrapperSingleton.icalerror_set_errno
+#   define icalproperty_new_dtstart EDSAbiWrapperSingleton.icalproperty_new_dtstart
+#   define icalproperty_new_rrule EDSAbiWrapperSingleton.icalproperty_new_rrule
+#   define icalproperty_new_tzid EDSAbiWrapperSingleton.icalproperty_new_tzid
+#   define icalproperty_new_tzname EDSAbiWrapperSingleton.icalproperty_new_tzname
+#   define icalproperty_new_tzoffsetfrom EDSAbiWrapperSingleton.icalproperty_new_tzoffsetfrom
+#   define icalproperty_new_tzoffsetto EDSAbiWrapperSingleton.icalproperty_new_tzoffsetto
+#   define icalproperty_new_x EDSAbiWrapperSingleton.icalproperty_new_x
+#   define icalproperty_set_x_name EDSAbiWrapperSingleton.icalproperty_set_x_name
+#   define icalrecur_iterator_free EDSAbiWrapperSingleton.icalrecur_iterator_free
+#   define icalrecur_iterator_new EDSAbiWrapperSingleton.icalrecur_iterator_new
+#   define icalrecur_iterator_next EDSAbiWrapperSingleton.icalrecur_iterator_next
+#   define icalrecurrencetype_clear EDSAbiWrapperSingleton.icalrecurrencetype_clear
+#   define icaltime_day_of_week EDSAbiWrapperSingleton.icaltime_day_of_week
+#   define icaltime_days_in_month EDSAbiWrapperSingleton.icaltime_days_in_month
+#   define icaltzutil_get_zone_directory EDSAbiWrapperSingleton.icaltzutil_get_zone_directory
+
 #  endif /* ENABLE_ICAL */
 #  ifdef ENABLE_BLUETOOTH
 #   define sdp_close EDSAbiWrapperSingleton.sdp_close
