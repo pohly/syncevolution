@@ -86,6 +86,20 @@ SyncContext *SyncContext::m_activeContext;
 
 static const char *LogfileBasename = "syncevolution-log";
 
+static std::string RealPath(const std::string &path)
+{
+    std::string buffer;
+    char *newPath = realpath(path.c_str(), NULL);
+    if (newPath) {
+        buffer = newPath;
+        free(newPath);
+        return buffer;
+    } else {
+        return path;
+    }
+}
+
+
 SyncContext::SyncContext()
 {
     init();
@@ -398,6 +412,15 @@ public:
             return;
         }
 
+        // Resolve symbolic links in path now, in case that they change later
+        // while the session runs. Relies on being allowed to pass NULL. If that's
+        // not allowed, we ignore the error and continue to use the known path.
+        errno = 0;
+        m_logdir = RealPath(m_logdir);
+        SE_LOG_DEBUG(NULL, "log path -> %s, %s",
+                     m_logdir.c_str(),
+                     errno ? strerror(errno) : "<okay>");
+
         // the config name has been normalized
         string peer = m_client.getConfigName();
 
@@ -484,6 +507,7 @@ public:
             m_path = "";
         } else {
             setLogdir(path);
+            SE_LOG_DEBUG(NULL, "checking log dir %s", m_logdir.c_str());
             if (mode == SESSION_CREATE) {
                 // create unique directory name in the given directory
                 time_t ts = time(NULL);
@@ -551,6 +575,7 @@ public:
                 }
             }
             m_logfile = m_path + "/" + LogfileBasename + ".html";
+            SE_LOG_DEBUG(NULL, "logfile: %s", m_logfile.c_str());
         }
 
         // update log level of default logger and our own replacement
@@ -605,7 +630,7 @@ public:
     }
 
     /** sets a fixed directory for database files without redirecting logging */
-    void setPath(const string &path) { m_path = path; }
+    void setPath(const string &path) { m_path = RealPath(path); SE_LOG_DEBUG(NULL, "setPath(%s) -> %s", path.c_str(), m_path.c_str()); }
 
     // return log directory, empty if not enabled
     const string &getLogdir() {
@@ -4796,7 +4821,7 @@ private:
         string logdir = getLogDir();
         ReadDir dirs(logdir);
         BOOST_FOREACH(const string &dir, dirs) {
-            sessions.push_back(logdir + "/" + dir);
+            sessions.push_back(RealPath(logdir + "/" + dir));
         }
         sort(sessions.begin(), sessions.end());
         return sessions;
