@@ -32,6 +32,12 @@ from OpenSSL import SSL
 # for output from this script itself
 logger = logging.getLogger("syncevo-http")
 
+# Timeout for D-Bus method calls. Both synchronous and asynchronous
+# calls have a low (?) default timeout of 60 seconds. We increase that
+# to something which is essentially infinite, to allow more time for
+# processing or interactive debugging.
+timeout=100000
+
 class ChainedOpenSSLContextFactory(ssl.DefaultOpenSSLContextFactory):
     def __init__(self, privateKeyFileName, certificateChainFileName,
                  sslmethod = SSL.SSLv3_METHOD):
@@ -131,7 +137,7 @@ class SyncMLSession:
             self.request = None
         if self.connection:
             try:
-                self.connection.Close(False, message)
+                self.connection.Close(False, message, timeout=timeout)
             except dbus.exceptions.DBusException, ex:
                 if ex.get_dbus_name() == "org.freedesktop.DBus.Error.UnknownMethod":
                     # triggered if connection instance is already gone, hide from user
@@ -186,7 +192,7 @@ class SyncMLSession:
         if final:
             logger.debug("closing connection for connection %s session %s", self.conpath, session)
             if self.connection:
-                self.connection.Close(True, "")
+                self.connection.Close(True, "", timeout=timeout)
                 self.connection = None
             self.destruct(http.GONE, "D-Bus server done")
 
@@ -219,7 +225,8 @@ class SyncMLSession:
                                             'config': config,
                                             'URL': url},
                                            True,
-                                           '')
+                                           '',
+                                           timeout=timeout)
         logger.debug("started new connection %s" % self.conpath)
         self.connection = dbus.Interface(Context.bus.get_object('org.syncevolution',
                                                                 self.conpath),
@@ -251,7 +258,7 @@ class SyncMLSession:
 
         # feed new data into SyncEvolution and wait for reply
         request.content.seek(0, 0)
-        self.connection.Process(data, type)
+        self.connection.Process(data, type, timeout=timeout)
         SyncMLSession.sessions.append(self)
         logger.debug("added new SyncML session %s", self)
 
@@ -287,7 +294,7 @@ class SyncMLSession:
         request.processingdata = data
         request.processingtype = type
         if mustprocess:
-            self.connection.Process(data, type)
+            self.connection.Process(data, type, timeout=timeout)
 
     def logMessage(self, direction, request, data, type):
         if 'plain' in type or "+xml" in type:
