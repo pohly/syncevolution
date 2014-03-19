@@ -265,6 +265,8 @@
     ]]></macro>
 
     <macro name="CALENDAR_BEFOREWRITE_SCRIPT"><![CDATA[
+      if (UID == EMPTY) { UID = newuid(); }
+
       // set UTC time of generation for iCalendar 2.0 DTSTAMP
       DGENERATED = NOW();
       // ensure that there is a DMODIFIED = LAST-MODIFIED property,
