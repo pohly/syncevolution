@@ -72,7 +72,19 @@ private:
     void start();
 protected:
     Akonadi::Collection m_collection;
-    const std::string m_subMime;
+
+    /**
+     * MIME types(s) of items, from submime constructor parameter.
+     * Only one format is supported, but it may have different aliases (for example,
+     * application/x-vnd.kde.notes == application/x-vnd.akonadi.note).
+     */
+    QStringList m_mimeTypes;
+
+    /**
+     * The actual type to be used inside the collection. Set after opening
+     * the collection.
+     */
+    QString m_contentMimeType;
 };
 
 class AkonadiContactSource : public AkonadiSyncSource
@@ -143,8 +155,8 @@ private:
     QString toSynthesis(QString data);
 
 public:
-    AkonadiMemoSource(const SyncSourceParams &params)
-        : AkonadiSyncSource("text/x-vnd.akonadi.note", params)
+    AkonadiMemoSource(const SyncSourceParams &params) :
+        AkonadiSyncSource("text/x-vnd.akonadi.note,application/x-vnd.kde.notes", params)
     {
     }
 
