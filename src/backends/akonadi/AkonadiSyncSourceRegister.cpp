@@ -365,6 +365,13 @@ public:
     virtual void updateConfig(ClientTestConfig &config) const
     {
         config.m_type = "kde-calendar";
+        // Looks like iCalendar file resource in Akonadi 1.11.0 does
+        // not actually enforce iCalendar 2.0 semantic. It allows
+        // updating of events with no UID
+        // (testLinkedItemsInsertBothUpdateChildNoIDs)
+        // and fails to detect double-adds (testInsertTwice).
+        // TODO: this should better be fixed.
+        config.m_sourceKnowsItemSemantic = false;
     }
 } iCal20Test;
 
@@ -375,6 +382,8 @@ public:
     virtual void updateConfig(ClientTestConfig &config) const
     {
         config.m_type = "kde-tasks";
+        // See above.
+        config.m_sourceKnowsItemSemantic = false;
     }
 } iTodo20Test;
 
