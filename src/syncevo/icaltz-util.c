@@ -29,6 +29,10 @@
 #include <stdint.h>
 #endif
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
 #if defined(sun) && defined(__SVR4)
 #include <sys/types.h>
 #include <sys/byteorder.h>
