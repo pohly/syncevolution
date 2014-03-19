@@ -325,7 +325,7 @@ icaltzutil_fetch_timezone (const char *location)
 	time_t trans;
 	int *trans_idx = NULL, dstidx = -1, stdidx = -1, pos, sign, zidx, zp_idx;
 	ttinfo *types = NULL;
-	char *znames = NULL, *full_path, *tzid, *r_trans, *temp;
+	char *znames = NULL, *full_path, *tzid, *r_trans, *temp = NULL;
 	leap *leaps = NULL;
 	icalcomponent *tz_comp = NULL, *dst_comp = NULL, *std_comp = NULL;
 	icalproperty *icalprop;
@@ -363,9 +363,9 @@ icaltzutil_fetch_timezone (const char *location)
 	num_types = decode (type_cnts.typecnt);
 
 	transitions = calloc (num_trans, sizeof (time_t));
-	r_trans = calloc (num_trans, 4);
+	temp = calloc (num_trans, 4);
+	r_trans = temp;
 	EFREAD(r_trans, 4, num_trans, f);
-	temp = r_trans;	
 
 	if (num_trans) {
 		trans_idx = calloc (num_trans, sizeof (int));
@@ -377,6 +377,7 @@ icaltzutil_fetch_timezone (const char *location)
 	}
 	
 	free (temp);
+	temp = NULL;
 
 	types = calloc (num_types, sizeof (ttinfo));
 	for (i = 0; i < num_types; i++) {
@@ -556,6 +557,8 @@ error:
 	free (full_path);
 	if (leaps)
 		free (leaps);
+	if (temp)
+		free (temp);
 
 	return tz_comp;
 }
