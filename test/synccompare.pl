@@ -172,6 +172,9 @@ sub NormalizeItem {
     # changed.
     s/\\N/\\n/g;
 
+    # Ignore blank lines. Akonadi inserts them.
+    s/\n{2,}/\n/s;
+
     # undo line continuation
     s/\n\s//gs;
     # ignore charset specifications, assume UTF-8
@@ -281,8 +284,9 @@ sub NormalizeItem {
 
     # remove fields which may differ
     s/^(PRODID|CREATED|DTSTAMP|LAST-MODIFIED|REV)(;X-VOBJ-FLOATINGTIME-ALLOWED=(TRUE|FALSE))?:.*\r?\n?//gm;
-    # remove optional fields
-    s/^(METHOD|X-WSS-[A-Z]*|X-WR-[A-Z]*|CALSCALE):.*\r?\n?//gm;
+    # remove optional properties and parameters
+    s/^(METHOD|X-WSS-[A-Z]*|X-WR-[A-Z]*|CALSCALE|X-KDE-ICAL-IMPLEMENTATION-VERSION|X-KDE-KCALCORE-ENABLED):.*\r?\n?//gm;
+    s/^(ATTENDEE[^:]*);X-UID=[^;:]*/$1/mg;
 
     # trailing line break(s) in a DESCRIPTION may or may not be
     # removed or added by servers
@@ -364,6 +368,10 @@ sub NormalizeItem {
         # VALUE=DURATION is the default behavior
         s/^TRIGGER([^\n:]*);VALUE=DURATION/TRIGGER$1/mg;
         s/^(TRIGGER.*):(\S*)/$1 . ":" . NormalizeTrigger($2)/mge;
+        # INDIVIDUAL is default for CUTYPE.
+        s/;CUTYPE=INDIVIDUAL([;:])/$1/mg;
+        # Print without quotation marks (probably not save in general, but okay for our test data).
+        s/;CN="([^;]*)"/;CN=$1/g;
     }
 
     # Added by EDS >= 2.32, presumably to cache some internal computation.
