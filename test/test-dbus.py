@@ -268,7 +268,7 @@ def property(key, value):
 
 def timeout(seconds):
     """Function decorator which sets a non-default timeout for a test.
-    The default timeout, enforced by DBusTest.runTest(), are 20 seconds.
+    The default timeout, enforced by DBusTest.runTest(), are 40 seconds.
     Use like this:
         @timeout(60)
         def testMyTest:
@@ -487,7 +487,7 @@ class DBusUtil(Timeout):
         properties = getattr(testMethod, "properties", {})
         return properties.get(key, default)
 
-    def runTest(self, result, own_xdg=True, serverArgs=[], own_home=False, defTimeout=20):
+    def runTest(self, result, own_xdg=True, serverArgs=[], own_home=False, defTimeout=40):
         """Starts the D-Bus server and dbus-monitor before the test
         itself. After the test run, the output of these two commands
         are added to the test's failure, if any. Otherwise the output
@@ -641,7 +641,7 @@ class DBusUtil(Timeout):
 
         # Find out what test function we run and look into
         # the function definition to see whether it comes
-        # with a non-default timeout, otherwise use a 20 second
+        # with a non-default timeout, otherwise use a 40 second
         # timeout.
         timeout = self.getTestProperty("timeout", defTimeout)
         timeout_handle = None
@@ -681,7 +681,7 @@ class DBusUtil(Timeout):
         # SIGTERM and SIGTERM depends on how much work still needs to
         # be done after being asked to quit. valgrind leak checking
         # can take a while.
-        unresponsive = self.killChildren(usingValgrind() and 120 or 20)
+        unresponsive = self.killChildren(usingValgrind() and 300 or 20)
         if unresponsive:
             error = "/".join(unresponsive) + " had to be killed with SIGKILL"
             print "   ", error
@@ -8684,7 +8684,7 @@ no changes
         self.checkSync(numReports=4)
 
     @property("debug", False)
-    @timeout(usingValgrind() and 600 or 200)
+    @timeout(usingValgrind() and 1000 or 200)
     def testSyncOutput2(self):
         """TestCmdline.testSyncOutput2 - run syncs between local dirs and check output, with two sources"""
         self.setUpLocalSyncConfigs(enableCalendar=True)
