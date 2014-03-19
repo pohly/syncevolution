@@ -74,6 +74,9 @@ case "$@" in *test-dbus.py\ *) akonadi=;;
 esac
 
 if [ "$DBUS_SESSION_SH_AKONADI" ] && [ "$akonadi" ]; then
+    # Prevents running unnecessary daemons which do not necessarily
+    # work (see "[Kde-pim] configuring Akonadi server").
+    export AKONADI_DISABLE_AGENT_AUTOSTART=1
     akonadictl start 1>&2
     SLEEP=5
 else
