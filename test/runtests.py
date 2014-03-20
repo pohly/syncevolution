@@ -297,19 +297,26 @@ class Action:
                                     # Replace XDG_DATA_HOME paths inside the sqlite3 db.
                                     # This runs *outside* of the chroot. It relies on
                                     # compatibility between the sqlite3 inside and outside the chroots.
-                                    subprocess.call("sqlite3 '%s' .dump | sed -e 's;%s;%s;g' | sqlite3 '%s'" %
-                                                    (source,
-                                                     os.path.expanduser('~/.local/share/'),
-                                                     os.path.join(context.stripSchrootDir(home), 'data'),
-                                                     target),
-                                                    shell=True)
+                                    db = subprocess.check_output(['sqlite3', source, '.dump'])
+                                    db = db.replace(os.path.expanduser('~/.local/share/'),
+                                                    os.path.join(context.stripSchrootDir(home), 'data', ''))
+                                    sqlite = subprocess.Popen(['sqlite3', target],
+                                                              stdin=subprocess.PIPE)
+                                    sqlite.communicate(db)
+                                    if sqlite.returncode:
+                                        raise Exception("sqlite3 returned %d" % sqlite.returncode)
+                                    db = subprocess.check_output(['sqlite3', target, '.dump'])
+                                    log('target %s:\n%s', target, db)
                                 elif entry == 'akonadiserverrc':
                                     # Replace hard-coded path to XDG dirs.
                                     content = open(source).read()
                                     for old, new, name in mapping:
                                         content = content.replace(os.path.expanduser('~/%s/' % old),
                                                                   os.path.join(context.stripSchrootDir(home), new, ''))
-                                    open(target, 'w').write(content)
+                                    rc = open(target, 'w')
+                                    rc.write(content)
+                                    rc.close()
+                                    log('target %s:\n%s', target, content)
                         os.environ['HOME'] = context.stripSchrootDir(home)
                         for old, new, name in mapping:
                             newdir = os.path.join(home, new)
