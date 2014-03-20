@@ -1488,6 +1488,7 @@ evolutiontest = SyncEvolutionTest("evolution", compile,
                                   # the code needs to be fixed.
                                   "Client::Source::kde_.*::testReadItem404,"
                                   "Client::Source::kde_.*::testDelete404,"
+                                  "Client::Source::kde_.*::testLinkedItems.*404,"
                                   "Client::Source::kde_.*::testImport.*,"
                                   "Client::Source::kde_.*::testRemoveProperties,"
                                   " "
