@@ -4528,6 +4528,8 @@ END:VCARD''')
     @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=10") # allow killing syncevo-dbus-server in middle of sync
     def testNoParent(self):
         """TestLocalSync.testNoParent - check that sync helper can continue without parent"""
+        existingProcesses = self.getChildren()
+        logging.printf('Existing processes: %s', str(existingProcesses))
         self.setUpConfigs()
         self.setUpListeners(self.sessionpath)
         pid = self.serverPid()
@@ -4535,7 +4537,8 @@ END:VCARD''')
         self.killTimeout = None
         self.syncProcesses = {}
         def killServer():
-            self.syncProcesses = self.getChildren()
+            self.syncProcesses = dict([ (p, props) for p, props in self.getChildren().iteritems() if not existingProcesses.has_key(p)])
+            logging.printf('Sync processes: %s', str(self.syncProcesses))
             if pid != serverPid:
                 logging.printf('killing syncevo-dbus-server wrapper with pid %d', serverPid)
                 os.kill(serverPid, signal.SIGKILL)
