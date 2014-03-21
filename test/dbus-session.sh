@@ -40,7 +40,6 @@ fi
 
 # kill all programs started by us
 atexit() {
-    set -x
     [ ! "$KEYRING_PID" ] || ( echo >&2 "dbus-session.sh $$: killing keyring pid $KEYRING_PID"; kill -9 $KEYRING_PID )
     [ ! "$DBUS_SESSION_SH_SYSTEM_BUS" ] || [ ! "$DBUS_SYSTEM_BUS_PID" ] || ( echo >&2 "dbus-session.sh $$: killing system bus daemon $DBUS_SYSTEM_BUS_PID"; kill -9 $DBUS_SYSTEM_BUS_PID )
     [ ! $DBUS_SESSION_BUS_PID ] || ( echo >&2 "dbus-session.sh $$: killing session bus daemon $DBUS_SESSION_BUS_PID"; kill -9 $DBUS_SESSION_BUS_PID )
