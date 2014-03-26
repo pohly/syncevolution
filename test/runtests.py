@@ -1478,31 +1478,120 @@ distcheck = SyncEvolutionDistcheck("distcheck",
                                    [ compile.name ])
 context.add(distcheck)
 
-evolutiontest = SyncEvolutionTest("evolution", compile,
-                                  "", options.shell,
-                                  "Client::Source SyncEvolution",
-                                  [],
-                                  "CLIENT_TEST_FAILURES="
-                                  # testReadItem404 works with some Akonadi versions (Ubuntu Lucid),
-                                  # but not all (Debian Testing). The other tests always fail,
-                                  # the code needs to be fixed.
-                                  "Client::Source::kde_.*::testReadItem404,"
-                                  "Client::Source::kde_.*::testDelete404,"
-                                  "Client::Source::kde_.*::testLinkedItems.*404,"
-                                  "Client::Source::kde_.*::testImport.*,"
-                                  "Client::Source::kde_.*::testRemoveProperties,"
-                                  " "
-                                  "CLIENT_TEST_SKIP="
-                                  "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsInsertBothUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsWithVALARM::testLinkedItemsInsertBothUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsWithVALARM::testLinkedItemsUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsAllDay::testLinkedItemsInsertBothUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsAllDay::testLinkedItemsUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsNoTZ::testLinkedItemsInsertBothUpdateChildNoIDs,"
-                                  "Client::Source::file_event::LinkedItemsNoTZ::testLinkedItemsUpdateChildNoIDs",
-                                  testPrefix=options.testprefix)
-context.add(evolutiontest)
+# Special case "evolution": this used to be a catch-all for all
+# Client::Source and unit tests in the "SyncEvolution" test group.
+# In practice it was always run with specific sources enabled.
+#
+# Now runtests.py has separate test runs for all of these but continues
+# to use --enable evolution=... This is done by mapping the enabled["evolution"]
+# value into the new categories (kde, eds, file, unittests).
+# The advantage is parallel testing and some separation between running incompatible
+# sources in the same process.
+#
+# Akonadi is known to crash randomly when used after EDS in the same
+# process (from Client::Source::kde_contact::testOpen):
+#
+# [DEBUG 00:00:00] ClientTest.cpp:1004: starting source->open()
+# [ERROR 00:20:00] stderr: syncevolution(787)/libakonadi Akonadi::SessionPrivate::socketError: Socket error occurred: "QLocalSocket::connectToServer: Invalid name"
+# [DEVELOPER 00:20:00] stderr: QDBusConnection: session D-Bus connection created before QCoreApplication. Application may misbehave.
+# [DEVELOPER 00:20:00] stderr: kres-migrator: cannot connect to X server
+# [DEVELOPER 00:20:00] stderr: QDBusConnection: session D-Bus connection created before QCoreApplication. Application may misbehave.
+# [DEVELOPER 00:20:00] stderr: kres-migrator: cannot connect to X server
+# [DEVELOPER 00:20:00] stderr: Qt has caught an exception thrown from an event handler. Throwing
+# [DEVELOPER 00:20:00] stderr: exceptions from an event handler is not supported in Qt. You must
+# [DEVELOPER 00:20:00] stderr: reimplement QApplication::notify() and catch all exceptions there.
+
+localtests = []
+
+test = SyncEvolutionTest("eds", compile,
+                         "", options.shell,
+                         "Client::Source::eds_contact Client::Source::eds_event Client::Source::eds_task Client::Source::eds_memo ",
+                         [],
+                         "CLIENT_TEST_FAILURES="
+                         " "
+                         "CLIENT_TEST_SKIP="
+                         " "
+                         ,
+                         testPrefix=options.testprefix)
+localtests.append(test)
+context.add(test)
+
+test = SyncEvolutionTest("kde", compile,
+                         "", options.shell,
+                         "Client::Source::kde_contact Client::Source::kde_event Client::Source::kde_task Client::Source::kde_memo",
+                         [],
+                         "CLIENT_TEST_FAILURES="
+                         # testReadItem404 works with some Akonadi versions (Ubuntu Lucid),
+                         # but not all (Debian Testing). The other tests always fail,
+                         # the code needs to be fixed.
+                         "Client::Source::kde_.*::testReadItem404,"
+                         "Client::Source::kde_.*::testDelete404,"
+                         "Client::Source::kde_.*::testLinkedItems.*404,"
+                         "Client::Source::kde_.*::testImport.*,"
+                         "Client::Source::kde_.*::testRemoveProperties,"
+                         " "
+                         "CLIENT_TEST_SKIP="
+                         " "
+                         ,
+                         testPrefix=options.testprefix)
+localtests.append(test)
+context.add(test)
+
+test = SyncEvolutionTest("file", compile,
+                         "", options.shell,
+                         "Client::Source::file_contact Client::Source::file_event Client::Source::file_task Client::Source::file_memo",
+                         [],
+                         "CLIENT_TEST_FAILURES="
+                         " "
+                         "CLIENT_TEST_SKIP="
+                         "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsDefault::testLinkedItemsUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsWithVALARM::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsWithVALARM::testLinkedItemsUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsAllDay::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsAllDay::testLinkedItemsUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsNoTZ::testLinkedItemsInsertBothUpdateChildNoIDs,"
+                         "Client::Source::file_event::LinkedItemsNoTZ::testLinkedItemsUpdateChildNoIDs"
+                         " "
+                         ,
+                         testPrefix=options.testprefix)
+localtests.append(test)
+context.add(test)
+
+test = SyncEvolutionTest("unittests", compile,
+                         "", options.shell,
+                         "SyncEvolution",
+                         [],
+                         "CLIENT_TEST_FAILURES="
+                         " "
+                         "CLIENT_TEST_SKIP="
+                         " "
+                         ,
+                         testPrefix=options.testprefix)
+localtests.append(test)
+context.add(test)
+
+# Implement the mapping from "evolution" to the new test names.
+if enabled.has_key("evolution"):
+    if enabled["evolution"] is None:
+        # Everything is enabled.
+        for test in localtests:
+            enable[test.name] = None
+    else:
+        # Specific tests are enabled.
+        evolution = enabled["evolution"].split(",")
+        localtestsEnabled = {}
+        for e in evolution:
+            if e:
+                for localtest in localtests:
+                    # Match "Client:source::eds_contact::testImport" against
+                    # "Client::source::eds_contact Client::source::eds_event ...".
+                    for defTest in localtest.tests.split():
+                        if defTest.startswith(e):
+                            localtestsEnabled.setdefault(localtest.name, []).append(e)
+                            break
+        for name, e in localtestsEnabled.iteritems():
+            enabled[name] = ','.join(e)
 
 # test-dbus.py itself doesn't need to run under valgrind, remove it...
 shell = re.sub(r'\S*valgrind\S*', '', options.shell)

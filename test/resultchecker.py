@@ -222,6 +222,10 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
     #list source test servers statically, we have no idea how to differenciate
     #automatically whether the server is a source test or sync test.
     sourceServers = ['evolution',
+                     'eds',
+                     'kde',
+                     'file',
+                     'unittests',
                      'evolution-prebuilt-build',
                      'yahoo',
                      'owndrive',
