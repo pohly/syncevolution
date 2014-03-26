@@ -292,19 +292,27 @@ class Action:
 
                             for path, entry in manual:
                                 source = os.path.join(path, entry)
+                                sourceDump = source + '.dump'
                                 target = os.path.join(home, os.path.relpath(path, context.home_template), entry)
                                 if entry == 'akonadi.db':
                                     # Replace XDG_DATA_HOME paths inside the sqlite3 db.
                                     # This runs *outside* of the chroot. It relies on
                                     # compatibility between the sqlite3 inside and outside the chroots.
-                                    db = subprocess.check_output(['sqlite3', source, '.dump'])
+                                    #
+                                    # Occasionally in parallel testing, 'sqlite3 .dump' produced
+                                    # incomplete output. Perhaps caused by parallel writes?
+                                    # To work around that, a static dump is used instead if found.
+                                    if os.path.isfile(sourceDump):
+                                        db = open(sourceDump).read()
+                                    else:
+                                        db = subprocess.check_output(['sqlite3', source, '.dump'])
                                     db = db.replace(os.path.expanduser('~/.local/share/'),
                                                     os.path.join(context.stripSchrootDir(home), 'data', ''))
                                     sqlite = subprocess.Popen(['sqlite3', target],
                                                               stdin=subprocess.PIPE)
                                     sqlite.communicate(db)
                                     if sqlite.returncode:
-                                        raise Exception("sqlite3 returned %d" % sqlite.returncode)
+                                        raise Exception("sqlite3 returned %d for the following input:\n%s" % (sqlite.returncode, db))
                                     db = subprocess.check_output(['sqlite3', target, '.dump'])
                                     log('target %s:\n%s', target, db)
                                 elif entry == 'akonadiserverrc':
