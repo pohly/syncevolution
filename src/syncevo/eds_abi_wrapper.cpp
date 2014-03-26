@@ -30,7 +30,8 @@
 using namespace std;
 namespace {
 
-std::string lookupDebug, lookupInfo;
+static std::string &getLookupDebug() { static std::string lookupDebug; return lookupDebug; }
+static std::string &getLookupInfo() { static std::string lookupInfo; return lookupInfo; }
 
 }
 
@@ -140,9 +141,9 @@ void *findSymbols(const char *libname, int minver, int maxver,
         }
     }
 
-    lookupInfo += info.str();
-    lookupDebug += info.str();
-    lookupDebug += debug.str();
+    getLookupInfo() += info.str();
+    getLookupDebug() += info.str();
+    getLookupDebug() += debug.str();
     return dlhandle;
 }
 
@@ -433,20 +434,30 @@ void EDSAbiWrapperInit()
         initialized = true;
     }
 
+    // Bind icaltimezone_get_component() and
+    // icaltzutil_fetch_timezone() to the version found (or not found,
+    // if not enabled) in our own executable. Without this, the
+    // dynamic linker on Ubuntu Saucy and Trusty prefers the versions
+    // from libical once it is loaded.
+    void *fetch = dlsym(RTLD_DEFAULT, "icaltzutil_fetch_timezone");
+    void *get = dlsym(RTLD_DEFAULT, "icaltimezone_get_component");
+    getLookupDebug() += SyncEvo::StringPrintf("icaltzutil_fetch_timezone = %p\n", fetch);
+    getLookupDebug() += SyncEvo::StringPrintf("icaltimezone_get_component = %p", get);
+
     static const char *soname = "libical.so.1";
     void *dlhandle = dlopen(soname, RTLD_GLOBAL|RTLD_LAZY);
     if (dlhandle) {
-        lookupInfo += "using ";
-        lookupInfo += soname;
-        lookupInfo += "\n";
+        getLookupInfo() += "using ";
+        getLookupInfo() += soname;
+        getLookupInfo() += "\n";
         EDSAbiHaveIcal1 = 1;
         dlclose(dlhandle);
     }
 }
 #endif // EVOLUTION_COMPATIBILITY
 
-extern "C" const char *EDSAbiWrapperInfo() { EDSAbiWrapperInit(); return lookupInfo.c_str(); }
-extern "C" const char *EDSAbiWrapperDebug() { EDSAbiWrapperInit(); return lookupDebug.c_str(); }
+extern "C" const char *EDSAbiWrapperInfo() { EDSAbiWrapperInit(); return getLookupInfo().c_str(); }
+extern "C" const char *EDSAbiWrapperDebug() { EDSAbiWrapperInit(); return getLookupDebug().c_str(); }
 
 #ifdef ENABLE_DBUS_TIMEOUT_HACK
 /**
