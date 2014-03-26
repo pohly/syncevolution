@@ -20,6 +20,7 @@
 #define EDS_ABI_WRAPPER_NO_REDEFINE 1
 #include <syncevo/eds_abi_wrapper.h>
 #include <syncevo/SyncContext.h>
+#include <syncevo/util.h>
 
 #include <string>
 #include <sstream>
@@ -115,10 +116,15 @@ void *findSymbols(const char *libname, int minver, int maxver,
         const char *symname = NULL;
         while (funcptr) {
             symname = va_arg(ap, const char *);
-            *funcptr = dlsym(dlhandle, symname);
+            // Don't overwrite address already found earlier. Needed
+            // for icaltimezone_get_component(), which may be
+            // overridden by ourselves.
             if (!*funcptr) {
-                debug << symname << " not found" << std::endl;
-                allfound = false;
+                *funcptr = dlsym(dlhandle, symname);
+                if (!*funcptr) {
+                    debug << symname << " not found" << std::endl;
+                    allfound = false;
+                }
             }
             funcptr = va_arg(ap, void **);
         }
@@ -178,6 +184,14 @@ extern "C" void EDSAbiWrapperInit()
     } else {
         initialized = true;
     }
+
+    // Bind icaltimezone_get_component() to the version found (or not found,
+    // if internal-icaltz not configured) in our own executable.
+    void *get = dlsym(RTLD_DEFAULT, "icaltimezone_get_component");
+    getLookupDebug() += SyncEvo::StringPrintf("icaltimezone_get_component = %p", get);
+#if defined(ENABLE_ECAL) || defined(ENABLE_ICAL)
+    EDSAbiWrapperSingleton.icaltimezone_get_component = (icalcomponent *(*)(icaltimezone *))get;
+#endif
 
 # ifdef HAVE_EDS
     edshandle =
