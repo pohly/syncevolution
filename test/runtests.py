@@ -1855,6 +1855,7 @@ syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
                          "--daemon-log", "syncevohttp.log",
                          "--wait-for-daemon-output", "syncevo-http:.listening.on.port.<httpport>",
                          os.path.join(compile.installdir, "usr", "bin", "syncevo-http-server"),
+                         "--debug",
                          "http://127.0.0.1:<httpport>/syncevolution",
                          "--",
                          options.testprefix])
