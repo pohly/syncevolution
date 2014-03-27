@@ -690,6 +690,14 @@ class DBusUtil(Timeout):
             # allow debugger to run as long as it is needed
             DBusUtil.pserver.communicate()
 
+        # Mark the end of the test in the dbus log. Relevant for
+        # checking the dbus log, because killing processes may distort
+        # the result (for example, in testAutoSyncNoNetworkManager, some sync sessions
+        # may still be running now and will cause unexpected notifications to be emitted
+        # when we kill syncevo-dbus-helper).
+        eotest = '---------------- end of test --------------------'
+        logging.log(eotest)
+
         # Find and kill all sub-processes except for dbus-monitor:
         # first try SIGTERM, then if they don't respond, SIGKILL. The
         # latter is an error. How much time we allow them between
@@ -746,7 +754,9 @@ class DBusUtil(Timeout):
         runTestDBusCheck = getattr(self, 'runTestDBusCheck', None)
         if runTestDBusCheck:
             try:
-                runTestDBusCheck(self, monitorout)
+                # Only pass the output from the test itself to the check.
+                # The rest is only relevant for debugging.
+                runTestDBusCheck(self, monitorout.split(eotest)[0])
             except:
                 # only append report if not part of some other error below
                 result.errors.append((self,
