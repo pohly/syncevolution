@@ -300,6 +300,33 @@
    fun:g_module_open
 }
 
+# ==25878== Conditional jump or move depends on uninitialised value(s)
+# ==25878==    at 0x4019A91: index (strchr.S:40)
+# ==25878==    by 0x4007DED: expand_dynamic_string_token (dl-load.c:425)
+# ==25878==    by 0x4007FA4: fillin_rpath (dl-load.c:495)
+# ==25878==    by 0x4008A3D: _dl_init_paths (dl-load.c:872)
+# ==25878==    by 0x4002F72: dl_main (rtld.c:1347)
+# ==25878==    by 0x4017564: _dl_sysdep_start (dl-sysdep.c:249)
+# ==25878==    by 0x4004CF7: _dl_start (rtld.c:332)
+# ==25878==    by 0x40012D7: ??? (in /lib/x86_64-linux-gnu/ld-2.19.so)
+# ==25878==    by 0x2: ???
+# ==25878==    by 0xFFEFFF92A: ???
+# ==25878==    by 0xFFEFFF938: ???
+# ==25878==    by 0xFFEFFF95B: ???
+# ==25878== 
+#
+# First seen on Ubuntu Trusty after introducing icaltzutil_fetch_timezone()
+# in the main executable. Perhaps related? Not tested.
+{
+   dlstart
+   Memcheck:Cond
+   fun:index
+   fun:expand_dynamic_string_token
+   ...
+   fun:_dl_start
+   obj:*/ld-2.19.so
+}
+
 # ==9785== Thread 2:
 # ==9785== Invalid free() / delete / delete[]
 # ==9785==    at 0x401D0CA: free (vg_replace_malloc.c:233)
@@ -1018,6 +1045,186 @@
    ...
    fun:g_thread_proxy
    fun:start_thread
+}
+
+# ==658== 5,184 (24 direct, 5,160 indirect) bytes in 1 blocks are definitely lost in loss record 4,621 of 4,713
+# ==658==    at 0x4C274A0: malloc (vg_replace_malloc.c:291)
+# ==658==    by 0x8815DC0: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x882B93D: g_slice_alloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x882BE7D: g_slice_alloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x80DE5EC: _g_dbus_worker_close (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x80DE676: _g_dbus_worker_stop (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x80CA9AE: g_dbus_connection_dispose (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x858BA6B: g_object_unref (in /usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==658==    by 0xD03490: SyncEvo::LocalTransportChild::~LocalTransportChild() (intrusive_ptr.hpp:97)
+# ==658==    by 0x873535: boost::detail::sp_counted_base::release() (sp_counted_base_gcc_x86.hpp:146)
+# ==658==    by 0xCFB9C5: SyncEvo::LocalTransportAgent::shutdown() (shared_count.hpp:371)
+# ==658==    by 0xC7F96E: SyncEvo::SyncContext::doSync() (SyncContext.cpp:4341)
+# ==658==    by 0xC890E7: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3422)
+# ==658==    by 0x8799E2: SyncEvo::TestEvolution::doSync(int const*, std::string const&, SyncEvo::SyncOptions const&) (client-test-app.cpp:431)
+# ==658==    by 0xA7C131: SyncEvo::SyncTests::doSync(SyncEvo::SyncOptions const&) (ClientTest.cpp:5949)
+# ==658==    by 0xA8D6B4: SyncEvo::SyncTests::doSync(char const*, SyncEvo::SyncOptions const&) (ClientTest.h:890)
+# ==658==    by 0xA8D846: SyncEvo::SyncTests::doSync(char const*, int, char const*, SyncEvo::SyncOptions const&) (ClientTest.h:895)
+# ==658==    by 0x9FA026: SyncEvo::SyncTests::refreshClient(SyncEvo::SyncOptions) (ClientTest.cpp:3025)
+# ==658==    by 0xA51F3B: SyncEvo::SyncTests::testItems() (ClientTest.cpp:4289)
+# ==658==    by 0xAE10DD: CppUnit::TestCaller<SyncEvo::SyncTests>::runTest() (TestCaller.h:166)
+# ==658==    by 0x79D1241: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79C7F8E: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79CE969: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D6EA4: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::string const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D0FC1: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D6849: CppUnit::TestResult::runTest(CppUnit::Test*) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D8A48: CppUnit::TestRunner::run(CppUnit::TestResult&, std::string const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79DAB29: CppUnit::TextTestRunner::run(std::string, bool, bool, bool) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0xAE42CB: main (client-test-main.cpp:348)
+# ==658== 
+#
+# Seen after updating to glib 2.38.2-5 on Debian Testing.
+{
+   g_dbus_connection_dispose + worker
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:_g_dbus_worker_close
+   fun:_g_dbus_worker_stop
+   fun:g_dbus_connection_dispose
+}
+
+# ==658== 53,621 (1,512 direct, 52,109 indirect) bytes in 7 blocks are definitely lost in loss record 4,703 of 4,713
+# ==658==    at 0x4C29590: calloc (vg_replace_malloc.c:618)
+# ==658==    by 0x8815E18: g_malloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x80DE31C: _g_dbus_worker_new (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x80D26CE: initable_init (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x806A6F9: g_initable_new_valist (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x806A7DB: g_initable_new (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x80D0B64: g_dbus_connection_new_sync (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x80E3F0B: on_run (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x10683CFB: ffi_call_unix64 (in /usr/lib/x86_64-linux-gnu/libffi.so.6.0.1)
+# ==658==    by 0x1068362B: ffi_call (in /usr/lib/x86_64-linux-gnu/libffi.so.6.0.1)
+# ==658==    by 0x8587DD4: g_cclosure_marshal_generic_va (in /usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==658==    by 0x8587366: _g_closure_invoke_va (in /usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==658==    by 0x859FDF7: g_signal_emit_valist (in /usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==658==    by 0x85A0A51: g_signal_emit (in /usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==658==    by 0x808DAFA: g_threaded_socket_service_func (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==658==    by 0x8835A4B: g_thread_pool_thread_proxy (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x8835094: g_thread_proxy (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x9A7B061: start_thread (pthread_create.c:312)
+# ==658==    by 0xA592A3C: clone (clone.S:111)
+# ==658==
+#
+# Seen after updating to glib 2.38.2-5 on Debian Testing.
+{
+   g_dbus_connection_new_sync + worker
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:_g_dbus_worker_new
+   ...
+   fun:g_dbus_connection_new_sync
+}
+
+# ==658== Syscall param rt_sigaction(act->sa_flags) points to uninitialised byte(s)
+# ==658==    at 0x9A8298A: __libc_sigaction (sigaction.c:64)
+# ==658==    by 0x880D312: unref_unix_signal_handler_unlocked (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x880D38F: g_child_watch_finalize (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0x880D975: g_source_unref_internal (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==658==    by 0xBB6D57: SyncEvo::ForkExecParent::~ForkExecParent() (ForkExec.cpp:136)
+# ==658==    by 0xBBE671: boost::detail::sp_counted_impl_p<SyncEvo::ForkExecParent>::dispose() (checked_delete.hpp:34)
+# ==658==    by 0x873535: boost::detail::sp_counted_base::release() (sp_counted_base_gcc_x86.hpp:146)
+# ==658==    by 0xCFB973: SyncEvo::LocalTransportAgent::shutdown() (shared_count.hpp:371)
+# ==658==    by 0xC7F96E: SyncEvo::SyncContext::doSync() (SyncContext.cpp:4341)
+# ==658==    by 0xC890E7: SyncEvo::SyncContext::sync(SyncEvo::SyncReport*) (SyncContext.cpp:3422)
+# ==658==    by 0x8799E2: SyncEvo::TestEvolution::doSync(int const*, std::string const&, SyncEvo::SyncOptions const&) (client-test-app.cpp:431)
+# ==658==    by 0xA7C131: SyncEvo::SyncTests::doSync(SyncEvo::SyncOptions const&) (ClientTest.cpp:5949)
+# ==658==    by 0xA8D6B4: SyncEvo::SyncTests::doSync(char const*, SyncEvo::SyncOptions const&) (ClientTest.h:890)
+# ==658==    by 0xA8D846: SyncEvo::SyncTests::doSync(char const*, int, char const*, SyncEvo::SyncOptions const&) (ClientTest.h:895)
+# ==658==    by 0x9F8326: SyncEvo::SyncTests::deleteAll(SyncEvo::SyncTests::DeleteAllMode) (ClientTest.cpp:2969)
+# ==658==    by 0xA518B9: SyncEvo::SyncTests::testItems() (ClientTest.cpp:4279)
+# ==658==    by 0xAE10DD: CppUnit::TestCaller<SyncEvo::SyncTests>::runTest() (TestCaller.h:166)
+# ==658==    by 0x79D1241: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79C7F8E: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79CE969: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D6EA4: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::string const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D0FC1: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D6849: CppUnit::TestResult::runTest(CppUnit::Test*) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79D8A48: CppUnit::TestRunner::run(CppUnit::TestResult&, std::string const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0x79DAB29: CppUnit::TextTestRunner::run(std::string, bool, bool, bool) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.1)
+# ==658==    by 0xAE42CB: main (client-test-main.cpp:348)
+# ==658==  Address 0xffeffc798 is on thread 1's stack
+# ==658== 
+# glib 2.38.2-5, already fixed later glib.
+{
+   sigaction in glib
+   Memcheck:Param
+   rt_sigaction(act->sa_flags)
+   ...
+   fun:unref_unix_signal_handler_unlocked
+}
+{
+   sigaction in glib, II
+   Memcheck:Param
+   rt_sigaction(act->sa_restorer)
+   ...
+   fun:unref_unix_signal_handler_unlocked
+}
+
+# ==20309== 16 bytes in 1 blocks are definitely lost in loss record 1,731 of 8,896
+# ==20309==    at 0x4C274A0: malloc (vg_replace_malloc.c:291)
+# ==20309==    by 0x8815DC0: g_malloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x882B93D: g_slice_alloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x882BE7D: g_slice_alloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x880D669: get_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x8810424: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x8810877: g_main_context_iterate.isra.24 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x881091B: g_main_context_iteration (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x8810958: glib_worker_main (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x8835094: g_thread_proxy (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x9A7B061: start_thread (pthread_create.c:312)
+# ==20309==    by 0xA592A3C: clone (clone.S:111)
+# ==20309==
+#
+# Seen after updating to glib 2.38.2-5 on Debian Testing.
+{
+   glib thread, dispatch
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   fun:g_slice_alloc
+   ...
+   fun:g_main_context_dispatch
+   ...
+   fun:glib_worker_main
+}
+
+# ==20309== 2,032 bytes in 1 blocks are definitely lost in loss record 8,734 of 8,896
+# ==20309==    at 0x4C29590: calloc (vg_replace_malloc.c:618)
+# ==20309==    by 0x8815E18: g_malloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x87E2BC0: thread_memory_from_self.part.12 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x882BA84: g_slice_alloc (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x882BE7D: g_slice_alloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x880E4D3: g_source_new (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x88111E8: g_timeout_source_new (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x80F9C4D: ik_source_check (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.3800.2)
+# ==20309==    by 0x8810290: g_main_context_check (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x88107AA: g_main_context_iterate.isra.24 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x881091B: g_main_context_iteration (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x8810958: glib_worker_main (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x8835094: g_thread_proxy (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==20309==    by 0x9A7B061: start_thread (pthread_create.c:312)
+# ==20309==    by 0xA592A3C: clone (clone.S:111)
+# ==20309== 
+#
+# Seen after updating to glib 2.38.2-5 on Debian Testing.
+{
+   glib thread, ik_source_check
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:g_source_new
+   ...
+   fun:ik_source_check
+   ...
+   fun:glib_worker_main
 }
 
 # ==24097== 596 (192 direct, 404 indirect) bytes in 1 blocks are definitely lost in loss record 1,605 of 1,743
