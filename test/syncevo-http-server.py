@@ -472,7 +472,9 @@ syncevo-http-server itself is installed""")
     else:
         root = logging.getLogger()
         ch = logging.StreamHandler()
-        formatter = logging.Formatter("[%(levelname)s] %(name)s: %(message)s")
+        formatter = logging.Formatter("[%(levelname)s" +
+                                      (level == logging.DEBUG and " %(asctime)s" or "") +
+                                      "] %(name)s: %(message)s")
         ch.setFormatter(formatter)
         root.addHandler(ch)
         if level == None:
