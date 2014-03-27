@@ -586,7 +586,21 @@ class DBusUtil(Timeout):
         else:
             self.pdlt = None
 
-        if debugger:
+        # Sanity check: must not have running syncevo-dbus-server.
+        # Perhaps the D-Bus daemon has not noticed that the previous owner
+        # is gone. Wait a bit.
+        start = time.time()
+        startServer = True
+        while bus.name_has_owner('org.syncevolution'):
+            if time.time() - start > 60:
+                startServer = False
+                break
+            logging.printf('There is a running syncevo-dbus-server?!')
+            time.sleep(1)
+
+        if not startServer:
+            logging.printf('Not starting syncevo-dbus-server, org.syncevolution is not available.')
+        elif debugger:
             print "\n%s: %s\n" % (self.id(), self.shortDescription())
             if env.get("HOME") != os.environ.get("HOME") and \
                     os.path.exists(os.path.join(os.environ.get("HOME"), ".gdbinit")):
@@ -620,9 +634,10 @@ class DBusUtil(Timeout):
         while self.isServerRunning() and not bus.name_has_owner('org.syncevolution'):
             time.sleep(1)
         # In addition, ensure that it is fully running by calling one method.
-        dbus.Interface(bus.get_object('org.syncevolution',
-                                      '/org/syncevolution/Server'),
-                       'org.syncevolution.Server').GetVersions()
+        if self.isServerRunning():
+            dbus.Interface(bus.get_object('org.syncevolution',
+                                          '/org/syncevolution/Server'),
+                           'org.syncevolution.Server').GetVersions()
 
         # pserver.pid is not necessarily the pid of syncevo-dbus-server.
         # It might be the child of the pserver process.
@@ -687,7 +702,9 @@ class DBusUtil(Timeout):
             print "   ", error
             result.errors.append((self, error))
 
-        if debugger:
+        if not startServer:
+            serverout = '<not started>'
+        elif debugger:
             serverout = '<see console>'
         else:
             serverout = open(syncevolog).read()
@@ -997,6 +1014,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
     def serverPid(self):
         """PID of syncevo-dbus-server, None if not running. Works regardless whether it is
         started directly or with a wrapper script like valgrindcheck.sh."""
+        self.assertTrue(DBusUtil.pserver)
         res = self.serverExecutableHelper(DBusUtil.pserver.pid)
         self.assertTrue(res)
         return res[1]
