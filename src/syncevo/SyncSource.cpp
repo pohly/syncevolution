@@ -343,7 +343,7 @@ public:
             std::string modname;
             size_t offset = basename.rfind('-');
             if (offset != basename.npos) {
-                modname = basename.substr(offset);
+                modname = basename.substr(0, offset);
             } else {
                 modname = basename;
             }
