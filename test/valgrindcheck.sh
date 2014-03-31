@@ -14,9 +14,16 @@
 # with valgrind.<pid of shell>.<current process>.out as default.
 
 
-LOGPARAM=${VALGRIND_LOG:-valgrind.p$$.c%p.out}
-# more than one file might get written
-LOGFILES=${VALGRIND_LOG:-valgrind.p$$.*.out}
+if [ "$VALGRIND_LOG" ]; then
+    LOGPARAM=$VALGRIND_LOG
+    LOGFILES=$VALGRIND_LOG
+    CUSTOM_LOGPARAM=yes
+else
+    LOGPARAM=$(pwd)/valgrind.p$$.c%p.out
+    # More than one file might get written, use wildcard.
+    LOGFILES=$(pwd)/valgrind.p$$.*.out
+    CUSTOM_LOGPARAM=no
+fi
 
 trap "cat $LOGFILES >&2 2>/dev/null; rm -f $LOGFILES" EXIT
 
@@ -27,7 +34,7 @@ trap "cat $LOGFILES >&2 2>/dev/null; rm -f $LOGFILES" EXIT
 # kill all valgrind processes, because there might be other, longer
 # running processes that need to continue.
 valgrindProcesses () {
-    if [ $LOGPARAM = "valgrind.p$$.c%p.out" ]; then
+    if [ $CUSTOM_LOGPARAM = "no" ]; then
         for file in $LOGFILES; do
             pid=`echo $file | perl -p -e 's/.*valgrind\.p\d+\.c(\d+).*/$1/'`
             echo $pid
