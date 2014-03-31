@@ -1,3 +1,93 @@
+SyncEvolution 1.4 -> 1.4.1, 31.03.2014
+======================================
+
+The first bug fix release in the 1.4 series addresses some issues which
+occurred on some systems.
+
+Details:
+
+* EDS: only load one backend plugin of each kind
+
+  SyncEvolution was meant to load the syncecal or syncebook shared object
+  which uses the most recent libraries (libical, libecal/libebook) on
+  the system and then stop loooking for alternatives. Due to a string
+  handling bug the check for already backends always found nothing,
+  leading to multiple conflicting backends loaded on some systems (for
+  example, those with libical0 and libical1 installed).
+
+  If that happened, the backend became unusable.
+
+* ical: workaround for libical 1.0 builtin timezone change
+
+  libical 1.0 started to return VTIMEZONE definitions with multiple
+  absolute transition times instead of RRULEs. This causes problems when
+  exchanging data with peers (see
+  https://sourceforge.net/p/freeassociation/bugs/95/).
+
+  In SyncEvolution, this affected sending an event using New Zealand
+  time in vCalendar 1.0 format to a phone, because the internal,
+  out-dated definition of the time zone in libsynthesis was used as
+  fallback when loading RRULE-based timezone definitions from libical
+  failed (see "[SyncEvolution] Some events showing wrong time on
+  phone"). It might also affect exchanging data with CalDAV peers (not
+  tested).
+
+  The workaround is to include the original code from libical.
+
+* dbus-session.sh: create XDG_RUNTIME_DIR
+
+  More recent distros (for example, Ubuntu Saucy) rely on
+  XDG_RUNTIME_DIR. Each time dbus-session.sh runs, it must
+  ensure that the runtime dir exists and is empty.
+
+  This was a problem when trying to run activesyncd + SyncEvolution
+  on a headless Ubuntu Saucy server (see FDO #76273).
+
+* Akonadi: support KDE Notes, enhanced "database" check
+
+  The KDE Notes resources store items under a different MIME type than the one
+  used in AKonadi (see "[Kde-pim] note format"). SyncEvolution use the same type
+  as Akonadi and thus did not find existing KDE Notes resources.
+
+  To support both while KDE and Akonadi transition to the same type,
+  SyncEvolution now looks for notes resources using both MIME types and accepts
+  both kinds of items when reading. When writing, SyncEvolution picks the MIME
+  type that is supported by the resource, which hopefully avoids confusing the
+  KDE app using the resource (untested).
+
+  As a positive side effect, the "database" value used for opening a resource is
+  now checked more thoroughly. Non-existent resources and the type mismatches
+  like pointing a "kde-contacts" backend to a calendar resource are now detected
+  early.
+
+* Akonadi: ensure that UID is set (FDO #74342)
+
+  Akonadi resources do not enforce iCalendar 2.0 semantic like
+  "each VEVENT must have a UID" (see "[Kde-pim] iCalendar semantic").
+  When receiving an event from a peer which itself does not enforce
+  that semantic (Funambol, vCalendar 1.0 based phones), then we
+  need to generate a UID, otherwise KOrganizer will ignore the
+  imported event.
+
+* Akonadi: avoid threading problem in HTTP server mode (FDO #75672)
+
+  When used as storage in a server, Akonadi got called in a background thread
+  that gets created to handle slow initialization of sources and preventing
+  ensuing timeouts in HTTP clients (probably not needed for Akonadi itself,
+  but may still be useful when combining it with other sources).
+
+  Akonadi cannot be used like that, leading to false "Akonadi not running"
+  errors or (if one got past that check) failing item operations.
+
+* autotools: Add QtCore include path to KDEPIM_CFLAGS (FDO #75670)
+
+  This fixes an issue where configure fails to find Akonadi when
+  test programs do not compile because QString is not found.
+
+* Enhanced testing again: faster execution, less false negatives
+  under load. Re-enabled testing of Akonadi.
+
+
 SyncEvolution 1.3.2 -> 1.4, 16.02.2014
 ======================================
 
