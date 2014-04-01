@@ -1370,6 +1370,32 @@ void WebDAVSource::storeServerInfos()
     }
 }
 
+void WebDAVSource::checkPostSupport()
+{
+    if (m_postPath.wasSet()) {
+        return;
+    }
+
+    static const ne_propname getaddmember[] = {
+        { "DAV:", "add-member" },
+        { NULL, NULL }
+    };
+    Timespec deadline = createDeadline();
+    Props_t davProps;
+    Neon::Session::PropfindPropCallback_t callback =
+        boost::bind(&WebDAVSource::openPropCallback,
+                    this, boost::ref(davProps), _1, _2, _3, _4);
+    SE_LOG_DEBUG(NULL, "check POST support of %s", m_calendar.m_path.c_str());
+    m_session->propfindProp(m_calendar.m_path, 0, getaddmember, callback, deadline);
+    // Fatal communication problems will be reported via exceptions.
+    // Once we get here, invalid or incomplete results can be
+    // treated as "don't have revision string".
+    m_postPath = extractHREF(davProps[m_calendar.m_path]["DAV::add-member"]);
+    SE_LOG_DEBUG(NULL, "%s POST support: %s",
+                 m_calendar.m_path.c_str(),
+                 m_postPath.empty() ? "<none>" : m_postPath.get().c_str());
+}
+
 /**
  * See https://trac.calendarserver.org/browser/CalendarServer/trunk/doc/Extensions/caldav-ctag.txt
  */
@@ -1677,8 +1703,20 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
     std::string rev;
     InsertItemResultState state = ITEM_OKAY;
 
+    // By default use PUT. Change that to POST when creating new items
+    // and server supports it. That avoids the problem of having to
+    // choose a path and figuring out whether the server really used it.
+    static const char putOperation[] = "PUT";
+    static const char postOperation[] = "POST";
+    const char *operation = putOperation;
+    if (uid.empty()) {
+        checkPostSupport();
+        if (!m_postPath.empty()) {
+            operation = postOperation;
+        }
+    }
     Timespec deadline = createDeadline(); // no resending if left empty
-    m_session->startOperation("PUT", deadline);
+    m_session->startOperation(operation, deadline);
     std::string result;
     int counter = 0;
  retry:
@@ -1689,7 +1727,8 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
         // catch unexpected conflicts via If-None-Match: *.
         std::string buffer;
         const std::string *data = createResourceName(item, buffer, new_uid);
-        Neon::Request req(*m_session, "PUT", luid2path(new_uid),
+        Neon::Request req(*m_session, operation,
+                          operation == postOperation ? m_postPath : luid2path(new_uid),
                           *data, result);
         // Clearing the idempotent flag would allow us to clearly
         // distinguish between a connection error (no changes made
@@ -1707,12 +1746,12 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
 
         // For this to work we must allow the server to overwrite
         // an item that we might have created before. Don't allow
-        // that in the first attempt.
-        if (counter == 1) {
+        // that in the first attempt. Only relevant for PUT.
+        if (operation != postOperation && counter == 1) {
             req.addHeader("If-None-Match", "*");
         }
         req.addHeader("Content-Type", contentType().c_str());
-        static const std::set<int> expected = boost::assign::list_of(412);
+        static const std::set<int> expected = boost::assign::list_of(412)(403);
         if (!req.run(&expected)) {
             goto retry;
         }
@@ -1725,6 +1764,39 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
             break;
         case 201:
             // created
+            break;
+        case 403:
+            // For a POST, this might be a UID conflict that we didn't detect
+            // ourselves. Happens for VJOURNAL and the testInsertTwice test
+            // when testing with Apple Calendar server. It then returns:
+            // Content-Type: text/xml
+            // Body:
+            // <?xml version='1.0' encoding='UTF-8'?>
+            // <error xmlns='DAV:'>
+            //    <no-uid-conflict xmlns='urn:ietf:params:xml:ns:caldav'>
+            //    <href xmlns='DAV:'>/calendars/__uids__/user01/tasks/c5490e736b6836c4d353d98bc78b3a3d.ics</href>
+            //    </no-uid-conflict>
+            //    <error-description xmlns='http://twistedmatrix.com/xml_namespace/dav/'>UID already exists</error-description>
+            // </error>
+            //
+            // Handling that would be nice (see FDO #77424), but for now we just
+            // do the same as for "Precondition Failed" and search for the UID.
+            if (operation == postOperation) {
+                try {
+                    std::string uid = extractUID(item);
+                    if (!uid.empty()) {
+                        std::string luid = findByUID(uid, deadline);
+                        return InsertItemResult(luid, "", ITEM_NEEDS_MERGE);
+                    }
+                } catch (...) {
+                    // Ignore the error and report the original problem below.
+                    Exception::log();
+                }
+            }
+            SE_THROW_EXCEPTION_STATUS(TransportStatusException,
+                                      std::string("unexpected status for PUT: ") +
+                                      Neon::Status2String(req.getStatus()),
+                                      SyncMLStatus(req.getStatus()->code));
             break;
         case 412: {
             // "Precondition Failed": our only precondition is the one about
