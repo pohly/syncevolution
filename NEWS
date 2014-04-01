@@ -1,3 +1,94 @@
+SyncEvolution 1.4.1 -> 1.4.99.1, 01.04.2014
+===========================================
+
+1.4.99.1 includes several PIM Manager improvements plus some unrelated
+fixes.
+
+Details:
+
+* LogRedirect: safeguard against memory corruption
+
+  When aborting, our AbortHandler gets called to close down logging.
+  This may involve memory allocation, which is unsafe. In FDO #76375, a
+  deadlock on a libc mutex was seen.
+
+  To ensure that the process shuts down anyway, install an alarm and give
+  the process five seconds to shut down before the SIGALRM signal will kill
+  it.
+
+* PBAP: Suspend/ResumeSync() (FDO #72112)
+
+  By default, the new API freezes a sync by stopping to consume data on the
+  local side of the sync.
+
+  In addition, the information that the sync is freezing is now also handed
+  down to the transport and all sources. In the case of PBAP caching, the local
+  transport notifies the child where the PBAP source then uses Bluez
+  5.15 Transfer1.Suspend/Resume to freeze/thaw the actual OBEX transfer.
+
+  If that fails (for example, not implemented because Bluez is too old
+  or the transfer is still queueing), then the transfer gets cancelled
+  and the entire sync fails. This is desirable for PBAP caching and
+  Bluetooth because a failed sync can easily be recovered from (just
+  start it again) and the overall goal is to free up Bluetooth bandwidth
+  quickly.
+
+* PBAP: transfer data via pipe (part of FDO #72112)
+
+  The main advantage is that processed data can be discarded
+  immediately. When using a plain file, the entire address book must be
+  stored in it.
+
+  The drawback is that obexd does not react well to a full pipe. It
+  simply gets stuck in a blocking write(); in other words, all obexd
+  operations get frozen and obexd stops responding on D-Bus.
+
+* PIM: enhanced progress notifications (FDO #72114)
+
+  This adds GetPeerStatus() and "progress" events. Progress is reported based
+  on the "item received" Synthesis event and the total item count. A modified
+  libsynthesis is needed where the SyncML binfile client on the target side of
+  the local sync actually sends the total item count (via NumberOfChanges).
+  This cannot be done yet right at the start of the sync, only the second SyncML
+  message will have it. That is acceptable, because completion is reached very
+  quickly anyway for syncs involving only one message.
+
+  At the moment, SyncContext::displaySourceProgress() holds back "item
+  received" events until a different event needs to be emitted. Progress
+  reporting might get more fine-grained when adding allowing held back
+  events to be emitted at a fixed rate, every 0.1s. This is not done yet
+  because it seems to work well enough already.
+
+  For testing and demonstration purposes, sync.py gets command line
+  arguments for setting progress frequency and showing progress either
+  via listening to signals or polling.
+
+* PIM: add SyncPeerWithFlags() and 'pbap-sync' flag (FDO #70950)
+
+  The is new API and flag grant control over the PBAP sync mode.
+
+* D-Bus: use streams for direct IPC with GIO
+
+  When using GIO, it is possible to avoid the DBusServer listening on a
+  publicly accessible address. Connection setup becomes more reliable,
+  too, because the D-Bus server side can detect that a child died
+  because the connection will be closed.
+
+  When using libdbus, the traditional server/listen and client/connect
+  model is still used.
+
+* sync output: hide "<source>: started" INFO messages
+
+  These messages get printed at the start of processing each
+  SyncML message. This is not particularly useful and just
+  adds noise to the output.
+
+* signon: fix build
+
+  Static build was broken for gSSO and UOA (wrong path name to .la file)
+  and gSSO was not enabled properly (wrong condition check).
+
+
 SyncEvolution 1.4 -> 1.4.1, 31.03.2014
 ======================================
 
