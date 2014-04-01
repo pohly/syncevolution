@@ -1392,6 +1392,7 @@ std::string WebDAVSource::databaseRevision()
     Neon::Session::PropfindPropCallback_t callback =
         boost::bind(&WebDAVSource::openPropCallback,
                     this, boost::ref(davProps), _1, _2, _3, _4);
+    SE_LOG_DEBUG(NULL, "read ctag of %s", m_calendar.m_path.c_str());
     m_session->propfindProp(m_calendar.m_path, 0, getctag, callback, deadline);
     // Fatal communication problems will be reported via exceptions.
     // Once we get here, invalid or incomplete results can be
