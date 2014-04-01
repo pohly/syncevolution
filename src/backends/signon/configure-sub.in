@@ -10,7 +10,7 @@ AC_ARG_ENABLE(gsso,
 if test $enable_gsso = "yes"; then
     AC_DEFINE(USE_GSSO, 1, [use gSSO])
     # link into static executables, similar to a SyncSource
-    SYNCSOURCES="$SYNCSOURCES src/backends/gsso/providergsso.la"
+    SYNCSOURCES="$SYNCSOURCES src/backends/signon/providergsso.la"
     GOOGLE_METHOD="oauth"
     GOOGLE_MECHANISM="oauth2"
     AC_SUBST(GOOGLE_METHOD)
@@ -18,7 +18,7 @@ if test $enable_gsso = "yes"; then
 fi
 
 # conditional compilation in make
-AM_CONDITIONAL([USE_GSSO], [test "$use_gsso" = "yes"])
+AM_CONDITIONAL([USE_GSSO], [test "$enable_gsso" = "yes"])
 
 PKG_CHECK_MODULES(UOA, [libsignon-glib >= 1.7 libaccounts-glib >= 1.8], HAVE_UOA=yes, HAVE_UOA=no)
 
@@ -32,7 +32,7 @@ AC_ARG_ENABLE(uoa,
 if test $enable_uoa = "yes"; then
     AC_DEFINE(USE_UOA, 1, [use UOA])
     # link into static executables, similar to a SyncSource
-    SYNCSOURCES="$SYNCSOURCES src/backends/uoa/provideruoa.la"
+    SYNCSOURCES="$SYNCSOURCES src/backends/signon/provideruoa.la"
     GOOGLE_METHOD="oauth2"
     GOOGLE_MECHANISM="web_server"
     AC_SUBST(GOOGLE_METHOD)
