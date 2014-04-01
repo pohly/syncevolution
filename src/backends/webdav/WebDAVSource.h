@@ -228,14 +228,14 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
 
     /** information about certain paths (path->property->value)*/
     typedef std::map<std::string, std::map<std::string, std::string> > Props_t;
-    Props_t m_davProps;
 
     /** extract value from first <DAV:href>value</DAV:href>, empty string if not inside propval */
     std::string extractHREF(const std::string &propval);
     /** extract all <DAV:href>value</DAV:href> values from a set, empty if none */
     std::list<std::string> extractHREFs(const std::string &propval);
 
-    void openPropCallback(const Neon::URI &uri,
+    void openPropCallback(Props_t &davProps,
+                          const Neon::URI &uri,
                           const ne_propname *prop,
                           const char *value,
                           const ne_status *status);

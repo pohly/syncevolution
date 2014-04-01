@@ -773,9 +773,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
         bool errorIsFatal() { return m_candidates.empty() && !m_found; }
     } tried;
     std::string path = m_session->getURI().m_path;
+    Props_t davProps;
     Neon::Session::PropfindPropCallback_t callback =
         boost::bind(&WebDAVSource::openPropCallback,
-                    this, _1, _2, _3, _4);
+                    this, boost::ref(davProps), _1, _2, _3, _4);
 
     // With Yahoo! the initial connection often failed with 50x
     // errors.  Retrying individual requests is error prone because at
@@ -785,7 +786,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     // than the total configured timeout period.
     //
     // The PROPFIND with openPropCallback is idempotent, because it
-    // will just overwrite previously found information in m_davProps.
+    // will just overwrite previously found information in davProps.
     // Therefore resending is okay.
     Timespec finalDeadline = createDeadline(); // no resending if left empty
 
@@ -859,7 +860,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     }
                     Neon::Session::PropfindPropCallback_t callback =
                         boost::bind(&WebDAVSource::openPropCallback,
-                                    this, _1, _2, _3, _4);
+                                    this, boost::ref(davProps), _1, _2, _3, _4);
                     m_session->propfindProp(path, 0, NULL, callback, Timespec());
                 } catch (const Neon::FatalException &ex) {
                     throw;
@@ -895,7 +896,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             // http://lists.w3.org/Archives/Public/w3c-dist-auth/2005OctDec/0243.html
             // http://thread.gmane.org/gmane.comp.web.webdav.neon.general/717/focus=719
             m_session->forceAuthorization(m_settings->getAuthProvider());
-            m_davProps.clear();
+            davProps.clear();
             // Avoid asking for CardDAV properties when only using CalDAV
             // and vice versa, to avoid breaking both when the server is only
             // broken for one of them (like Google, which (temporarily?) sent
@@ -1012,20 +1013,20 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
         }
 
         if (success) {
-            Props_t::iterator pathProps = m_davProps.find(path);
-            if (pathProps == m_davProps.end()) {
+            Props_t::iterator pathProps = davProps.find(path);
+            if (pathProps == davProps.end()) {
                 // No reply for requested path? Happens with Yahoo Calendar server,
                 // which returns information about "/dav" when asked about "/".
                 // Move to that path.
-                if (!m_davProps.empty()) {
-                    pathProps = m_davProps.begin();
+                if (!davProps.empty()) {
+                    pathProps = davProps.begin();
                     string newpath = pathProps->first;
                     SE_LOG_DEBUG(NULL, "use properties for '%s' instead of '%s'",
                                  newpath.c_str(), path.c_str());
                     path = newpath;
                 }
             }
-            StringMap *props = pathProps == m_davProps.end() ? NULL : &pathProps->second;
+            StringMap *props = pathProps == davProps.end() ? NULL : &pathProps->second;
             bool isResult = false;
             if (props && typeMatches(*props)) {
                 isResult = true;
@@ -1121,12 +1122,12 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                         { "urn:ietf:params:xml:ns:carddav", "supported-address-data" },
                         { NULL, NULL }
                     };
-                    m_davProps.clear();
+                    davProps.clear();
                     m_session->propfindProp(path, 1,
                                             getContent() == "VCARD" ? carddav : caldav,
                                             callback, finalDeadline);
                     std::set<std::string> subs;
-                    BOOST_FOREACH(Props_t::value_type &entry, m_davProps) {
+                    BOOST_FOREACH(Props_t::value_type &entry, davProps) {
                         const std::string &sub = entry.first;
                         const std::string &subType = entry.second["DAV::resourcetype"];
                         // new candidates are:
@@ -1226,7 +1227,8 @@ std::list<std::string> WebDAVSource::extractHREFs(const std::string &propval)
     return res;
 }
 
-void WebDAVSource::openPropCallback(const Neon::URI &uri,
+void WebDAVSource::openPropCallback(Props_t &davProps,
+                                    const Neon::URI &uri,
                                     const ne_propname *prop,
                                     const char *value,
                                     const ne_status *status)
@@ -1239,8 +1241,8 @@ void WebDAVSource::openPropCallback(const Neon::URI &uri,
     name += ":";
     name += prop->name;
     if (value) {
-        m_davProps[uri.m_path][name] = value;
-        boost::trim_if(m_davProps[uri.m_path][name],
+        davProps[uri.m_path][name] = value;
+        boost::trim_if(davProps[uri.m_path][name],
                        boost::is_space());
     }
 }
@@ -1386,15 +1388,15 @@ std::string WebDAVSource::databaseRevision()
     contactServer();
 
     Timespec deadline = createDeadline();
+    Props_t davProps;
     Neon::Session::PropfindPropCallback_t callback =
         boost::bind(&WebDAVSource::openPropCallback,
-                    this, _1, _2, _3, _4);
-    m_davProps[m_calendar.m_path]["http://calendarserver.org/ns/:getctag"] = "";
+                    this, boost::ref(davProps), _1, _2, _3, _4);
     m_session->propfindProp(m_calendar.m_path, 0, getctag, callback, deadline);
     // Fatal communication problems will be reported via exceptions.
     // Once we get here, invalid or incomplete results can be
     // treated as "don't have revision string".
-    string ctag = m_davProps[m_calendar.m_path]["http://calendarserver.org/ns/:getctag"];
+    string ctag = davProps[m_calendar.m_path]["http://calendarserver.org/ns/:getctag"];
     return ctag;
 }
 
