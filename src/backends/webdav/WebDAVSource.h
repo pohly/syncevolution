@@ -282,7 +282,7 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
      * other, unrelated collections (a CalDAV collection must not
      * contain a CardDAV collection, for example)
      */
-    bool ignoreCollection(const StringMap &props) const;
+    bool isLeafCollection(const StringMap &props) const;
 
  protected:
     /**

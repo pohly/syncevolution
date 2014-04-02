@@ -1104,7 +1104,12 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (props) {
                     type = (*props)["DAV::resourcetype"];
                 }
-                if (type.find("<DAV:collection></DAV:collection>") != type.npos) {
+                bool isCollection = type.find("<DAV:collection></DAV:collection>") != type.npos;
+                if (isCollection && props && isLeafCollection(*props)) {
+                    // The goal here was to prevent diving into collections which are
+                    // known to not contain other relevant collections.
+                    SE_LOG_DEBUG(NULL, "skipping listing because collection cannot contain other relevant collections: %s", path.c_str());
+                } else if (isCollection) {
                     // List members and find new candidates.
                     // Yahoo! Calendar does not return resources contained in /dav/<user>/Calendar/
                     // if <allprops> is used. Properties must be requested explicitly.
@@ -1148,15 +1153,25 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                         // type (example: Apple Calendar Server "inbox" under
                         // calendar-home-set URL with type "CALDAV:schedule-inbox") requires
                         // knowledge not current provided by derived classes. TODO (?).
-                        if (tried.isNew(sub) &&
-                            subType.find("<DAV:collection></DAV:collection>") != subType.npos &&
-                            subType.find("<urn:ietf:params:xml:ns:caldavschedule-") == subType.npos &&
-                            subType.find("<http://calendarserver.org/ns/shared") == subType.npos &&
-                            (typeMatches(entry.second) || !ignoreCollection(entry.second))) {
+                        if (!tried.isNew(sub)) {
+                            SE_LOG_DEBUG(NULL, "skipping because already checked: %s", sub.c_str());
+                        } else if (subType.find("<DAV:collection></DAV:collection>") == subType.npos ||
+                                   subType.find("<urn:ietf:params:xml:ns:caldavschedule-") != subType.npos) {
+                            SE_LOG_DEBUG(NULL, "skipping because of wrong resourcetype: %s\n%s",
+                                         sub.c_str(),
+                                         subType.c_str());
+#if 0
+                            // Do not ignore shared collections. We might have read-write
+                            // access (for example, Google marks additional calendars as
+                            // 'shared').
+                        } else if (subType.find("<http://calendarserver.org/ns/shared") != subType.npos) {
+                            SE_LOG_DEBUG(NULL, "skipping because it is shared: %s", sub.c_str());
+#endif
+                        } else if (!typeMatches(entry.second)) {
+                            SE_LOG_DEBUG(NULL, "skipping because of wrong type: %s", sub.c_str());
+                        } else {
                             subs.insert(sub);
                             SE_LOG_DEBUG(NULL, "new candidate: %s", sub.c_str());
-                        } else {
-                            SE_LOG_DEBUG(NULL, "skipping: %s", sub.c_str());
                         }
                     }
 
@@ -1960,7 +1975,7 @@ std::string WebDAVSource::getLUID(Neon::Request &req)
     }
 }
 
-bool WebDAVSource::ignoreCollection(const StringMap &props) const
+bool WebDAVSource::isLeafCollection(const StringMap &props) const
 {
     // CardDAV and CalDAV both promise to not contain anything
     // unrelated to them
