@@ -18,7 +18,7 @@
  */
 
 #include <syncevo/PrefixConfigNode.h>
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
 
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -26,7 +26,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-PrefixConfigNode::PrefixConfigNode(const string prefix,
+PrefixConfigNode::PrefixConfigNode(const std::string prefix,
                                    const boost::shared_ptr<ConfigNode> &node) :
     m_prefix(prefix),
     m_node(node),
@@ -34,21 +34,21 @@ PrefixConfigNode::PrefixConfigNode(const string prefix,
 {
 }
 
-PrefixConfigNode::PrefixConfigNode(const string prefix,
+PrefixConfigNode::PrefixConfigNode(const std::string prefix,
                                    const boost::shared_ptr<const ConfigNode> &node) :
     m_prefix(prefix),
     m_readOnlyNode(node)
 {
 }
 
-InitStateString PrefixConfigNode::readProperty(const string &property) const
+InitStateString PrefixConfigNode::readProperty(const std::string &property) const
 {
     return m_readOnlyNode->readProperty(m_prefix + property);
 }
 
-void PrefixConfigNode::writeProperty(const string &property,
+void PrefixConfigNode::writeProperty(const std::string &property,
                                      const InitStateString &value,
-                                     const string &comment)
+                                     const std::string &comment)
 {
     m_node->writeProperty(m_prefix + property,
                           value,
@@ -61,8 +61,8 @@ void PrefixConfigNode::readProperties(ConfigProps &props) const
     m_readOnlyNode->readProperties(original);
 
     BOOST_FOREACH(const StringPair &prop, original) {
-        string key = prop.first;
-        string value = prop.second;
+        std::string key = prop.first;
+        std::string value = prop.second;
 
         if (boost::starts_with(key, m_prefix)) {
             props[key.substr(m_prefix.size())] = value;
@@ -75,14 +75,14 @@ void PrefixConfigNode::clear()
     ConfigProps original;
     m_readOnlyNode->readProperties(original);
     BOOST_FOREACH(const StringPair &prop, original) {
-        string key = prop.first;
+        std::string key = prop.first;
         if (boost::starts_with(key, m_prefix)) {
             m_node->removeProperty(key);
         }
     }
 }
 
-void PrefixConfigNode::removeProperty(const string &property)
+void PrefixConfigNode::removeProperty(const std::string &property)
 {
     m_node->removeProperty(m_prefix + property);
 }
@@ -90,7 +90,7 @@ void PrefixConfigNode::removeProperty(const string &property)
 void PrefixConfigNode::flush()
 {
     if (!m_node.get()) {
-        SyncContext::throwError(getName() + ": read-only, flushing not allowed");
+        Exception::throwError(SE_HERE, getName() + ": read-only, flushing not allowed");
     }
     m_node->flush();
 }

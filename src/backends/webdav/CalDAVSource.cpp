@@ -898,7 +898,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
     EventCache::iterator it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         // gone already
-        throwError(STATUS_NOT_FOUND, "deleting item: " + davLUID);
+        throwError(SE_HERE, STATUS_NOT_FOUND, "deleting item: " + davLUID);
         return "";
     }
     // use item as it is, load only if it is not going to be removed entirely
@@ -911,7 +911,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                          davLUID.c_str(),
                          SubIDName(subid).c_str(),
                          SubIDName(*event.m_subids.begin()).c_str());
-            throwError(STATUS_NOT_FOUND, "remove sub-item: " + SubIDName(subid) + " in " + davLUID);
+            throwError(SE_HERE, STATUS_NOT_FOUND, "remove sub-item: " + SubIDName(subid) + " in " + davLUID);
             return event.m_etag;
         } else {
             try {
@@ -991,7 +991,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
             }
         }
         if (!found) {
-            throwError(STATUS_NOT_FOUND, "remove sub-item: " + SubIDName(subid) + " in " + davLUID);
+            throwError(SE_HERE, STATUS_NOT_FOUND, "remove sub-item: " + SubIDName(subid) + " in " + davLUID);
             return event.m_etag;
         }
         event.m_subids.erase(subid);
@@ -1120,7 +1120,7 @@ CalDAVSource::Event &CalDAVSource::findItem(const std::string &davLUID)
 {
     EventCache::iterator it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
-        throwError(STATUS_NOT_FOUND, "finding item: " + davLUID);
+        throwError(SE_HERE, STATUS_NOT_FOUND, "finding item: " + davLUID);
     }
     return *it->second;
 }

@@ -199,7 +199,7 @@ void SQLiteContactSource::getSynthesisInfo(SynthesisInfo &info, XMLConfigFragmen
                 "        <use datatype='vCard21' mode='rw'/>\n";
         }
     } else {
-        throwError(string("configured MIME type not supported: ") + type);
+        throwError(SE_HERE, string("configured MIME type not supported: ") + type);
     }
  
 }
@@ -241,7 +241,7 @@ sysync::TSyError SQLiteContactSource::readItemAsKey(sysync::cItemID aID, sysync:
 
     sqliteptr contact(m_sqlite.prepareSQL("SELECT * FROM ABPerson WHERE ROWID = '%s';", uid.c_str()));
     if (m_sqlite.checkSQL(sqlite3_step(contact)) != SQLITE_ROW) {
-        throwError(STATUS_NOT_FOUND, string("contact not found: ") + uid);
+        throwError(SE_HERE, STATUS_NOT_FOUND, string("contact not found: ") + uid);
     }
 
     for (int i = 0; i<LAST_COL; i++) {

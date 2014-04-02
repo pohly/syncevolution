@@ -267,7 +267,7 @@ int main(int argc, char **argv)
         bool success = g_option_context_parse(opt_context, &argc, &argv, gerror);
         g_option_context_free(opt_context);
         if (!success) {
-            gerror.throwError("parsing command line options");
+            gerror.throwError(SE_HERE, "parsing command line options");
         }
         // if (!opt_server && opt_allow_anonymous) {
         // throw stdruntime_error("The --allow-anonymous option only makes sense when used with --server.");

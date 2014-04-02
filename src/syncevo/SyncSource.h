@@ -1315,7 +1315,7 @@ class SyncSourceBase {
      * @param action   a string describing the operation or object involved
      * @param error    the errno error code for the failure
      */
-    void throwError(const string &action, int error) SE_NORETURN;
+    void throwError(const SourceLocation &where, const string &action, int error) SE_NORETURN;
 
     /**
      * throw an exception after an operation failed and
@@ -1325,7 +1325,7 @@ class SyncSourceBase {
      *
      * @param action     a string describing what was attempted *and* how it failed
      */
-    void throwError(const string &failure) SE_NORETURN;
+    void throwError(const SourceLocation &where, const string &failure) SE_NORETURN;
 
     /**
      * throw an exception with a specific status code after an operation failed and
@@ -1336,7 +1336,7 @@ class SyncSourceBase {
      * @param status     a more specific status code; other throwError() variants use STATUS_FATAL
      * @param action     a string describing what was attempted *and* how it failed
      */
-    void throwError(SyncMLStatus status, const string &failure) SE_NORETURN;
+    void throwError(const SourceLocation &where, SyncMLStatus status, const string &failure) SE_NORETURN;
 
     /**
      * The Synthesis engine only counts items which are deleted by the
@@ -1855,7 +1855,7 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      *                     a specific URI.
      * @return description of the new database
      */
-    virtual Database createDatabase(const Database &database) { throwError("creating databases is not supported by backend " + getBackend()); return Database("", ""); }
+    virtual Database createDatabase(const Database &database) { throwError(SE_HERE, "creating databases is not supported by backend " + getBackend()); return Database("", ""); }
 
     /**
      * Removing a database primarily removes the meta data about the
@@ -1877,7 +1877,7 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * @param uri              unique identifier for the database
      * @param removeData       describes what to do about the database content
      */
-    virtual void deleteDatabase(const std::string &uri, RemoveData removeData) { throwError("deleting databases is not supported by backend " + getBackend()); }
+    virtual void deleteDatabase(const std::string &uri, RemoveData removeData) { throwError(SE_HERE, "deleting databases is not supported by backend " + getBackend()); }
 
     /**
      * Actually opens the data source specified in the constructor,

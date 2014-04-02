@@ -88,8 +88,7 @@ class SyncContext : public SyncConfig {
     boost::shared_ptr<UserInterface> m_userInterface;
 
     /**
-     * a pointer to the active SourceList instance for this context if one exists;
-     * used for error handling in throwError() on the iPhone
+     * a pointer to the active SourceList instance for this context if one exists
      */
     SourceList *m_sourceListPtr;
 
@@ -371,51 +370,6 @@ class SyncContext : public SyncConfig {
      * Start and end times of the check are also reported.
      */
     void checkStatus(SyncReport &report);
-
-    /**
-     * throws a StatusException with a local, fatal error with the given string
-     * or (on the iPhone, where exception handling is not
-     * supported by the toolchain) prints an error directly
-     * and aborts
-     *
-     * output format: <error>
-     *
-     * @param error     a string describing the error
-     */
-    static void throwError(const string &error) SE_NORETURN;
-
-    /**
-     * throw an exception with a specific status code after an operation failed and
-     * remember that this instance has failed
-     *
-     * output format: <failure>
-     *
-     * @param status     a more specific status code; other throwError() variants
-     *                   use STATUS_FATAL + sysync::LOCAL_STATUS_CODE, which is interpreted
-     *                   as a fatal local error
-     * @param action     a string describing what was attempted *and* how it failed
-     */
-    static void throwError(SyncMLStatus status, const string &failure) SE_NORETURN;
-
-    /**
-     * throw an exception after an operation failed and
-     * remember that this instance has failed
-     *
-     * output format: <action>: <error string>
-     *
-     * @Param action   a string describing the operation or object involved
-     * @param error    the errno error code for the failure
-     */
-    static void throwError(const string &action, int error) SE_NORETURN;
-
-    /**
-     * An error handler which prints the error message and then
-     * stops the program. Never returns.
-     *
-     * The API was chosen so that it can be used as libebook/libecal
-     * "backend-dies" signal handler.
-     */
-    static void fatalError(void *object, const char *error) SE_NORETURN;
 
     /**
      * When using Evolution this function starts a background thread

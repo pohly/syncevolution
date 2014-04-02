@@ -239,7 +239,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
     GErrorCXX gerror;
     AgAccountCXX account(ag_manager_load_account(manager, accountID, gerror), TRANSFER_REF);
     if (!account) {
-        gerror.throwError(StringPrintf("loading account with ID %d from %s failed",
+        gerror.throwError(SE_HERE, StringPrintf("loading account with ID %d from %s failed",
                                        accountID,
                                        username.c_str()));
     }
@@ -312,7 +312,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
         SYNCEVO_GLIB_CALL_SYNC(res, gerror, ag_account_store_async,
                                account, NULL);
         if (!res) {
-            gerror.throwError("failed to store account");
+            gerror.throwError(SE_HERE, "failed to store account");
         }
 
         authData = AgAuthDataCXX::steal(ag_account_service_get_auth_data(accountService));

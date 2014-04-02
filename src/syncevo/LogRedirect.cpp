@@ -21,7 +21,6 @@
 #include "config.h"
 #include <syncevo/LogRedirect.h>
 #include <syncevo/Logging.h>
-#include <syncevo/SyncContext.h>
 #include "test.h"
 #include <syncevo/util.h>
 #include <sys/types.h>
@@ -32,9 +31,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <errno.h>
 
+#include <boost/algorithm/string/find_iterator.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/noncopyable.hpp>
+#include <boost/foreach.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -413,7 +415,7 @@ bool LogRedirect::process(FDs &fds) throw()
                         break;
                     } else {
                         // Give up.
-                        SyncContext::throwError("out of memory");
+                        Exception::throwError(SE_HERE, "out of memory");
                         return false;
                     }
                 } else {
@@ -433,7 +435,7 @@ bool LogRedirect::process(FDs &fds) throw()
                         // pretend that data was read, so that caller invokes us again
                         return true;
                     } else {
-                        SyncContext::throwError("reading output", errno);
+                        Exception::throwError(SE_HERE, "reading output", errno);
                         return false;
                     }
                 } else {
@@ -601,7 +603,7 @@ void LogRedirect::process()
             switch (res) {
             case -1:
                 // fatal, cannot continue
-                SyncContext::throwError("waiting for output", errno);
+                Exception::throwError(SE_HERE, "waiting for output", errno);
                 return;
                 break;
             case 0:

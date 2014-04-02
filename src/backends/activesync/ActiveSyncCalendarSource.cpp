@@ -132,7 +132,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
                 continue;
             }
 
-            gerror.throwError("reading ActiveSync changes");
+            gerror.throwError(SE_HERE, "reading ActiveSync changes");
         }
         GStringPtr bufferOwner(buffer, "reading changes: empty sync key returned");
 
@@ -144,15 +144,15 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
         // populate ID lists and content cache
         BOOST_FOREACH(EasItemInfo *item, created) {
             if (!item->server_id) {
-                throwError("no server ID for new eas item");
+                throwError(SE_HERE, "no server ID for new eas item");
             }
             string easid(item->server_id);
             if (easid.empty()) {
-                throwError("empty server ID for new eas item");
+                throwError(SE_HERE, "empty server ID for new eas item");
             }
             SE_LOG_DEBUG(getDisplayName(), "new eas item %s", easid.c_str());
             if (!item->data) {
-                throwError(StringPrintf("no body returned for new eas item %s", easid.c_str()));
+                throwError(SE_HERE, StringPrintf("no body returned for new eas item %s", easid.c_str()));
             }
             Event &event = setItemData(easid, item->data);
             BOOST_FOREACH(const std::string &subid, event.m_subids) {
@@ -163,15 +163,15 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
         }
         BOOST_FOREACH(EasItemInfo *item, updated) {
             if (!item->server_id) {
-                throwError("no server ID for updated eas item");
+                throwError(SE_HERE, "no server ID for updated eas item");
             }
             string easid(item->server_id);
             if (easid.empty()) {
-                throwError("empty server ID for updated eas item");
+                throwError(SE_HERE, "empty server ID for updated eas item");
             }
             SE_LOG_DEBUG(getDisplayName(), "updated eas item %s", easid.c_str());
             if (!item->data) {
-                throwError(StringPrintf("no body returned for updated eas item %s", easid.c_str()));
+                throwError(SE_HERE, StringPrintf("no body returned for updated eas item %s", easid.c_str()));
             }
             Event &event = setItemData(easid, item->data);
             BOOST_FOREACH(const std::string &subid, event.m_subids) {
@@ -182,11 +182,11 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
         }
         BOOST_FOREACH(const char *serverID, deleted) {
             if (!serverID) {
-                throwError("no server ID for deleted eas item");
+                throwError(SE_HERE, "no server ID for deleted eas item");
             }
             string easid(serverID);
             if (easid.empty()) {
-                throwError("empty server ID for deleted eas item");
+                throwError(SE_HERE, "empty server ID for deleted eas item");
             }
             Event &event = findItem(easid);
             if (event.m_subids.empty()) {
@@ -300,7 +300,7 @@ ActiveSyncCalendarSource::Event &ActiveSyncCalendarSource::findItem(const std::s
 {
     EventCache::iterator it = m_cache.find(easid);
     if (it == m_cache.end()) {
-        throwError(STATUS_NOT_FOUND, "merged event not found: " + easid);
+        throwError(SE_HERE, STATUS_NOT_FOUND, "merged event not found: " + easid);
     }
     return *it->second;
 }
@@ -606,7 +606,7 @@ void ActiveSyncCalendarSource::readItem(const std::string &luid, std::string &it
             eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
             item = icalstr.get();
         } else {
-            throwError(STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
         }
     } else {
         // complex case: create VCALENDAR with just the VTIMEZONE definition(s)
@@ -630,7 +630,7 @@ void ActiveSyncCalendarSource::readItem(const std::string &luid, std::string &it
             }
         }
         if (!found) {
-            throwError(STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
         }
         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(calendar)));
         item = icalstr.get();
@@ -650,7 +650,7 @@ void ActiveSyncCalendarSource::deleteItem(const string &luid)
     if (event.m_subids.size() == 1) {
         // remove entire merged item, nothing will be left after removal
         if (*event.m_subids.begin() != subid) {
-            throwError(STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
         } else {
             event.m_subids.clear();
             event.m_calendar = NULL;
@@ -674,7 +674,7 @@ void ActiveSyncCalendarSource::deleteItem(const string &luid)
             }
         }
         if (!found) {
-            throwError(STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
         }
         event.m_subids.erase(subid);
         // TODO: avoid updating the item immediately

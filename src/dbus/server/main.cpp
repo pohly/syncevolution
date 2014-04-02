@@ -139,7 +139,7 @@ int main(int argc, char **argv, char **envp)
         bool success = g_option_context_parse(context, &argc, &argv, gerror);
         PlainGStr durationOwner(durationString);
         if (!success) {
-            gerror.throwError("parsing command line options");
+            gerror.throwError(SE_HERE, "parsing command line options");
         }
         if (durationString && !parseDuration(duration, durationString)) {
             SE_THROW(StringPrintf("invalid parameter value '%s' for --duration/-d: must be positive number of seconds or 'unlimited'", durationString));

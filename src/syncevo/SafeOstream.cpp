@@ -18,7 +18,9 @@
  */
 
 #include <syncevo/SafeOstream.h>
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
+
+#include <errno.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -43,7 +45,7 @@ SafeOstream::~SafeOstream()
     close();
     if (bad() ||
         rename(m_tmpFilename.c_str(), m_filename.c_str())) {
-        SyncContext::throwError(m_tmpFilename, errno);
+        Exception::throwError(SE_HERE, m_tmpFilename, errno);
     }
 }
 

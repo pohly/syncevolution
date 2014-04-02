@@ -82,7 +82,7 @@ bool AkonadiSyncSource::isEmpty()
     //To Check if the respective collection is Empty, without actually loading the collections
     std::auto_ptr<CollectionStatisticsJob> statisticsJob(DisableAutoDelete(new CollectionStatisticsJob(m_collection)));
     if (!statisticsJob->exec()) {
-        throwError("Error fetching the collection stats");
+        throwError(SE_HERE, "Error fetching the collection stats");
     }
     return statisticsJob->statistics().count() == 0;
 }
@@ -135,7 +135,7 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
     fetchJob->fetchScope().setContentMimeTypes(m_mimeTypes);
 
     if (!fetchJob->exec()) {
-        throwError("cannot list collections");
+        throwError(SE_HERE, "cannot list collections");
     }
 
     // Currently, the first collection of the right type is the default
@@ -196,11 +196,11 @@ void AkonadiSyncSource::open()
     std::auto_ptr<CollectionFetchJob> fetchJob(DisableAutoDelete(new CollectionFetchJob(m_collection,
                                                                                         CollectionFetchJob::Base)));
     if (!fetchJob->exec()) {
-        throwError(StringPrintf("cannot fetch collection %s", id.c_str()));
+        throwError(SE_HERE, StringPrintf("cannot fetch collection %s", id.c_str()));
     }
     Collection::List collections = fetchJob->collections();
     if (collections.isEmpty()) {
-        throwError(StringPrintf("collection %s not found", id.c_str()));
+        throwError(SE_HERE, StringPrintf("collection %s not found", id.c_str()));
     }
     m_collection = collections.front();
 
@@ -213,7 +213,7 @@ void AkonadiSyncSource::open()
         }
     }
     if (m_contentMimeType.isEmpty()) {
-        throwError(StringPrintf("Resource %s cannot store items of type(s) %s. It can only store %s.",
+        throwError(SE_HERE, StringPrintf("Resource %s cannot store items of type(s) %s. It can only store %s.",
                                 id.c_str(),
                                 m_mimeTypes.join(",").toUtf8().constData(),
                                 collectionMimeTypes.join(",").toUtf8().constData()));
@@ -230,7 +230,7 @@ void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisio
     // copy all local IDs and the corresponding revision
     std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(m_collection)));
     if (!fetchJob->exec()) {
-        throwError("listing items");
+        throwError(SE_HERE, "listing items");
     }
     BOOST_FOREACH (const Item &item, fetchJob->items()) {
         // Filter out items which don't have the right type (for example, VTODO when
@@ -262,7 +262,7 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
         item.setPayloadFromData(QByteArray(data.c_str()));
         std::auto_ptr<ItemCreateJob> createJob(DisableAutoDelete(new ItemCreateJob(item, m_collection)));
         if (!createJob->exec()) {
-            throwError(string("storing new item ") + luid);
+            throwError(SE_HERE, string("storing new item ") + luid);
             return InsertItemResult("", "", ITEM_OKAY);
         }
         item = createJob->item();
@@ -270,7 +270,7 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
         Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
         std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(Item(syncItemId))));
         if (!fetchJob->exec()) {
-            throwError(string("checking item ") + luid);
+            throwError(SE_HERE, string("checking item ") + luid);
         }
         item = fetchJob->items().first();
         item.setPayloadFromData(QByteArray(data.c_str()));
@@ -279,7 +279,7 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
         // we are updating.
         // TODO: check that the item has not been updated in the meantime
         if (!modifyJob->exec()) {
-            throwError(string("updating item ") + luid);
+            throwError(SE_HERE, string("updating item ") + luid);
             return InsertItemResult("", "", ITEM_OKAY);
         }
         item = modifyJob->item();
@@ -306,7 +306,7 @@ void AkonadiSyncSource::removeItem(const string &luid)
     // TODO: check that the revision is right (need revision from SyncEvolution)
     std::auto_ptr<ItemDeleteJob> deleteJob(DisableAutoDelete(new ItemDeleteJob(Item(syncItemId))));
     if (!deleteJob->exec()) {
-        throwError(string("deleting item " ) + luid);
+        throwError(SE_HERE, string("deleting item " ) + luid);
     }
 }
 
@@ -323,13 +323,13 @@ void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, boo
     fetchJob->fetchScope().fetchFullPayload();
     if (fetchJob->exec()) {
         if (fetchJob->items().empty()) {
-            throwError(STATUS_NOT_FOUND, string("extracting item ") + luid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, string("extracting item ") + luid);
         }
         QByteArray payload = fetchJob->items().first().payloadData();
         data.assign(payload.constData(),
                     payload.size());
     } else {
-        throwError(string("extracting item " ) + luid);
+        throwError(SE_HERE, string("extracting item " ) + luid);
     }
 }
 

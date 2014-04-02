@@ -692,7 +692,7 @@ static void Details2PersonaStep(const GError *gerror, const boost::shared_ptr<Pe
 {
     try {
         if (gerror) {
-            GErrorCXX::throwError("modifying property", gerror);
+            GErrorCXX::throwError(SE_HERE, "modifying property", gerror);
         }
         size_t current = pending->m_current++;
         if (current < pending->m_changes.size()) {

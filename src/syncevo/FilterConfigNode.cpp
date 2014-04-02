@@ -18,7 +18,7 @@
  */
 
 #include <syncevo/FilterConfigNode.h>
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
 
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -41,7 +41,7 @@ FilterConfigNode::FilterConfigNode(const boost::shared_ptr<const ConfigNode> &no
 {
 }
 
-void FilterConfigNode::addFilter(const string &property,
+void FilterConfigNode::addFilter(const std::string &property,
                                  const InitStateString &value)
 {
     m_filter[property] = value;
@@ -52,7 +52,7 @@ void FilterConfigNode::setFilter(const ConfigFilter &filter)
     m_filter = filter;
 }
 
-InitStateString FilterConfigNode::readProperty(const string &property) const
+InitStateString FilterConfigNode::readProperty(const std::string &property) const
 {
     ConfigFilter::const_iterator it = m_filter.find(property);
 
@@ -63,14 +63,14 @@ InitStateString FilterConfigNode::readProperty(const string &property) const
     }
 }
 
-void FilterConfigNode::writeProperty(const string &property,
+void FilterConfigNode::writeProperty(const std::string &property,
                                      const InitStateString &value,
-                                     const string &comment)
+                                     const std::string &comment)
 {
     ConfigFilter::iterator it = m_filter.find(property);
 
     if (!m_node.get()) {
-        SyncContext::throwError(getName() + ": read-only, setting properties not allowed");
+        Exception::throwError(SE_HERE, getName() + ": read-only, setting properties not allowed");
     }
 
     if (it != m_filter.end()) {
@@ -89,12 +89,12 @@ void FilterConfigNode::readProperties(ConfigProps &props) const
     }
 }
 
-void FilterConfigNode::removeProperty(const string &property)
+void FilterConfigNode::removeProperty(const std::string &property)
 {
     ConfigFilter::iterator it = m_filter.find(property);
 
     if (!m_node.get()) {
-        SyncContext::throwError(getName() + ": read-only, removing properties not allowed");
+        Exception::throwError(SE_HERE, getName() + ": read-only, removing properties not allowed");
     }
 
     if (it != m_filter.end()) {
@@ -112,7 +112,7 @@ void FilterConfigNode::clear()
 void FilterConfigNode::flush()
 {
     if (!m_node.get()) {
-        SyncContext::throwError(getName() + ": read-only, flushing not allowed");
+        Exception::throwError(SE_HERE, getName() + ": read-only, flushing not allowed");
     }
     m_node->flush();
 }

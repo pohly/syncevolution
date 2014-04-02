@@ -173,7 +173,7 @@ KCalCore::Incidence::Ptr KCalExtendedData::findIncidence(const string &luid)
     QString uid = id.getIDString();
     KDateTime rid = id.getDateTime();
     // if (!m_storage->load(uid, rid)) {
-    // m_parent->throwError(string("failed to load incidence ") + luid);
+    // m_parent->throwError(SE_HERE, string("failed to load incidence ") + luid);
     // }
     KCalCore::Incidence::Ptr incidence = m_calendar->incidence(uid, rid);
     return incidence;
@@ -212,7 +212,7 @@ KCalExtendedSource::KCalExtendedSource(const SyncSourceParams &params, Type type
                                 m_operations);
         break;
     default:
-        throwError("invalid calendar type");
+        throwError(SE_HERE, "invalid calendar type");
         break;
     }
 
@@ -261,7 +261,7 @@ void KCalExtendedSource::open()
             m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
         }
         if (!m_data->m_storage->open()) {
-            throwError("failed to open storage");
+            throwError(SE_HERE, "failed to open storage");
         }
 #ifdef ENABLE_MAEMO
         mKCal::Notebook::Ptr defaultNotebook;
@@ -279,7 +279,7 @@ void KCalExtendedSource::open()
         mKCal::Notebook::Ptr defaultNotebook = m_data->m_storage->defaultNotebook();
 #endif
         if (!defaultNotebook) {
-            throwError("no default Notebook");
+            throwError(SE_HERE, "no default Notebook");
         }
         m_data->m_notebookUID = defaultNotebook->uid();
 #ifdef ENABLE_MAEMO
@@ -287,13 +287,13 @@ void KCalExtendedSource::open()
         // if databaseID has a "uid:" prefix, open existing notebook with given ID in default storage
         m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
         if (!m_data->m_storage->open()) {
-            throwError("failed to open storage");
+            throwError(SE_HERE, "failed to open storage");
         }
         QString uid = databaseID.c_str() + strlen("uid:");
         mKCal::Notebook::Ptr notebook = m_data->m_storage->notebook(uid);
 
         if ( !notebook ) {
-            throwError(string("no such notebook with UID \"") + uid.toStdString() + string("\" in default storage"));
+            throwError(SE_HERE, string("no such notebook with UID \"") + uid.toStdString() + string("\" in default storage"));
         }
         m_data->m_notebookUID = notebook->uid();
 #endif
@@ -304,7 +304,7 @@ void KCalExtendedSource::open()
         // 2) without a special prefix, throw an error
         m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
         if (!m_data->m_storage->open()) {
-            throwError("failed to open storage");
+            throwError(SE_HERE, "failed to open storage");
         }
         QString name = databaseID.c_str();
         mKCal::Notebook::Ptr notebook;
@@ -320,11 +320,11 @@ void KCalExtendedSource::open()
             if ( boost::starts_with(databaseID, "SyncEvolution_Test_") ) {
                 notebook = mKCal::Notebook::Ptr ( new mKCal::Notebook(QString(), name, QString(), QString(), false, true, false, false,true) );
                 if ( !notebook ) {
-                    throwError("failed to create notebook");
+                    throwError(SE_HERE, "failed to create notebook");
                 }
                 m_data->m_storage->addNotebook(notebook, false);
             } else {
-                throwError(string("no such notebook with name \"") + string(databaseID) + string("\" in default storage"));
+                throwError(SE_HERE, string("no such notebook with name \"") + string(databaseID) + string("\" in default storage"));
             }
         } else {
             notebook = *it;
@@ -336,7 +336,7 @@ void KCalExtendedSource::open()
     // issues with it (BMC #6061); the load() calls elsewhere in this
     // file are commented out
     if (!m_data->m_storage->loadNotebookIncidences(m_data->m_notebookUID)) {
-        throwError("failed to load calendar");
+        throwError(SE_HERE, "failed to load calendar");
     }
 }
 
@@ -384,7 +384,7 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
     m_data->m_calendar = mKCal::ExtendedCalendar::Ptr(new mKCal::ExtendedCalendar(KDateTime::Spec::LocalZone()));
     m_data->m_storage = mKCal::ExtendedCalendar::defaultStorage(m_data->m_calendar);
     if (!m_data->m_storage->open()) {
-        throwError("failed to open storage");
+        throwError(SE_HERE, "failed to open storage");
     }
     mKCal::Notebook::List notebookList = m_data->m_storage->notebooks();
     mKCal::Notebook::List::Iterator it;
@@ -417,7 +417,7 @@ void KCalExtendedSource::beginSync(const std::string &lastToken, const std::stri
     // return all items
     incidences = m_data->m_calendar->incidences();
     // if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
-    //     throwError("allIncidences() failed");
+    //     throwError(SE_HERE, "allIncidences() failed");
     // }
     m_data->extractIncidences(incidences, SyncSourceChanges::ANY, *this);
     if (*anchor) {
@@ -425,13 +425,13 @@ void KCalExtendedSource::beginSync(const std::string &lastToken, const std::stri
         KDateTime endSyncTime(QDateTime::fromString(QString(anchor), Qt::ISODate), KDateTime::Spec::UTC());
         KCalCore::Incidence::List added, modified, deleted;
         if (!m_data->m_storage->insertedIncidences(&added, endSyncTime, m_data->m_notebookUID)) {
-            throwError("insertedIncidences() failed");
+            throwError(SE_HERE, "insertedIncidences() failed");
         }
         if (!m_data->m_storage->modifiedIncidences(&modified, endSyncTime, m_data->m_notebookUID)) {
-            throwError("modifiedIncidences() failed");
+            throwError(SE_HERE, "modifiedIncidences() failed");
         }
         if (!m_data->m_storage->deletedIncidences(&deleted, endSyncTime, m_data->m_notebookUID)) {
-            throwError("deletedIncidences() failed");
+            throwError(SE_HERE, "deletedIncidences() failed");
         }
         // It is guaranteed that modified and inserted items are
         // returned as inserted, so no need to check that.
@@ -445,7 +445,7 @@ std::string KCalExtendedSource::endSync(bool success)
 {
     if (m_data->m_modified) {
         if (!m_data->m_storage->save()) {
-            throwError("could not save calendar");
+            throwError(SE_HERE, "could not save calendar");
         }
         time_t modtime = time(NULL);
         // Saving set the modified time stamps of all items needed
@@ -471,7 +471,7 @@ void KCalExtendedSource::readItem(const string &uid, std::string &item)
 {
     KCalCore::Incidence::Ptr incidence(m_data->findIncidence(uid));
     if (!incidence) {
-        throwError(string("failure extracting ") + uid);
+        throwError(SE_HERE, string("failure extracting ") + uid);
     }
     KCalCore::Calendar::Ptr calendar(new KCalCore::MemoryCalendar(KDateTime::Spec::LocalZone()));
     calendar->addIncidence(incidence);
@@ -490,7 +490,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         // deleted yet. To avoid the problem, make sure we save between
         // the deletes and the inserts.
         if (!m_data->m_storage->save()) {
-            throwError("could not save calendar");
+            throwError(SE_HERE, "could not save calendar");
         }
         m_delete_run = 0;
         m_insert_run = 0;
@@ -499,11 +499,11 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     KCalCore::Calendar::Ptr calendar(new KCalCore::MemoryCalendar(KDateTime::Spec::LocalZone()));
     KCalCore::ICalFormat parser;
     if (!parser.fromString(calendar, std2qstring(item))) {
-        throwError("error parsing iCalendar 2.0 item");
+        throwError(SE_HERE, "error parsing iCalendar 2.0 item");
     }
     KCalCore::Incidence::List incidences = calendar->rawIncidences();
     if (incidences.empty()) {
-        throwError("iCalendar 2.0 item empty?!");
+        throwError(SE_HERE, "iCalendar 2.0 item empty?!");
     }
     InsertItemResultState updated;
     string newUID;
@@ -542,7 +542,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
 
         updated = ITEM_OKAY;
         if (!m_data->m_calendar->addIncidence(incidence)) {
-            throwError("could not add incidence");
+            throwError(SE_HERE, "could not add incidence");
         }
         m_data->m_calendar->setNotebook(incidence, m_data->m_notebookUID);
         newUID = m_data->getItemID(incidence).getLUID();
@@ -552,10 +552,10 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
         newUID = oldUID;
         KCalCore::Incidence::Ptr original = m_data->findIncidence(oldUID);
         if (!original) {
-            throwError("incidence to be updated not found");
+            throwError(SE_HERE, "incidence to be updated not found");
         }
         if (original->type() != incidence->type()) {
-            throwError("cannot update incidence, wrong type?!");
+            throwError(SE_HERE, "cannot update incidence, wrong type?!");
         }
 
         // preserve UID and RECURRENCE-ID, because this must not change
@@ -590,13 +590,13 @@ void KCalExtendedSource::deleteItem(const string &uid)
 {
     KCalCore::Incidence::Ptr incidence = m_data->findIncidence(uid);
     if (!incidence) {
-        // throwError(string("incidence ") + uid + " not found");
+        // throwError(SE_HERE, string("incidence ") + uid + " not found");
         // don't treat this as error, it can happen, for example
         // when the master event was removed before (MBC #6061)
         return;
     }
     if (!m_data->m_calendar->deleteIncidence(incidence)) {
-        throwError(string("could not delete incidence") + uid);
+        throwError(SE_HERE, string("could not delete incidence") + uid);
     }
     m_data->m_modified = true;
     m_delete_run++;
@@ -607,7 +607,7 @@ void KCalExtendedSource::listAllItems(RevisionMap_t &revisions)
     KCalCore::Incidence::List incidences;
     incidences = m_data->m_calendar->incidences();
     // if (!m_data->m_storage->allIncidences(&incidences, m_data->m_notebookUID)) {
-    //     throwError("allIncidences() failed");
+    //     throwError(SE_HERE, "allIncidences() failed");
     // }
     foreach (KCalCore::Incidence::Ptr incidence, incidences) {
         if (incidence->type() == m_data->m_type) {

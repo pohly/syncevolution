@@ -257,7 +257,7 @@ void ForkExecParent::start()
                                   (m_mergedStdoutStderr || !m_onStderr.empty()) ? &err : NULL,
                                   gerror)) {
         m_childPid = 0;
-        gerror.throwError("spawning child");
+        gerror.throwError(SE_HERE, "spawning child");
     }
     // set up output redirection, ignoring failures
     setupPipe(m_err, m_errID, err);

@@ -336,6 +336,8 @@ class GLibNotify : public boost::noncopyable
     callback_t m_callback;
 };
 
+class SourceLocation; // Exception.h
+
 /**
  * Wraps GError. Where a GError** is expected, simply pass
  * a GErrorCXX instance.
@@ -420,8 +422,8 @@ struct GErrorCXX {
      * always throws an exception, including information from GError if available:
      * <action>: <error message>|failure
      */
-    void throwError(const std::string &action);
-    static void throwError(const std::string &action, const GError *err);
+    void throwError(const SourceLocation &where, const std::string &action);
+    static void throwError(const SourceLocation &where, const std::string &action, const GError *err);
 };
 
 template<class T> void NoopDestructor(T *) {}

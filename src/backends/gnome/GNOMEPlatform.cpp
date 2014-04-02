@@ -27,7 +27,8 @@ extern "C" {
 
 #include "GNOMEPlatform.h"
 
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
+#include <syncevo/UserInterface.h>
 #include <syncevo/SyncConfig.h>
 
 #include <syncevo/declarations.h>
@@ -200,7 +201,7 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
     } while (result != GNOME_KEYRING_RESULT_OK &&
              (Timespec::monotonic() - start).duration() < GNOMEKeyringRetryDuration);
     if (result != GNOME_KEYRING_RESULT_OK) {
-        SyncContext::throwError(StringPrintf("%s: saving password '%s' in GNOME keyring failed: %s",
+        Exception::throwError(SE_HERE, StringPrintf("%s: saving password '%s' in GNOME keyring failed: %s",
                                              key.description.c_str(),
                                              key.toString().c_str(),
                                              gnome_keyring_result_to_message(result)));

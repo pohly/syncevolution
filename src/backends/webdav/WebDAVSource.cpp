@@ -571,7 +571,7 @@ void WebDAVSource::contactServer()
                                 boost::ref(m_calendar),
                                 _1, _2));
     if (m_calendar.empty()) {
-        throwError("no database found");
+        throwError(SE_HERE, "no database found");
     }
     SE_LOG_DEBUG(NULL, "picked final path %s", m_calendar.m_path.c_str());
 
@@ -641,7 +641,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
         size_t pos = username.find('@');
         if (pos == username.npos) {
             // throw authentication error to indicate that the credentials are wrong
-            throwError(STATUS_UNAUTHORIZED, StringPrintf("syncURL not configured and username %s does not contain a domain", username.c_str()));
+            throwError(SE_HERE, STATUS_UNAUTHORIZED, StringPrintf("syncURL not configured and username %s does not contain a domain", username.c_str()));
         }
         std::string domain = username.substr(pos + 1);
 
@@ -655,7 +655,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                                     domain.c_str()).c_str(),
                        "r");
             if (!in) {
-                throwError("syncURL not configured and starting syncevo-webdav-lookup for DNS SRV lookup failed", errno);
+                throwError(SE_HERE, "syncURL not configured and starting syncevo-webdav-lookup for DNS SRV lookup failed", errno);
             }
             // ridicuously long URLs are truncated...
             char buffer[1024];
@@ -673,10 +673,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             case 0:
                 break;
             case 2:
-                throwError(StringPrintf("syncURL not configured and syncevo-webdav-lookup did not find a DNS utility to search for %s in %s", serviceType().c_str(), domain.c_str()));
+                throwError(SE_HERE, StringPrintf("syncURL not configured and syncevo-webdav-lookup did not find a DNS utility to search for %s in %s", serviceType().c_str(), domain.c_str()));
                 break;
             case 3:
-                throwError(StringPrintf("syncURL not configured and DNS SRV search for %s in %s did not find the service", serviceType().c_str(), domain.c_str()));
+                throwError(SE_HERE, StringPrintf("syncURL not configured and DNS SRV search for %s in %s did not find the service", serviceType().c_str(), domain.c_str()));
                 break;
             default: {
                 Timespec now = Timespec::monotonic();
@@ -693,7 +693,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 }
 
                 // probably network problem
-                throwError(STATUS_TRANSPORT_FAILURE, StringPrintf("syncURL not configured and DNS SRV search for %s in %s failed", serviceType().c_str(), domain.c_str()));
+                throwError(SE_HERE, STATUS_TRANSPORT_FAILURE, StringPrintf("syncURL not configured and DNS SRV search for %s in %s failed", serviceType().c_str(), domain.c_str()));
                 break;
             }
             }
@@ -1196,7 +1196,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
 
         counter++;
         if (counter > limit) {
-            throwError(StringPrintf("giving up search for collection after %d attempts", limit));
+            throwError(SE_HERE, StringPrintf("giving up search for collection after %d attempts", limit));
         }
         path = next;
     }

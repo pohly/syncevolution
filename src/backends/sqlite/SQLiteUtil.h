@@ -24,6 +24,7 @@
 
 #include <sqlite3.h>
 #include <syncevo/SmartPtr.h>
+#include <syncevo/Exception.h>
 
 #include <string>
 #include <stdio.h>
@@ -78,7 +79,7 @@ class SQLiteUtil
      * throw error for a specific sqlite3 operation on m_db
      * @param operation   a description of the operation which failed
      */
-    void throwError(const string &operation);
+    void throwError(const SourceLocation &where, const string &operation);
 
     /**
      * wrapper around sqlite3_prepare() which operates on the current
@@ -101,7 +102,7 @@ class SQLiteUtil
     /** checks the result of an sqlite3 call, throws an error if faulty, otherwise returns the result */
     int checkSQL(int res, const char *operation = "SQLite call") {
         if (res != SQLITE_OK && res != SQLITE_ROW && res != SQLITE_DONE) {
-            throwError(operation);
+            throwError(SE_HERE, operation);
         }
         return res;
     }

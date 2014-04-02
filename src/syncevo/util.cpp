@@ -20,9 +20,9 @@
 
 #include "config.h"
 #include <syncevo/util.h>
+#include <syncevo/Exception.h>
 #include <syncevo/SyncContext.h>
 #include <syncevo/TransportAgent.h>
-#include <syncevo/SynthesisEngine.h>
 #include <syncevo/Logging.h>
 #include <syncevo/LogRedirect.h>
 #include <syncevo/SuspendFlags.h>
@@ -37,10 +37,6 @@
 #include <boost/lambda/bind.hpp>
 #include <fstream>
 #include <iostream>
-
-#include "gdbus-cxx-bridge.h"
-
-#include <pcrecpp.h>
 
 #include <errno.h>
 #include <unistd.h>
@@ -158,7 +154,7 @@ void mkdir_p(const string &path)
                        nextdir ? (R_OK|X_OK) : (R_OK|X_OK|W_OK)) &&
                 (errno != ENOENT ||
                  mkdir(dirs.get(), 0700))) {
-                SyncContext::throwError(string(dirs.get()), errno);
+                Exception::throwError(SE_HERE, string(dirs.get()), errno);
             }
         }
         if (nextdir) {
@@ -176,7 +172,7 @@ void rm_r(const string &path, boost::function<bool (const string &,
         if (errno == ENOENT) {
             return;
         } else {
-            SyncContext::throwError(path, errno);
+            Exception::throwError(SE_HERE, path, errno);
         }
     }
 
@@ -185,7 +181,7 @@ void rm_r(const string &path, boost::function<bool (const string &,
             !unlink(path.c_str())) {
             return;
         } else {
-            SyncContext::throwError(path, errno);
+            Exception::throwError(SE_HERE, path, errno);
         }
     }
 
@@ -195,7 +191,7 @@ void rm_r(const string &path, boost::function<bool (const string &,
     }
     if (filter(path, true) &&
         rmdir(path.c_str())) {
-        SyncContext::throwError(path, errno);
+        Exception::throwError(SE_HERE, path, errno);
     }
 }
 
@@ -232,7 +228,7 @@ bool isDir(const string &path)
         closedir(dir);
         return true;
     } else if (errno != ENOTDIR && errno != ENOENT) {
-        SyncContext::throwError(path, errno);
+        Exception::throwError(SE_HERE, path, errno);
     }
 
     return false;
@@ -376,7 +372,7 @@ ReadDir::ReadDir(const string &path, bool throwError) : m_path(path)
     try {
         dir = opendir(path.c_str());
         if (!dir) {
-            SyncContext::throwError(path, errno);
+            Exception::throwError(SE_HERE, path, errno);
         }
         errno = 0;
         struct dirent *entry = readdir(dir);
@@ -388,7 +384,7 @@ ReadDir::ReadDir(const string &path, bool throwError) : m_path(path)
             entry = readdir(dir);
         }
         if (errno) {
-            SyncContext::throwError(path, errno);
+            Exception::throwError(SE_HERE, path, errno);
         }
         std::sort(m_entries.begin(), m_entries.end());
     } catch(...) {
@@ -828,114 +824,6 @@ InitStateTri::Value InitStateTri::getValue() const
     }
 }
 
-const char * const TRANSPORT_PROBLEM = "transport problem: ";
-const char * const SYNTHESIS_PROBLEM = "error code from Synthesis engine ";
-const char * const SYNCEVOLUTION_PROBLEM = "error code from SyncEvolution ";
-
-SyncMLStatus Exception::handle(SyncMLStatus *status,
-                               const std::string *logPrefix,
-                               std::string *explanation,
-                               Logger::Level level,
-                               HandleExceptionFlags flags)
-{
-    // any problem here is a fatal local problem, unless set otherwise
-    // by the specific exception
-    SyncMLStatus new_status = SyncMLStatus(STATUS_FATAL + sysync::LOCAL_STATUS_CODE);
-    std::string error;
-
-    try {
-        throw;
-    } catch (const TransportException &ex) {
-        SE_LOG_DEBUG(logPrefix, "TransportException thrown at %s:%d",
-                     ex.m_file.c_str(), ex.m_line);
-        error = std::string(TRANSPORT_PROBLEM) + ex.what();
-        new_status = SyncMLStatus(sysync::LOCERR_TRANSPFAIL);
-    } catch (const BadSynthesisResult &ex) {
-        new_status = SyncMLStatus(ex.result());
-        error = StringPrintf("%s%s",
-                             SYNTHESIS_PROBLEM,
-                             Status2String(new_status).c_str());
-    } catch (const StatusException &ex) {
-        new_status = ex.syncMLStatus();
-        SE_LOG_DEBUG(logPrefix, "exception thrown at %s:%d",
-                     ex.m_file.c_str(), ex.m_line);
-        error = StringPrintf("%s%s: %s",
-                             SYNCEVOLUTION_PROBLEM,
-                             Status2String(new_status).c_str(), ex.what());
-        if (new_status == STATUS_NOT_FOUND &&
-            (flags & HANDLE_EXCEPTION_404_IS_OKAY)) {
-            level = Logger::DEBUG;
-        }
-    } catch (const Exception &ex) {
-        SE_LOG_DEBUG(logPrefix, "exception thrown at %s:%d",
-                     ex.m_file.c_str(), ex.m_line);
-        error = ex.what();
-    } catch (const std::exception &ex) {
-        error = ex.what();
-    } catch (...) {
-        error = "unknown error";
-    }
-    if (flags & HANDLE_EXCEPTION_FATAL) {
-        level = Logger::ERROR;
-    }
-    if (flags & HANDLE_EXCEPTION_NO_ERROR) {
-        level = Logger::DEBUG;
-    }
-    SE_LOG(logPrefix, level, "%s", error.c_str());
-    if (flags & HANDLE_EXCEPTION_FATAL) {
-        // Something unexpected went wrong, can only shut down.
-        ::abort();
-    }
-
-    if (explanation) {
-        *explanation = error;
-    }
-
-    if (status && *status == STATUS_OK) {
-        *status = new_status;
-    }
-    return status ? *status : new_status;
-}
-
-void Exception::tryRethrow(const std::string &explanation, bool mustThrow)
-{
-    static const std::string statusre = ".* \\((?:local|remote), status (\\d+)\\)";
-    int status;
-
-    if (boost::starts_with(explanation, TRANSPORT_PROBLEM)) {
-        SE_THROW_EXCEPTION(TransportException, explanation.substr(strlen(TRANSPORT_PROBLEM)));
-    } else if (boost::starts_with(explanation, SYNTHESIS_PROBLEM)) {
-        static const pcrecpp::RE re(statusre);
-        if (re.FullMatch(explanation.substr(strlen(SYNTHESIS_PROBLEM)), &status)) {
-            SE_THROW_EXCEPTION_1(BadSynthesisResult, "Synthesis engine failure", (sysync::TSyErrorEnum)status);
-        }
-    } else if (boost::starts_with(explanation, SYNCEVOLUTION_PROBLEM)) {
-        static const pcrecpp::RE re(statusre + ": (.*)",
-                                    pcrecpp::RE_Options().set_dotall(true));
-        std::string details;
-        if (re.FullMatch(explanation.substr(strlen(SYNCEVOLUTION_PROBLEM)), &status, &details)) {
-            SE_THROW_EXCEPTION_STATUS(StatusException, details, (SyncMLStatus)status);
-        }
-    }
-
-    if (mustThrow) {
-        throw std::runtime_error(explanation);
-    }
-}
-
-void Exception::tryRethrowDBus(const std::string &error)
-{
-    static const pcrecpp::RE re("(org\\.syncevolution(?:\\.\\w+)+): (.*)",
-                                pcrecpp::RE_Options().set_dotall(true));
-    std::string exName, explanation;
-    if (re.FullMatch(error, &exName, &explanation)) {
-        // found SyncEvolution exception explanation, parse it
-        tryRethrow(explanation);
-        // explanation not parsed, fall back to D-Bus exception
-        throw GDBusCXX::dbus_error(exName, explanation);
-    }
-}
-
 std::string SubstEnvironment(const std::string &str)
 {
     std::stringstream res;
@@ -1029,7 +917,7 @@ std::string SyncEvolutionDataDir()
     return dataDir;
 }
 
-ScopedEnvChange::ScopedEnvChange(const string &var, const string &value) :
+ScopedEnvChange::ScopedEnvChange(const std::string &var, const std::string &value) :
     m_var(var)
 {
     const char *oldval = getenv(var.c_str());

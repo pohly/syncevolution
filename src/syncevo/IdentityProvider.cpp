@@ -19,6 +19,7 @@
 
 #include <syncevo/IdentityProvider.h>
 #include <syncevo/SyncConfig.h>
+#include <syncevo/Exception.h>
 
 #include <algorithm>
 
