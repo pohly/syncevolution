@@ -192,6 +192,9 @@ void Logger::formatLines(Level msglevel,
         if (!firstLine.empty()) {
             print(firstLine, 1);
         }
+        if (prefix && prefix->empty()) {
+            prefix = NULL;
+        }
         tag = StringPrintf("[%s%s%s] %s%s",
                            levelToStr(msglevel),
                            procname.c_str(),
@@ -259,7 +262,7 @@ Logger::MessageOptions::MessageOptions(Level level,
                                        const char *function,
                                        int flags) :
     m_level(level),
-    m_prefix(prefix),
+    m_prefix((!prefix || prefix->empty()) ? NULL : prefix),
     m_file(file),
     m_line(line),
     m_function(function),
