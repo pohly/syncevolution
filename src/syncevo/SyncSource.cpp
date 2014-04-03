@@ -191,6 +191,26 @@ string SyncSourceBase::getNativeDatatypeName()
     return info.m_native;
 }
 
+SyncSourceBase::Operations::Operations(SyncSourceName &source) :
+    m_startDataRead(source),
+    m_endDataRead(source),
+    m_startDataWrite(source),
+    m_finalizeLocalID(source),
+    m_endDataWrite(source),
+    m_readNextItem(source),
+    m_readItemAsKey(source),
+    m_insertItemAsKey(source),
+    m_updateItemAsKey(source),
+    m_deleteItem(source),
+    m_loadAdminData(source),
+    m_saveAdminData(source),
+    m_insertMapItem(source),
+    m_updateMapItem(source),
+    m_deleteMapItem(source),
+    m_deleteBlob(source)
+{
+}
+
 static void BumpCounter(int32_t &counter)
 {
     counter++;
@@ -198,6 +218,7 @@ static void BumpCounter(int32_t &counter)
 
 SyncSource::SyncSource(const SyncSourceParams &params) :
     SyncSourceConfig(params.m_name, params.m_nodes),
+    m_operations(*this),
     m_numDeleted(0),
     m_added(0),
     m_updated(0),
