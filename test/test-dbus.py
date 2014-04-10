@@ -5211,8 +5211,32 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         if os.path.isfile(self.serverexe + ".bak"):
             os.rename(self.serverexe + ".bak", self.serverexe)
 
+    def which(self, program):
+        def is_exe(fpath):
+            return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+        for path in os.environ['PATH'].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+        return None
+
     def run(self, result):
-        self.runTest(result)
+        # Ensure that we use a private copy of syncevo-dbus-server, for two reasons:
+        # - when using the installed version, we might not be able to rename it.
+        # - when other tests run concurrently, they too would see the modification and shut down.
+        tmppath = os.path.abspath('TestFileNotifyDir')
+        oldpath = os.environ['PATH']
+        try:
+            os.makedirs(tmppath)
+            shutil.copy(self.which('syncevo-dbus-server'), tmppath)
+            os.environ['PATH'] = '%s:%s' % (tmppath, oldpath)
+            self.runTest(result)
+        finally:
+            os.environ['PATH'] = oldpath
+            if os.path.exists(tmppath):
+                shutil.rmtree(tmppath)
 
     def modifyServerFile(self):
         """rename server executable to trigger shutdown"""
