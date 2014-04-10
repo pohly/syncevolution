@@ -480,9 +480,10 @@ bool Server::shutdown()
     return false;
 }
 
-void Server::fileModified()
+void Server::fileModified(const std::string &file)
 {
-    SE_LOG_DEBUG(NULL, "file modified, %s shutdown: %s, %s",
+    SE_LOG_DEBUG(NULL, "file %s modified, %s shutdown: %s, %s",
+                 file.c_str(),
                  m_shutdownRequested ? "continuing" : "initiating",
                  m_shutdownTimer ? "timer already active" : "timer not yet active",
                  m_activeSession ? "waiting for active session to finish" : "setting timer");
@@ -521,7 +522,7 @@ void Server::run()
     BOOST_FOREACH(const string &file, files) {
         try {
             SE_LOG_DEBUG(NULL, "watching: %s", file.c_str());
-            boost::shared_ptr<SyncEvo::GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&Server::fileModified, this)));
+            boost::shared_ptr<SyncEvo::GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&Server::fileModified, this, file)));
             m_files.push_back(notify);
         } catch (...) {
             // ignore errors for indidividual files

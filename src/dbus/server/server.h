@@ -93,7 +93,7 @@ class Server : public GDBusCXX::DBusObjectHelper
      * automatic syncing enabled in a config.
      */
     list< boost::shared_ptr<GLibNotify> > m_files;
-    void fileModified();
+    void fileModified(const std::string &file);
     bool shutdown();
 
     /**
