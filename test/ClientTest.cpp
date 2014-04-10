@@ -440,7 +440,7 @@ void LocalTests::addTests() {
             ADD_TEST(LocalTests, testSimpleInsert);
             ADD_TEST(LocalTests, testLocalDeleteAll);
             ADD_TEST(LocalTests, testComplexInsert);
-            if (config.m_insertItem.find("\nUID:") != std::string::npos) {
+            if (config.m_uniqueID) {
                 ADD_TEST(LocalTests, testInsertTwice);
             }
 
@@ -6803,6 +6803,9 @@ void ClientTest::getTestData(const char *type, Config &config)
 
     config.m_mangleItem = mangleGeneric;
 
+    // True for most item kinds, exceptions set below.
+    config.m_uniqueID = true;
+
     static std::set<std::string> vCardEssential =
         boost::assign::list_of("FN")("N")("UID")("VERSION"),
         iCalEssential =
@@ -6818,12 +6821,14 @@ void ClientTest::getTestData(const char *type, Config &config)
         config.m_uri = "card3"; // ScheduleWorld
         config.m_type = "text/vcard";
         config.m_essentialProperties = vCardEssential;
+        config.m_uniqueID = false;
         config.m_insertItem =
             "BEGIN:VCARD\n"
             "VERSION:3.0\n"
             "TITLE:tester\n"
             "FN:John Doe\n"
             "N:Doe;John;;;\n"
+            "UID:25741c35e5431f054444fdf4571219c3\n"
             "TEL;TYPE=WORK;TYPE=VOICE:business 1\n"
             "X-EVOLUTION-FILE-AS:Doe\\, John\n"
             "X-MOZILLA-HTML:FALSE\n"
@@ -6834,6 +6839,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "TITLE:tester\n"
             "FN:Joan Doe\n"
             "N:Doe;Joan;;;\n"
+            "UID:25741c35e5431f054444fdf4571219c3\n"
             "X-EVOLUTION-FILE-AS:Doe\\, Joan\n"
             "TEL;TYPE=WORK;TYPE=VOICE:business 2\n"
             "BDAY:2006-01-08\n"
@@ -6846,6 +6852,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "TITLE:tester\n"
             "FN:Joan Doe\n"
             "N:Doe;Joan;;;\n"
+            "UID:25741c35e5431f054444fdf4571219c3\n"
             "X-EVOLUTION-FILE-AS:Doe\\, Joan\n"
             "TEL;TYPE=WORK;TYPE=VOICE:business 1\n"
             "TEL;TYPE=HOME;TYPE=VOICE:home 2\n"
@@ -6859,6 +6866,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "TITLE:tester\n"
             "FN:John Doe\n"
             "N:Doe;John;;;\n"
+            "UID:25741c35e5431f054444fdf4571219c3\n"
             "X-EVOLUTION-FILE-AS:Doe\\, John\n"
             "X-MOZILLA-HTML:FALSE\n"
             "TEL;TYPE=WORK;TYPE=VOICE:business 1\n"
@@ -6871,6 +6879,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "TITLE:developer\n"
             "FN:John Doe\n"
             "N:Doe;John;;;\n"
+            "UID:25741c35e5431f054444fdf4571219c3\n"
             "TEL;TYPE=WORK;TYPE=VOICE:123456\n"
             "X-EVOLUTION-FILE-AS:Doe\\, John\n"
             "X-MOZILLA-HTML:TRUE\n"
@@ -6883,6 +6892,7 @@ void ClientTest::getTestData(const char *type, Config &config)
             "TITLE:tester\n"
             "N:Doe;<<UNIQUE>>;<<REVISION>>;;\n"
             "FN:<<UNIQUE>> Doe\n"
+            "UID:<<UNIQUE>>-25741c35e5431f054444fdf4571219c3\n"
             "TEL;TYPE=WORK;TYPE=VOICE:business 1\n"
             "X-EVOLUTION-FILE-AS:Doe\\, <<UNIQUE>>\n"
             "X-MOZILLA-HTML:FALSE\n"
@@ -7679,6 +7689,12 @@ void ClientTest::getTestData(const char *type, Config &config)
         config.m_itemType = "text/calendar";
         config.m_essentialProperties = iCalEssential;
         config.m_mangleItem = mangleICalendar20;
+
+        // Although iCalendar 2.0 is used in EDS, uniqueness is not
+        // really enforced when syncing. The test data does not have
+        // UID set and thus would not pass testInsertTwice.
+        config.m_uniqueID = false;
+
         config.m_insertItem =
             "BEGIN:VCALENDAR\n"
             "PRODID:-//Ximian//NONSGML Evolution Calendar//EN\n"

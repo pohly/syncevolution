@@ -1,13 +1,13 @@
-@@ -32,7 +32,7 @@
- BEGIN:VCARD
+@@ -36,7 +36,7 @@
  VERSION:3.0
+ UID:unique-id-user12
  NICKNAME:user12
 -NOTE:ampersand entity &amp\; less-than entity &lt\;
 +NOTE:ampersand entity &amp less-than entity &lt
  FN:xml entities
  N:xml;entities;;;
  X-EVOLUTION-FILE-AS:xml\, entities
-@@ -88,9 +88,9 @@
+@@ -97,9 +97,9 @@
    mailing address)\n- long lines (in this note)\n- special characters (in
    this note)\n- tabs (in this note)\n\nVery long line\, very very long th
   is time... still not finished... blah blah blah blah blah 1 2 3 4 5 6 7 
@@ -19,8 +19,8 @@
   line starts with tab
  FN:Umlaut Ä Ö Ü ß
  N:Ü;Ä;Ö;Umlaut;ß
-@@ -115,7 +115,7 @@
- X-EVOLUTION-ASSISTANT:
+@@ -124,7 +124,7 @@
+ UID:unique-id-user8
  NICKNAME:user8
  X-EVOLUTION-SPOUSE:
 -NOTE:Here are some special characters: comma \, colon : semicolon \;
@@ -28,7 +28,7 @@
  FN:special characters
  N:characters;special;;;
  X-EVOLUTION-FILE-AS:characters\, special
-@@ -156,7 +156,7 @@
+@@ -164,7 +164,7 @@
  VERSION:3.0
  URL:http://john.doe.com
  TITLE:Senior Tester
@@ -37,7 +37,7 @@
  ROLE:professional test case
  X-EVOLUTION-MANAGER:John Doe Senior
  X-EVOLUTION-ASSISTANT:John Doe Junior
-@@ -168,7 +168,7 @@
+@@ -177,7 +177,7 @@
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
  FN:John Doe
@@ -46,8 +46,8 @@
  X-EVOLUTION-FILE-AS:Doe\, John
  CATEGORIES:TEST
  X-EVOLUTION-BLOG-URL:web log
-@@ -288,7 +288,7 @@
- X-EVOLUTION-ASSISTANT:
+@@ -297,7 +297,7 @@
+ UID:unique-id-user6
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
 -NOTE:The first name is "First \; special \;".

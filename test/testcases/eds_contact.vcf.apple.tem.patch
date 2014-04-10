@@ -1,4 +1,4 @@
-@@ -163,7 +163,7 @@
+@@ -172,7 +172,7 @@
  NICKNAME:user1
  BDAY:2006-01-08
  X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer

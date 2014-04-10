@@ -283,6 +283,13 @@ struct ClientTestConfig {
     boost::function<std::string (const std::string &data, bool update, const std::string &uniqueUIDSuffix)> m_mangleItem;
 
     /**
+     * Items have a UID which really has to be unique among all items
+     * in the database. True for iCalendar 2.0, false for vCard 3.0
+     * (there is a UID, but its uniqueness is not enforced).
+     */
+    bool m_uniqueID;
+
+    /**
      * A very simple item that is inserted during basic tests. Ideally
      * it only contains properties supported by all servers.
      */

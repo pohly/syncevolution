@@ -1,6 +1,7 @@
-@@ -1,5 +1,35 @@
+@@ -1,5 +1,38 @@
  BEGIN:VCARD
  VERSION:3.0
++UID:unique-id-user20
 +NICKNAME:user20
 +NOTE:PHOTO with invalid relative file URI
 +FN:bad file URI
@@ -11,6 +12,7 @@
 +
 +BEGIN:VCARD
 +VERSION:3.0
++UID:unique-id-user19
 +NICKNAME:user19
 +NOTE:PHOTO with relative file URI
 +FN:file URI
@@ -21,6 +23,7 @@
 +
 +BEGIN:VCARD
 +VERSION:3.0
++UID:unique-id-user18
 +NICKNAME:user18
 +NOTE:PHOTO with uri as value
 +FN:photo URI
@@ -31,6 +34,6 @@
 +
 +BEGIN:VCARD
 +VERSION:3.0
+ UID:unique-id-user17
  NICKNAME:user17
  NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
- FN:parserbug=

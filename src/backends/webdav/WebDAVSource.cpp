@@ -323,10 +323,16 @@ const std::string *WebDAVSource::setResourceName(const std::string &item, std::s
         olduid.resize(olduid.size() - suffix.size());
     }
 
-    // first check if the item already contains the right UID
+    // First check if the item already contains the right UID
+    // or at least some UID. If there is a UID, we trust it to be correct,
+    // because our guess here (resource name == UID) can be wrong, for
+    // example for items created by other clients or by us when using
+    // POST and letting the server choose the resource name.
+    //
+    // This relies on our peer doing the right thing.
     size_t start, end;
     std::string uid = extractUID(item, &start, &end);
-    if (uid == olduid) {
+    if (uid == olduid || !uid.empty()) {
         return &item;
     }
 

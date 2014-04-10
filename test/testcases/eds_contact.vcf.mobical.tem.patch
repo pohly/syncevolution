@@ -1,4 +1,4 @@
-@@ -4,6 +4,7 @@
+@@ -5,6 +5,7 @@
  NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
  FN:parserbug=
  N:parserbug=;;;;
@@ -6,7 +6,7 @@
  X-EVOLUTION-FILE-AS:parserbug=
  END:VCARD
  
-@@ -14,6 +15,7 @@
+@@ -16,6 +17,7 @@
  FN:incomplete
  N:incomplete;;;;
  EMAIL:
@@ -14,7 +14,7 @@
  X-EVOLUTION-FILE-AS:incomplete
  END:VCARD
  
-@@ -26,6 +28,7 @@
+@@ -29,6 +31,7 @@
   before a space\, 3.0 inserts line break plus space.
  FN:long line
  N:line;long;;;
@@ -22,7 +22,7 @@
  X-EVOLUTION-FILE-AS:line\, long
  END:VCARD
  
-@@ -35,6 +38,7 @@
+@@ -39,6 +42,7 @@
  NOTE:ampersand entity &amp\; less-than entity &lt\;
  FN:xml entities
  N:xml;entities;;;
@@ -30,7 +30,7 @@
  X-EVOLUTION-FILE-AS:xml\, entities
  END:VCARD
  
-@@ -44,6 +48,7 @@
+@@ -49,6 +53,7 @@
  NOTE:a colon is not a special character so here it comes : and not quoting necessary
  FN:colon
  N:colon;unquoted;;;
@@ -38,7 +38,7 @@
  X-EVOLUTION-FILE-AS:colon\, unquoted
  END:VCARD
  
-@@ -53,6 +58,7 @@
+@@ -59,6 +64,7 @@
  NOTE:here are some quotation marks: single ' double " back ` - none of them is special
  FN:quotation marks
  N:marks;quotation;;;
@@ -46,7 +46,7 @@
  X-EVOLUTION-FILE-AS:marks\, quotation
  END:VCARD
  
-@@ -62,6 +68,7 @@
+@@ -69,6 +75,7 @@
  NOTE:Spouse's Name: foobar
  FN:spouse name
  N:name;spouse;;;
@@ -54,7 +54,7 @@
  X-EVOLUTION-FILE-AS:spouse\, name
  END:VCARD
  
-@@ -71,6 +78,7 @@
+@@ -79,6 +86,7 @@
  NOTE;CHARSET="UTF-8":Tests charset specification with quotation marks.
  FN:charset
  N:set;char;;;
@@ -62,7 +62,7 @@
  X-EVOLUTION-FILE-AS:set\, char
  END:VCARD
  
-@@ -118,6 +126,7 @@
+@@ -127,6 +135,7 @@
  NOTE:Here are some special characters: comma \, colon : semicolon \;
  FN:special characters
  N:characters;special;;;
@@ -70,7 +70,7 @@
  X-EVOLUTION-FILE-AS:characters\, special
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -156,12 +165,12 @@
+@@ -164,13 +173,13 @@
  VERSION:3.0
  URL:http://john.doe.com
  TITLE:Senior Tester
@@ -79,21 +79,22 @@
  ROLE:professional test case
  X-EVOLUTION-MANAGER:John Doe Senior
  X-EVOLUTION-ASSISTANT:John Doe Junior
+ UID:unique-id-user1
  NICKNAME:user1
 -BDAY:2006-01-08
 +BDAY:2007-03-01
  X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
  X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
  X-EVOLUTION-ANNIVERSARY:2006-01-09
-@@ -185,7 +194,6 @@
+@@ -194,7 +203,6 @@
   5;Testovia
  LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
    Box #1\nTestovia
 -ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
  LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
    #3\nNew Testonia
- UID:pas-id-43C0ED3900000001
-@@ -214,7 +222,7 @@
+ EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
+@@ -222,7 +230,7 @@
  
  BEGIN:VCARD
  VERSION:3.0
@@ -102,7 +103,7 @@
  TITLE:
  ROLE:
  X-EVOLUTION-MANAGER:
-@@ -250,7 +258,7 @@
+@@ -258,7 +266,7 @@
  
  BEGIN:VCARD
  VERSION:3.0
@@ -111,7 +112,7 @@
  TITLE:
  ROLE:
  X-EVOLUTION-MANAGER:
-@@ -281,7 +289,7 @@
+@@ -289,7 +297,7 @@
  
  BEGIN:VCARD
  VERSION:3.0
@@ -120,7 +121,7 @@
  TITLE:
  ROLE:
  X-EVOLUTION-MANAGER:
-@@ -290,7 +298,7 @@
+@@ -299,7 +307,7 @@
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
  FN:Mr. First \; special \; middle Last
@@ -129,7 +130,7 @@
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -302,7 +310,7 @@
+@@ -310,7 +318,7 @@
  
  BEGIN:VCARD
  VERSION:3.0
@@ -138,7 +139,7 @@
  TITLE:
  ROLE:
  X-EVOLUTION-MANAGER:
-@@ -384,53 +392,8 @@
+@@ -393,53 +401,8 @@
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <

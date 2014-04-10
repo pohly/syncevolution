@@ -1,5 +1,6 @@
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user17
 NICKNAME:user17
 NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
 FN:parserbug=
@@ -9,6 +10,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user16
 NICKNAME:user16
 NOTE:test case with empty email
 FN:incomplete
@@ -19,6 +21,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user11
 NICKNAME:user11
 NOTE:This is a long line without any special characters. This is a simpler 
  example that should require folding in vcards. Does folding insert a crlf
@@ -31,6 +34,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user12
 NICKNAME:user12
 NOTE:ampersand entity &amp\; less-than entity &lt\;
 FN:xml entities
@@ -40,6 +44,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user13
 NICKNAME:user13
 NOTE:a colon is not a special character so here it comes : and not quoting necessary
 FN:colon
@@ -49,6 +54,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user14
 NICKNAME:user14
 NOTE:here are some quotation marks: single ' double " back ` - none of them is special
 FN:quotation marks
@@ -58,6 +64,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user15
 NICKNAME:user15
 NOTE:Spouse's Name: foobar
 FN:spouse name
@@ -67,6 +74,7 @@ END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user9
 NICKNAME:user9
 NOTE;CHARSET="UTF-8":Tests charset specification with quotation marks.
 FN:charset
@@ -81,6 +89,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user2
 NICKNAME:user2
 X-EVOLUTION-SPOUSE:
 NOTE:This user tests some of the advanced aspects of vcards:\n- non-ASCII c
@@ -103,7 +112,6 @@ X-EVOLUTION-VIDEO-URL:
 X-MOZILLA-HTML:FALSE
 ADR;TYPE=HOME:test 5;Line 2;Umlaut Ä in Line 1;test 1;test 3;test 2;test 4
 LABEL;TYPE=HOME:Umlaut Ä in Line 1\nLine 2\n\ntest 1\, test 3\ntest 2\ntest 5\ntest 4
-UID:pas-id-43C0EF0A00000002
 END:VCARD
 
 BEGIN:VCARD
@@ -113,6 +121,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user8
 NICKNAME:user8
 X-EVOLUTION-SPOUSE:
 NOTE:Here are some special characters: comma \, colon : semicolon \;
@@ -124,7 +133,6 @@ CALURI:
 FBURL:
 X-EVOLUTION-VIDEO-URL:
 X-MOZILLA-HTML:FALSE
-UID:pas-id-43C15E84000001AC
 END:VCARD
 
 BEGIN:VCARD
@@ -134,6 +142,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user7
 NICKNAME:user7
 X-EVOLUTION-SPOUSE:
 NOTE:This test case uses line breaks. This is line 1.\nLine 2.\n\nLine brea
@@ -149,7 +158,6 @@ X-EVOLUTION-VIDEO-URL:
 X-MOZILLA-HTML:FALSE
 ADR;TYPE=HOME:;Address Line 2\nAddress Line 3;Address Line 1;;;;
 LABEL;TYPE=HOME:Address Line 1\nAddress Line 2\nAddress Line 3
-UID:pas-id-43C15DFB000001AB
 END:VCARD
 
 BEGIN:VCARD
@@ -160,6 +168,7 @@ ORG:Test Inc.;Testing;test#1
 ROLE:professional test case
 X-EVOLUTION-MANAGER:John Doe Senior
 X-EVOLUTION-ASSISTANT:John Doe Junior
+UID:unique-id-user1
 NICKNAME:user1
 BDAY:2006-01-08
 X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
@@ -188,7 +197,6 @@ LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
 ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
 LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
   #3\nNew Testonia
-UID:pas-id-43C0ED3900000001
 EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
 EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
 EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
@@ -219,6 +227,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user5
 NICKNAME:user5
 X-EVOLUTION-SPOUSE:
 NOTE:image in JPG format
@@ -245,7 +254,6 @@ PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQEASABIAAD/4QAWRXhpZgAATU0AKgAA
  JXuScoO45Awe2CIi96aKW1cVyubkYVy6rTqz0J8a5t2qqZl0UjAMwYKScfPAJ+cIQHHP0Dth
  VFaMWt0XwxetnM50Ks2rsxL6ZMnJlJmb5hBBBEiVxjA28dznqo+hdksbQuS3Hs6tVtNzdM1Z
  /VH5nO3Bl/CJmYHKDynjv3zCEB5rLQNo0bIbydWNWxKljbLQLoWkISOAkBKAABCEID//2Q==
-UID:pas-id-43C0F0B500000005
 END:VCARD
 
 BEGIN:VCARD
@@ -255,6 +263,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user4
 NICKNAME:user4
 X-EVOLUTION-SPOUSE:
 NOTE:image in PNG format
@@ -276,7 +285,6 @@ PHOTO;ENCODING=b;TYPE=PNG:iVBORw0KGgoAAAANSUhEUgAAACQAAAAXCAYAAABj7u2bAAAAB
  BHcEv7FvyN8xxqmeynovA1Baf4UVvANhyn/Uq8E/Q57ssNufhvx1QZrDHfS9p9i3sQsnscdN
  owXWEQlOBXMYyI4j3EavqFUzpOYl4OTqUJ9+NzmkbXyb6Ryfumm7Wso4it2cYXL6K6PeBmcV
  8E5iEvxPDjv8CyVaxQfsIfbqGIlf17k6Bb/Ae0cnahfg6KuAAAAAElFTkSuQmCC
-UID:pas-id-43C0F07900000004
 END:VCARD
 
 BEGIN:VCARD
@@ -286,6 +294,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user6
 NICKNAME:user6
 X-EVOLUTION-SPOUSE:
 NOTE:The first name is "First \; special \;".
@@ -297,7 +306,6 @@ CALURI:
 FBURL:
 X-EVOLUTION-VIDEO-URL:
 X-MOZILLA-HTML:FALSE
-UID:pas-id-43C15D55000001AA
 END:VCARD
 
 BEGIN:VCARD
@@ -307,6 +315,7 @@ TITLE:
 ROLE:
 X-EVOLUTION-MANAGER:
 X-EVOLUTION-ASSISTANT:
+UID:unique-id-user3
 NICKNAME:user3
 X-EVOLUTION-SPOUSE:
 NOTE:image in GIF format
@@ -322,11 +331,11 @@ PHOTO;ENCODING=b;TYPE=GIF:R0lGODlhJAAXAIABAAAAAP///yH+FUNyZWF0ZWQgd2l0aCBUa
  GUgR0lNUAAh+QQBCgABACwAAAAAJAAXAAACVYyPqcvtD6OctNqLFdi8b/sd3giAJRNmqXaKH
  TIaZJKSpx3McLtyeSuTAWm34e+4WBGFuJ/P1QjZek9ksjiRGqFCTW5pZblmzdiO+GJWncqM+
  w2PwwsAOw==
-UID:pas-id-43C0F04B00000003
 END:VCARD
 
 BEGIN:VCARD
 VERSION:3.0
+UID:unique-id-user10
 NICKNAME:user10
 X-EVOLUTION-SPOUSE:
 NOTE:large vcard with plenty of special chars < & < & < & < & < & < & < & <
