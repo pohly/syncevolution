@@ -100,10 +100,10 @@ database
   Google Contacts). Conceptually a database is a set of items where each
   item is independent of the others.
 
-data source
-  A name for something that provides access to data. Primarily used for
-  the configuration which combines backend and database settings, sometimes
-  also instead of these two terms.
+backend
+  Access to databases is provided by SyncEvolution backends. It does
+  not matter where that data is stored. Some backends provide access
+  to data outside of the host itself (`CalDAV and CardDAV`_, ActiveSync).
 
 local/remote
   Synchronization always happens between a pair of databases and thus
@@ -114,49 +114,83 @@ local/remote
 
 sync config
   A sync configuration defines how to access a peer: the protocol
-  which is to be used, how to find the peer, credentials, etc. Peers
-  might support more than one protocol, in which case multiple
-  sync configs have to be created.
+  which is to be used, how to find the peer, credentials, etc.
 
   Sync configs can be used to initiate a sync (like contacting a
   SyncML server) or to handle an incoming sync request (when acting
   as SyncML server which is contacted by the peer).
 
+  If the peer supports SyncML as sync protocol, a sync only uses one
+  sync config on the SyncEvolution side. If the peer supports data
+  access via some other protocols, then SyncEvolution can make that
+  data available via SyncML and run a sync where SyncML is used
+  internally.  Such a sync involves two sync configs, see `originating
+  config`_ and `target config`_.
+
+  Which data gets synchronized is configured in the source configs used
+  by the sync config.
+
+data source (or just "source")
+  A name for something that provides access to data. Primarily used for
+  the combination of SyncEvolution backend (see below) and database settings.
+  A data source provides read/write access to a database, which is a prerequisite
+  for syncing the database.
+
 source config
-  Each data source corresponds to a local database. A source config
-  defines how to access that database, like a sync config does for
-  peers. This information about a local database is independent
+  A source config records the information required for accessing
+  a data source. This information about a database is independent
   of the peers that the database might be synchronized with.
 
-  Sync configs use these shared source configs and add additional,
-  per-peer settings to each of them that define how that local
-  database maps to a remote database in the peer. By default a source
-  config is inactive inside a sync config and thus ignored. It must be
-  activated by setting the unshared `sync` property to something other
-  than `none` (aka `disabled`).
+  Some additional information about a source depends on the sync
+  config using the source and thus can be set differently for each
+  of them (also called "per-peer" or "unshared"). For example, the pairing
+  between sources can be set with the ``uri`` property if the name of the
+  sources are different.
 
-  In SyncEvolution's predefined configuration templates, the following
-  names for sources are used. Different names can be chosen for sources
-  that are defined manually.
+  By default a source config is inactive inside a sync config and thus
+  ignored during a sync. It must be activated by setting the per-peer
+  ``sync`` property (more on properties below) to something other than
+  ``none`` (aka ``disabled``). This can be used to configure a sync
+  with a peer which cannot or is not allowed to sync all sources.
 
-  * addressbook: a list of contacts
-  * calendar: calendar *events*
-  * memo: plain text notes
-  * todo: task list
-  * calendar+todo: a virtual source combining one local "calendar" and
-    one "todo" source (required for synchronizing with some phones)
+context
+  Sync and source configs are defined inside one or more configuration
+  contexts. There is always a ``@default`` context that gets used if nothing
+  else is specified.
 
-backend
-  Access to databases is provided by SyncEvolution backends. It does
-  not matter where that data is stored. Some backends provide access
-  to data outside of the host itself (`CalDAV and CardDAV`_, ActiveSync).
+  A sync config can use all sources defined in the same context.
 
-configuration property
-  Sync and source configs contain configuration properties. Each
-  property is a name/value pair. Sync properties are used in sync configs,
-  source properties in source configs. The names were chosen so that
-  they are unique, i.e., no sync property has the same name as a source
-  property.
+  Typically each context represents a certain set of related
+  sources. For example, normally the ``@default`` context is used for
+  local databases. Data sources related to a certain peer can
+  be defined in a context ``@peer-name`` named after that peer.
+
+configuration properties
+  SyncEvolution uses key/value pairs to store configuration options.
+  A configuration is a set of unique keys and their values that together
+  describe a certain object.
+
+  These sets of properties are addressed via the main config name (a
+  sync config name with or without an explicit context, or just the
+  context name) and optionally the source name (if the properties
+  are for a specific source).
+
+  Sync properties are set for sync configs, independently of a
+  particular source. Properties that cannot be set without naming
+  a source are source properties. This includes the intersection of
+  properties that belong both to a source and a sync config.
+
+  The property names were chosen so that they are unique, i.e., no
+  sync property has the same name as a source property. For historic
+  reasons, internally these properties are treated as two different
+  sets and there are two different command line options to query the
+  list of sync resp. source properties.
+
+  Some configuration properties are shared between configurations
+  automatically. This sharing is hard-coded and cannot be configured.
+  It has the advantage that certain settings only need to be set
+  once and/or can be changed for several different configs
+  at once.
 
   A property can be *unshared* (has separate values for each peer, therefore
   sometimes also called *per-peer*; for example the `uri` property which
@@ -164,16 +198,41 @@ configuration property
   example the `database` property for selecting the local database) or
   *global* (exactly one value).
 
-context
-  Sync and source configs are defined inside a configuration context.
-  Typically each context represents a certain set of sources. The values
-  of shared properties are only shared inside their context. That way
-  it is possible to define a second `work` context with a `work calendar`
-  source using one database and use the implicit `default` context for
-  a private `calendar` source with a different database.
+  Together with the distinction between sync and source properties,
+  this currently results in five different groups of properties:
 
-context config
-  The shared and global properties of a certain context.
+  * Sync properties (by definition, this also includes properties
+    independent of a particular sync config because they can be set
+    without naming a source):
+    * global (= ``~/.config/syncevolution/config.ini``):
+      independent of a particular context, for example ``keyring``
+    * shared (= ``~/.config/syncevolution/<context name>/config.ini``):
+      set once for each context, for example ``logdir``
+    * unshared (= ``~/.config/syncevolution/<context name>/peers/<peer name>/config.ini``):
+      set separately for each sync config, for example ``syncURL``
+  * Source properties:
+    * shared (= ``~/.config/syncevolution/<context name>/sources/<source name>/config.ini``):
+      the properties required for access to the data, primarily ``backend`` and ``database``
+    * unshared (= ``~/.config/syncevolution/<context name>/peers/<peer name>/sources/<source name>/config.ini``):
+      the already mentioned ``sync`` and ``uri`` properties, but also a per-peer
+      sync format properties
+
+  Many properties have reasonable defaults, either defined in the
+  configuration layer or chosen at runtime by the SyncEvolution
+  engine reading the configuration, and therefore do not have to
+  be set.
+
+  The configuration layer in SyncEvolution has a very limited
+  understanding of the semantic of each property. It just knows about
+  some generic types (strings, boolean, integers, ...) and where
+  properties are supposed to be stored. It is the layer above that,
+  the one which actually tries to use the configuration, that
+  determines whether the property values make sense as
+  specified. Beware that it is possible to set properties to values
+  that conflict with other property values (triggering errors when
+  using the configuration) or to set properties that are not used
+  (typically they get ignored silently, unless an explicit error check
+  was implemented).
 
 configuration template
   Templates define the settings for specific peers. Some templates
@@ -189,21 +248,38 @@ configuration template
   add sync configs for different peers to that context without
   reseting the existing settings.
 
+  In SyncEvolution's predefined configuration templates, the following
+  names for sources are used. Different names can be chosen for sources
+  that are defined manually.
+
+  * addressbook: a list of contacts
+  * calendar: calendar *events*
+  * memo: plain text notes
+  * todo: task list
+  * calendar+todo: a virtual source combining one local "calendar" and
+    one "todo" source (required for synchronizing with some phones)
+
 local sync
   Traditionally, a sync config specifies SyncML as the synchronization
-  protocol. The peer must support SyncML for this to work. When the
-  peer acts as SyncML server, conflict resolution happens on the
-  peer, outside of the control of SyncEvolution.
+  protocol via the `syncURL` property. The peer must support SyncML for
+  this to work.
 
-  In a so called `local sync`_, SyncEvolution connects two of its own
-  backends and runs all of the synchronization logic itself on the host.
+  In a so called local sync, SyncEvolution acts as SyncML server
+  and client at the same time, connecting the two sides via internal
+  message passing. Both sides have their own set of sources, which may
+  use CalDAV, CardDAV or ActiveSync to access the data.
+
+  See `Synchronization beyond SyncML`_.
+
+originating config
+  In a local sync, the sync config used to start the sync is called
+  the originating sync config, or just originating config.
 
 target config
-  In addition to the normal sync config, a local sync also uses a target
-  config. This target config is a special kind of sync config. It defines
-  sync properties that are necessary to access databases on the other
-  side of the local sync. Sync configs can have arbitrary names while
-  a target config must be named `target-config`.
+  In addition to the originating config, a local sync also uses a target
+  config. At the configuration level, this target config is just another
+  sync config. It becomes a target config when referenced by a sync config
+  for local syncing.
 
 
 COMMAND LINE CONVENTIONS
@@ -213,11 +289,12 @@ The ``<config>`` and the ``<source>`` strings in the command line synopsis are
 used to find the sync resp. source configs. Depending on which
 other parameters are given, different operations are executed.
 
-A config name has the format ``[<peer>][@<context>]``. When the context
-is not specified explicitly, SyncEvolution first searches for an
-existing configuration with the given name. If not found, it uses the
-``@default`` context as fallback. Thus the empty config name is an alias
-for ``@default``.
+The ``<config>`` string has the format ``[<peer>][@<context>]``. When
+the context is not specified explicitly, SyncEvolution first searches
+for an existing sync configuration with the given ``<peer>`` name. If
+not found, the configuration can only be created, but not read. It
+will be created in the ``@default`` context as fallback. The empty
+``<config>`` string is an alias for ``@default``.
 
 The ``<peer>`` part identifies a specific sync or target config inside
 the context. It is optional and does not have to be specified when not
@@ -227,13 +304,13 @@ source (``--print-items @work calendar``).
 
 Listing sources on the command line limits the operation to those
 sources (called *active sources* below). If not given, all sources
-defined for the config are active. Some operations require
+enabled for the config are active. Some operations require
 the name of exactly one source.
 
 Properties are set with key/value assignments and/or the
 ``--sync/source-property`` keywords. Those keywords are only needed for
 the hypothetical situation that a sync and source property share the
-same name (not normally the case). Without them, SyncEvolution
+same name (which was intentionally avoided). Without them, SyncEvolution
 automatically identifies which kind of property is meant based on the
 name.
 
@@ -273,7 +350,7 @@ Another way to achieve the same effect is to run the ``--configure``
 operation twice, once for ``addressbook`` and once for ``calendar``::
 
   --configure "database=My Addressbook" @default addressbook
-  --configure "calendar/database=My Calendar" @default calendar
+  --configure "database=My Calendar" @default calendar
 
 If the same property is set both with and without a ``<source>/`` prefix,
 then the more specific value with that prefix is used for that source,
@@ -805,32 +882,70 @@ Some examples of things that can be done with local sync:
 * mirror a local database as items in a directory, with format conversion
   and one-way or two-way data transfer (export vs. true syncing)
 
-Because local sync involves two sides, two configurations are
-needed. One is called the *target config*. By convention it must be
-called ``target-config@<some context name>``, for example
-``target-config@google-calendar``. The target config holds properties
-which apply to all sources inside that context, like user name, 
-password and URL for the server. Once configured, the target config
-can be used to list/import/export/update items via the SyncEvolution
-command line. It cannot be used for synchronization because it does
-not defined what the items are supposed to be synchronized with.
+Because local sync involves two sides, two sync configurations are
+needed. One is called the *target config*. Traditionally, this really
+was a configuration called ``target-config``, for example
+``target-config@google``. This is no longer required.
 
-For synchronization, a second *sync config* is needed. This config has
-the same role as the traditional SyncML configs and is typically
+The target config can hold properties which apply to all sources
+inside its context, like user name, password and URL for the server
+(more on that below) and sync settings (like logging and data
+backups). Once configured, the target config can be used to
+list/import/export/update items via the SyncEvolution command line. It
+cannot be used for synchronization because it does not defined what
+the items are supposed to be synchronized with.
+
+For synchronization, a second *originating config* is needed. This config has
+the same role as the traditional SyncML sync configs and is typically
 defined in the same implicit ``@default`` context as those
-configs. All configs in that context use the same local data. The sync
-config defines the database pairs and the sync mode (one-way, two-way, ...).
+configs. All configs in that context use the same local data, thus turning
+that local data into the hub through with data flows to all peers that the
+host is configured to sync with.
 
-The first step is to select a target config with
-``syncURL=local://@<some context name>``. Multiple sync configs can
-access the same target config. In the second step, the ``uri`` of each
-source in the sync config must be set to the name of the corresponding
-source in the target config.  The ``sync`` property in the sync config
-defines the direction of the data flow. It can be set temporarily when
-starting a synchronzation with the sync config.
+A sync config becomes an originating config in a local sync by setting
+the ``syncURL`` to the special URL ``local://[<target config
+name>][@<some context name>]``. This selects the target config to
+sync with. If the target config name is left out, the actual string
+``target-config`` is used as name. The context can be omitted if the
+target config name is unique. Originating and target config can be in
+the same context. Care must be taken to not use a source more than
+once in a local sync.
+
+In addition, ``peerIsClient=1`` must be set in the originating config,
+because SyncEvolution only supports running the SyncML client on the
+target side. It makes sense to use the local databases on
+originating side, because that side requires more frequent access to
+the data.
+
+The originating config defines the database pairs, either implicitly
+(by using the same source names on both sides, which is possible when
+different contexts are used) or explicitly (via the `uri` properties
+set for the sources on the originating side). The originating config
+also defines the ``sync`` mode for each pair. ``uri`` and ``sync``
+values on the target side are ignored and do not have to be specified.
+
+As a special case, sources used in combination with the target config
+may access the credentials and ``syncURL`` stored there as fallback when
+nothing was specified for the sources directly. This makes sense for
+the WebDAV and ActiveSync backends where the credentials are typically
+the same and (depending on the web server) the same start URL can be
+used to find calendar and contact databases.
+
+  **Warning:** when setting password for the target config and using a
+  keyring, a ``syncURL`` or a unique ``remoteDeviceID`` string must be
+  set, because they are needed to identify the host in the keyring.
+
+TODO: take host from username, if it is an email address.
+
+If this feature is not used, the ``syncURL`` could be left empty because
+local sync itself does not use it. However, the command line expects
+it to be set to ``none`` explicitly to detect typos.
 
   **Warning:** because the client in the local sync starts the sync,
   ``preventSlowSync=0`` must be set in the target config to have an effect.
+
+TODO: this is inconsistent. Should we allow the user to set preventSlowSync
+in the originating config and use that on the target side?
 
 
 CalDAV and CardDAV
@@ -876,7 +991,7 @@ To scan for collections, use::
                  backend=<caldav or carddav> \
                  username=<email address or user name> \
                  "password=!@#ABcd1234" \
-                 syncURL=<base URL of server, if auto-discovery is not supported>
+                 syncURL=<base URL of server, if server auto-discovery is not supported>
 
 Configuration templates for Google Calendar, Yahoo Calendar and a
 generic CalDAV/CardDAV server are included in SyncEvolution. The Yahoo
@@ -884,14 +999,18 @@ template also contains an entry for contact synchronization, but using
 it is not recommended due to known server-side issues.
 
 The following commands set up synchronization with a generic WebDAV
-server that supports CalDAV, CardDAV and auto-discovery. For Google and Yahoo,
-replace ``webdav`` with ``google-calendar`` resp. ``yahoo`` and remove the
-``addressbook`` source when setting up the sync config. ::
+server that supports CalDAV, CardDAV and scanning starting at the
+root of the server.
+
+For Google there is no common start URL for CalDAV and CardDAV.
+TODO: document how to use Google.
+TODO: Yahoo not currently supported, remove template?
 
    # configure target config
    syncevolution --configure \
                 --template webdav \
-                username=123456@example.com \
+                syncURL=http://example.com \
+                username=123456 \
                 "password=!@#ABcd1234" \
                 target-config@webdav
 
@@ -912,13 +1031,16 @@ replace ``webdav`` with ``google-calendar`` resp. ``yahoo`` and remove the
 
 Here are some alternative ways of configuring the target config::
 
-   # A) Server has one URL as starting point instead of DNS auto-discovery.
+   # A) Server supports DNS auto-discovery via domain name in the username.
    syncevolution --configure \
                 --template webdav \
-                username=123456 \
+                username=123456@example.com \
                 "password=!@#ABcd1234" \
-                syncURL=http://example.com \
                 target-config@webdav
+
+TODO: take host name from username in this case, to satisfy GNOME keyring. Currently
+one gets:
+[ERROR 00:00:09] sync password for target-config@foobar: cannot store password in GNOME keyring, not enough attributes (user=123456@example.com). Try setting syncURL or remoteDeviceID if this is a sync password.
 
    # B) Explicitly specify collections (from server documentation or --print-databases).
    #    The 'calendar' and 'addressbook' names are the ones expected by the sync config
@@ -926,12 +1048,24 @@ Here are some alternative ways of configuring the target config::
    syncevolution --configure \
                 username=123456 \
                 "password=!@#ABcd1234" \
+                --template none \
+                syncURL=http://example.com \
                 addressbook/backend=carddav \
                 addressbook/database=http://example.com/addressbooks/123456/ \
                 calendar/backend=caldav \
                 calendar/database=http://example.com/calendar/123456/ \
                 target-config@webdav \
                 calendar addressbook
+
+When creating these target configs, the command line tool tries to
+verify that the sources really work and (in the case of --template
+webdav) will enable only sources which really work. This involves
+contacting the WebDAV server. TODO: add command line options for
+controlling this aspect. "--force" to disable them? Or off by default
+and on with --sanity-checks=on? Must work for all backends, not just
+WebDAV.
+
+TODO: fix DNS auto-discovery. syncevo-webdav-lookup not packaged at the moment.
 
 Finally, here is how the ``@webdav`` context needs to be configured so that SyncML
 clients or servers can be added to it::
