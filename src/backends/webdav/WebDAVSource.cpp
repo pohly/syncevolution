@@ -553,12 +553,19 @@ void WebDAVSource::open()
 }
 
 static bool setFirstURL(Neon::URI &result,
+                        bool &resultIsReadOnly,
                         const std::string &name,
-                        const Neon::URI &uri)
+                        const Neon::URI &uri,
+                        bool isReadOnly)
 {
-    result = uri;
-    // stop
-    return false;
+    if (result.empty() ||
+        // Overwrite read-only with read/write collection.
+        (resultIsReadOnly && !isReadOnly)) {
+        result = uri;
+        resultIsReadOnly = isReadOnly;
+    }
+    // Stop if read/write found.
+    return resultIsReadOnly;
 }
 
 void WebDAVSource::contactServer()
@@ -589,13 +596,17 @@ void WebDAVSource::contactServer()
         return;
     }
 
-    // Create session and find first collection (the default).
+    // Create session and find first collection (the default). Prefer
+    // read/write collections over read-only, just like getDatabases()
+    // does.
+    bool isReadOnly;
     m_calendar = Neon::URI();
     SE_LOG_INFO(getDisplayName(), "determine final URL based on %s",
                 m_contextSettings ? m_contextSettings->getURLDescription().c_str() : "");
     findCollections(boost::bind(setFirstURL,
                                 boost::ref(m_calendar),
-                                _1, _2));
+                                boost::ref(isReadOnly),
+                                _1, _2, _3));
     if (m_calendar.empty()) {
         throwError(SE_HERE, "no database found");
     }
@@ -642,7 +653,8 @@ void WebDAVSource::contactServer()
 }
 
 bool WebDAVSource::findCollections(const boost::function<bool (const std::string &,
-                                                               const Neon::URI &)> &storeResult)
+                                                               const Neon::URI &,
+                                                               bool isReadOnly)> &storeResult)
 {
     bool res = true; // completed
     int timeoutSeconds = m_settings->timeoutSeconds();
@@ -960,6 +972,8 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 { "urn:ietf:params:xml:ns:caldav", "max-date-time" },
                 { "urn:ietf:params:xml:ns:caldav", "max-instances" },
                 { "urn:ietf:params:xml:ns:caldav", "max-attendees-per-instance" },
+                // ACL, http://www.ietf.org/rfc/rfc3744.txt
+                { "DAV:", "current-user-privilege-set" },
                 { NULL, NULL }
             };
             static const ne_propname carddav[] = {
@@ -977,6 +991,8 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 { "urn:ietf:params:xml:ns:carddav", "addressbook-description" },
                 { "urn:ietf:params:xml:ns:carddav", "supported-address-data" },
                 { "urn:ietf:params:xml:ns:carddav", "max-resource-size" },
+                // ACL, http://www.ietf.org/rfc/rfc3744.txt
+                { "DAV:", "current-user-privilege-set" },
                 { NULL, NULL }
             };
             SE_LOG_DEBUG(NULL, "read relevant properties of %s", path.c_str());
@@ -1084,11 +1100,33 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 if (it != props->end()) {
                     name = it->second;
                 }
+
+                // Might be read-only. Assume it is read/write unless we
+                // find the opposite.
+                bool isReadOnly = false;
+                it = props->find("DAV::current-user-privilege-set");
+                if (it != props->end()) {
+                    const std::string &priviliges = it->second;
+                    SE_LOG_DEBUG(NULL, "current-user-privilege-set: %s", priviliges.c_str());
+                    // Be careful here: parsing XML with string operations is fragile,
+                    // so don't go to read-only mode if we don't find DAV::read.
+                    // Also beware of the double vs. single colon oddity from libneon.
+                    if ((priviliges.find("DAV::write") == priviliges.npos &&
+                         priviliges.find("DAV::read") != priviliges.npos) ||
+                        (priviliges.find("DAV:write") == priviliges.npos &&
+                         priviliges.find("DAV:read") != priviliges.npos)) {
+                        isReadOnly = true;
+                    }
+                } else {
+                    SE_LOG_DEBUG(NULL, "no current-user-privilege-set, assume read/write");
+                }
+
                 SE_LOG_DEBUG(NULL, "found %s = %s",
                              name.c_str(),
                              uri.toURL().c_str());
                 res = storeResult(name,
-                                  uri);
+                                  uri,
+                                  isReadOnly);
                 if (!res) {
                     // done
                     break;
@@ -1319,7 +1357,8 @@ void WebDAVSource::close()
 
 static bool storeCollection(SyncSource::Databases &result,
                             const std::string &name,
-                            const Neon::URI &uri)
+                            const Neon::URI &uri,
+                            bool isReadOnly)
 {
     std::string url = uri.toURL();
 
@@ -1331,7 +1370,7 @@ static bool storeCollection(SyncSource::Databases &result,
         }
     }
 
-    result.push_back(SyncSource::Database(name, url));
+    result.push_back(SyncSource::Database(name, url, false, isReadOnly));
     return true;
 }
 
@@ -1343,7 +1382,30 @@ WebDAVSource::Databases WebDAVSource::getDatabases()
     if (m_contextSettings->getAuthProvider()->wasConfigured()) {
         findCollections(boost::bind(storeCollection,
                                     boost::ref(result),
-                                    _1, _2));
+                                    _1, _2, _3));
+
+        // Move all read-only collections to the end of the array.
+        // They are probably not the default calendar (for example,
+        // with ownCloud we find a read-only "Birthday Calendar"
+        // before the "Default Calendar").
+        //
+        // WebDAVSource::contactServer() does the same.
+        size_t e = result.size(), i = 0;
+        while (i < e) {
+            if (result[i].m_isReadOnly) {
+                // Move to end.
+                result.push_back(result[i]);
+                // Remove at current position.
+                result.erase(result.begin() + i);
+                // Check that position again and ignore the already
+                // checked entry at the end.
+                e--;
+            } else {
+                // Next position.
+                i++;
+            }
+        }
+
         if (!result.empty()) {
             result.front().m_isDefault = true;
         }
