@@ -138,25 +138,25 @@
         </property>
 
         <property name="CALURI" suppressempty="yes">
-          <value field="CALURI" show="yes"/>
+          <value field="CALURI"/>
         </property>
         <property name="FBURL" suppressempty="yes">
-          <value field="FBURL" show="yes"/>
+          <value field="FBURL"/>
         </property>
 
         <!-- X-EVOLUTION-BLOG-URL property for everyone except KDE -->
         <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="KDE"/>
         <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="other">
-          <value field="BLOGURL" show="yes"/>
+          <value field="BLOGURL"/>
         </property>
         <!-- the KDE way of expressing BLOGURL -->
         <property name="X-KADDRESSBOOK-BlogFeed" suppressempty="yes" show="no" rule="KDE">
-          <value field="BLOGURL" show="yes"/>
+          <value field="BLOGURL"/>
         </property>
 
         <!-- VIDEOURL not supported by KDE natively, let's use X-EVOLUTION-VIDEO-URL as extension -->
         <property name="X-EVOLUTION-VIDEO-URL" suppressempty="yes" rule="other">
-          <value field="VIDEOURL" show="yes"/>
+          <value field="VIDEOURL"/>
         </property>
 
         <!-- item for SyncML server: EVOLUTION rule not active,
@@ -178,28 +178,28 @@
         -->
         <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1" rule="KDE"/> <!-- disable X-EVOLUTION-MANAGER for KDE -->
         <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1" rule="other">
-          <value field="MANAGER" show="yes"/>
+          <value field="MANAGER"/>
         </property>
         <property name="X-MANAGER" suppressempty="yes" rule="EVOLUTION"/> <!-- disables the X-MANAGER for EVOLUTION -->
         <property name="X-MANAGER" suppressempty="yes" rule="KDE"/> <!-- disables the X-MANAGER for KDE -->
         <property name="X-MANAGER" suppressempty="yes" rule="other">
-          <value field="MANAGER" show="yes"/>
+          <value field="MANAGER"/>
         </property>
         <property name="X-KADDRESSBOOK-X-ManagersName" suppressempty="yes" show="no" rule="KDE">
-          <value field="MANAGER" show="yes"/>
+          <value field="MANAGER"/>
         </property>
 
         <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1" rule="KDE"/>
         <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1" rule="other">
-          <value field="ASSISTANT" show="yes"/>
+          <value field="ASSISTANT"/>
         </property>
         <property name="X-ASSISTANT" suppressempty="yes" rule="EVOLUTION"/>
         <property name="X-ASSISTANT" suppressempty="yes" rule="KDE"/>
         <property name="X-ASSISTANT" suppressempty="yes" rule="other">
-          <value field="ASSISTANT" show="yes"/>
+          <value field="ASSISTANT"/>
         </property>
         <property name="X-KADDRESSBOOK-X-AssistantsName" suppressempty="yes" show="no" rule="KDE">
-          <value field="ASSISTANT" show="yes"/>
+          <value field="ASSISTANT"/>
         </property>
 
         <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="KDE"/>
@@ -209,23 +209,23 @@
         <property name="X-SPOUSE" suppressempty="yes" rule="EVOLUTION"/>
         <property name="X-SPOUSE" suppressempty="yes" rule="KDE"/>
         <property name="X-SPOUSE" suppressempty="yes" rule="other">
-          <value field="SPOUSE" show="yes"/>
+          <value field="SPOUSE"/>
         </property>
         <property name="X-KADDRESSBOOK-X-SpousesName" suppressempty="yes" show="no" rule="KDE">
-          <value field="SPOUSE" show="yes"/>
+          <value field="SPOUSE"/>
         </property>
 
         <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1" rule="KDE"/>
         <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1" rule="other">
-          <value field="ANNIVERSARY" show="yes"/>
+          <value field="ANNIVERSARY"/>
         </property>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="EVOLUTION"/>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="KDE"/>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="other">
-          <value field="ANNIVERSARY" show="yes"/>
+          <value field="ANNIVERSARY"/>
         </property>
         <property name="X-KADDRESSBOOK-X-Anniversary" suppressempty="yes" show="no" rule="KDE">
-          <value field="ANNIVERSARY" show="yes"/>
+          <value field="ANNIVERSARY"/>
         </property>
 
 
@@ -361,23 +361,23 @@
           <position field="SMS_HANDLE" repeat="array" increment="1" minshow="0"/>
         </property>
         <property name="X-KADDRESSBOOK-CRYPTOENCRYPTPREF" suppressempty="yes">
-          <value field="CRYPTOENCRYPTPREF" show="yes"/>
+          <value field="CRYPTOENCRYPTPREF"/>
         </property>
         <property name="X-KADDRESSBOOK-CRYPTOPROTOPREF" suppressempty="yes">
-          <value field="CRYPTOPROTOPREF" show="yes"/>
+          <value field="CRYPTOPROTOPREF"/>
         </property>
         <property name="X-KADDRESSBOOK-CRYPTOSIGNPREF" suppressempty="yes">
-          <value field="CRYPTOSIGNPREF" show="yes"/>
+          <value field="CRYPTOSIGNPREF"/>
         </property>
         <property name="X-KADDRESSBOOK-OPENPGPFP" suppressempty="yes">
-          <value field="OPENPGPFP" show="yes"/>
+          <value field="OPENPGPFP"/>
         </property>
         <property name="X-KADDRESSBOOK-X-IMAddress" suppressempty="yes">
-          <value field="IM_ADDRESS" show="yes"/>
+          <value field="IM_ADDRESS"/>
         </property>
 
         <property name="X-MOZILLA-HTML">
-          <value field="WANTS_HTML" show="yes"/>
+          <value field="WANTS_HTML"/>
         </property>
 
         <property name="ADR" values="7">
