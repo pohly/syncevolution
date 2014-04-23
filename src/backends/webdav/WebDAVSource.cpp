@@ -1428,6 +1428,9 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
     }
     if (content == "VEVENT") {
         info.m_backendRule = "HAVE-SYNCEVOLUTION-EXDATE-DETACHED";
+    } else if (content == "VCARD") {
+        // Assume that a CardDAV server has and preserves UID values.
+        info.m_backendRule = "LOCALSTORAGE-WITH-UID";
     }
 
     // TODO: instead of identifying the peer based on the
@@ -1442,6 +1445,7 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 "          <deviceid>none</deviceid>\n"
                 // enable extensions, just in case (not relevant yet for calendar)
                 "          <include rule=\"ALL\"/>\n"
+                "          <include rule=\"HAVE-VCARD-UID\">\n"
                 "      </remoterule>";
         } else if (host.find("yahoo") != host.npos) {
             info.m_backendRule = "YAHOO";
@@ -1461,6 +1465,7 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 // doesn't seem to store the X-EVOLUTION-UI-SLOT parameter
                 // extensions.
                 "          <include rule=\"ALL\"/>\n"
+                "          <include rule=\"HAVE-VCARD-UID\">\n"
                 "      </remoterule>";
         } else {
             // fallback: generic CalDAV/CardDAV, with all properties
@@ -1470,6 +1475,7 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 "      <remoterule name='WEBDAV'>\n"
                 "          <deviceid>none</deviceid>\n"
                 "          <include rule=\"ALL\"/>\n"
+                "          <include rule=\"HAVE-VCARD-UID\">\n"
                 "      </remoterule>";
         }
         SE_LOG_DEBUG(getDisplayName(), "using data conversion rules for '%s'", info.m_backendRule.c_str());
