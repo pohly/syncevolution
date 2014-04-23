@@ -583,8 +583,11 @@ class Context:
         # run testresult checker
         testdir = compile.testdir
         backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
-        # resultchecker doesn't need valgrind, remove it
-        shell = re.sub(r'\S*valgrind\S*', '', options.shell)
+        # resultchecker doesn't need valgrind, remove it if present
+        shell = options.simpleshell
+        if not shell:
+            shell = options.shell
+        shell = re.sub(r'\S*valgrind\S*', '', shell)
         # When using schroot, run it in /tmp, because the host's directory might
         # not exist in the chroot.
         shell = shell.replace('schroot ', 'schroot -d /tmp ', 1)
@@ -1029,6 +1032,9 @@ parser.add_option("", "--resulturi",
 parser.add_option("", "--shell",
                   type="string", dest="shell", default="",
                   help="a prefix which is put in front of a command to execute it (can be used for e.g. run_garnome)")
+parser.add_option("", "--simple-shell",
+                  type="string", dest="simpleshell", default="",
+                  help="shell to use for result checking (just the environment, no daemons)")
 parser.add_option("", "--schrootdir",
                   type="string", dest="schrootdir", default="",
                   help="the path to the root of the chroot when using schroot in --shell; --resultdir already includes the path")
