@@ -1857,6 +1857,7 @@ syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
                              [ "--daemon-log", "syncevohttp.log" ] ) +
                        [ options.testprefix,
                          os.path.join(compile.installdir, "usr", "libexec", "syncevo-dbus-server"),
+                         '--verbosity=3', # Full information about daemon operation.
                          '--dbus-verbosity=1', # Only errors from syncevo-dbus-server and syncing.
                          '--stdout', '--no-syslog', # Write into same syncevohttp.log as syncevo-http-server.
                          '--duration=unlimited', # Never shut down, even if client is inactive for a while.
