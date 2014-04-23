@@ -3,6 +3,10 @@
       <field name="SYNCLVL" type="integer" compare="never"/>
       <field name="REV" type="timestamp" compare="never" age="yes"/>
 
+      <!-- If we knew that both sides have reliable UID support, we could use
+       it for pairing. But we don't know that and thus cannot rely on it. -->
+      <field name="UID" type="string" compare="never"/>
+
       <!-- Name elements -->
       <field name="N_LAST" type="string" compare="always"/>
       <field name="N_FIRST" type="string" compare="always"/>

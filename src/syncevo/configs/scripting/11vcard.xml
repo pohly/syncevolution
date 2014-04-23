@@ -1,0 +1,8 @@
+    <macro name="VCARD_BEFOREWRITE_SCRIPT"><![CDATA[
+      if (UID == EMPTY) { UID = newuid(); }
+      $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT;
+    ]]></macro>
+
+    <macro name="VCARD_AFTERREAD_SCRIPT"><![CDATA[
+      $VCARD_INCOMING_PHOTO_VALUE_SCRIPT;
+    ]]></macro>

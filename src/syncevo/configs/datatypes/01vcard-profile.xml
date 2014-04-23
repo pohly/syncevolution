@@ -17,6 +17,10 @@
           <value field="REV"/>
         </property>
 
+        <property name="UID" rule="HAVE-VCARD-UID" showindevinf="no">
+          <value field="UID"/>
+        </property>
+
         <property name="N" values="5" mandatory="yes"> <!-- Note: makes N parse and generate even if not in remote's CTCap -->
           <value index="0" field="N_LAST"/>
           <value index="1" field="N_FIRST"/>

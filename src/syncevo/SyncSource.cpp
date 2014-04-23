@@ -704,10 +704,10 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
         // include $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT in its own script,
         // otherwise it will be sent invalid, empty PHOTO;TYPE=unknown;VALUE=binary:
         // properties.
-        info.m_beforeWriteScript = "$VCARD_OUTGOING_PHOTO_VALUE_SCRIPT;\n";
+        info.m_beforeWriteScript = "$VCARD_BEFOREWRITE_SCRIPT;\n";
         // Likewise for reading. This is needed to ensure proper merging
         // of contact data.
-        info.m_afterReadScript = "$VCARD_INCOMING_PHOTO_VALUE_SCRIPT;\n";
+        info.m_afterReadScript = "$VCARD_AFTERREAD_SCRIPT;\n";
     } else if (type == "text/x-calendar" || type == "text/x-vcalendar") {
         info.m_native = "vCalendar10";
         info.m_fieldlist = "calendar";
