@@ -2072,6 +2072,9 @@ void Cmdline::listDatabases(SyncSource *source, const string &header)
             if (database.m_isDefault) {
                 out << " <default>";
             }
+            if (database.m_isReadOnly) {
+                out << " <read-only>";
+            }
             out << endl;
         }
     }
