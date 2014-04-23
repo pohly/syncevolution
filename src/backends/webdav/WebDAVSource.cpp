@@ -37,6 +37,7 @@ class ContextSettings : public Neon::Settings {
     boost::shared_ptr<SyncConfig> m_context;
     SyncSourceConfig *m_sourceConfig;
     std::string m_url;
+    std::string m_urlDescription;
     /** do change tracking without relying on CTag */
     bool m_noCTag;
     bool m_googleUpdateHack;
@@ -57,6 +58,12 @@ public:
         m_credentialsOkay(false)
     {
         std::string url;
+        std::string description = "<unset>";
+
+        std::string syncName = m_context->getConfigName();
+        if (syncName.empty()) {
+            syncName = "<none>";
+        }
 
         // check source config first
         if (m_sourceConfig) {
@@ -65,6 +72,14 @@ public:
                 std::string username = getUsername();
                 boost::replace_all(url, "%u", Neon::URI::escape(username));
             }
+            std::string sourceName = m_sourceConfig->getName();
+            if (sourceName.empty()) {
+                sourceName = "<none>";
+            }
+            description = StringPrintf("sync config '%s', source config '%s', database='%s'",
+                                       syncName.c_str(),
+                                       sourceName.c_str(),
+                                       url.c_str());
         }
 
         // fall back to sync context
@@ -78,10 +93,14 @@ public:
                     boost::replace_all(url, "%u", Neon::URI::escape(username));
                 }
             }
+
+            description = StringPrintf("sync config '%s', syncURL='%s'",
+                                       syncName.c_str(),
+                                       url.c_str());
         }
 
         // remember result and set flags
-        setURL(url);
+        setURL(url, description);
 
         // m_credentialsOkay: no corresponding setting when using
         // credentials + URL from source config, in which case we
@@ -93,8 +112,9 @@ public:
         }
     }
 
-    void setURL(const std::string &url) { initializeFlags(url); m_url = url; }
+    void setURL(const std::string &url, const std::string &description) { initializeFlags(url); m_url = url; m_urlDescription = description; }
     virtual std::string getURL() { return m_url; }
+    std::string getURLDescription() { return m_urlDescription; }
 
     virtual bool verifySSLHost()
     {
@@ -557,9 +577,13 @@ void WebDAVSource::contactServer()
         m_contextSettings) {
         m_calendar = Neon::URI::parse(database, true);
         // m_contextSettings = m_settings, so this sets m_settings->getURL()
-        m_contextSettings->setURL(database);
+        m_contextSettings->setURL(database,
+                                  StringPrintf("%s database=%s",
+                                               getDisplayName().c_str(),
+                                               database.c_str()));
         // start talking to host defined by m_settings->getURL()
         m_session = Neon::Session::create(m_settings);
+        SE_LOG_INFO(getDisplayName(), "using configured database=%s", database.c_str());
         // force authentication via username/password or OAuth2
         m_session->forceAuthorization(m_settings->getAuthProvider());
         return;
@@ -567,13 +591,15 @@ void WebDAVSource::contactServer()
 
     // Create session and find first collection (the default).
     m_calendar = Neon::URI();
+    SE_LOG_INFO(getDisplayName(), "determine final URL based on %s",
+                m_contextSettings ? m_contextSettings->getURLDescription().c_str() : "");
     findCollections(boost::bind(setFirstURL,
                                 boost::ref(m_calendar),
                                 _1, _2));
     if (m_calendar.empty()) {
         throwError(SE_HERE, "no database found");
     }
-    SE_LOG_DEBUG(NULL, "picked final path %s", m_calendar.m_path.c_str());
+    SE_LOG_INFO(getDisplayName(), "final URL path %s", m_calendar.m_path.c_str());
 
     // Check some server capabilities. Purely informational at this
     // point, doesn't have to succeed either (Google 401 throttling
@@ -665,7 +691,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 read--;
             }
             buffer[read] = 0;
-            m_contextSettings->setURL(buffer);
+            m_contextSettings->setURL(buffer,
+                                      StringPrintf("DNS SRV URL for domain %s and service %s",
+                                                   domain.c_str(),
+                                                   serviceType().c_str()));
             SE_LOG_DEBUG(getDisplayName(), "found syncURL '%s' via DNS SRV", buffer);
             int res = pclose(in);
             in = NULL;
@@ -707,6 +736,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
 
     // start talking to host defined by m_settings->getURL()
     m_session = Neon::Session::create(m_settings);
+    SE_LOG_INFO(getDisplayName(), "start database search at %s%s%s",
+                m_settings->getURL().c_str(),
+                m_contextSettings ? ", from " : "",
+                m_contextSettings ? m_contextSettings->getURLDescription().c_str() : "");
 
     // Find default calendar. Same for address book, with slightly
     // different parameters.
