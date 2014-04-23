@@ -21,6 +21,7 @@ import copy
 import errno
 import signal
 import stat
+import exceptions
 
 def log(format, *args):
     now = time.time()
@@ -616,8 +617,8 @@ class Context:
         self.runCommand(" && ".join(commands))
 
         # report result by email
-        if self.recipients:
-            server = smtplib.SMTP(self.mailhost)
+        server, body, writer = self.startEmail()
+        if server:
             msg=''
             try:
                 msg = open(self.resultdir + "/nightly.html").read()
@@ -628,6 +629,19 @@ class Context:
             msg = re.sub(r'href="([a-zA-Z0-9./])',
                          'href="' + uri + r'/\1',
                          msg)
+            writer.startbody("text/html;charset=ISO-8859-1").write(msg)
+            self.finishEmail(server, body)
+        else:
+            log('%s\n', '\n'.join(self.summary))
+
+        if status in Action.COMPLETED:
+            sys.exit(0)
+        else:
+            sys.exit(1)
+
+    def startEmail(self):
+        if self.recipients:
+            server = smtplib.SMTP(self.mailhost)
             body = StringIO.StringIO()
             writer = MimeWriter.MimeWriter (body)
             writer.addheader("From", self.sender)
@@ -636,18 +650,14 @@ class Context:
             writer.addheader("Subject", self.mailtitle + ": " + os.path.basename(self.resultdir))
             writer.addheader("MIME-Version", "1.0")
             writer.flushheaders()
-            writer.startbody("text/html;charset=ISO-8859-1").write(msg)
-
-            failed = server.sendmail(self.sender, self.recipients, body.getvalue())
-            if failed:
-                log('could not send to: %s', failed)
-                sys.exit(1)
+            return (server, body, writer)
         else:
-            log('%s\n', '\n'.join(self.summary))
+            return (None, None, None)
 
-        if status in Action.COMPLETED:
-            sys.exit(0)
-        else:
+    def finishEmail(self, server, body):
+        failed = server.sendmail(self.sender, self.recipients, body.getvalue())
+        if failed:
+            log('could not send to: %s', failed)
             sys.exit(1)
 
 class CVSCheckout(Action):
@@ -2508,5 +2518,19 @@ if options.list:
     for action in context.todo:
         print action.name
 else:
-    log('Ready to run. I have PID %d.', os.getpid())
-    context.execute()
+    pid = os.getpid()
+    log('Ready to run. I have PID %d.', pid)
+    try:
+        context.execute()
+    except exceptions.SystemExit:
+        raise
+    except:
+        # Something went wrong. Send emergency email if an email is
+        # expected and we are the parent process.
+        if pid == os.getpid():
+            server, body, writer = context.startEmail()
+            if server:
+                writer.startbody("text/html;charset=ISO-8859-1").write('<html><body><pre>%s</pre></body></html>' %
+                                                                       traceback.format_exc())
+                context.finishEmail(server, body)
+        raise
