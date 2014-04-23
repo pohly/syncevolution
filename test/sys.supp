@@ -2197,3 +2197,35 @@
    ...
    fun:_ZN7SyncEvo7mkdir_pERKSs
 }
+
+# ==26935== 32 bytes in 1 blocks are definitely lost in loss record 4,665 of 7,062
+# ==26935==    at 0x402BAD9: calloc (vg_replace_malloc.c:618)
+# ==26935==    by 0x548461A: g_malloc0 (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x54848FA: g_malloc0_n (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x546CE2F: g_hash_table_resize (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x546E03F: g_hash_table_destroy (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x5474F27: g_key_file_remove_group_node (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x5475033: g_key_file_clear (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x547681E: g_key_file_free (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x4380DD4: source_finalize (e-source.c:912)
+# ==26935==    by 0x53F7057: g_object_unref (in /usr/lib/i386-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==26935==    by 0x439257F: source_registry_unref_source (e-source-registry.c:692)
+# ==26935==    by 0x546D0EB: g_hash_table_remove_all_nodes (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x546DFAE: g_hash_table_remove_all (in /lib/i386-linux-gnu/libglib-2.0.so.0.3800.2)
+# ==26935==    by 0x4393DAA: source_registry_dispose (e-source-registry.c:1257)
+# ==26935==    by 0x53F6FC7: g_object_unref (in /usr/lib/i386-linux-gnu/libgobject-2.0.so.0.3800.2)
+# ==26935==    by 0x827F424: boost::detail::sp_counted_impl_p<SyncEvo::EDSRegistryLoader>::dispose() (EDSClient.h:39)
+# ==26935==    by 0x82CB72F: boost::shared_ptr<SyncEvo::EDSRegistryLoader>::~shared_ptr() (sp_counted_base_gcc_x86.hpp:146)
+# ==26935==    by 0x55B5FB0: __run_exit_handlers (exit.c:82)
+# ==26935==    by 0x55B600C: exit (exit.c:104)
+# ==26935==    by 0x559CA6A: (below main) (libc-start.c:321)
+# ==26935== 
+{
+   freeing ESourceRegistry leaks memory
+   Memcheck:Leak
+   ...
+   fun:g_object_unref
+   fun:*EDSRegistryLoader*dispose*
+   ...
+   fun:__run_exit_handlers
+}
