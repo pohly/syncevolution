@@ -280,11 +280,12 @@ class Action:
                                                  'akonadiserverrc'):
                                         manual.append((path, entry))
                                         exclude.append(entry)
-                                    # Copy only regular files. Ignore process id files created
+                                    # Copy only regular files. Ignore process id files and socket-<hostname> symlinks created
                                     # inside the home by a concurrent Akonadi instance.
                                     # Some files need special processing (see below).
                                     elif not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)) \
-                                            or entry.endswith('.pid'):
+                                            or entry.endswith('.pid') \
+                                            or entry.startswith('socket-'):
                                         exclude.append(entry)
                                 return exclude
                             shutil.copytree(context.home_template, home,
