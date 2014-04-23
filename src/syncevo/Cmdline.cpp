@@ -683,8 +683,8 @@ static void ExportLUID(SyncSourceRaw *raw,
     raw->readItemRaw(luid, item);
     if (!out) {
         // write into directory
-        string fullPath = itemPath + "/" + luid;
-        ofstream file((itemPath + "/" + luid).c_str());
+        string fullPath = itemPath + "/" + CmdlineLUID::fromLUID(luid);
+        ofstream file(fullPath.c_str());
         file << item;
         file.close();
         if (file.bad()) {
@@ -1524,10 +1524,14 @@ bool Cmdline::run() {
                         if (!ReadFile(path, content)) {
                             SyncContext::throwError(path, errno);
                         }
+                        std::string luid;
+                        if (m_update) {
+                            luid = CmdlineLUID::toLUID(entry);
+                        }
                         SE_LOG_SHOW(NULL, "#%d: %s: %s",
                                     count,
                                     entry.c_str(),
-                                    insertItem(raw, "", content).getEncoded().c_str());
+                                    insertItem(raw, luid, content).getEncoded().c_str());
                         count++;
                     }
                 }
