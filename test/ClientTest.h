@@ -552,6 +552,16 @@ public:
     virtual bool compareDatabases(const char *refFile, TestingSyncSource &copy, bool raiseAssert = true);
 
     /**
+     * compares data using synccompare
+     *
+     * @param refFile      existing file with source reference items
+     * @param actualFile   existing file with actual items which are expected to match
+     * @param raiseAssert  raise assertion if comparison yields differences (defaults to true)
+     * @return true if the two databases are equal
+     */
+    bool compareDatabases(const std::string &refFile, const std::string &actualFile, bool raiseAssert = true);
+
+    /**
      * compare data in source with set of items
      */
     void compareDatabasesRef(TestingSyncSource &copy,
@@ -632,6 +642,7 @@ public:
     virtual void testChanges();
     virtual void testChangesMultiCycles();
     virtual void testLinkedSources();
+    void doImport(const std::string &testcases);
     virtual void testImport();
     virtual void testImportDelete();
     virtual void testRemoveProperties();
@@ -871,6 +882,13 @@ protected:
     virtual void testResendProxyFull();
 
     virtual void testTimeout();
+
+    virtual void testUpload();
+    virtual void testDownload();
+
+    void doUpdateConflict(const std::string &testname, bool localWins);
+    virtual void testUpdateLocalWins();
+    virtual void testUpdateRemoteWins();
 
     /**
      * implements testMaxMsg(), testLargeObject(), testLargeObjectEncoded()

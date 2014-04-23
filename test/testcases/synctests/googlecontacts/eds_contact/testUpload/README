@@ -1,0 +1,6 @@
+The test data was adapted to cope with some bugs/limitations:
+
+- ROLE, CALURL, FBURL, CATEGORIES, GEO are not stored by Google
+  and get lost.
+- ORG department and unit get merged.
+

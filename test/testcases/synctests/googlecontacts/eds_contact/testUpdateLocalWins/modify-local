@@ -1,0 +1,23 @@
+#! /bin/sh
+
+set -ex
+
+IN=$1
+OUT=$2
+
+rm -rf $OUT
+mkdir $OUT
+[ -d $IN ] || (echo >&2 "$IN not a directory"; false)
+
+for i in $IN/*; do
+   # Modify second and third contact by changing a field.
+   # The second contact will also get modified locally.
+   perl -e '$_ = join("", <>); if (/John [23] Doe/) {' \
+       -e 's/primary 8/primary 80/;' \
+       -e 's/END:VCARD/BDAY:2006-01-01\r\nEMAIL:new local email\r\nEND:VCARD/;' \
+       -e 'print;' \
+       -e '}' \
+   <$i >$OUT/$(basename $i)
+done
+
+find $OUT -size 0 -delete

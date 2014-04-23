@@ -259,24 +259,15 @@ nodist_src_client_test_SOURCES = test/test.cpp
 # -O2, because CXXFLAGS comes later in the final compile command.
 @ifGNUmake@ $(foreach e, $(foreach i, $(src_client_test_SOURCES), $(dir $(i))src_client_test-$(basename $(notdir $i))), $(e).o $(e).lo $(e).obj) : CXXFLAGS = -g
 
-# list of test file base files
+# List of test files which get copied verbatim from
+# $(top_srcdir)/test/testcases/ to src/testcases below. test/test.am
+# has the list for inclusion in "make dist" with the original
+# "test/" directory. We need to replace that here.
 #
 # Generated files (testcases/eds_event.ics.funambol.tem) are derived from
 # the original base file ($(srcdir)/test/testcases/eds_event.ics) by
 # applying a patch ($(srcdir)/test/testcases/eds_event.ics.funambol.tem.patch).
-CLIENT_LIB_TEST_FILES = \
-  src/testcases/lcs/file1.txt \
-  src/testcases/lcs/file2.txt \
-  src/testcases/local.png \
-  src/testcases/templates/clients/SyncEvolution.ini \
-  src/testcases/templates/clients/phone/nokia/S40/7210c.ini \
-  src/testcases/google_event.ics \
-  src/testcases/yahoo_contact.vcf \
-  src/testcases/eds_contact.vcf \
-  src/testcases/eds_event.ics \
-  src/testcases/eds_event.ics.local \
-  src/testcases/eds_memo.ics \
-  src/testcases/eds_task.ics
+CLIENT_LIB_TEST_FILES = $(subst test/,src/,$(test_testcases))
 
 # all patch files
 TEST_FILES_PATCHES = $(wildcard $(top_srcdir)/test/testcases/*.patch)
