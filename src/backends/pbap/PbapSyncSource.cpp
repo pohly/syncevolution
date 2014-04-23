@@ -931,7 +931,9 @@ PbapSyncSource::Databases PbapSyncSource::getDatabases()
     Databases result;
 
     result.push_back(Database("select database via bluetooth address",
-                              "[obex-bt://]<bt-addr>"));
+                              "[obex-bt://]<bt-addr>",
+                              false,
+                              true));
     return result;
 }
 
