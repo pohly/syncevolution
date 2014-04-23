@@ -24,7 +24,7 @@ import stat
 
 def log(format, *args):
     now = time.time()
-    print time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
+    print 'runtests.py-%d' % os.getpid(), time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
     log.latest = now
 log.start = time.time()
 log.latest = log.start
@@ -40,6 +40,7 @@ def cd(path):
     if not os.access(path, os.F_OK):
         os.makedirs(path)
     os.chdir(path)
+    log('changing into directory %s (= %s)', path, os.getcwd())
 
 def abspath(path):
     """Absolute path after expanding vars and user."""
@@ -666,14 +667,14 @@ class CVSCheckout(Action):
     def execute(self):
         cd(self.workdir)
         if os.access(self.module, os.F_OK):
-            os.chdir(self.module)
+            cd(self.module)
             context.runCommand("cvs update -d -r %s"  % (self.revision))
         elif self.revision == "HEAD":
             context.runCommand("cvs -d %s checkout %s" % (self.cvsroot, self.module))
-            os.chdir(self.module)
+            cd(self.module)
         else:
             context.runCommand("cvs -d %s checkout -r %s %s" % (self.cvsroot, self.revision, self.module))
-            os.chdir(self.module)
+            cd(self.module)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
@@ -698,7 +699,7 @@ class SVNCheckout(Action):
         else:
             cmd = "checkout"
         context.runCommand("svn %s %s %s"  % (cmd, self.url, self.module))
-        os.chdir(self.module)
+        cd(self.module)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
@@ -734,7 +735,7 @@ class GitCheckout(GitCheckoutBase, Action):
                            {"dir": self.basedir,
                             "rev": self.revision},
                            runAsIs=True)
-        os.chdir(self.basedir)
+        cd(self.basedir)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
@@ -761,7 +762,7 @@ class GitCopy(GitCheckoutBase, Action):
         if not os.access(self.basedir, os.F_OK):
             context.runCommand("(mkdir -p %s && cp -a -l %s/%s %s) || ( rm -rf %s && false )" %
                                (self.workdir, self.sourcedir, self.name, self.workdir, self.basedir))
-        os.chdir(self.basedir)
+        cd(self.basedir)
         cmd = " && ".join([
                 'rm -f %(patchlog)s',
                 'echo "save local changes with stash under a fixed name <rev>-nightly"',
@@ -853,6 +854,11 @@ class SyncEvolutionTest(Action):
 
     def execute(self):
         resdir = os.getcwd()
+        log('result dir: %s, /proc/self/cwd -> %s', resdir, os.readlink('/proc/self/cwd'))
+        if resdir == '/':
+            time.sleep(5)
+            resdir = os.getcwd()
+            log('result dir: %s, /proc/self/cwd -> %s', resdir, os.readlink('/proc/self/cwd'))
         # Run inside a new directory which links to all files in the build dir.
         # That way different actions are independent of each other while still
         # sharing the same test binaries and files.
@@ -872,7 +878,7 @@ class SyncEvolutionTest(Action):
                 name = os.path.join(actiondir, entry)
                 os.symlink(target, name)
                 links[entry] = os.path.join(hosttargetdir, entry)
-        os.chdir(actiondir)
+        cd(actiondir)
         try:
             # use installed backends if available
             backenddir = os.path.join(self.build.installdir, "usr/lib/syncevolution/backends")
