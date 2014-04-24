@@ -289,6 +289,27 @@ void ContextSettings::initializeFlags(const std::string &url)
     m_noCTag = noCTag;
 }
 
+WebDAVSource::Props_t::mapped_type & WebDAVSource::Props_t::operator [] (const WebDAVSource::Props_t::key_type &key)
+{
+    iterator it = find(key);
+    if (it != end()) {
+        return it->second;
+    } else {
+        push_back(value_type(key, mapped_type()));
+        return back().second;
+    }
+}
+
+WebDAVSource::Props_t::iterator WebDAVSource::Props_t::find(const WebDAVSource::Props_t::key_type &key) {
+    for (iterator it = begin();
+         it != end();
+         ++it) {
+        if (it->first == key) {
+            return it;
+        }
+    }
+    return end();
+}
 
 WebDAVSource::WebDAVSource(const SyncSourceParams &params,
                            const boost::shared_ptr<Neon::Settings> &settings) :

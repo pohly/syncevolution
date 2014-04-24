@@ -238,8 +238,21 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
      */
     InitStateString m_postPath;
 
-    /** information about certain paths (path->property->value)*/
-    typedef std::map<std::string, std::map<std::string, std::string> > Props_t;
+    /**
+     * Information about certain paths (path->property->value).
+     * The container acts like a hash (supports indexing with unique string)
+     * but adds new entries at the end like a vector.
+     */
+    class Props_t : public std::vector< std::pair < std::string, std::map<std::string, std::string> > >
+    {
+    public:
+        typedef std::string key_type;
+        typedef std::map<std::string, std::string> mapped_type;
+
+        mapped_type &operator [] (const key_type &key);
+        iterator find(const key_type &key);
+        const_iterator find(const key_type &key) const { return const_cast<Props_t *>(this)->find(key); }
+    };
 
     /** extract value from first <DAV:href>value</DAV:href>, empty string if not inside propval */
     std::string extractHREF(const std::string &propval);
