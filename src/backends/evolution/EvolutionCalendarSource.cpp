@@ -430,6 +430,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 
 void EvolutionCalendarSource::close()
 {
+    m_knownTimezones.clear();
     m_calendar.reset();
 }
 
@@ -543,10 +544,18 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
         GErrorCXX gerror;
         const char *tzid = icaltimezone_get_tzid(zone);
+
+        //we are receiving two similar timezones names we will remove the prefix to make easy to compare
+        string timeZoneName(tzid);
+        std::size_t found = timeZoneName.find("/freeassociation.sourceforge.net/Tzfile/");
+        if (found != std::string::npos) {
+            timeZoneName.replace(timeZoneName.begin(), timeZoneName.begin() + 40, ""); // 40 == strlen("/freeassociation.sourceforge.net/Tzfile/")
+        }
+
         if (!tzid || !tzid[0]) {
             // cannot add a VTIMEZONE without TZID
             SE_LOG_DEBUG(getDisplayName(), "skipping VTIMEZONE without TZID");
-        } else {
+        } else if (find(m_knownTimezones.begin(), m_knownTimezones.end(), timeZoneName) == m_knownTimezones.end()) {
             gboolean success =
 #ifdef USE_EDS_CLIENT
                 e_cal_client_add_timezone_sync(m_calendar, zone, NULL, gerror)
@@ -557,6 +566,8 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             if (!success) {
                 throwError(SE_HERE, string("error adding VTIMEZONE ") + tzid,
                            gerror);
+            } else {
+                m_knownTimezones.push_back(timeZoneName);
             }
         }
     }
@@ -619,11 +630,12 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // adding the parent, then updating it with the
                 // saved children.
                 //
-                // TODO: still necessary with e_cal_client API?
+#ifndef USE_EDS_CLIENT
                 ICalComps_t children;
                 if (id.m_rid.empty()) {
                     children = removeEvents(id.m_uid, true);
                 }
+#endif
 
                 // creating new objects works for normal events and detached occurrences alike
                 if (
@@ -648,23 +660,17 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     throwError(SE_HERE, "storing new item", gerror);
                 }
 
+#ifndef USE_EDS_CLIENT
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
-                    if (
-#ifdef USE_EDS_CLIENT
-                        !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                         CALOBJ_MOD_THIS, NULL,
-                                                         gerror)
-#else
-                        !e_cal_modify_object(m_calendar, *icalcomp,
+                    if (!e_cal_modify_object(m_calendar, *icalcomp,
                                              CALOBJ_MOD_THIS,
-                                             gerror)
-#endif
-                        ) {
+                                             gerror)) {
                         throwError(SE_HERE, string("recreating item ") + newluid, gerror);
                     }
                 }
+#endif
             }
         }
     }
@@ -742,21 +748,26 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-                BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
-                    if (
 #ifdef USE_EDS_CLIENT
-                        !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                         CALOBJ_MOD_THIS, NULL,
-                                                         gerror)
+                GSList *objs = 0;
+                BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
+                    objs = g_slist_append(objs, *icalcomp);
+                }
+                if (!e_cal_client_modify_objects_sync(m_calendar, objs,
+                                                      CALOBJ_MOD_THIS, NULL,
+                                                      gerror)) {
+                    throwError(SE_HERE, string("recreating item ") + luid, gerror);
+                }
+                g_slist_free(objs);
 #else
-                        !e_cal_modify_object(m_calendar, *icalcomp,
+                BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
+                    if (!e_cal_modify_object(m_calendar, *icalcomp,
                                              CALOBJ_MOD_THIS,
-                                             gerror)
-#endif
-                        ) {
+                                             gerror)) {
                         throwError(SE_HERE, string("recreating item ") + luid, gerror);
                     }
                 }
+#endif
             } else {
                 // no children, updating is simple
                 if (

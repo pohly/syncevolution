@@ -164,6 +164,7 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
 #endif
     string m_typeName;             /**< "calendar", "task list", "memo list" */
     EvolutionCalendarSourceType m_type;         /**< use events, tasks or memos? */
+    list<string> m_knownTimezones;  /** list with all timezones already registered on EDS */
 
     // Convenience function for source type casting
 #ifdef USE_EDS_CLIENT
