@@ -16,9 +16,8 @@ endif
 bin_SCRIPTS += src/backends/webdav/syncevo-webdav-lookup
 CLEANFILES += src/backends/webdav/syncevo-webdav-lookup
 
-src/backends/webdav/syncevo-webdav-lookup: $(srcdir)/src/backends/webdav/syncevo-webdav-lookup.sh
-	$(AM_V_GEN)rm -f $@ ; \
-	cd src/backends/webdav && ln -s $(notdir $<) $(notdir $@)
+src/backends/webdav/syncevo-webdav-lookup: $(top_srcdir)/src/backends/webdav/syncevo-webdav-lookup.sh
+	$(AM_V_GEN) rm -f $@ && cp $< $@ && chmod a+rx $@
 
 src_backends_webdav_src = \
   src/backends/webdav/CalDAVSource.h \
