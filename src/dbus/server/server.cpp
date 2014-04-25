@@ -356,6 +356,7 @@ Server::Server(GMainLoop *loop,
     m_loop(loop),
     m_shutdownRequested(shutdownRequested),
     m_restart(restart),
+    m_conn(conn),
     m_lastSession(time(NULL)),
     m_activeSession(NULL),
     m_lastInfoReq(0),
@@ -531,6 +532,13 @@ void Server::run()
     }
 
     SE_LOG_INFO(NULL, "ready to run");
+    // Note that with GDBus GIO, this will also finally request the
+    // "org.syncevolution" name. This relies on preserving the name in
+    // m_conn that we originally passed to dbus_get_bus_connection().
+    // getConnection() works with a plain GDBusConnection and doesn't
+    // have the name, so we really need our own copy of
+    // DBusConnectionPtr here.
+    dbus_bus_connection_undelay(m_conn);
     if (!m_shutdownRequested) {
         g_main_loop_run(m_loop);
     }

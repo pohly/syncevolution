@@ -219,7 +219,6 @@ int main(int argc, char **argv, char **envp)
             unsetenv("G_DBUS_DEBUG");
         }
 
-        dbus_bus_connection_undelay(conn);
         server->run();
         SE_LOG_DEBUG(NULL, "cleaning up");
 #ifdef ENABLE_DBUS_PIM
