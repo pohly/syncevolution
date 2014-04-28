@@ -630,25 +630,41 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // adding the parent, then updating it with the
                 // saved children.
                 //
-#ifndef USE_EDS_CLIENT
+                // With EDS >= 3.6 we need to do this when creating a
+                // parent after its child(ren) because
+                // e_cal_client_create_object() checks that the UID
+                // is not in use already. This is a rare situation, so
+                // we try to create the event and only remove the children
+                // when that fails.
                 ICalComps_t children;
+#ifndef USE_EDS_CLIENT
                 if (id.m_rid.empty()) {
                     children = removeEvents(id.m_uid, true);
                 }
 #endif
 
                 // creating new objects works for normal events and detached occurrences alike
-                if (
+                bool success;
 #ifdef USE_EDS_CLIENT
-                    e_cal_client_create_object_sync(m_calendar, subcomp, (gchar **)&uid, 
-                                                    NULL, gerror)
+                success = e_cal_client_create_object_sync(m_calendar, subcomp, (gchar **)&uid,
+                                                          NULL, gerror);
+                if (!success &&
+                    gerror.matches(E_CAL_CLIENT_ERROR, E_CAL_CLIENT_ERROR_OBJECT_ID_ALREADY_EXISTS) &&
+                    id.m_rid.empty()) {
+                    // Try again after removing children.
+                    children = removeEvents(id.m_uid, true);
+                    gerror.clear();
+                    success = e_cal_client_create_object_sync(m_calendar, subcomp, (gchar **)&uid,
+                                                              NULL, gerror);
+                }
 #else
-                    e_cal_create_object(m_calendar, subcomp, (gchar **)&uid, gerror)
+                success = e_cal_create_object(m_calendar, subcomp, (gchar **)&uid, gerror);
 #endif
-                    ) {
+                if (success) {
 #ifdef USE_EDS_CLIENT
                     PlainGStr owner((gchar *)uid);
 #endif
+
                     // Evolution workaround: don't rely on uid being set if we already had
                     // one. In Evolution 2.12.1 it was set to garbage. The recurrence ID
                     // shouldn't have changed either.
@@ -660,17 +676,23 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     throwError(SE_HERE, "storing new item", gerror);
                 }
 
-#ifndef USE_EDS_CLIENT
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
-                    if (!e_cal_modify_object(m_calendar, *icalcomp,
+                    if (
+#ifdef USE_EDS_CLIENT
+                        !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
+                                                         CALOBJ_MOD_THIS, NULL,
+                                                         gerror)
+#else
+                        !e_cal_modify_object(m_calendar, *icalcomp,
                                              CALOBJ_MOD_THIS,
-                                             gerror)) {
+                                             gerror)
+#endif
+                        ) {
                         throwError(SE_HERE, string("recreating item ") + newluid, gerror);
                     }
                 }
-#endif
             }
         }
     }
