@@ -191,6 +191,11 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
       boost::intrusive_ptr<GDBusConnection>(conn, add_ref)
       {}
 
+    DBusConnectionPtr(const DBusConnectionPtr &other) :
+      boost::intrusive_ptr<GDBusConnection>(other),
+      m_name(other.m_name)
+      {}
+
     GDBusConnection *reference(void) throw()
     {
         GDBusConnection *conn = get();
