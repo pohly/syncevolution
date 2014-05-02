@@ -76,6 +76,7 @@ my $nokia_7210c = $server =~ /nokia_7210c/;
 my $ovi = $server =~ /Ovi/;
 my $unique_uid = $ENV{CLIENT_TEST_UNIQUE_UID};
 my $full_timezones = $ENV{CLIENT_TEST_FULL_TIMEZONES}; # do not simplify VTIMEZONE definitions
+my $no_timezones =  $ENV{CLIENT_TEST_NO_TIMEZONES};
 
 # TODO: this hack ensures that any synchronization is limited to
 # properties supported by Synthesis. Remove this again.
@@ -327,11 +328,13 @@ sub NormalizeItem {
     # added by Google CalDAV server when storing an all-day event
     # which doesn't need any time zone definition)
     # http://code.google.com/p/google-caldav-issues/issues/detail?id=63
+    #
+    # Also strip all definitions if requested.
     while (m/(BEGIN:VTIMEZONE.*?TZID:([^\n]*)\n.*?END:VTIMEZONE\n)/gs) {
         my $def = $1;
         my $tzid = $2;
-        # used as parameter?
-        if (! m/;TZID="?\Q$tzid\E"?/) {
+        # Strip all, or not used as parameter?
+        if ($no_timezones || ! m/;TZID="?\Q$tzid\E"?/) {
             # no, remove definition
             s!\Q$def\E!!s;
         }
