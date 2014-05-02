@@ -1766,6 +1766,13 @@ test = SyncEvolutionTest("apple", compile,
                          "Client::Sync::eds_task::testOneWayFromLocal,"
                          "Client::Sync::eds_task::testOneWayFromClient,"
                          " "
+                         # Apple Calendar Server 5.2 (and earlier?)
+                         # implement timezones by reference and does
+                         # not return VTIMEZONE definitions (see
+                         # "Apple Calendar Server 5.2 + timezone by
+                         # reference" on the caldeveloper mailing
+                         # list). Ignore timezone related test failures.
+                         "CLIENT_TEST_NO_TIMEZONES=1 "
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          ,
                          testPrefix=options.testprefix)
