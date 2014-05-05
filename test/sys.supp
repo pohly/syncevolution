@@ -1961,7 +1961,6 @@
 {
    neon + gnutls
    Memcheck:Leak
-   fun:malloc
    ...
    fun:gnutls_session_get_data2
    fun:ne_sock_connect_ssl
