@@ -210,8 +210,53 @@ sub NormalizeItem {
     # make TYPE uppercase (in vCard 3.0 at least those parameters are case-insensitive)
     while( s/^(\w*[^:\n]*);TYPE=(\w*?[a-z]\w*?)([;:])/ $1 . ";TYPE=" . uppercase($2) . $3 /mge ) {}
 
-    # replace parameters with a sorted parameter list
-    s!^([^;:\n]*);(.*?):!$1 . ";" . join(';',sort(split(/;/, $2))) . ":"!meg;
+    # Replace parameters with a sorted parameter list. Cannot be done with
+    # a regular expression because of quoted strings. While we know exact
+    # parameter values, normalize them to use quoted strings if and only
+    # if the content is more complex than alphanumeric plus underscore and
+    # hyphen.
+    my @lines;
+    my ($propname, $sep, $rest);
+    foreach (split /\n/) {
+        ($propname, $sep, $rest) = /^([^;:]+)([:;])(.*)/;
+        if ($sep eq ";") {
+            my @params;
+            my $c;
+            my $i = 0;
+            my $n = length($rest);
+            my $quoted = 0;
+            my $start = 0;
+            while ($i < $n) {
+                $c = substr($rest, $i, 1);
+                $i++;
+                if ($quoted) {
+                    if ($c eq '"') {
+                        $quoted = 0;
+                    }
+                } else {
+                    if ($c eq '"') {
+                        $quoted = 1;
+                    } elsif ($c eq ';' || $c eq ':') {
+                        my $param = substr($rest, $start, $i - $start - 1);
+                        my ($name, $value) = $param =~ /^([^=]*)="?([^"]*)"?$/;
+                        if ($value =~ /^[a-zA-Z0-9_-]*$/) {
+                            $param = $name . '=' . $value;
+                        } else {
+                            $param = $name . '="' . $value . '"';
+                        }
+                        push @params, $param;
+                        $start = $i;
+                        if ($c eq ':') {
+                            last;
+                        }
+                    }
+                }
+            }
+            $_ = $propname . ';' . join(";", sort(@params)) . ':' . substr($rest, $start);
+        }
+        push @lines, $_;
+    }
+    $_ = join("\n", @lines);
 
     # VALUE=DATE is the default, no need to show it
     s/^(EXDATE|BDAY);VALUE=DATE:/\1:/mg;
