@@ -730,9 +730,15 @@ sub NormalizeItem {
       }
 
       my $spaces = "  " x ($#formatted - 1);
+
+      # Ignore group tags during folding, add back before indenting.
+      /^([^.:;]+\.)?(.*)/s;
+      my $tag = $1;
+      $_ = $2;
       my $thiswidth = $width -1 - length($spaces);
       $thiswidth = 1 if $thiswidth <= 0;
       s/(.{$thiswidth})(?!$)/$1\n /g;
+      $_ = $tag . $_;
       s/^(.*)$/$spaces$1/mg;
       push @{$formatted[$#formatted]}, $_;
 
@@ -751,15 +757,76 @@ sub NormalizeItem {
           $str =~ /^(\s*)/;
           return length($1);
         }
+        # Sort lines without group tag before lines without group tag.
+        # When both lines have group tags, sort based on line without
+        # group tag, then regroup related items after sorting.
+        sub cmplines {
+            my $a = shift;
+            my $b = shift;
+            $a =~ s/^[^.:;]+\.//;
+            $b =~ s/^[^.:;]+\.//;
+            return $a cmp $b;
+        }
+        my @body;
+        my $isimportant;
+        foreach $_ (@{$block}) {
+            $isimportant = ($_ =~ /^\s*(N|SUMMARY):/);
+            /^(\s*)([^.:;]+\.)?(.*)/s;
+            push @body, [$isimportant, length($1), $2, $3];
+        }
+        my @sorted = sort( { ($a->[1] - $b->[1]) || # Compare indention, more indented last.
+                             ($b->[0] - $a->[0]) || # Compare importance, less important last.
+                             $a->[3] cmp $b->[3] } # Compare property name, parameters and value without group tag.
+                           @body );
+
+        # Combine lines with the same group tag.
+        my %tags;
+        my @tagged;
+        my $tag;
+        my $entry;
+        my $index;
+        foreach (@sorted) {
+            $tag = $_->[2];
+            # Has a line a group tag?
+            if ($tag) {
+                # Same as one found before?
+                $index = $tags{$tag};
+                if (defined($index)) {
+                    # Append to previous instance of the tag, keeping tag indices the same.
+                    push @{$tagged[$index]}, $_;
+                } else {
+                    # Add at end, remember index for next line with the same tag.
+                    push @tagged, $_;
+                    $tags{$tag} = $#tagged;
+                }
+            } else {
+                push @tagged, $_;
+            }
+        }
+
+        # Convert back into individual, indented text lines.
+        my @expanded;
+        foreach (@tagged) {
+            if ($_->[2]) {
+                if ($#{$_} == 3) {
+                    # Remove redundant group tags.
+                    $_->[2] = "";
+                }
+            }
+            push @expanded, (" " x $_->[1]) . ($_->[2] ? "- " : "") . $_->[3];
+            if ($#{$_} > 3) {
+                foreach ($_->[4,-1]) {
+                    push @expanded, (" " x $_->[1]) . "  " . $_->[3];
+                }
+            }
+        }
+
+        # Create one BEGIN/END block.
         $_ = join("\n",
                   $begin,
-                  sort( { $a =~ /^\s*(N|SUMMARY):/ ? -1 :
-                          $b =~ /^\s*(N|SUMMARY):/ ? 1 :
-                          ($a =~ /^\s/ && $b =~ /^\S/) ? 1 :
-                          numspaces($a) == numspaces($b) ? $a cmp $b :
-                          numspaces($a) - numspaces($b) }
-                        @{$block} ),
+                  @expanded,
                   $end);
+
         push @{$formatted[$#formatted]}, $_;
       }
     }
