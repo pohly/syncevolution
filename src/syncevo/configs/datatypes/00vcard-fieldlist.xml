@@ -37,23 +37,17 @@
 
       <!-- telephone numbers -->
       <field name="TEL"         array="yes" type="telephone" compare="conflict"/>
-      <field name="TEL_FLAGS"   array="yes" type="integer"   compare="conflict"/> <!-- offset 0 -->
-      <field name="TEL_LABEL"   array="yes" type="string"    compare="conflict"/> <!-- offset 1 -->
-      <field name="TEL_ID"      array="yes" type="integer"   compare="conflict"/> <!-- offset 2 -->
-      <field name="TEL_SLOT"    array="yes" type="integer"   compare="never"/>    <!-- offset 3 -->
+      <field name="TEL_FLAGS"   array="yes" type="integer"   compare="conflict"/>
+      <field name="TEL_SLOT"    array="yes" type="integer"   compare="never"/>
 
       <!-- emails -->
       <field name="EMAIL"       array="yes" type="multiline" compare="conflict"/>
-      <field name="EMAIL_FLAGS" array="yes" type="integer"   compare="conflict"/> <!-- offset 0 -->
-      <field name="EMAIL_LABEL" array="yes" type="string"    compare="conflict"/> <!-- offset 1 -->
-      <field name="EMAIL_ID"    array="yes" type="integer"   compare="conflict"/> <!-- offset 2 -->
-      <field name="EMAIL_SLOT"  array="yes" type="integer"   compare="never"/>    <!-- offset 3 -->
+      <field name="EMAIL_FLAGS" array="yes" type="integer"   compare="conflict"/>
+      <field name="EMAIL_SLOT"  array="yes" type="integer"   compare="never"/>
 
       <!-- web addresses -->
       <field name="WEB"         array="yes" type="string" compare="conflict"/>
-      <field name="WEB_FLAGS"   array="yes" type="integer"   compare="conflict"/> <!-- offset 0 -->
-      <field name="WEB_LABEL"   array="yes" type="string"    compare="conflict"/> <!-- offset 1 -->
-      <field name="WEB_ID"      array="yes" type="integer"   compare="conflict"/> <!-- offset 2 -->
+      <field name="WEB_FLAGS"   array="yes" type="integer"   compare="conflict"/>
 
       <!-- would be nicer to have as part of WEB, but parser/encoder does not support mapping
            with more than one property per field -->
@@ -98,9 +92,7 @@
       <!-- home address -->
       <field name="ADR_STREET"        array="yes" type="multiline" compare="conflict"/>
       <field name="ADR_ADDTL"         array="yes" type="multiline" compare="conflict"/>
-      <field name="ADR_STREET_FLAGS"  array="yes" type="integer"   compare="conflict"/> <!-- offset 0 (from ADR_STREET_FLAGS) -->
-      <field name="ADR_STREET_LABEL"  array="yes" type="string"    compare="conflict"/> <!-- offset 1 -->
-      <field name="ADR_STREET_ID"     array="yes" type="integer"   compare="conflict"/> <!-- offset 2 -->
+      <field name="ADR_STREET_FLAGS"  array="yes" type="integer"   compare="conflict"/>
       <field name="ADR_POBOX"         array="yes" type="multiline" compare="conflict"/>
       <field name="ADR_CITY"          array="yes" type="multiline" compare="conflict"/>
       <field name="ADR_REG"           array="yes" type="multiline" compare="conflict"/>
