@@ -594,6 +594,7 @@ void WebDAVSource::contactServer()
     if (!m_calendar.empty() &&
         m_session) {
         // we have done this work before, no need to repeat it
+        return;
     }
 
     SE_LOG_DEBUG(NULL, "using libneon %s with %s",
