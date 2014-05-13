@@ -1510,6 +1510,8 @@ WebDAVSource::Databases WebDAVSource::getDatabases()
 void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                                     XMLConfigFragments &fragments)
 {
+    contactServer();
+
     TrackingSyncSource::getSynthesisInfo(info, fragments);
 
     // only CalDAV enforces unique UID
@@ -1526,7 +1528,7 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
 
     // TODO: instead of identifying the peer based on the
     // session URI, use some information gathered about
-    // it during open()
+    // it during contactServer()
     if (m_session) {
         string host = m_session->getURI().m_host;
         if (host.find("google") != host.npos) {
@@ -1558,19 +1560,9 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 "          <include rule=\"ALL\"/>\n"
                 "          <include rule=\"HAVE-VCARD-UID\">\n"
                 "      </remoterule>";
-        } else {
-            // fallback: generic CalDAV/CardDAV, with all properties
-            // enabled (for example, X-EVOLUTION-UI-SLOT)
-            info.m_backendRule = "WEBDAV";
-            fragments.m_remoterules["WEBDAV"] =
-                "      <remoterule name='WEBDAV'>\n"
-                "          <deviceid>none</deviceid>\n"
-                "          <include rule=\"ALL\"/>\n"
-                "          <include rule=\"HAVE-VCARD-UID\">\n"
-                "      </remoterule>";
         }
-        SE_LOG_DEBUG(getDisplayName(), "using data conversion rules for '%s'", info.m_backendRule.c_str());
     }
+    SE_LOG_DEBUG(getDisplayName(), "using data conversion rules for '%s'", info.m_backendRule.c_str());
 }
 
 void WebDAVSource::storeServerInfos()
