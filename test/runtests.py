@@ -1674,7 +1674,12 @@ context.add(test)
 
 test = SyncEvolutionTest("googlecontacts", compile,
                          "", options.shell,
-                         "Client::Sync::eds_contact::testItems Client::Source::google_carddav",
+                         "Client::Sync::eds_contact::testItems "
+                         "Client::Sync::eds_contact::testDownload "
+                         "Client::Sync::eds_contact::testUpload "
+                         "Client::Sync::eds_contact::testUpdateLocalWins "
+                         "Client::Sync::eds_contact::testUpdateRemoteWins "
+                         "Client::Source::google_carddav",
                          [ "google_carddav", "eds_contact" ],
                          "CLIENT_TEST_WEBDAV='google carddav' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
