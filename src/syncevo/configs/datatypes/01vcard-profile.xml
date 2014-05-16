@@ -1,4 +1,4 @@
-    <!-- vCard profile -->
+    <!-- vCard profile for Evolution, KDE, SyncML -->
     <mimeprofile name="vCard" fieldlist="contacts">
 
       <profile name="VCARD" nummandatory="0"> <!-- we allow records without "N" as Address book can store them -->
@@ -78,7 +78,7 @@
           <value field="ROLE"/>
         </property>
 
-        <property name="TEL">
+        <property name="TEL" groupfield="GROUP_TAG">
           <value field="TEL"/>
           <position field="TEL" repeat="array" increment="1" minshow="1"/>
           <parameter name="TYPE" default="yes" positional="no" show="yes">
@@ -101,9 +101,12 @@
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="TEL_SLOT"/>
           </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
 
-        <property name="EMAIL">
+        <property name="EMAIL" groupfield="GROUP_TAG">
           <value field="EMAIL"/>
           <position field="EMAIL" repeat="array" increment="1" minshow="1"/>
           <parameter name="TYPE" default="yes" positional="no" show="yes">
@@ -117,9 +120,12 @@
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="EMAIL_SLOT"/>
           </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
 
-        <property name="URL">
+        <property name="URL" groupfield="GROUP_TAG">
           <value field="WEB"/>
           <position field="WEB" repeat="array" increment="1" minshow="1"/>
           <parameter name="TYPE" default="yes" positional="no" show="yes">
@@ -129,6 +135,9 @@
               <enum mode="ignore"   value="B2"/> <!-- OTHER -->
               <enum name="PREF"     value="B3"/>
             </value>
+          </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
           </parameter>
         </property>
 
@@ -197,6 +206,14 @@
           <value field="ASSISTANT"/>
         </property>
 
+        <property name="X-ABRELATEDNAMES" suppressempty="yes" groupfield="GROUP_TAG">
+          <value field="RELATEDNAMES"/>
+          <position field="RELATEDNAMES" repeat="array" increment="1" minshow="0"/>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
+        </property>
+
         <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="KDE"/>
         <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="other">
           <value field="SPOUSE" show="yes"/>
@@ -223,6 +240,27 @@
           <value field="ANNIVERSARY"/>
         </property>
 
+        <property name="X-ABDATE" suppressempty="yes" groupfield="GROUP_TAG">
+          <value field="XDATE" conversion="DATE+EXTFMT"/>
+          <position field="XDATE" repeat="array" increment="1" minshow="0"/>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
+        </property>
+
+        <property name="IMPP" suppressempty="yes" groupfield="GROUP_TAG">
+          <value field="IMPP"/>
+          <position field="IMPP" repeat="array" increment="1" minshow="0"/>
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT-IN-IMPP">
+            <value field="IMPP_SLOT"/>
+          </parameter>
+          <parameter name="X-SERVICE-TYPE" positional="no" show="no">
+            <value field="IMPP_SERVICE"/>
+          </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
+        </property>
 
         <property name="X-AIM" suppressempty="yes" rule="KDE"/>
         <property name="X-AIM" suppressempty="yes" rule="other">
@@ -375,7 +413,7 @@
           <value field="WANTS_HTML"/>
         </property>
 
-        <property name="ADR" values="7">
+        <property name="ADR" values="7" groupfield="GROUP_TAG">
           <value index="0" field="ADR_POBOX"/>
           <value index="1" field="ADR_ADDTL"/>
           <value index="2" field="ADR_STREET"/>
@@ -391,8 +429,11 @@
               <enum mode="ignore"   value="B2"/> <!-- OTHER -->
             </value>
           </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
-        
+
         <property name="BDAY" rule="EXTENDED-DATE-FORMAT">
           <value field="BDAY" conversion="DATE+EXTFMT"/>
         </property>
@@ -417,6 +458,12 @@
         <property name="GEO" values="2">
           <value index="0" field="GEO_LAT"/>
           <value index="1" field="GEO_LONG"/>
+        </property>
+
+        <!-- Label assigned to any of the repeating properties. -->
+        <property name="X-ABLabel" suppressempty="yes" groupfield="GROUP_TAG" rule="HAVE-ABLABEL-PROPERTY">
+          <value field="LABEL" repeat="array" increment="1" minshow="0"/>
+          <position field="LABEL" repeat="array" increment="1" minshow="1"/>
         </property>
 
         <property name="X-*" suppressempty="yes" show="false">

@@ -1,5 +1,7 @@
-    <!-- rule which enables all optional properties and parameters -->
+    <!-- rule which enables all optional properties and parameters in the legacy format vCard -->
     <remoterule name="ALL">
       <deviceid>none - this rule is activated via its name in MAKE/PARSETEXTWITHPROFILE() macro calls</deviceid>
       <include rule="HAVE-EVOLUTION-UI-SLOT"/>
+      <include rule="HAVE-EVOLUTION-UI-SLOT-IN-IMPP"/>
+      <include rule="HAVE-ABLABEL-PARAMETER"/>
     </remoterule>

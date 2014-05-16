@@ -4,6 +4,7 @@
       <noemptyproperties>yes</noemptyproperties>
       <!-- enable storing of X-EVOLUTION-UI-SLOT -->
       <include rule="HAVE-EVOLUTION-UI-SLOT"/>
+      <include rule="HAVE-ABLABEL-PARAMETER"/>
     </remoterule>
 
     <subrule name="HAVE-VCARD-UID">
@@ -18,4 +19,5 @@
       <!-- enable storing of X-EVOLUTION-UI-SLOT -->
       <include rule="HAVE-EVOLUTION-UI-SLOT"/>
       <include rule="HAVE-VCARD-UID"/>
+      <include rule="HAVE-ABLABEL-PARAMETER"/>
     </remoterule>

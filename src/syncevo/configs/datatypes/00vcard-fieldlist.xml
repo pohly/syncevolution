@@ -7,6 +7,9 @@
        it for pairing. But we don't know that and thus cannot rely on it. -->
       <field name="UID" type="string" compare="never"/>
 
+      <!-- The group tags used to combine instances of different repeating properties. -->
+      <field name="GROUP_TAG" array="yes" type="string" compare="never"/>
+
       <!-- Name elements -->
       <field name="N_LAST" type="string" compare="always"/>
       <field name="N_FIRST" type="string" compare="always"/>
@@ -31,9 +34,14 @@
       <field name="ORG_TEAM" type="string" compare="conflict" merge="fillempty"/>
       <field name="ROLE" type="string" compare="conflict" merge="fillempty"/>
 
-      <!-- birthday and anniversary (not necessarily the same) -->
+      <!-- Birthday and anniversary (not necessarily the same). BDAY is always used,
+           ANNIVERSARY only by some profiles. -->
       <field name="BDAY" type="date" compare="conflict" merge="fillempty"/>
       <field name="ANNIVERSARY" type="date" compare="conflict" merge="fillempty"/>
+
+      <!-- Generic storage for special dates, including anniversary. Mapped to X-ABDATE + X-ABLabel. -->
+      <!-- Beware, don't use "DATE", it conflicts with builtin function name. -->
+      <field name="XDATE" array="yes" type="date" compare="conflict"/>
 
       <!-- telephone numbers -->
       <field name="TEL"         array="yes" type="telephone" compare="conflict"/>
@@ -56,6 +64,9 @@
       <field name="BLOGURL"     array="yes" type="string" compare="conflict"/>
       <field name="VIDEOURL"    array="yes" type="string" compare="conflict"/>
 
+      <!-- generic replacement for MANAGER/ASSISTANT/SPOUSE -->
+      <field name="RELATEDNAMES" array="yes" type="string" compare="conflict"/>
+
       <!-- related persons: should be turned into array, like WEB and CALURI/FBURL -->
       <field name="MANAGER"    type="string" compare="conflict"/>
       <field name="ASSISTANT"  type="string" compare="conflict"/>
@@ -65,7 +76,12 @@
            type would be useful, maybe add that later. -->
       <field name="WANTS_HTML"  type="string" compare="conflict"/>
 
-      <!-- chat handles: should be turned into one array, like WEB and CALURI/FBURL -->
+      <!-- RFC 4770 chat handles, used internally *instead* of the individual handles below. -->
+      <field name="IMPP" array="yes" type="string" compare="conflict"/> <!-- includes protocol: xmpp:google%20talk -->
+      <field name="IMPP_SERVICE" array="yes" type="string" compare="conflict"/> <!-- GoogleTalk -->
+      <field name="IMPP_SLOT" array="yes" type="string" compare="conflict"/> <!-- Evolution UI slot -->
+
+      <!-- Individual chat handles: used as temporary storage when exchanging data via legacy profiles. -->
       <field name="AIM_HANDLE"        array="yes" type="string" compare="conflict"/>
       <field name="AIM_SLOT"          array="yes" type="string" compare="conflict"/>
       <field name="GADUGADU_HANDLE"        array="yes" type="string" compare="conflict"/>
@@ -116,6 +132,9 @@
       <field name="CRYPTOPROTOPREF" array="yes" type="string" compare="conflict"/>
       <field name="CRYPTOSIGNPREF" type="string" compare="conflict"/>
       <field name="OPENPGPFP" type="string" compare="conflict"/>
+
+      <!-- Custom labels. Mapped to either X-ABProperty via group tag (WebDAV) or X-ABLabel parameter (internal). -->
+      <field name="LABEL" array="yes" type="string" compare="conflict"/>
 
       <!-- store extensions that don't match any of the other fields -->
       <field name="XPROPS" array="yes" type="string" compare="never"/>

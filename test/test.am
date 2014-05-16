@@ -24,6 +24,7 @@ dist_noinst_DATA += \
   test/testcases/eds_event.ics.local \
   test/testcases/eds_task.ics \
   test/testcases/vcal10.ics \
+  test/testcases/carddav.vcf \
   test/testcases/eds_contact.vcf \
   test/testcases/eds_memo.ics \
   test/testcases/google_event.ics \

@@ -467,14 +467,9 @@ sub NormalizeItem {
       s/^FN:.*\n/FN$1: [...]\n/mg;
    }
 
-   if ($googlecarddav) {
-       # Adds .X-ABLabel to URL, TEL, etc. to represent custom
-       # labels. TODO: support that in SyncEvolution
-       s/^.*\.X-ABLabel(;[^:;\n]*)*:.*\r?\n?//mg;
-
-       # Ignore groups. TODO: support that in SyncEvolution.
-       s/^[a-zA-Z0-9]+\.//mg;
-   }
+   # Properties and parameters are case-insensitive. ownCloud uses
+   # X-ABLABEL while everyone else uses X-ABLabel.
+   s/X-ABLABEL/X-ABLabel/g;
 
    if ($googlesyncml) {
       # Not support car type in telephone

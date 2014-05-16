@@ -1523,7 +1523,23 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
         info.m_backendRule = "HAVE-SYNCEVOLUTION-EXDATE-DETACHED";
     } else if (content == "VCARD") {
         // Assume that a CardDAV server has and preserves UID values.
-        info.m_backendRule = "LOCALSTORAGE-WITH-UID";
+        info.m_backendRule = "CARDDAV";
+        fragments.m_remoterules["CARDDAV"] =
+            "      <remoterule name='CARDDAV'>\n"
+            "          <deviceid>none</deviceid>\n"
+            "          <noemptyproperties>yes</noemptyproperties>\n"
+            "          <include rule='HAVE-EVOLUTION-UI-SLOT'/>\n"
+            "          <include rule='HAVE-EVOLUTION-UI-SLOT-IN-IMPP'/>\n"
+            "          <include rule='HAVE-VCARD-UID'/>\n"
+            "          <include rule='HAVE-ABLABEL-PROPERTY'/>\n"
+            "      </remoterule>";
+        // Assume that a CardDAV server uses IMPP (RFC 4770) and
+        // Apple Address book (X-AB) extensions. Convert to the traditional,
+        // internal fields (ANNIVERSARY, JABBER, etc.) after reading
+        // from a CardDAV server and from the traditional fields
+        // before writing.
+        info.m_beforeWriteScript = "$VCARD_BEFOREWRITE_SCRIPT_WEBDAV;\n";
+        info.m_afterReadScript = "$VCARD_AFTERREAD_SCRIPT_WEBDAV;\n";
     }
 
     // TODO: instead of identifying the peer based on the
@@ -1533,12 +1549,17 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
         string host = m_session->getURI().m_host;
         if (host.find("google") != host.npos) {
             info.m_backendRule = "GOOGLE";
+            // Same as CARDDAV above, minus HAVE-EVOLUTION-UI-SLOT-IN-IMPP.
+            // Sending IMPP;X-SERVICE-TYPE=..;X-EVOLUTION-UI-SLOT=
+            // causes Google to ignore X-SERVICE-TYPE.
             fragments.m_remoterules["GOOGLE"] =
                 "      <remoterule name='GOOGLE'>\n"
                 "          <deviceid>none</deviceid>\n"
-                // enable extensions, just in case (not relevant yet for calendar)
-                "          <include rule=\"ALL\"/>\n"
-                "          <include rule=\"HAVE-VCARD-UID\">\n"
+                "          <noemptyproperties>yes</noemptyproperties>\n"
+                "          <include rule='HAVE-EVOLUTION-UI-SLOT'/>\n"
+                // "          <include rule='HAVE-EVOLUTION-UI-SLOT-IN-IMPP'/>\n"
+                "          <include rule='HAVE-VCARD-UID'/>\n"
+                "          <include rule='HAVE-ABLABEL-PROPERTY'/>\n"
                 "      </remoterule>";
         } else if (host.find("yahoo") != host.npos) {
             info.m_backendRule = "YAHOO";
@@ -1558,7 +1579,8 @@ void WebDAVSource::getSynthesisInfo(SynthesisInfo &info,
                 // doesn't seem to store the X-EVOLUTION-UI-SLOT parameter
                 // extensions.
                 "          <include rule=\"ALL\"/>\n"
-                "          <include rule=\"HAVE-VCARD-UID\">\n"
+                "          <include rule=\"HAVE-VCARD-UID\"/>\n"
+                "          <include rule=\"HAVE-ABLABEL-PROPERTY\"/>\n"
                 "      </remoterule>";
         }
     }
