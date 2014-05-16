@@ -808,6 +808,16 @@ sub NormalizeItem {
         my @expanded;
         foreach (@tagged) {
             if ($_->[2]) {
+                if ($#{$_} == 4) {
+                    # Simplify IMPP + X-ABLabel:Other to just IMPP without group tag.
+                    # For the sake of simplicity we only do that if the number of
+                    # grouped properties is exactly two. Otherwise we would have
+                    # to search in the list of extra properties.
+                    if ($_->[3] =~ /^IMPP[;:]/ &&
+                        $_->[4][3] =~ /^X-ABLabel:Other$/) {
+                        splice(@{$_}, 4);
+                    }
+                }
                 if ($#{$_} == 3) {
                     # Remove redundant group tags.
                     $_->[2] = "";
