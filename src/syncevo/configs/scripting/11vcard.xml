@@ -144,9 +144,15 @@
        GROUP_TAG = UNASSIGNED;
     ]]></macro>
 
+    <!-- The legacy->modern conversion ignores empty property values
+    because we would not encode them as empty
+    IMPP/X-ABDATE/X-ABRELATEDNAMES values anyway
+    (<noemptyproperties>), leaving us with just the redundant labels.
+    -->
+
     <!-- X-SPOUSE/MANAGER/ASSISTANT -> special X-ABRELATEDNAMES -->
     <macro name="VCARD_LEGACY_TO_MODERN_RELATEDNAMES"><![CDATA[
-       if ($1 != UNASSIGNED) {
+       if ($1 != EMPTY) {
           // STRING tag;
           INTEGER num;
           num = SIZE(LABEL);
@@ -163,7 +169,7 @@
        INTEGER impp_index;
        impp_index = SIZE($3) - 1;
        while (impp_index >= 0) {
-          if ($3[impp_index] != UNASSIGNED) {
+          if ($3[impp_index] != EMPTY) {
              INTEGER num;
              num = SIZE(LABEL);
              IMPP[num] = $2 + ":" + URLENCODE($3[impp_index]);
@@ -178,7 +184,7 @@
 
     <!-- convert from X- fields to IMPP, ANNIVERSARY to DATE, etc. -->
     <macro name="VCARD_LEGACY_TO_MODERN"><![CDATA[
-       if (ANNIVERSARY != UNASSIGNED) {
+       if (ANNIVERSARY != EMPTY) {
           INTEGER i;
           i = SIZE(LABEL);
           // STRING tag;
@@ -220,7 +226,7 @@
        INTEGER tagnum;
        tagnum = 1;
        while (i >= 0) {
-          if (LABEL[i] != UNASSIGNED) {
+          if (LABEL[i] != EMPTY) {
              GROUP_TAG[i] = "item" + tagnum;
              tagnum = tagnum + 1;
           }
