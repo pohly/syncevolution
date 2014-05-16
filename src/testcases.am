@@ -2,16 +2,7 @@
 # already defined.
 
 src_testcasesdir = $(testdir)/testcases
-dist_src_testcases_DATA = \
-  src/testcases/local.png \
-  src/testcases/google_event.ics \
-  src/testcases/yahoo_contact.vcf \
-  src/testcases/eds_contact.vcf \
-  src/testcases/eds_event.ics \
-  src/testcases/eds_event.ics.local \
-  src/testcases/eds_memo.ics \
-  src/testcases/eds_task.ics \
-  $(TEST_FILES_GENERATED)
+dist_src_testcases_DATA = $(TEST_FILES_GENERATED)
 
 src_testcases_lcsdir = $(testdir)/testcases/lcs
 dist_src_testcases_lcs_DATA = \

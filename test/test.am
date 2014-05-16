@@ -87,6 +87,7 @@ test_DATA += \
 	$(NOP)
 
 nobase_testparent_DATA += \
+	$(test_testcases) \
 	test/test-dbus/templates/templates/clients/phone/nokia/S40/7210c.ini \
 	test/test-dbus/templates/templates/clients/SyncEvolution.ini \
 	test/test-dbus/auto-sync/config/syncevolution/.internal.ini \
