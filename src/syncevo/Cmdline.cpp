@@ -3038,7 +3038,7 @@ protected:
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (servers):\n"
                                   "   template name = template description\n"
                                   "   eGroupware = http://www.egroupware.org\n"
-                                  "   Funambol = http://my.funambol.com\n"
+                                  "   Funambol = https://onemediahub.com\n"
                                   "   Google_Calendar = event sync via CalDAV, use for the 'target-config@google-calendar' config\n"
                                   "   Google_Contacts = contact sync via SyncML, see http://www.google.com/support/mobile/bin/topic.py?topic=22181\n"
                                   "   Goosync = http://www.goosync.com/\n"
@@ -4767,11 +4767,11 @@ private:
 
         boost::replace_first(config,
                              "syncURL = http://sync.scheduleworld.com/funambol/ds",
-                             "syncURL = http://my.funambol.com/sync");
+                             "syncURL = https://onemediahub.com/sync");
 
         boost::replace_first(config,
                              "WebURL = http://www.scheduleworld.com",
-                             "WebURL = http://my.funambol.com");
+                             "WebURL = https://onemediahub.com");
 
         boost::replace_first(config,
                              "IconURI = image://themedimage/icons/services/scheduleworld",

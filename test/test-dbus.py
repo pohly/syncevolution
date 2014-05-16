@@ -6039,10 +6039,10 @@ sources/todo/config.ini:# databasePassword = '''.format(
         config = config.replace("PeerName = ScheduleWorld",
                                 "PeerName = Funambol")
         config = config.replace("syncURL = http://sync.scheduleworld.com/funambol/ds",
-                                "syncURL = http://my.funambol.com/sync",
+                                "syncURL = https://onemediahub.com/sync",
                                 1)
         config = config.replace("WebURL = http://www.scheduleworld.com",
-                                "WebURL = http://my.funambol.com",
+                                "WebURL = https://onemediahub.com",
                                 1)
         config = config.replace("IconURI = image://themedimage/icons/services/scheduleworld",
                                 "IconURI = image://themedimage/icons/services/funambol",
@@ -6498,7 +6498,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
         expected = "Available configuration templates (servers):\n" \
                    "   template name = template description\n" \
                    "   eGroupware = http://www.egroupware.org\n" \
-                   "   Funambol = http://my.funambol.com\n" \
+                   "   Funambol = https://onemediahub.com\n" \
                    "   Google_Calendar = event sync via CalDAV, use for the 'target-config@google-calendar' config\n" \
                    "   Google_Contacts = contact sync via SyncML, see http://www.google.com/support/mobile/bin/topic.py?topic=22181\n" \
                    "   Goosync = http://www.goosync.com/\n" \
