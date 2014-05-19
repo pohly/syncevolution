@@ -819,7 +819,14 @@ sub NormalizeItem {
                     }
                 }
                 if ($#{$_} == 3) {
-                    # Remove redundant group tags.
+                    # If the last remaining property is X-ABLabel, then ignore it.
+                    # We ignore empty properties, which can cause their labels to
+                    # be left as redundant information (happens with Google CardDAV
+                    # when sending an empty URL).
+                    if ($_->[3] =~ "X-ABLabel:") {
+                        next;
+                    }
+                    # Remove redundant group tag from other properties.
                     $_->[2] = "";
                 }
             }
