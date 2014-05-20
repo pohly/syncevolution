@@ -1,0 +1,18 @@
+Google Calendar APIs Terms of Service
+Last modified: April 20, 2012
+
+By using this API, you consent to be bound by these terms in addition to the Google APIs Terms of Service ("API ToS") at http://code.google.com/apis/terms/index.html.
+
+1. Data location
+   1. You acknowledge that any information provided by users through the Calendar APIs will be handled and stored by Google and that such information may be stored and processed in the United States or any other country in which Google or its subsidiaries or affiliated legal entities maintain facilities.
+   2. By using the Calendar APIs, you consent and will obtain any necessary consent from your users to any such transfer of information.
+
+2. Deprecation Policy
+   Google will announce if we intend to discontinue or make backwards incompatible changes to this API or Service. We will use commercially reasonable efforts to continue to operate Versions 1 and 2 of the Calendar Data API without these changes until November 17, 2014, unless (as Google determines in its reasonable good faith judgment):
+
+      * required by law or third party relationship (including if there is a change in applicable law or relationship), or
+      * doing so could create a security risk or substantial economic or material technical burden.
+
+   This Deprecation Policy doesn't apply to versions, features, and functionality labeled as "experimental."
+
+   After November 17, 2014, this Deprecation Policy will not apply.
