@@ -1022,7 +1022,7 @@ public:
         // Redirect output of libphonenumber and make it a bit quieter
         // than it is by default. We map fatal libphonenumber errors
         // to ERROR and everything else to DEBUG.
-        i18n::phonenumbers::PhoneNumberUtil::SetLogger(&m_logger);
+        i18n::phonenumbers::PhoneNumberUtil::GetInstance()->SetLogger(&m_logger);
     }
 
     static std::locale genLocale()
