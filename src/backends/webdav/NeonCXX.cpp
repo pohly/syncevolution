@@ -346,6 +346,12 @@ void Session::preSend(ne_request *req, ne_buffer *header)
         SE_THROW("internal error: startOperation() not called");
     }
 
+    bool haveUserAgentHeader = boost::starts_with(header->data, "User-Agent:") ||
+        strstr(header->data, "\nUser-Agent:");
+    if (!haveUserAgentHeader) {
+        ne_buffer_concat(header, "User-Agent: SyncEvolution\r\n", (const char *)NULL);
+    }
+
     // Only do this once when using normal username/password.
     // Always do it when using OAuth2.
     bool useOAuth2 = m_authProvider && m_authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2);
