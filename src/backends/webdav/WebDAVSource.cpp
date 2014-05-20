@@ -705,6 +705,82 @@ public:
     }
 };
 
+std::string WebDAVSource::lookupDNSSRV(const std::string &domain)
+{
+    std::string url;
+    int timeoutSeconds = m_settings->timeoutSeconds();
+    int retrySeconds = m_settings->retrySeconds();
+
+    FILE *in = NULL;
+    try {
+        Timespec startTime = Timespec::monotonic();
+
+    retry:
+        in = popen(StringPrintf("syncevo-webdav-lookup '%s' '%s'",
+                                serviceType().c_str(),
+                                domain.c_str()).c_str(),
+                   "r");
+        if (!in) {
+            throwError(SE_HERE, "starting syncevo-webdav-lookup for DNS SRV lookup failed", errno);
+        }
+        // ridicuously long URLs are truncated...
+        char buffer[1024];
+        size_t read = fread(buffer, 1, sizeof(buffer) - 1, in);
+        buffer[read] = 0;
+        if (read > 0 && buffer[read - 1] == '\n') {
+            read--;
+        }
+        buffer[read] = 0;
+        url = buffer;
+        int res = pclose(in);
+        in = NULL;
+        if (res != -1 && WIFEXITED(res)) {
+            res = WEXITSTATUS(res);
+        } else {
+            res = -1;
+        }
+        switch (res) {
+        case 0:
+            SE_LOG_DEBUG(getDisplayName(), "found syncURL '%s' via DNS SRV", buffer);
+            break;
+        case 2:
+            throwError(SE_HERE, StringPrintf("syncevo-webdav-lookup did not find a DNS utility to search for %s in %s", serviceType().c_str(), domain.c_str()));
+            break;
+        case 3:
+            throwError(SE_HERE, StringPrintf("DNS SRV search for %s in %s did not find the service", serviceType().c_str(), domain.c_str()));
+            break;
+        case -1:
+            throwError(SE_HERE, StringPrintf("DNS SRV search for %s in %s failed", serviceType().c_str(), domain.c_str()));
+            break;
+        default: {
+            Timespec now = Timespec::monotonic();
+            if (retrySeconds > 0 &&
+                timeoutSeconds > 0) {
+                if (now < startTime + timeoutSeconds) {
+                    SE_LOG_DEBUG(getDisplayName(), "DNS SRV search failed due to network issues, retry in %d seconds",
+                                 retrySeconds);
+                    Sleep(retrySeconds);
+                    goto retry;
+                } else {
+                    SE_LOG_INFO(getDisplayName(), "DNS SRV search timed out after %d seconds", timeoutSeconds);
+                }
+            }
+
+            // probably network problem
+            throwError(SE_HERE, STATUS_TRANSPORT_FAILURE, StringPrintf("DNS SRV search for %s in %s failed", serviceType().c_str(), domain.c_str()));
+            break;
+        }
+        }
+    } catch (...) {
+        if (in) {
+            pclose(in);
+        }
+        throw;
+    }
+
+    return url;
+}
+
 bool WebDAVSource::findCollections(const boost::function<bool (const std::string &,
                                                                const Neon::URI &,
                                                                bool isReadOnly)> &storeResult)
@@ -735,68 +811,11 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             throwError(SE_HERE, STATUS_UNAUTHORIZED, StringPrintf("syncURL not configured and username %s does not contain a domain", username.c_str()));
         }
         std::string domain = username.substr(pos + 1);
-
-        FILE *in = NULL;
-        try {
-            Timespec startTime = Timespec::monotonic();
-
-        retry:
-            in = popen(StringPrintf("syncevo-webdav-lookup '%s' '%s'",
-                                    serviceType().c_str(),
-                                    domain.c_str()).c_str(),
-                       "r");
-            if (!in) {
-                throwError(SE_HERE, "syncURL not configured and starting syncevo-webdav-lookup for DNS SRV lookup failed", errno);
-            }
-            // ridicuously long URLs are truncated...
-            char buffer[1024];
-            size_t read = fread(buffer, 1, sizeof(buffer) - 1, in);
-            buffer[read] = 0;
-            if (read > 0 && buffer[read - 1] == '\n') {
-                read--;
-            }
-            buffer[read] = 0;
-            m_contextSettings->setURL(buffer,
-                                      StringPrintf("DNS SRV URL for domain %s and service %s",
-                                                   domain.c_str(),
-                                                   serviceType().c_str()));
-            SE_LOG_DEBUG(getDisplayName(), "found syncURL '%s' via DNS SRV", buffer);
-            int res = pclose(in);
-            in = NULL;
-            switch (res) {
-            case 0:
-                break;
-            case 2:
-                throwError(SE_HERE, StringPrintf("syncURL not configured and syncevo-webdav-lookup did not find a DNS utility to search for %s in %s", serviceType().c_str(), domain.c_str()));
-                break;
-            case 3:
-                throwError(SE_HERE, StringPrintf("syncURL not configured and DNS SRV search for %s in %s did not find the service", serviceType().c_str(), domain.c_str()));
-                break;
-            default: {
-                Timespec now = Timespec::monotonic();
-                if (retrySeconds > 0 &&
-                    timeoutSeconds > 0) {
-                    if (now < startTime + timeoutSeconds) {
-                        SE_LOG_DEBUG(getDisplayName(), "DNS SRV search failed due to network issues, retry in %d seconds",
-                                     retrySeconds);
-                        Sleep(retrySeconds);
-                        goto retry;
-                    } else {
-                        SE_LOG_INFO(getDisplayName(), "DNS SRV search timed out after %d seconds", timeoutSeconds);
-                    }
-                }
-
-                // probably network problem
-                throwError(SE_HERE, STATUS_TRANSPORT_FAILURE, StringPrintf("syncURL not configured and DNS SRV search for %s in %s failed", serviceType().c_str(), domain.c_str()));
-                break;
-            }
-            }
-        } catch (...) {
-            if (in) {
-                pclose(in);
-            }
-            throw;
-        }
+        std::string url = lookupDNSSRV(domain);
+        m_contextSettings->setURL(url,
+                                  StringPrintf("DNS SRV URL for domain %s and service %s",
+                                               domain.c_str(),
+                                               serviceType().c_str()));
     }
 
     // start talking to host defined by m_settings->getURL()
