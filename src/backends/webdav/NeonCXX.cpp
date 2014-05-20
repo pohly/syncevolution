@@ -621,7 +621,11 @@ bool Session::checkError(int error, int code, const ne_status *status,
                                      operation.c_str(),
                                      code);
             }
-            if (code >= 500 && code <= 599) {
+            if (code >= 500 && code <= 599 &&
+                 // not implemented
+                code != 501 &&
+                // HTTP version not supported
+                code != 505) {
                 // potentially temporary server failure, may try again
                 retry = true;
             }
@@ -676,7 +680,11 @@ bool Session::checkError(int error, int code, const ne_status *status,
                                  operation.c_str(),
                                  error,
                                  ne_get_error(m_session));
-            if (code >= 500 && code <= 599) {
+            if (code >= 500 && code <= 599 &&
+                // not implemented
+                code != 501 &&
+                // HTTP version not supported
+                code != 505) {
                 // potentially temporary server failure, may try again
                 retry = true;
             }
