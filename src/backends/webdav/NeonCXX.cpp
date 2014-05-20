@@ -362,14 +362,14 @@ void Session::preSend(ne_request *req, ne_buffer *header)
             SE_LOG_DEBUG(NULL, "using OAuth2 token '%s' to authenticate", m_oauth2Bearer.c_str());
             m_credentialsSent = true;
             // SmartPtr<char *> blob(ne_base64((const unsigned char *)m_oauth2Bearer.c_str(), m_oauth2Bearer.size()));
-            ne_buffer_concat(header, "Authorization: Bearer ", m_oauth2Bearer.c_str() /* blob.get() */, "\r\n", NULL);
+            ne_buffer_concat(header, "Authorization: Bearer ", m_oauth2Bearer.c_str() /* blob.get() */, "\r\n", (const char *)NULL);
         } else if (m_uri.m_scheme == "https") {
             // append "Authorization: Basic" header if not present already
             if (!haveAuthorizationHeader) {
                 Credentials creds = m_authProvider->getCredentials();
                 std::string credentials = creds.m_username + ":" + creds.m_password;
                 SmartPtr<char *> blob(ne_base64((const unsigned char *)credentials.c_str(), credentials.size()));
-                ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", NULL);
+                ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", (const char *)NULL);
             }
 
             // check for acceptance of credentials later
