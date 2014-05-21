@@ -1234,7 +1234,12 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             }
             StringMap *props = pathProps == davProps.end() ? NULL : &pathProps->second;
             bool isResult = false;
-            if (props && typeMatches(*props)) {
+            std::string type;
+            if (props) {
+                type = (*props)["DAV::resourcetype"];
+            }
+            bool isCollection = type.find("<DAV:collection></DAV:collection>") != type.npos;
+            if (isCollection && props && isLeafCollection(*props) && typeMatches(*props)) {
                 isResult = true;
                 StringMap::const_iterator it;
 
@@ -1345,22 +1350,15 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 }
             }
 
-            // finally, recursively descend into collections,
-            // unless we identified it as a result (because those
-            // cannot be recursive)
-            if (!isResult) {
-                std::string type;
-                if (props) {
-                    type = (*props)["DAV::resourcetype"];
-                }
-                bool isCollection = type.find("<DAV:collection></DAV:collection>") != type.npos;
-                if (isCollection && props && isLeafCollection(*props)) {
+            // Finally, recursively descend into some collections.
+            if (isCollection) {
+                if (props && isLeafCollection(*props)) {
                     // The goal here was to prevent diving into collections which are
                     // known to not contain other relevant collections.
                     SE_LOG_DEBUG(NULL, "skipping listing because collection cannot contain other relevant collections: %s", candidate.m_uri.toURL().c_str());
-                } else if (isCollection && !(candidate.m_flags & Candidate::LIST)) {
+                } else if (!(candidate.m_flags & Candidate::LIST)) {
                     SE_LOG_DEBUG(NULL, "skipping listing because we don't know whether collection contains relevant collections: %s", candidate.m_uri.toURL().c_str());
-                } else if (isCollection) {
+                } else {
                     // List members and find new candidates.
                     // Yahoo! Calendar does not return resources contained in /dav/<user>/Calendar/
                     // if <allprops> is used. Properties must be requested explicitly.
