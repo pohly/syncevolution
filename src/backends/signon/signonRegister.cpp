@@ -26,7 +26,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-#if defined(USE_GSSO) || defined(USE_UOA)
+#if defined(USE_GSSO) || defined(USE_UOA) || defined(USE_SIGNON) || defined(STATIC_GSSO) || defined(STATIC_UOA) || defined(STATIC_SIGNON)
 static class SignonProvider : public IdentityProvider
 {
 public:
@@ -36,35 +36,43 @@ public:
         // one to use. If it turns out that the two will never be installed at the
         // same time, then this perhaps should be "signon" instead, which then would
         // pick either a gSSO or UAO backend depending on which is available.
-#ifdef USE_GSSO
+#if defined(USE_GSSO) || defined(STATIC_GSSO)
         IdentityProvider("gsso",
                          "gsso:<numeric account ID>[,<service name>]\n"
                          "   Authentication using libgsignond + libaccounts,\n"
                          "   using an account created and managed with libaccounts.\n"
                          "   The service name is optional. If not given, the\n"
                          "   settings from the account will be used.")
-#elif defined USE_UOA
+#elif defined(USE_UOA) || defined(STATIC_UOA)
         IdentityProvider("uoa",
                          "uoa:<numeric account ID>[,<service name>]\n"
                          "   Authentication using libsignon + libaccounts,\n"
                          "   using an account created and managed with libaccounts.\n"
                          "   The service name is optional. If not given, the\n"
                          "   settings from the account will be used.")
-#endif // USE_GSSO
+#elif defined(USE_SIGNON) || defined(STATIC_SIGNON)
+        IdentityProvider("signon",
+                         "signon:<parameters>]\n"
+                         "   Authentication using libgsignond with an identity created\n"
+                         "   before calling SyncEvolution. The <parameters> string is a\n"
+                         "   GVariant text dump suitable for g_variant_parse() (see\n"
+                         "   https://developer.gnome.org/glib/stable/gvariant-text.html).\n"
+                         "   It must contain a hash with keys 'identity', 'method', \n"
+                         "   'session' and 'mechanism'. The first two values are used for\n"
+                         "   signon_identity_create_session(), the last one for\n"
+                         "   signon_auth_session_process_async().\n")
+#endif
     {}
 
     virtual boost::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password)
     {
-        // Returning NULL if not enabled...
         boost::shared_ptr<AuthProvider> provider;
-#if (defined USE_GSSO || defined USE_UOA)
         provider = createSignonAuthProvider(username, password);
-#endif
         return provider;
     }
 } gsso;
 
-#endif // USE_GSSO || USE_UOA
+#endif // one signon-based provider enabled
 
 SE_END_CXX
