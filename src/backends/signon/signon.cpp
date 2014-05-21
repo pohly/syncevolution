@@ -279,15 +279,18 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
     const char *method = ag_auth_data_get_method(authData);
     const char *mechanism = ag_auth_data_get_mechanism(authData);
 
+    GVariantCXX sessionDataVar(ag_auth_data_get_login_parameters(authData, NULL));
+    GHashTableCXX sessionData(Variant2HashTable(sessionDataVar), TRANSFER_REF);
+#ifdef USE_GSSO
+    GVariant *realmsVariant = (GVariant *)g_hash_table_lookup(sessionData, "Realms");
+    PlainGStrArray realms(g_variant_dup_strv(realmsVariant, NULL));
+#endif
+
     // Check that the service has a credentials ID. If not, create it and
     // store its ID permanently.
     if (!signonID) {
         SE_LOG_DEBUG(NULL, "have to create signon identity");
-        SignonIdentityCXX identity(signon_identity_new(
-#ifdef USE_GSSO
-                                                       NULL
-#endif
-                                                       ), TRANSFER_REF);
+        SignonIdentityCXX identity(signon_identity_new(), TRANSFER_REF);
         boost::shared_ptr<SignonIdentityInfo> identityInfo(signon_identity_info_new(), signon_identity_info_free);
         signon_identity_info_set_caption(identityInfo.get(),
                                          StringPrintf("created by SyncEvolution for account #%d and service %s",
@@ -295,6 +298,11 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
                                                       serviceName.empty() ? "<<none>>" : serviceName.c_str()).c_str());
         const gchar *mechanisms[] = { mechanism ? mechanism : "*", NULL };
         signon_identity_info_set_method(identityInfo.get(), method, mechanisms);
+#ifdef USE_GSSO
+        if (realms) {
+            signon_identity_info_set_realms(identityInfo.get(), realms);
+        }
+#endif
         StoreIdentityData data;
         signon_identity_store_credentials_with_info(identity, identityInfo.get(),
                                                     StoreIdentityCB, &data);
@@ -324,13 +332,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
         mechanism = ag_auth_data_get_mechanism(authData);
     }
 
-    GVariantCXX sessionDataVar(ag_auth_data_get_login_parameters(authData, NULL));
-    GHashTableCXX sessionData(Variant2HashTable(sessionDataVar), TRANSFER_REF);
-    SignonIdentityCXX identity(signon_identity_new_from_db(signonID
-#ifdef USE_GSSO
-                                                           , NULL
-#endif
-                                                           ), TRANSFER_REF);
+    SignonIdentityCXX identity(signon_identity_new_from_db(signonID), TRANSFER_REF);
     SE_LOG_DEBUG(NULL, "using signond identity %d", signonID);
     SignonAuthSessionCXX authSession(signon_identity_create_session(identity, method, gerror), TRANSFER_REF);
 
