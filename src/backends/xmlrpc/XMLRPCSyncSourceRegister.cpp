@@ -114,7 +114,7 @@ public:
     {
         // set type as required by XMLRPCSyncSource
         // and leave everything else at its default
-        config.type = "xmlrpc:text/x-vcard:2.1";
+        config.m_type = "xmlrpc:text/x-vcard:2.1";
     }
 } VCard21Test;
 
@@ -124,7 +124,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
-        config.type = "xmlrpc:text/vcard:3.0";
+        config.m_type = "xmlrpc:text/vcard:3.0";
     }
 } VCard30Test;
 
@@ -134,7 +134,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
-        config.type = "xmlrpc:text/calendar:2.0";
+        config.m_type = "xmlrpc:text/calendar:2.0";
 
         // A sync source which supports linked items (= recurring
         // event with detached exception) is expected to handle
@@ -146,7 +146,7 @@ public:
         // Client::Source::xmlrpc_event::testLinkedItemsInsertChildTwice
         //
         // Disable linked item testing to avoid this.
-        config.sourceKnowsItemSemantic = false;
+        config.m_sourceKnowsItemSemantic = false;
     }
 } ICal20Test;
 
@@ -156,7 +156,7 @@ public:
 
     virtual void updateConfig(ClientTestConfig &config) const
     {
-        config.type = "xmlrpc:text/calendar:2.0";
+        config.m_type = "xmlrpc:text/calendar:2.0";
     }
 } ITodo20Test;
 
