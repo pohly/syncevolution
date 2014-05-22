@@ -178,7 +178,7 @@ void MapSyncSource::detectChanges(SyncSourceRevisions::ChangeMode mode)
         break;
     default:
         // ?!
-        throwError("unknown change mode");
+        throwError(SE_HERE, "unknown change mode");
         break;
     }
 

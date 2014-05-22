@@ -1,5 +1,5 @@
-@@ -83,15 +83,14 @@
- X-EVOLUTION-ASSISTANT:
+@@ -92,15 +92,14 @@
+ UID:unique-id-user2
  NICKNAME:user2
  X-EVOLUTION-SPOUSE:
 -NOTE:This user tests some of the advanced aspects of vcards:\n- non-ASCII c

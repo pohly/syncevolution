@@ -350,7 +350,7 @@ public:
     void checkError(const char *op, T &req)
     {
         if (req.error()) {
-            m_parent->throwError(StringPrintf("%s: failed with error %d", op, req.error()));
+            m_parent->throwError(SE_HERE, StringPrintf("%s: failed with error %d", op, req.error()));
         }
     }
     template<class T>
@@ -365,7 +365,7 @@ public:
             foreach (int index, errors.keys()) {
                 res.push_back(StringPrintf("entry #%d failed with error %d", index, errors[index]));
             }
-            m_parent->throwError(StringPrintf("%s: failed with error %d, ", op, req.error()) +
+            m_parent->throwError(SE_HERE, StringPrintf("%s: failed with error %d, ", op, req.error()) +
                                  boost::join(res, ", "));
         }
     }
@@ -398,7 +398,7 @@ void QtContactsSource::open()
     cxxptr<QContactManager> manager(QContactManager::fromUri(m_data->m_managerURI),
                                     "QTContactManager");
     if (manager->error()) {
-        throwError(StringPrintf("failed to open QtContact database %s, error code %d",
+        throwError(SE_HERE, StringPrintf("failed to open QtContact database %s, error code %d",
                                 m_data->m_managerURI.toLocal8Bit().constData(),
                                 manager->error()));
     }
@@ -528,12 +528,12 @@ void QtContactsSource::readItem(const string &uid, std::string &item, bool raw)
     QVersitContactExporter exporter(profiles);
     exporter.setDetailHandler(&handler);
     if (!exporter.exportContacts(contacts, QVersitDocument::VCard30Type)) {
-        throwError(uid + ": encoding as vCard 3.0 failed");
+        throwError(SE_HERE, uid + ": encoding as vCard 3.0 failed");
     }
     QByteArray vcard;
     QVersitWriter writer(&vcard);
     if (!writer.startWriting(exporter.documents())) {
-        throwError(uid + ": writing as vCard 3.0 failed");
+        throwError(SE_HERE, uid + ": writing as vCard 3.0 failed");
     }
     writer.waitForFinished();
     item = vcard.constData();
@@ -544,7 +544,7 @@ TrackingSyncSource::InsertItemResult QtContactsSource::insertItem(const string &
 {
     QVersitReader reader(QByteArray(item.c_str()));
     if (!reader.startReading()) {
-        throwError("reading vCard failed");
+        throwError(SE_HERE, "reading vCard failed");
     }
     reader.waitForFinished();
     m_data->checkError("decoding vCard", reader);
@@ -559,7 +559,7 @@ TrackingSyncSource::InsertItemResult QtContactsSource::insertItem(const string &
     QVersitContactImporter importer(profiles);
     importer.setPropertyHandler(&handler);
     if (!importer.importDocuments(reader.results())) {
-        throwError("importing vCard failed");
+        throwError(SE_HERE, "importing vCard failed");
     }
 
     QList<QContact> contacts = importer.contacts();

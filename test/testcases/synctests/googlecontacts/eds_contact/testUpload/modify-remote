@@ -1,0 +1,20 @@
+#! /bin/sh
+
+set -ex
+
+IN=$1
+OUT=$2
+
+rm -rf $OUT
+mkdir $OUT
+[ -d $IN ] || (echo >&2 "$IN not a directory"; false)
+
+for i in $IN/*; do
+   perl -e '$_ = join("", <>); if (1) {' \
+       -e 's/END:VCARD/EMAIL:new remote email\r\nEND:VCARD/;' \
+       -e 'print;' \
+       -e '}' \
+   <$i >$OUT/$(basename $i)
+done
+
+find $OUT -size 0 -delete

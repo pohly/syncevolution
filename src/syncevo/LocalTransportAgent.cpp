@@ -827,10 +827,10 @@ class LocalTransportAgentChild : public TransportAgent
 
                 if (!targetNodes.dataConfigExists()) {
                     if (targetName.empty()) {
-                        m_client->throwError("missing URI for one of the sources");
+                        Exception::throwError(SE_HERE, "missing URI for one of the sources");
                     } else {
-                        m_client->throwError(StringPrintf("%s: source not configured",
-                                                          fullTargetName.c_str()));
+                        Exception::throwError(SE_HERE, StringPrintf("%s: source not configured",
+                                                                    fullTargetName.c_str()));
                     }
                 }
 
@@ -839,9 +839,10 @@ class LocalTransportAgentChild : public TransportAgent
                 // be written. If a sync mode was set, it must have been
                 // done before in this loop => error in original config.
                 if (!targetSource.isDisabled()) {
-                    m_client->throwError(StringPrintf("%s: source targetted twice by %s",
-                                                      fullTargetName.c_str(),
-                                                      serverConfig.first.c_str()));
+                    Exception::throwError(SE_HERE,
+                                          StringPrintf("%s: source targetted twice by %s",
+                                                       fullTargetName.c_str(),
+                                                       serverConfig.first.c_str()));
                 }
                 // invert data direction
                 if (mode == SYNC_REFRESH_FROM_LOCAL) {

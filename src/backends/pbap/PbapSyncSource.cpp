@@ -39,6 +39,7 @@
 #include <syncevo/GLibSupport.h> // PBAP backend does not compile without GLib.
 #include <syncevo/util.h>
 #include <syncevo/BoostHelper.h>
+#include <src/syncevo/SynthesisEngine.h>
 
 #include "gdbus-cxx-bridge.h"
 
@@ -47,7 +48,6 @@
 
 #include <synthesis/SDK_util.h>
 
-#include <syncevo/SyncContext.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -341,7 +341,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     std::string properties;
     const pcrecpp::RE re("(?:(2\\.1|3\\.0):?)?(\\^?)([-a-zA-Z,]*)");
     if (!re.FullMatch(format, &version, &tmp, &properties)) {
-        m_parent.throwError(StringPrintf("invalid specification of PBAP vCard format (databaseFormat): %s",
+        m_parent.throwError(SE_HERE, StringPrintf("invalid specification of PBAP vCard format (databaseFormat): %s",
                                          format.c_str()));
     }
     char negated = tmp.c_str()[0];
@@ -350,7 +350,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         version = "2.1";
     }
     if (version != "2.1" && version != "3.0") {
-        m_parent.throwError(StringPrintf("invalid vCard version prefix in PBAP vCard format specification (databaseFormat): %s",
+        m_parent.throwError(SE_HERE, StringPrintf("invalid vCard version prefix in PBAP vCard format specification (databaseFormat): %s",
                                          format.c_str()));
     }
     std::set<std::string> keywords;
@@ -413,7 +413,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     }
 
     if (session.empty()) {
-        m_parent.throwError("PBAP: failed to create session");
+        m_parent.throwError(SE_HERE, "PBAP: failed to create session");
     }
 
     if (m_obexAPI != OBEXD_OLD) {
@@ -505,7 +505,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                          boost::bind(&boost::iequals<std::string,std::string>, _1, prop, std::locale()));
 
         if (entry == m_filterFields.end()) {
-            m_parent.throwError(StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
+            m_parent.throwError(SE_HERE, StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
                                              prop.c_str()));
         }
 
@@ -647,7 +647,7 @@ void PbapSession::checkForError()
     Transfers::const_iterator it = m_transfers.find(m_currentTransfer);
     if (it != m_transfers.end()) {
         if (!it->second.m_transferErrorCode.empty()) {
-            m_parent.throwError(StringPrintf("%s: %s",
+            m_parent.throwError(SE_HERE, StringPrintf("%s: %s",
                                              it->second.m_transferErrorCode.c_str(),
                                              it->second.m_transferErrorMsg.c_str()));
         }
@@ -870,7 +870,7 @@ PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
         boost::iequals(PBAPSyncMode, "incremental") ? PBAP_SYNC_INCREMENTAL :
         boost::iequals(PBAPSyncMode, "text") ? PBAP_SYNC_TEXT :
         boost::iequals(PBAPSyncMode, "all") ? PBAP_SYNC_NORMAL :
-        (throwError(StringPrintf("invalid value for SYNCEVOLUTION_PBAP_SYNC: %s", PBAPSyncMode)), PBAP_SYNC_NORMAL);
+        (throwError(SE_HERE, StringPrintf("invalid value for SYNCEVOLUTION_PBAP_SYNC: %s", PBAPSyncMode)), PBAP_SYNC_NORMAL);
     m_isFirstCycle = true;
     m_hadContacts = false;
 }
@@ -885,7 +885,7 @@ void PbapSyncSource::open()
     const string prefix("obex-bt://");
 
     if (!boost::starts_with(database, prefix)) {
-        throwError("database should specifiy device address (obex-bt://<bt-addr>)");
+        throwError(SE_HERE, "database should specifiy device address (obex-bt://<bt-addr>)");
     }
 
     std::string address = database.substr(prefix.size());
@@ -896,7 +896,7 @@ void PbapSyncSource::open()
 void PbapSyncSource::beginSync(const std::string &lastToken, const std::string &resumeToken)
 {
     if (!lastToken.empty()) {
-        throwError(STATUS_SLOW_SYNC_508, std::string("PBAP cannot do change detection"));
+        throwError(SE_HERE, STATUS_SLOW_SYNC_508, std::string("PBAP cannot do change detection"));
     }
 }
 
@@ -931,7 +931,9 @@ PbapSyncSource::Databases PbapSyncSource::getDatabases()
     Databases result;
 
     result.push_back(Database("select database via bluetooth address",
-                              "[obex-bt://]<bt-addr>"));
+                              "[obex-bt://]<bt-addr>",
+                              false,
+                              true));
     return result;
 }
 
@@ -987,7 +989,7 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
                                             PULL_AS_CONFIGURED);
     }
     if (!m_pullAll) {
-        throwError("logic error: readNextItem without aFirst=true before");
+        throwError(SE_HERE, "logic error: readNextItem without aFirst=true before");
     }
     std::string id = m_pullAll->getNextID();
     if (id.empty()) {
@@ -1010,7 +1012,7 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
 sysync::TSyError PbapSyncSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH aItemKey)
 {
     if (!m_pullAll) {
-        throwError("logic error: readItemAsKey() without preceeding readNextItem()");
+        throwError(SE_HERE, "logic error: readItemAsKey() without preceeding readNextItem()");
     }
     pcrecpp::StringPiece vcard;
     if (m_pullAll->getContact(atoi(aID->item), vcard)) {
@@ -1022,20 +1024,20 @@ sysync::TSyError PbapSyncSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH
 
 SyncSourceRaw::InsertItemResult PbapSyncSource::insertItemRaw(const std::string &luid, const std::string &item)
 {
-    throwError("writing via PBAP is not supported");
+    throwError(SE_HERE, "writing via PBAP is not supported");
     return InsertItemResult();
 }
 
 void PbapSyncSource::readItemRaw(const std::string &luid, std::string &item)
 {
     if (!m_pullAll) {
-        throwError("logic error: readItemRaw() without preceeding readNextItem()");
+        throwError(SE_HERE, "logic error: readItemRaw() without preceeding readNextItem()");
     }
     pcrecpp::StringPiece vcard;
     if (m_pullAll->getContact(atoi(luid.c_str()), vcard)) {
         item.assign(vcard.data(), vcard.size());
     } else {
-        throwError(STATUS_NOT_FOUND, string("retrieving item: ") + luid);
+        throwError(SE_HERE, STATUS_NOT_FOUND, string("retrieving item: ") + luid);
     }
 }
 

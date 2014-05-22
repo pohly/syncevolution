@@ -388,7 +388,8 @@ class Session {
      *         errors reported via exceptions
      */
     bool checkError(int error, int code = 0, const ne_status *status = NULL,
-                    const string &location = "",
+                    const string &newLocation = "",
+                    const std::string &oldLocation = "",
                     const std::set<int> *expectedCodes = NULL);
 
     /** ne_set_server_auth() callback */
@@ -591,6 +592,7 @@ class Request
     ne_request *getRequest() const { return m_req; }
     std::string *getResult() const { return m_result; }
     XMLParser *getParser() const { return m_parser; }
+    std::string getPath() const { return m_path; }
 
     /** ne_block_reader implementation */
     static int addResultData(void *userdata, const char *buf, size_t len);
@@ -600,6 +602,10 @@ class Request
     // but due to a bug in neon, our method string is still used
     // for credentials)
     std::string m_method;
+
+    // Path used when creating the request. Copied by ne_request_create(),
+    // but cannot be accessed later via the request.
+    std::string m_path;
 
     Session &m_session;
     ne_request *m_req;

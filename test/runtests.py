@@ -21,10 +21,11 @@ import copy
 import errno
 import signal
 import stat
+import exceptions
 
 def log(format, *args):
     now = time.time()
-    print time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
+    print 'runtests.py-%d' % os.getpid(), time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
     log.latest = now
 log.start = time.time()
 log.latest = log.start
@@ -40,6 +41,7 @@ def cd(path):
     if not os.access(path, os.F_OK):
         os.makedirs(path)
     os.chdir(path)
+    log('changing into directory %s (= %s)', path, os.getcwd())
 
 def abspath(path):
     """Absolute path after expanding vars and user."""
@@ -279,11 +281,12 @@ class Action:
                                                  'akonadiserverrc'):
                                         manual.append((path, entry))
                                         exclude.append(entry)
-                                    # Copy only regular files. Ignore process id files created
+                                    # Copy only regular files. Ignore process id files and socket-<hostname> symlinks created
                                     # inside the home by a concurrent Akonadi instance.
                                     # Some files need special processing (see below).
                                     elif not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)) \
-                                            or entry.endswith('.pid'):
+                                            or entry.endswith('.pid') \
+                                            or entry.startswith('socket-'):
                                         exclude.append(entry)
                                 return exclude
                             shutil.copytree(context.home_template, home,
@@ -583,8 +586,11 @@ class Context:
         # run testresult checker
         testdir = compile.testdir
         backenddir = os.path.join(compile.installdir, "usr/lib/syncevolution/backends")
-        # resultchecker doesn't need valgrind, remove it
-        shell = re.sub(r'\S*valgrind\S*', '', options.shell)
+        # resultchecker doesn't need valgrind, remove it if present
+        shell = options.simpleshell
+        if not shell:
+            shell = options.shell
+        shell = re.sub(r'\S*valgrind\S*', '', shell)
         # When using schroot, run it in /tmp, because the host's directory might
         # not exist in the chroot.
         shell = shell.replace('schroot ', 'schroot -d /tmp ', 1)
@@ -611,8 +617,8 @@ class Context:
         self.runCommand(" && ".join(commands))
 
         # report result by email
-        if self.recipients:
-            server = smtplib.SMTP(self.mailhost)
+        server, body, writer = self.startEmail()
+        if server:
             msg=''
             try:
                 msg = open(self.resultdir + "/nightly.html").read()
@@ -623,6 +629,19 @@ class Context:
             msg = re.sub(r'href="([a-zA-Z0-9./])',
                          'href="' + uri + r'/\1',
                          msg)
+            writer.startbody("text/html;charset=ISO-8859-1").write(msg)
+            self.finishEmail(server, body)
+        else:
+            log('%s\n', '\n'.join(self.summary))
+
+        if status in Action.COMPLETED:
+            sys.exit(0)
+        else:
+            sys.exit(1)
+
+    def startEmail(self):
+        if self.recipients:
+            server = smtplib.SMTP(self.mailhost)
             body = StringIO.StringIO()
             writer = MimeWriter.MimeWriter (body)
             writer.addheader("From", self.sender)
@@ -631,18 +650,14 @@ class Context:
             writer.addheader("Subject", self.mailtitle + ": " + os.path.basename(self.resultdir))
             writer.addheader("MIME-Version", "1.0")
             writer.flushheaders()
-            writer.startbody("text/html;charset=ISO-8859-1").write(msg)
-
-            failed = server.sendmail(self.sender, self.recipients, body.getvalue())
-            if failed:
-                log('could not send to: %s', failed)
-                sys.exit(1)
+            return (server, body, writer)
         else:
-            log('%s\n', '\n'.join(self.summary))
+            return (None, None, None)
 
-        if status in Action.COMPLETED:
-            sys.exit(0)
-        else:
+    def finishEmail(self, server, body):
+        failed = server.sendmail(self.sender, self.recipients, body.getvalue())
+        if failed:
+            log('could not send to: %s', failed)
             sys.exit(1)
 
 class CVSCheckout(Action):
@@ -663,14 +678,14 @@ class CVSCheckout(Action):
     def execute(self):
         cd(self.workdir)
         if os.access(self.module, os.F_OK):
-            os.chdir(self.module)
+            cd(self.module)
             context.runCommand("cvs update -d -r %s"  % (self.revision))
         elif self.revision == "HEAD":
             context.runCommand("cvs -d %s checkout %s" % (self.cvsroot, self.module))
-            os.chdir(self.module)
+            cd(self.module)
         else:
             context.runCommand("cvs -d %s checkout -r %s %s" % (self.cvsroot, self.revision, self.module))
-            os.chdir(self.module)
+            cd(self.module)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
@@ -695,7 +710,7 @@ class SVNCheckout(Action):
         else:
             cmd = "checkout"
         context.runCommand("svn %s %s %s"  % (cmd, self.url, self.module))
-        os.chdir(self.module)
+        cd(self.module)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
@@ -731,7 +746,7 @@ class GitCheckout(GitCheckoutBase, Action):
                            {"dir": self.basedir,
                             "rev": self.revision},
                            runAsIs=True)
-        os.chdir(self.basedir)
+        cd(self.basedir)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
@@ -758,7 +773,7 @@ class GitCopy(GitCheckoutBase, Action):
         if not os.access(self.basedir, os.F_OK):
             context.runCommand("(mkdir -p %s && cp -a -l %s/%s %s) || ( rm -rf %s && false )" %
                                (self.workdir, self.sourcedir, self.name, self.workdir, self.basedir))
-        os.chdir(self.basedir)
+        cd(self.basedir)
         cmd = " && ".join([
                 'rm -f %(patchlog)s',
                 'echo "save local changes with stash under a fixed name <rev>-nightly"',
@@ -850,6 +865,11 @@ class SyncEvolutionTest(Action):
 
     def execute(self):
         resdir = os.getcwd()
+        log('result dir: %s, /proc/self/cwd -> %s', resdir, os.readlink('/proc/self/cwd'))
+        if resdir == '/':
+            time.sleep(5)
+            resdir = os.getcwd()
+            log('result dir: %s, /proc/self/cwd -> %s', resdir, os.readlink('/proc/self/cwd'))
         # Run inside a new directory which links to all files in the build dir.
         # That way different actions are independent of each other while still
         # sharing the same test binaries and files.
@@ -869,7 +889,7 @@ class SyncEvolutionTest(Action):
                 name = os.path.join(actiondir, entry)
                 os.symlink(target, name)
                 links[entry] = os.path.join(hosttargetdir, entry)
-        os.chdir(actiondir)
+        cd(actiondir)
         try:
             # use installed backends if available
             backenddir = os.path.join(self.build.installdir, "usr/lib/syncevolution/backends")
@@ -1029,6 +1049,9 @@ parser.add_option("", "--resulturi",
 parser.add_option("", "--shell",
                   type="string", dest="shell", default="",
                   help="a prefix which is put in front of a command to execute it (can be used for e.g. run_garnome)")
+parser.add_option("", "--simple-shell",
+                  type="string", dest="simpleshell", default="",
+                  help="shell to use for result checking (just the environment, no daemons)")
 parser.add_option("", "--schrootdir",
                   type="string", dest="schrootdir", default="",
                   help="the path to the root of the chroot when using schroot in --shell; --resultdir already includes the path")
@@ -1651,9 +1674,14 @@ context.add(test)
 
 test = SyncEvolutionTest("googlecontacts", compile,
                          "", options.shell,
-                         "Client::Sync::eds_contact::testItems Client::Source::google_carddav",
+                         "Client::Sync::eds_contact::testItems "
+                         "Client::Sync::eds_contact::testDownload "
+                         "Client::Sync::eds_contact::testUpload "
+                         "Client::Sync::eds_contact::testUpdateLocalWins "
+                         "Client::Sync::eds_contact::testUpdateRemoteWins "
+                         "Client::Source::google_carddav",
                          [ "google_carddav", "eds_contact" ],
-                         "CLIENT_TEST_WEBDAV='google carddav testcases=testcases/eds_contact.vcf' "
+                         "CLIENT_TEST_WEBDAV='google carddav' "
                          "CLIENT_TEST_NUM_ITEMS=10 " # don't stress server
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          "CLIENT_TEST_FAILURES="
@@ -1725,6 +1753,31 @@ test = SyncEvolutionTest("apple", compile,
                          "CLIENT_TEST_WEBDAV='apple caldav caldavtodo carddav' "
                          "CLIENT_TEST_NUM_ITEMS=100 " # test is local, so we can afford a higher number;
                          # used to be 250, but with valgrind that led to runtimes of over 40 minutes in testManyItems (too long!)
+                         "CLIENT_TEST_FAILURES="
+                         # After introducing POST, a misbehavior (?) of the
+                         # server started breaking the test:
+                         # - POST returns a certain etag "foo" in send.client.A
+                         # - the server seems to reorder properties, leading to etag "bar"
+                         # - in check.client.A, because of "foo" != "bar", the item gets
+                         #   downloaded and updated in a sync where no such update is
+                         #   expected.
+                         #
+                         # Related to https://bugs.freedesktop.org/show_bug.cgi?id=63882 "WebDAV: re-import uploaded item".
+                         # However, it is uncertain whether the server really
+                         # behaves correctly, because the client cannot detect
+                         # that the item is still getting modified by the server.
+                         "Client::Sync::eds_contact::testOneWayFromLocal,"
+                         "Client::Sync::eds_contact::testOneWayFromClient,"
+                         "Client::Sync::eds_task::testOneWayFromLocal,"
+                         "Client::Sync::eds_task::testOneWayFromClient,"
+                         " "
+                         # Apple Calendar Server 5.2 (and earlier?)
+                         # implement timezones by reference and does
+                         # not return VTIMEZONE definitions (see
+                         # "Apple Calendar Server 5.2 + timezone by
+                         # reference" on the caldeveloper mailing
+                         # list). Ignore timezone related test failures.
+                         "CLIENT_TEST_NO_TIMEZONES=1 "
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          ,
                          testPrefix=options.testprefix)
@@ -1845,6 +1898,7 @@ syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
                              [ "--daemon-log", "syncevohttp.log" ] ) +
                        [ options.testprefix,
                          os.path.join(compile.installdir, "usr", "libexec", "syncevo-dbus-server"),
+                         '--verbosity=3', # Full information about daemon operation.
                          '--dbus-verbosity=1', # Only errors from syncevo-dbus-server and syncing.
                          '--stdout', '--no-syslog', # Write into same syncevohttp.log as syncevo-http-server.
                          '--duration=unlimited', # Never shut down, even if client is inactive for a while.
@@ -2476,5 +2530,19 @@ if options.list:
     for action in context.todo:
         print action.name
 else:
-    log('Ready to run. I have PID %d.', os.getpid())
-    context.execute()
+    pid = os.getpid()
+    log('Ready to run. I have PID %d.', pid)
+    try:
+        context.execute()
+    except exceptions.SystemExit:
+        raise
+    except:
+        # Something went wrong. Send emergency email if an email is
+        # expected and we are the parent process.
+        if pid == os.getpid():
+            server, body, writer = context.startEmail()
+            if server:
+                writer.startbody("text/html;charset=ISO-8859-1").write('<html><body><pre>%s</pre></body></html>' %
+                                                                       traceback.format_exc())
+                context.finishEmail(server, body)
+        raise

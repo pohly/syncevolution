@@ -110,7 +110,8 @@ class EvolutionSyncSource : public TrackingSyncSource
      * @param gerror     a more detailed description of the failure,
      *                   may be empty
      */
-    void throwError(const string &action,
+    void throwError(const SourceLocation &where,
+                    const string &action,
                     GErrorCXX &gerror);
 #endif
 };

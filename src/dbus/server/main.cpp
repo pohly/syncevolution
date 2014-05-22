@@ -139,7 +139,7 @@ int main(int argc, char **argv, char **envp)
         bool success = g_option_context_parse(context, &argc, &argv, gerror);
         PlainGStr durationOwner(durationString);
         if (!success) {
-            gerror.throwError("parsing command line options");
+            gerror.throwError(SE_HERE, "parsing command line options");
         }
         if (durationString && !parseDuration(duration, durationString)) {
             SE_THROW(StringPrintf("invalid parameter value '%s' for --duration/-d: must be positive number of seconds or 'unlimited'", durationString));
@@ -219,7 +219,6 @@ int main(int argc, char **argv, char **envp)
             unsetenv("G_DBUS_DEBUG");
         }
 
-        dbus_bus_connection_undelay(conn);
         server->run();
         SE_LOG_DEBUG(NULL, "cleaning up");
 #ifdef ENABLE_DBUS_PIM

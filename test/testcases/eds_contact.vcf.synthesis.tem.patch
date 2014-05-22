@@ -1,4 +1,4 @@
-@@ -156,14 +156,14 @@
+@@ -164,15 +164,15 @@
  VERSION:3.0
  URL:http://john.doe.com
  TITLE:Senior Tester
@@ -7,6 +7,7 @@
  ROLE:professional test case
  X-EVOLUTION-MANAGER:John Doe Senior
  X-EVOLUTION-ASSISTANT:John Doe Junior
+ UID:unique-id-user1
  NICKNAME:user1
  BDAY:2006-01-08
 -X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
@@ -16,7 +17,7 @@
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
-@@ -199,14 +199,14 @@
+@@ -207,14 +207,14 @@
  TEL;TYPE=WORK;TYPE=FAX;X-EVOLUTION-UI-SLOT=4:businessfax 4
  TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
  TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6

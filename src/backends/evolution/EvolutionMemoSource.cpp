@@ -166,7 +166,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
                                     0));
 
     if( !subcomp ) {
-        throwError(string("failure creating vjournal " ) + summary);
+        throwError(SE_HERE, string("failure creating vjournal " ) + summary);
     }
 
     GErrorCXX gerror;
@@ -199,10 +199,10 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
                 state = ITEM_NEEDS_MERGE;
                 uid = icalcomponent_get_uid(subcomp);
                 if (!uid) {
-                    throwError("storing new memo item, no UID set", gerror);
+                    throwError(SE_HERE, "storing new memo item, no UID set", gerror);
                 }
             } else {
-                throwError("storing new memo item", gerror);
+                throwError(SE_HERE, "storing new memo item", gerror);
             }
         }
 #ifdef USE_EDS_CLIENT
@@ -231,7 +231,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionMemoSource::insertItem(const 
             !e_cal_modify_object(m_calendar, subcomp, CALOBJ_MOD_ALL, gerror)
 #endif
             ) {
-            throwError(string("updating memo item ") + luid, gerror);
+            throwError(SE_HERE, string("updating memo item ") + luid, gerror);
         }
         ItemID newid = getItemID(subcomp);
         newluid = newid.getLUID();

@@ -63,14 +63,14 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
                                 m_operations);
         break;
     default:
-        throwError("invalid calendar type");
+        throwError(SE_HERE, "invalid calendar type");
         break;
     }
     mc = CMulticalendar::MCInstance();
     cal = NULL;
     conv = NULL;
     if (!mc) {
-        throwError("Could not connect to Maemo Calendar backend");
+        throwError(SE_HERE, "Could not connect to Maemo Calendar backend");
     }
 }
 
@@ -135,7 +135,7 @@ void MaemoCalendarSource::open()
     }
 
     if (!cal) {
-        throwError(string("not found: ") + id);
+        throwError(SE_HERE, string("not found: ") + id);
     }
     conv = new ICalConverter;
     conv->setSyncing(true); // not sure what this does, but may as well tell the truth
@@ -223,7 +223,7 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
         CComponent *c = cal->getEntry(id, entry_type, err);
         if (!c)
         {
-            throwError(string("retrieving item: ") + id);
+            throwError(SE_HERE, string("retrieving item: ") + id);
         }
         revisions[id] = get_revision(c);
         delete c;
@@ -236,7 +236,7 @@ void MaemoCalendarSource::readItem(const string &uid, std::string &item, bool ra
     int err;
     CComponent * c = cal->getEntry(uid, entry_type, err);
     if (!c) {
-        throwError(string("retrieving item: ") + uid);
+        throwError(SE_HERE, string("retrieving item: ") + uid);
     }
     if (entry_format == -1) {
         item = c->getSummary();
@@ -246,7 +246,7 @@ void MaemoCalendarSource::readItem(const string &uid, std::string &item, bool ra
     }
     delete c;
     if (err != CALENDAR_OPERATION_SUCCESSFUL) {
-        throwError(string("generating ical for item: ") + uid);
+        throwError(SE_HERE, string("generating ical for item: ") + uid);
     }
 }
 
@@ -260,7 +260,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
 
     if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
         // stubbornly refuse to try this
-        throwError(string("can't sync smart calendar ") + cal->getCalendarName());
+        throwError(SE_HERE, string("can't sync smart calendar ") + cal->getCalendarName());
     }
 
     if (entry_format == -1) {
@@ -273,9 +273,9 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
         // barely-legal input (mostly on todo entries), yet a component is returned
         if (!comps.size()) {
             if (err != CALENDAR_OPERATION_SUCCESSFUL) {
-                throwError(string("parsing ical: ") + item);
+                throwError(SE_HERE, string("parsing ical: ") + item);
             } else {
-                throwError(string("no events in ical: ") + item);
+                throwError(SE_HERE, string("no events in ical: ") + item);
             }
         }
         vector< CComponent * >::iterator it = comps.begin();
@@ -283,7 +283,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
             for (; it != comps.end(); ++it) {
                 delete (*it);
             }
-            throwError(string("too many events in ical: ") + item);
+            throwError(SE_HERE, string("too many events in ical: ") + item);
         }
         c = *it;
     }
@@ -301,7 +301,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
         default: r = false; err = CALENDAR_SYSTEM_ERROR;
         }
         if (!r) {
-            throwError(string("updating item ") + uid);
+            throwError(SE_HERE, string("updating item ") + uid);
         }
     } else {
         switch (entry_type) {
@@ -311,7 +311,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
         default: r = false; err = CALENDAR_SYSTEM_ERROR;
         }
         if (!r) {
-            throwError(string("creating item "));
+            throwError(SE_HERE, string("creating item "));
         }
         if (err == CALENDAR_ENTRY_DUPLICATED) {
             u = ITEM_REPLACED;
@@ -330,12 +330,12 @@ void MaemoCalendarSource::removeItem(const string &uid)
 
     if (cal->getCalendarType() == BIRTHDAY_CALENDAR) {
         // stubbornly refuse to try this
-        throwError(string("can't sync smart calendar ") + cal->getCalendarName());
+        throwError(SE_HERE, string("can't sync smart calendar ") + cal->getCalendarName());
     }
 
     cal->deleteComponent(uid, err);
     if (err != CALENDAR_OPERATION_SUCCESSFUL) {
-        throwError(string("deleting item: ") + uid);
+        throwError(SE_HERE, string("deleting item: ") + uid);
     }
 }
 

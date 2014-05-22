@@ -356,6 +356,7 @@ Server::Server(GMainLoop *loop,
     m_loop(loop),
     m_shutdownRequested(shutdownRequested),
     m_restart(restart),
+    m_conn(conn),
     m_lastSession(time(NULL)),
     m_activeSession(NULL),
     m_lastInfoReq(0),
@@ -480,9 +481,10 @@ bool Server::shutdown()
     return false;
 }
 
-void Server::fileModified()
+void Server::fileModified(const std::string &file)
 {
-    SE_LOG_DEBUG(NULL, "file modified, %s shutdown: %s, %s",
+    SE_LOG_DEBUG(NULL, "file %s modified, %s shutdown: %s, %s",
+                 file.c_str(),
                  m_shutdownRequested ? "continuing" : "initiating",
                  m_shutdownTimer ? "timer already active" : "timer not yet active",
                  m_activeSession ? "waiting for active session to finish" : "setting timer");
@@ -521,7 +523,7 @@ void Server::run()
     BOOST_FOREACH(const string &file, files) {
         try {
             SE_LOG_DEBUG(NULL, "watching: %s", file.c_str());
-            boost::shared_ptr<SyncEvo::GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&Server::fileModified, this)));
+            boost::shared_ptr<SyncEvo::GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&Server::fileModified, this, file)));
             m_files.push_back(notify);
         } catch (...) {
             // ignore errors for indidividual files
@@ -530,6 +532,13 @@ void Server::run()
     }
 
     SE_LOG_INFO(NULL, "ready to run");
+    // Note that with GDBus GIO, this will also finally request the
+    // "org.syncevolution" name. This relies on preserving the name in
+    // m_conn that we originally passed to dbus_get_bus_connection().
+    // getConnection() works with a plain GDBusConnection and doesn't
+    // have the name, so we really need our own copy of
+    // DBusConnectionPtr here.
+    dbus_bus_connection_undelay(m_conn);
     if (!m_shutdownRequested) {
         g_main_loop_run(m_loop);
     }

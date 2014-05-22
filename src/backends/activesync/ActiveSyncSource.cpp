@@ -83,14 +83,14 @@ void ActiveSyncSource::findCollections(const std::string &account, const bool fo
     
     /* Fetch the folders */
     handler = EasSyncHandlerCXX::steal(eas_sync_handler_new(account.c_str()));
-    if (!handler) throwError("findCollections cannot allocate sync handler");
+    if (!handler) throwError(SE_HERE, "findCollections cannot allocate sync handler");
     
     if (!eas_sync_handler_get_folder_list (handler,
 					   force_update,
 					   folders,
 					   NULL,
 					   gerror)) {
-	gerror.throwError("fetching folder list");
+	gerror.throwError(SE_HERE, "fetching folder list");
     }
     
     /* Save the Collections */
@@ -157,7 +157,7 @@ ActiveSyncSource::Databases ActiveSyncSource::getDatabases()
     // do a scan if username is set
     UserIdentity identity = m_context->getSyncUser();
     if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
-        throwError(StringPrintf("%s: only the 'user:<account ID in gconf>' format is supported by ActiveSync", identity.toString().c_str()));
+        throwError(SE_HERE, StringPrintf("%s: only the 'user:<account ID in gconf>' format is supported by ActiveSync", identity.toString().c_str()));
     }
     const std::string &account = identity.m_identity;
 
@@ -206,7 +206,7 @@ void ActiveSyncSource::open()
     // extract account ID and throw error if missing
     UserIdentity identity = m_context->getSyncUser();
     if (identity.m_provider != USER_IDENTITY_PLAIN_TEXT) {
-        throwError(StringPrintf("%s: only the 'user:<account ID in gconf>' format is supported by ActiveSync", identity.toString().c_str()));
+        throwError(SE_HERE, StringPrintf("%s: only the 'user:<account ID in gconf>' format is supported by ActiveSync", identity.toString().c_str()));
     }
     const std::string &username = identity.m_identity;
 
@@ -229,7 +229,7 @@ void ActiveSyncSource::open()
 	    m_folder = lookupFolder(folder);
 	}
 	if (m_folder.empty()) {
-	    throwError("could not find folder: "+folder);
+	    throwError(SE_HERE, "could not find folder: "+folder);
 	}
     }
 
@@ -306,7 +306,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
                 continue;
             }
 
-            gerror.throwError("reading ActiveSync changes");
+            gerror.throwError(SE_HERE, "reading ActiveSync changes");
         }
         GStringPtr bufferOwner(buffer, "reading changes: empty sync key returned");
 
@@ -317,43 +317,43 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
         // populate ID lists and content cache
         BOOST_FOREACH(EasItemInfo *item, created) {
             if (!item->server_id) {
-                throwError("no server ID for new eas item");
+                throwError(SE_HERE, "no server ID for new eas item");
             }
             string luid(item->server_id);
             if (luid.empty()) {
-                throwError("empty server ID for new eas item");
+                throwError(SE_HERE, "empty server ID for new eas item");
             }
             SE_LOG_DEBUG(getDisplayName(), "new item %s", luid.c_str());
             addItem(luid, NEW);
             m_ids->setProperty(luid, "1");
             if (!item->data) {
-                throwError(StringPrintf("no body returned for new eas item %s", luid.c_str()));
+                throwError(SE_HERE, StringPrintf("no body returned for new eas item %s", luid.c_str()));
             }
             m_items[luid] = item->data;
         }
         BOOST_FOREACH(EasItemInfo *item, updated) {
             if (!item->server_id) {
-                throwError("no server ID for updated eas item");
+                throwError(SE_HERE, "no server ID for updated eas item");
             }
             string luid(item->server_id);
             if (luid.empty()) {
-                throwError("empty server ID for updated eas item");
+                throwError(SE_HERE, "empty server ID for updated eas item");
             }
             SE_LOG_DEBUG(getDisplayName(), "updated item %s", luid.c_str());
             addItem(luid, UPDATED);
             // m_ids.setProperty(luid, "1"); not necessary, should already exist (TODO: check?!)
             if (!item->data) {
-                throwError(StringPrintf("no body returned for updated eas item %s", luid.c_str()));
+                throwError(SE_HERE, StringPrintf("no body returned for updated eas item %s", luid.c_str()));
             }
             m_items[luid] = item->data;
         }
         BOOST_FOREACH(const char *serverID, deleted) {
             if (!serverID) {
-                throwError("no server ID for deleted eas item");
+                throwError(SE_HERE, "no server ID for deleted eas item");
             }
             string luid(serverID);
             if (luid.empty()) {
-                throwError("empty server ID for deleted eas item");
+                throwError(SE_HERE, "empty server ID for deleted eas item");
             }
             SE_LOG_DEBUG(getDisplayName(), "deleted item %s", luid.c_str());
             addItem(luid, DELETED);
@@ -415,7 +415,7 @@ void ActiveSyncSource::deleteItem(const string &luid)
     // the problem by looking up the item in our list (and keep the
     // list up-to-date elsewhere)
     if (m_ids && m_ids->readProperty(luid).empty()) {
-        throwError(STATUS_NOT_FOUND, "item not found: " + luid);
+        throwError(SE_HERE, STATUS_NOT_FOUND, "item not found: " + luid);
     }
 
     // send delete request
@@ -432,7 +432,7 @@ void ActiveSyncSource::deleteItem(const string &luid)
                                        m_folder.c_str(),
                                        items,
                                        gerror)) {
-        gerror.throwError("deleting eas item");
+        gerror.throwError(SE_HERE, "deleting eas item");
     }
     GStringPtr bufferOwner(buffer, "delete items: empty sync key returned");
 
@@ -477,15 +477,15 @@ SyncSourceSerialize::InsertItemResult ActiveSyncSource::insertItem(const std::st
                                         m_folder.c_str(),
                                         items,
                                         gerror)) {
-            gerror.throwError("adding eas item");
+            gerror.throwError(SE_HERE, "adding eas item");
         }
         if (!item->server_id) {
-            throwError("no server ID for new eas item");
+            throwError(SE_HERE, "no server ID for new eas item");
         }
         // get new ID from updated item
         res.m_luid = item->server_id;
         if (res.m_luid.empty()) {
-            throwError("empty server ID for new eas item");
+            throwError(SE_HERE, "empty server ID for new eas item");
         }
 
         // TODO: if someone else has inserted a new calendar item
@@ -502,7 +502,7 @@ SyncSourceSerialize::InsertItemResult ActiveSyncSource::insertItem(const std::st
                                            m_folder.c_str(),
                                            items,
                                            gerror)) {
-            gerror.throwError("updating eas item");
+            gerror.throwError(SE_HERE, "updating eas item");
         }
         res.m_luid = luid;
     }
@@ -542,13 +542,13 @@ void ActiveSyncSource::readItem(const std::string &luid, std::string &item)
                    message = 0xda2940 "GDBus.Error:org.meego.activesyncd.ItemOperationsError.ObjectNotFound: Document library - The object was not found or access denied."}
 
                 */) {
-                throwError(STATUS_NOT_FOUND, "item not found: " + luid);
+                throwError(SE_HERE, STATUS_NOT_FOUND, "item not found: " + luid);
             } else {
-                gerror.throwError(StringPrintf("reading eas item %s", luid.c_str()));
+                gerror.throwError(SE_HERE, StringPrintf("reading eas item %s", luid.c_str()));
             }
         }
         if (!tmp->data) {
-            throwError(StringPrintf("no body returned for eas item %s", luid.c_str()));
+            throwError(SE_HERE, StringPrintf("no body returned for eas item %s", luid.c_str()));
         }
         item = tmp->data;
     } else {

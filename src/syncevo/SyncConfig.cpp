@@ -202,7 +202,7 @@ void ConfigProperty::splitComment(const string &comment, list<string> &commentLi
 
 void ConfigProperty::throwValueError(const ConfigNode &node, const string &name, const string &value, const string &error) const
 {
-    SyncContext::throwError(node.getName() + ": " + name + " = " + value + ": " + error);
+    Exception::throwError(SE_HERE, node.getName() + ": " + name + " = " + value + ": " + error);
 }
 
 std::string ConfigProperty::sharing2str(Sharing sharing)
@@ -2062,7 +2062,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
             const char *envval = getenv(envname.c_str());
             SE_LOG_DEBUG(NULL, "using password from env var %s", envname.c_str());
             if (!envval) {
-                SyncContext::throwError(string("the environment variable '") +
+                Exception::throwError(SE_HERE, string("the environment variable '") +
                                         envname +
                                         "' for the '" +
                                         descr +

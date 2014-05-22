@@ -15,16 +15,12 @@ dist_noinst_SCRIPTS += \
   test/log2html.py \
   test/run_src_client_test.sh
 
-dist_noinst_DATA += \
-  test/COPYING \
-  test/Algorithm/Artistic \
-  test/Algorithm/COPYING \
-  test/Algorithm/README \
+test_testcases = \
   test/testcases/eds_event.ics \
   test/testcases/eds_event.ics.local \
   test/testcases/eds_task.ics \
   test/testcases/vcal10.ics \
-  test/testcases/eds_contact.vcf \
+  test/testcases/carddav.vcf \
   test/testcases/eds_contact.vcf \
   test/testcases/eds_memo.ics \
   test/testcases/google_event.ics \
@@ -34,6 +30,40 @@ dist_noinst_DATA += \
   test/testcases/local.png \
   test/testcases/templates/clients/phone/nokia/S40/7210c.ini \
   test/testcases/templates/clients/SyncEvolution.ini \
+  test/testcases/synctests/apple/eds_contact/testUpload/local-synced \
+  test/testcases/synctests/apple/eds_contact/testUpload/local \
+  test/testcases/synctests/apple/eds_contact/testUpload/modify-remote \
+  test/testcases/synctests/apple/eds_contact/testUpload/remote \
+  test/testcases/synctests/apple/eds_contact/testDownload/modify-local \
+  test/testcases/synctests/apple/eds_contact/testDownload/local \
+  test/testcases/synctests/apple/eds_contact/testDownload/remote \
+  test/testcases/synctests/apple/eds_contact/testDownload/remote-synced \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpload/local-synced \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpload/local \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpload/modify-remote \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpload/remote \
+  test/testcases/synctests/googlecontacts/eds_contact/testDownload/modify-local \
+  test/testcases/synctests/googlecontacts/eds_contact/testDownload/local \
+  test/testcases/synctests/googlecontacts/eds_contact/testDownload/remote \
+  test/testcases/synctests/googlecontacts/eds_contact/testDownload/remote-synced \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateRemoteWins/modify-local \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateRemoteWins/local-synced \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateRemoteWins/local \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateRemoteWins/modify-remote \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateRemoteWins/remote-synced \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateLocalWins/modify-local \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateLocalWins/local-synced \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateLocalWins/local \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateLocalWins/modify-remote \
+  test/testcases/synctests/googlecontacts/eds_contact/testUpdateLocalWins/remote-synced \
+  $(NOP)
+
+dist_noinst_DATA += \
+  $(test_testcases) \
+  test/COPYING \
+  test/Algorithm/Artistic \
+  test/Algorithm/COPYING \
+  test/Algorithm/README \
   test/syncevo-http-server-logging.conf \
   $(wildcard test/testcases/*.patch)
 
@@ -88,6 +118,7 @@ test_DATA += \
 	$(NOP)
 
 nobase_testparent_DATA += \
+	$(test_testcases) \
 	test/test-dbus/templates/templates/clients/phone/nokia/S40/7210c.ini \
 	test/test-dbus/templates/templates/clients/SyncEvolution.ini \
 	test/test-dbus/auto-sync/config/syncevolution/.internal.ini \

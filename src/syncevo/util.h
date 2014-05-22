@@ -41,6 +41,7 @@
 
 #include <syncevo/Timespec.h>    // definitions used to be included in util.h,
                                  // include it to avoid changing code using the time things
+#include <syncevo/Exception.h>   // same for Exception and SE_THROW*
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -474,117 +475,6 @@ class InitStateTri : public InitStateString
     Value getValue() const;
 };
 
-enum HandleExceptionFlags {
-    HANDLE_EXCEPTION_FLAGS_NONE = 0,
-
-    /**
-     * a 404 status error is possible and must not be logged as ERROR
-     */
-    HANDLE_EXCEPTION_404_IS_OKAY = 1 << 0,
-    HANDLE_EXCEPTION_FATAL = 1 << 1,
-    /**
-     * don't log exception as ERROR
-     */
-    HANDLE_EXCEPTION_NO_ERROR = 1 << 2,
-    HANDLE_EXCEPTION_MAX = 1 << 3,
-};
-
-/**
- * an exception which records the source file and line
- * where it was thrown
- *
- * @TODO add function name
- */
-class Exception : public std::runtime_error
-{
- public:
-    Exception(const std::string &file,
-                           int line,
-                           const std::string &what) :
-    std::runtime_error(what),
-        m_file(file),
-        m_line(line)
-        {}
-    ~Exception() throw() {}
-    const std::string m_file;
-    const int m_line;
-
-    /**
-     * Convenience function, to be called inside a catch(..) block.
-     *
-     * Rethrows the exception to determine what it is, then logs it
-     * at the chosen level (error by default).
-     *
-     * Turns certain known exceptions into the corresponding
-     * status code if status still was STATUS_OK when called.
-     * Returns updated status code.
-     *
-     * @param logPrefix      passed to SE_LOG* messages
-     * @retval explanation   set to explanation for problem, if non-NULL
-     * @param level     level to be used for logging
-     */
-    static SyncMLStatus handle(SyncMLStatus *status = NULL, const std::string *logPrefix = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
-    static SyncMLStatus handle(const std::string &logPrefix, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, &logPrefix, NULL, Logger::ERROR, flags); }
-    static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, NULL, &explanation, Logger::ERROR, flags); }
-    static void handle(HandleExceptionFlags flags) { handle(NULL, NULL, NULL, Logger::ERROR, flags); }
-    static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }
-
-    /**
-     * Tries to identify exception class based on explanation string created by
-     * handle(). If successful, that exception is throw with the same
-     * attributes as in the original exception.
-     *
-     * If not, tryRethrow() returns (mustThrow false) or throws a std::runtime_error
-     * with the explanation as text.
-     */
-    static void tryRethrow(const std::string &explanation, bool mustThrow = false);
-
-    /**
-     * Same as tryRethrow() for strings with a 'org.syncevolution.xxxx:' prefix,
-     * as passed as D-Bus error strings.
-     */
-    static void tryRethrowDBus(const std::string &error);
-};
-
-/**
- * StatusException by wrapping a SyncML status
- */
-class StatusException : public Exception
-{
-public:
-    StatusException(const std::string &file,
-                    int line,
-                    const std::string &what,
-                    SyncMLStatus status)
-        : Exception(file, line, what), m_status(status)
-    {}
-
-    SyncMLStatus syncMLStatus() const { return m_status; }
-protected:
-    SyncMLStatus m_status;
-};
-
-class TransportException : public Exception
-{
- public:
-    TransportException(const std::string &file,
-                       int line,
-                       const std::string &what) :
-    Exception(file, line, what) {}
-    ~TransportException() throw() {}
-};
-
-class TransportStatusException : public StatusException
-{
- public:
-    TransportStatusException(const std::string &file,
-                             int line,
-                             const std::string &what,
-                             SyncMLStatus status) :
-    StatusException(file, line, what, status) {}
-    ~TransportStatusException() throw() {}
-};
-
 /**
  * replace ${} with environment variables, with
  * XDG_DATA_HOME, XDG_CACHE_HOME and XDG_CONFIG_HOME having their normal
@@ -648,35 +538,6 @@ class ScopedEnvChange
 };
 
 std::string getCurrentTime();
-
-/** throw a normal SyncEvolution Exception, including source information */
-#define SE_THROW(_what) \
-    SE_THROW_EXCEPTION(Exception, _what)
-
-/** throw a class which accepts file, line, what parameters */
-#define SE_THROW_EXCEPTION(_class,  _what) \
-    throw _class(__FILE__, __LINE__, _what)
-
-/** throw a class which accepts file, line, what plus 1 additional parameter */
-#define SE_THROW_EXCEPTION_1(_class,  _what, _x1)   \
-    throw _class(__FILE__, __LINE__, (_what), (_x1))
-
-/** throw a class which accepts file, line, what plus 2 additional parameters */
-#define SE_THROW_EXCEPTION_2(_class,  _what, _x1, _x2) \
-    throw _class(__FILE__, __LINE__, (_what), (_x1), (_x2))
-
-/** throw a class which accepts file, line, what plus 2 additional parameters */
-#define SE_THROW_EXCEPTION_3(_class,  _what, _x1, _x2, _x3) \
-    throw _class(__FILE__, __LINE__, (_what), (_x1), (_x2), (_x3))
-
-/** throw a class which accepts file, line, what plus 2 additional parameters */
-#define SE_THROW_EXCEPTION_4(_class,  _what, _x1, _x2, _x3, _x4) \
-    throw _class(__FILE__, __LINE__, (_what), (_x1), (_x2), (_x3), (_x4))
-
-/** throw a class which accepts file, line, what parameters and status parameters*/
-#define SE_THROW_EXCEPTION_STATUS(_class,  _what, _status) \
-    throw _class(__FILE__, __LINE__, _what, _status)
-
 
 // GRunWhile(), GRunInMain(), GRunIsMain() depend on glib support,
 // which pretty much is a hard requirement of SyncEvolution these days.

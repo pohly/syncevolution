@@ -573,7 +573,7 @@ public:
                 if (mkdir(m_path.c_str(), S_IRWXU) &&
                     errno != EEXIST) {
                     SE_LOG_DEBUG(NULL, "%s: %s", m_path.c_str(), strerror(errno));
-                    SyncContext::throwError(m_path, errno);
+                    Exception::throwError(SE_HERE, m_path, errno);
                 }
             }
             m_logfile = m_path + "/" + LogfileBasename + ".html";
@@ -850,7 +850,7 @@ public:
             struct stat buf;
             string fullpath = first + "/" + name;
             if (stat(fullpath.c_str(), &buf)) {
-                SyncContext::throwError(fullpath, errno);
+                Exception::throwError(SE_HERE, fullpath, errno);
             }
             firstInodes.insert(buf.st_ino);
         }
@@ -858,7 +858,7 @@ public:
             struct stat buf;
             string fullpath = second + "/" + name;
             if (stat(fullpath.c_str(), &buf)) {
-                SyncContext::throwError(fullpath, errno);
+                Exception::throwError(SE_HERE, fullpath, errno);
             }
             set<ino_t>::iterator it = firstInodes.find(buf.st_ino);
             if (it == firstInodes.end()) {
@@ -1261,7 +1261,7 @@ public:
         string dir = databaseName(source, suffix);
         boost::shared_ptr<ConfigNode> node = ConfigNode::createFileNode(dir + ".ini");
         if (!node->exists()) {
-            SyncContext::throwError(dir + ": no such database backup found");
+            Exception::throwError(SE_HERE, dir + ": no such database backup found");
         }
         if (source.getOperations().m_restoreData) {
             source.getOperations().m_restoreData(SyncSource::Operations::ConstBackupInfo(SyncSource::Operations::BackupInfo::BACKUP_OTHER, dir, node),
@@ -2127,48 +2127,6 @@ bool SyncContext::displaySourceProgress(SyncSource &source,
     return false;
 }
 
-void SyncContext::throwError(const string &error)
-{
-    throwError(SyncMLStatus(STATUS_FATAL + sysync::LOCAL_STATUS_CODE), error);
-}
-
-void SyncContext::throwError(SyncMLStatus status, const string &error)
-{
-#ifdef IPHONE
-    /*
-     * Catching the runtime_exception fails due to a toolchain problem,
-     * so do the error handling now and abort: because there is just
-     * one sync source this is probably the only thing that can be done.
-     * Still, it's not nice on the server...
-     */
-    fatalError(NULL, error.c_str());
-#else
-    SE_THROW_EXCEPTION_STATUS(StatusException, error, status);
-#endif
-}
-
-void SyncContext::throwError(const string &action, int error)
-{
-    std::string what = action + ": " + strerror(error);
-    // be as specific if we can be: relevant for the file backend,
-    // which is expected to return STATUS_NOT_FOUND == 404 for "file
-    // not found"
-    if (error == ENOENT) {
-        throwError(STATUS_NOT_FOUND, what);
-    } else {
-        throwError(what);
-    }
-}
-
-void SyncContext::fatalError(void *object, const char *error)
-{
-    SE_LOG_ERROR(NULL, "%s", error);
-    if (m_activeContext && m_activeContext->m_sourceListPtr) {
-        m_activeContext->m_sourceListPtr->syncDone(STATUS_FATAL, NULL);
-    }
-    exit(1);
-}
-
 /*
  * There have been segfaults inside glib in the background
  * thread which ran the second event loop. Disabled it again,
@@ -2265,12 +2223,14 @@ void SyncContext::initSources(SourceList &sourceList)
                     boost::shared_ptr<PersistentSyncSourceConfig> source_config 
                         = getSyncSourceConfig(source);
                     if (!source_config || !source_config->exists()) {
-                        throwError(StringPrintf("Virtual data source \"%s\" references a nonexistent datasource \"%s\".", name.c_str(), source.c_str()));
+                        Exception::throwError(SE_HERE,
+                                              StringPrintf("Virtual data source \"%s\" references a nonexistent datasource \"%s\".", name.c_str(), source.c_str()));
                     }
                     pair< map<string, string>::iterator, bool > res = subSources.insert(make_pair(source, name));
                     if (!res.second) {
-                        throwError(StringPrintf("Data source \"%s\" included in the virtual sources \"%s\" and \"%s\". It can only be included in one virtual source at a time.",
-                                                source.c_str(), res.first->second.c_str(), name.c_str()));
+                        Exception::throwError(SE_HERE,
+                                              StringPrintf("Data source \"%s\" included in the virtual sources \"%s\" and \"%s\". It can only be included in one virtual source at a time.",
+                                                           source.c_str(), res.first->second.c_str(), name.c_str()));
                     }
 
                 }
@@ -2303,7 +2263,7 @@ void SyncContext::initSources(SourceList &sourceList)
                                         contextName);
                 cxxptr<SyncSource> syncSource(SyncSource::createSource(params));
                 if (!syncSource) {
-                    throwError(name + ": type unknown" );
+                    Exception::throwError(SE_HERE, name + ": type unknown" );
                 }
                 if (subSources.find(name) != subSources.end()) {
                     syncSource->recordVirtualSource(subSources[name]);
@@ -2911,7 +2871,7 @@ void SyncContext::getConfigXML(string &xml, string &configname)
             }
 
             if (mappedSources.size() !=2) {
-                vSource->throwError ("virtual data source currently only supports events+tasks combinations");
+                vSource->throwError(SE_HERE, "virtual data source currently only supports events+tasks combinations");
             } 
 
             string name = vSource->getName();
@@ -3336,7 +3296,7 @@ void SyncContext::checkConfig(const std::string &operation) const
         } else {
             SE_LOG_INFO(NULL, "Configuration \"%s\" does not exist.", m_server.c_str());
         }
-        throwError(StringPrintf("Cannot proceed with %s without a configuration.", operation.c_str()));
+        Exception::throwError(SE_HERE, StringPrintf("Cannot proceed with %s without a configuration.", operation.c_str()));
     }
 }
 
@@ -3388,7 +3348,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
         if ( getPeerIsClient()) {
             m_serverMode = true;
         } else if (m_localSync && !m_agent) {
-            throwError("configuration error, syncURL = local can only be used in combination with peerIsClient = 1");
+            Exception::throwError(SE_HERE, "configuration error, syncURL = local can only be used in combination with peerIsClient = 1");
         }
 
         // create a Synthesis engine, used purely for logging purposes
@@ -3410,7 +3370,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             // instantiate backends, but do not open them yet
             initSources(sourceList);
             if (sourceList.empty()) {
-                throwError("no sources active, check configuration");
+                Exception::throwError(SE_HERE, "no sources active, check configuration");
             }
 
             // request all config properties once: throwing exceptions
@@ -3813,11 +3773,11 @@ SyncMLStatus SyncContext::doSync()
                 version = 11;
                 if (!sendSAN (version)) {
                     // return a proper error code 
-                    throwError ("Server Alerted Sync init failed");
+                    Exception::throwError(SE_HERE, "Server Alerted Sync init failed");
                 }
             } else {
                 // return a proper error code 
-                throwError ("Server Alerted Sync init failed");
+                Exception::throwError(SE_HERE, "Server Alerted Sync init failed");
             }
         }
     }
@@ -3908,7 +3868,7 @@ SyncMLStatus SyncContext::doSync()
                     slow = 0;
                     direction = 2;
                 } else {
-                    source->throwError(string("invalid sync mode: ") + sync);
+                    source->throwError(SE_HERE, string("invalid sync mode: ") + sync);
                 }
                 m_engine.SetInt32Value(target, "forceslow", slow);
                 m_engine.SetInt32Value(target, "syncmode", direction);
@@ -4149,7 +4109,7 @@ SyncMLStatus SyncContext::doSync()
                                                                   progressInfo.extra3),
                                                   false);
                         } else {
-                            throwError(std::string("unknown target ") + s);
+                            Exception::throwError(SE_HERE, std::string("unknown target ") + s);
                         }
                         target.reset();
                         break;

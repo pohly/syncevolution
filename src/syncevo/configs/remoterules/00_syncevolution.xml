@@ -6,8 +6,9 @@
       <strictexecordering>no</strictexecordering>
 
       <include rule="HAVE-SYNCEVOLUTION-EXDATE-DETACHED"/>
-
       <include rule="HAVE-EVOLUTION-UI-SLOT"/>
+      <include rule="HAVE-ABLABEL-PARAMETER"/>
+
       <!-- Merging between SyncEvolution instances is expected to work
            well, so allow the engine to update items on both
            sides also in the "non-first" slow sync case.

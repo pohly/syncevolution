@@ -1,4 +1,4 @@
-    <!-- vCard profile -->
+    <!-- vCard profile for Evolution, KDE, SyncML -->
     <mimeprofile name="vCard" fieldlist="contacts">
 
       <profile name="VCARD" nummandatory="0"> <!-- we allow records without "N" as Address book can store them -->
@@ -15,6 +15,10 @@
         </property>
         <property name="REV" rule="other" mandatory="yes">
           <value field="REV"/>
+        </property>
+
+        <property name="UID" rule="HAVE-VCARD-UID" showindevinf="no">
+          <value field="UID"/>
         </property>
 
         <property name="N" values="5" mandatory="yes"> <!-- Note: makes N parse and generate even if not in remote's CTCap -->
@@ -74,7 +78,7 @@
           <value field="ROLE"/>
         </property>
 
-        <property name="TEL">
+        <property name="TEL" groupfield="GROUP_TAG">
           <value field="TEL"/>
           <position field="TEL" repeat="array" increment="1" minshow="1"/>
           <parameter name="TYPE" default="yes" positional="no" show="yes">
@@ -92,17 +96,17 @@
               <enum name="X-EVOLUTION-RADIO" value="B10"/>
               <enum name="X-EVOLUTION-TELEX" value="B11"/>
               <enum name="X-EVOLUTION-TTYTDD" value="B12"/>
-
-              <!-- enum mode="prefix" name="X-CustomLabel-" value="1.L"/ -->
-              <!-- enum mode="prefix" name="X-Synthesis-Ref" value="2.L"/ -->
             </value>
           </parameter>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="TEL_SLOT"/>
           </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
 
-        <property name="EMAIL">
+        <property name="EMAIL" groupfield="GROUP_TAG">
           <value field="EMAIL"/>
           <position field="EMAIL" repeat="array" increment="1" minshow="1"/>
           <parameter name="TYPE" default="yes" positional="no" show="yes">
@@ -111,17 +115,17 @@
               <enum name="WORK"     value="B1"/>
               <enum mode="ignore"   value="B2"/> <!-- OTHER -->
               <enum name="INTERNET" value="B3"/>
-
-              <!-- enum mode="prefix" name="X-CustomLabel-" value="1.L"/ -->
-              <!-- enum mode="prefix" name="X-Synthesis-Ref" value="2.L"/ -->
             </value>
           </parameter>
           <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT">
             <value field="EMAIL_SLOT"/>
           </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
 
-        <property name="URL">
+        <property name="URL" groupfield="GROUP_TAG">
           <value field="WEB"/>
           <position field="WEB" repeat="array" increment="1" minshow="1"/>
           <parameter name="TYPE" default="yes" positional="no" show="yes">
@@ -130,33 +134,33 @@
               <enum name="WORK"     value="B1"/>
               <enum mode="ignore"   value="B2"/> <!-- OTHER -->
               <enum name="PREF"     value="B3"/>
-
-              <!-- enum mode="prefix" name="X-CustomLabel-" value="1.L"/ -->
-              <!-- enum mode="prefix" name="X-Synthesis-Ref" value="2.L"/ -->
             </value>
+          </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
           </parameter>
         </property>
 
         <property name="CALURI" suppressempty="yes">
-          <value field="CALURI" show="yes"/>
+          <value field="CALURI"/>
         </property>
         <property name="FBURL" suppressempty="yes">
-          <value field="FBURL" show="yes"/>
+          <value field="FBURL"/>
         </property>
 
         <!-- X-EVOLUTION-BLOG-URL property for everyone except KDE -->
         <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="KDE"/>
         <property name="X-EVOLUTION-BLOG-URL" suppressempty="yes" rule="other">
-          <value field="BLOGURL" show="yes"/>
+          <value field="BLOGURL"/>
         </property>
         <!-- the KDE way of expressing BLOGURL -->
         <property name="X-KADDRESSBOOK-BlogFeed" suppressempty="yes" show="no" rule="KDE">
-          <value field="BLOGURL" show="yes"/>
+          <value field="BLOGURL"/>
         </property>
 
         <!-- VIDEOURL not supported by KDE natively, let's use X-EVOLUTION-VIDEO-URL as extension -->
         <property name="X-EVOLUTION-VIDEO-URL" suppressempty="yes" rule="other">
-          <value field="VIDEOURL" show="yes"/>
+          <value field="VIDEOURL"/>
         </property>
 
         <!-- item for SyncML server: EVOLUTION rule not active,
@@ -178,28 +182,36 @@
         -->
         <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1" rule="KDE"/> <!-- disable X-EVOLUTION-MANAGER for KDE -->
         <property name="X-EVOLUTION-MANAGER" suppressempty="yes" delayedparsing="1" rule="other">
-          <value field="MANAGER" show="yes"/>
+          <value field="MANAGER"/>
         </property>
         <property name="X-MANAGER" suppressempty="yes" rule="EVOLUTION"/> <!-- disables the X-MANAGER for EVOLUTION -->
         <property name="X-MANAGER" suppressempty="yes" rule="KDE"/> <!-- disables the X-MANAGER for KDE -->
         <property name="X-MANAGER" suppressempty="yes" rule="other">
-          <value field="MANAGER" show="yes"/>
+          <value field="MANAGER"/>
         </property>
         <property name="X-KADDRESSBOOK-X-ManagersName" suppressempty="yes" show="no" rule="KDE">
-          <value field="MANAGER" show="yes"/>
+          <value field="MANAGER"/>
         </property>
 
         <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1" rule="KDE"/>
         <property name="X-EVOLUTION-ASSISTANT" suppressempty="yes" delayedparsing="1" rule="other">
-          <value field="ASSISTANT" show="yes"/>
+          <value field="ASSISTANT"/>
         </property>
         <property name="X-ASSISTANT" suppressempty="yes" rule="EVOLUTION"/>
         <property name="X-ASSISTANT" suppressempty="yes" rule="KDE"/>
         <property name="X-ASSISTANT" suppressempty="yes" rule="other">
-          <value field="ASSISTANT" show="yes"/>
+          <value field="ASSISTANT"/>
         </property>
         <property name="X-KADDRESSBOOK-X-AssistantsName" suppressempty="yes" show="no" rule="KDE">
-          <value field="ASSISTANT" show="yes"/>
+          <value field="ASSISTANT"/>
+        </property>
+
+        <property name="X-ABRELATEDNAMES" suppressempty="yes" groupfield="GROUP_TAG">
+          <value field="RELATEDNAMES"/>
+          <position field="RELATEDNAMES" repeat="array" increment="1" minshow="0"/>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
 
         <property name="X-EVOLUTION-SPOUSE" suppressempty="yes" delayedparsing="1" rule ="KDE"/>
@@ -209,25 +221,46 @@
         <property name="X-SPOUSE" suppressempty="yes" rule="EVOLUTION"/>
         <property name="X-SPOUSE" suppressempty="yes" rule="KDE"/>
         <property name="X-SPOUSE" suppressempty="yes" rule="other">
-          <value field="SPOUSE" show="yes"/>
+          <value field="SPOUSE"/>
         </property>
         <property name="X-KADDRESSBOOK-X-SpousesName" suppressempty="yes" show="no" rule="KDE">
-          <value field="SPOUSE" show="yes"/>
+          <value field="SPOUSE"/>
         </property>
 
         <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1" rule="KDE"/>
         <property name="X-EVOLUTION-ANNIVERSARY" suppressempty="yes" delayedparsing="1" rule="other">
-          <value field="ANNIVERSARY" show="yes"/>
+          <value field="ANNIVERSARY"/>
         </property>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="EVOLUTION"/>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="KDE"/>
         <property name="X-ANNIVERSARY" suppressempty="yes" rule="other">
-          <value field="ANNIVERSARY" show="yes"/>
+          <value field="ANNIVERSARY"/>
         </property>
         <property name="X-KADDRESSBOOK-X-Anniversary" suppressempty="yes" show="no" rule="KDE">
-          <value field="ANNIVERSARY" show="yes"/>
+          <value field="ANNIVERSARY"/>
         </property>
 
+        <property name="X-ABDATE" suppressempty="yes" groupfield="GROUP_TAG">
+          <value field="XDATE" conversion="DATE+EXTFMT"/>
+          <position field="XDATE" repeat="array" increment="1" minshow="0"/>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
+        </property>
+
+        <property name="IMPP" suppressempty="yes" groupfield="GROUP_TAG">
+          <value field="IMPP"/>
+          <position field="IMPP" repeat="array" increment="1" minshow="0"/>
+          <parameter name="X-EVOLUTION-UI-SLOT" positional="no" show="no" rule="HAVE-EVOLUTION-UI-SLOT-IN-IMPP">
+            <value field="IMPP_SLOT"/>
+          </parameter>
+          <parameter name="X-SERVICE-TYPE" positional="no" show="no">
+            <value field="IMPP_SERVICE"/>
+          </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
+        </property>
 
         <property name="X-AIM" suppressempty="yes" rule="KDE"/>
         <property name="X-AIM" suppressempty="yes" rule="other">
@@ -361,26 +394,26 @@
           <position field="SMS_HANDLE" repeat="array" increment="1" minshow="0"/>
         </property>
         <property name="X-KADDRESSBOOK-CRYPTOENCRYPTPREF" suppressempty="yes">
-          <value field="CRYPTOENCRYPTPREF" show="yes"/>
+          <value field="CRYPTOENCRYPTPREF"/>
         </property>
         <property name="X-KADDRESSBOOK-CRYPTOPROTOPREF" suppressempty="yes">
-          <value field="CRYPTOPROTOPREF" show="yes"/>
+          <value field="CRYPTOPROTOPREF"/>
         </property>
         <property name="X-KADDRESSBOOK-CRYPTOSIGNPREF" suppressempty="yes">
-          <value field="CRYPTOSIGNPREF" show="yes"/>
+          <value field="CRYPTOSIGNPREF"/>
         </property>
         <property name="X-KADDRESSBOOK-OPENPGPFP" suppressempty="yes">
-          <value field="OPENPGPFP" show="yes"/>
+          <value field="OPENPGPFP"/>
         </property>
         <property name="X-KADDRESSBOOK-X-IMAddress" suppressempty="yes">
-          <value field="IM_ADDRESS" show="yes"/>
+          <value field="IM_ADDRESS"/>
         </property>
 
         <property name="X-MOZILLA-HTML">
-          <value field="WANTS_HTML" show="yes"/>
+          <value field="WANTS_HTML"/>
         </property>
 
-        <property name="ADR" values="7">
+        <property name="ADR" values="7" groupfield="GROUP_TAG">
           <value index="0" field="ADR_POBOX"/>
           <value index="1" field="ADR_ADDTL"/>
           <value index="2" field="ADR_STREET"/>
@@ -394,13 +427,13 @@
               <enum name="HOME"     value="B0"/>
               <enum name="WORK"     value="B1"/>
               <enum mode="ignore"   value="B2"/> <!-- OTHER -->
-
-              <!-- enum mode="prefix" name="X-CustomLabel-" value="1.L"/ -->
-              <!-- enum mode="prefix" name="X-Synthesis-Ref" value="2.L"/ -->
             </value>
           </parameter>
+          <parameter name="X-ABLabel" rule="HAVE-ABLABEL-PARAMETER" sharedfield="yes">
+            <value field="LABEL"/>
+          </parameter>
         </property>
-        
+
         <property name="BDAY" rule="EXTENDED-DATE-FORMAT">
           <value field="BDAY" conversion="DATE+EXTFMT"/>
         </property>
@@ -425,6 +458,12 @@
         <property name="GEO" values="2">
           <value index="0" field="GEO_LAT"/>
           <value index="1" field="GEO_LONG"/>
+        </property>
+
+        <!-- Label assigned to any of the repeating properties. -->
+        <property name="X-ABLabel" suppressempty="yes" groupfield="GROUP_TAG" rule="HAVE-ABLABEL-PROPERTY">
+          <value field="LABEL" repeat="array" increment="1" minshow="0"/>
+          <position field="LABEL" repeat="array" increment="1" minshow="1"/>
         </property>
 
         <property name="X-*" suppressempty="yes" show="false">

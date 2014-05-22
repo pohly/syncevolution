@@ -36,11 +36,11 @@ XMLRPCSyncSource::XMLRPCSyncSource(const SyncSourceParams &params,
     TrackingSyncSource(params)
 {
     if (dataformat.empty()) {
-        throwError("a data format must be specified");
+        throwError(SE_HERE, "a data format must be specified");
     }
     size_t sep = dataformat.find(':');
     if (sep == dataformat.npos) {
-        throwError(string("data format not specified as <mime type>:<mime version>: " + dataformat));
+        throwError(SE_HERE, string("data format not specified as <mime type>:<mime version>: " + dataformat));
     }
     m_mimeType.assign(dataformat, 0, sep);
     m_mimeVersion = dataformat.substr(sep + 1);

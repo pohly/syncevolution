@@ -28,7 +28,7 @@ using namespace std;
 // include first, it sets HANDLE_LIBICAL_MEMORY for us
 #include <syncevo/icalstrdup.h>
 
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
 #include <syncevo/SmartPtr.h>
 #include <syncevo/Logging.h>
 
@@ -128,7 +128,7 @@ EvolutionCalendarSource::EvolutionCalendarSource(EvolutionCalendarSourceType typ
 #endif
         break;
      default:
-        SyncContext::throwError("internal error, invalid calendar type");
+        Exception::throwError(SE_HERE, "internal error, invalid calendar type");
         break;
     }
 }
@@ -153,7 +153,7 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
         if (!gerror) {
             tmp = NULL;
         } else {
-            throwError("unable to access backend databases", gerror);
+            throwError(SE_HERE, "unable to access backend databases", gerror);
         }
     }
     ESourceListCXX sources(tmp, TRANSFER_REF);
@@ -238,7 +238,7 @@ void EvolutionCalendarSource::open()
 
     ESourceList *tmp;
     if (!e_cal_get_sources(&tmp, sourceType(), gerror)) {
-        throwError("unable to access backend databases", gerror);
+        throwError(SE_HERE, "unable to access backend databases", gerror);
     }
     ESourceListCXX sources(tmp, TRANSFER_REF);
 
@@ -263,7 +263,7 @@ void EvolutionCalendarSource::open()
             } else if (!id.compare(0, 7, "file://")) {
                 m_calendar.set(e_cal_new_from_uri(id.c_str(), sourceType()), (string("creating ") + m_typeName).c_str());
             } else {
-                throwError(string("not found: '") + id + "'");
+                throwError(SE_HERE, string("not found: '") + id + "'");
             }
             created = true;
             onlyIfExists = false;
@@ -279,10 +279,10 @@ void EvolutionCalendarSource::open()
                 gerror.clear();
                 sleep(5);
                 if (!e_cal_open(m_calendar, onlyIfExists, gerror)) {
-                    throwError(string("opening ") + m_typeName, gerror);
+                    throwError(SE_HERE, string("opening ") + m_typeName, gerror);
                 }
             } else {
-                throwError(string("opening ") + m_typeName, gerror);
+                throwError(SE_HERE, string("opening ") + m_typeName, gerror);
             }
         }
     }
@@ -291,7 +291,7 @@ void EvolutionCalendarSource::open()
 
     g_signal_connect_after(m_calendar,
                            "backend-died",
-                           G_CALLBACK(SyncContext::fatalError),
+                           G_CALLBACK(Exception::fatalError),
                            (void *)"Evolution Data Server has died unexpectedly, database no longer available.");
 }
 
@@ -387,7 +387,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
     ECalClientView *view;
 
     if (!e_cal_client_get_view_sync (m_calendar, "#t", &view, NULL, gerror)) {
-        throwError( "getting the view" , gerror);
+        throwError(SE_HERE, "getting the view" , gerror);
     }
     ECalClientViewCXX viewPtr = ECalClientViewCXX::steal(view);
 
@@ -395,7 +395,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 
     ECalClientViewSyncHandler handler(viewPtr, boost::bind(list_revisions, _1, &revisions));
     if (!handler.processSync(gerror)) {
-        throwError("watching view", gerror);
+        throwError(SE_HERE, "watching view", gerror);
     }
 
     // Update m_allLUIDs
@@ -412,7 +412,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
                                        "#t",
                                        &nextItem,
                                        gerror)) {
-        throwError("reading all items", gerror);
+        throwError(SE_HERE, "reading all items", gerror);
     }
     eptr<GList> listptr(nextItem);
     while (nextItem) {
@@ -507,7 +507,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
     eptr<icalcomponent> icomp(icalcomponent_new_from_string((char *)data.c_str()));
 
     if( !icomp ) {
-        throwError(string("failure parsing ical") + data);
+        throwError(SE_HERE, string("failure parsing ical") + data);
     }
 
     GErrorCXX gerror;
@@ -529,7 +529,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                                gerror)
 #endif
         ) {
-        throwError(string("fixing timezones") + data,
+        throwError(SE_HERE, string("fixing timezones") + data,
                    gerror);
     }
 
@@ -555,7 +555,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 #endif
                 ;
             if (!success) {
-                throwError(string("error adding VTIMEZONE ") + tzid,
+                throwError(SE_HERE, string("error adding VTIMEZONE ") + tzid,
                            gerror);
             }
         }
@@ -567,7 +567,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
     icalcomponent *subcomp = icalcomponent_get_first_component(icomp,
                                                                getCompType());
     if (!subcomp) {
-        throwError("extracting event");
+        throwError(SE_HERE, "extracting event");
     }
 
     // Remove LAST-MODIFIED: the Evolution Exchange Connector does not
@@ -645,7 +645,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     modTime = getItemModTime(newid);
                     m_allLUIDs.insertLUID(newid);
                 } else {
-                    throwError("storing new item", gerror);
+                    throwError(SE_HERE, "storing new item", gerror);
                 }
 
                 // Recreate any children removed earlier: when we get here,
@@ -662,7 +662,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                                              gerror)
 #endif
                         ) {
-                        throwError(string("recreating item ") + newluid, gerror);
+                        throwError(SE_HERE, string("recreating item ") + newluid, gerror);
                     }
                 }
             }
@@ -734,7 +734,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     !e_cal_create_object(m_calendar, subcomp, (char **)&uid, gerror)
 #endif
                     ) {
-                    throwError(string("creating updated item ") + luid, gerror);
+                    throwError(SE_HERE, string("creating updated item ") + luid, gerror);
                 }
 #ifdef USE_EDS_CLIENT
                 PlainGStr owner((gchar *)uid);
@@ -754,7 +754,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                                              gerror)
 #endif
                         ) {
-                        throwError(string("recreating item ") + luid, gerror);
+                        throwError(SE_HERE, string("recreating item ") + luid, gerror);
                     }
                 }
             } else {
@@ -770,7 +770,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                                          gerror)
 #endif
                     ) {
-                    throwError(string("updating item ") + luid, gerror);
+                    throwError(SE_HERE, string("updating item ") + luid, gerror);
                 }
             }
         } else {
@@ -786,7 +786,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                                      gerror)
 #endif
                 ) {
-                throwError(string("updating item ") + luid, gerror);
+                throwError(SE_HERE, string("updating item ") + luid, gerror);
             }
         }
 
@@ -835,10 +835,10 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
             SE_LOG_DEBUG(getDisplayName(), "%s: request to delete non-existant item ignored",
                          uid.c_str());
             if (!ignoreNotFound) {
-                throwError(STATUS_NOT_FOUND, string("delete item: ") + uid);
+                throwError(SE_HERE, STATUS_NOT_FOUND, string("delete item: ") + uid);
             }
         } else {
-            throwError(string("deleting item " ) + uid, gerror);
+            throwError(SE_HERE, string("deleting item " ) + uid, gerror);
         }
     }
 
@@ -874,7 +874,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                     !e_cal_create_object(m_calendar, *icalcomp, &uid, gerror)
 #endif
                     ) {
-                    throwError(string("recreating first item ") + luid, gerror);
+                    throwError(SE_HERE, string("recreating first item ") + luid, gerror);
                 }
 #ifdef USE_EDS_CLIENT
                 PlainGStr owner((gchar *)uid);
@@ -892,7 +892,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                                          gerror)
 #endif
                     ) {
-                    throwError(string("recreating following item ") + luid, gerror);
+                    throwError(SE_HERE, string("recreating following item ") + luid, gerror);
                 }
             }
         }
@@ -922,9 +922,9 @@ void EvolutionCalendarSource::removeItem(const string &luid)
             (!success && IsCalObjNotFound(gerror))) {
             SE_LOG_DEBUG(getDisplayName(), "%s: request to delete non-existant item",
                          luid.c_str());
-            throwError(STATUS_NOT_FOUND, string("delete item: ") + id.getLUID());
+            throwError(SE_HERE, STATUS_NOT_FOUND, string("delete item: ") + id.getLUID());
         } else if (!success) {
-            throwError(string("deleting item " ) + luid, gerror);
+            throwError(SE_HERE, string("deleting item " ) + luid, gerror);
         }
     }
     m_allLUIDs.eraseLUID(id);
@@ -973,13 +973,13 @@ icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
 #endif
         ) {
         if (IsCalObjNotFound(gerror)) {
-            throwError(STATUS_NOT_FOUND, string("retrieving item: ") + id.getLUID());
+            throwError(SE_HERE, STATUS_NOT_FOUND, string("retrieving item: ") + id.getLUID());
         } else {
-            throwError(string("retrieving item: ") + id.getLUID(), gerror);
+            throwError(SE_HERE, string("retrieving item: ") + id.getLUID(), gerror);
         }
     }
     if (!comp) {
-        throwError(string("retrieving item: ") + id.getLUID());
+        throwError(SE_HERE, string("retrieving item: ") + id.getLUID());
     }
     eptr<icalcomponent> ptr(comp);
 
@@ -991,7 +991,7 @@ icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
     if (id.m_rid.empty()) {
         struct icaltimetype rid = icalcomponent_get_recurrenceid(comp);
         if (!icaltime_is_null_time(rid)) {
-            throwError(string("retrieving item: got child instead of parent: ") + id.m_uid);
+            throwError(SE_HERE, string("retrieving item: got child instead of parent: ") + id.m_uid);
         }
     }
 
@@ -1032,7 +1032,7 @@ string EvolutionCalendarSource::retrieveItemAsString(const ItemID &id)
         icalstr = e_cal_get_component_as_string(m_calendar, comp);
 #endif
         if (!icalstr) {
-            throwError(string("could not encode item as iCalendar: ") + id.getLUID());
+            throwError(SE_HERE, string("could not encode item as iCalendar: ") + id.getLUID());
         } else {
             SE_LOG_DEBUG(getDisplayName(), "had to remove TZIDs because e_cal_get_component_as_string() failed for:\n%s", icalstr.get());
 	}

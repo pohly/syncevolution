@@ -458,7 +458,7 @@ void Session::propfindURI(const std::string &path, int depth,
     const char *tmp = ne_get_response_header(req, "Location");
     std::string location(tmp ? tmp : "");
 
-    if (!checkError(error, status->code, status, location)) {
+    if (!checkError(error, status->code, status, location, path)) {
         goto retry;
     }
 }
@@ -541,7 +541,9 @@ void Session::flush()
     }
 }
 
-bool Session::checkError(int error, int code, const ne_status *status, const string &location,
+bool Session::checkError(int error, int code, const ne_status *status,
+                         const std::string &newLocation,
+                         const std::string &oldLocation,
                          const std::set<int> *expectedCodes)
 {
     flush();
@@ -571,20 +573,25 @@ bool Session::checkError(int error, int code, const ne_status *status, const str
     // detect redirect
     if ((error == NE_ERROR || error == NE_OK) &&
         (code >= 300 && code <= 399)) {
-        // special case Google: detect redirect to temporary error page
-        // and retry; same for redirect to login page
-        if (boost::starts_with(location, "http://www.google.com/googlecalendar/unavailable.html") ||
-            boost::starts_with(location, "https://www.google.com/googlecalendar/unavailable.html") ||
-            boost::starts_with(location, "https://accounts.google.com/ServiceLogin")) {
+        // Special case Google: detect redirect to temporary error page
+        // and retry; same for redirect to login page. Only do that for
+        // "real" URLs, not for the root or /calendar/ that we run into
+        // when scanning, because the login there will always fail.
+        if (oldLocation != "/" &&
+            oldLocation != "/calendar/" &&
+            (boost::starts_with(newLocation, "http://www.google.com/googlecalendar/unavailable.html") ||
+             boost::starts_with(newLocation, "https://www.google.com/googlecalendar/unavailable.html") ||
+             boost::starts_with(newLocation, "https://accounts.google.com/ServiceLogin"))) {
             retry = true;
         } else {
             SE_THROW_EXCEPTION_2(RedirectException,
-                                 StringPrintf("%s: %d status: redirected to %s",
+                                 StringPrintf("%s: %d status: %s redirected to %s",
                                               operation.c_str(),
                                               code,
-                                              location.c_str()),
+                                              oldLocation.c_str(),
+                                              newLocation.c_str()),
                                  code,
-                                 location);
+                                 newLocation);
         }
     }
 
@@ -888,6 +895,7 @@ Request::Request(Session &session,
                  const std::string &body,
                  std::string &result) :
     m_method(method),
+    m_path(path),
     m_session(session),
     m_result(&result),
     m_parser(NULL)
@@ -902,6 +910,7 @@ Request::Request(Session &session,
                  const std::string &body,
                  XMLParser &parser) :
     m_method(method),
+    m_path(path),
     m_session(session),
     m_result(NULL),
     m_parser(&parser)
@@ -968,6 +977,7 @@ bool Session::run(Request &request, const std::set<int> *expectedCodes)
 
     return checkError(error, request.getStatus()->code, request.getStatus(),
                       request.getResponseHeader("Location"),
+                      request.getPath(),
                       expectedCodes);
 }
 

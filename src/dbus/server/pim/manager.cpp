@@ -888,7 +888,7 @@ void Manager::searchWithRegistry(const ESourceRegistryCXX &registry,
 {
     try {
         if (!registry) {
-            GErrorCXX::throwError("create ESourceRegistry", gerror);
+            GErrorCXX::throwError(SE_HERE, "create ESourceRegistry", gerror);
         }
         doSearch(registry,
                  result,

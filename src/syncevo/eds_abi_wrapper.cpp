@@ -19,7 +19,6 @@
 
 #define EDS_ABI_WRAPPER_NO_REDEFINE 1
 #include <syncevo/eds_abi_wrapper.h>
-#include <syncevo/SyncContext.h>
 #include <syncevo/util.h>
 
 #include <string>

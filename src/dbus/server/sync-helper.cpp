@@ -133,7 +133,7 @@ int main(int argc, char **argv, char **envp)
         g_option_context_add_main_entries(context, entries, GETTEXT_PACKAGE);
         bool success = g_option_context_parse(context, &argc, &argv, gerror);
         if (!success) {
-            gerror.throwError("parsing command line options");
+            gerror.throwError(SE_HERE, "parsing command line options");
         }
 
         if (debug) {

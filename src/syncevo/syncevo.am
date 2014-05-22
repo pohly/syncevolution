@@ -69,6 +69,9 @@ src_syncevo_sources = \
   src/syncevo/LocalTransportAgent.h \
   src/syncevo/LocalTransportAgent.cpp \
   \
+  src/syncevo/Exception.h \
+  src/syncevo/Exception.cpp \
+  \
   src/syncevo/util.cpp \
   src/syncevo/util.h \
   src/syncevo/BoostHelper.h \
@@ -178,6 +181,7 @@ src_syncevo_libsyncevolution_include_HEADERS = \
   src/syncevo/LogStdout.h \
   src/syncevo/LogSyslog.h \
   \
+  src/syncevo/Exception.h \
   src/syncevo/FilterConfigNode.h \
   src/syncevo/PrefixConfigNode.h \
   src/syncevo/SafeConfigNode.h \

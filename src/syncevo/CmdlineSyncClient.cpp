@@ -62,7 +62,7 @@ string CmdlineSyncClient::askPassword(const string &passwordName,
         }
         password = std::string(buffer);
     } else {
-        throwError(string("could not read password for ") + descr);
+        Exception::throwError(SE_HERE, string("could not read password for ") + descr);
     }
 
     return password;
@@ -84,7 +84,7 @@ bool CmdlineSyncClient::savePassword(const string &passwordName,
 void CmdlineSyncClient::readStdin(string &content)
 {
     if (!ReadFile(cin, content)) {
-        throwError("stdin", errno);
+        Exception::throwError(SE_HERE, "stdin", errno);
     }
 }
 

@@ -18,7 +18,7 @@
  */
 
 #include <syncevo/SafeConfigNode.h>
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
 
 #include <boost/foreach.hpp>
 
@@ -38,15 +38,15 @@ SafeConfigNode::SafeConfigNode(const boost::shared_ptr<const ConfigNode> &node) 
 {
 }
 
-InitStateString SafeConfigNode::readProperty(const string &property) const
+InitStateString SafeConfigNode::readProperty(const std::string &property) const
 {
     InitStateString res = m_readOnlyNode->readProperty(escape(property));
     return InitStateString(unescape(res.get()), res.wasSet());
 }
 
-void SafeConfigNode::writeProperty(const string &property,
+void SafeConfigNode::writeProperty(const std::string &property,
                                    const InitStateString &value,
-                                   const string &comment)
+                                   const std::string &comment)
 {
     m_node->writeProperty(escape(property),
                           InitStateString(escape(value.get()), value.wasSet()),
@@ -59,14 +59,14 @@ void SafeConfigNode::readProperties(ConfigProps &props) const
     m_readOnlyNode->readProperties(original);
 
     BOOST_FOREACH(const StringPair &prop, original) {
-        string key = unescape(prop.first);
-        string value = unescape(prop.second);
+        std::string key = unescape(prop.first);
+        std::string value = unescape(prop.second);
 
         props[key] = value;
     }
 }
 
-void SafeConfigNode::removeProperty(const string &property)
+void SafeConfigNode::removeProperty(const std::string &property)
 {
     m_node->removeProperty(escape(property));
 }
@@ -74,7 +74,7 @@ void SafeConfigNode::removeProperty(const string &property)
 void SafeConfigNode::flush()
 {
     if (!m_node.get()) {
-        SyncContext::throwError(getName() + ": read-only, flushing not allowed");
+        Exception::throwError(SE_HERE, getName() + ": read-only, flushing not allowed");
     }
     m_node->flush();
 }

@@ -270,6 +270,10 @@ public:
         if (it != m_props.end() ||
             (it = m_props.find("testcases")) != m_props.end()) {
             config.m_testcases = it->second.c_str();
+        } else if (m_type == "carddav") {
+            // CardDAV uses a non-EDS vCard flavor, so we can't use the
+            // default eds_contact.vcf.
+            config.m_testcases = "testcases/carddav.vcf";
         }
     }
 

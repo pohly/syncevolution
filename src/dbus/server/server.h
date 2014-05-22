@@ -67,6 +67,7 @@ class Server : public GDBusCXX::DBusObjectHelper
     bool &m_shutdownRequested;
     Timespec m_lastFileMod;
     boost::shared_ptr<SyncEvo::Restart> &m_restart;
+    GDBusCXX::DBusConnectionPtr m_conn;
 
     uint32_t m_lastSession;
     typedef std::list< std::pair< boost::shared_ptr<GDBusCXX::Watch>, boost::shared_ptr<Client> > > Clients_t;
@@ -93,7 +94,7 @@ class Server : public GDBusCXX::DBusObjectHelper
      * automatic syncing enabled in a config.
      */
     list< boost::shared_ptr<GLibNotify> > m_files;
-    void fileModified();
+    void fileModified(const std::string &file);
     bool shutdown();
 
     /**

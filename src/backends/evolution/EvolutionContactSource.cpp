@@ -30,10 +30,9 @@ using namespace std;
 
 #ifdef ENABLE_EBOOK
 
-#include <syncevo/SyncContext.h>
 #include "EvolutionContactSource.h"
 #include <syncevo/util.h>
-
+#include <syncevo/Exception.h>
 #include <syncevo/Logging.h>
 
 #ifdef USE_EDS_CLIENT
@@ -124,7 +123,7 @@ EvolutionSyncSource::Databases EvolutionContactSource::getDatabases()
 #else
     ESourceList *sources = NULL;
     if (!e_book_get_addressbooks(&sources, NULL)) {
-        SyncContext::throwError("unable to access address books");
+        Exception::throwError(SE_HERE, "unable to access address books");
     }
 
     Databases secondary;
@@ -205,7 +204,7 @@ void EvolutionContactSource::open()
                                // therefore failed in some cases
     ESourceList *tmp;
     if (!e_book_get_addressbooks(&tmp, gerror)) {
-        throwError("unable to access address books", gerror);
+        throwError(SE_HERE, "unable to access address books", gerror);
     }
     ESourceListCXX sources(tmp, TRANSFER_REF);
 
@@ -221,7 +220,7 @@ void EvolutionContactSource::open()
         } else if (boost::starts_with(id, "file://")) {
             m_addressbook.set(e_book_new_from_uri(id.c_str(), gerror), "creating address book");
         } else {
-            throwError(string(getName()) + ": no such address book: '" + id + "'");
+            throwError(SE_HERE, string(getName()) + ": no such address book: '" + id + "'");
         }
         created = true;
     } else {
@@ -233,10 +232,10 @@ void EvolutionContactSource::open()
             // opening newly created address books often fails, try again once more
             sleep(5);
             if (!e_book_open(m_addressbook, onlyIfExists, gerror)) {
-                throwError("opening address book", gerror);
+                throwError(SE_HERE, "opening address book", gerror);
             }
         } else {
-            throwError("opening address book", gerror);
+            throwError(SE_HERE, "opening address book", gerror);
         }
     }
 
@@ -248,7 +247,7 @@ void EvolutionContactSource::open()
     if (identity.wasSet() || passwd.wasSet()) {
         GList *authmethod;
         if (!e_book_get_supported_auth_methods(m_addressbook, &authmethod, gerror)) {
-            throwError("getting authentication methods", gerror);
+            throwError(SE_HERE, "getting authentication methods", gerror);
         }
         while (authmethod) {
             // map identity + password to plain username/password credentials
@@ -274,7 +273,7 @@ void EvolutionContactSource::open()
 
     g_signal_connect_after(m_addressbook,
                            "backend-died",
-                           G_CALLBACK(SyncContext::fatalError),
+                           G_CALLBACK(Exception::fatalError),
                            (void *)"Evolution Data Server has died unexpectedly, contacts no longer available.");
 #endif
 }
@@ -389,7 +388,7 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
     }
 
     if (!e_book_client_get_view_sync(m_addressbook, sexp, &view, NULL, gerror)) {
-        throwError( "getting the view" , gerror);
+        throwError(SE_HERE, "getting the view" , gerror);
     }
     EBookClientViewCXX viewPtr = EBookClientViewCXX::steal(view);
 
@@ -405,32 +404,32 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
 
     EBookClientViewSyncHandler handler(viewPtr, boost::bind(list_revisions, _1, &revisions));
     if (!handler.process(gerror)) {
-        throwError("watching view", gerror);
+        throwError(SE_HERE, "watching view", gerror);
     }
 #else
     GErrorCXX gerror;
     eptr<EBookQuery> allItemsQuery(e_book_query_any_field_contains(""), "query");
     GList *nextItem;
     if (!e_book_get_contacts(m_addressbook, allItemsQuery, &nextItem, gerror)) {
-        throwError( "reading all items", gerror );
+        throwError(SE_HERE, "reading all items", gerror );
     }
     eptr<GList> listptr(nextItem);
     while (nextItem) {
         EContact *contact = E_CONTACT(nextItem->data);
         if (!contact) {
-            throwError("contact entry without data");
+            throwError(SE_HERE, "contact entry without data");
         }
         pair<string, string> revmapping;
         const char *uid = (const char *)e_contact_get_const(contact,
                                                             E_CONTACT_UID);
         if (!uid || !uid[0]) {
-            throwError("contact entry without UID");
+            throwError(SE_HERE, "contact entry without UID");
         }
         revmapping.first = uid;
         const char *rev = (const char *)e_contact_get_const(contact,
                                                             E_CONTACT_REV);
         if (!rev || !rev[0]) {
-            throwError(string("contact entry without REV: ") + revmapping.first);
+            throwError(SE_HERE, string("contact entry without REV: ") + revmapping.first);
         }
         revmapping.second = rev;
         revisions.insert(revmapping);
@@ -467,9 +466,9 @@ string EvolutionContactSource::getRevision(const string &luid)
 #endif
         ) {
         if (IsContactNotFound(gerror)) {
-            throwError(STATUS_NOT_FOUND, string("retrieving item: ") + luid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, string("retrieving item: ") + luid);
         } else {
-            throwError(string("reading contact ") + luid,
+            throwError(SE_HERE, string("reading contact ") + luid,
                        gerror);
         }
     }
@@ -477,7 +476,7 @@ string EvolutionContactSource::getRevision(const string &luid)
     const char *rev = (const char *)e_contact_get_const(contact,
                                                         E_CONTACT_REV);
     if (!rev || !rev[0]) {
-        throwError(string("contact entry without REV: ") + luid);
+        throwError(SE_HERE, string("contact entry without REV: ") + luid);
     }
     return rev;
 }
@@ -535,7 +534,7 @@ void EvolutionContactSource::checkCacheForError(boost::shared_ptr<ContactCache> 
         GErrorCXX gerror;
         std::swap(gerror, cache->m_gerror);
         cache.reset();
-        throwError(StringPrintf("reading contacts %s", cache->m_name.c_str()), gerror);
+        throwError(SE_HERE, StringPrintf("reading contacts %s", cache->m_name.c_str()), gerror);
     }
 }
 
@@ -862,9 +861,9 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
 #endif
         ) {
         if (IsContactNotFound(gerror)) {
-            throwError(STATUS_NOT_FOUND, string("reading contact: ") + luid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, string("reading contact: ") + luid);
         } else {
-            throwError(string("reading contact ") + luid,
+            throwError(SE_HERE, string("reading contact ") + luid,
                        gerror);
         }
     }
@@ -883,7 +882,7 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
         ) {
 #if defined(EVOLUTION_COMPATIBILITY) || defined(HAVE_E_CONTACT_INLINE_LOCAL_PHOTOS)
         if (!e_contact_inline_local_photos(contactptr, gerror)) {
-            throwError(string("inlining PHOTO file data in ") + luid, gerror);
+            throwError(SE_HERE, string("inlining PHOTO file data in ") + luid, gerror);
         }
 #endif
     }
@@ -891,7 +890,7 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
     eptr<char> vcardstr(e_vcard_to_string(&contactptr->parent,
                                           EVC_FORMAT_VCARD_30));
     if (!vcardstr) {
-        throwError(string("failure extracting contact from Evolution " ) + luid);
+        throwError(SE_HERE, string("failure extracting contact from Evolution " ) + luid);
     }
 
     item = vcardstr.get();
@@ -905,7 +904,7 @@ TrackingSyncSource::InsertItemResult EvolutionContactSource::checkBatchedInsert(
         return TrackingSyncSource::InsertItemResult(boost::bind(&EvolutionContactSource::checkBatchedInsert, this, pending));
     }
     if (pending->m_gerror) {
-        pending->m_gerror.throwError(pending->m_name);
+        pending->m_gerror.throwError(SE_HERE, pending->m_name);
     }
     string newrev = getRevision(pending->m_uid);
     return TrackingSyncSource::InsertItemResult(pending->m_uid, newrev, ITEM_OKAY);
@@ -1044,14 +1043,14 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
             if (uid.empty()) {
                 gchar* newuid;
                 if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid, NULL, gerror)) {
-                    throwError("add new contact", gerror);
+                    throwError(SE_HERE, "add new contact", gerror);
                 }
                 PlainGStr newuidPtr(newuid);
                 string newrev = getRevision(newuid);
                 return InsertItemResult(newuid, newrev, ITEM_OKAY);
             } else {
                 if (!e_book_client_modify_contact_sync(m_addressbook, contact, NULL, gerror)) {
-                    throwError("updating contact "+ uid, gerror);
+                    throwError(SE_HERE, "updating contact "+ uid, gerror);
                 }
                 string newrev = getRevision(uid);
                 return InsertItemResult(uid, newrev, ITEM_OKAY);
@@ -1083,19 +1082,19 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
             e_book_commit_contact(m_addressbook, contact, gerror)) {
             const char *newuid = (const char *)e_contact_get_const(contact, E_CONTACT_UID);
             if (!newuid) {
-                throwError("no UID for contact");
+                throwError(SE_HERE, "no UID for contact");
             }
             string newrev = getRevision(newuid);
             return InsertItemResult(newuid, newrev, ITEM_OKAY);
         } else {
-            throwError(uid.empty() ?
+            throwError(SE_HERE, uid.empty() ?
                        "storing new contact" :
                        string("updating contact ") + uid,
                        gerror);
         }
 #endif
     } else {
-        throwError(string("failure parsing vcard " ) + item);
+        throwError(SE_HERE, string("failure parsing vcard " ) + item);
     }
     // not reached!
     return InsertItemResult("", "", ITEM_OKAY);
@@ -1113,9 +1112,9 @@ void EvolutionContactSource::removeItem(const string &uid)
 #endif
         ) {
         if (IsContactNotFound(gerror)) {
-            throwError(STATUS_NOT_FOUND, string("deleting contact: ") + uid);
+            throwError(SE_HERE, STATUS_NOT_FOUND, string("deleting contact: ") + uid);
         } else {
-            throwError( string( "deleting contact " ) + uid,
+            throwError(SE_HERE, string( "deleting contact " ) + uid,
                         gerror);
         }
     }
@@ -1138,7 +1137,7 @@ std::string EvolutionContactSource::getDescription(const string &luid)
                                 gerror)
 #endif
             ) {
-            throwError(string("reading contact ") + luid,
+            throwError(SE_HERE, string("reading contact ") + luid,
                        gerror);
         }
         eptr<EContact, GObject> contactptr(contact, "contact");

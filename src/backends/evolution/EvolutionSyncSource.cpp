@@ -20,7 +20,7 @@
 
 #include "EvolutionSyncSource.h"
 #include <syncevo/SmartPtr.h>
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
 #include <syncevo/GLibSupport.h>
 
 #ifdef USE_EDS_CLIENT
@@ -76,7 +76,7 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
                 // TODO: create source
                 // m_calendar = ECalClientCXX::steal(e_cal_client_new_from_uri(id.c_str(), sourceType(), gerror));
         } else {
-            throwError(string("database not found: '") + id + "'");
+            throwError(SE_HERE, string("database not found: '") + id + "'");
         }
         created = true;
     } else {
@@ -84,14 +84,14 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
     }
 
     if (!client) {
-        throwError("accessing database", gerror);
+        throwError(SE_HERE, "accessing database", gerror);
     }
 
     // Listen for errors
     g_signal_connect (client, "backend-error", G_CALLBACK(handleErrorCB), this); 
     g_signal_connect_after(client,
                            "backend-died",
-                           G_CALLBACK(SyncContext::fatalError),
+                           G_CALLBACK(Exception::fatalError),
                            (void *)"Evolution Data Server has died unexpectedly.");
 
 
@@ -109,7 +109,7 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
                 gerror.clear();
                 sleep(5);
             } else {
-                throwError("opening database", gerror);
+                throwError(SE_HERE, "opening database", gerror);
             }
         } else {
             // Success!
@@ -153,16 +153,16 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     GKeyFileCXX keyfile(g_key_file_new(), TRANSFER_REF);
     GErrorCXX gerror;
     if (!g_key_file_load_from_data(keyfile, ini, len, G_KEY_FILE_NONE, gerror)) {
-        gerror.throwError("parsing ESource .ini data");
+        gerror.throwError(SE_HERE, "parsing ESource .ini data");
     }
     PlainGStrArray keys(g_key_file_get_keys(keyfile, mainSection, NULL, gerror));
     if (!keys) {
-        gerror.throwError("listing keys in main section");
+        gerror.throwError(SE_HERE, "listing keys in main section");
     }
     for (int i = 0; keys.at(i); i++) {
         if (boost::starts_with(keys.at(i), "DisplayName[")) {
             if (!g_key_file_remove_key(keyfile, mainSection, keys.at(i), gerror)) {
-                gerror.throwError("remove key");
+                gerror.throwError(SE_HERE, "remove key");
             }
         }
     }
@@ -231,7 +231,7 @@ SyncSource::Database EvolutionSyncSource::createDatabase(const Database &databas
     //                                            sources,
     //                                            NULL,
     //                                            gerror)) {
-    //     gerror.throwError(StringPrintf("creating EDS database of type %s with name '%s'%s%s",
+    //     gerror.throwError(SE_HERE, StringPrintf("creating EDS database of type %s with name '%s'%s%s",
     //                                    sourceExtension(),
     //                                    database.m_name.c_str(),
     //                                    database.m_uri.empty() ? "" : " and URI ",
@@ -248,12 +248,12 @@ void EvolutionSyncSource::deleteDatabase(const std::string &uri, RemoveData remo
     ESourceRegistryCXX registry = EDSRegistryLoader::getESourceRegistry();
     ESourceCXX source(e_source_registry_ref_source(registry, uri.c_str()), TRANSFER_REF);
     if (!source) {
-        throwError(StringPrintf("EDS database with URI '%s' cannot be deleted, does not exist",
-                                uri.c_str()));
+        throwError(SE_HERE, StringPrintf("EDS database with URI '%s' cannot be deleted, does not exist",
+                                         uri.c_str()));
     }
     GErrorCXX gerror;
     if (!e_source_remove_sync(source, NULL, gerror)) {
-        throwError(StringPrintf("deleting EDS database with URI '%s'", uri.c_str()),
+        throwError(SE_HERE, StringPrintf("deleting EDS database with URI '%s'", uri.c_str()),
                    gerror);
     }
     if (removeData == REMOVE_DATA_FORCE) {
@@ -332,7 +332,7 @@ ESource *EvolutionSyncSource::findSource(const ESourceListCXX &list, const strin
     return NULL;
 }
 
-void EvolutionSyncSource::throwError(const string &action, GErrorCXX &gerror)
+void EvolutionSyncSource::throwError(const SourceLocation &where, const string &action, GErrorCXX &gerror)
 {
     string gerrorstr;
     if (gerror) {
@@ -342,7 +342,7 @@ void EvolutionSyncSource::throwError(const string &action, GErrorCXX &gerror)
         gerrorstr = ": failure";
     }
 
-    throwError(action + gerrorstr);
+    throwError(where, action + gerrorstr);
 }
 #endif // HAVE_EDS
 

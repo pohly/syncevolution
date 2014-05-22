@@ -1,0 +1,225 @@
+@@ -2,7 +2,7 @@
+ VERSION:3.0
+ UID:unique-id-user17
+ NICKNAME:user17
+-NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
++NOTE:triggers parser bug in Funambol 3.0\: trailing= is mistaken for soft line break=
+ FN:parserbug=
+ N:parserbug=;;;;
+ X-EVOLUTION-FILE-AS:parserbug=
+@@ -24,9 +24,7 @@
+ UID:unique-id-user11
+ NICKNAME:user11
+ NOTE:This is a long line without any special characters. This is a simpler 
+- example that should require folding in vcards. Does folding insert a crlf
+-  before a space or does it insert crlf _plus_ a space? vCard 2.1 inserts 
+- before a space\, 3.0 inserts line break plus space.
++ example that should require folding in vcards. ...
+ FN:long line
+ N:line;long;;;
+ X-EVOLUTION-FILE-AS:line\, long
+@@ -46,7 +44,7 @@
+ VERSION:3.0
+ UID:unique-id-user13
+ NICKNAME:user13
+-NOTE:a colon is not a special character so here it comes : and not quoting necessary
++NOTE:a colon is not a special character so here it comes \: and not quotingnecessary
+ FN:colon
+ N:colon;unquoted;;;
+ X-EVOLUTION-FILE-AS:colon\, unquoted
+@@ -56,7 +54,7 @@
+ VERSION:3.0
+ UID:unique-id-user14
+ NICKNAME:user14
+-NOTE:here are some quotation marks: single ' double " back ` - none of them is special
++NOTE:here are some quotation marks\: single ' double " back ` - none of them is special
+ FN:quotation marks
+ N:marks;quotation;;;
+ X-EVOLUTION-FILE-AS:marks\, quotation
+@@ -66,7 +64,7 @@
+ VERSION:3.0
+ UID:unique-id-user15
+ NICKNAME:user15
+-NOTE:Spouse's Name: foobar
++NOTE:Spouse's Name\: foobar
+ FN:spouse name
+ N:name;spouse;;;
+ X-EVOLUTION-FILE-AS:spouse\, name
+@@ -92,19 +90,10 @@
+ UID:unique-id-user2
+ NICKNAME:user2
+ X-EVOLUTION-SPOUSE:
+-NOTE:This user tests some of the advanced aspects of vcards:\n- non-ASCII c
+- haracters (with umlauts in the name)\n- line break (in this note and the
+-  mailing address)\n- long lines (in this note)\n- special characters (in
+-  this note)\n- tabs (in this note)\n\nVery long line\, very very long th
+- is time... still not finished... blah blah blah blah blah 1 2 3 4 5 6 7 
+- 8 9 10 11 12 13 14 15 16\n\ncomma \,\ncolon :\nsemicolon \;\nbackslash 
+- \\\n\nThe same\, in the middle of a line:\ncomma \, comma\ncolon : col
+- on\nsemicolon \; semicolon\nbackslash \\ backslash\n\nA tab 	tab done\n	
+- line starts with tab
++NOTE:This user tests some of the advanced aspects of vcards...
+ FN:Umlaut Ä Ö Ü ß
+ N:Ü;Ä;Ö;Umlaut;ß
+ X-EVOLUTION-FILE-AS:Ü\, Ä
+-CATEGORIES:Business
+ X-EVOLUTION-BLOG-URL:
+ CALURI:
+ FBURL:
+@@ -124,7 +113,7 @@
+ UID:unique-id-user8
+ NICKNAME:user8
+ X-EVOLUTION-SPOUSE:
+-NOTE:Here are some special characters: comma \, colon : semicolon \;
++NOTE:Here are some special characters\: comma \, colon \: semicolon \;
+ FN:special characters
+ N:characters;special;;;
+ X-EVOLUTION-FILE-AS:characters\, special
+@@ -146,7 +135,7 @@
+ NICKNAME:user7
+ X-EVOLUTION-SPOUSE:
+ NOTE:This test case uses line breaks. This is line 1.\nLine 2.\n\nLine brea
+- ks in vcard 2.1 are encoded as =0D=0A.\nThat means the = has to be encod
++ ks in vcard 2.1 are encoded as=0D=0A.\nThat means the= has to be encod
+  ed itself...
+ FN:line breaks
+ N:breaks;line;;;
+@@ -204,7 +193,7 @@
+ IMPP;X-SERVICE-TYPE=MSN:msnim:MSN
+ IMPP;X-SERVICE-TYPE=ICQ:aim:ICQ
+ IMPP;X-SERVICE-TYPE=Jabber:xmpp:Jabber
+-IMPP;X-SERVICE-TYPE=chat-label:x-apple:custom%20chat
++IMPP;X-SERVICE-TYPE=Chat-label:x-apple:custom%20chat
+ X-EVOLUTION-FILE-AS:Doe\, John
+ X-MOZILLA-HTML:FALSE
+ X-PHONETIC-FIRST-NAME:John
+@@ -246,15 +235,15 @@
+ item29.X-ABLabel:domestic-partner-label
+ item30.X-ABRELATEDNAMES:custom relationship
+ item30.X-ABLabel:custom-label5
+-item31.URL:http://profile.com
++item31.URL:http\://profile.com
+ item31.X-ABLabel:Profile
+-item32.URL:http://blog.com
++item32.URL:http\://blog.com
+ item32.X-ABLabel:Blog
+-item33.URL:http://homepage.com
++item33.URL:http\://homepage.com
+ item33.X-ABLabel:HomePage
+-item34.URL:http://company.com
++item34.URL:http\://company.com
+ item34.X-ABLabel:Work
+-item35.URL:http://custom.com
++item35.URL:http\://custom.com
+ item35.X-ABLabel:Custom-label6
+ END:VCARD
+ 
+@@ -376,107 +365,7 @@
+ UID:unique-id-user10
+ NICKNAME:user10
+ X-EVOLUTION-SPOUSE:
+-NOTE:large vcard with plenty of special chars < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
+-  & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
++NOTE:large vcard with plenty of special chars < &...
+ FN:large vcard
+ N:;vcard;;large;
+ X-EVOLUTION-FILE-AS:large

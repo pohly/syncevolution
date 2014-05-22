@@ -1,0 +1,245 @@
+    <macro name="VCARD_BEFOREWRITE_SCRIPT"><![CDATA[
+      if (UID == EMPTY) { UID = newuid(); }
+      $VCARD_OUTGOING_PHOTO_VALUE_SCRIPT;
+    ]]></macro>
+
+    <macro name="NEWTAG"><![CDATA[
+      INTEGER newtag;
+      newtag = 1;
+      while (TRUE) {
+         $1 = "item" + newtag;
+         if (!CONTAINS($2, $1)) {
+            break;
+         }
+         newtag = newtag + 1;
+      }
+    ]]></macro>
+
+    <macro name="VCARD_AFTERREAD_SCRIPT"><![CDATA[
+      $VCARD_INCOMING_PHOTO_VALUE_SCRIPT;
+    ]]></macro>
+
+    <!-- moves an IMPP value to a specific legacy field -->
+    <macro name="VCARD_MODERN_TO_LEGACY_IMPP"><![CDATA[
+       INTEGER impp_index;
+       impp_index = SIZE($2);
+       SWAP($1, $2[impp_index]);
+       SWAP(IMPP_SLOT[$4], $3[impp_index]);
+       IMPP[$4] = UNASSIGNED;
+    ]]></macro>
+
+    <!-- convert from IMPP to X- fields, XDATE to ANNIVERSARY, etc. -->
+    <macro name="VCARD_MODERN_TO_LEGACY"><![CDATA[
+       INTEGER i;
+       STRING s;
+
+       // Special X-ABDATE -> X-ANNIVERSARY.
+       i = SIZE(XDATE) - 1;
+       while (i >= 0) {
+          if (GROUP_TAG[i] != EMPTY &&
+              XDATE[i] != UNASSIGNED &&
+              LABEL[i] == "Anniversary") {
+              SWAP(ANNIVERSARY, XDATE[i]);
+
+              // XDATE[i] = UNASSIGNED;
+              break;
+          }
+          i = i - 1;
+       }
+
+       // Special X-ABRELATEDNAMES -> X-SPOUSE/MANAGER/ASSISTANT
+       i = SIZE(RELATEDNAMES) - 1;
+       while (i >= 0) {
+          if (GROUP_TAG[i] != EMPTY &&
+              RELATEDNAMES[i] != UNASSIGNED) {
+             s = LABEL[i];
+             if (s == "Spouse") {
+                if (SPOUSE == EMPTY) {
+                   SWAP(SPOUSE, RELATEDNAMES[i]);
+                   // RELATEDNAMES[i] = UNASSIGNED;
+                }
+             } else if (s == "Manager") {
+                if (MANAGER == EMPTY) {
+                   SWAP(MANAGER, RELATEDNAMES[i]);
+                   // RELATEDNAMES[i] = UNASSIGNED;
+                }
+             } else if (s == "Assistant") {
+                if (ASSISTANT == EMPTY) {
+                   SWAP(ASSISTANT, RELATEDNAMES[i]);
+                   // RELATEDNAMES[i] = UNASSIGNED;
+                }
+             }
+          }
+          i = i - 1;
+       }
+
+       // IMPP -> X-JABBER/AIM/... depending on service type. Protocol must match.
+       i = SIZE(IMPP) - 1;
+       INTEGER offset;
+       STRING service;
+       STRING protocol;
+       STRING value;
+       while (i >= 0) {
+          service = IMPP_SERVICE[i];
+          if (service != UNASSIGNED) {
+             offset = FIND(IMPP[i], ":");
+             if (offset != UNASSIGNED) {
+                protocol = SUBSTR(IMPP[i], 0, offset);
+                value = URLDECODE(SUBSTR(IMPP[i], offset + 1));
+                if (service == "AIM" && protocol == "aim") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, AIM_HANDLE, AIM_SLOT, i);
+                } else if (service == "Gadugadu") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, GADUGADU_HANDLE, GADUGADU_SLOT, i);
+                } else if (service == "Groupwise") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, GROUPWISE_HANDLE, GROUPWISE_SLOT, i);
+                } else if (service == "ICQ" && protocol == "aim") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, ICQ_HANDLE, ICQ_SLOT, i);
+                } else if (service == "Jabber" && protocol == "xmpp") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, JABBER_HANDLE, JABBER_SLOT, i);
+                } else if (service == "MSN" && protocol == "msnim") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, MSN_HANDLE, MSN_SLOT, i);
+                } else if (service == "Yahoo" && protocol == "ymsgr") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, YAHOO_HANDLE, YAHOO_SLOT, i);
+                } else if (service == "Skype" && protocol == "skype") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, SKYPE_HANDLE, SKYPE_SLOT, i);
+                } else if (service == "Sip") {
+                   $VCARD_MODERN_TO_LEGACY_IMPP(value, SIP_HANDLE, SIP_SLOT, i);
+                }
+             }
+          }
+          i = i - 1;
+       }
+
+
+       // Remove labels which are no longer needed (valued moved above,
+       // stored for a group which has no other properties (Google
+       // CardDAV server sometimes sends that, editing in Evolution
+       // might cause it, etc.) or provide no information ("Other").
+       i = SIZE(LABEL) - 1;
+       while (i >= 0) {
+          if (LABEL[i] == "Other" ||
+              LABEL[i] != UNASSIGNED &&
+              (GROUP_TAG[i] == EMPTY ||
+               RELATEDNAMES[i] == UNASSIGNED &&
+               XDATE[i] == UNASSIGNED &&
+               TEL[i] == UNASSIGNED &&
+               EMAIL[i] == UNASSIGNED &&
+               WEB[i] == UNASSIGNED &&
+               XDATE[i] == UNASSIGNED &&
+               IMPP[i] == UNASSIGNED &&
+               ADR_POBOX[i] == UNASSIGNED &&
+               ADR_ADDTL[i] == UNASSIGNED &&
+               ADR_STREET[i] == UNASSIGNED &&
+               ADR_CITY[i] == UNASSIGNED &&
+               ADR_REG[i] == UNASSIGNED &&
+               ADR_ZIP[i] == UNASSIGNED &&
+               ADR_COUNTRY[i] == UNASSIGNED &&
+               ADR_STREET_FLAGS[i] == UNASSIGNED)) {
+               LABEL[i] = UNASSIGNED;
+          }
+          i = i - 1;
+       }
+
+       // Remove all group tags. Not used for legacy formats.
+       GROUP_TAG = UNASSIGNED;
+    ]]></macro>
+
+    <!-- The legacy->modern conversion ignores empty property values
+    because we would not encode them as empty
+    IMPP/X-ABDATE/X-ABRELATEDNAMES values anyway
+    (<noemptyproperties>), leaving us with just the redundant labels.
+    -->
+
+    <!-- X-SPOUSE/MANAGER/ASSISTANT -> special X-ABRELATEDNAMES -->
+    <macro name="VCARD_LEGACY_TO_MODERN_RELATEDNAMES"><![CDATA[
+       if ($1 != EMPTY) {
+          // STRING tag;
+          INTEGER num;
+          num = SIZE(LABEL);
+          // $NEWTAG(tag, GROUP_TAG);
+          SWAP(RELATEDNAMES[num], $1);
+          LABEL[num] = $2;
+          // GROUP_TAG[num] = tag;
+          // $1 = UNASSIGNED;
+       }
+    ]]></macro>
+
+    <!-- X-JABBER/AIM/... -> IMPP -->
+    <macro name="VCARD_LEGACY_TO_MODERN_IMPP"><![CDATA[
+       INTEGER impp_index;
+       impp_index = SIZE($3) - 1;
+       while (impp_index >= 0) {
+          if ($3[impp_index] != EMPTY) {
+             INTEGER num;
+             num = SIZE(LABEL);
+             IMPP[num] = $2 + ":" + URLENCODE($3[impp_index]);
+             $3[impp_index] = UNASSIGNED;
+             SWAP($4[impp_index], IMPP_SLOT[num]);
+             IMPP_SERVICE[num] = $1;
+             LABEL[num] = "Other";
+          }
+          impp_index = impp_index - 1;
+       }
+    ]]></macro>
+
+    <!-- convert from X- fields to IMPP, ANNIVERSARY to DATE, etc. -->
+    <macro name="VCARD_LEGACY_TO_MODERN"><![CDATA[
+       if (ANNIVERSARY != EMPTY) {
+          INTEGER i;
+          i = SIZE(LABEL);
+          // STRING tag;
+
+          // $NEWTAG(tag, GROUP_TAG);
+
+          SWAP(XDATE[i], ANNIVERSARY);
+          LABEL[i] = "Anniversary";
+          // GROUP_TAG[i] = tag;
+          // ANNIVERSARY = UNASSIGNED;
+       }
+
+       $VCARD_LEGACY_TO_MODERN_RELATEDNAMES(SPOUSE, "Spouse");
+       $VCARD_LEGACY_TO_MODERN_RELATEDNAMES(MANAGER, "Manager");
+       $VCARD_LEGACY_TO_MODERN_RELATEDNAMES(ASSISTANT, "Assistant");
+
+       $VCARD_LEGACY_TO_MODERN_IMPP("AIM", "aim", AIM_HANDLE, AIM_SLOT);
+       $VCARD_LEGACY_TO_MODERN_IMPP("Gadugadu", "x-apple", GADUGADU_HANDLE, GADUGADU_SLOT); // ???
+       $VCARD_LEGACY_TO_MODERN_IMPP("Groupwise", "x-apple", GROUPWISE_HANDLE, GROUPWISE_SLOT); // ???
+       $VCARD_LEGACY_TO_MODERN_IMPP("ICQ", "aim", ICQ_HANDLE, ICQ_SLOT);
+       $VCARD_LEGACY_TO_MODERN_IMPP("Jabber", "xmpp", JABBER_HANDLE, JABBER_SLOT);
+       $VCARD_LEGACY_TO_MODERN_IMPP("MSN", "msnim", MSN_HANDLE, MSN_SLOT);
+       $VCARD_LEGACY_TO_MODERN_IMPP("Yahoo", "ymsgr", YAHOO_HANDLE, YAHOO_SLOT);
+       $VCARD_LEGACY_TO_MODERN_IMPP("Skype", "skype", SKYPE_HANDLE, SKYPE_SLOT);
+       $VCARD_LEGACY_TO_MODERN_IMPP("Sip", "x-apple", SIP_HANDLE, SIP_SLOT); // ???
+       // $VCARD_LEGACY_TO_MODERN_IMPP("???", "???", IM_ADDRESS);
+       // $VCARD_LEGACY_TO_MODERN_IMPP("???", "???", MEANWHILE_HANDLE, MEANWHILE_SLOT);
+       // $VCARD_LEGACY_TO_MODERN_IMPP("??", "???", SMS_HANDLE, SMS_SLOT);
+
+       // Create group tags for all labels. Without them the label won't be
+       // associated with the corresponding property in the modern vCard.
+       INTEGER i;
+       i = SIZE(LABEL) - 1;
+       // Reset GROUP_TAG. It might contain obsolete tags after
+       // a read/modify cycle.
+       GROUP_TAG = EMPTY;
+       // We don't use group tags internally, so we can simply enumerate them
+       // here.
+       INTEGER tagnum;
+       tagnum = 1;
+       while (i >= 0) {
+          if (LABEL[i] != EMPTY) {
+             GROUP_TAG[i] = "item" + tagnum;
+             tagnum = tagnum + 1;
+          }
+          i = i - 1;
+       }
+    ]]></macro>
+
+    <macro name="VCARD_BEFOREWRITE_SCRIPT_WEBDAV"><![CDATA[
+      $VCARD_BEFOREWRITE_SCRIPT;
+      $VCARD_LEGACY_TO_MODERN;
+    ]]></macro>
+
+    <macro name="VCARD_AFTERREAD_SCRIPT_WEBDAV"><![CDATA[
+      $VCARD_MODERN_TO_LEGACY;
+      $VCARD_AFTERREAD_SCRIPT;
+    ]]></macro>

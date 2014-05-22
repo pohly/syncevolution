@@ -1,0 +1,64 @@
+#! /bin/sh
+
+set -ex
+
+IN=$1
+OUT=$2
+
+rm -rf $OUT
+mkdir $OUT
+[ -d $IN ] || (echo >&2 "$IN not a directory"; false)
+
+# TODO: X-SERVICE-TYPE, one for each kind, etc.
+
+for i in $IN/*; do
+   # Modify first and second contact by changing a field.
+   # The second contact will also get modified locally.
+   # We add a new BDAY property here, too, that will be added to
+   # the local side during the merge by the engine, and
+   # new array entries, that need special handling by the merge script.
+   #
+   # Each -e generates a line break, so no \n is necessary inside the expanded vCard.
+   perl -e '$_ = join("", <>); if (/John [12] Doe/) {' \
+       -e 's/primary 8/primary 80/;' \
+       -e 's!END:VCARD!BDAY:2006-01-08\r' \
+       -e 'TEL;TYPE=HOME:new remote tel 1\r' \
+       -e 'tel2.TEL:new remote tel 2\r' \
+       -e 'tel2.X-ABLabel:new-remote-tel-label\r' \
+       -e 'email1.EMAIL:new remote email 1\r' \
+       -e 'email1.X-ABLabel:new-remote-email-label\r' \
+       -e 'EMAIL;TYPE=HOME:new remote email 2\r' \
+       -e 'date1.X-ABDATE:2014-01-01\r' \
+       -e 'date1.X-ABLabel:date-label-2014\r' \
+       -e 'url1.URL:http\\://www.example.com/foobar\r' \
+       -e 'url1.X-ABLabel:example-url-label\r' \
+       -e 'impp1.IMPP;X-SERVICE-TYPE=AIM:aim:new-aim\r' \
+       -e 'impp1.X-ABLabel:Other\r' \
+       -e 'impp2.IMPP;X-SERVICE-TYPE=Gadugadu:x-apple:new-gadugadu\r' \
+       -e 'impp2.X-ABLabel:Other\r' \
+       -e 'impp3.IMPP;X-SERVICE-TYPE=Groupwise:x-apple:new-groupwise\r' \
+       -e 'impp3.X-ABLabel:Other\r' \
+       -e 'impp4.IMPP;X-SERVICE-TYPE=ICQ:aim:new-icq\r' \
+       -e 'impp4.X-ABLabel:Other\r' \
+       -e 'impp5.IMPP;X-SERVICE-TYPE=Jabber:xmpp:new-jabber\r' \
+       -e 'impp5.X-ABLabel:Other\r' \
+       -e 'impp6.IMPP;X-SERVICE-TYPE=MSN:msnim:new-MSN\r' \
+       -e 'impp6.X-ABLabel:Other\r' \
+       -e 'impp7.IMPP;X-SERVICE-TYPE=Yahoo:ymsgr:new-yahoo\r' \
+       -e 'impp7.X-ABLabel:Other\r' \
+       -e 'impp8.IMPP;X-SERVICE-TYPE=Skype:skype:new-skype\r' \
+       -e 'impp8.X-ABLabel:Other\r' \
+       -e 'impp9.IMPP;X-SERVICE-TYPE=Sip:x-apple:new-sip\r' \
+       -e 'impp9.X-ABLabel:Other\r' \
+       -e 'impp10.IMPP;X-SERVICE-TYPE=Abc:x-apple:new-abc\r' \
+       -e 'impp10.X-ABLabel:Other\r' \
+       -e 'name1.X-ABRELATEDNAMES:new person\r' \
+       -e 'name1.X-ABLabel:cousin\r' \
+       -e 'ADR;TYPE=WORK:box;;street;town;county;12346;country\r' \
+       -e 'END:VCARD!;' \
+       -e 'print;' \
+       -e '}' \
+   <$i >$OUT/$(basename $i)
+done
+
+find $OUT -size 0 -delete

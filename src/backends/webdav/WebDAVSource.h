@@ -56,14 +56,16 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
 
     /**
      * Scan server based on username/password/syncURL. Callback is
-     * passed name and URL of each collection (in this order), may
-     * return false to stop scanning gracefully or throw errors to
+     * passed name and URL of each collection (in this order) plus
+     * some flags (isReadOnly = collection cannot be written);
+     * may return false to stop scanning gracefully or throw errors to
      * abort.
      *
      * @return true if scanning completed, false if callback requested stop
      */
     bool findCollections(const boost::function<bool (const std::string &,
-                                                     const Neon::URI &)> &callback);
+                                                     const Neon::URI &,
+                                                     bool isReadOnly)> &callback);
 
     /** store resource URL permanently after successful sync */
     void storeServerInfos();
@@ -88,6 +90,9 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
 	}
 	return TrackingSyncSource::endSync(success);
     }
+
+    /** sets m_postPath */
+    void checkPostSupport();
 
     /* implementation of TrackingSyncSource interface */
     virtual std::string databaseRevision();
@@ -226,16 +231,36 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     /** normalized path: including backslash, URI encoded */
     Neon::URI m_calendar;
 
-    /** information about certain paths (path->property->value)*/
-    typedef std::map<std::string, std::map<std::string, std::string> > Props_t;
-    Props_t m_davProps;
+    /**
+     * Unset until checkPostSupport() is called,
+     * valid path for POST if server supports RFC 5995,
+     * empty otherwise.
+     */
+    InitStateString m_postPath;
+
+    /**
+     * Information about certain paths (path->property->value).
+     * The container acts like a hash (supports indexing with unique string)
+     * but adds new entries at the end like a vector.
+     */
+    class Props_t : public std::vector< std::pair < std::string, std::map<std::string, std::string> > >
+    {
+    public:
+        typedef std::string key_type;
+        typedef std::map<std::string, std::string> mapped_type;
+
+        mapped_type &operator [] (const key_type &key);
+        iterator find(const key_type &key);
+        const_iterator find(const key_type &key) const { return const_cast<Props_t *>(this)->find(key); }
+    };
 
     /** extract value from first <DAV:href>value</DAV:href>, empty string if not inside propval */
     std::string extractHREF(const std::string &propval);
     /** extract all <DAV:href>value</DAV:href> values from a set, empty if none */
     std::list<std::string> extractHREFs(const std::string &propval);
 
-    void openPropCallback(const Neon::URI &uri,
+    void openPropCallback(Props_t &davProps,
+                          const Neon::URI &uri,
                           const ne_propname *prop,
                           const char *value,
                           const ne_status *status);
@@ -272,7 +297,7 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
      * other, unrelated collections (a CalDAV collection must not
      * contain a CardDAV collection, for example)
      */
-    bool ignoreCollection(const StringMap &props) const;
+    bool isLeafCollection(const StringMap &props) const;
 
  protected:
     /**

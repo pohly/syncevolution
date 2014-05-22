@@ -1,0 +1,73 @@
+BEGIN:VCARD
+VERSION:3.0
+UID:pas-id-5363657E0000002F
+PRODID:-//Synthesis AG//NONSGML SyncML Engine V3.4.0.47//EN
+REV:20140502T092918Z
+N:Doe;John;1;Mr.;Sr.
+FN:Mr. John 1 Doe Sr.
+X-EVOLUTION-FILE-AS:Doe\, John
+NICKNAME:Johnny
+TITLE:tester
+ORG:at company;;;
+TEL;TYPE=WORK,VOICE:business 1
+TEL;TYPE=CELL:mobile
+TEL;TYPE=HOME,VOICE:home
+TEL:main
+TEL;TYPE=WORK,FAX:work fax
+TEL;TYPE=HOME,FAX:home fax
+TEL;TYPE=PAGER:pager
+TEL;X-ABLabel="Google Voice":google voice
+TEL;X-ABLabel="custom-label4":custom
+EMAIL;TYPE=HOME:john.doe@home.com
+EMAIL;TYPE=WORK:doe@work.com
+EMAIL;X-ABLabel="custom-label2":john@custom.com
+URL;X-ABLabel=Profile:http://profile.com
+URL;X-ABLabel=Blog:http://blog.com
+URL;X-ABLabel=HomePage:http://homepage.com
+URL;X-ABLabel=Work:http://company.com
+URL;X-ABLabel="Custom-label6 Backslash ":http://custom.com
+X-EVOLUTION-MANAGER:manager
+X-EVOLUTION-ASSISTANT:assistant
+X-ABRELATEDNAMES;X-ABLabel=Child:child
+X-ABRELATEDNAMES;X-ABLabel=Mother:mother
+X-ABRELATEDNAMES;X-ABLabel=Father:father
+X-ABRELATEDNAMES;X-ABLabel=Parent:parent
+X-ABRELATEDNAMES;X-ABLabel=Brother:brother
+X-ABRELATEDNAMES;X-ABLabel=Sister:sister
+X-ABRELATEDNAMES;X-ABLabel=Friend:friend
+X-ABRELATEDNAMES;X-ABLabel=relative:relative
+X-ABRELATEDNAMES;X-ABLabel="referred-by-label":referred-by
+X-ABRELATEDNAMES;X-ABLabel=Partner:partner
+X-ABRELATEDNAMES;X-ABLabel="domestic-partner-label":domestic partner
+X-ABRELATEDNAMES;X-ABLabel="custom-label5 Umlaut ä Semicolon ; Backslash \ newline  tab	end of label":custom relationship
+X-EVOLUTION-SPOUSE:spouse
+X-EVOLUTION-ANNIVERSARY:19710101
+X-ABDATE;X-ABLabel="custom-label3":20000201
+IMPP;X-SERVICE-TYPE=GoogleTalk:xmpp:google%20talk
+IMPP;X-SERVICE-TYPE=QQ:x-apple:QQ
+IMPP;X-SERVICE-TYPE="Chat-label":x-apple:custom%20chat
+X-AIM:aim
+X-ICQ:ICQ
+X-YAHOO:yahoo
+X-SKYPE:skype
+X-MSN:MSN
+X-JABBER:Jabber
+X-MOZILLA-HTML:FALSE
+ADR;TYPE=HOME:PO;neighborhood;home address\n;City;State;ZIP;Country
+ADR;TYPE=WORK:;;work address;;;;
+ADR:;;custom address;;;;
+BDAY:19701230
+NOTE:A test contact.
+PHOTO;TYPE=png;ENCODING=b:iVBORw0KGgoAAAANSUhEUgAAACQAAAAXCAYAAABj7u2bAAAAB
+ mJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH1gEICjgdiWkBOQA
+ AAB10RVh0Q29tbWVudABDcmVhdGVkIHdpdGggVGhlIEdJTVDvZCVuAAABaElEQVRIx+3Wu0tcU
+ RAG8F98gRKTYGORRqwksJV/QOqFFIFgKgsRYbHV1larDQQCKQxpUscyhUmXJuCSNpYWPsAU6wP
+ xHW6aWbgsu+ve3RUs7geHc+fON3O+M4c5HHLkyHG/eISkg5heIGmUr++hVWigyY6THlejbWSt0
+ Bv8QBXX2MF7jKU4IyjjJ45xg31sYKZuw7Xv9Gh6vvXO9QbBtbGNJ8Ert+AlTURkFjQX9g5e4yk
+ GUcBm+FaDexx2MUQOYhIL2Lpj09oV9CvsQgPuePj+hP037BL6M6yRSdDZHWVOcBHcEv7FvyN8x
+ xqmeynovA1Baf4UVvANhyn/Uq8E/Q57ssNufhvx1QZrDHfS9p9i3sQsnscdNowXWEQlOBXMYyI
+ 4j3EavqFUzpOYl4OTqUJ9+NzmkbXyb6Ryfumm7Wso4it2cYXL6K6PeBmcV8E5iEvxPDjv8CyVa
+ xQfsIfbqGIlf17k6Bb/Ae0cnahfg6KuAAAAAElFTkSuQmCC
+X-PHONETIC-FIRST-NAME:John
+X-PHONETIC-LAST-NAME:Doe
+END:VCARD

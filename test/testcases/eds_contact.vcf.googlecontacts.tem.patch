@@ -1,22 +1,22 @@
-@@ -1,7 +1,6 @@
- BEGIN:VCARD
+@@ -2,7 +2,6 @@
  VERSION:3.0
+ UID:unique-id-user17
  NICKNAME:user17
 -NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
  FN:parserbug=
  N:parserbug=;;;;
  X-EVOLUTION-FILE-AS:parserbug=
-@@ -10,7 +9,6 @@
- BEGIN:VCARD
+@@ -12,7 +11,6 @@
  VERSION:3.0
+ UID:unique-id-user16
  NICKNAME:user16
 -NOTE:test case with empty email
  FN:incomplete
  N:incomplete;;;;
  EMAIL:
-@@ -20,10 +18,6 @@
- BEGIN:VCARD
+@@ -23,10 +21,6 @@
  VERSION:3.0
+ UID:unique-id-user11
  NICKNAME:user11
 -NOTE:This is a long line without any special characters. This is a simpler 
 - example that should require folding in vcards. Does folding insert a crlf
@@ -25,42 +25,43 @@
  FN:long line
  N:line;long;;;
  X-EVOLUTION-FILE-AS:line\, long
-@@ -32,7 +26,6 @@
- BEGIN:VCARD
+@@ -36,7 +30,6 @@
  VERSION:3.0
+ UID:unique-id-user12
  NICKNAME:user12
 -NOTE:ampersand entity &amp\; less-than entity &lt\;
  FN:xml entities
  N:xml;entities;;;
  X-EVOLUTION-FILE-AS:xml\, entities
-@@ -41,7 +34,6 @@
- BEGIN:VCARD
+@@ -46,7 +39,6 @@
  VERSION:3.0
+ UID:unique-id-user13
  NICKNAME:user13
 -NOTE:a colon is not a special character so here it comes : and not quoting necessary
  FN:colon
  N:colon;unquoted;;;
  X-EVOLUTION-FILE-AS:colon\, unquoted
-@@ -50,7 +42,6 @@
- BEGIN:VCARD
+@@ -56,7 +48,6 @@
  VERSION:3.0
+ UID:unique-id-user14
  NICKNAME:user14
 -NOTE:here are some quotation marks: single ' double " back ` - none of them is special
  FN:quotation marks
  N:marks;quotation;;;
  X-EVOLUTION-FILE-AS:marks\, quotation
-@@ -59,7 +50,6 @@
- BEGIN:VCARD
+@@ -66,7 +57,6 @@
  VERSION:3.0
+ UID:unique-id-user15
  NICKNAME:user15
 -NOTE:Spouse's Name: foobar
  FN:spouse name
  N:name;spouse;;;
  X-EVOLUTION-FILE-AS:spouse\, name
-@@ -67,15 +57,6 @@
+@@ -74,16 +64,6 @@
  
  BEGIN:VCARD
  VERSION:3.0
+-UID:unique-id-user9
 -NICKNAME:user9
 -NOTE;CHARSET="UTF-8":Tests charset specification with quotation marks.
 -FN:charset
@@ -73,8 +74,8 @@
  URL:
  TITLE:
  ROLE:
-@@ -83,19 +64,9 @@
- X-EVOLUTION-ASSISTANT:
+@@ -92,19 +72,9 @@
+ UID:unique-id-user2
  NICKNAME:user2
  X-EVOLUTION-SPOUSE:
 -NOTE:This user tests some of the advanced aspects of vcards:\n- non-ASCII c
@@ -93,16 +94,16 @@
  X-EVOLUTION-BLOG-URL:
  CALURI:
  FBURL:
-@@ -115,7 +86,6 @@
- X-EVOLUTION-ASSISTANT:
+@@ -124,7 +94,6 @@
+ UID:unique-id-user8
  NICKNAME:user8
  X-EVOLUTION-SPOUSE:
 -NOTE:Here are some special characters: comma \, colon : semicolon \;
  FN:special characters
  N:characters;special;;;
  X-EVOLUTION-FILE-AS:characters\, special
-@@ -136,9 +106,6 @@
- X-EVOLUTION-ASSISTANT:
+@@ -145,9 +114,6 @@
+ UID:unique-id-user7
  NICKNAME:user7
  X-EVOLUTION-SPOUSE:
 -NOTE:This test case uses line breaks. This is line 1.\nLine 2.\n\nLine brea
@@ -111,7 +112,7 @@
  FN:line breaks
  N:breaks;line;;;
  X-EVOLUTION-FILE-AS:breaks\, line
-@@ -154,10 +121,8 @@
+@@ -162,10 +128,8 @@
  
  BEGIN:VCARD
  VERSION:3.0
@@ -122,8 +123,8 @@
 +ORG:Test Inc.;Testing
  X-EVOLUTION-MANAGER:John Doe Senior
  X-EVOLUTION-ASSISTANT:John Doe Junior
- NICKNAME:user1
-@@ -166,15 +131,10 @@
+ UID:unique-id-user1
+@@ -175,15 +139,10 @@
  X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
@@ -139,40 +140,40 @@
  X-EVOLUTION-VIDEO-URL:chat
  X-MOZILLA-HTML:TRUE
  ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
-@@ -221,7 +181,6 @@
- X-EVOLUTION-ASSISTANT:
+@@ -230,7 +189,6 @@
+ UID:unique-id-user5
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
 -NOTE:image in JPG format
  FN:Ms. JPG
  N:;JPG;;Ms.;
  X-EVOLUTION-FILE-AS:JPG
-@@ -257,7 +216,6 @@
- X-EVOLUTION-ASSISTANT:
+@@ -266,7 +224,6 @@
+ UID:unique-id-user4
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
 -NOTE:image in PNG format
  FN:Mrs. PNG
  N:;PNG;;Mrs.;
  X-EVOLUTION-FILE-AS:PNG
-@@ -288,7 +246,6 @@
- X-EVOLUTION-ASSISTANT:
+@@ -297,7 +254,6 @@
+ UID:unique-id-user6
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
 -NOTE:The first name is "First \; special \;".
  FN:Mr. First \; special \; middle Last
  N:Last;First \; special \;;middle;Mr.;
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
-@@ -309,7 +266,6 @@
- X-EVOLUTION-ASSISTANT:
+@@ -318,7 +274,6 @@
+ UID:unique-id-user3
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
 -NOTE:image in GIF format
  FN:Mr. GIF
  N:;GIF;;Mr.;
  X-EVOLUTION-FILE-AS:GIF
-@@ -329,107 +285,6 @@
- VERSION:3.0
+@@ -338,107 +293,6 @@
+ UID:unique-id-user10
  NICKNAME:user10
  X-EVOLUTION-SPOUSE:
 -NOTE:large vcard with plenty of special chars < & < & < & < & < & < & < & <

@@ -1,0 +1,6 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:simple contact
+N:contact;simple;;;
+UID:foo-bar-1234
+END:VCARD

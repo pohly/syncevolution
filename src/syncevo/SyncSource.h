@@ -283,6 +283,13 @@ struct ClientTestConfig {
     boost::function<std::string (const std::string &data, bool update, const std::string &uniqueUIDSuffix)> m_mangleItem;
 
     /**
+     * Items have a UID which really has to be unique among all items
+     * in the database. True for iCalendar 2.0, false for vCard 3.0
+     * (there is a UID, but its uniqueness is not enforced).
+     */
+    bool m_uniqueID;
+
+    /**
      * A very simple item that is inserted during basic tests. Ideally
      * it only contains properties supported by all servers.
      */
@@ -668,32 +675,6 @@ enum OperationExecution {
 };
 
 /**
- * Implements the "call all slots, error if any failed" semantic of
- * the pre- and post-signals described below.
- */
-class OperationSlotInvoker {
- public:
-    typedef sysync::TSyError result_type;
-    template<typename InputIterator>
-        result_type operator() (InputIterator first, InputIterator last) const
-        {
-            result_type res = sysync::LOCERR_OK;
-            while (first != last) {
-                try {
-                    *first;
-                } catch (...) {
-                    SyncMLStatus status = Exception::handle();
-                    if (res == sysync::LOCERR_OK) {
-                        res = static_cast<result_type>(status);
-                    }
-                }
-                ++first;
-            }
-            return res;
-        }
-};
-
-/**
  * Helper class for looking up a pending operation by a Synthesis parameter.
  * KeyH (add, replace) and item ID (delete) are supported.
  */
@@ -734,6 +715,62 @@ template <class F> class ContinueOperation : public boost::function<F>
         boost::function<F>(callback)
     {}
 };
+
+/**
+ * Interface expected by SyncSourceBase helper class.
+ * Needed to break a cyclic dependency.
+ */
+class SyncSourceName
+{
+ public:
+    /**
+     * the name of the sync source (for example, "addressbook"),
+     * unique in the context of its own configuration
+     **/
+    virtual std::string getName() const { return "uninitialized SyncSourceBase"; }
+
+    /**
+     * the name of the sync source as it should be displayed to users
+     * in debug messages; typically the same as getName(), but may
+     * also include a context ("@foobar/addressbook") to disambiguate
+     * the name when "addressbook" is used multiple times in a sync (as
+     * with local sync)
+     */
+    virtual std::string getDisplayName() const { return "uninitialized SyncSourceBase"; }
+};
+
+/**
+ * Implements the "call all slots, error if any failed" semantic of
+ * the pre- and post-signals described below.
+ */
+class OperationSlotInvoker {
+    SyncSourceName &m_source;
+
+ public:
+    OperationSlotInvoker(SyncSourceName &source) :
+        m_source(source)
+    {}
+
+    typedef sysync::TSyError result_type;
+    template<typename InputIterator>
+        result_type operator() (InputIterator first, InputIterator last) const
+        {
+            result_type res = sysync::LOCERR_OK;
+            while (first != last) {
+                try {
+                    *first;
+                } catch (...) {
+                    SyncMLStatus status = Exception::handle(m_source.getDisplayName());
+                    if (res == sysync::LOCERR_OK) {
+                        res = static_cast<result_type>(status);
+                    }
+                }
+                ++first;
+            }
+            return res;
+        }
+};
+
 
 /**
  * Helper class, needs to be specialized based on number of parameters
@@ -780,11 +817,11 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
      * invokes signals and implementation of operation,
      * combines all return codes into one
      */
-    sysync::TSyError operator () (SyncSource &source) const throw ()
+    sysync::TSyError operator () () const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
-        res = m_pre(source);
+        res = m_pre(dynamic_cast<SyncSource &>(m_source));
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -793,7 +830,7 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
                     res = m_operation();
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                     exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -801,7 +838,7 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
                 exec = OPERATION_EMPTY;
             }
         }
-        sysync::TSyError newres = m_post(source, exec, res);
+        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res);
         if (newres != sysync::LOCERR_OK) {
             res = newres;
         }
@@ -817,10 +854,19 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
 };
@@ -837,12 +883,11 @@ template<class F> class OperationWrapperSwitch<F, 1, sysync::TSyError>
                                           arg1_type a1),
         OperationSlotInvoker> PostSignal;
 
-    sysync::TSyError operator () (SyncSource &source,
-                                  arg1_type a1) const throw ()
+    sysync::TSyError operator () (arg1_type a1) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
-        res = m_pre(source, a1);
+        res = m_pre(dynamic_cast<SyncSource &>(m_source), a1);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -851,7 +896,7 @@ template<class F> class OperationWrapperSwitch<F, 1, sysync::TSyError>
                     res = m_operation(a1);
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                     exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -859,7 +904,7 @@ template<class F> class OperationWrapperSwitch<F, 1, sysync::TSyError>
                 exec = OPERATION_EMPTY;
             }
         }
-        sysync::TSyError newres = m_post(source, exec, res, a1);
+        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1);
         if (newres != sysync::LOCERR_OK) {
             res = newres;
         }
@@ -869,10 +914,18 @@ template<class F> class OperationWrapperSwitch<F, 1, sysync::TSyError>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
 };
@@ -892,8 +945,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
     typedef ContinueOperation<sysync::TSyError (arg1_type)> Continue;
     typedef std::map<typename Converter::key_type, Continue> Pending;
 
-    sysync::TSyError operator () (SyncSource &source,
-                                  arg1_type a1) const throw ()
+    sysync::TSyError operator () (arg1_type a1) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
@@ -902,7 +954,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
         typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
         bool continuing = it != m_pending.end();
 
-        res = continuing ? sysync::LOCERR_OK : m_pre(source, a1);
+        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -924,7 +976,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
                     }
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                     exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -933,7 +985,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
             }
         }
         if (res != sysync::LOCERR_AGAIN) {
-            sysync::TSyError newres = m_post(source, exec, res, a1);
+            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1);
             if (newres != sysync::LOCERR_OK) {
                 res = newres;
             }
@@ -944,10 +996,18 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
     Pending m_pending;
@@ -966,12 +1026,11 @@ template<class F> class OperationWrapperSwitch<F, 2, sysync::TSyError>
                                           arg1_type a1, arg2_type a2),
         OperationSlotInvoker> PostSignal;
 
-    sysync::TSyError operator () (SyncSource &source,
-                                  arg1_type a1, arg2_type a2) const throw ()
+    sysync::TSyError operator () (arg1_type a1, arg2_type a2) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
-        res = m_pre(source, a1, a2);
+        res = m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -980,7 +1039,7 @@ template<class F> class OperationWrapperSwitch<F, 2, sysync::TSyError>
                     res = m_operation(a1, a2);
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                     exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -988,7 +1047,7 @@ template<class F> class OperationWrapperSwitch<F, 2, sysync::TSyError>
                 exec = OPERATION_EMPTY;
             }
         }
-        sysync::TSyError newres = m_post(source, exec, res, a1, a2);
+        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2);
         if (newres != sysync::LOCERR_OK) {
             res = newres;
         }
@@ -998,10 +1057,18 @@ template<class F> class OperationWrapperSwitch<F, 2, sysync::TSyError>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
 };
@@ -1022,8 +1089,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 2, V>
     typedef ContinueOperation<sysync::TSyError (arg1_type, arg2_type)> Continue;
     typedef std::map<typename Converter::key_type, Continue> Pending;
 
-    sysync::TSyError operator () (SyncSource &source,
-                                  arg1_type a1, arg2_type a2) const throw ()
+    sysync::TSyError operator () (arg1_type a1, arg2_type a2) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
@@ -1032,7 +1098,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 2, V>
         typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
         bool continuing = it != m_pending.end();
 
-        res = continuing ? sysync::LOCERR_OK : m_pre(source, a1, a2);
+        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -1054,7 +1120,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 2, V>
                     }
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                     exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -1063,7 +1129,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 2, V>
             }
         }
         if (res != sysync::LOCERR_AGAIN) {
-            sysync::TSyError newres = m_post(source, exec, res, a1, a2);
+            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2);
             if (newres != sysync::LOCERR_OK) {
                 res = newres;
             }
@@ -1074,10 +1140,18 @@ template<class F, class V> class OperationWrapperSwitch<F, 2, V>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
     Pending m_pending;
@@ -1097,12 +1171,11 @@ template<class F> class OperationWrapperSwitch<F, 3, sysync::TSyError>
                                           arg1_type a1, arg2_type a2, arg3_type a3),
         OperationSlotInvoker> PostSignal;
 
-    sysync::TSyError operator () (SyncSource &source,
-                                  arg1_type a1, arg2_type a2, arg3_type a3) const throw ()
+    sysync::TSyError operator () (arg1_type a1, arg2_type a2, arg3_type a3) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
-        res = m_pre(source, a1, a2, a3);
+        res = m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2, a3);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -1111,7 +1184,7 @@ template<class F> class OperationWrapperSwitch<F, 3, sysync::TSyError>
                     res = m_operation(a1, a2, a3);
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                         exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -1119,7 +1192,7 @@ template<class F> class OperationWrapperSwitch<F, 3, sysync::TSyError>
                 exec = OPERATION_EMPTY;
             }
         }
-        sysync::TSyError newres = m_post(source, exec, res, a1, a2, a3);
+        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2, a3);
         if (newres != sysync::LOCERR_OK) {
             res = newres;
         }
@@ -1129,10 +1202,18 @@ template<class F> class OperationWrapperSwitch<F, 3, sysync::TSyError>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
 
@@ -1155,8 +1236,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 3, V>
     typedef ContinueOperation<sysync::TSyError (arg1_type, arg2_type, arg3_type)> Continue;
     typedef std::map<typename Converter::key_type, Continue> Pending;
 
-    sysync::TSyError operator () (SyncSource &source,
-                                  arg1_type a1, arg2_type a2, arg3_type a3) const throw ()
+    sysync::TSyError operator () (arg1_type a1, arg2_type a2, arg3_type a3) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
@@ -1165,7 +1245,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 3, V>
         typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
         bool continuing = it != m_pending.end();
 
-        res = continuing ? sysync::LOCERR_OK : m_pre(source, a1, a2, a3);
+        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2, a3);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
@@ -1187,7 +1267,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 3, V>
                     }
                     exec = OPERATION_FINISHED;
                 } catch (...) {
-                    res = Exception::handle(/* source */);
+                    res = Exception::handle(m_source.getDisplayName());
                     exec = OPERATION_EXCEPTION;
                 }
             } else {
@@ -1196,7 +1276,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 3, V>
             }
         }
         if (res != sysync::LOCERR_AGAIN) {
-            sysync::TSyError newres = m_post(source, exec, res, a1, a2, a3);
+            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2, a3);
             if (newres != sysync::LOCERR_OK) {
                 res = newres;
             }
@@ -1207,10 +1287,18 @@ template<class F, class V> class OperationWrapperSwitch<F, 3, V>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
+    OperationWrapperSwitch(SyncSourceName &source) :
+        m_source(source),
+        m_pre(OperationSlotInvoker(source)),
+        m_post(OperationSlotInvoker(source))
+    {
+    }
+
  protected:
     OperationType m_operation;
 
  private:
+    SyncSourceName &m_source;
     PreSignal m_pre;
     PostSignal m_post;
     Pending m_pending;
@@ -1247,6 +1335,8 @@ public OperationWrapperSwitch<F, boost::function<F>::arity, typename boost::func
 {
     typedef OperationWrapperSwitch<F, boost::function<F>::arity, typename boost::function<F>::result_type> inherited;
  public:
+    OperationWrapper(SyncSourceName &source): inherited(source) {}
+
     /** operation implemented? */
     operator bool () const { return inherited::m_operation; }
 
@@ -1269,24 +1359,9 @@ public OperationWrapperSwitch<F, boost::function<F>::arity, typename boost::func
  * this base via different intermediate classes, therefore the
  * need to keep it abstract.
  */
-class SyncSourceBase {
+class SyncSourceBase : public SyncSourceName {
  public:
     virtual ~SyncSourceBase() {}
-
-    /**
-     * the name of the sync source (for example, "addressbook"),
-     * unique in the context of its own configuration
-     **/
-    virtual std::string getName() const { return "uninitialized SyncSourceBase"; }
-
-    /**
-     * the name of the sync source as it should be displayed to users
-     * in debug messages; typically the same as getName(), but may
-     * also include a context ("@foobar/addressbook") to disambiguate
-     * the name when "addressbook" is used multiple times in a sync (as
-     * with local sync)
-     */
-    virtual std::string getDisplayName() const { return "uninitialized SyncSourceBase"; }
 
     /**
      * Convenience function, to be called inside a catch() block of
@@ -1308,7 +1383,7 @@ class SyncSourceBase {
      * @param action   a string describing the operation or object involved
      * @param error    the errno error code for the failure
      */
-    void throwError(const string &action, int error) SE_NORETURN;
+    void throwError(const SourceLocation &where, const string &action, int error) SE_NORETURN;
 
     /**
      * throw an exception after an operation failed and
@@ -1318,7 +1393,7 @@ class SyncSourceBase {
      *
      * @param action     a string describing what was attempted *and* how it failed
      */
-    void throwError(const string &failure) SE_NORETURN;
+    void throwError(const SourceLocation &where, const string &failure) SE_NORETURN;
 
     /**
      * throw an exception with a specific status code after an operation failed and
@@ -1329,7 +1404,7 @@ class SyncSourceBase {
      * @param status     a more specific status code; other throwError() variants use STATUS_FATAL
      * @param action     a string describing what was attempted *and* how it failed
      */
-    void throwError(SyncMLStatus status, const string &failure) SE_NORETURN;
+    void throwError(const SourceLocation &where, SyncMLStatus status, const string &failure) SE_NORETURN;
 
     /**
      * The Synthesis engine only counts items which are deleted by the
@@ -1409,6 +1484,8 @@ class SyncSourceBase {
      * post-signals managed by OperationWrapper.
      */
     struct Operations {
+        Operations(SyncSourceName &source);
+
         /**
          * The caller determines where item data is stored (m_dirname)
          * and where meta information about them (m_node). The callee
@@ -1825,11 +1902,12 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     static TestRegistry &getTestRegistry();
 
     struct Database {
-    Database(const string &name, const string &uri, bool isDefault = false) :
-        m_name( name ), m_uri( uri ), m_isDefault(isDefault) {}
+    Database(const string &name, const string &uri, bool isDefault = false, bool isReadOnly = false) :
+        m_name( name ), m_uri( uri ), m_isDefault(isDefault), m_isReadOnly(isReadOnly) {}
         string m_name;
         string m_uri;
         bool m_isDefault;
+        bool m_isReadOnly;
     };
     typedef vector<Database> Databases;
     
@@ -1848,7 +1926,7 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      *                     a specific URI.
      * @return description of the new database
      */
-    virtual Database createDatabase(const Database &database) { throwError("creating databases is not supported by backend " + getBackend()); return Database("", ""); }
+    virtual Database createDatabase(const Database &database) { throwError(SE_HERE, "creating databases is not supported by backend " + getBackend()); return Database("", ""); }
 
     /**
      * Removing a database primarily removes the meta data about the
@@ -1870,7 +1948,7 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * @param uri              unique identifier for the database
      * @param removeData       describes what to do about the database content
      */
-    virtual void deleteDatabase(const std::string &uri, RemoveData removeData) { throwError("deleting databases is not supported by backend " + getBackend()); }
+    virtual void deleteDatabase(const std::string &uri, RemoveData removeData) { throwError(SE_HERE, "deleting databases is not supported by backend " + getBackend()); }
 
     /**
      * Actually opens the data source specified in the constructor,

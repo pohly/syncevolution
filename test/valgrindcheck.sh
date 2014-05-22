@@ -59,7 +59,7 @@ killvalgrind () {
         if ps --no-headers ww $pid; then
             for signal in $signals; do
                 echo "valgrind.sh: killing forked process $pid with signal $signal"
-                kill -$signal $pid 2>&1 | grep -v 'No such process'
+                LC_ALL=C kill -$signal $pid 2>&1 | grep -v 'No such process'
             done
         fi
     done

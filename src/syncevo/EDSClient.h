@@ -140,7 +140,7 @@ class EDSRegistryLoader : private boost::noncopyable
             return m_registry;
         }
         if (m_gerror) {
-            m_gerror.throwError("creating source registry");
+            m_gerror.throwError(SE_HERE, "creating source registry");
         }
         return m_registry;
     }

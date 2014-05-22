@@ -1,20 +1,20 @@
-@@ -2,7 +2,6 @@
- VERSION:3.0
+@@ -3,7 +3,6 @@
+ UID:unique-id-user17
  NICKNAME:user17
  NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
 -FN:parserbug=
  N:parserbug=;;;;
  X-EVOLUTION-FILE-AS:parserbug=
  END:VCARD
-@@ -11,7 +10,6 @@
- VERSION:3.0
+@@ -13,7 +12,6 @@
+ UID:unique-id-user16
  NICKNAME:user16
  NOTE:test case with empty email
 -FN:incomplete
  N:incomplete;;;;
  EMAIL:
  X-EVOLUTION-FILE-AS:incomplete
-@@ -24,7 +22,6 @@
+@@ -27,7 +25,6 @@
   example that should require folding in vcards. Does folding insert a crlf
    before a space or does it insert crlf _plus_ a space? vCard 2.1 inserts 
   before a space\, 3.0 inserts line break plus space.
@@ -22,33 +22,33 @@
  N:line;long;;;
  X-EVOLUTION-FILE-AS:line\, long
  END:VCARD
-@@ -33,7 +30,6 @@
- VERSION:3.0
+@@ -37,7 +34,6 @@
+ UID:unique-id-user12
  NICKNAME:user12
  NOTE:ampersand entity &amp\; less-than entity &lt\;
 -FN:xml entities
  N:xml;entities;;;
  X-EVOLUTION-FILE-AS:xml\, entities
  END:VCARD
-@@ -42,7 +38,6 @@
- VERSION:3.0
+@@ -47,7 +43,6 @@
+ UID:unique-id-user13
  NICKNAME:user13
  NOTE:a colon is not a special character so here it comes : and not quoting necessary
 -FN:colon
  N:colon;unquoted;;;
  X-EVOLUTION-FILE-AS:colon\, unquoted
  END:VCARD
-@@ -51,7 +46,6 @@
- VERSION:3.0
+@@ -57,7 +52,6 @@
+ UID:unique-id-user14
  NICKNAME:user14
  NOTE:here are some quotation marks: single ' double " back ` - none of them is special
 -FN:quotation marks
  N:marks;quotation;;;
  X-EVOLUTION-FILE-AS:marks\, quotation
  END:VCARD
-@@ -59,17 +53,16 @@
- BEGIN:VCARD
+@@ -66,10 +60,10 @@
  VERSION:3.0
+ UID:unique-id-user15
  NICKNAME:user15
 -NOTE:Spouse's Name: foobar
 -FN:spouse name
@@ -61,14 +61,15 @@
  END:VCARD
  
  BEGIN:VCARD
- VERSION:3.0
+@@ -77,7 +71,6 @@
+ UID:unique-id-user9
  NICKNAME:user9
  NOTE;CHARSET="UTF-8":Tests charset specification with quotation marks.
 -FN:charset
  N:set;char;;;
  X-EVOLUTION-FILE-AS:set\, char
  END:VCARD
-@@ -92,8 +85,7 @@
+@@ -101,8 +94,7 @@
   \\\n\nThe same\, in the middle of a line:\ncomma \, comma\ncolon : col
   on\nsemicolon \; semicolon\nbackslash \\ backslash\n\nA tab 	tab done\n	
   line starts with tab
@@ -78,16 +79,16 @@
  X-EVOLUTION-FILE-AS:Ü\, Ä
  CATEGORIES:Business
  X-EVOLUTION-BLOG-URL:
-@@ -101,7 +93,7 @@
+@@ -110,7 +102,7 @@
  FBURL:
  X-EVOLUTION-VIDEO-URL:
  X-MOZILLA-HTML:FALSE
 -ADR;TYPE=HOME:test 5;Line 2;Umlaut Ä in Line 1;test 1;test 3;test 2;test 4
 +ADR;TYPE=HOME:;;Umlaut Ä in Line 1;test 1;test 3;test 2;test 4
  LABEL;TYPE=HOME:Umlaut Ä in Line 1\nLine 2\n\ntest 1\, test 3\ntest 2\ntest 5\ntest 4
- UID:pas-id-43C0EF0A00000002
  END:VCARD
-@@ -116,7 +108,6 @@
+ 
+@@ -125,7 +117,6 @@
  NICKNAME:user8
  X-EVOLUTION-SPOUSE:
  NOTE:Here are some special characters: comma \, colon : semicolon \;
@@ -95,7 +96,7 @@
  N:characters;special;;;
  X-EVOLUTION-FILE-AS:characters\, special
  X-EVOLUTION-BLOG-URL:
-@@ -139,7 +130,6 @@
+@@ -148,7 +139,6 @@
  NOTE:This test case uses line breaks. This is line 1.\nLine 2.\n\nLine brea
   ks in vcard 2.1 are encoded as =0D=0A.\nThat means the = has to be encod
   ed itself...
@@ -103,16 +104,16 @@
  N:breaks;line;;;
  X-EVOLUTION-FILE-AS:breaks\, line
  X-EVOLUTION-BLOG-URL:
-@@ -147,7 +137,7 @@
+@@ -156,7 +146,7 @@
  FBURL:
  X-EVOLUTION-VIDEO-URL:
  X-MOZILLA-HTML:FALSE
 -ADR;TYPE=HOME:;Address Line 2\nAddress Line 3;Address Line 1;;;;
 +ADR;TYPE=HOME:;;Address Line 1\nAddress Line 2;;;;
  LABEL;TYPE=HOME:Address Line 1\nAddress Line 2\nAddress Line 3
- UID:pas-id-43C15DFB000001AB
  END:VCARD
-@@ -167,49 +157,32 @@
+ 
+@@ -176,48 +166,31 @@
  X-EVOLUTION-ANNIVERSARY:2006-01-09
  X-EVOLUTION-SPOUSE:Joan Doe
  NOTE:This is a test case which uses almost all Evolution fields.
@@ -139,7 +140,6 @@
 -ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
 -LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
 -  #3\nNew Testonia
- UID:pas-id-43C0ED3900000001
 -EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
 -EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
 -EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
@@ -177,7 +177,7 @@
  END:VCARD
  
  BEGIN:VCARD
-@@ -222,8 +195,7 @@
+@@ -231,8 +204,7 @@
  NICKNAME:user5
  X-EVOLUTION-SPOUSE:
  NOTE:image in JPG format
@@ -187,7 +187,7 @@
  X-EVOLUTION-FILE-AS:JPG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -258,8 +230,7 @@
+@@ -267,8 +239,7 @@
  NICKNAME:user4
  X-EVOLUTION-SPOUSE:
  NOTE:image in PNG format
@@ -197,7 +197,7 @@
  X-EVOLUTION-FILE-AS:PNG
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -289,8 +260,7 @@
+@@ -298,8 +269,7 @@
  NICKNAME:user6
  X-EVOLUTION-SPOUSE:
  NOTE:The first name is "First \; special \;".
@@ -207,7 +207,7 @@
  X-EVOLUTION-FILE-AS:Last\, First \; special \;
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -310,8 +280,7 @@
+@@ -319,8 +289,7 @@
  NICKNAME:user3
  X-EVOLUTION-SPOUSE:
  NOTE:image in GIF format
@@ -217,7 +217,7 @@
  X-EVOLUTION-FILE-AS:GIF
  X-EVOLUTION-BLOG-URL:
  CALURI:
-@@ -430,7 +399,6 @@
+@@ -439,7 +408,6 @@
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <
    & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & < & <

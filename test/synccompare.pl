@@ -76,6 +76,7 @@ my $nokia_7210c = $server =~ /nokia_7210c/;
 my $ovi = $server =~ /Ovi/;
 my $unique_uid = $ENV{CLIENT_TEST_UNIQUE_UID};
 my $full_timezones = $ENV{CLIENT_TEST_FULL_TIMEZONES}; # do not simplify VTIMEZONE definitions
+my $no_timezones =  $ENV{CLIENT_TEST_NO_TIMEZONES};
 
 # TODO: this hack ensures that any synchronization is limited to
 # properties supported by Synthesis. Remove this again.
@@ -209,8 +210,53 @@ sub NormalizeItem {
     # make TYPE uppercase (in vCard 3.0 at least those parameters are case-insensitive)
     while( s/^(\w*[^:\n]*);TYPE=(\w*?[a-z]\w*?)([;:])/ $1 . ";TYPE=" . uppercase($2) . $3 /mge ) {}
 
-    # replace parameters with a sorted parameter list
-    s!^([^;:\n]*);(.*?):!$1 . ";" . join(';',sort(split(/;/, $2))) . ":"!meg;
+    # Replace parameters with a sorted parameter list. Cannot be done with
+    # a regular expression because of quoted strings. While we know exact
+    # parameter values, normalize them to use quoted strings if and only
+    # if the content is more complex than alphanumeric plus underscore and
+    # hyphen.
+    my @lines;
+    my ($propname, $sep, $rest);
+    foreach (split /\n/) {
+        ($propname, $sep, $rest) = /^([^;:]+)([:;])(.*)/;
+        if ($sep eq ";") {
+            my @params;
+            my $c;
+            my $i = 0;
+            my $n = length($rest);
+            my $quoted = 0;
+            my $start = 0;
+            while ($i < $n) {
+                $c = substr($rest, $i, 1);
+                $i++;
+                if ($quoted) {
+                    if ($c eq '"') {
+                        $quoted = 0;
+                    }
+                } else {
+                    if ($c eq '"') {
+                        $quoted = 1;
+                    } elsif ($c eq ';' || $c eq ':') {
+                        my $param = substr($rest, $start, $i - $start - 1);
+                        my ($name, $value) = $param =~ /^([^=]*)="?([^"]*)"?$/;
+                        if ($value =~ /^[a-zA-Z0-9_-]*$/) {
+                            $param = $name . '=' . $value;
+                        } else {
+                            $param = $name . '="' . $value . '"';
+                        }
+                        push @params, $param;
+                        $start = $i;
+                        if ($c eq ':') {
+                            last;
+                        }
+                    }
+                }
+            }
+            $_ = $propname . ';' . join(";", sort(@params)) . ':' . substr($rest, $start);
+        }
+        push @lines, $_;
+    }
+    $_ = join("\n", @lines);
 
     # VALUE=DATE is the default, no need to show it
     s/^(EXDATE|BDAY);VALUE=DATE:/\1:/mg;
@@ -327,11 +373,13 @@ sub NormalizeItem {
     # added by Google CalDAV server when storing an all-day event
     # which doesn't need any time zone definition)
     # http://code.google.com/p/google-caldav-issues/issues/detail?id=63
+    #
+    # Also strip all definitions if requested.
     while (m/(BEGIN:VTIMEZONE.*?TZID:([^\n]*)\n.*?END:VTIMEZONE\n)/gs) {
         my $def = $1;
         my $tzid = $2;
-        # used as parameter?
-        if (! m/;TZID="?\Q$tzid\E"?/) {
+        # Strip all, or not used as parameter?
+        if ($no_timezones || ! m/;TZID="?\Q$tzid\E"?/) {
             # no, remove definition
             s!\Q$def\E!!s;
         }
@@ -419,14 +467,9 @@ sub NormalizeItem {
       s/^FN:.*\n/FN$1: [...]\n/mg;
    }
 
-   if ($googlecarddav) {
-       # Adds .X-ABLabel to URL, TEL, etc. to represent custom
-       # labels. TODO: support that in SyncEvolution
-       s/^.*\.X-ABLabel(;[^:;\n]*)*:.*\r?\n?//mg;
-
-       # Ignore groups. TODO: support that in SyncEvolution.
-       s/^[a-zA-Z0-9]+\.//mg;
-   }
+   # Properties and parameters are case-insensitive. ownCloud uses
+   # X-ABLABEL while everyone else uses X-ABLabel.
+   s/X-ABLABEL/X-ABLabel/g;
 
    if ($googlesyncml) {
       # Not support car type in telephone
@@ -727,9 +770,15 @@ sub NormalizeItem {
       }
 
       my $spaces = "  " x ($#formatted - 1);
+
+      # Ignore group tags during folding, add back before indenting.
+      /^([^.:;]+\.)?(.*)/s;
+      my $tag = $1;
+      $_ = $2;
       my $thiswidth = $width -1 - length($spaces);
       $thiswidth = 1 if $thiswidth <= 0;
       s/(.{$thiswidth})(?!$)/$1\n /g;
+      $_ = $tag . $_;
       s/^(.*)$/$spaces$1/mg;
       push @{$formatted[$#formatted]}, $_;
 
@@ -748,15 +797,93 @@ sub NormalizeItem {
           $str =~ /^(\s*)/;
           return length($1);
         }
+        # Sort lines without group tag before lines without group tag.
+        # When both lines have group tags, sort based on line without
+        # group tag, then regroup related items after sorting.
+        sub cmplines {
+            my $a = shift;
+            my $b = shift;
+            $a =~ s/^[^.:;]+\.//;
+            $b =~ s/^[^.:;]+\.//;
+            return $a cmp $b;
+        }
+        my @body;
+        my $isimportant;
+        foreach $_ (@{$block}) {
+            $isimportant = ($_ =~ /^\s*(N|SUMMARY):/);
+            /^(\s*)([^.:;]+\.)?(.*)/s;
+            push @body, [$isimportant, length($1), $2, $3];
+        }
+        my @sorted = sort( { ($a->[1] - $b->[1]) || # Compare indention, more indented last.
+                             ($b->[0] - $a->[0]) || # Compare importance, less important last.
+                             $a->[3] cmp $b->[3] } # Compare property name, parameters and value without group tag.
+                           @body );
+
+        # Combine lines with the same group tag.
+        my %tags;
+        my @tagged;
+        my $tag;
+        my $entry;
+        my $index;
+        foreach (@sorted) {
+            $tag = $_->[2];
+            # Has a line a group tag?
+            if ($tag) {
+                # Same as one found before?
+                $index = $tags{$tag};
+                if (defined($index)) {
+                    # Append to previous instance of the tag, keeping tag indices the same.
+                    push @{$tagged[$index]}, $_;
+                } else {
+                    # Add at end, remember index for next line with the same tag.
+                    push @tagged, $_;
+                    $tags{$tag} = $#tagged;
+                }
+            } else {
+                push @tagged, $_;
+            }
+        }
+
+        # Convert back into individual, indented text lines.
+        my @expanded;
+        foreach (@tagged) {
+            if ($_->[2]) {
+                if ($#{$_} == 4) {
+                    # Simplify IMPP + X-ABLabel:Other to just IMPP without group tag.
+                    # For the sake of simplicity we only do that if the number of
+                    # grouped properties is exactly two. Otherwise we would have
+                    # to search in the list of extra properties.
+                    if ($_->[3] =~ /^IMPP[;:]/ &&
+                        $_->[4][3] =~ /^X-ABLabel:Other$/) {
+                        splice(@{$_}, 4);
+                    }
+                }
+                if ($#{$_} == 3) {
+                    # If the last remaining property is X-ABLabel, then ignore it.
+                    # We ignore empty properties, which can cause their labels to
+                    # be left as redundant information (happens with Google CardDAV
+                    # when sending an empty URL).
+                    if ($_->[3] =~ "X-ABLabel:") {
+                        next;
+                    }
+                    # Remove redundant group tag from other properties.
+                    $_->[2] = "";
+                }
+            }
+            push @expanded, (" " x $_->[1]) . ($_->[2] ? "- " : "") . $_->[3];
+            if ($#{$_} > 3) {
+                foreach ($_->[4,-1]) {
+                    push @expanded, (" " x $_->[1]) . "  " . $_->[3];
+                }
+            }
+        }
+
+        # Create one BEGIN/END block.
         $_ = join("\n",
                   $begin,
-                  sort( { $a =~ /^\s*(N|SUMMARY):/ ? -1 :
-                          $b =~ /^\s*(N|SUMMARY):/ ? 1 :
-                          ($a =~ /^\s/ && $b =~ /^\S/) ? 1 :
-                          numspaces($a) == numspaces($b) ? $a cmp $b :
-                          numspaces($a) - numspaces($b) }
-                        @{$block} ),
+                  @expanded,
                   $end);
+
         push @{$formatted[$#formatted]}, $_;
       }
     }

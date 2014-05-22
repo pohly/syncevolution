@@ -314,7 +314,7 @@ boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &ne
                                               gerror),
                    false);
     if (!connection) {
-        gerror.throwError("creating GIO D-Bus connection");
+        gerror.throwError(SE_HERE, "creating GIO D-Bus connection");
     }
 
     // A fake DBusServerCXX which does nothing more than return the address, aka

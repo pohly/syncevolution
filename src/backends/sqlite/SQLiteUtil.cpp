@@ -33,7 +33,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-void SQLiteUtil::throwError(const string &operation)
+void SQLiteUtil::throwError(const SourceLocation &here, const string &operation)
 {
     string descr = m_name + ": '" + m_fileid + "': " + operation + " failed";
 
@@ -43,7 +43,7 @@ void SQLiteUtil::throwError(const string &operation)
         descr += error ? error : "unspecified error";
     }
 
-    throw runtime_error(descr);
+    Exception::throwError(here, descr);
 }
 
 sqlite3_stmt *SQLiteUtil::prepareSQLWrapper(const char *sql, const char **nextsql)
@@ -151,14 +151,14 @@ void SQLiteUtil::open(const string &name,
                 } else if (res == SQLITE_ROW) {
                     // continue
                 } else {
-                    throwError("creating database");\
+                    throwError(SE_HERE, "creating database");\
                 }
             }
         }
         break;
     }
     default:
-        throwError("checking content");
+        throwError(SE_HERE, "checking content");
         break;
     }
 

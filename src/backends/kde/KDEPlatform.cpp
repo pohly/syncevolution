@@ -24,7 +24,8 @@
 
 #include "KDEPlatform.h"
 
-#include <syncevo/SyncContext.h>
+#include <syncevo/Exception.h>
+#include <syncevo/UserInterface.h>
 #include <syncevo/SyncConfig.h>
 
 // Qt headers may define "signals" as preprocessor symbol,
@@ -232,7 +233,7 @@ bool KWalletSavePasswordSlot(const InitStateTri &keyring,
     }
 
     if (!write_success) {
-        SyncContext::throwError("Saving " + passwordName + " in KWallet failed.");
+        Exception::throwError(SE_HERE, "Saving " + passwordName + " in KWallet failed.");
     }
     SE_LOG_DEBUG(NULL, "stored password in KWallet using %s",
                  key.toString().c_str());

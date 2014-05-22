@@ -277,7 +277,7 @@ bool Cmdline::parse(vector<string> &parsed)
                     dir = ".";
                 }
                 if (!relToAbs(dir)) {
-                    SyncContext::throwError(dir, errno);
+                    Exception::throwError(SE_HERE, dir, errno);
                 }
                 m_itemPath = dir + "/" + file;
             }
@@ -683,12 +683,12 @@ static void ExportLUID(SyncSourceRaw *raw,
     raw->readItemRaw(luid, item);
     if (!out) {
         // write into directory
-        string fullPath = itemPath + "/" + luid;
-        ofstream file((itemPath + "/" + luid).c_str());
+        string fullPath = itemPath + "/" + CmdlineLUID::fromLUID(luid);
+        ofstream file(fullPath.c_str());
         file << item;
         file.close();
         if (file.bad()) {
-            SyncContext::throwError(fullPath, errno);
+            Exception::throwError(SE_HERE, fullPath, errno);
         }
     } else {
         std::string delimiter;
@@ -920,7 +920,7 @@ bool Cmdline::run() {
             return false;
         }
         if (m_dryrun) {
-            SyncContext::throwError("--dry-run not supported for configuration changes");
+            Exception::throwError(SE_HERE, "--dry-run not supported for configuration changes");
         }
 
         // name of renamed config ("foo.old") after migration
@@ -1279,7 +1279,7 @@ bool Cmdline::run() {
                     // abort if the user explicitly asked for the sync source
                     // and it cannot be enabled, otherwise disable it silently
                     if (selected) {
-                        SyncContext::throwError(source + ": " + disable);
+                        Exception::throwError(SE_HERE, source + ": " + disable);
                     }
                     syncMode = "disabled";
                 } else if (selected) {
@@ -1295,7 +1295,7 @@ bool Cmdline::run() {
             }
 
             if (!sources.empty()) {
-                SyncContext::throwError(string("no such source(s): ") + boost::join(sources, " "));
+                Exception::throwError(SE_HERE, string("no such source(s): ") + boost::join(sources, " "));
             }
         }
 
@@ -1316,7 +1316,7 @@ bool Cmdline::run() {
             return false;
         }
         if (m_dryrun) {
-            SyncContext::throwError("--dry-run not supported for removing configurations");
+            Exception::throwError(SE_HERE, "--dry-run not supported for removing configurations");
         }
 
         // extra sanity check
@@ -1328,7 +1328,7 @@ bool Cmdline::run() {
             boost::shared_ptr<SyncConfig> config;
             config.reset(new SyncConfig(m_server));
             if (!config->exists()) {
-                SyncContext::throwError(string("no such configuration: ") + m_server);
+                Exception::throwError(SE_HERE, string("no such configuration: ") + m_server);
             }
             config->remove();
             m_configModified = true;
@@ -1376,7 +1376,7 @@ bool Cmdline::run() {
                 if (!sourceConfig.getBackend().wasSet()) {
                     explanation.push_back("backend property not set");
                 }
-                SyncContext::throwError(SyncMLStatus(sysync::LOCERR_CFGPARSE),
+                Exception::throwError(SE_HERE, SyncMLStatus(sysync::LOCERR_CFGPARSE),
                                         boost::join(explanation, "\n"));
             } else {
                 throw;
@@ -1397,20 +1397,20 @@ bool Cmdline::run() {
             SyncSourceLogging *logging = dynamic_cast<SyncSourceLogging *>(source.get());
             if (!ops.m_startDataRead ||
                 !ops.m_readNextItem) {
-                source->throwError("reading items not supported");
+                source->throwError(SE_HERE, "reading items not supported");
             }
 
-            err = ops.m_startDataRead(*source, "", "");
+            err = ops.m_startDataRead("", "");
             CHECK_ERROR("reading items");
             source->setReadAheadOrder(SyncSourceBase::READ_ALL_ITEMS);
             processLUIDs(source, boost::bind(ShowLUID, logging, _1));
         } else if (m_deleteItems) {
             if (!ops.m_deleteItem) {
-                source->throwError("deleting items not supported");
+                source->throwError(SE_HERE, "deleting items not supported");
             }
             list<string> luids;
             bool deleteAll = std::find(m_luids.begin(), m_luids.end(), "*") != m_luids.end();
-            err = ops.m_startDataRead(*source, "", "");
+            err = ops.m_startDataRead("", "");
             CHECK_ERROR("reading items");
             if (deleteAll) {
                 readLUIDs(source, luids);
@@ -1418,21 +1418,21 @@ bool Cmdline::run() {
                 luids = m_luids;
             }
             if (ops.m_endDataRead) {
-                err = ops.m_endDataRead(*source);
+                err = ops.m_endDataRead();
                 CHECK_ERROR("stop reading items");
             }
             if (ops.m_startDataWrite) {
-                err = ops.m_startDataWrite(*source);
+                err = ops.m_startDataWrite();
                 CHECK_ERROR("writing items");
             }
             BOOST_FOREACH(const string &luid, luids) {
                 sysync::ItemIDType id;
                 id.item = (char *)luid.c_str();
-                err = ops.m_deleteItem(*source, &id);
+                err = ops.m_deleteItem(&id);
                 CHECK_ERROR("deleting item");
             }
             char *token;
-            err = ops.m_endDataWrite(*source, true, &token);
+            err = ops.m_endDataWrite(true, &token);
             if (token) {
                 free(token);
             }
@@ -1440,17 +1440,17 @@ bool Cmdline::run() {
         } else {
             SyncSourceRaw *raw = dynamic_cast<SyncSourceRaw *>(source.get());
             if (!raw) {
-                source->throwError("reading/writing items directly not supported");
+                source->throwError(SE_HERE, "reading/writing items directly not supported");
             }
             if (m_import || m_update) {
-                err = ops.m_startDataRead(*source, "", "");
+                err = ops.m_startDataRead("", "");
                 CHECK_ERROR("reading items");
                 if (ops.m_endDataRead) {
-                    err = ops.m_endDataRead(*source);
+                    err = ops.m_endDataRead();
                     CHECK_ERROR("stop reading items");
                 }
                 if (ops.m_startDataWrite) {
-                    err = ops.m_startDataWrite(*source);
+                    err = ops.m_startDataWrite();
                     CHECK_ERROR("writing items");
                 }
 
@@ -1462,12 +1462,12 @@ bool Cmdline::run() {
                     if (m_itemPath == "-") {
                         context->getUserInterfaceNonNull().readStdin(content);
                     } else if (!ReadFile(m_itemPath, content)) {
-                        SyncContext::throwError(m_itemPath, errno);
+                        Exception::throwError(SE_HERE, m_itemPath, errno);
                     }
                     if (m_delimiter == "none") {
                         if (m_update) {
                             if (m_luids.size() != 1) {
-                                SyncContext::throwError("need exactly one LUID parameter");
+                                Exception::throwError(SE_HERE, "need exactly one LUID parameter");
                             } else {
                                 luid = *m_luids.begin();
                             }
@@ -1489,7 +1489,7 @@ bool Cmdline::run() {
                                 total++;
                             }
                             if (total != m_luids.size()) {
-                                SyncContext::throwError(StringPrintf("%lu items != %lu luids, must match => aborting",
+                                Exception::throwError(SE_HERE, StringPrintf("%lu items != %lu luids, must match => aborting",
                                                                      total, (unsigned long)m_luids.size()));
                             }
                         }
@@ -1502,7 +1502,7 @@ bool Cmdline::run() {
                             if (m_update) {
                                 if (luidit == m_luids.end()) {
                                     // was checked above
-                                    SyncContext::throwError("internal error, not enough luids");
+                                    Exception::throwError(SE_HERE, "internal error, not enough luids");
                                 }
                                 luid = *luidit;
                                 ++luidit;
@@ -1522,23 +1522,27 @@ bool Cmdline::run() {
                         string content;
                         string path = m_itemPath + "/" + entry;
                         if (!ReadFile(path, content)) {
-                            SyncContext::throwError(path, errno);
+                            Exception::throwError(SE_HERE, path, errno);
+                        }
+                        std::string luid;
+                        if (m_update) {
+                            luid = CmdlineLUID::toLUID(entry);
                         }
                         SE_LOG_SHOW(NULL, "#%d: %s: %s",
                                     count,
                                     entry.c_str(),
-                                    insertItem(raw, "", content).getEncoded().c_str());
+                                    insertItem(raw, luid, content).getEncoded().c_str());
                         count++;
                     }
                 }
                 char *token = NULL;
-                err = ops.m_endDataWrite(*source, true, &token);
+                err = ops.m_endDataWrite(true, &token);
                 if (token) {
                     free(token);
                 }
                 CHECK_ERROR("stop writing items");
             } else if (m_export) {
-                err = ops.m_startDataRead(*source, "", "");
+                err = ops.m_startDataRead("", "");
                 CHECK_ERROR("reading items");
 
                 ostream *out = NULL;
@@ -1576,7 +1580,7 @@ bool Cmdline::run() {
                 if (outFile) {
                     outFile->close();
                     if (outFile->bad()) {
-                        SyncContext::throwError(m_itemPath, errno);
+                        Exception::throwError(SE_HERE, m_itemPath, errno);
                     }
                 }
             }
@@ -1646,7 +1650,7 @@ bool Cmdline::run() {
 
         // check whether there were any sources specified which do not exist
         if (!unmatchedSources.empty()) {
-            context->throwError(string("no such source(s): ") + boost::join(unmatchedSources, " "));
+            Exception::throwError(SE_HERE, string("no such source(s): ") + boost::join(unmatchedSources, " "));
         }
 
         if (m_status) {
@@ -1716,13 +1720,13 @@ void Cmdline::processLUIDs(SyncSource *source, const boost::function<void (const
     const SyncSource::Operations &ops = source->getOperations();
     sysync::ItemIDType id;
     sysync::sInt32 status;
-    sysync::TSyError err = ops.m_readNextItem(*source, &id, &status, true);
+    sysync::TSyError err = ops.m_readNextItem(&id, &status, true);
     CHECK_ERROR("next item");
     while (status != sysync::ReadNextItem_EOF) {
         process(id.item);
         StrDispose(id.item);
         StrDispose(id.parent);
-        err = ops.m_readNextItem(*source, &id, &status, false);
+        err = ops.m_readNextItem(&id, &status, false);
         CHECK_ERROR("next item");
     }
 }
@@ -2041,7 +2045,7 @@ void Cmdline::checkForPeerProps()
             // legacy "sync" property, which applies to both shared and unshared
             // properties => cannot determine that here anymore, so ignore it
         } else {
-            SyncContext::throwError(string("per-peer (unshared) properties not allowed: ") +
+            Exception::throwError(SE_HERE, string("per-peer (unshared) properties not allowed: ") +
                                     props);
         }
     }
@@ -2067,6 +2071,9 @@ void Cmdline::listDatabases(SyncSource *source, const string &header)
             out << "   " << database.m_name << " (" << database.m_uri << ")";
             if (database.m_isDefault) {
                 out << " <default>";
+            }
+            if (database.m_isReadOnly) {
+                out << " <read-only>";
             }
             out << endl;
         }

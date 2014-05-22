@@ -45,7 +45,6 @@
 #include <sstream>
 #include <fstream>
 
-#include <syncevo/SyncContext.h>
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -56,7 +55,7 @@ FileSyncSource::FileSyncSource(const SyncSourceParams &params,
     m_entryCounter(0)
 {
     if (dataformat.empty()) {
-        throwError("a database format must be specified");
+        throwError(SE_HERE, "a database format must be specified");
     }
 }
 
@@ -110,7 +109,7 @@ void FileSyncSource::open()
         if (errno == ENOENT && createDir) {
             mkdir_p(basedir.c_str());
         } else {
-            throwError(basedir, errno);
+            throwError(SE_HERE, basedir, errno);
         }
     }
 
@@ -126,7 +125,7 @@ bool FileSyncSource::isEmpty()
     try {
         dir = opendir(m_basedir.c_str());
         if (!dir) {
-            SyncContext::throwError(m_basedir, errno);
+            Exception::throwError(SE_HERE, m_basedir, errno);
         }
         errno = 0;
         struct dirent *entry = readdir(dir);
@@ -139,7 +138,7 @@ bool FileSyncSource::isEmpty()
             entry = readdir(dir);
         }
         if (errno) {
-            SyncContext::throwError(m_basedir, errno);
+            Exception::throwError(SE_HERE, m_basedir, errno);
         }
     } catch(...) {
         if (dir) {
@@ -195,7 +194,7 @@ void FileSyncSource::readItem(const string &uid, std::string &item, bool raw)
     string filename = createFilename(uid);
 
     if (!ReadFile(filename, item)) {
-        throwError(filename + ": reading failed", errno);
+        throwError(SE_HERE, filename + ": reading failed", errno);
     }
 }
 
@@ -233,7 +232,7 @@ TrackingSyncSource::InsertItemResult FileSyncSource::insertItem(const string &ui
                     newuid = buff.str();
                     break;
                 } else {
-                    throwError(filename, errno);
+                    throwError(SE_HERE, filename, errno);
                 }
             }
 
@@ -246,7 +245,7 @@ TrackingSyncSource::InsertItemResult FileSyncSource::insertItem(const string &ui
     out.write(item.c_str(), item.size());
     out.close();
     if (!out.good()) {
-        throwError(filename + ": writing failed", errno);
+        throwError(SE_HERE, filename + ": writing failed", errno);
     }
 
     return InsertItemResult(newuid,
@@ -260,7 +259,7 @@ void FileSyncSource::removeItem(const string &uid)
     string filename = createFilename(uid);
 
     if (unlink(filename.c_str())) {
-        throwError(filename, errno);
+        throwError(SE_HERE, filename, errno);
     }
 }
 
@@ -268,7 +267,7 @@ string FileSyncSource::getATimeString(const string &filename)
 {
     struct stat buf;
     if (stat(filename.c_str(), &buf)) {
-        throwError(filename, errno);
+        throwError(SE_HERE, filename, errno);
     }
     time_t mtime = buf.st_mtime;
     int mnsec = buf.st_mtim.tv_nsec;
