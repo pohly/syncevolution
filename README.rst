@@ -1064,12 +1064,7 @@ one gets:
 When creating these target configs, the command line tool tries to
 verify that the sources really work and (in the case of --template
 webdav) will enable only sources which really work. This involves
-contacting the WebDAV server. TODO: add command line options for
-controlling this aspect. "--force" to disable them? Or off by default
-and on with --sanity-checks=on? Must work for all backends, not just
-WebDAV.
-
-TODO: fix DNS auto-discovery. syncevo-webdav-lookup not packaged at the moment.
+contacting the WebDAV server.
 
 Finally, here is how the ``@webdav`` context needs to be configured so that SyncML
 clients or servers can be added to it::
