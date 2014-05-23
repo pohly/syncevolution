@@ -112,12 +112,12 @@ backend
 local/remote
   Synchronization always happens between a pair of databases and thus
   has two sides. One database or side of a sync is remote (the one
-  of the peer) or local (SyncEvolution). For the sake of consistency (and
+  of the peer), the other is local (SyncEvolution). For the sake of consistency (and
   lack of better terms), these terms are used even if the peer is another
   instance of SyncEvolution and/or all data resides on the same storage.
 
 sync config
-  A sync configuration defines how to access a peer: the protocol
+  A sync configuration defines how to talk with a peer: the protocol
   which is to be used, how to find the peer, credentials, etc.
 
   Sync configs can be used to initiate a sync (like contacting a
