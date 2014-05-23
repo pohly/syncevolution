@@ -95,6 +95,10 @@ peer
 host
   The device or computer that SyncEvolution runs on.
 
+item
+  The smallest unit of synchronization. Examples of items include
+  calendar events and individual contacts, memos, or tasks.
+
 database
   Each peer has one or more databases that get synchronized (Google Calendar,
   Google Contacts). Conceptually a database is a set of items where each
