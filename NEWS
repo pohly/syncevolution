@@ -1,3 +1,349 @@
+SyncEvolution 1.4.99.1 -> 1.4.99.2, 23.05.2014
+==============================================
+
+1.4.99.2 enhances interoperability with CardDAV servers and in
+particular Google Contacts considerably. Contact data gets converted
+to and from the format typically used by CardDAV servers, so now
+anniversary, spouse, manager, assistant and instant message
+information are exchanged properly.
+
+Custom labels get stored in EDS as extensions and no longer get lost
+when updating some other aspects of a contact. However, Evolution does
+not show custom labels and removes them when editing a property which
+has a custom label (BGO #730636).
+
+Scanning for CardDAV/CalDAV resources was enhanced. It now finds
+additional calendars with Google CalDAV and works with iCloud.
+However, syncing with iCloud ran into a server bug (reported as
+17001498 "CalDAV REPORT drops calendar data") and needs further work.
+
+Details:
+
+* vcard profile: avoid data loss during merging
+
+  When resolving a merge conflict, repeating properties were taken
+  wholesale from the winning side (for example, all email addresses). If
+  a new email address had been added on the loosing side, it got lost.
+
+  Arguably it is better to preserve as much data as possible during a
+  conflict. SyncEvolution now does that in a merge script by checking
+  which properties in the loosing side do not exist in the winning side
+  and copying those entries.
+
+  Typically only the main value (email address, phone number) is checked
+  and not the additional meta data (like the type). Otherwise minor
+  differences (for example, both sides have same email address, but with
+  different types) would lead to duplicates.
+
+  Only addresses are treated differently: for them all attributes
+  (street, country, city, etc.) are compared, because there is no single
+  main value.
+
+* engine: UID support in contact data
+
+  Before, the UID property in a vCard was ignored by the engine.
+  Backends were responsible for ensuring that the property is
+  set if required by the underlying storage. This turned out to be
+  handled incompletely in the WebDAV backend.
+
+  This change moves this into the engine:
+  - UID is now field. It does not get used for matching
+    because the engine cannot rely on it being stored
+    by both sides.
+  - It gets parsed if present, but only generated if
+    explicitly enabled (because that is the traditional
+    behavior).
+  - It is never shown in the DevInf's CtCap
+    because the Synthesis engine would always show it
+    regardless whether a rule enabled the property.
+    That's because rules normally only get triggered
+    after exchanging DevInf and thus DevInf has to
+    be rule-independent. We don't want it shown because
+    then merging the incoming item during a local sync
+    would use the incoming UID, even if it is empty.
+  - Before writing, ensure that UID is set.
+
+  When updating an existing item, the Synthesis engine reads
+  the existing item, preserves the existing UID unless the peer
+  claims to support UID, and then updates with the existing UID.
+
+  This works for local sync (where SyncEvolution never claims
+  to support UID when talking to the other side). It will break
+  with peers which have UID in their CtCap although they
+  rewrite the UID and backends whose underlying storage cannot
+  handle UID changes during an update (for example, CardDAV).
+
+
+* CardDAV: use Apple/Google/CardDAV vCard flavor
+
+  In principle, CardDAV servers support arbitrary vCard 3.0
+  data. Extensions can be different and need to be preserved. However,
+  when multiple different clients or the server's Web UI interpret the
+  vCards, they need to agree on the semantic of these vCard extensions.
+
+  In practice, CardDAV was pushed by Apple and Apple clients are
+  probably the most common clients of CardDAV services. When the Google
+  Contacts Web UI creates or edits a contact, Google CardDAV will
+  send that data using the vCard flavor used by Apple.
+
+  Therefore it makes sense to exchange contacts with *all* CardDAV
+  servers using that format. This format could be made configurable in
+  SyncEvolution on a case-by-case basis; at the moment, it is
+  hard-coded.
+
+  During syncing, SyncEvolution takes care to translate between the
+  vCard flavor used internally (based on Evolution) and the CardDAV
+  vCard flavor. This mapping includes:
+
+  X-AIM/JABBER/... <-> IMPP + X-SERVICE-TYPE
+
+    Any IMPP property declared as X-SERVICE-TYPE=AIM will get
+    mapped to X-AIM. Same for others. Some IMPP service types
+    have no known X- property extension; they are stored in
+    EDS as IMPP. X- property extensions without a known X-SERVICE-TYPE
+    (for example, GaduGadu and Groupwise) are stored with
+    X-SERVICE-TYPE values chosen by SyncEvolution so that
+    Google CardDAV preserves them (GroupWise with mixed case
+    got translated by Google into Groupwise, so the latter is used).
+
+    Google always sends an X-ABLabel:Other for IMPP. This is ignored
+    because the service type overrides it.
+
+    The value itself also gets transformed during the mapping. IMPP uses
+    an URI as value, with a chat protocol (like "aim" or "xmpp") and
+    some protocol specific identifier. For each X- extension the
+    protocol is determined by the property name and the value is the
+    protocol specific identifier without URL encoding.
+
+  X-SPOUSE/MANAGER/ASSISTANT <-> X-ABRELATEDNAMES + X-ABLabel
+
+    The mapping is based on the X-ABLabel property attached to
+    the X-ABRELATEDNAMES property. This depends on the English
+    words "Spouse", "Manager", "Assistant" that Google CardDAV
+    and Apple devices seem to use regardless of the configured
+    language.
+
+    As with IMPP, only the subset of related names which have
+    a corresponding X- property extension get mapped. The rest
+    is stored in EDS using the X-ABRELATEDNAMES property.
+
+  X-ANNIVERSARY <-> X-ABDATE
+
+    Same here, with X-ABLabel:Anniversary as the special case
+    which gets mapped.
+
+  X-ABLabel parameter <-> property
+
+    CardDAV vCards have labels attached to arbitrary other properties
+    (TEL, ADR, X-ABDATE, X-ABRELATEDNAMES, ...) via vCard group tags:
+    item1.X-ABDATE:2010-01-01
+    item1.X-ABLabel:Anniversary
+
+    The advantage is that property values can contain arbitrary
+    characters, including line breaks and double quotation marks,
+    which is not possible in property parameters.
+
+    Neither EDS nor KDE (judging from the lack of responses on the
+    KDE-PIM mailing list) support custom labels. SyncEvolution could
+    have used grouping as it is done in CardDAV, but grouping is not
+    used much (not at all?) by the UIs working with the vCards in EDS
+    and KDE. It seemed easier to use a new X-ABLabel parameter.
+
+    Characters which cannot be stored in a parameter get converted
+    (double space to single space, line break to space, etc.) during
+    syncing. In practice, these characters don't appear in X-ABLabel
+    properties anyway because neither Apple nor Google UIs allow entering
+    them for custom labels.
+
+    The "Other" label is used by Google even in case where it adds no
+    information. For example, all XMPP properties have an associated
+    X-ABLabel=Other although the Web UI does not provide a means to edit
+    or show such a label. Editing the text before the value in the UI
+    changes the X-SERVICE-TYPE parameter value, not the X-ABLabel as for
+    other fields.
+
+    Therefore the "Other" label is ignored by removing it during syncing.
+
+  X-EVOLUTION-UI-SLOT (the parameter used in Evolution to determine the
+  order of properties in the UI) gets stored in CardDAV. The only exception
+  is Google CardDAV which got confused when an IMPP property had both
+  X-SERVICE-TYPE and X-EVOLUTION-UI-SLOT parameters set. For Google,
+  X-EVOLUTION-UI-SLOT is only sent on other properties and thus ordering
+  of chat information can get lost when syncing with Google.
+
+* synccompare: support grouping and quoted parameter strings
+
+  Grouped properties are sorted first according to the actual property
+  name, then related properties are moved to the place where their group
+  tag appears first. The first grouped property gets a "- " prefix, all
+  following ones are just indended with "  ". The actual group tag is not
+  part of the normalized output, because its value is irrelevant:
+
+  BDAY:19701230
+  - EMAIL:john@custom.com
+    X-ABLabel:custom-label2
+  ...
+  FN:Mr. John 1 Doe Sr.
+  - IMPP;X-SERVICE-TYPE=AIM:aim:aim
+    X-ABLabel:Other
+  ...
+  - X-ABDATE:19710101
+    X-ABLabel:Anniversary
+
+  Redundant tags (those set for only a single property, X-ABLabel:Other)
+  get removed as part of normalizing an item.
+
+* WebDAV: use server's order when listing collections
+
+  When doing a recursive scan of the home set, preserve the order of
+  entries as reported by the server and check the first one first. The
+  server knows better which entries are more relevant for the user (and
+  thus should be the default) or may have some other relevant
+  order. Previously, SyncEvolution replaced that order with sorting by
+  URL, which led to a predictable, but rather meaningless order.
+
+  For example, Google lists the users own calendar first, followed by
+  the shared calendars sorted alphabetical by their name. Now
+  SyncEvolution picks the main calendar as default correctly when
+  scanning from https://www.google.com/calendar/dav/.
+
+* WebDAV: improved database search (Google, Zimbra)
+
+  Zimbra has a principal URL that also serves as home set. When using it
+  as start URL, SyncEvolution only looked the URL once, without listing
+  its content, and thus did not find the databases.
+
+  When following the Zimbra principal URL indirectly, SyncEvolution did
+  check all of the collections there recursively. Unfortunately that
+  also includes many mail folders, causing the scan to abort after
+  checking 1000 collections (an internal safe guard).
+
+  The solution for both includes tracking what to do with a URL. For the
+  initial URL, only meta data about the URL itself gets
+  checked. Recursive scanning is only done for the home set. If that
+  home set contains many collections, scanning is still slow and may run
+  into the internal safe guard limit. This cannot be avoided because the
+  CalDAV spec explicitly states that the home set may contain normal
+  collections which contain other collections, so a client has to do the
+  recursive scan.
+
+  When looking at a specific calendar, Google CalDAV does not report
+  what the current principal or the home set is and therefore
+  SyncEvolution stopped after finding just the initial calendar. Now it
+  detects the lack of meta information and adds all parents also as
+  candidates that need to be looked at. The downside of this is that it
+  doesn't know anything about which parents are relevant, so it ends up
+  checking https://www.google.com/calendar/ and
+  https://www.google.com/.
+
+  In both cases Basic Auth gets rejected with a temporary redirect to
+  the Google login page, which is something that SyncEvolution must
+  ignore immediately during scanning without applying the resend
+  workaround for "temporary rejection of valid credentials" that can
+  happen for valid Google CalDAV URLs.
+
+* WebDAV: enhanced database search (Google Calendar)
+
+  Additional databases where not found for several
+  reasons. SyncEvolution ignored all shared calendars
+  (http://calendarserver.org/ns/shared) and Google marks the additional
+  calendars that way. The other problem was that the check for leaf
+  collections (= collections which cannot contain other desired
+  collections) incorrectly excluded those collections instead of only
+  preventing listing of their content.
+
+  With this change,
+  https://www.google.com/calendar/dav/?SyncEvolution=Google can be used
+  as starting point for Google Calendar.
+
+* WebDAV: fix database scan on iCloud
+
+  The calendar home set URL on iCloud (the one ending in /calendars/) is
+  declared as containing calendar data. That was enough for
+  SyncEvolution to accept it incorrectly as calendar. However, the home
+  set only contains calendar data indirectly.
+
+* WebDAV: support redirects between hosts and DNS SRV lookup based on URL
+
+  When finding a new URL, we must be prepared to reinitialize the Neon
+  session with the new host settings.
+
+  iCloud does not have .well-known support on its www.icloud.com
+  server. To support lookup with a non-icloudd.com email address, we
+  must do DNS SRV lookup when access to .well-known URLs fails. We do
+  this without a www prefix on the host first, because that is what happens
+  to work for icloud.com.
+
+  With these changes it becomes possible to do database scans on Apple
+  iCloud, using syncURL=https://www.icloud.com or
+  syncURL=https://icloud.com. Giving the syncURL like this is only
+  necessary for a username that does not end in @icloud.com. When
+  the syncURL is not set, the domain for DNS SRV lookup is taken
+  from the username.
+
+* WebDAV: more efficient item creation
+
+  PUT has the disadvantage that a client needs to choose a name and then
+  figure out what the real name on the server is. With Google CardDAV that
+  requires sending another request and only works because the server happens
+  to remember the original name (which is not guaranteed!).
+
+  POST works for new items without a name and happens to be implemented
+  by Google such that the response already includes all required
+  information (new name and revision string).
+
+  POST is checked for as described in RFC 5995 once before creating a new
+  item. Servers which don't support it continue to get a PUT.
+
+* WebDAV: send "User-Agent: SyncEvolution"
+
+  Apple iCloud servers reject requests unless they contain a User-Agent
+  header. The exact value doesn't seem to matter. Making the string
+  configurable might be better, but can still be done later when it
+  is more certain whether and for what it is needed.
+
+* WebDAV: refactor and fix DNS SRV lookup
+
+  The syncevo-webdav-lookup script was not packaged. It did not report
+  "not found" DNS results correctly and the caller did not check for
+  this either, so when looking up the information for a domain which
+  does not have DNS SRV entries, SyncEvolution ended up retrying for
+  while as if there had been a temporary lookup problem.
+
+* signon: make Accounts optional
+
+  The new "signon" provider only depends on lib[g]signon-glib. It uses
+  gSSO if found, else UOA. Instead of pulling parameters and the
+  identity via libaccounts-glib, the user of SyncEvolution now has to
+  ensure that the identity exists and pass all relevant parameters
+  in the "signon:" username.
+
+* gSSO: adapt to gSSO >= 2.0
+
+* config templates: Funambol URLs
+
+  Funambol turned of the URL redirect from my.funambol.com to
+  onemedia.com. The Funambol template now uses the current URL.  Users
+  with existing Funambol configs must updated the syncURL property
+  manually to https://onemediahub.com/sync
+
+  Kudos to Daniel Clement for reporting the change.
+
+* command line: fix --update from directory
+
+  The "--update <dir name>" operation was supposed to take the
+  item luids from the file names inside the directory. That part
+  had not been implemented, turning the operation accidentally
+  into an "--import".
+
+  Also missing was the escaping/unescaping of luids. Now the
+  same escaping is done as in command line output and command
+  line parsing to make the luids safe for use as file name.
+
+* testing: added server-specific tests for CardDAV covering
+  remote item formats and edit conflicts.
+
+
 SyncEvolution 1.4.1 -> 1.4.99.1, 01.04.2014
 ===========================================
 
