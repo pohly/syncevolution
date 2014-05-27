@@ -144,6 +144,11 @@ if COND_DBUS_PIM
 src_dbus_server_service_files_in += \
   src/dbus/server/pim/org._01.pim.contacts.service.in
 
+test_SCRIPTS += \
+	src/dbus/server/pim/examples/search.py \
+	src/dbus/server/pim/examples/sync.py \
+	$(NOP)
+
 if ENABLE_TESTING
 test_SCRIPTS += \
 	src/dbus/server/pim/testpim.py \
