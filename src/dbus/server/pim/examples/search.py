@@ -47,7 +47,10 @@
 
 import dbus
 import dbus.service
-import gobject
+try:
+    import gobject
+except ImportError:
+    from gi.repository import GObject as gobject
 from dbus.mainloop.glib import DBusGMainLoop
 import functools
 import subprocess
