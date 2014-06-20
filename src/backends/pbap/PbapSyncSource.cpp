@@ -533,7 +533,18 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(PullData pullData)
     std::list<std::string> &filter = boost::get< std::list<std::string> >(currentFilter["Fields"]);
     switch (pullData) {
     case PULL_AS_CONFIGURED:
-        SE_LOG_DEBUG(NULL, "pull all with configured filter: '%s'",
+        // Avoid empty filter. Android 4.3 on Samsung Galaxy S3
+        // only returns the mandatory FN, N, TEL fields when no
+        // filter is set.
+        const char *filterSource;
+        if (filter.empty()) {
+            filterSource = "default properties";
+            filter = supportedProperties();
+        } else {
+            filterSource = "configured";
+        }
+        SE_LOG_DEBUG(NULL, "pull all with %s filter: '%s'",
+                     filterSource,
                      boost::join(filter, " ").c_str());
         break;
     case PULL_WITHOUT_PHOTOS:
