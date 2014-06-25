@@ -1022,7 +1022,13 @@ public:
         // Redirect output of libphonenumber and make it a bit quieter
         // than it is by default. We map fatal libphonenumber errors
         // to ERROR and everything else to DEBUG.
-        i18n::phonenumbers::PhoneNumberUtil::GetInstance()->SetLogger(&m_logger);
+        //
+        // The PhoneNumberUtil instance owns the logger, so we don't
+        // need (and must not) free it. libphonenumber < r571 has the
+        // same API and thus this code compiles. However, older
+        // libphonenumer does not actually free the instance, causing
+        // a minor memory leak.
+        i18n::phonenumbers::PhoneNumberUtil::GetInstance()->SetLogger(new PhoneNumberLogger);
     }
 
     static std::locale genLocale()
