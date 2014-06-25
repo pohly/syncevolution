@@ -1093,7 +1093,7 @@ public:
                 // Pick default operation. Will be replaced with
                 // telephone-specific operation once we know that the
                 // field is 'phones/value'.
-                bool (AnyContainsBoost::*func)(const char *text) const = NULL;
+                bool (AnyContainsBoost::*func)(const char *text) const;
                 if (operation == "contains") {
                     func = &AnyContainsBoost::containsSearchText;
                 } else if (operation == "is") {
@@ -1102,6 +1102,8 @@ public:
                     func = &AnyContainsBoost::beginsWithSearchText;
                 } else if (operation == "ends-with") {
                     func = &AnyContainsBoost::endsWithSearchText;
+                } else {
+                    func = NULL;
                 }
                 if (func) {
                     switch (terms.size()) {
