@@ -1089,7 +1089,7 @@ void Session::onQuit(int status) throw ()
                                         m_me,
                                         false,
                                         SyncReport()),
-                            0.1 /* seconds */);
+                            1 /* seconds */);
     } catch (...) {
         Exception::handle();
     }
