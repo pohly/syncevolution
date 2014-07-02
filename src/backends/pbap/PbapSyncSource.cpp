@@ -66,6 +66,19 @@ SE_BEGIN_CXX
 typedef std::map<int, pcrecpp::StringPiece> Content;
 typedef std::list<std::string> ContactQueue;
 
+/**
+ * This class is responsible for a) generating unique IDs for each
+ * contact in a certain order (returned one-by-one via getNextID())
+ * and b) returning the contact one-by-one in that order
+ * (getContact()). This is done to match the way how the sync engine
+ * handles items.
+ *
+ * Although the API of getContact() allows random access, we don't need
+ * to support that for syncing.
+ *
+ * IDs are #0 to #n-1 where n = GetSize() at the time when the session
+ * starts.
+ */
 class PullAll
 {
     std::string m_buffer; // vCards kept in memory when using old obexd.
@@ -86,7 +99,7 @@ public:
     ~PullAll();
 
     std::string getNextID();
-    bool getContact(int contactNumber, pcrecpp::StringPiece &vcard);
+    bool getContact(const char *id, pcrecpp::StringPiece &vcard);
     const char *addVCards(int startIndex, const pcrecpp::StringPiece &content);
 };
 
@@ -665,8 +678,9 @@ std::string PullAll::getNextID()
     return id;
 }
 
-bool PullAll::getContact(int contactNumber, pcrecpp::StringPiece &vcard)
+bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
 {
+    int contactNumber = atoi(id);
     SE_LOG_DEBUG(NULL, "get PBAP contact #%d", contactNumber);
     if (contactNumber < 0 ||
         contactNumber >= m_numContacts) {
@@ -940,7 +954,7 @@ sysync::TSyError PbapSyncSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH
         throwError(SE_HERE, "logic error: readItemAsKey() without preceeding readNextItem()");
     }
     pcrecpp::StringPiece vcard;
-    if (m_pullAll->getContact(atoi(aID->item), vcard)) {
+    if (m_pullAll->getContact(aID->item, vcard)) {
         return getSynthesisAPI()->setValue(aItemKey, "data", vcard.data(), vcard.size());
     } else {
         return sysync::DB_NotFound;
@@ -959,7 +973,7 @@ void PbapSyncSource::readItemRaw(const std::string &luid, std::string &item)
         throwError(SE_HERE, "logic error: readItemRaw() without preceeding readNextItem()");
     }
     pcrecpp::StringPiece vcard;
-    if (m_pullAll->getContact(atoi(luid.c_str()), vcard)) {
+    if (m_pullAll->getContact(luid.c_str(), vcard)) {
         item.assign(vcard.data(), vcard.size());
     } else {
         throwError(SE_HERE, STATUS_NOT_FOUND, string("retrieving item: ") + luid);
