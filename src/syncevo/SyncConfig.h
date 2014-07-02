@@ -293,7 +293,6 @@ class ConfigProperty {
         m_obligatory(false),
         m_hidden(false),
         m_sharing(NO_SHARING),
-        m_flags(0),
         m_names(name),
         m_comment(boost::trim_right_copy(comment)),
         m_defValue(def),
@@ -305,7 +304,6 @@ class ConfigProperty {
         m_obligatory(false),
         m_hidden(false),
         m_sharing(NO_SHARING),
-        m_flags(0),
         m_names(names),
         m_comment(boost::trim_right_copy(comment)),
             m_defValue(def),
@@ -448,7 +446,6 @@ class ConfigProperty {
     bool m_obligatory;
     bool m_hidden;
     Sharing m_sharing;
-    int m_flags;
     const Aliases m_names;
     const std::string m_comment, m_defValue, m_descr;
 };

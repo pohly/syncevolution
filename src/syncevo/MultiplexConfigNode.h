@@ -37,7 +37,6 @@ class MultiplexConfigNode : public FilterConfigNode
     boost::shared_ptr<FilterConfigNode> m_nodes[2][3];
     const ConfigPropertyRegistry &m_registry;
     bool m_havePeerNodes;
-    int m_hiddenLower, m_hiddenUpper;
 
     FilterConfigNode *getNode(const std::string &property,
                               const ConfigProperty **prop = NULL) const;
@@ -49,8 +48,8 @@ class MultiplexConfigNode : public FilterConfigNode
         FilterConfigNode(boost::shared_ptr<ConfigNode>()),
         m_name(name),
         m_registry(registry),
-        m_havePeerNodes(true),
-        m_hiddenLower(0), m_hiddenUpper(1) {}
+        m_havePeerNodes(true)
+    {}
 
     /** only join hidden or user-visible properties */
     MultiplexConfigNode(const std::string &name,
@@ -59,8 +58,8 @@ class MultiplexConfigNode : public FilterConfigNode
         FilterConfigNode(boost::shared_ptr<ConfigNode>()),
         m_name(name),
         m_registry(registry),
-        m_havePeerNodes(true),
-        m_hiddenLower(hidden), m_hiddenUpper(hidden) {}
+        m_havePeerNodes(true)
+    {}
 
     /** true when peer nodes are used (default), false when they are dummy nodes */
     bool getHavePeerNodes() const { return m_havePeerNodes; }
