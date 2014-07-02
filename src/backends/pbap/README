@@ -126,3 +126,54 @@ syncevo-dbus-server, for example by patching
 src/dbus/server/syncevo-dbus-server-startup.sh.in =
 /usr/libexec/syncevo-dbus-server-startup.sh, or using the new
 SyncPeerWithFlags() and 'pbap-sync' flag.
+
+
+Transfering in chunks
+=====================
+
+The default is to pull all contacts in one transfer. This can be
+changed to transfer in chunks. Optionally the size of the chunks can
+be adjusted dynamically at runtime to achieve a certain time per
+transfer.
+
+The purpose of transferring in chunks is twofold:
+  1. It avoids having to pull the entire address book into a file
+     which then has to be kept around until syncing is complete.
+  2. By randomly starting at different offsets, eventually all
+     data gets added to the local cache even if no sync ever
+     completes.
+
+This gets configured with environment variables:
+
+SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_PHOTO=<number of contacts>
+  A value larger 0 enables chunking when transferring contacts with photo data.
+
+SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_NO_PHOTO=<number of contacts>
+  A value larger 0 enables chunking when transferring contacts without photo data.
+
+SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME=<seconds>
+  The desired duration of each transfer. Indirectly also controls the amount
+  of data which has to be buffered. Defaults to 30 seconds, turned off
+  with any value <= 0 seconds.
+
+SYNCEVOLUTION_PBAP_CHUNK_TIME_LAMBDA=<0 to 1>
+  Controls how quickly new measurements adapt the chunk size. 0 is fastest
+  (= next transfer uses exactly the calculated number of contacts), 1 is not
+  all all (= all transfers use the intitial number). Defaults to 0.1.
+
+SYNCEVOLUTION_PBAP_CHUNK_OFFSET=<0 to number of contacts in phone>
+  Overrides the random selection of the start offset. Useful for debugging.
+  Offsets which are out of range get mapped into a valid offset.
+
+For example, consider a Samsung Galaxy S3, Android 4.3, average
+contact size 6KB with photo data and 235B without. The transfer rate
+is 40KB/s with photo data, 17KB/s without. To achieve 30s per chunk,
+one needs to choose 243 contacts per chunk with photo data resp. 2500
+without. A transfer of 1000 contacts without photos completes in under
+17 seconds, with photos under 2:05 minutes. In this case, downloading
+in chunks was almost as fast as transferring all at once.
+
+To debug transferring in chunks, run
+  SYNCEVOLUTION_DEBUG=1 syncevolution --daemon=no --export - \
+     backend=pbap loglevel=4 \
+     database=obex-bt://64:B3:10:C0:8C:2E 2>&1 | grep -e transferred -e "pullall" -e "max count"
