@@ -673,24 +673,29 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 } else {
                     throwError(SE_HERE, "storing new item", gerror);
                 }
-
+#ifdef USE_EDS_CLIENT
+                GListCXX<icalcomponent, GSList> objs;
+                BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
+                    objs.push_front(*icalcomp);
+                }
+                if (!objs.empty() &&
+                    !e_cal_client_modify_objects_sync(m_calendar, objs,
+                                                      CALOBJ_MOD_THIS, NULL,
+                                                      gerror)) {
+                    throwError(SE_HERE, string("recreating item ") + luid, gerror);
+                }
+#else
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
-                    if (
-#ifdef USE_EDS_CLIENT
-                        !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                         CALOBJ_MOD_THIS, NULL,
-                                                         gerror)
-#else
-                        !e_cal_modify_object(m_calendar, *icalcomp,
+                    if (!e_cal_modify_object(m_calendar, *icalcomp,
                                              CALOBJ_MOD_THIS,
                                              gerror)
-#endif
                         ) {
                         throwError(SE_HERE, string("recreating item ") + newluid, gerror);
                     }
                 }
+#endif
             }
         }
     }
@@ -769,16 +774,16 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
 #ifdef USE_EDS_CLIENT
-                GSList *objs = 0;
+                GListCXX<icalcomponent, GSList> objs;
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
-                    objs = g_slist_append(objs, *icalcomp);
+                    objs.push_front(*icalcomp);
                 }
-                if (!e_cal_client_modify_objects_sync(m_calendar, objs,
+                if (!objs.empty() &&
+                    !e_cal_client_modify_objects_sync(m_calendar, objs,
                                                       CALOBJ_MOD_THIS, NULL,
                                                       gerror)) {
                     throwError(SE_HERE, string("recreating item ") + luid, gerror);
                 }
-                g_slist_free(objs);
 #else
                 BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
                     if (!e_cal_modify_object(m_calendar, *icalcomp,
@@ -893,6 +898,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 
         // recreate children
         bool first = true;
+        GListCXX<icalcomponent, GSList> objs;
         BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
             if (first) {
                 char *uid;
@@ -912,21 +918,25 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 #endif
                 first = false;
             } else {
-                if (
 #ifdef USE_EDS_CLIENT
-                    !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                     CALOBJ_MOD_THIS, NULL,
-                                                     gerror)
+                objs.push_back(*icalcomp);
 #else
-                    !e_cal_modify_object(m_calendar, *icalcomp,
+                if (!e_cal_modify_object(m_calendar, *icalcomp,
                                          CALOBJ_MOD_THIS,
-                                         gerror)
-#endif
-                    ) {
+                                         gerror)) {
                     throwError(SE_HERE, string("recreating following item ") + luid, gerror);
                 }
+#endif
             }
         }
+#ifdef USE_EDS_CLIENT
+        if (!objs.empty() &&
+            !e_cal_client_modify_objects_sync(m_calendar, objs,
+                                               CALOBJ_MOD_THIS, NULL,
+                                               gerror)) {
+            throwError(SE_HERE, string("recreating following item ") + luid, gerror);
+        }
+#endif
     } else {
         // workaround for EDS 2.32 API semantic: succeeds even if
         // detached recurrence doesn't exist and adds EXDATE,
