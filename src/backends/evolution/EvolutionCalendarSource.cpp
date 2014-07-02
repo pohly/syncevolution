@@ -545,29 +545,27 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         GErrorCXX gerror;
         const char *tzid = icaltimezone_get_tzid(zone);
 
-        //we are receiving two similar timezones names we will remove the prefix to make easy to compare
-        string timeZoneName(tzid);
-        std::size_t found = timeZoneName.find("/freeassociation.sourceforge.net/Tzfile/");
-        if (found != std::string::npos) {
-            timeZoneName.replace(timeZoneName.begin(), timeZoneName.begin() + 40, ""); // 40 == strlen("/freeassociation.sourceforge.net/Tzfile/")
-        }
-
         if (!tzid || !tzid[0]) {
             // cannot add a VTIMEZONE without TZID
             SE_LOG_DEBUG(getDisplayName(), "skipping VTIMEZONE without TZID");
-        } else if (find(m_knownTimezones.begin(), m_knownTimezones.end(), timeZoneName) == m_knownTimezones.end()) {
-            gboolean success =
+        } else {
+            string timeZoneName(icaltimezone_get_display_name(zone));
+            // check if the timezone was already registered in EDS
+            // Keeping a cache of already registered timezones will avoid some dbus call of "e_cal_client_add_timezone_sync"
+            if (find(m_knownTimezones.begin(), m_knownTimezones.end(), timeZoneName) == m_knownTimezones.end()) {
+                gboolean success =
 #ifdef USE_EDS_CLIENT
-                e_cal_client_add_timezone_sync(m_calendar, zone, NULL, gerror)
+                    e_cal_client_add_timezone_sync(m_calendar, zone, NULL, gerror)
 #else
-                e_cal_add_timezone(m_calendar, zone, gerror)
+                    e_cal_add_timezone(m_calendar, zone, gerror)
 #endif
-                ;
-            if (!success) {
-                throwError(SE_HERE, string("error adding VTIMEZONE ") + tzid,
-                           gerror);
-            } else {
-                m_knownTimezones.push_back(timeZoneName);
+                    ;
+                if (!success) {
+                    throwError(SE_HERE, string("error adding VTIMEZONE ") + tzid,
+                               gerror);
+                } else {
+                    m_knownTimezones.push_back(timeZoneName);
+                }
             }
         }
     }
