@@ -124,4 +124,5 @@ The PIM Manager defaults to SYNCEVOLUTION_PBAP_SYNC=incremental. This
 can be overriden by setting the env variable when starting
 syncevo-dbus-server, for example by patching
 src/dbus/server/syncevo-dbus-server-startup.sh.in =
-/usr/libexec/syncevo-dbus-server-startup.sh.
+/usr/libexec/syncevo-dbus-server-startup.sh, or using the new
+SyncPeerWithFlags() and 'pbap-sync' flag.
