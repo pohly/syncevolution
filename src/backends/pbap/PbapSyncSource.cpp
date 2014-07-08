@@ -100,6 +100,8 @@ struct PullParams
 
     /** Initial chunk offset, again in contacts. */
     uint16_t m_startOffset;
+
+    PullParams() { memset(this, 0, sizeof(*this)); }
 };
 
 /**
@@ -248,9 +250,17 @@ public:
 };
 
 PullAll::PullAll() :
+    m_contentStartIndex(0),
     m_numContacts(0),
     m_currentContact(0),
-    m_tmpFileOffset(0)
+    m_tmpFileOffset(0),
+    m_transferOffset(0),
+    m_initialOffset(0),
+    m_transferMaxCount(0),
+    m_desiredMaxCount(0),
+    m_lastTransferRate(0),
+    m_lastContactSizeAverage(0),
+    m_wasSuspended(false)
 {}
 
 PullAll::~PullAll()
