@@ -285,6 +285,8 @@ class Action:
                                     # inside the home by a concurrent Akonadi instance.
                                     # Some files need special processing (see below).
                                     elif not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)) \
+                                            or entry == 'akonadi.db-shm' \
+                                            or entry == 'akonadiconnectionrc' \
                                             or entry.endswith('.pid') \
                                             or entry.startswith('socket-'):
                                         exclude.append(entry)
