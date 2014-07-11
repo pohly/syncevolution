@@ -55,361 +55,367 @@
        LOOSING.PHOTO = EMPTY;
      }
 
-     // Merge arrays such that the superset remains in the winning item.
-     // The arrays then get copied wholesale to the loosing item.
-     // Items which share the label array must avoid conflicts in the label
-     // array, the others don't.
-     // See "[SyncEvolution] merging of winning and loosing items"
-     INTEGER i;
-     INTEGER num;
-     TELEPHONE tel;
-     DATE xdate;
-     STRING val;
+     // When running in caching mode, we end up executing the merge script,
+     // but in that case we want to remove data from the loosing item and
+     // thus need to skip the array merging.
+     if (!CACHEDATA()) {
+       // Merge arrays such that the superset remains in the winning item.
+       // The arrays then get copied wholesale to the loosing item.
+       // Items which share the label array must avoid conflicts in the label
+       // array, the others don't.
+       // See "[SyncEvolution] merging of winning and loosing items"
+       INTEGER i;
+       INTEGER num;
+       TELEPHONE tel;
+       DATE xdate;
+       STRING val;
 
-     i = SIZE(LOOSING.TEL) - 1;
-     while (i >= 0) {
-        tel = LOOSING.TEL[i];
-        if (tel != EMPTY &&
-            !CONTAINS(WINNING.TEL, tel)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.TEL[num] = tel;
-           WINNING.TEL_FLAGS[num] = LOOSING.TEL_FLAGS[i];
-           WINNING.TEL_SLOT[num] = LOOSING.TEL_SLOT[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.TEL) - 1;
+       while (i >= 0) {
+          tel = LOOSING.TEL[i];
+          if (tel != EMPTY &&
+              !CONTAINS(WINNING.TEL, tel)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.TEL[num] = tel;
+             WINNING.TEL_FLAGS[num] = LOOSING.TEL_FLAGS[i];
+             WINNING.TEL_SLOT[num] = LOOSING.TEL_SLOT[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.XDATE) - 1;
-     while (i >= 0) {
-        xdate = LOOSING.XDATE[i];
-        if (xdate != EMPTY &&
-            !CONTAINS(WINNING.XDATE, xdate)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.XDATE[num] = xdate;
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.XDATE) - 1;
+       while (i >= 0) {
+          xdate = LOOSING.XDATE[i];
+          if (xdate != EMPTY &&
+              !CONTAINS(WINNING.XDATE, xdate)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.XDATE[num] = xdate;
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.EMAIL) - 1;
-     while (i >= 0) {
-        val = LOOSING.EMAIL[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.EMAIL, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.EMAIL[num] = val;
-           WINNING.EMAIL_FLAGS[num] = LOOSING.EMAIL_FLAGS[i];
-           WINNING.EMAIL_SLOT[num] = LOOSING.EMAIL_SLOT[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.EMAIL) - 1;
+       while (i >= 0) {
+          val = LOOSING.EMAIL[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.EMAIL, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.EMAIL[num] = val;
+             WINNING.EMAIL_FLAGS[num] = LOOSING.EMAIL_FLAGS[i];
+             WINNING.EMAIL_SLOT[num] = LOOSING.EMAIL_SLOT[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.WEB) - 1;
-     while (i >= 0) {
-        val = LOOSING.WEB[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.WEB, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.WEB[num] = val;
-           WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.WEB) - 1;
+       while (i >= 0) {
+          val = LOOSING.WEB[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.WEB, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.WEB[num] = val;
+             WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.WEB) - 1;
-     while (i >= 0) {
-        val = LOOSING.WEB[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.WEB, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.WEB[num] = val;
-           WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.WEB) - 1;
+       while (i >= 0) {
+          val = LOOSING.WEB[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.WEB, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.WEB[num] = val;
+             WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.WEB) - 1;
-     while (i >= 0) {
-        val = LOOSING.WEB[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.WEB, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.WEB[num] = val;
-           WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.WEB) - 1;
+       while (i >= 0) {
+          val = LOOSING.WEB[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.WEB, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.WEB[num] = val;
+             WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.CALURI) - 1;
-     while (i >= 0) {
-        val = LOOSING.CALURI[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.CALURI, val)) {
-           num = SIZE(WINNING.CALURI);
-           WINNING.CALURI[num] = val;
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.CALURI) - 1;
+       while (i >= 0) {
+          val = LOOSING.CALURI[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.CALURI, val)) {
+             num = SIZE(WINNING.CALURI);
+             WINNING.CALURI[num] = val;
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.FBURL) - 1;
-     while (i >= 0) {
-        val = LOOSING.FBURL[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.FBURL, val)) {
-           num = SIZE(WINNING.FBURL);
-           WINNING.FBURL[num] = val;
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.FBURL) - 1;
+       while (i >= 0) {
+          val = LOOSING.FBURL[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.FBURL, val)) {
+             num = SIZE(WINNING.FBURL);
+             WINNING.FBURL[num] = val;
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.BLOGURL) - 1;
-     while (i >= 0) {
-        val = LOOSING.BLOGURL[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.BLOGURL, val)) {
-           num = SIZE(WINNING.BLOGURL);
-           WINNING.BLOGURL[num] = val;
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.BLOGURL) - 1;
+       while (i >= 0) {
+          val = LOOSING.BLOGURL[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.BLOGURL, val)) {
+             num = SIZE(WINNING.BLOGURL);
+             WINNING.BLOGURL[num] = val;
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.VIDEOURL) - 1;
-     while (i >= 0) {
-        val = LOOSING.VIDEOURL[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.VIDEOURL, val)) {
-           num = SIZE(WINNING.VIDEOURL);
-           WINNING.VIDEOURL[num] = val;
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.VIDEOURL) - 1;
+       while (i >= 0) {
+          val = LOOSING.VIDEOURL[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.VIDEOURL, val)) {
+             num = SIZE(WINNING.VIDEOURL);
+             WINNING.VIDEOURL[num] = val;
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.CALURI) - 1;
-     while (i >= 0) {
-        val = LOOSING.CALURI[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.CALURI, val)) {
-           num = SIZE(WINNING.CALURI);
-           WINNING.CALURI[num] = val;
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.CALURI) - 1;
+       while (i >= 0) {
+          val = LOOSING.CALURI[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.CALURI, val)) {
+             num = SIZE(WINNING.CALURI);
+             WINNING.CALURI[num] = val;
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.RELATEDNAMES) - 1;
-     while (i >= 0) {
-        val = LOOSING.RELATEDNAMES[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.RELATEDNAMES, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.RELATEDNAMES[num] = val;
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.RELATEDNAMES) - 1;
+       while (i >= 0) {
+          val = LOOSING.RELATEDNAMES[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.RELATEDNAMES, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.RELATEDNAMES[num] = val;
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.IMPP) - 1;
-     while (i >= 0) {
-        val = LOOSING.IMPP[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.IMPP, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.IMPP[num] = val;
-           WINNING.IMPP_SERVICE[num] = LOOSING.IMPP_SERVICE[i];
-           WINNING.IMPP_SLOT[num] = LOOSING.IMPP_SLOT[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     
-     i = SIZE(LOOSING.AIM_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.AIM_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.AIM_HANDLE, val)) {
-           num = SIZE(WINNING.AIM_HANDLE);
-           WINNING.AIM_HANDLE[num] = val;
-           WINNING.AIM_SLOT[num] = LOOSING.AIM_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.IMPP) - 1;
+       while (i >= 0) {
+          val = LOOSING.IMPP[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.IMPP, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.IMPP[num] = val;
+             WINNING.IMPP_SERVICE[num] = LOOSING.IMPP_SERVICE[i];
+             WINNING.IMPP_SLOT[num] = LOOSING.IMPP_SLOT[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.GADUGADU_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.GADUGADU_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.GADUGADU_HANDLE, val)) {
-           num = SIZE(WINNING.GADUGADU_HANDLE);
-           WINNING.GADUGADU_HANDLE[num] = val;
-           WINNING.GADUGADU_SLOT[num] = LOOSING.GADUGADU_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.GROUPWISE_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.GROUPWISE_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.GROUPWISE_HANDLE, val)) {
-           num = SIZE(WINNING.GROUPWISE_HANDLE);
-           WINNING.GROUPWISE_HANDLE[num] = val;
-           WINNING.GROUPWISE_SLOT[num] = LOOSING.GROUPWISE_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.ICQ_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.ICQ_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.ICQ_HANDLE, val)) {
-           num = SIZE(WINNING.ICQ_HANDLE);
-           WINNING.ICQ_HANDLE[num] = val;
-           WINNING.ICQ_SLOT[num] = LOOSING.ICQ_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.JABBER_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.JABBER_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.JABBER_HANDLE, val)) {
-           num = SIZE(WINNING.JABBER_HANDLE);
-           WINNING.JABBER_HANDLE[num] = val;
-           WINNING.JABBER_SLOT[num] = LOOSING.JABBER_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.MSN_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.MSN_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.MSN_HANDLE, val)) {
-           num = SIZE(WINNING.MSN_HANDLE);
-           WINNING.MSN_HANDLE[num] = val;
-           WINNING.MSN_SLOT[num] = LOOSING.MSN_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.YAHOO_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.YAHOO_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.YAHOO_HANDLE, val)) {
-           num = SIZE(WINNING.YAHOO_HANDLE);
-           WINNING.YAHOO_HANDLE[num] = val;
-           WINNING.YAHOO_SLOT[num] = LOOSING.YAHOO_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.SKYPE_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.SKYPE_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.SKYPE_HANDLE, val)) {
-           num = SIZE(WINNING.SKYPE_HANDLE);
-           WINNING.SKYPE_HANDLE[num] = val;
-           WINNING.SKYPE_SLOT[num] = LOOSING.SKYPE_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
-     i = SIZE(LOOSING.SIP_HANDLE) - 1;
-     while (i >= 0) {
-        val = LOOSING.SIP_HANDLE[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.SIP_HANDLE, val)) {
-           num = SIZE(WINNING.SIP_HANDLE);
-           WINNING.SIP_HANDLE[num] = val;
-           WINNING.SIP_SLOT[num] = LOOSING.SIP_SLOT[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.AIM_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.AIM_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.AIM_HANDLE, val)) {
+             num = SIZE(WINNING.AIM_HANDLE);
+             WINNING.AIM_HANDLE[num] = val;
+             WINNING.AIM_SLOT[num] = LOOSING.AIM_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.GADUGADU_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.GADUGADU_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.GADUGADU_HANDLE, val)) {
+             num = SIZE(WINNING.GADUGADU_HANDLE);
+             WINNING.GADUGADU_HANDLE[num] = val;
+             WINNING.GADUGADU_SLOT[num] = LOOSING.GADUGADU_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.GROUPWISE_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.GROUPWISE_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.GROUPWISE_HANDLE, val)) {
+             num = SIZE(WINNING.GROUPWISE_HANDLE);
+             WINNING.GROUPWISE_HANDLE[num] = val;
+             WINNING.GROUPWISE_SLOT[num] = LOOSING.GROUPWISE_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.ICQ_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.ICQ_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.ICQ_HANDLE, val)) {
+             num = SIZE(WINNING.ICQ_HANDLE);
+             WINNING.ICQ_HANDLE[num] = val;
+             WINNING.ICQ_SLOT[num] = LOOSING.ICQ_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.JABBER_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.JABBER_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.JABBER_HANDLE, val)) {
+             num = SIZE(WINNING.JABBER_HANDLE);
+             WINNING.JABBER_HANDLE[num] = val;
+             WINNING.JABBER_SLOT[num] = LOOSING.JABBER_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.MSN_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.MSN_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.MSN_HANDLE, val)) {
+             num = SIZE(WINNING.MSN_HANDLE);
+             WINNING.MSN_HANDLE[num] = val;
+             WINNING.MSN_SLOT[num] = LOOSING.MSN_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.YAHOO_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.YAHOO_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.YAHOO_HANDLE, val)) {
+             num = SIZE(WINNING.YAHOO_HANDLE);
+             WINNING.YAHOO_HANDLE[num] = val;
+             WINNING.YAHOO_SLOT[num] = LOOSING.YAHOO_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.SKYPE_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.SKYPE_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.SKYPE_HANDLE, val)) {
+             num = SIZE(WINNING.SKYPE_HANDLE);
+             WINNING.SKYPE_HANDLE[num] = val;
+             WINNING.SKYPE_SLOT[num] = LOOSING.SKYPE_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
+       i = SIZE(LOOSING.SIP_HANDLE) - 1;
+       while (i >= 0) {
+          val = LOOSING.SIP_HANDLE[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.SIP_HANDLE, val)) {
+             num = SIZE(WINNING.SIP_HANDLE);
+             WINNING.SIP_HANDLE[num] = val;
+             WINNING.SIP_SLOT[num] = LOOSING.SIP_SLOT[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.EMAIL) - 1;
-     while (i >= 0) {
-        val = LOOSING.EMAIL[i];
-        if (val != EMPTY &&
-            !CONTAINS(WINNING.EMAIL, val)) {
-           num = SIZE(WINNING.LABEL);
-           WINNING.EMAIL[num] = val;
-           WINNING.EMAIL_FLAGS[num] = LOOSING.EMAIL_FLAGS[i];
-           WINNING.EMAIL_SLOT[num] = LOOSING.EMAIL_SLOT[i];
-           WINNING.LABEL[num] = LOOSING.LABEL[i];
-           winningchanged = 1;
-        }
-        i = i - 1;
-     }
+       i = SIZE(LOOSING.EMAIL) - 1;
+       while (i >= 0) {
+          val = LOOSING.EMAIL[i];
+          if (val != EMPTY &&
+              !CONTAINS(WINNING.EMAIL, val)) {
+             num = SIZE(WINNING.LABEL);
+             WINNING.EMAIL[num] = val;
+             WINNING.EMAIL_FLAGS[num] = LOOSING.EMAIL_FLAGS[i];
+             WINNING.EMAIL_SLOT[num] = LOOSING.EMAIL_SLOT[i];
+             WINNING.LABEL[num] = LOOSING.LABEL[i];
+             winningchanged = 1;
+          }
+          i = i - 1;
+       }
 
-     i = SIZE(LOOSING.ADR_STREET) - 1;
-     INTEGER e;
-     INTEGER contained;
-     while (i >= 0) {
-        if (LOOSING.ADR_STREET[i] != EMPTY ||
-            LOOSING.ADR_ADDTL[i] != EMPTY ||
-            LOOSING.ADR_STREET_FLAGS[i] != EMPTY ||
-            LOOSING.ADR_POBOX[i] != EMPTY ||
-            LOOSING.ADR_CITY[i] != EMPTY ||
-            LOOSING.ADR_REG[i] != EMPTY ||
-            LOOSING.ADR_ZIP[i] != EMPTY ||
-            LOOSING.ADR_COUNTRY[i] != EMPTY) {
-            contained = 0;
-            e = SIZE(WINNING.ADR_STREET) - 1;
-            while (e >= 0) {
-               if (LOOSING.ADR_STREET[i] == WINNING.ADR_STREET[e] &&
-                   LOOSING.ADR_ADDTL[i] == WINNING.ADR_ADDTL[e] &&
-                   LOOSING.ADR_STREET_FLAGS[i] == WINNING.ADR_STREET_FLAGS[e] &&
-                   LOOSING.ADR_POBOX[i] == WINNING.ADR_POBOX[e] &&
-                   LOOSING.ADR_CITY[i] == WINNING.ADR_CITY[e] &&
-                   LOOSING.ADR_REG[i] == WINNING.ADR_REG[e] &&
-                   LOOSING.ADR_ZIP[i] == WINNING.ADR_ZIP[e] &&
-                   LOOSING.ADR_COUNTRY[i] == WINNING.ADR_COUNTRY[e]) {
-                   contained = 1;
-                   break;
-               }
-               e = e - 1;
-            }
-            if (!contained) {
-               num = SIZE(WINNING.LABEL);
-               WINNING.ADR_STREET[num] = LOOSING.ADR_STREET[i];
-               WINNING.ADR_ADDTL[num] = LOOSING.ADR_ADDTL[i];
-               WINNING.ADR_STREET_FLAGS[num] = LOOSING.ADR_STREET_FLAGS[i];
-               WINNING.ADR_POBOX[num] = LOOSING.ADR_POBOX[i];
-               WINNING.ADR_CITY[num] = LOOSING.ADR_CITY[i];
-               WINNING.ADR_REG[num] = LOOSING.ADR_REG[i];
-               WINNING.ADR_ZIP[num] = LOOSING.ADR_ZIP[i];
-               WINNING.ADR_COUNTRY[num] = LOOSING.ADR_COUNTRY[i];
-               WINNING.LABEL[num] = LOOSING.LABEL[i];
-               winningchanged = 1;
-            }
-        }
-        i = i - 1;
+       i = SIZE(LOOSING.ADR_STREET) - 1;
+       INTEGER e;
+       INTEGER contained;
+       while (i >= 0) {
+          if (LOOSING.ADR_STREET[i] != EMPTY ||
+              LOOSING.ADR_ADDTL[i] != EMPTY ||
+              LOOSING.ADR_STREET_FLAGS[i] != EMPTY ||
+              LOOSING.ADR_POBOX[i] != EMPTY ||
+              LOOSING.ADR_CITY[i] != EMPTY ||
+              LOOSING.ADR_REG[i] != EMPTY ||
+              LOOSING.ADR_ZIP[i] != EMPTY ||
+              LOOSING.ADR_COUNTRY[i] != EMPTY) {
+              contained = 0;
+              e = SIZE(WINNING.ADR_STREET) - 1;
+              while (e >= 0) {
+                 if (LOOSING.ADR_STREET[i] == WINNING.ADR_STREET[e] &&
+                     LOOSING.ADR_ADDTL[i] == WINNING.ADR_ADDTL[e] &&
+                     LOOSING.ADR_STREET_FLAGS[i] == WINNING.ADR_STREET_FLAGS[e] &&
+                     LOOSING.ADR_POBOX[i] == WINNING.ADR_POBOX[e] &&
+                     LOOSING.ADR_CITY[i] == WINNING.ADR_CITY[e] &&
+                     LOOSING.ADR_REG[i] == WINNING.ADR_REG[e] &&
+                     LOOSING.ADR_ZIP[i] == WINNING.ADR_ZIP[e] &&
+                     LOOSING.ADR_COUNTRY[i] == WINNING.ADR_COUNTRY[e]) {
+                     contained = 1;
+                     break;
+                 }
+                 e = e - 1;
+              }
+              if (!contained) {
+                 num = SIZE(WINNING.LABEL);
+                 WINNING.ADR_STREET[num] = LOOSING.ADR_STREET[i];
+                 WINNING.ADR_ADDTL[num] = LOOSING.ADR_ADDTL[i];
+                 WINNING.ADR_STREET_FLAGS[num] = LOOSING.ADR_STREET_FLAGS[i];
+                 WINNING.ADR_POBOX[num] = LOOSING.ADR_POBOX[i];
+                 WINNING.ADR_CITY[num] = LOOSING.ADR_CITY[i];
+                 WINNING.ADR_REG[num] = LOOSING.ADR_REG[i];
+                 WINNING.ADR_ZIP[num] = LOOSING.ADR_ZIP[i];
+                 WINNING.ADR_COUNTRY[num] = LOOSING.ADR_COUNTRY[i];
+                 WINNING.LABEL[num] = LOOSING.LABEL[i];
+                 winningchanged = 1;
+              }
+          }
+          i = i - 1;
+       }
      }
-
-     if (winningchanged) { SETWINNINGCHANGED(1); }
+     // Never tell the engine to update the winning client item
+     // in a caching sync. The engine would send an update to the
+     // client, which is not what we want when caching!
+     if (!CACHEDATA() && winningchanged) { SETWINNINGCHANGED(1); }
      if (loosingchanged) { SETLOOSINGCHANGED(1); }
 
      // Continue merge.
