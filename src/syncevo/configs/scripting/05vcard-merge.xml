@@ -49,6 +49,10 @@
            }
          }
        }
+     } else {
+       LOOSING.PHOTO_VALUE = EMPTY;
+       LOOSING.PHOTO_TYPE = EMPTY;
+       LOOSING.PHOTO = EMPTY;
      }
 
      // Merge arrays such that the superset remains in the winning item.
