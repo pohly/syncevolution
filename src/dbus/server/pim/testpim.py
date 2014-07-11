@@ -44,6 +44,8 @@ import itertools
 import codecs
 import pprint
 import shutil
+import ConfigParser
+import io
 
 import localed
 
@@ -843,17 +845,56 @@ XDG root.
                                          '/org/01/pim/contacts',
                                          byte_arrays=True,
                                          utf8_strings=True)
-        def checkSync(expectedResult, result, intermediateResult=None):
-             self.assertEqual(expectedResult, result)
-             while not (uid, 'done', {}) in syncProgress:
-                  self.loopIteration('added signal')
-             progress = [ (uid, 'started', {}) ]
-             if intermediateResult:
-                  progress.append((uid, 'modified', intermediateResult))
-             progress.append((uid, 'modified', expectedResult))
-             progress.append((uid, 'done', {}))
-             self.assertEqual(progress, [(u, e, d) for u, e, d in syncProgress if e != 'progress'])
+        targetsessions = []
+        logdir = xdg_root + '/cache/syncevolution/'
+        # for entry in os.listdir(logdir):
+        #      session = os.path.join(logdir, entry)
+        #      if entry.startswith('target_+config@'):
+        #           targetsessions.append(session)
 
+        # Must be called after each sync with the peer.
+        def checkSync(expectedResult, result, intermediateResult, logdir):
+             if expectedResult is not None:
+                  self.assertEqual(expectedResult, result)
+                  while not (uid, 'done', {}) in syncProgress:
+                       self.loopIteration('added signal')
+                  progress = [ (uid, 'started', {}) ]
+                  if intermediateResult:
+                       progress.append((uid, 'modified', intermediateResult))
+                  progress.append((uid, 'modified', expectedResult))
+                  progress.append((uid, 'done', {}))
+                  self.assertEqual(progress, [(u, e, d) for u, e, d in syncProgress if e != 'progress'])
+
+             # Verify result on target side. We don't get any information about it
+             # from the PIM Manager, so look at the status.ini file directly.
+             # For that we need to identify the new session dir.
+             newsessions = []
+             for entry in os.listdir(logdir):
+                  session = os.path.join(logdir, entry)
+                  if 'target_+config@' in entry and \
+                           (not session in targetsessions):
+                       newsessions.append(session)
+             self.assertTrue(newsessions)
+             self.assertEqual([session], newsessions)
+             targetsessions.extend(newsessions)
+             config = ConfigParser.ConfigParser()
+             content = '[fake]\n' + open(os.path.join(session, 'status.ini')).read()
+             config.readfp(io.BytesIO(content))
+             content = dict(config.items('fake'))
+             for i in ['start',
+                       'end',
+                       'source-remote-stat-local-any-sent',
+                       'source-remote-stat-remote-added-total']:
+                  if i in content:
+                       del content[i]
+             self.assertEqual({ 'status': '200',
+                                'source-remote-mode': 'slow',
+                                'source-remote-first': 'true',
+                                'source-remote-resume': 'false',
+                                'source-remote-status': '0',
+                                'source-remote-backup-before': '-1',
+                                'source-remote-backup-after': '-1',
+                                }, content)
 
         # Must be the Bluetooth MAC address (like A0:4E:04:1E:AD:30)
         # of a phone which is paired, currently connected, and
@@ -919,6 +960,7 @@ XDG root.
                                      uid)
         progress('clear', duration)
         # TODO: check that syncPhone() really used PBAP - but how?
+        checkSync(None, None, None, logdir)
 
         # Should not have written files, except for specific exceptions:
         exclude = []
@@ -931,7 +973,11 @@ XDG root.
         exclude.extend([xdg_root + '/cache/syncevolution/[^/]*/synthesis(/|$)'])
 
         # Now compare files and their modification time stamp.
-        self.assertEqual(files, listsyncevo(exclude=exclude))
+        # SYNCEVOLUTION_LOGLEVEL can be used to increase verbosity
+        # during these tests, in which case this particular assert
+        # may fail because of extra message dumps.
+        if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+             self.assertEqual(files, listsyncevo(exclude=exclude))
 
         # Export data from local database into a file via the --export
         # operation in the syncevo-dbus-server. Depends on (and tests)
@@ -945,7 +991,8 @@ XDG root.
         self.compareDBs(contacts, export)
 
         # Add a contact.
-        john = '''BEGIN:VCARD
+        if phone:
+             john = '''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
@@ -966,13 +1013,25 @@ PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQEASABIAAD/4QAWRXhpZgAATU0AKgAA
  /VH5nO3Bl/CJmYHKDynjv3zCEB5rLQNo0bIbydWNWxKljbLQLoWkISOAkBKAABCEID//2Q==
 END:VCARD'''
 
-        # Test all fields that PIM Manager supports in its D-Bus API
-        # when using the file backend, because (in contrast to a phone)
-        # we know that it supports them, too.
-        if not phone:
+        else:
+             # Test all fields that PIM Manager supports in its D-Bus API
+             # when using the file backend, because (in contrast to a phone)
+             # we know that it supports them, too.
+             #
+             # The order of properties is intentionally not how
+             # libsynthesis generates them, because we need to ensure
+             # that the field lists are in a normalized form when
+             # comparing arrays. This is currently achieved by the
+             # parse/encode cycle on the client side, which must use
+             # the same vCard flavor and options as the local storage.
+             #
+             # This happens to work for EDS but is not guaranteed to
+             # work for other storages.
+             #
+             # Whether empty properties get generated or not is relevant.
+             # To test this, our test case has no URL.
              john = r'''BEGIN:VCARD
 VERSION:3.0
-URL:http://john.doe.com
 TITLE:Senior Tester
 ORG:Test Inc.;Testing;test#1
 ROLE:professional test case
@@ -993,6 +1052,11 @@ CALURI:calender
 FBURL:free/busy
 X-EVOLUTION-VIDEO-URL:chat
 X-MOZILLA-HTML:TRUE
+UID:pas-id-43C0ED3900000001
+EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
+EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
+EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=4:john.doe@yet.another.world
 ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
  ld Testovia
 LABEL;TYPE=WORK:Test Drive 2\nTest Town\, Upper Test County\n12346\nTest Bo
@@ -1002,13 +1066,6 @@ ADR;TYPE=HOME:Test Box #1;;Test Drive 1;Test Village;Lower Test County;1234
 LABEL;TYPE=HOME:Test Drive 1\nTest Village\, Lower Test County\n12345\nTest
   Box #1\nTestovia
 ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
-LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
-  #3\nNew Testonia
-UID:pas-id-43C0ED3900000001
-EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
-EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
-EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
-EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=4:john.doe@yet.another.world
 TEL;TYPE=work;TYPE=Voice;X-EVOLUTION-UI-SLOT=1:business 1
 TEL;TYPE=homE;TYPE=VOICE;X-EVOLUTION-UI-SLOT=2:home 2
 TEL;TYPE=CELL;X-EVOLUTION-UI-SLOT=3:mobile 3
@@ -1017,6 +1074,23 @@ TEL;TYPE=HOME;TYPE=FAX;X-EVOLUTION-UI-SLOT=5:homefax 5
 TEL;TYPE=PAGER;X-EVOLUTION-UI-SLOT=6:pager 6
 TEL;TYPE=CAR;X-EVOLUTION-UI-SLOT=7:car 7
 TEL;TYPE=PREF;X-EVOLUTION-UI-SLOT=8:primary 8
+LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
+  #3\nNew Testonia
+PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQEASABIAAD/4QAWRXhpZgAATU0AKgAA
+ AAgAAAAAAAD//gAXQ3JlYXRlZCB3aXRoIFRoZSBHSU1Q/9sAQwAFAwQEBAMFBAQEBQUFBgcM
+ CAcHBwcPCwsJDBEPEhIRDxERExYcFxMUGhURERghGBodHR8fHxMXIiQiHiQcHh8e/9sAQwEF
+ BQUHBgcOCAgOHhQRFB4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4e
+ Hh4eHh4eHh4e/8AAEQgAFwAkAwEiAAIRAQMRAf/EABkAAQADAQEAAAAAAAAAAAAAAAAGBwgE
+ Bf/EADIQAAECBQMCAwQLAAAAAAAAAAECBAADBQYRBxIhEzEUFSIIFjNBGCRHUVZ3lqXD0+P/
+ xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMR
+ AD8AuX6UehP45/aXv9MTPTLVKxNSvMPcqu+a+XdLxf1SfJ6fU37PioTnOxfbOMc/KIZ7U/2V
+ fmTR/wCaKlu6+blu/Ui72zxWtUmmUOrTaWwkWDT09FPR4K587OVrUfVsIwElPPPAbAjxr2um
+ hWXbDu5rmfeApLPZ4hx0lzNm9aUJ9KAVHKlJHAPf7ozPLqWt9y6Z0EPGmoLNjTq48a1iaybJ
+ YV52yEtCms5KJmAT61JXtJyUdyQTEc1WlMql7N1/oZ6jagVZVFfUyZPpFy5lvWcxU7Z03BUk
+ GZLWJqVhPYLkIIPBEBtSEUyNAsjI1q1m/VP+UICwL/sqlXp7v+aOHsnyGttq218MtKd8+Ru2
+ JXuScoO45Awe2CIi96aKW1cVyubkYVy6rTqz0J8a5t2qqZl0UjAMwYKScfPAJ+cIQHHP0Dth
+ VFaMWt0XwxetnM50Ks2rsxL6ZMnJlJmb5hBBBEiVxjA28dznqo+hdksbQuS3Hs6tVtNzdM1Z
+ /VH5nO3Bl/CJmYHKDynjv3zCEB5rLQNo0bIbydWNWxKljbLQLoWkISOAkBKAABCEID//2Q==
 END:VCARD
 '''
 
@@ -1061,10 +1135,12 @@ END:VCARD
                     'updated': finalUpdated,
                     'removed': 0},
                   result,
-                  intermediate)
+                  intermediate,
+                  logdir)
 
         # Also exclude modified database files.
-        self.assertEqual(files, listsyncevo(exclude=exclude))
+        if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+             self.assertEqual(files, listsyncevo(exclude=exclude))
 
         # Testcase data does not necessarily import/export without changes.
         if not testcases:
@@ -1088,9 +1164,11 @@ END:VCARD
                                'removed': 0}
              checkSync(expectedResult,
                        result,
-                       incrementalSync and expectedResult)
+                       incrementalSync and expectedResult,
+                       logdir)
              exclude.append(logdir + '(/$)')
-             self.assertEqual(files, listsyncevo(exclude=exclude))
+             if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+                  self.assertEqual(files, listsyncevo(exclude=exclude))
              self.assertEqual(2, len(os.listdir(logdir)))
 
         # No changes.
@@ -1104,8 +1182,10 @@ END:VCARD
                           'removed': 0}
         checkSync(expectedResult,
                   result,
-                  incrementalSync and expectedResult)
-        self.assertEqual(files, listsyncevo(exclude=exclude))
+                  incrementalSync and expectedResult,
+                  logdir)
+        if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+             self.assertEqual(files, listsyncevo(exclude=exclude))
         if not phone:
              self.assertEqual(testcases and 6 or 2, len(os.listdir(logdir)))
 
@@ -1123,24 +1203,26 @@ END:VCARD
                                'removed': 0}
              checkSync(expectedResult,
                        result,
-                       incrementalSync and expectedResult)
+                       incrementalSync and expectedResult,
+                       logdir)
              exclude.append(logdir + '(/$)')
-             self.assertEqual(files, listsyncevo(exclude=exclude))
+             if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+                  self.assertEqual(files, listsyncevo(exclude=exclude))
              self.assertEqual(4, len(os.listdir(logdir)))
 
-        # Test incremental sync API. Only possible with real phone.
+        # Test syncing again. Incremental sync only possible with real phone.
         if phone:
+             syncProgress = []
              expectedResult = {'modified': False,
                                'added': 0,
                                'updated': 0,
                                'removed': 0}
-
-             syncProgress = []
              duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'text' })
              # TODO: check that we actually do text-only sync
              checkSync(expectedResult,
                        result,
-                       None)
+                       None,
+                       logdir)
 
              syncProgress = []
              duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'all' })
@@ -1151,7 +1233,8 @@ END:VCARD
              # TODO: check that we actually do complete sync
              checkSync(expectedResult,
                        result,
-                       None)
+                       None,
+                       logdir)
 
              syncProgress = []
              duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'incremental' })
@@ -1164,8 +1247,38 @@ END:VCARD
              # no changes.
              checkSync(expectedResult,
                        result,
-                       expectedResult)
+                       expectedResult,
+                       logdir)
 
+        else:
+             # Normal sync, no changes expected.
+             syncProgress = []
+             duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, {})
+             checkSync(expectedResult,
+                       result,
+                       None,
+                       logdir)
+
+        if not phone and not testcases:
+             # Simulate text-only sync by removing the photo from the file
+             # and running a sync in text-only mode. Nothing should change.
+             john = re.sub(r'''\nPHOTO.*\n( .*\n)*''', '\n', john)
+             output = open(item, "w")
+             output.write(john)
+             output.close()
+
+             syncProgress = []
+             expectedResult = {'modified': False,
+                               'added': 0,
+                               'updated': 0,
+                               'removed': 0}
+             duration, result = timeFunction(self.manager.SyncPeerWithFlags, uid, { 'pbap-sync': 'text' })
+             # This verifies that we actually do text-only sync, because if we did
+             # a full sync, the photo would get removed.
+             checkSync(expectedResult,
+                       result,
+                       None,
+                       logdir)
 
         # Cannot update data when using pre-defined test cases.
         if not testcases:
@@ -1189,7 +1302,8 @@ END:VCARD'''
                        incrementalSync and {'modified': False,
                                             'added': 0,
                                             'updated': 0,
-                                            'removed': 0})
+                                            'removed': 0},
+                       logdir)
 
         # Remove contact(s).
         for file in os.listdir(contacts):
@@ -1205,7 +1319,8 @@ END:VCARD'''
                           'removed': numItems}
         checkSync(expectedResult,
                   result,
-                  incrementalSync and expectedResult)
+                  incrementalSync and expectedResult,
+                  logdir)
 
         # Test invalid maxsession values.
         if not testcases:
@@ -1215,7 +1330,8 @@ END:VCARD'''
                                        {'protocol': 'PBAP',
                                         'address': 'foo',
                                         'maxsessions': '-1'})
-             self.assertEqual(files, listsyncevo(exclude=exclude))
+             if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+                  self.assertEqual(files, listsyncevo(exclude=exclude))
 
              with self.assertRaisesRegexp(dbus.DBusException,
                                           'bad lexical cast: source type value could not be interpreted as target'):
@@ -1224,7 +1340,8 @@ END:VCARD'''
                                         'address': 'foo',
                                         'maxsessions': '1000000000000000000000000000000000000000000000'})
 
-        self.assertEqual(files, listsyncevo(exclude=exclude))
+        if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
+             self.assertEqual(files, listsyncevo(exclude=exclude))
 
     @timeout(100)
     @property("ENV", "SYNCEVOLUTION_SYNC_DELAY=5") # first parent sleeps, then child -> total delay 10s
@@ -2751,7 +2868,7 @@ END:VCARD
     # tell EDS about locale changes, it currently crashes when we do that (https://bugs.freedesktop.org/show_bug.cgi?id=59571#c20).
     #
     # Remove the SYNCEVOLUTION_PIM_EDS_NO_E164=1 part from ENV to test and use EDS.
-    @property("ENV", "LANG=en_US.UTF-8 SYNCEVOLUTION_PIM_EDS_NO_E164=1")
+    @property("ENV", "LANG=en_US.UTF-8")
     def testLocaledPhone(self):
          # Parsing of 01164 3 331 6005 depends on locale: in the US, 011 is followed
          # by a country code, and therefore libphonenumber parses the string as
@@ -2796,7 +2913,7 @@ END:VCARD
               daemon.SetLocale(['LANG=de_DE.UTF-8'], True)
               self.runUntil('German locale',
                             check=lambda: self.assertEqual([], view.errors),
-                            until=lambda: view.quiescentCount > 1)
+                            until=lambda: view.quiescentCount > (usingEDS and 2 or 1))
               self.assertEqual(len(view.contacts), 0)
 
               # Switch back to US.
@@ -2804,7 +2921,7 @@ END:VCARD
               daemon.SetLocale(['LANG=en_US.UTF-8'], True)
               self.runUntil('US locale',
                             check=lambda: self.assertEqual([], view.errors),
-                            until=lambda: view.quiescentCount > 1)
+                            until=lambda: view.quiescentCount > (usingEDS and 2 or 1))
               self.assertEqual(len(view.contacts), 1)
          except Exception, ex:
              if msg:
