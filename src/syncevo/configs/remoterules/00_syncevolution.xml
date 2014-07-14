@@ -5,6 +5,10 @@
       <!-- enable reordering when talking to ourselves, enables asynchronous and batched execution -->
       <strictexecordering>no</strictexecordering>
 
+      <!-- No need to send empty properties, we don't need them to indicate when
+       something isn't present because we use CtCap for that. -->
+      <noemptyproperties>yes</noemptyproperties>
+
       <include rule="HAVE-SYNCEVOLUTION-EXDATE-DETACHED"/>
       <include rule="HAVE-EVOLUTION-UI-SLOT"/>
       <include rule="HAVE-ABLABEL-PARAMETER"/>
