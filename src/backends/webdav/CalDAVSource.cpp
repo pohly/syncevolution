@@ -410,6 +410,24 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
     boost::shared_ptr<Event> newEvent(new Event);
     newEvent->m_calendar.set(icalcomponent_new_from_string((char *)item.c_str()), // hack for old libical
                              "parsing iCalendar 2.0");
+
+    // Google Calendar adds a default alarm each time a VEVENT is
+    // added anew. Avoid that by adding a dummy VALARM with
+    // ACTION=NONE. Must include a fake TRIGGER. This is what iOS
+    // does.
+    icalcomponent *event;
+    if (settings().googleAlarmHack() &&
+        (event = icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) != NULL &&
+        !icalcomponent_get_first_component(event, ICAL_VALARM_COMPONENT)) {
+        static eptr<icalcomponent> alarm(icalcomponent_new_from_string("BEGIN:VALARM\r\n"
+                                                                       "ACTION:NONE\r\n"
+                                                                       "DESCRIPTION:ignore me\r\n"
+                                                                       "TRIGGER:-PT1H\r\n"
+                                                                       "END:VALARM"),
+                                         "dummy VALARM");
+        icalcomponent_add_component(event, icalcomponent_new_clone(alarm));
+    }
+
     struct icaltimetype lastmodtime = icaltime_null_time();
     icalcomponent *firstcomp = NULL;
     for (icalcomponent *comp = firstcomp = icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT);
@@ -501,20 +519,10 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
         // Yahoo expects resource names to match UID + ".ics".
         std::string name = newEvent->m_UID + ".ics";
         std::string buffer;
-        const std::string *data;
-        if (!settings().googleChildHack() || subid.empty()) {
-            // avoid re-encoding item data
-            data = &item;
-        } else {
-            // sanitize item first: when adding child event without parent,
-            // then the RECURRENCE-ID confuses Google
-            eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(newEvent->m_calendar)));
-            buffer = icalstr.get();
-            Event::escapeRecurrenceID(buffer);
-            data = &buffer;
-        }
         SE_LOG_DEBUG(getDisplayName(), "inserting new VEVENT");
-        res = insertItem(name, *data, true);
+        eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(newEvent->m_calendar)));
+        std::string data = icalstr.get();
+        res = insertItem(name, data, true);
         subres.m_mainid = res.m_luid;
         subres.m_uid = newEvent->m_UID;
         subres.m_subid = subid;
@@ -536,59 +544,10 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             icalcomponent_merge_component(event.m_calendar,
                                           newEvent->m_calendar.release()); // function destroys merged calendar
         } else {
-            // Google Calendar adds a default alarm each time a VEVENT is added
-            // anew. Avoid that by resending our data if necessary (= no alarm set).
-            if (settings().googleAlarmHack() &&
-                !icalcomponent_get_first_component(firstcomp, ICAL_VALARM_COMPONENT)) {
-                // add to cache, then update it
-                newEvent->m_DAVluid = res.m_luid;
-                newEvent->m_etag = res.m_revision;
-                m_cache[newEvent->m_DAVluid] = newEvent;
-
-                // potentially need to know sequence and mod time on server:
-                // keep pointer (clears pointer in newEvent),
-                // then get and parse new copy from server
-                eptr<icalcomponent> calendar = newEvent->m_calendar;
-
-                if (settings().googleUpdateHack()) {
-                    loadItem(*newEvent);
-
-                    // increment in original data
-                    newEvent->m_sequence++;
-                    newEvent->m_lastmodtime++;
-                    Event::setSequence(firstcomp, newEvent->m_sequence);
-                    icalproperty *lastmod = icalcomponent_get_first_property(firstcomp, ICAL_LASTMODIFIED_PROPERTY);
-                    if (lastmod) {
-                        lastmodtime = icaltime_from_timet(newEvent->m_lastmodtime, false);
-                        lastmodtime.is_utc = 1;
-                        icalproperty_set_lastmodified(lastmod, lastmodtime);
-                    }
-                    icalproperty *dtstamp = icalcomponent_get_first_property(firstcomp, ICAL_DTSTAMP_PROPERTY);
-                    if (dtstamp) {
-                        icalproperty_set_dtstamp(dtstamp, lastmodtime);
-                    }
-                    // re-encode below
-                    data = &buffer;
-                }
-                bool mangleRecurrenceID = settings().googleChildHack() && !subid.empty();
-                if (data == &buffer || mangleRecurrenceID) {
-                    eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(calendar)));
-                    buffer = icalstr.get();
-                }
-                if (mangleRecurrenceID) {
-                    Event::escapeRecurrenceID(buffer);
-                }
-                SE_LOG_DEBUG(NULL, "resending VEVENT to get rid of VALARM");
-                res = insertItem(name, *data, true);
-                newEvent->m_etag =
-                    subres.m_revision = res.m_revision;
-                newEvent->m_calendar = calendar;
-            } else {
-                // add to cache without further changes
-                newEvent->m_DAVluid = res.m_luid;
-                newEvent->m_etag = res.m_revision;
-                m_cache[newEvent->m_DAVluid] = newEvent;
-            }
+            // add to cache without further changes
+            newEvent->m_DAVluid = res.m_luid;
+            newEvent->m_etag = res.m_revision;
+            m_cache[newEvent->m_DAVluid] = newEvent;
         }
     } else {
         if (!subid.empty() && subid != knownSubID) {
@@ -710,13 +669,6 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                                       newEvent->m_calendar.release()); // function destroys merged calendar
         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
         std::string data = icalstr.get();
-
-        // Google gets confused when adding a child without parent,
-        // replace in that case.
-        bool haveParent = event.m_subids.find("") != event.m_subids.end();
-        if (settings().googleChildHack() && !haveParent) {
-            Event::escapeRecurrenceID(data);
-        }
 
         // TODO: avoid updating item on server immediately?
         try {
@@ -977,7 +929,6 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
     } else {
         loadItem(event);
         bool found = false;
-        bool parentRemoved = false;
         for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -985,9 +936,6 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                 icalcomponent_remove_component(event.m_calendar, comp);
                 icalcomponent_free(comp);
                 found = true;
-                if (subid.empty()) {
-                    parentRemoved = true;
-                }
             }
         }
         if (!found) {
@@ -997,20 +945,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
         event.m_subids.erase(subid);
         // TODO: avoid updating the item immediately
         eptr<char> icalstr(ical_strdup(icalcomponent_as_ical_string(event.m_calendar)));
-        InsertItemResult res;
-        if (parentRemoved && settings().googleChildHack()) {
-            // Must avoid VEVENTs with RECURRENCE-ID in
-            // event.m_calendar and the PUT request.  Brute-force
-            // approach here is to encode as string, escape, and parse
-            // again.
-            string item = icalstr.get();
-            Event::escapeRecurrenceID(item);
-            event.m_calendar.set(icalcomponent_new_from_string((char *)item.c_str()), // hack for old libical
-                                 "parsing iCalendar 2.0");
-            res = insertItem(davLUID, item, true);
-        } else {
-            res = insertItem(davLUID, icalstr.get(), true);
-        }
+        InsertItemResult res = insertItem(davLUID, icalstr.get(), true);
         if (res.m_state != ITEM_OKAY ||
             res.m_luid != davLUID) {
             SE_THROW("unexpected result of removing sub event");

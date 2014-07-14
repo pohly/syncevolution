@@ -1667,11 +1667,21 @@ test = SyncEvolutionTest("googlecalendar", compile,
                          "CLIENT_TEST_UNIQUE_UID=2 " # server keeps backups and complains with 409 about not increasing SEQUENCE number even after deleting old data
                          "CLIENT_TEST_MODE=server " # for Client::Sync
                          "CLIENT_TEST_FAILURES="
-                         # http://code.google.com/p/google-caldav-issues/issues/detail?id=61 "cannot remove detached recurrence"
-                         "Client::Source::google_caldav::LinkedItemsDefault::testLinkedItemsRemoveNormal,"
-                         "Client::Source::google_caldav::LinkedItemsNoTZ::testLinkedItemsRemoveNormal,"
-                         "Client::Source::google_caldav::LinkedItemsWithVALARM::testLinkedItemsRemoveNormal,"
-                         "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsRemoveNormal,"
+                         # Its is possible now to send a child event with RECURRENCE-ID.
+                         # However, adding the parent later causes the server to also update
+                         # properties of the child.
+                         "Client::Source::google_caldav::LinkedItems.*::testLinkedItemsChildParent,"
+                         "Client::Source::google_caldav::LinkedItems.*::testLinkedItemsChildChangesParent,"
+                         "Client::Source::google_caldav::LinkedItems.*::testLinkedItemsInsertBothUpdateParent,"
+                         # Removing individual events from an item with more than one event
+                         # has no effect.
+                         "Client::Source::google_caldav::LinkedItems.*::testLinkedItemsRemoveParentFirst,"
+                         "Client::Source::google_caldav::LinkedItems.*::testLinkedItemsRemoveNormal,"
+                         # A child with date-only RECURRENCE-ID gets stored with date-time RECURRENCE-ID.
+                         "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsChild,"
+                         "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsInsertChildTwice,"
+                         "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsUpdateChild,"
+                         "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsUpdateChildNoIDs,"
                          ,
                          testPrefix=options.testprefix)
 context.add(test)

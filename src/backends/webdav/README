@@ -15,10 +15,6 @@ information about a peer:
   A ?SyncEvolution=<keyword>,<keyword>,... parameter provides
   further control. Currently implemented keywords:
   UpdateHack = work around Google's REV CalDAV quirks
-  ChildHack = avoid storing calendar items which contain
-              VEVENTs with RECURRENCE-ID and no corresponding
-              VEVENT with RRULE; Google Calendar can store such
-              items but reading them fails
   AlarmHack = when storing a VEVENT without VALARM, store it
               multiple times, because otherwise Google Calendar
               adds a default alarm

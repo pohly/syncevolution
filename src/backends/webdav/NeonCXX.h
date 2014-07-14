@@ -117,13 +117,6 @@ class Settings {
     virtual bool googleUpdateHack() const = 0;
 
     /**
-     * if true, then avoid RECURRENCE-ID in sub items without
-     * corresponding parent by replacing it with
-     * X-SYNCEVOLUTION-RECURRENCE-ID
-     */
-    virtual bool googleChildHack() const = 0;
-
-    /**
      * if true, then check whether server has added an unwanted alarm
      * and resend to get rid of it
      */

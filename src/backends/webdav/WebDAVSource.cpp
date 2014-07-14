@@ -41,7 +41,6 @@ class ContextSettings : public Neon::Settings {
     /** do change tracking without relying on CTag */
     bool m_noCTag;
     bool m_googleUpdateHack;
-    bool m_googleChildHack;
     bool m_googleAlarmHack;
     // credentials were valid in the past: stored persistently in tracking node
     bool m_credentialsOkay;
@@ -53,7 +52,6 @@ public:
         m_sourceConfig(sourceConfig),
         m_noCTag(false),
         m_googleUpdateHack(false),
-        m_googleChildHack(false),
         m_googleAlarmHack(false),
         m_credentialsOkay(false)
     {
@@ -138,8 +136,7 @@ public:
 
     bool noCTag() const { return m_noCTag; }
     virtual bool googleUpdateHack() const { return m_googleUpdateHack; }
-    virtual bool googleChildHack() const { return m_googleChildHack; }
-    virtual bool googleAlarmHack() const { return m_googleChildHack; }
+    virtual bool googleAlarmHack() const { return m_googleAlarmHack; }
 
     virtual int timeoutSeconds() const { return m_context->getRetryDuration(); }
     virtual int retrySeconds() const {
@@ -239,7 +236,6 @@ void ContextSettings::lookupAuthProvider()
 void ContextSettings::initializeFlags(const std::string &url)
 {
     bool googleUpdate = false,
-        googleChild = false,
         googleAlarm = false,
         noCTag = false;
 
@@ -260,12 +256,11 @@ void ContextSettings::initializeFlags(const std::string &url)
                 if (boost::iequals(*flag, "UpdateHack")) {
                     googleUpdate = true;
                 } else if (boost::iequals(*flag, "ChildHack")) {
-                    googleChild = true;
+                    // Not used anymore, flag ignored.
                 } else if (boost::iequals(*flag, "AlarmHack")) {
                     googleAlarm = true;
                 } else if (boost::iequals(*flag, "Google")) {
                     googleUpdate =
-                        googleChild =
                         googleAlarm = true;
                 } else if (boost::iequals(*flag, "NoCTag")) {
                     noCTag = true;
@@ -284,7 +279,6 @@ void ContextSettings::initializeFlags(const std::string &url)
 
     // store final result
     m_googleUpdateHack = googleUpdate;
-    m_googleChildHack = googleChild;
     m_googleAlarmHack = googleAlarm;
     m_noCTag = noCTag;
 }
