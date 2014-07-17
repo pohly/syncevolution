@@ -330,6 +330,17 @@ std::string StringPrintf(const char *format, ...)
 std::string StringPrintfV(const char *format, va_list ap);
 
 /**
+ * Turns a value of arbitrary type into a std::string,
+ * using the << operator.
+ */
+template<class T> std::string ToString(const T &value)
+{
+    std::stringstream s;
+    s << value;
+    return s.str();
+}
+
+/**
  * strncpy() which inserts adds 0 byte
  */
 char *Strncpy(char *dest, const char *src, size_t n);
