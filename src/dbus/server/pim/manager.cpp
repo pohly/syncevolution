@@ -1564,7 +1564,9 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
         if (entry.first == "pbap-sync") {
             const std::string *value = boost::get<const std::string>(&entry.second);
             if (!value) {
-                SE_THROW(StringPrintf("SyncPeerWithFlags flag 'pbap-sync' expects a string value"));
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects a string value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
             }
             if (*value != "text" &&
                 *value != "all" &&
@@ -1575,7 +1577,9 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
         } else if (entry.first == "progress-frequency") {
             const double *value = boost::get<const double>(&entry.second);
             if (!value) {
-                SE_THROW(StringPrintf("SyncPeerWithFlags flag 'progress-frequency' expects a double value"));
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects a double value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
             }
             if (*value <= 0) {
                 SE_THROW(StringPrintf("SyncPeerWithFlags flag 'progress-frequency' must be a positive, non-zero frequency value (Hz): %lf", *value));
