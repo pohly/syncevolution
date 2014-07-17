@@ -159,7 +159,7 @@ SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME=<seconds>
 SYNCEVOLUTION_PBAP_CHUNK_TIME_LAMBDA=<0 to 1>
   Controls how quickly new measurements adapt the chunk size. 0 is fastest
   (= next transfer uses exactly the calculated number of contacts), 1 is not
-  all all (= all transfers use the intitial number). Defaults to 0.1.
+  at all (= all transfers use the intitial number). Defaults to 0.1.
 
 SYNCEVOLUTION_PBAP_CHUNK_OFFSET=<0 to number of contacts in phone>
   Overrides the random selection of the start offset. Useful for debugging.
