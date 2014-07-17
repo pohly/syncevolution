@@ -36,6 +36,7 @@ import functools
 import sys
 import traceback
 import itertools
+import json
 import time
 from optparse import OptionParser
 
@@ -66,6 +67,9 @@ parser.add_option("", "--poll-progress",
 parser.add_option("-m", "--mode",
                   action="store", default='',
                   help="Override default PBAP sync mode. One of 'all', 'text', 'incremental' (default).")
+parser.add_option("", "--sync-flags",
+                  action="store", default='',
+                  help="Additionall SyncPeerWithFlags() flags in JSON notation. For example: { 'pbap-chunk-transfer-time': 20, 'pbap-chunk-time-lambda': 0.5, 'pbap-chunk-max-count-photo': 100 }")
 parser.add_option("-f", "--progress-frequency",
                   action="store", type="float", default=0.0,
                   help="Override default progress event frequency.")
@@ -237,7 +241,7 @@ if not error and options.sync:
         pull_progress()
 
     print 'syncing peer %s' % peername
-    flags = {}
+    flags = json.loads(options.sync_flags)
     if options.progress_frequency != 0.0:
         flags['progress-frequency'] = options.progress_frequency
     if options.mode:
