@@ -1574,6 +1574,46 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
                 SE_THROW(StringPrintf("SyncPeerWithFlags flag 'pbap-sync' expects one of 'text', 'all', or 'incremental': %s", value->c_str()));
             }
             env["SYNCEVOLUTION_PBAP_SYNC"] = *value;
+        } else if (entry.first == "pbap-chunk-max-count-photo") {
+            const int32_t *value = boost::get<int32_t>(&entry.second);
+            if (!value) {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects an integer value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
+            }
+            env["SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_PHOTO"] = StringPrintf("%d", *value);
+        } else if (entry.first == "pbap-chunk-max-count-no-photo") {
+            const int32_t *value = boost::get<int32_t>(&entry.second);
+            if (!value) {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects an integer value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
+            }
+            env["SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_NO_PHOTO"] = StringPrintf("%d", *value);
+        } else if (entry.first == "pbap-chunk-transfer-time") {
+            const int32_t *value = boost::get<int32_t>(&entry.second);
+            if (!value) {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects an integer value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
+            }
+            env["SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME"] = StringPrintf("%d", *value);
+        } else if (entry.first == "pbap-chunk-time-lambda") {
+            const double *value = boost::get<double>(&entry.second);
+            if (!value) {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects a double value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
+            }
+            env["SYNCEVOLUTION_PBAP_CHUNK_TIME_LAMBDA"] = StringPrintf("%f", *value);
+        } else if (entry.first == "pbap-chunk-offset") {
+            const int32_t *value = boost::get<int32_t>(&entry.second);
+            if (!value) {
+                SE_THROW(StringPrintf("SyncPeerWithFlags flag '%s' expects an integer value, got instead: %s",
+                                      entry.first.c_str(),
+                                      ToString(entry.second).c_str()));
+            }
+            env["SYNCEVOLUTION_PBAP_CHUNK_OFFSET"] = StringPrintf("%d", *value);
         } else if (entry.first == "progress-frequency") {
             const double *value = boost::get<const double>(&entry.second);
             if (!value) {

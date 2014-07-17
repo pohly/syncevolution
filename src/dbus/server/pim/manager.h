@@ -148,7 +148,7 @@ class Manager : public GDBusCXX::DBusObjectHelper
     void syncPeer(const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
                   const std::string &uid);
 
-    typedef std::map<std::string, boost::variant<std::string, double> > SyncFlags;
+    typedef std::map<std::string, boost::variant<std::string, double, int32_t> > SyncFlags;
     /** Manager.SyncPeerWithFlags() */
     void syncPeerWithFlags(const boost::shared_ptr<GDBusCXX::Result1<SyncResult> > &result,
                            const std::string &uid,
