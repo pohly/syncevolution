@@ -108,6 +108,7 @@ uninstall-test-files:
 	rm -f $(DESTDIR)/$(testdir)/syncevolution \
 		$(DESTDIR)/$(testdir)/synccompare \
 		$(DESTDIR)/$(testdir)/syncevo-dbus-server \
+		$(DESTDIR)/$(testdir)/synclog2html \
 		$(DESTDIR)/$(testdir)/SyncConfig.h \
 		$(DESTDIR)/$(testdir)/ClientTests.cpp.html \
 		$(DESTDIR)/$(testdir)/config.h \
