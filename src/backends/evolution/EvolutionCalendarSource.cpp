@@ -549,10 +549,9 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             // cannot add a VTIMEZONE without TZID
             SE_LOG_DEBUG(getDisplayName(), "skipping VTIMEZONE without TZID");
         } else {
-            string timeZoneName(icaltimezone_get_display_name(zone));
             // check if the timezone was already registered in EDS
             // Keeping a cache of already registered timezones will avoid some dbus call of "e_cal_client_add_timezone_sync"
-            if (find(m_knownTimezones.begin(), m_knownTimezones.end(), timeZoneName) == m_knownTimezones.end()) {
+            if (find(m_knownTimezones.begin(), m_knownTimezones.end(), tzid) == m_knownTimezones.end()) {
                 gboolean success =
 #ifdef USE_EDS_CLIENT
                     e_cal_client_add_timezone_sync(m_calendar, zone, NULL, gerror)
@@ -564,7 +563,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     throwError(SE_HERE, string("error adding VTIMEZONE ") + tzid,
                                gerror);
                 } else {
-                    m_knownTimezones.push_back(timeZoneName);
+                    m_knownTimezones.push_back(tzid);
                 }
             }
         }
