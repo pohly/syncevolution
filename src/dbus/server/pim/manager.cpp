@@ -1096,12 +1096,12 @@ void Manager::setPeer(const boost::shared_ptr<GDBusCXX::Result0> &result,
 }
 
 static const char * const PEER_KEY_PROTOCOL = "protocol";
-static const char * const PEER_SYNCML_PROTOCOL = "SyncML";
+// static const char * const PEER_SYNCML_PROTOCOL = "SyncML";
 static const char * const PEER_PBAP_PROTOCOL = "PBAP";
 static const char * const PEER_FILES_PROTOCOL = "files";
 static const char * const PEER_KEY_TRANSPORT = "transport";
 static const char * const PEER_BLUETOOTH_TRANSPORT = "Bluetooth";
-static const char * const PEER_IP_TRANSPORT = "IP";
+// static const char * const PEER_IP_TRANSPORT = "IP";
 static const char * const PEER_DEF_TRANSPORT = PEER_BLUETOOTH_TRANSPORT;
 static const char * const PEER_KEY_ADDRESS = "address";
 static const char * const PEER_KEY_DATABASE = "database";

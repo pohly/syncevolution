@@ -47,7 +47,6 @@ namespace {
     GMainLoop *loop = NULL;
     bool shutdownRequested = false;
     const char * const execName = "syncevo-dbus-server";
-    const char * const debugEnv = "SYNCEVOLUTION_DEBUG";
 
 void niam(int sig)
 {
