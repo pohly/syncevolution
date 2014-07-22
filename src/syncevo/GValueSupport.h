@@ -63,8 +63,8 @@ class GValueCXX : public GValue
     }
 };
 
-template<class C> void dummyTake(GValue *, C);
-template<class C> void dummySetStatic(GValue *, const C);
+template<class C> void dummyTake(GValue *, C) {}
+template<class C> void dummySetStatic(GValue *, const C) {}
 
 /**
  * Declares a C++ wrapper for a GValue containing a specific
