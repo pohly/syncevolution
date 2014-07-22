@@ -970,8 +970,6 @@ XDG root.
                         xdg_root + '/cache/syncevolution/target_.config@[^/]*$'])
         # - some files which are allowed to be written
         exclude.extend([xdg_root + '/cache/syncevolution/[^/]*/(status.ini|syncevolution-log.html)$'])
-        # - synthesis client files (should not be written at all, but that's harder - redirect into cache for now)
-        exclude.extend([xdg_root + '/cache/syncevolution/[^/]*/synthesis(/|$)'])
 
         # Now compare files and their modification time stamp.
         # SYNCEVOLUTION_LOGLEVEL can be used to increase verbosity
