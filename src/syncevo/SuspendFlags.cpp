@@ -185,7 +185,10 @@ boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(boost::weak_pt
     if (newState > oldState &&
         m_senderFD >= 0) {
         unsigned char msg = newState;
-        write(m_senderFD, &msg, 1);
+        // Retry on some errors, ignore others.
+        while (write(m_senderFD, &msg, 1) != 1 &&
+               (errno == EAGAIN || errno==EINTR))
+        {}
     }
     // don't depend on pipes or detecting that change, alert
     // listeners directly
@@ -326,7 +329,18 @@ void SuspendFlags::handleSignal(int sig)
     }
     if (me.m_senderFD >= 0) {
         msg[0] = (unsigned char)(ABORT_MAX + sig);
-        write(me.m_senderFD, msg, msg[1] == ABORT_MAX ? 1 : 2);
+        size_t left = msg[1] == ABORT_MAX ? 1 : 2;
+        while (left) {
+            ssize_t written = write(me.m_senderFD, msg, left);
+            if (written > 0) {
+                left -= written;
+            } else {
+                if (errno != EAGAIN &&
+                    errno != EINTR) {
+                    break;
+                }
+            }
+        }
     }
 }
 
