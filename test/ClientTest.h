@@ -571,7 +571,7 @@ public:
     /**
      * compare data in source with vararg list of std::string pointers, NULL terminated
      */
-    void compareDatabases(TestingSyncSource &copy, ...);
+    void compareDatabases(TestingSyncSource *copy, ...);
 
     /**
      * insert artificial items, number of them determined by TEST_EVOLUTION_NUM_ITEMS
