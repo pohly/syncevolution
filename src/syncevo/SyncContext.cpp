@@ -3205,8 +3205,12 @@ void SyncContext::initMain(const char *appname)
 {
 #if defined(HAVE_GLIB)
     // this is required when using glib directly or indirectly
+#if !GLIB_CHECK_VERSION(2,36,0)
     g_type_init();
+#endif
+#if !GLIB_CHECK_VERSION(2,32,0)
     g_thread_init(NULL);
+#endif
     g_set_prgname(appname);
 
     // redirect glib logging into our own logging
