@@ -3123,7 +3123,7 @@ protected:
 
     void testPrintFileTemplatesConfig() {
         // simulate reading templates from user's XDG HOME
-        symlink("../templates", (m_testDir + "/syncevolution-templates").c_str());
+        CPPUNIT_ASSERT(!symlink("../templates", (m_testDir + "/syncevolution-templates").c_str()));
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
