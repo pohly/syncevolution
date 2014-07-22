@@ -875,7 +875,8 @@ XDG root.
                            (not session in targetsessions):
                        newsessions.append(session)
              self.assertTrue(newsessions)
-             self.assertEqual([session], newsessions)
+             self.assertEqual(len(newsessions), 1)
+             session = newsessions[0]
              targetsessions.extend(newsessions)
              config = ConfigParser.ConfigParser()
              content = '[fake]\n' + open(os.path.join(session, 'status.ini')).read()
