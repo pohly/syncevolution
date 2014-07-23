@@ -931,8 +931,6 @@ used to find calendar and contact databases.
   keyring, a ``syncURL`` or a unique ``remoteDeviceID`` string must be
   set, because they are needed to identify the host in the keyring.
 
-TODO: take host from username, if it is an email address.
-
 If this feature is not used, the ``syncURL`` could be left empty because
 local sync itself does not use it. However, the command line expects
 it to be set to ``none`` explicitly to detect typos.
@@ -1033,10 +1031,6 @@ Here are some alternative ways of configuring the target config::
                 username=123456@example.com \
                 "password=!@#ABcd1234" \
                 target-config@webdav
-
-TODO: take host name from username in this case, to satisfy GNOME keyring. Currently
-one gets:
-[ERROR 00:00:09] sync password for target-config@foobar: cannot store password in GNOME keyring, not enough attributes (user=123456@example.com). Try setting syncURL or remoteDeviceID if this is a sync password.
 
    # B) Explicitly specify collections (from server documentation or --print-databases).
    #    The 'calendar' and 'addressbook' names are the ones expected by the sync config
