@@ -43,13 +43,8 @@ class EvolutionMemoSource : public EvolutionCalendarSource
     //
     // implementation of SyncSource
     //
-    virtual InsertItemResult insertItem(const string &uid, const std::string &item, bool raw);
-    void readItem(const std::string &luid, std::string &item, bool raw);
-    virtual std::string getMimeType() const { return "text/plain"; }
-    virtual std::string getMimeVersion() const { return "1.0"; }
-
- private:
-    bool isNativeType(const char *type);
+    virtual std::string getMimeType() const { return "text/calendar+plain"; }
+    virtual std::string getMimeVersion() const { return "2.0"; }
 };
 
 #endif // ENABLE_ECAL

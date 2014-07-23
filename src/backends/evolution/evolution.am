@@ -15,7 +15,7 @@ src_backends_evolution_syncecal_src = \
   src/backends/evolution/EvolutionCalendarSource.h \
   src/backends/evolution/EvolutionMemoSource.h \
   src/backends/evolution/EvolutionCalendarSource.cpp \
-  src/backends/evolution/EvolutionMemoSource.cpp
+  $(NOP)
 
 if ENABLE_ECAL
 src_backends_evolution_syncecal_src += \
