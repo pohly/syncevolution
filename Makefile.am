@@ -379,7 +379,7 @@ README.patched.rst: README.rst src/syncevolution
 	                -e 's/^:Version: .*/:Version: $(VERSION)/;' \
 	                -e 's/:Date: .*/":Date: " . `date +%Y-%m-%d`/e;' \
 	                -e 'if (s;(<< see "syncevolution --sync-property ." >>\n);run("src/syncevolution --daemon=no --sync-property ?") || $$1;e) { $$syncfound=1; }' \
-	                -e 'if (s;(<< see "syncevolution --datastore-property ." >>\n);run("src/syncevolution --daemon=no --datastore-property ?") || $$1;e) { $$sourcefound=1; }' \
+	                -e 'if (s;(<< see "syncevolution --datastore-property ." >>\n);run("src/syncevolution --daemon=no --source-property ?") || $$1;e) { $$sourcefound=1; }' \
 	                -e 'print;' \
 	                -e '}' \
 	                -e 'die "<<sync-property>> tag not in README.rst?!" unless $$syncfound;' \

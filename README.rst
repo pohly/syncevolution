@@ -138,8 +138,8 @@ sync config
   sync config on the SyncEvolution side. If the peer supports data
   access via some other protocols, then SyncEvolution can make that
   data available via SyncML and run a sync where SyncML is used
-  internally.  Such a sync involves two sync configs, see `originating
-  config`_ and `target config`_.
+  internally.  Such a sync involves two sync configs, see ``originating
+  config`` and ``target config``.
 
   A sync config can use all datastores defined in the same context
   (see below). Some properties of the datastore can be set differently
@@ -154,7 +154,7 @@ context
 
   Typically each context represents a certain set of related
   datastores. For example, normally the ``@default`` context is used for
-  local databases. datastores related to a certain peer can
+  local databases. Datastores related to a certain peer can
   be defined in a context ``@peer-name`` named after that peer.
 
 configuration properties
@@ -168,9 +168,10 @@ configuration properties
   are for a specific datastore).
 
   Sync properties are set for sync configs, independently of a
-  particular datastore. Properties that cannot be set without naming
-  a datastore are datastore properties. This includes the intersection of
-  properties that belong both to a datastore and a sync config.
+  particular datastore. Properties that cannot be set without
+  specifying they datastore that they apply to are datastore
+  properties. This includes properties that belong both to a datastore
+  and a sync config.
 
   The property names were chosen so that they are unique, i.e., no
   sync property has the same name as a datastore property. For historic
@@ -194,15 +195,19 @@ configuration properties
   this currently results in five different groups of properties:
 
   * Sync properties (by definition, this also includes properties
-    independent of a particular sync config because they can be set
-    without naming a datastore):
+    independent of a particular sync config because they are set for
+    all sync configs at once, independently of any particular
+    datastore):
+
     * global (= ``~/.config/syncevolution/config.ini``):
       independent of a particular context, for example ``keyring``
     * shared (= ``~/.config/syncevolution/<context name>/config.ini``):
       set once for each context, for example ``logdir``
     * unshared (= ``~/.config/syncevolution/<context name>/peers/<peer name>/config.ini``):
       set separately for each sync config, for example ``syncURL``
+
   * Datastore properties:
+
     * shared (= ``~/.config/syncevolution/<context name>/sources/<store name>/config.ini``):
       the properties required for access to the data, primarily ``backend`` and ``database``
     * unshared (= ``~/.config/syncevolution/<context name>/peers/<peer name>/sources/<store name>/config.ini``):
@@ -766,7 +771,7 @@ Sync properties
 << see "syncevolution --sync-property ?" >>
 
 Datastore properties
------------------
+--------------------
 << see "syncevolution --datastore-property ?" >>
 
 
@@ -996,9 +1001,10 @@ The following commands set up synchronization with a generic WebDAV
 server that supports CalDAV, CardDAV and scanning starting at the
 root of the server.
 
-For Google there is no common start URL for CalDAV and CardDAV.
 TODO: document how to use Google.
 TODO: Yahoo not currently supported, remove template?
+
+For Google there is no common start URL for CalDAV and CardDAV. ::
 
    # configure target config
    syncevolution --configure \
