@@ -1,3 +1,189 @@
+SyncEvolution 1.4.99.2 -> 1.4.99.3, 23.07.2014
+==============================================
+
+This release enhances CalDAV/CardDAV and PBAP syncing and fixes some
+problems. The enhanced conflict handling introduced 1.4.99.2 was
+unintentionally limited to syncs with EDS on the server side; it is
+now also available for example in WebDAV<->SyncML bridge setups.
+
+Details:
+
+* CardDAV: implement read-ahead
+
+  Instead of downloading contacts one-by-one with GET, SyncEvolution now
+  looks at contacts that are most likely going to be needed soon and
+  gets all of them at once with addressbook-multiget REPORT.
+
+  The number of contacts per REPORT is 50 by default, configurable by
+  setting the SYNCEVOLUTION_CARDDAV_BATCH_SIZE env variable.
+
+  This has two advantages:
+  - It avoids round-trips to the server and thus speeds up a large
+    download (100 small contacts with individual GETs took 28s on
+    a fast connection, 3s with two REPORTs).
+  - It reduces the overall number of requests. Google CardDAV is known
+    to start issuing intermittent 401 authentication errors when the
+    number of contacts retrieved via GET is too large. Perhaps this
+    can be avoided with addressbook-multiget.
+
+* Google Calendar: remove child hack, improve alarm hack (FDO #63881)
+
+  Google recently enhanced support for RECURRENCE-ID, so SyncEvolution
+  no longer needs to replace the property when uploading a single
+  detached event with RECURRENCE-ID. However, several things are still
+  broken in the server, with no workaround in SyncEvolution:
+  - Removing individual events gets ignored by the server;
+    a full "wipe out server data" might work (untested).
+  - When updating the parent event, all child events also get
+    updated even though they were included unchanged in the data
+    sent by SyncEvolution.
+  - The RECURRENCE-ID of a child event of an all-day recurring event
+    does not get stored properly.
+  - The update hack seems to fail for complex meetings: uploading them
+    once and then deleting them seems to make uploading them again
+    impossible.
+
+  All of these issues were reported to Google and are worked on there,
+  so perhaps the situation will improve. In the meantime, syncing with
+  Google CalDAV should better be limited to:
+  - Downloading a Google calendar in one-way mode.
+  - Two-way syncing of simple calendars without complex meeting
+    serieses.
+
+  While updating the Google workarounds, the alarm hack (sending a
+  new event without alarms twice to avoid the automatic server side
+  alarm) was simplified. Now the new event gets sent only once with a
+  pseudo-alarm.
+
+* ephemeral sync: don't write binfile client files (FDO #55921)
+
+  When doing PBAP caching, we don't want any meta data written because
+  the next sync would not use it anyway. With the latest libsynthesis
+  we can configure "/dev/null" as datadir for the client's binfiles and
+  libsynthesis will avoid writing them.
+
+  The PIM manager uses this for PBAP syncing automatically. For testing
+  it can be enabled by setting the SYNCEVOLUTION_EPHEMERAL env variable.
+
+* PBAP: avoid empty field filter
+
+  Empty field filter is supposed to mean "return all supported
+  fields". This used to work and stopped working with Android phones
+  after an update to 4.3 (seen on Galaxy S3); now the phone only
+  returns the mandatory TEL, FN, N fields.
+
+  The workaround is to replace the empty filter list with the list of
+  known and supported properties. This means we only pull data we really
+  need, but it also means we won't get to see any additional properties
+  that the phone might support.
+
+* PBAP: transfer in chunks (FDO #77272)
+
+  If enabled via env variables, PullAll transfers will be limited to
+  a certain numbers contacts at different offsets until all data got
+  pulled. See PBAP README for details.
+
+  When transfering in chunks, the enumeration of contacts for the engine
+  no longer matches the PBAP enumeration. Debug output uses "offset #x"
+  for PBAP and "ID y" for the engine.
+
+* PBAP: remove transfer via pipe
+
+  Using a pipe was never fully supported by obexd (blocks
+  obexd). Transfering in suitably sized chunks (FDO #77272) will be a
+  more obexd friendly solution with a similar effect (not having to
+  buffer the entire address book in memory).
+
+* engine: enable batching by default (FDO #52669)
+
+  This reverts commit c435e937cd406e904c437eec51a32a6ec6163102.
+
+  Commit 7b636720a in libsynthesis fixes an unitialized memory read in
+  the asynchronous item update code path.
+
+  Testing confirms that we can now used batched writes reliably with EDS
+  (the only backend currently supporting asynchronous writes +
+  batching), so this change enables it again also for local and
+  SyncEvolution<->SyncEvolution sync (with asynchronous execution of
+  contact add/update overlapped with SyncML message exchanges) and other
+  SyncML syncs (with changes combined into batches and executed at the
+  end of each message).
+
+* datatypes: fix contact caching
+
+  Adding grouping to the contact datatype in 1.4.99.2 broke PBAP caching: when
+  sending an empty URL, for example, during the sync, the parsed contact
+  had different field arrays than the locally stored contact, because the
+  latter was saved without the empty URL.
+
+  This caused the field-based comparison to detect a difference even when
+  the final, reencoded contact wasn't different at all.
+
+  To solve this, syncing now uses the same "don't send empty properties"
+  configuration as local storages. Testing shows that this resolves
+  the difference for EDS.
+
+  A more resilient solution would be to add a check based on the encoded
+  data, but that's more costly performance wise.
+
+* datatypes: fix vCard handling
+
+  The new "preserve repeating properties during conflict resolution"
+  feature from 1.4.99.2 was only active when using EDS as storage. The relevant
+  merge script must be applied to all datatypes, not just the EDS
+  flavor.
+
+  The feature was also unintentionally active when running in
+  caching mode. This caused two problems:
+  - The cached item was updated even though only the
+    ordering of repeating properties had been modified during
+    merging.
+  - The merged item was sent back to the client side, which
+    was undesirable (caching is supposed to be one-way) or even
+    impossible (PBAP is read-only, causing sync failures eith error 20030).
+
+  We must check for caching mode and disable merging when it is active.
+  We also must not tell the engine that we updated the photo property
+  in the winning item, because then that item would get sent to the
+  read-only side of the sync.
+
+  Perhaps a better solution would be to actually tell the engine
+  that the remote side is read-only when we activate caching mode.
+
+* datatypes: avoid PHOTO corruption during merge (FDO #77065)
+
+  When handling an update/update conflict (both sides of the sync have an
+  updated contact) and photo data was moved into a local file by EDS, the engine
+  merged the file path and the photo data together and thus corrupted the photo.
+
+  The engine does not know about the special role of the photo property.
+  This needs to be handled by the merge script, and that script did not
+  cover this particular situation. Now the loosing side is cleared,
+  causing the engine to then copy the winning side over into the loosing
+  one.
+
+  Found by Renato Filho/Canonical when testing SyncEvolution for Ubuntu 14.04.
+
+* PBAP syncing: updated photo not always stored
+
+  Because photo data was treated like a C string, changes after any
+  embedded null byte were ignored during a comparison.
+
+* PIM: fix phone number normalization
+
+  The parsed number always has a country code, whereas SyncEvolution expected it
+  to be zero for strings without an explicit country code. This caused a caller
+  ID lookup of numbers like "089788899" in DE to find only telephone numbers in
+  the current default country, instead of being more permissive and also finding
+  "+189788899". The corresponding unit test was broken and checked for the wrong
+  result. Found while investigating an unrelated test failure when updating
+  libphonenumber.
+
+* Various compiler problems and warnings fixed; compiles with
+  --with-warnings=fatal on current Debian Testing and Ubuntu Trusty
+  (FDO #79316).
+
+
 SyncEvolution 1.4.99.1 -> 1.4.99.2, 23.05.2014
 ==============================================
 
