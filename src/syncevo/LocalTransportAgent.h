@@ -64,7 +64,7 @@ class LocalTransportAgent : public TransportAgent
 {
  private:
     LocalTransportAgent(SyncContext *server,
-                        const std::string &clientContext,
+                        const std::string &clientConfig,
                         void *loop = NULL);
     boost::weak_ptr<LocalTransportAgent> m_self;
 
@@ -72,13 +72,13 @@ class LocalTransportAgent : public TransportAgent
     /**
      * @param server          the server side of the sync;
      *                        must remain valid while transport exists
-     * @param clientContext   name of the context which contains the client's
-     *                        sources, must start with @ sign
+     * @param clientConfig    name of the target sync config or context (in which case
+     *                        the target-config in that context is used)
      * @param loop            optional glib loop to use when waiting for IO;
      *                        transport will *not* increase the reference count
      */
     static boost::shared_ptr<LocalTransportAgent> create(SyncContext *server,
-                                                         const std::string &clientContext,
+                                                         const std::string &clientConfig,
                                                          void *loop = NULL);
     ~LocalTransportAgent();
 
@@ -107,7 +107,7 @@ class LocalTransportAgent : public TransportAgent
 
  private:
     SyncContext *m_server;
-    std::string m_clientContext;
+    std::string m_clientConfig;
     Status m_status;
     SyncReport m_clientReport;
     GMainLoopCXX m_loop;
