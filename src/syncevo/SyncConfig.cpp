@@ -1402,6 +1402,17 @@ public:
             }
         }
         key.user = getUsername(syncPropUsername, globalConfigNode);
+        // User domain part of a username which looks like an email address
+        // as server name if we don't have something better. Needed for
+        // WebDAV configs using just an email address to locate the server.
+        if (key.server.empty()) {
+            size_t offset = key.user.find('@');
+            if (offset != key.user.npos &&
+                offset != key.user.size() - 1) {
+                key.server = key.user.substr(offset + 1);
+                key.user.resize(offset);
+            }
+        }
         return key;
     }
 } syncPropPassword;
