@@ -4583,25 +4583,20 @@ END:VCARD''')
             DBusUtil.pserver.wait()
             DBusUtil.pserver = None
             loop.quit()
-            # Remove timeout by returning false.
-            self.killTimeout = None
-            return False
-        def progressChanged(*args, **keywords):
-            # Now give sync some more time to get started. Less than
-            # the 10 seconds that the child process gets delayed,
-            # enough to get it started.
-            delay = 1
-            logging.printf('killing syncevo-dbus-server in %d seconds', delay)
-            self.killTimeout = Timeout.addTimeout(delay, killServer)
-            # Don't call me again.
-            self.progressChanged = None
-        # Wait for first sign of a running sync.
-        self.progressChanged = progressChanged
-
-        self.session.Sync("slow", {})
-        loop.run()
-        if self.killTimeout is not None:
-            Timeout.removeTimeout(self.killTimeout)
+        def output(path, level, text, procname):
+            if self.running and DBusUtil.pserver and text == 'ready to sync':
+                killServer()
+        receiver = bus.add_signal_receiver(output,
+                                           'LogOutput',
+                                           'org.syncevolution.Server',
+                                           self.server.bus_name,
+                                           byte_arrays=True,
+                                           utf8_strings=True)
+        try:
+            self.session.Sync("slow", {})
+            loop.run()
+        finally:
+            receiver.remove()
 
         # Should have killed server.
         self.assertFalse(DBusUtil.pserver)
