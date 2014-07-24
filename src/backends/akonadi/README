@@ -27,13 +27,13 @@ Query databases:
 syncevolution
 
 Configuring syncevolution for contacts with Akonadi as backend:
-syncevolution --configure --source-property sync=none \
+syncevolution --configure --datastore-property sync=none \
               --sync-property username=... \
               --sync-property password=... \
               scheduleworld
-syncevolution --configure --source-property sync=two-way \
-              --source-property type=kde-contacts \
-              --source-property evolutionsource=akonadi:?... \
+syncevolution --configure --datastore-property sync=two-way \
+              --datastore-property type=kde-contacts \
+              --datastore-property evolutionsource=akonadi:?... \
               scheduleworld addressbook
 
 Initial run:

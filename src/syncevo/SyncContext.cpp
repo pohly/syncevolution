@@ -1407,7 +1407,7 @@ public:
             m_doLogging &&
             (m_client.getDumpData() || m_client.getPrintChanges())) {
             // dump initial databases
-            SE_LOG_INFO(NULL, "creating complete data backup of source %s before sync (%s)",
+            SE_LOG_INFO(NULL, "creating complete data backup of datastore %s before sync (%s)",
                         sourceName.c_str(),
                         (m_client.getDumpData() && m_client.getPrintChanges()) ? "enabled with dumpData and needed for printChanges" :
                         m_client.getDumpData() ? "because it was enabled with dumpData" :
@@ -2224,12 +2224,12 @@ void SyncContext::initSources(SourceList &sourceList)
                         = getSyncSourceConfig(source);
                     if (!source_config || !source_config->exists()) {
                         Exception::throwError(SE_HERE,
-                                              StringPrintf("Virtual data source \"%s\" references a nonexistent datasource \"%s\".", name.c_str(), source.c_str()));
+                                              StringPrintf("Virtual datastore \"%s\" references a nonexistent datasource \"%s\".", name.c_str(), source.c_str()));
                     }
                     pair< map<string, string>::iterator, bool > res = subSources.insert(make_pair(source, name));
                     if (!res.second) {
                         Exception::throwError(SE_HERE,
-                                              StringPrintf("Data source \"%s\" included in the virtual sources \"%s\" and \"%s\". It can only be included in one virtual source at a time.",
+                                              StringPrintf("Datastore \"%s\" included in the virtual datastores \"%s\" and \"%s\". It can only be included in one virtual datastore at a time.",
                                                            source.c_str(), res.first->second.c_str(), name.c_str()));
                     }
 
@@ -2865,13 +2865,13 @@ void SyncContext::getConfigXML(string &xml, string &configname)
                     sourceType.m_format != subType.m_format ||
                     sourceType.m_forceFormat != subType.m_forceFormat)) {
                     SE_LOG_WARNING(NULL, 
-                                   "Virtual data source \"%s\" and sub data source \"%s\" have different data format. Will use the format in virtual data source.",
+                                   "Virtual datastore \"%s\" and sub datastore \"%s\" have different data format. Will use the format in virtual datastore.",
                                    vSource->getDisplayName().c_str(), source.c_str());
                 }
             }
 
             if (mappedSources.size() !=2) {
-                vSource->throwError(SE_HERE, "virtual data source currently only supports events+tasks combinations");
+                vSource->throwError(SE_HERE, "virtual datastore currently only supports events+tasks combinations");
             } 
 
             string name = vSource->getName();
@@ -3379,7 +3379,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             // instantiate backends, but do not open them yet
             initSources(sourceList);
             if (sourceList.empty()) {
-                Exception::throwError(SE_HERE, "no sources active, check configuration");
+                Exception::throwError(SE_HERE, "no datastores active, check configuration");
             }
 
             // request all config properties once: throwing exceptions
@@ -3555,7 +3555,7 @@ bool SyncContext::sendSAN(uint16_t version)
             mode = SA_TWO_WAY;
         }
         if (mode < SA_FIRST || mode > SA_LAST) {
-            SE_LOG_DEV(NULL, "Ignoring data source %s with an invalid sync mode", name.c_str());
+            SE_LOG_DEV(NULL, "Ignoring datastore %s with an invalid sync mode", name.c_str());
             continue;
         }
         syncMode = mode;
@@ -3576,7 +3576,7 @@ bool SyncContext::sendSAN(uint16_t version)
                 contentTypeB = 0;
                 SE_LOG_DEBUG(NULL, "Unknown datasource mimetype, use 0 as default");
             }
-            SE_LOG_DEBUG(NULL, "SAN source %s uri %s type %u mode %d",
+            SE_LOG_DEBUG(NULL, "SAN datastore %s uri %s type %u mode %d",
                          name.c_str(),
                          uri.c_str(),
                          contentTypeB,
@@ -3586,7 +3586,7 @@ bool SyncContext::sendSAN(uint16_t version)
             };
         } else {
             string mimetype = GetLegacyMIMEType(sourceType.m_format, sourceType.m_forceFormat);
-            SE_LOG_DEBUG(NULL, "SAN source %s uri %s type %s",
+            SE_LOG_DEBUG(NULL, "SAN datastore %s uri %s type %s",
                          name.c_str(),
                          uri.c_str(),
                          mimetype.c_str());
@@ -3595,7 +3595,7 @@ bool SyncContext::sendSAN(uint16_t version)
     }
 
     if (!hasSource) {
-        SE_THROW ("No source enabled for server alerted sync!");
+        SE_THROW ("No datastore enabled for server alerted sync!");
     }
 
     /* Generate the SAN Package */
@@ -3709,7 +3709,7 @@ bool SyncContext::setFreeze(bool freeze)
         }
         if (m_sourceListPtr) {
             BOOST_FOREACH (SyncSource *source, *m_sourceListPtr) {
-                SE_LOG_DEBUG(NULL, "SyncContext::setFreeze(): source %s", source->getDisplayName().c_str());
+                SE_LOG_DEBUG(NULL, "SyncContext::setFreeze(): datastore %s", source->getDisplayName().c_str());
                 source->setFreeze(freeze);
             }
         }
@@ -4054,7 +4054,7 @@ SyncMLStatus SyncContext::doSync()
                 if (!explanation.empty()) {
                     string sourceparam = boost::join(sources, " ");
                     SE_LOG_ERROR(NULL,
-                                 "Aborting because of unexpected slow sync for source(s): %s",
+                                 "Aborting because of unexpected slow sync for datastore(s): %s",
                                  sourceparam.c_str());
                     SE_LOG_INFO(NULL, "%s", explanation.c_str());
                 } else {

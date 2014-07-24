@@ -871,7 +871,7 @@ servers via the SyncML protocol. Starting with release 1.2,
 SyncEvolution also supports other protocols like CalDAV and
 CardDAV.
 
-These protocols are implemented in backends which look like data
+These protocols are implemented in backends which behave like local
 datastores. SyncEvolution then synchronizes data between a pair of
 backends. Because the entire sync logic (matching of items, merging)
 is done locally by SyncEvolution, this mode of operation is called

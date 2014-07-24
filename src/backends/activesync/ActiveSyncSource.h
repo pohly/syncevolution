@@ -186,7 +186,7 @@ class ActiveSyncSource :
     boost::shared_ptr<ConfigNode> m_itemNode;
 
  private:
-    /** "source-config@<context>" instance which holds our username == ActiveSync account ID */
+    /** "target-config@<context>" instance which holds our username == ActiveSync account ID */
     boost::shared_ptr<SyncConfig> m_context;
 
     /** account ID for libeas, must be set in "username" config property */

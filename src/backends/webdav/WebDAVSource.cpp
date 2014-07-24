@@ -81,7 +81,7 @@ public:
             if (sourceName.empty()) {
                 sourceName = "<none>";
             }
-            description = StringPrintf("sync config '%s', source config '%s', database='%s'",
+            description = StringPrintf("sync config '%s', datastore config '%s', database='%s'",
                                        syncName.c_str(),
                                        sourceName.c_str(),
                                        url.c_str());
@@ -219,14 +219,14 @@ void ContextSettings::lookupAuthProvider()
     if (m_sourceConfig) {
         identity = m_sourceConfig->getUser();
         password = m_sourceConfig->getPassword();
-        credentialsFrom = "source config";
+        credentialsFrom = "datastore config";
     }
 
     // fall back to context
     if (m_context && !identity.wasSet() && !password.wasSet()) {
         identity = m_context->getSyncUser();
         password = m_context->getSyncPassword();
-        credentialsFrom = "source context";
+        credentialsFrom = "context";
     }
     SE_LOG_DEBUG(NULL, "using username '%s' from %s for WebDAV, password %s",
                  identity.toString().c_str(),

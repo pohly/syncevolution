@@ -1427,7 +1427,7 @@ static BoolConfigProperty syncPropPreventSlowSync("preventSlowSync",
                                                   "side with a refresh-from-client/server sync instead of doing\n"
                                                   "a slow sync.\n"
                                                   "When this option is enabled, slow syncs that could cause problems\n"
-                                                  "are not allowed to proceed. Instead, the affected sources are\n"
+                                                  "are not allowed to proceed. Instead, the affected datastores are\n"
                                                   "skipped, allowing the user to choose a suitable sync mode in\n"
                                                   "the next run (slow sync selected explicitly, refresh sync).\n"
                                                   "The following situations are handled:\n\n"
@@ -2007,7 +2007,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
                      serverName.c_str(),
                      username.c_str());
     } else {
-        SE_LOG_DEBUG(NULL, "checking password property '%s' in source '%s' of config '%s' with user identity '%s'",
+        SE_LOG_DEBUG(NULL, "checking password property '%s' in datastore '%s' of config '%s' with user identity '%s'",
                      getMainName().c_str(),
                      sourceName.c_str(),
                      serverName.c_str(),
@@ -2154,7 +2154,7 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
                      serverName.c_str(),
                      username.c_str());
     } else {
-        SE_LOG_DEBUG(NULL, "possibly saving password property '%s' in source '%s' of config '%s' with user identity '%s'",
+        SE_LOG_DEBUG(NULL, "possibly saving password property '%s' in datastore '%s' of config '%s' with user identity '%s'",
                      getMainName().c_str(),
                      sourceName.c_str(),
                      serverName.c_str(),
@@ -2681,7 +2681,7 @@ StringConfigProperty SyncSourceConfig::m_sourcePropSync("sync",
                                            "not always obvious.\n"
                                            "\n"
                                            "When accepting a sync session in a SyncML server (HTTP server), only\n"
-                                           "sources with sync != disabled are made available to the client,\n"
+                                           "datastores with sync != disabled are made available to the client,\n"
                                            "which chooses the final sync mode based on its own configuration.\n"
                                            "When accepting a sync session in a SyncML client (local sync with\n"
                                            "the server contacting SyncEvolution on a device), the sync mode\n"
@@ -2710,25 +2710,25 @@ public:
     SourceBackendConfigProperty() :
         StringConfigProperty("backend",
                              "Specifies the SyncEvolution backend and thus the\n"
-                             "data which is synchronized by this source. Each\n"
+                             "data which is synchronized by this datastore. Each\n"
                              "backend may support multiple databases (see 'database'\n"
                              "property), different formats inside that database (see\n"
                              "'databaseFormat'), and different formats when talking to\n"
                              "the sync peer (see 'syncFormat' and 'forceSyncFormat').\n"
                              "\n"
                              "A special 'virtual' backend combines several other\n"
-                             "data sources and presents them as one set of items\n"
+                             "datastores and presents them as one set of items\n"
                              "to the peer. For example, Nokia phones typically\n"
                              "exchange tasks and events as part of one set of\n"
                              "calendar items.\n"
                              "\n"
                              "Right now such a virtual backend is limited to\n"
-                             "combining one calendar source with events and one\n"
-                             "task source. They have to be specified in the\n"
+                             "combining one calendar datastore with events and one\n"
+                             "task datastore. They have to be specified in the\n"
                              "``database`` property, typically like this:\n"
                              "``calendar,todo``\n"
                              "\n"
-                             "Different sources combined in one virtual source must\n"
+                             "Different datastores combined in one virtual datastore must\n"
                              "have a common format. As with other backends,\n"
                              "the preferred format can be influenced via the 'syncFormat'\n"
                              "attribute.\n"
@@ -2821,7 +2821,7 @@ static ConfigProperty sourcePropDatabaseID(Aliases("database") + "evolutionsourc
                                            "like for example the system address book.\n"
                                            "Not setting this property selects that default\n"
                                            "database.\n\n"
-                                           "If the backend is a virtual data source,\n"
+                                           "If the backend is a virtual data datastore,\n"
                                            "this field must contain comma seperated list of\n"
                                            "sub datasources actually used to store data.\n"
                                            "If your sub datastore has a comma in name, you\n"
@@ -2833,8 +2833,8 @@ static ConfigProperty sourcePropDatabaseID(Aliases("database") + "evolutionsourc
                                            "run ``syncevolution --print-databases``. The name\n"
                                            "is printed in front of the colon, followed by\n"
                                            "an identifier in brackets. Usually the name is unique and can be\n"
-                                           "used to reference the data source. The default\n"
-                                           "data source is marked with <default> at the end\n"
+                                           "used to reference the data datastore. The default\n"
+                                           "data datastore is marked with <default> at the end\n"
                                            "of the line, if there is a default.\n");
 
 static StringConfigProperty sourcePropDatabaseFormat("databaseFormat",
@@ -2845,11 +2845,11 @@ static StringConfigProperty sourcePropDatabaseFormat("databaseFormat",
 
 static ConfigProperty sourcePropURI("uri",
                                     "this is appended to the server's URL to identify the\n"
-                                    "server's database; if unset, the source name is used as\n"
+                                    "server's database; if unset, the datastore name is used as\n"
                                     "fallback");
 
 static ConfigProperty sourcePropUser(Aliases("databaseUser") + "evolutionuser",
-                                     "authentication for backend data source; password can be specified\n"
+                                     "authentication for backend data datastore; password can be specified\n"
                                      "in multiple ways, see SyncML server password for details\n"
                                      "\n"
                                      "Warning: setting database user/password in cases where it is not\n"
@@ -2889,7 +2889,7 @@ public:
         key.object += " ";
         key.object += sourceName;
         key.object += " backend";
-        key.description = StringPrintf("databasePassword for %s in source %s",
+        key.description = StringPrintf("databasePassword for %s in datastore %s",
                                        descr.c_str(), sourceName.c_str());
         return key;
     }
@@ -3004,11 +3004,11 @@ SyncSourceNodes::getNode(const ConfigProperty &prop) const
 {
     switch (prop.getSharing()) {
     case ConfigProperty::GLOBAL_SHARING:
-        return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no global source properties"))));
+        return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no global datastore properties"))));
         break;
     case ConfigProperty::SOURCE_SET_SHARING:
         if (prop.isHidden()) {
-            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no hidden source set properties"))));
+            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no hidden datastore set properties"))));
         } else {
             return m_sharedNode;
         }

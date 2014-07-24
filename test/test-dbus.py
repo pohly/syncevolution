@@ -2592,7 +2592,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.session.CheckSource("memo", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.SourceUnusable: The source 'memo' is not usable")
+                                 "org.syncevolution.SourceUnusable: The datastore 'memo' is not usable")
         else:
             self.fail("no exception thrown")
 
@@ -2619,7 +2619,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.session.CheckSource("memo", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.SourceUnusable: The source 'memo' is not usable")
+                                 "org.syncevolution.SourceUnusable: The datastore 'memo' is not usable")
         else:
             self.fail("no exception thrown")
 
@@ -6195,7 +6195,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
         self.assertTrue(out.startswith("List and manipulate databases:\n"))
         self.assertEqual(out.find("\nOptions:\n"), -1)
         self.assertTrue(out.endswith("Remove item(s):\n" \
-                                     "  syncevolution --delete-items [--] <config> <source> (<luid> ... | '*')\n\n"))
+                                     "  syncevolution --delete-items [--] <config> <store> (<luid> ... | '*')\n\n"))
         self.assertEqualDiff(specific_error, stripOutput(err))
 
     @property('debug', False)
@@ -6855,7 +6855,7 @@ sources/xyz/config.ini:# databasePassword = """)
    not always obvious.
    
    When accepting a sync session in a SyncML server (HTTP server), only
-   sources with sync != disabled are made available to the client,
+   datastores with sync != disabled are made available to the client,
    which chooses the final sync mode based on its own configuration.
    When accepting a sync session in a SyncML client (local sync with
    the server contacting SyncEvolution on a device), the sync mode
@@ -7341,7 +7341,7 @@ syncevolution/default/sources/eds_event/config.ini:backend = calendar
                                          expectSuccess = False)
         self.assertEqualDiff('', out)
         err = stripOutput(err)
-        self.assertEqualDiff('[ERROR] error code from SyncEvolution fatal error (local, status 10500): no such source(s): eds_event\n', err)
+        self.assertEqualDiff('[ERROR] error code from SyncEvolution fatal error (local, status 10500): no such datastore(s): eds_event\n', err)
 
         shutil.rmtree(self.configdir, True)
         # allow user to proceed if they wish and possible: here
@@ -7350,7 +7350,7 @@ syncevolution/default/sources/eds_event/config.ini:backend = calendar
                                          expectSuccess = False)
         self.assertEqualDiff('', out)
         err = stripOutput(err)
-        self.assertEqualDiff('[ERROR] error code from SyncEvolution fatal error (local, status 10500): no such source(s): eds_event\n', err)
+        self.assertEqualDiff('[ERROR] error code from SyncEvolution fatal error (local, status 10500): no such datastore(s): eds_event\n', err)
 
         shutil.rmtree(self.configdir, True)
         # allow user to proceed if they wish: configure exactly the
@@ -7961,20 +7961,20 @@ sources/memo/config.ini:type = todo
                                          expectSuccess = False)
         # Information about supported modules is optional, depends on compilation of
         # SyncEvolution.
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] source 'bar' does not exist\n\[ERROR\] backend property not set\n''')
+        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] datastore 'bar' does not exist\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # "foo" not configured, no source named
         out, err, code  = self.runCmdline(["--print-items",
                                            "foo"],
                                           expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] no source selected\n\[ERROR\] backend property not set\n''')
+        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # nothing known about source
         out, err, code = self.runCmdline(["--print-items"],
                                          expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no source selected\n\[ERROR\] backend property not set\n''')
+        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # now create "foo"
@@ -7987,7 +7987,7 @@ sources/memo/config.ini:type = todo
         out, err, code  = self.runCmdline(["--print-items",
                                            "foo"],
                                           expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no source selected\n\[ERROR\] backend property not set\n''')
+        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # "foo" configured, but "bar" is not
@@ -7995,7 +7995,7 @@ sources/memo/config.ini:type = todo
                                           "foo",
                                           "bar"],
                                          expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] source 'bar' does not exist\n\[ERROR\] backend property not set\n''')
+        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] datastore 'bar' does not exist\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # add "bar" source, using file backend
@@ -8367,13 +8367,13 @@ END:VCARD''')
         out = self.stripSyncTime(out)
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting first time sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 Comparison was impossible.
 
 [INFO] @default/addressbook: starting first time sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
 Comparison was impossible.
@@ -8462,13 +8462,13 @@ no changes
         out = self.stripSyncTime(out)
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
 no changes
@@ -8544,13 +8544,13 @@ END:VCARD''')
         out = self.stripSyncTime(out)
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
                        after last sync | current data
@@ -8640,13 +8640,13 @@ no changes
         out = self.stripSyncTime(out)
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
                        after last sync | current data
@@ -8751,24 +8751,24 @@ END:VCARD''')
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting first time sync, two-way (peer is server)
 [INFO remote@client] @client/calendar: starting first time sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 Comparison was impossible.
 
-[INFO remote@client] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @client/calendar ***
 Comparison was impossible.
 
 [INFO] @default/addressbook: starting first time sync, two-way (peer is client)
 [INFO] @default/calendar: starting first time sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
 Comparison was impossible.
 
 [INFO] @default/addressbook: started
-[INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 Comparison was impossible.
 
@@ -8867,24 +8867,24 @@ no changes
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO remote@client] @client/calendar: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
-[INFO remote@client] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @client/calendar ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
 [INFO] @default/calendar: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
 no changes
 
 [INFO] @default/addressbook: started
-[INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 no changes
 
@@ -8975,18 +8975,18 @@ END:VCARD''')
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO remote@client] @client/calendar: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
-[INFO remote@client] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @client/calendar ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
 [INFO] @default/calendar: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
                        after last sync | current data
@@ -9001,7 +9001,7 @@ END:VCARD                                END:VCARD
 -------------------------------------------------------------------------------
 
 [INFO] @default/addressbook: started
-[INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 no changes
 
@@ -9097,18 +9097,18 @@ no changes
         self.assertEqualDiff('''[INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
 [INFO remote@client] @client/calendar: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
-[INFO remote@client] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @client/calendar ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
 [INFO] @default/calendar: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
                        after last sync | current data
@@ -9123,7 +9123,7 @@ END:VCARD                              <
 -------------------------------------------------------------------------------
 
 [INFO] @default/addressbook: started
-[INFO] creating complete data backup of source calendar before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore calendar before sync (enabled with dumpData and needed for printChanges)
 *** @default/calendar ***
 no changes
 
@@ -9219,13 +9219,13 @@ no changes
 [INFO remote@client] target side of local sync ready
 [INFO remote@client] @client/calendar: inactive
 [INFO remote@client] @client/addressbook: starting normal sync, two-way (peer is server)
-[INFO remote@client] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO remote@client] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @client data changes to be applied during synchronization:
 *** @client/addressbook ***
 no changes
 
 [INFO] @default/addressbook: starting normal sync, two-way (peer is client)
-[INFO] creating complete data backup of source addressbook before sync (enabled with dumpData and needed for printChanges)
+[INFO] creating complete data backup of datastore addressbook before sync (enabled with dumpData and needed for printChanges)
 @default data changes to be applied during synchronization:
 *** @default/addressbook ***
 no changes

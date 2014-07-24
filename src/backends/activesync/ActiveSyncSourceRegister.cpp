@@ -204,7 +204,7 @@ static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t
         return res.release();
     } else {
         // sorry, no database
-        SE_LOG_ERROR(NULL, "cannot create EAS source for database %s, check config",
+        SE_LOG_ERROR(NULL, "cannot create EAS datastore for database %s, check config",
                      res->getDatabaseID().c_str());
         return NULL;
     }
