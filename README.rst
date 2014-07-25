@@ -943,9 +943,6 @@ it to be set to ``none`` explicitly to detect typos.
   **Warning:** because the client in the local sync starts the sync,
   ``preventSlowSync=0`` must be set in the target config to have an effect.
 
-TODO: this is inconsistent. Should we allow the user to set preventSlowSync
-in the originating config and use that on the target side?
-
 
 CalDAV and CardDAV
 ==================
