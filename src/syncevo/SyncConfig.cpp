@@ -1302,7 +1302,7 @@ static ConfigProperty syncPropSyncURL("syncURL",
                                       "Identifies how to contact the peer,\n"
                                       "best explained with some examples.\n\n"
                                       "HTTP(S) SyncML servers::\n\n"
-                                      "  http://example.com/sync\n"
+                                      "  http://example.com/sync\n\n"
                                       "OBEX over Bluetooth uses the MAC address, with\n"
                                       "the channel chosen automatically::\n\n"
                                       "  obex-bt://00:0A:94:03:F3:7E\n\n"
