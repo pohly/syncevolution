@@ -967,6 +967,9 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     // a bit harder for it.
     bool haveHomeSet = false;
 
+    // Remember whether we have results for https://apidata.googleusercontent.com:443/caldav/v2.
+    bool haveGoogleCalDAV2 = false;
+
     while (true) {
         bool usernameInserted = false;
         Candidate next;
@@ -984,6 +987,17 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
         SE_LOG_DEBUG(NULL, "testing %s", candidate.m_uri.toURL().c_str());
         Neon::URI currentURI = m_session->getURI();
         Neon::URI &newURI = candidate.m_uri;
+        bool success = false;
+        bool isWellKnown = boost::starts_with(candidate.m_uri.m_path, "/.well-known/");
+
+        // Special hack Google: if we already have results for the current CalDAV
+        // endpoint, then don't try the legacy one.
+        if (newURI.m_host == "www.google.com" &&
+            (boost::starts_with(newURI.m_path, "/calendar/dav/") || newURI.m_path =="/calendar/dav") &&
+            haveGoogleCalDAV2) {
+            SE_LOG_DEBUG(getDisplayName(), "skipping legacy Google CalDAV");
+            goto next;
+        }
 
         // Accessing the well-known URIs should lead to a redirect, but
         // with Yahoo! Calendar all I got was a 502 "connection refused".
@@ -1005,8 +1019,6 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             // candidates.push_back(StringPrintf("/calendar/dav/%s/user/", Neon::URI::escape(username).c_str()));
         }
 
-        bool success = false;
-        bool isWellKnown = boost::starts_with(candidate.m_uri.m_path, "/.well-known/");
         try {
             if (newURI.m_scheme != currentURI.m_scheme ||
                 newURI.m_host != currentURI.m_host ||
@@ -1292,6 +1304,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 SE_LOG_DEBUG(NULL, "found %s = %s",
                              name.c_str(),
                              uri.toURL().c_str());
+                if (uri.m_host == "apidata.googleusercontent.com" &&
+                    boost::starts_with(uri.m_path, "/caldav/v2/")) {
+                    haveGoogleCalDAV2 = true;
+                }
                 res = storeResult(name,
                                   uri,
                                   isReadOnly);
@@ -1448,6 +1464,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             }
         }
 
+    next:
         if (next.empty()) {
             // use next untried candidate
             next = tried.getNextCandidate();

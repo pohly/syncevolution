@@ -1568,8 +1568,7 @@ class TestDBusServer(DBusUtil, unittest.TestCase):
         configs = self.server.GetConfigs(True, utf8_strings=True)
         configs.sort()
         self.assertEqual(configs, ["Funambol",
-                                   "Google_Calendar",
-                                   "Google_Contacts",
+                                   "Google",
                                    "Goosync",
                                    "Memotoo",
                                    "Mobical",
@@ -5621,13 +5620,16 @@ def internalToIni(config):
 
 # result of removeComments(self.removeRandomUUID(filterConfig())) for
 # Google Calendar template/config
-googlecaldav = '''syncURL = https://www.google.com/calendar/dav/%u/user/?SyncEvolution=Google
+google = '''syncURL = https://apidata.googleusercontent.com/caldav/v2 https://www.googleapis.com/.well-known/carddav https://www.google.com/calendar/dav
 printChanges = 0
 dumpData = 0
 deviceId = fixed-devid
-IconURI = image://themedimage/icons/services/google-calendar
+IconURI = image://themedimage/icons/services/google
 ConsumerReady = 1
 peerType = WebDAV
+[addressbook]
+sync = two-way
+backend = CardDAV
 [calendar]
 sync = two-way
 backend = CalDAV
@@ -6494,8 +6496,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
                    "   template name = template description\n" \
                    "   eGroupware = http://www.egroupware.org\n" \
                    "   Funambol = https://onemediahub.com\n" \
-                   "   Google_Calendar = event sync via CalDAV, use for the 'target-config@google-calendar' config\n" \
-                   "   Google_Contacts = contact sync via SyncML, see http://www.google.com/support/mobile/bin/topic.py?topic=22181\n" \
+                   "   Google = event and contact sync via CalDAV/CardDAV, use for the 'target-config@google' config\n" \
                    "   Goosync = http://www.goosync.com/\n" \
                    "   Memotoo = http://www.memotoo.com\n" \
                    "   Mobical = https://www.everdroid.com\n" \
@@ -6701,9 +6702,9 @@ spds/sources/todo/config.txt:# evolutionpassword =
 
         # note that "backend" will be taken from the @default context
         # if one exists, so run this before setting up Funambol below
-        out, err, code = self.runCmdline(["--print-config", "--template", "google calendar"])
+        out, err, code = self.runCmdline(["--print-config", "--template", "google"])
         self.assertNoErrors(err)
-        self.assertEqualDiff(googlecaldav,
+        self.assertEqualDiff(google,
                              removeComments(self.removeRandomUUID(filterConfig(out))))
 
         out, err, code = self.runCmdline(["--print-config", "--template", "yahoo"])
@@ -6928,18 +6929,18 @@ sources/xyz/config.ini:# databasePassword = """)
             self.assertEqualDiff(yahoo.replace("sync = two-way", "sync = disabled"),
                                  removeComments(self.removeRandomUUID(filterConfig(out))))
 
-        # configure Google Calendar with template derived from config name
+        # configure Google Calendar/Contacts with template derived from config name
         out, err, code = self.runCmdline(["--configure",
-                                          "target-config@google-calendar"])
-        self.assertSilent(out, err, ignore=self.sourceCheckOutput('calendar'))
+                                          "target-config@google"])
+        self.assertSilent(out, err, ignore=self.sourceCheckOutput(['addressbook', 'calendar']))
 
-        out, err, code = self.runCmdline(["--print-config", "target-config@google-calendar"])
+        out, err, code = self.runCmdline(["--print-config", "target-config@google"])
         self.assertNoErrors(err)
         if davenabled:
-            self.assertEqualDiff(googlecaldav,
+            self.assertEqualDiff(google,
                                  removeComments(self.removeRandomUUID(filterConfig(out))))
         else:
-            self.assertEqualDiff(googlecaldav.replace("sync = two-way", "sync = disabled"),
+            self.assertEqualDiff(google.replace("sync = two-way", "sync = disabled"),
                                  removeComments(self.removeRandomUUID(filterConfig(out))))
 
         # test "template not found" error cases
