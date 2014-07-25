@@ -34,8 +34,18 @@ BoolConfigProperty &WebDAVCredentialsOkay()
  * NULL pointer for config is allowed.
  */
 class ContextSettings : public Neon::Settings {
+public:
+    /**
+     * Base URL(s) for WebDAV service.
+     * More than one can be give as candidate for scanning.
+     */
+    typedef std::vector<std::string> URLs;
+
+private:
     boost::shared_ptr<SyncConfig> m_context;
     SyncSourceConfig *m_sourceConfig;
+    URLs m_urls;
+    std::string m_urlsDescription;
     std::string m_url;
     std::string m_urlDescription;
     /** do change tracking without relying on CTag */
@@ -55,7 +65,7 @@ public:
         m_googleAlarmHack(false),
         m_credentialsOkay(false)
     {
-        std::string url;
+        URLs urls;
         std::string description = "<unset>";
 
         std::string syncName = m_context->getConfigName();
@@ -65,11 +75,8 @@ public:
 
         // check source config first
         if (m_sourceConfig) {
-            url = m_sourceConfig->getDatabaseID();
-            if (url.find("%u") != url.npos) {
-                std::string username = getUsername();
-                boost::replace_all(url, "%u", Neon::URI::escape(username));
-            }
+            urls.push_back(m_sourceConfig->getDatabaseID());
+            std::string &url = urls.front();
             std::string sourceName = m_sourceConfig->getName();
             if (sourceName.empty()) {
                 sourceName = "<none>";
@@ -81,24 +88,18 @@ public:
         }
 
         // fall back to sync context
-        if (url.empty() && m_context) {
-            vector<string> urls = m_context->getSyncURL();
-
-            if (!urls.empty()) {
-                url = urls.front();
-                if (url.find("%u") != url.npos) {
-                    std::string username = getUsername();
-                    boost::replace_all(url, "%u", Neon::URI::escape(username));
-                }
-            }
-
+        if ((urls.empty() || (urls.size() == 1 && urls.front().empty())) && m_context) {
+            urls = m_context->getSyncURL();
             description = StringPrintf("sync config '%s', syncURL='%s'",
                                        syncName.c_str(),
-                                       url.c_str());
+                                       boost::join(urls, " ").c_str());
         }
 
         // remember result and set flags
-        setURL(url, description);
+        setURLs(urls, description);
+        if (!urls.empty()) {
+            setURL(urls.front(), description);
+        }
 
         // m_credentialsOkay: no corresponding setting when using
         // credentials + URL from source config, in which case we
@@ -110,8 +111,11 @@ public:
         }
     }
 
+    void setURLs(const URLs &urls, const std::string &description) { m_urls = urls; m_urlsDescription = description; }
+    URLs getURLs() { return m_urls; }
+    std::string getURLsDescription() { return m_urlsDescription; }
     void setURL(const std::string &url, const std::string &description) { initializeFlags(url); m_url = url; m_urlDescription = description; }
-    virtual std::string getURL() { return m_url; }
+    std::string getURL() { return m_url; }
     std::string getURLDescription() { return m_urlDescription; }
 
     virtual bool verifySSLHost()
@@ -820,8 +824,13 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     // Only our own m_contextSettings allows overriding the
     // URL. Not an issue, in practice it is always used.
     bool didDNS = false;
-    std::string url = m_settings->getURL();
-    if (url.empty() && m_contextSettings) {
+    ContextSettings::URLs urls;
+    if (m_contextSettings) {
+        urls = m_contextSettings->getURLs();
+    } else {
+        urls.push_back(m_settings->getURL());
+    }
+    if ((urls.empty() || (urls.size() == 1 && urls.front().empty())) && m_contextSettings) {
         didDNS = true;
         size_t pos = username.find('@');
         if (pos == username.npos) {
@@ -830,10 +839,12 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
         }
         std::string domain = username.substr(pos + 1);
         std::string url = lookupDNSSRV(domain);
-        m_contextSettings->setURL(url,
-                                  StringPrintf("DNS SRV URL for domain %s and service %s",
-                                               domain.c_str(),
-                                               serviceType().c_str()));
+        urls.clear();
+        urls.push_back(url);
+        m_contextSettings->setURLs(urls,
+                                   StringPrintf("DNS SRV URL for domain %s and service %s",
+                                                domain.c_str(),
+                                                serviceType().c_str()));
     }
 
     // start talking to host defined by m_settings->getURL()
@@ -911,11 +922,29 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
         bool errorIsFatal() { return m_candidates.empty() && !m_found; }
     } tried;
 
-    // Avoid listing members for the initial URL. If the user gave us
-    // the root of a generic WebDAV server, a recursive listing of
-    // all resource collections on it will take too long. We only
-    // list the home sets.
-    Candidate candidate(m_session->getURI(), Candidate::NONE);
+    // Populate URLs to be scanned with configured URLs.
+    BOOST_FOREACH(const std::string &url, urls) {
+        Neon::URI uri = Neon::URI::parse(url);
+        // Avoid listing members for the initial URLs. If the user gave us
+        // the root of a generic WebDAV server, a recursive listing of
+        // all resource collections on it will take too long. We only
+        // list the home sets.
+        Candidate candidate(Neon::URI::parse(url), Candidate::NONE);
+        tried.addCandidate(candidate, Tried::BACK);
+
+        // Add well-known URL as fallback to be tried if configured
+        // path was empty. eGroupware also replies with a redirect for the
+        // empty path, but relying on that alone is risky because it isn't
+        // specified.
+        if (candidate.m_uri.m_path.empty() || candidate.m_uri.m_path == "/") {
+            std::string wellknown = wellKnownURL();
+            if (!wellknown.empty()) {
+                tried.addCandidate(Candidate(candidate.m_uri, wellknown, Candidate::NONE), Tried::BACK);
+            }
+        }
+    }
+
+    Candidate candidate = tried.getNextCandidate();
     Props_t davProps;
     Neon::Session::PropfindPropCallback_t callback =
         boost::bind(&WebDAVSource::openPropCallback,
@@ -932,17 +961,6 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     // will just overwrite previously found information in davProps.
     // Therefore resending is okay.
     Timespec finalDeadline = createDeadline(); // no resending if left empty
-
-    // Add well-known URL as fallback to be tried if configured
-    // path was empty. eGroupware also replies with a redirect for the
-    // empty path, but relying on that alone is risky because it isn't
-    // specified.
-    if (candidate.m_uri.m_path.empty() || candidate.m_uri.m_path == "/") {
-        std::string wellknown = wellKnownURL();
-        if (!wellknown.empty()) {
-            tried.addCandidate(Candidate(m_session->getURI(), wellknown, Candidate::NONE), Tried::BACK);
-        }
-    }
 
     // Remember whether we have found the home set. If we do not come
     // across it as part of the regular search, then we need to search
