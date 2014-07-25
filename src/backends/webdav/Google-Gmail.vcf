@@ -1,0 +1,82 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Mr. John 1 Doe Sr.
+N:Doe;John;1;Mr.;Sr.
+NICKNAME:Johnny
+X-PHONETIC-FIRST-NAME:John
+X-PHONETIC-LAST-NAME:Doe
+EMAIL;TYPE=INTERNET;TYPE=HOME:john.doe@home.com
+EMAIL;TYPE=INTERNET;TYPE=WORK:doe@work.com
+item1.EMAIL;TYPE=INTERNET:john@custom.com
+item1.X-ABLabel:custom-label
+X-GTALK:google talk
+X-AIM:aim
+X-YAHOO:yahoo
+X-SKYPE:skype
+X-QQ:QQ
+X-MSN:MSN
+X-ICQ:ICQ
+X-JABBER:Jabber
+TEL;TYPE=WORK:business 1
+TEL;TYPE=CELL:mobile
+TEL;TYPE=HOME:home
+TEL;TYPE=MAIN:main
+TEL;TYPE=WORK;TYPE=FAX:work fax
+TEL;TYPE=HOME;TYPE=FAX:home fax
+item2.TEL:google voice
+item2.X-ABLabel:GRAND_CENTRAL
+TEL;TYPE=PAGER:pager
+item3.TEL:custom
+item3.X-ABLabel:custom-label
+ADR;TYPE=HOME:PO;neighborhood;home address\n;City;State;ZIP;Country
+ADR;TYPE=WORK:;;work address;;;;
+item4.ADR:;;custom address;;;;
+item4.X-ABLabel:custom-label
+ORG:at company
+TITLE:tester
+BDAY:1970-12-30
+item5.URL:http\://profile.com
+item5.X-ABLabel:PROFILE
+item6.URL:http\://blog.com
+item6.X-ABLabel:BLOG
+item7.URL:http\://homepage.com
+item7.X-ABLabel:_$!<HomePage>!$_
+URL;TYPE=WORK:http\://company.com
+item8.URL:http\://custom.com
+item8.X-ABLabel:Custom-label
+item9.X-ABDATE:1971-01-01
+item9.X-ABLabel:_$!<Anniversary>!$_
+item10.X-ABDATE:2000-02-01
+item10.X-ABLabel:custom-label
+item11.X-ABRELATEDNAMES:spouse
+item11.X-ABLabel:_$!<Spouse>!$_
+item12.X-ABRELATEDNAMES:child
+item12.X-ABLabel:_$!<Child>!$_
+item13.X-ABRELATEDNAMES:mother
+item13.X-ABLabel:_$!<Mother>!$_
+item14.X-ABRELATEDNAMES:father
+item14.X-ABLabel:_$!<Father>!$_
+item15.X-ABRELATEDNAMES:parent
+item15.X-ABLabel:_$!<Parent>!$_
+item16.X-ABRELATEDNAMES:brother
+item16.X-ABLabel:_$!<Brother>!$_
+item17.X-ABRELATEDNAMES:sister
+item17.X-ABLabel:_$!<Sister>!$_
+item18.X-ABRELATEDNAMES:friend
+item18.X-ABLabel:_$!<Friend>!$_
+item19.X-ABRELATEDNAMES:relative
+item19.X-ABLabel:RELATIVE
+item20.X-ABRELATEDNAMES:manager
+item20.X-ABLabel:_$!<Manager>!$_
+item21.X-ABRELATEDNAMES:assistant
+item21.X-ABLabel:_$!<Assistant>!$_
+item22.X-ABRELATEDNAMES:referred-by
+item22.X-ABLabel:REFERRED_BY
+item23.X-ABRELATEDNAMES:partner
+item23.X-ABLabel:_$!<Partner>!$_
+item24.X-ABRELATEDNAMES:domestic partner
+item24.X-ABLabel:DOMESTIC_PARTNER
+item25.X-ABRELATEDNAMES:custom relationship
+item25.X-ABLabel:custom-label
+NOTE:A test contact.\ncustom-field: custom field value
+END:VCARD

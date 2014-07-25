@@ -13,10 +13,10 @@ else
 noinst_LTLIBRARIES += $(src_backends_webdav_lib)
 endif
 
-bin_SCRIPTS += src/backends/webdav/syncevo-webdav-lookup
-CLEANFILES += src/backends/webdav/syncevo-webdav-lookup
+bin_SCRIPTS += src/syncevo-webdav-lookup
+CLEANFILES += src/syncevo-webdav-lookup
 
-src/backends/webdav/syncevo-webdav-lookup: $(top_srcdir)/src/backends/webdav/syncevo-webdav-lookup.sh
+src/syncevo-webdav-lookup: $(top_srcdir)/src/backends/webdav/syncevo-webdav-lookup.sh
 	$(AM_V_GEN) rm -f $@ && cp $< $@ && chmod a+rx $@
 
 src_backends_webdav_src = \

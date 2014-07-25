@@ -1,46 +1,96 @@
-PKG_CHECK_MODULES(GSSO, [libgsignon-glib libaccounts-glib], HAVE_GSSO=yes, HAVE_GSSO=no)
+PKG_CHECK_MODULES(GSSO, [libgsignon-glib >= 2.0], HAVE_GSSO=yes, HAVE_GSSO=no)
+PKG_CHECK_MODULES(UOA, [libsignon-glib >= 1.7], HAVE_UOA=yes, HAVE_UOA=no)
+PKG_CHECK_MODULES(ACCOUNTS, [libaccounts-glib >= 1.8], HAVE_ACCOUNTS=yes, HAVE_ACCOUNTS=no)
+
+def_gsso="no"
+def_uoa="no"
+def_signon="no"
+if test "$HAVE_GSSO" = "yes" && test "$HAVE_ACCOUNTS" = "yes"; then
+   def_gsso="yes"
+fi
+if test "$HAVE_UOA" = "yes" && test "$HAVE_ACCOUNTS" = "yes"; then
+   def_uoa="yes"
+fi
+if test "$HAVE_GSSO" = "yes"; then
+   DEFAULT_SIGNON="GSSO"
+   def_signon="yes"
+elif test "$HAVE_UOA" = "yes"; then
+   DEFAULT_SIGNON="UOA"
+   def_signon="yes"
+fi
+AC_SUBST(DEFAULT_SIGNON)
+
+# The backends could be compiled independently. However, the XML example files
+# for accounts only get created once and the backends require conflicting values
+# in them.
+#
+# Also, when compiling without dynamic module loading, signonRegister.cpp will
+# only be compiled once and thus can activate only one of the actual signon
+# implementations.
 
 AC_ARG_ENABLE(gsso,
               AS_HELP_STRING([--enable-gsso],
-                             [enables or disables support for the gSSO single-sign-on system; default is on if development files are available]),
+                             [enables or disables support for the gSSO + Accounts single-sign-on system; default is on if development files are available]),
               [enable_gsso="$enableval"
                test "$enable_gsso" = "yes" || test "$enable_gsso" = "no" || AC_MSG_ERROR([invalid value for --enable-gsso: $enable_gsso])
-               test "$enable_gsso" = "no" || test "$HAVE_GSSO" = "yes" || AC_MSG_ERROR([required pkg(s) not found that are needed for --enable-gsso])],
-              enable_gsso="$HAVE_GSSO")
+               test "$enable_gsso" = "no" || (test "$HAVE_GSSO" = "yes" && test "$HAVE_ACCOUNTS" = "yes" ) || AC_MSG_ERROR([required pkg(s) not found that are needed for --enable-gsso])],
+              enable_gsso="$def_gsso")
 if test $enable_gsso = "yes"; then
-    AC_DEFINE(USE_GSSO, 1, [use gSSO])
     # link into static executables, similar to a SyncSource
     SYNCSOURCES="$SYNCSOURCES src/backends/signon/providergsso.la"
     GOOGLE_METHOD="oauth"
     GOOGLE_MECHANISM="oauth2"
     AC_SUBST(GOOGLE_METHOD)
     AC_SUBST(GOOGLE_MECHANISM)
+    if test "$enable_static" = "yes"; then
+       AC_DEFINE(STATIC_GSSO, 1, [activate gsso])
+    fi
 fi
 
 # conditional compilation in make
 AM_CONDITIONAL([USE_GSSO], [test "$enable_gsso" = "yes"])
-
-PKG_CHECK_MODULES(UOA, [libsignon-glib >= 1.7 libaccounts-glib >= 1.8], HAVE_UOA=yes, HAVE_UOA=no)
 
 AC_ARG_ENABLE(uoa,
               AS_HELP_STRING([--enable-uoa],
                              [enables or disables support for the UOA single-sign-on system; default is on if development files are available]),
               [enable_uoa="$enableval"
                test "$enable_uoa" = "yes" || test "$enable_uoa" = "no" || AC_MSG_ERROR([invalid value for --enable-uoa: $enable_uoa])
-               test "$enable_uoa" = "no" || test "$HAVE_UOA" = "yes" || AC_MSG_ERROR([required pkg(s) not found that are needed for --enable-uoa])],
-              enable_uoa="$HAVE_UOA")
+               test "$enable_uoa" = "no" || (test "$HAVE_UOA" = "yes" && test "$HAVE_ACCOUNTS" = "yes" ) || AC_MSG_ERROR([required pkg(s) not found that are needed for --enable-uoa])],
+              enable_uoa="$def_uoa")
 if test $enable_uoa = "yes"; then
-    AC_DEFINE(USE_UOA, 1, [use UOA])
     # link into static executables, similar to a SyncSource
     SYNCSOURCES="$SYNCSOURCES src/backends/signon/provideruoa.la"
     GOOGLE_METHOD="oauth2"
     GOOGLE_MECHANISM="web_server"
     AC_SUBST(GOOGLE_METHOD)
     AC_SUBST(GOOGLE_MECHANISM)
+    if test "$enable_static" = "yes"; then
+       AC_DEFINE(STATIC_UOA, 1, [activate gsso])
+    fi
 fi
 
 # conditional compilation in make
 AM_CONDITIONAL([USE_UOA], [test "$enable_uoa" = "yes"])
+
+AC_ARG_ENABLE(signon,
+              AS_HELP_STRING([--enable-sign],
+                             [enables or disables support for the UOA or gSSO single-sign-on system without Accounts; default is on if development files are available]),
+              [enable_signon="$enableval"
+               test "$enable_signon" = "yes" || test "$enable_signon" = "no" || AC_MSG_ERROR([invalid value for --enable-signon: $enable_signon])
+               test "$enable_signon" = "no" || test "$HAVE_UOA" = "yes" || test "$HAVE_GSSO" = "yes" || AC_MSG_ERROR([required pkg(s) not found that are needed for --enable-signon])],
+              enable_signon="$def_signon")
+if test $enable_signon = "yes"; then
+    # link into static executables, similar to a SyncSource
+    SYNCSOURCES="$SYNCSOURCES src/backends/signon/providersignon.la"
+    AC_SUBST(GOOGLE_METHOD)
+    AC_SUBST(GOOGLE_MECHANISM)
+    if test "$enable_static" = "yes"; then
+       AC_DEFINE(STATIC_SIGNON, 1, [activate gsso])
+    fi
+fi
+
+# conditional compilation in make
+AM_CONDITIONAL([USE_SIGNON], [test "$enable_signon" = "yes"])
 
 AC_ARG_WITH([google-client-id],
             AS_HELP_STRING([--with-google-client-id=...], [OAuth2 client ID for google.provider]),

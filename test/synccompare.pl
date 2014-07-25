@@ -514,10 +514,8 @@ sub NormalizeItem {
       s/^STATUS:CONFIRMED\r?\n?//gm;
     }
 
-    # Google randomly (?!) adds a standard alarm to events.
-    if ($google_valarm) {
-        s/BEGIN:VALARM\nDESCRIPTION:This is an event reminder\nACTION:DISPLAY\nTRIGGER:-PT10M\n(X-KDE-KCALCORE-ENABLED:TRUE\n)END:VALARM\n//s;
-    }
+    # Ignore VALARM ACTION:NONE. This has to be added to avoid default alarms in Google CalDAV.
+    s/^BEGIN:VALARM\r?\n.*?^ACTION:NONE\r?\n.*?^END:VALARM\r?\n//ms;
 
     if ($yahoo) {
         s/^(X-MICROSOFT-[-A-Z0-9]*)(;[^:;\n]*)*:.*\r?\n?//gm;

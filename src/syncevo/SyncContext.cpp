@@ -3205,8 +3205,12 @@ void SyncContext::initMain(const char *appname)
 {
 #if defined(HAVE_GLIB)
     // this is required when using glib directly or indirectly
+#if !GLIB_CHECK_VERSION(2,36,0)
     g_type_init();
+#endif
+#if !GLIB_CHECK_VERSION(2,32,0)
     g_thread_init(NULL);
+#endif
     g_set_prgname(appname);
 
     // redirect glib logging into our own logging
@@ -3305,6 +3309,11 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
     SyncMLStatus status = STATUS_OK;
 
     checkConfig("sync");
+
+    if (getenv("SYNCEVOLUTION_EPHEMERAL")) {
+        SE_LOG_INFO(NULL, "turning on ephemeral sync mode as requested by SYNCEVOLUTION_EPHEMERAL variable");
+        makeEphemeral();
+    }
 
     // redirect logging as soon as possible
     SourceList sourceList(*this, m_doLogging);
@@ -4405,7 +4414,8 @@ SyncMLStatus SyncContext::doSync()
 string SyncContext::getSynthesisDatadir()
 {
     if (isEphemeral() && m_sourceListPtr) {
-        return m_sourceListPtr->getLogdir() + "/synthesis";
+        // Suppress writing in libsynthesis binfile client.
+        return "/dev/null";
     } else if (m_localSync && !m_serverMode) {
         return m_localClientRootPath + "/.synthesis";
     } else {

@@ -435,6 +435,7 @@ class ClientTest : private boost::noncopyable {
      * registerTests() and remains valid until the client is deleted
      */
     void *factory;
+    void freeFactory();
 };
 
 /**
@@ -570,7 +571,7 @@ public:
     /**
      * compare data in source with vararg list of std::string pointers, NULL terminated
      */
-    void compareDatabases(TestingSyncSource &copy, ...);
+    void compareDatabases(TestingSyncSource *copy, ...);
 
     /**
      * insert artificial items, number of them determined by TEST_EVOLUTION_NUM_ITEMS

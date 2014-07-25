@@ -647,7 +647,6 @@ Session::Session(Server &server,
                      "org.syncevolution.Session",
                      boost::bind(&Server::autoTermCallback, &server)),
     ReadOperations(config_name, server),
-    m_server(server),
     m_flags(flags),
     m_sessionID(session),
     m_peerDeviceID(peerDeviceID),
@@ -1090,7 +1089,7 @@ void Session::onQuit(int status) throw ()
                                         m_me,
                                         false,
                                         SyncReport()),
-                            0.1 /* seconds */);
+                            1 /* seconds */);
     } catch (...) {
         Exception::handle();
     }

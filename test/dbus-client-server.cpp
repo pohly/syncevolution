@@ -253,7 +253,9 @@ int main(int argc, char **argv)
             { NULL}
         };
 
+#if !GLIB_CHECK_VERSION(2,36,0)
         g_type_init();
+#endif
 
         opt_address = NULL;
         opt_kill = NULL;

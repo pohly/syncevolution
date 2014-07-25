@@ -19,6 +19,8 @@
           <setting name="ClientId">@GOOGLE_CLIENT_ID@</setting>
           <setting name="ClientSecret">@GOOGLE_CLIENT_SECRET@</setting>
           <setting type="boolean" name="ForceClientAuthViaRequestBody">true</setting>
+          <!-- Required for creating gsignond identities. -->
+          <setting type="as" name="Realms">['google.com']</setting>
         </group>
       </group>
     </group>

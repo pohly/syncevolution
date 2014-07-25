@@ -351,6 +351,10 @@ in SyncPeerWithFlags(). The following keys are possible:
     "pbap-sync": string "text"|"all"|"incremental" - synchronize only
     text properties, all properties or first text, then all. The default is
     taken from SYNCEVOLUTION_PBAP_SYNC if set, otherwise it is "incremental".
+    "pbap-chunk-max-count-photo", "pbap-chunk-max-count-no-photo",
+    "pbap-chunk-transfer-time", "pbap-chunk-offset": int32_t -
+    see PBAP README.
+    "pbap-chunk-time-lambda": double - see PBAP README
 
 When doing text syncing, local photo data is preserved. The
 incremental sync has the same effect as a text-only sync followed by

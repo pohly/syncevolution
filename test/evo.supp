@@ -5276,3 +5276,26 @@
    ...
    fun:_ZN6sysync16TDebugLoggerBase16DebugStartOutputEv
 }
+
+# ==12547== 32 bytes in 1 blocks are definitely lost in loss record 394 of 1,061
+# ==12547==    at 0x4C28A20: operator new(unsigned long) (vg_replace_malloc.c:319)
+# ==12547==    by 0x7C1EFB: SyncEvo::SuspendFlags::getSuspendFlags() (shared_count.hpp:167)
+# ==12547==    by 0x7C204C: SyncEvo::SuspendFlags::handleSignal(int) (SuspendFlags.cpp:277)
+# ==12547==    by 0x952A8EF: ??? (in /lib/x86_64-linux-gnu/libpthread-2.19.so)
+# ==12547==    by 0x9529AFC: ??? (syscall-template.S:81)
+# ==12547==    by 0x91049FE: dlt_receiver_receive_fd (dlt_common.c:2227)
+# ==12547==    by 0x90FC6DB: dlt_user_receiverthread_function (dlt_user.c:3461)
+# ==12547==    by 0x95230C9: start_thread (pthread_create.c:312)
+# ==12547==    by 0xA82C05C: clone (clone.S:111)
+# ==12547== 
+# Looks like something allocated by RecMutex; perhaps related to not cleaning up
+# during process shutdown.
+{
+   dlt thread + suspend mutex
+   Memcheck:Leak
+   fun:_Znwm
+   fun:*getSuspendFlags*
+   fun:*SuspendFlags*handleSignal*
+   ...
+   fun:dlt_*
+}

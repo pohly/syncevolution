@@ -55,6 +55,12 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     void contactServer();
 
     /**
+     * DNS SRV lookup for current service type.
+     * Returns the found URL, otherwise throws exception.
+     */
+    std::string lookupDNSSRV(const std::string &domain);
+
+    /**
      * Scan server based on username/password/syncURL. Callback is
      * passed name and URL of each collection (in this order) plus
      * some flags (isReadOnly = collection cannot be written);

@@ -51,10 +51,10 @@ public:
 };
 
 LocalTransportAgent::LocalTransportAgent(SyncContext *server,
-                                         const std::string &clientContext,
+                                         const std::string &clientConfig,
                                          void *loop) :
     m_server(server),
-    m_clientContext(SyncConfig::normalizeConfigString(clientContext)),
+    m_clientConfig(SyncConfig::normalizeConfigString(clientConfig)),
     m_status(INACTIVE),
     m_loop(loop ?
            GMainLoopCXX(static_cast<GMainLoop *>(loop), ADD_REF) :
@@ -63,10 +63,10 @@ LocalTransportAgent::LocalTransportAgent(SyncContext *server,
 }
 
 boost::shared_ptr<LocalTransportAgent> LocalTransportAgent::create(SyncContext *server,
-                                                                   const std::string &clientContext,
+                                                                   const std::string &clientConfig,
                                                                    void *loop)
 {
-    boost::shared_ptr<LocalTransportAgent> self(new LocalTransportAgent(server, clientContext, loop));
+    boost::shared_ptr<LocalTransportAgent> self(new LocalTransportAgent(server, clientConfig, loop));
     self->m_self = self;
     return self;
 }
@@ -77,16 +77,6 @@ LocalTransportAgent::~LocalTransportAgent()
 
 void LocalTransportAgent::start()
 {
-    // compare normalized context names to detect forbidden sync
-    // within the same context; they could be set up, but are more
-    // likely configuration mistakes
-    string peer, context;
-    SyncConfig::splitConfigString(m_clientContext, peer, context);
-    if (!peer.empty()) {
-        SE_THROW(StringPrintf("invalid local sync URL: '%s' references a peer config, should point to a context like @%s instead",
-                              m_clientContext.c_str(),
-                              context.c_str()));
-    }
     // TODO (?): check that there are no conflicts between the active
     // sources. The old "contexts must be different" check achieved that
     // via brute force (because by definition, databases from different
@@ -185,7 +175,7 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
 void LocalTransportAgent::logChildOutput(const std::string &level, const std::string &message)
 {
     Logger::MessageOptions options(Logger::strToLevel(level.c_str()));
-    options.m_processName = &m_clientContext;
+    options.m_processName = &m_clientConfig;
     // Child should have written this into its own log file and/or syslog/dlt already.
     // Only pass it on to a user of the command line interface.
     options.m_flags = Logger::MessageOptions::ALREADY_LOGGED;
@@ -217,7 +207,7 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
             sources[sourceName] = std::make_pair(targetName, sync);
         }
     }
-    m_child->m_startSync.start(m_clientContext,
+    m_child->m_startSync.start(m_clientConfig,
                                StringPair(m_server->getConfigName(),
                                           m_server->isEphemeral() ?
                                           "ephemeral" :
@@ -417,7 +407,7 @@ TransportAgent::Status LocalTransportAgent::wait(bool noReply)
                             status -= sysync::LOCAL_STATUS_CODE;
                         }
                         std::string explanation = StringPrintf("failure on target side %s of local sync",
-                                                               m_clientContext.c_str());
+                                                               m_clientConfig.c_str());
                         static const pcrecpp::RE re("\\((?:local|remote), status (\\d+)\\): (.*)");
                         int clientStatus;
                         std::string clientExplanation;
@@ -741,7 +731,7 @@ class LocalTransportAgentChild : public TransportAgent
     // D-Bus API, see LocalTransportChild;
     // must keep number of parameters < 9, the maximum supported by
     // our D-Bus binding
-    void startSync(const std::string &clientContext,
+    void startSync(const std::string &clientConfig,
                    const StringPair &serverConfig, // config name + root path
                    const std::string &serverLogDir,
                    bool serverDoLogging,
@@ -751,7 +741,23 @@ class LocalTransportAgentChild : public TransportAgent
                    const LocalTransportChild::ReplyPtr &reply)
     {
         setMsgToParent(reply, "sync() was called");
-        Logger::setProcessName(clientContext);
+
+        string peer, context, normalConfig;
+        normalConfig = SyncConfig::normalizeConfigString(clientConfig);
+        SyncConfig::splitConfigString(normalConfig, peer, context);
+        if (peer.empty()) {
+            peer = "target-config";
+        }
+
+        // Keep the process name short in debug output if it is the
+        // normal "target-config", be more verbose if it is something
+        // else because it may be relevant.
+        if (peer != "target-config") {
+            Logger::setProcessName(peer + "@" + context);
+        } else {
+            Logger::setProcessName("@" + context);
+        }
+
         SE_LOG_DEBUG(NULL, "Sync() called, starting the sync");
         const char *delay = getenv("SYNCEVOLUTION_LOCAL_CHILD_DELAY2");
         if (delay) {
@@ -759,11 +765,11 @@ class LocalTransportAgentChild : public TransportAgent
         }
 
         // initialize sync context
-        m_client.reset(new SyncContext(std::string("target-config") + clientContext,
+        m_client.reset(new SyncContext(peer + "@" + context,
                                        serverConfig.first,
                                        serverConfig.second == "ephemeral" ?
                                        serverConfig.second :
-                                       serverConfig.second + "/." + clientContext,
+                                       serverConfig.second + "/." + normalConfig,
                                        boost::shared_ptr<TransportAgent>(this, NoopAgentDestructor()),
                                        serverDoLogging));
         if (serverConfig.second == "ephemeral") {
@@ -823,7 +829,7 @@ class LocalTransportAgentChild : public TransportAgent
             if (mode != SYNC_NONE) {
                 SyncSourceNodes targetNodes = m_client->getSyncSourceNodes(targetName);
                 SyncSourceConfig targetSource(targetName, targetNodes);
-                string fullTargetName = clientContext + "/" + targetName;
+                string fullTargetName = normalConfig + "/" + targetName;
 
                 if (!targetNodes.dataConfigExists()) {
                     if (targetName.empty()) {

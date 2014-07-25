@@ -2527,14 +2527,17 @@ static string internalToIni(const string &config)
 }
 
 /** result of removeComments(filterRandomUUID(filterConfig())) for Google Calendar template/config */
-static const std::string googlecaldav =
-               "syncURL = https://www.google.com/calendar/dav/%u/user/?SyncEvolution=Google\n"
+static const std::string google =
+               "syncURL = https://apidata.googleusercontent.com/caldav/v2 https://www.googleapis.com/.well-known/carddav https://www.google.com/calendar/dav\n"
                "printChanges = 0\n"
                "dumpData = 0\n"
                "deviceId = fixed-devid\n"
-               "IconURI = image://themedimage/icons/services/google-calendar\n"
+               "IconURI = image://themedimage/icons/services/google\n"
                "ConsumerReady = 1\n"
                "peerType = WebDAV\n"
+               "[addressbook]\n"
+               "sync = two-way\n"
+               "backend = CardDAV\n"
                "[calendar]\n"
                "sync = two-way\n"
                "backend = CalDAV\n";
@@ -3038,9 +3041,8 @@ protected:
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (servers):\n"
                                   "   template name = template description\n"
                                   "   eGroupware = http://www.egroupware.org\n"
-                                  "   Funambol = http://my.funambol.com\n"
-                                  "   Google_Calendar = event sync via CalDAV, use for the 'target-config@google-calendar' config\n"
-                                  "   Google_Contacts = contact sync via SyncML, see http://www.google.com/support/mobile/bin/topic.py?topic=22181\n"
+                                  "   Funambol = https://onemediahub.com\n"
+                                  "   Google = event and contact sync via CalDAV/CardDAV, use for the 'target-config@google' config\n"
                                   "   Goosync = http://www.goosync.com/\n"
                                   "   Memotoo = http://www.memotoo.com\n"
                                   "   Mobical = https://www.everdroid.com\n"
@@ -3123,7 +3125,7 @@ protected:
 
     void testPrintFileTemplatesConfig() {
         // simulate reading templates from user's XDG HOME
-        symlink("../templates", (m_testDir + "/syncevolution-templates").c_str());
+        CPPUNIT_ASSERT(!symlink("../templates", (m_testDir + "/syncevolution-templates").c_str()));
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "/dev/null");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
@@ -3137,9 +3139,9 @@ protected:
         // note that "backend" will be take from the @default context if one
         // exists, so run this before setting up Funambol below
         {
-            TestCmdline cmdline("--print-config", "--template", "google calendar", NULL);
+            TestCmdline cmdline("--print-config", "--template", "google", NULL);
             cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF(googlecaldav,
+            CPPUNIT_ASSERT_EQUAL_DIFF(google,
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
         }
 
@@ -3532,17 +3534,17 @@ protected:
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
         }
 
-        // configure Google Calendar with template derived from config name
+        // configure Google Calendar/Contacts with template derived from config name
         {
             TestCmdline cmdline("--configure",
-                                "target-config@google-calendar",
+                                "target-config@google",
                                 NULL);
             cmdline.doit();
         }
         {
-            TestCmdline cmdline("--print-config", "target-config@google-calendar", NULL);
+            TestCmdline cmdline("--print-config", "target-config@google", NULL);
             cmdline.doit();
-            CPPUNIT_ASSERT_EQUAL_DIFF(googlecaldav,
+            CPPUNIT_ASSERT_EQUAL_DIFF(google,
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
         }
 
@@ -4767,11 +4769,11 @@ private:
 
         boost::replace_first(config,
                              "syncURL = http://sync.scheduleworld.com/funambol/ds",
-                             "syncURL = http://my.funambol.com/sync");
+                             "syncURL = https://onemediahub.com/sync");
 
         boost::replace_first(config,
                              "WebURL = http://www.scheduleworld.com",
-                             "WebURL = http://my.funambol.com");
+                             "WebURL = https://onemediahub.com");
 
         boost::replace_first(config,
                              "IconURI = image://themedimage/icons/services/scheduleworld",

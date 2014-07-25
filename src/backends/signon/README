@@ -1,8 +1,8 @@
 Google CalDAV/CardDAV via OAuth2
 ================================
 
-Setup
------
+Setup with gSSO and Accounts
+----------------------------
 
 SyncEvolution needs an active account for Google. Services for CardDAV
 and CalDAV can be used, but are not required if the provider was
@@ -10,7 +10,8 @@ already configured to ask for CardDAV and CalDAV access.
 
 SyncEvolution source code ships with example .provider, .service, and
 .service-type files in the src/backends/signon/accounts
-directory. These files work with gSSO.
+directory. These files work with gSSO and (when compiled for that
+instead ) with UOA.
 
 When compiling, it is possible to insert valid client ID+secret into
 these files using the --with-google-client-* configure options. The
@@ -40,6 +41,31 @@ Optionally, one can also enable the services:
 It is not possible to create signond identities via command line
 tools. SyncEvolution will create those automatically and store them
 for the provider so that it can be reused in future operations.
+
+Setup with gSSO and without Accounts
+====================================
+
+An identity must be created once:
+
+$ gsso-example --create-identity=google-for-syncevolution --identity-method=oauth --identity-realms=google.com
+Identity stored with id 3
+$ ID=3
+
+On normal Linux desktops, access control is based on executable file
+paths. On such a system grant SyncEvolution access to the new identity with:
+$ gsso-example --add-context=$ID --system-context=<path>/syncevolution --application-context=
+$ gsso-example --add-context=$ID --system-context=<path>/libexec/syncevo-dbus-server --application-context=
+$ gsso-example --add-context=$ID --system-context=<path>/libexec/syncevo-dbus-helper --application-context=
+$ gsso-example --add-context=$ID --system-context=<path>/libexec/syncevo-local-sync --application-context=
+
+On Tizen, set a Smack label: --system-context=User --application-context=
+
+Then use
+   "username=signon:
+{'identity': <uint32 $ID>, 'method': <'oauth'>, 'mechanism': <'oauth2'>, 'session': <{'TokenHost': <'accounts.google.com'>, 'ForceClientAuthViaRequestBody': <true>, 'Scope': <'email https://www.googleapis.com/auth/carddav'>, 'UiPolicy': <uint32 0>, 'ClientId': <'73652887053-2ciia00v5fseed7s0sudggdu3oaoo2re.apps.googleusercontent.com'>, 'AuthPath': <'/o/oauth2/auth'>, 'ResponseType': <'code'>, 'AuthHost': <'accounts.google.com'>, 'ClientSecret': <'2YDYzyI6HWSJFd5dOqz0uZGj'>, 'Realms': <['google.com']>, 'RedirectUri': <'http://localhost'>, 'TokenPath': <'/o/oauth2/token'>}> }"
+
+in the commands below. This is the information that SyncEvolution
+would normally find in the accounts system.
 
 
 Usage

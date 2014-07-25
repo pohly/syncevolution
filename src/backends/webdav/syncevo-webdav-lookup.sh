@@ -47,6 +47,9 @@ DOMAIN=$2
 LOG=`mktemp`
 trap "[ -s $LOG ] && ( echo $0 failed to find '$TYPE $DOMAIN':; cat $LOG >&2 ); rm -f $LOG" EXIT
 
+# We depend on certain output strings which might be localized.
+export LC_ALL=C
+
 # find one of the supported tools for DNS queries
 TOOL=
 ALTERNATIVES="adnshost host /usr/lib/syncevolution/host nslookup"
@@ -78,23 +81,55 @@ for type in ${TYPE}s ${TYPE}; do
 
         case $TOOL in
             adnshost)
-                res=`$TOOL -Fi -tsrv _$type._tcp.$DOMAIN | tee -a $LOG | grep ^_$type._tcp.$DOMAIN`
-                # _carddavs._tcp.yahoo.com.cn SRV 1 1 443 carddav.address.yahoo.com misconfig 101 prohibitedcname "DNS alias found where canonical name wanted" ( )
-                PORT=`echo $res | sed -e 's;.* SRV [^ ]* [^ ]* \([^ ]*\) \([^ ]*\).*;\1;'`
-                HOSTNAME=`echo $res | sed -e 's;.* SRV [^ ]* [^ ]* \([^ ]*\) \([^ ]*\).*;\2;'`
+                if res=`$TOOL -Fi -tsrv _$type._tcp.$DOMAIN | tee -a $LOG | grep -e ^_$type._tcp.$DOMAIN -e nxdomain -e permfail`; then
+                    # _carddavs._tcp.yahoo.com.cn SRV 1 1 443 carddav.address.yahoo.com misconfig 101 prohibitedcname "DNS alias found where canonical name wanted" ( )
+                    PORT=`echo $res | sed -e 's;.* SRV [^ ]* [^ ]* \([^ ]*\) \([^ ]*\).*;\1;'`
+                    HOSTNAME=`echo $res | sed -e 's;.* SRV [^ ]* [^ ]* \([^ ]*\) \([^ ]*\).*;\2;'`
+                else
+                    ret=$?
+                    if echo "$res" | grep -q -e nxdomain -e permfail; then
+                        ret=3
+                    fi
+                    exit $ret
+                fi
                 ;;
             nslookup)
-                res=`$TOOL -type=srv _$type._tcp.$DOMAIN | tee -a $LOG | grep "service =" | head -1`
-                # _caldavs._tcp.yahoo.com	service = 1 1 443 caldav.calendar.yahoo.com.
-                PORT=`echo $res | sed -e 's;.*service = [^ ]* [^ ]* \([^ ]*\) \([^ ]*\)\.;\1;'`
-                HOSTNAME=`echo $res | sed -e 's;.*service = [^ ]* [^ ]* \([^ ]*\) \([^ ]*\)\.;\2;'`
+                if res=`$TOOL -type=srv _$type._tcp.$DOMAIN | tee -a $LOG | grep -e "service =" -e NXDOMAIN -e 'canonical name' | head -1`; then
+                    if echo "$res" | grep -q -e NXDOMAIN -e 'canonical name'; then
+                        exit 3
+                    else
+                        # _caldavs._tcp.yahoo.com	service = 1 1 443 caldav.calendar.yahoo.com.
+                        PORT=`echo $res | sed -e 's;.*service = [^ ]* [^ ]* \([^ ]*\) \([^ ]*\)\.;\1;'`
+                        HOSTNAME=`echo $res | sed -e 's;.*service = [^ ]* [^ ]* \([^ ]*\) \([^ ]*\)\.;\2;'`
+                    fi
+                else
+                    ret=$?
+                    if echo "$res" | grep -q -e NXDOMAIN -e 'canonical name'; then
+                        ret=3
+                    fi
+                    exit $ret
+                fi
                 ;;
             host|*/host)
-                res=`$TOOL -t srv _$type._tcp.$DOMAIN | tee -a $LOG | grep "\<SRV\>" | head -1`
-                # _caldavs._tcp.yahoo.com has SRV record 1 1 443 caldav.calendar.yahoo.com.
-                # _caldavs._tcp.yahoo.com SRV 1 1 443 caldav.calendar.yahoo.com
-                PORT=`echo $res | sed -e 's;.* \([^ ]*\) \([^. ]\+\(\.[^. ]\+\)*\)\.\?;\1;'`
-                HOSTNAME=`echo $res | sed -e 's;.* \([^ ]*\) \([^. ]\+\(\.[^. ]\+\)*\)\.\?;\2;'`
+                # "host -t srv _carddavs._tcp.googleapis.com" returns only alias information.
+                # If we see that instead of the service entry, then we know that the information
+                # is permanently not available.
+                if res=`$TOOL -t srv _$type._tcp.$DOMAIN | tee -a $LOG | grep -e "\<SRV\>" -e NXDOMAIN -e 'is an alias' | head -1`; then
+                    if echo "$res" | grep -q -e NXDOMAIN -e 'is an alias'; then
+                        exit 3
+                    else
+                        # _caldavs._tcp.yahoo.com has SRV record 1 1 443 caldav.calendar.yahoo.com.
+                        # _caldavs._tcp.yahoo.com SRV 1 1 443 caldav.calendar.yahoo.com
+                        PORT=`echo $res | sed -e 's;.* \([^ ]*\) \([^. ]\+\(\.[^. ]\+\)*\)\.\?;\1;'`
+                        HOSTNAME=`echo $res | sed -e 's;.* \([^ ]*\) \([^. ]\+\(\.[^. ]\+\)*\)\.\?;\2;'`
+                    fi
+                else
+                    ret=$?
+                    if echo "$res" | grep -q -e NXDOMAIN -e 'is an alias'; then
+                        ret=3
+                    fi
+                    exit $ret
+                fi
                 ;;
             *)
                 echo "unsupported tool $TOOL"
@@ -105,7 +140,8 @@ for type in ${TYPE}s ${TYPE}; do
         # print result
         echo $METHOD://$HOSTNAME:$PORT/$URLPATH
     ) 2>>$LOG
-    if [ $? -eq 0 ]; then
+    ret=$?
+    if [ $ret -eq 0 ]; then
         # success, discard errrors
         rm -f $LOG
         exit 0
@@ -113,4 +149,4 @@ for type in ${TYPE}s ${TYPE}; do
 done
 
 # nothing worked
-exit 2
+exit $ret

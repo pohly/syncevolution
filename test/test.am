@@ -72,9 +72,9 @@ if COND_DBUS
 noinst_PROGRAMS += test/dbus-client-server
 test_dbus_client_server_SOURCES = test/dbus-client-server.cpp
 test_dbus_client_server_CPPFLAGS = -I$(gdbus_dir) -I$(top_srcdir)/src
-test_dbus_client_server_CXXFLAGS = $(CPPUNIT_CXXFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(BACKEND_CPPFLAGS) $(DBUS_CFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS)
+test_dbus_client_server_CXXFLAGS = $(CPPUNIT_CXXFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(BACKEND_CPPFLAGS) $(DBUS_CFLAGS) $(GLIB_CFLAGS) $(GOBJECT_CFLAGS) $(PCRECPP_CFLAGS)
 test_dbus_client_server_LDFLAGS = $(CPPUNIT_LDFLAGS)
-test_dbus_client_server_LDADD = $(gdbus_build_dir)/libgdbussyncevo.la src/syncevo/libsyncevolution.la $(DBUS_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS)
+test_dbus_client_server_LDADD = $(gdbus_build_dir)/libgdbussyncevo.la src/syncevo/libsyncevolution.la $(DBUS_LIBS) $(GLIB_LIBS) $(GOBJECT_LIBS) $(PCRECPP_LIBS)
 test_dbus_client_server_DEPENDENCIES = $(gdbus_build_dir)/libgdbussyncevo.la src/syncevo/libsyncevolution.la
 
 if ENABLE_UNIT_TESTS
@@ -101,6 +101,7 @@ install-test-files:
 	ln -f -s $(bindir)/synccompare $(DESTDIR)/$(testdir)
 	ln -f -s $(libexecdir)/syncevo-dbus-server $(DESTDIR)/$(testdir)
 	ln -f -s $(bindir)/synclog2html $(DESTDIR)/$(testdir)
+	ln -f -s $(bindir)/syncevo-webdav-lookup $(DESTDIR)/$(testdir)
 	cp config.h $(top_srcdir)/src/syncevo/SyncConfig.h src/ClientTest.cpp.html $(DESTDIR)/$(testdir) # needed by test-dbus.py
 
 all_uninstall_hooks += uninstall-test-files
@@ -108,6 +109,8 @@ uninstall-test-files:
 	rm -f $(DESTDIR)/$(testdir)/syncevolution \
 		$(DESTDIR)/$(testdir)/synccompare \
 		$(DESTDIR)/$(testdir)/syncevo-dbus-server \
+		$(DESTDIR)/$(testdir)/synclog2html \
+		$(DESTDIR)/$(testdir)/syncevo-webdav-lookup \
 		$(DESTDIR)/$(testdir)/SyncConfig.h \
 		$(DESTDIR)/$(testdir)/ClientTests.cpp.html \
 		$(DESTDIR)/$(testdir)/config.h \

@@ -539,7 +539,6 @@ void IndividualAggregator::doRunWithPersona(const boost::function<void (FolksPer
 class FolksTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE(FolksTest);
     CPPUNIT_TEST(open);
-    CPPUNIT_TEST(asyncError);
     CPPUNIT_TEST(gvalue);
     CPPUNIT_TEST_SUITE_END();
 
@@ -669,29 +668,6 @@ private:
         str2.setStatic(fixed);
         CPPUNIT_ASSERT(!strcmp(str2.get(), fixed));
         CPPUNIT_ASSERT(str2.get() == fixed);
-    }
-
-    void asyncError() {
-        bool done = false, failed = false;
-        SYNCEVO_GLIB_CALL_ASYNC(folks_individual_aggregator_remove_individual,
-                                boost::bind(asyncCB, _1,
-                                            "folks_individual_aggregator_remove_individual",
-                                            boost::ref(failed), boost::ref(done)),
-                                NULL, NULL);
-        while (!done) {
-            g_main_context_iteration(NULL, true);
-        }
-        // Invalid parameters are not reported!
-        CPPUNIT_ASSERT(!failed);
-
-        // using simpler macro
-        GErrorCXX gerror;
-        SYNCEVO_GLIB_CALL_SYNC(NULL,
-                               gerror,
-                               folks_individual_aggregator_remove_individual,
-                               NULL, NULL);
-        // Invalid parameters are not reported!
-        CPPUNIT_ASSERT(!gerror);
     }
 
     static void individualSignal(std::ostringstream &out,
