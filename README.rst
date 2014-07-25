@@ -989,19 +989,14 @@ To scan for collections, use::
                  "password=!@#ABcd1234" \
                  syncURL=<base URL of server, if server auto-discovery is not supported>
 
-Configuration templates for Google Calendar, Yahoo Calendar and a
+Configuration templates for Google Calendar/Contacts, Yahoo Calendar and a
 generic CalDAV/CardDAV server are included in SyncEvolution. The Yahoo
 template also contains an entry for contact synchronization, but using
 it is not recommended due to known server-side issues.
 
 The following commands set up synchronization with a generic WebDAV
 server that supports CalDAV, CardDAV and scanning starting at the
-root of the server.
-
-TODO: document how to use Google.
-TODO: Yahoo not currently supported, remove template?
-
-For Google there is no common start URL for CalDAV and CardDAV. ::
+root of the server. ::
 
    # configure target config
    syncevolution --configure \
@@ -1077,6 +1072,69 @@ clients or servers can be added to it::
 
    # sync
    syncevolution --sync slow memotoo@webdav
+
+
+Google + OAuth
+--------------
+
+For Google there is no common start URL for CalDAV and CardDAV,
+therefore the "Google" template lists all that may be relevant and the
+setup is very similar to the generic ``webdav`` case, except that the
+syncURL does not have to be specified::
+
+   # configure target config
+   syncevolution --configure \
+                --template google \
+                username=john.doe@gmail.com \
+                "password=!@#ABcd1234" \
+                target-config@google
+
+   # configure sync config
+   syncevolution --configure \
+                 --template SyncEvolution_Client \
+                 syncURL=local://@google \
+                 username= \
+                 password= \
+                 google \
+                 calendar addressbook
+
+   # initial slow sync
+   syncevolution --sync slow google
+
+   # incremental sync
+   syncevolution google
+
+If your Google account is configured to use two-factor login, then you
+need to create an application specific password for SyncEvolution. See
+https://support.google.com/mail/answer/1173270
+
+Google already announced that they will turn off support for logging
+into their CalDAV/CardDAV services with plain username/password
+credentials. SyncEvolution supports the new login method, OAuth, but
+it depends on additional components to implement OAuth: GNOME Online
+Accounts, Ubuntu Online Accounts, or gSSO.
+
+Support for GNOME Online Accounts (GOA) is compiled into
+syncevolution.org binaries and therefore documented here. For
+instructions regarding binaries shipped by distributions please
+consult the documentation provided by the distribution or search the
+web.
+
+For Google Calendar, GOA >= 3.8 is required. For Google Contacts, GOA
+3.8 may work if it was patched by the distribution (as done in Debian
+Jessie), otherwise a version >= 3.10 is required.
+
+Use the GNOME Control Center to create an account for Google. It is
+not necessary to enable any of the data categories. That would turn on
+access in other GNOME apps (for example, Evolution), whereas
+SyncEvolution's use of the account is configured separately via the
+SyncEvolution command line.
+
+When configuring SyncEvolution for Google, follow the instructions
+above with ``username=goa:<Google email address>`` and empty password.
+If the email address does not uniquely identify the GOA account,
+the SyncEvolution command line will provide a list of accounts to choose
+from.
 
 
 NOTES
