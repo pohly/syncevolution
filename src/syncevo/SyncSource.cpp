@@ -438,7 +438,7 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
         SyncSource *source = NULL;
         source = new VirtualSyncSource(params, config);
         if (error && !source) {
-            Exception::throwError(SE_HERE, params.getDisplayName() + ": virtual source cannot be instantiated");
+            Exception::throwError(SE_HERE, params.getDisplayName() + ": virtual datastore cannot be instantiated");
         }
         return source;
     }
@@ -507,7 +507,7 @@ VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig 
         std::string evoSyncSource = getDatabaseID();
         BOOST_FOREACH(std::string name, getMappedSources()) {
             if (name.empty()) {
-                throwError(SE_HERE, StringPrintf("configuration of underlying sources contains empty source name: database = '%s'",
+                throwError(SE_HERE, StringPrintf("configuration of underlying datastores contains empty datastore name: database = '%s'",
                                                  evoSyncSource.c_str()));
             }
             SyncSourceNodes source = config->getSyncSourceNodes(name);
@@ -516,7 +516,7 @@ VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig 
             m_sources.push_back(syncSource);
         }
         if (m_sources.size() != 2) {
-            throwError(SE_HERE, StringPrintf("configuration of underlying sources must contain exactly one calendar and one todo source (like calendar+todo): database = '%s'",
+            throwError(SE_HERE, StringPrintf("configuration of underlying datastores must contain exactly one calendar and one todo datastore (like calendar+todo): database = '%s'",
                                              evoSyncSource.c_str()));
         }
     }

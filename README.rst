@@ -14,13 +14,13 @@ SYNOPSIS
 ========
 
 List and manipulate databases:
-  syncevolution --print-databases|--create-database|--remove-database [<properties>] [<config> <source>]
+  syncevolution --print-databases|--create-database|--remove-database [<properties>] [<config> <store>]
 
 Show information about configuration(s):
   syncevolution --print-servers|--print-configs|--print-peers
 
 Show information about a specific configuration:
-  syncevolution --print-config [--quiet] [--] <config> [main|<source> ...]
+  syncevolution --print-config [--quiet] [--] <config> [main|<store> ...]
 
 List sessions:
   syncevolution --print-sessions [--quiet] [--] <config>
@@ -29,39 +29,39 @@ Show information about SyncEvolution:
   syncevolution --help|-h|--version
 
 Run a synchronization as configured:
-  syncevolution <config> [<source> ...]
+  syncevolution <config> [<store> ...]
 
 Run a synchronization with properties changed just for this run:
-  syncevolution --run <options for run> [--] <config> [<source> ...]
+  syncevolution --run <options for run> [--] <config> [<store> ...]
 
 Restore data from the automatic backups:
-  syncevolution --restore <session directory> --before|--after [--dry-run] [--] <config> <source> ...
+  syncevolution --restore <session directory> --before|--after [--dry-run] [--] <config> <store> ...
 
 Create, update or remove a configuration:
-  syncevolution --configure <options> [--] <config> [<source> ...]
+  syncevolution --configure <options> [--] <config> [<store> ...]
 
   syncevolution --remove|--migrate <options> [--] <config>
 
 List items:
-  syncevolution --print-items [--] [<config> [<source>]]
+  syncevolution --print-items [--] [<config> [<store>]]
 
 Export item(s):
-  syncevolution [--delimiter <string>] --export <dir>|<file>|- [--] [<config> [<source> [<luid> ...]]]
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- [--] [<config> [<store> [<luid> ...]]]
                                                                 --luids <luid> ...
 
 Add item(s):
-  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [--] [<config> [<source>]]
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [--] [<config> [<store>]]
                                                                      --luids <luid> ...
 
 Update item(s):
-  syncevolution --update <dir> [--] <config> <source>
+  syncevolution --update <dir> [--] <config> <store>
 
-  syncevolution [--delimiter <string>|none] --update <file>|- [--] <config> <source> <luid> ...
+  syncevolution [--delimiter <string>|none] --update <file>|- [--] <config> <store> <luid> ...
                                                                --luids <luid> ...
 
 
 Remove item(s):
-  syncevolution --delete-items [--] <config> <source> (<luid> ... | '*')
+  syncevolution --delete-items [--] <config> <store> (<luid> ... | '*')
 
 
 DESCRIPTION
@@ -95,85 +95,141 @@ peer
 host
   The device or computer that SyncEvolution runs on.
 
+item
+  The smallest unit of synchronization. Examples of items include
+  calendar events and individual contacts, memos, or tasks.
+
 database
   Each peer has one or more databases that get synchronized (Google Calendar,
   Google Contacts). Conceptually a database is a set of items where each
   item is independent of the others.
-
-data source
-  A name for something that provides access to data. Primarily used for
-  the configuration which combines backend and database settings, sometimes
-  also instead of these two terms.
-
-local/remote
-  Synchronization always happens between a pair of databases and thus
-  has two sides. One database or side of a sync is remote (the one
-  of the peer) or local (SyncEvolution). For the sake of consistency (and
-  lack of better terms), these terms are used even if the peer is another
-  instance of SyncEvolution and/or all data resides on the same storage.
-
-sync config
-  A sync configuration defines how to access a peer: the protocol
-  which is to be used, how to find the peer, credentials, etc. Peers
-  might support more than one protocol, in which case multiple
-  sync configs have to be created.
-
-  Sync configs can be used to initiate a sync (like contacting a
-  SyncML server) or to handle an incoming sync request (when acting
-  as SyncML server which is contacted by the peer).
-
-source config
-  Each data source corresponds to a local database. A source config
-  defines how to access that database, like a sync config does for
-  peers. This information about a local database is independent
-  of the peers that the database might be synchronized with.
-
-  Sync configs use these shared source configs and add additional,
-  per-peer settings to each of them that define how that local
-  database maps to a remote database in the peer. By default a source
-  config is inactive inside a sync config and thus ignored. It must be
-  activated by setting the unshared `sync` property to something other
-  than `none` (aka `disabled`).
-
-  In SyncEvolution's predefined configuration templates, the following
-  names for sources are used. Different names can be chosen for sources
-  that are defined manually.
-
-  * addressbook: a list of contacts
-  * calendar: calendar *events*
-  * memo: plain text notes
-  * todo: task list
-  * calendar+todo: a virtual source combining one local "calendar" and
-    one "todo" source (required for synchronizing with some phones)
 
 backend
   Access to databases is provided by SyncEvolution backends. It does
   not matter where that data is stored. Some backends provide access
   to data outside of the host itself (`CalDAV and CardDAV`_, ActiveSync).
 
-configuration property
-  Sync and source configs contain configuration properties. Each
-  property is a name/value pair. Sync properties are used in sync configs,
-  source properties in source configs. The names were chosen so that
-  they are unique, i.e., no sync property has the same name as a source
-  property.
+datastore (or just "store")
+  Used for the combination of SyncEvolution backend and database settings.
+  A datastore provides read/write access to a database, which is a prerequisite
+  for syncing the database. The datastore is independent of the peers that
+  the database might be synchronized with.
 
-  A property can be *unshared* (has separate values for each peer, therefore
-  sometimes also called *per-peer*; for example the `uri` property which
-  defines the remote database), *shared* (same value for all peers; for
-  example the `database` property for selecting the local database) or
-  *global* (exactly one value).
+  This used to be called "data source" or just "source", which is a
+  term still found in older documentation, some file paths and the
+  source code of SyncEvolution.
+
+local/remote
+  Synchronization always happens between a pair of databases and thus
+  has two sides. One database or side of a sync is remote (the one
+  of the peer), the other is local (SyncEvolution). For the sake of consistency (and
+  lack of better terms), these terms are used even if the peer is another
+  instance of SyncEvolution and/or all data resides on the same storage.
+
+sync config
+  A sync configuration defines how to talk with a peer: the protocol
+  which is to be used, how to find the peer, credentials, etc.
+
+  Sync configs can be used to initiate a sync (like contacting a
+  SyncML server) or to handle an incoming sync request (when acting
+  as SyncML server which is contacted by the peer).
+
+  If the peer supports SyncML as sync protocol, a sync only uses one
+  sync config on the SyncEvolution side. If the peer supports data
+  access via some other protocols, then SyncEvolution can make that
+  data available via SyncML and run a sync where SyncML is used
+  internally.  Such a sync involves two sync configs, see ``originating
+  config`` and ``target config``.
+
+  A sync config can use all datastores defined in the same context
+  (see below). Some properties of the datastore can be set differently
+  for each peer and thus sync config (``per-peer``). One of these, the
+  ``sync`` property, defines if and how a datastore is used during a
+  sync.
 
 context
-  Sync and source configs are defined inside a configuration context.
-  Typically each context represents a certain set of sources. The values
-  of shared properties are only shared inside their context. That way
-  it is possible to define a second `work` context with a `work calendar`
-  source using one database and use the implicit `default` context for
-  a private `calendar` source with a different database.
+  Sync and datastore configs are defined inside one or more configuration
+  contexts. There is always a ``@default`` context that gets used if nothing
+  else is specified.
 
-context config
-  The shared and global properties of a certain context.
+  Typically each context represents a certain set of related
+  datastores. For example, normally the ``@default`` context is used for
+  local databases. Datastores related to a certain peer can
+  be defined in a context ``@peer-name`` named after that peer.
+
+configuration properties
+  SyncEvolution uses key/value pairs to store configuration options.
+  A configuration is a set of unique keys and their values that together
+  describe a certain object.
+
+  These sets of properties are addressed via the main config name (a
+  sync config name with or without an explicit context, or just the
+  context name) and optionally the datastore name (if the properties
+  are for a specific datastore).
+
+  Sync properties are set for sync configs, independently of a
+  particular datastore. Properties that cannot be set without
+  specifying they datastore that they apply to are datastore
+  properties. This includes properties that belong both to a datastore
+  and a sync config.
+
+  The property names were chosen so that they are unique, i.e., no
+  sync property has the same name as a datastore property. For historic
+  reasons, internally these properties are treated as two different
+  sets and there are two different command line options to query the
+  list of sync resp. datastore properties.
+
+  Some configuration properties are shared between configurations
+  automatically. This sharing is hard-coded and cannot be configured.
+  It has the advantage that certain settings only need to be set
+  once and/or can be changed for several different configs
+  at once.
+
+  A property can be *unshared* (has separate values for each peer, therefore
+  sometimes also called *per-peer*; for example the ``sync`` property),
+  *shared* (same value for all peers; for
+  example the ``database`` property for selecting the local database) or
+  *global* (exactly one value).
+
+  Together with the distinction between sync and datastore properties,
+  this currently results in five different groups of properties:
+
+  * Sync properties (by definition, this also includes properties
+    independent of a particular sync config because they are set for
+    all sync configs at once, independently of any particular
+    datastore):
+
+    * global (= ``~/.config/syncevolution/config.ini``):
+      independent of a particular context, for example ``keyring``
+    * shared (= ``~/.config/syncevolution/<context name>/config.ini``):
+      set once for each context, for example ``logdir``
+    * unshared (= ``~/.config/syncevolution/<context name>/peers/<peer name>/config.ini``):
+      set separately for each sync config, for example ``syncURL``
+
+  * Datastore properties:
+
+    * shared (= ``~/.config/syncevolution/<context name>/sources/<store name>/config.ini``):
+      the properties required for access to the data, primarily ``backend`` and ``database``
+    * unshared (= ``~/.config/syncevolution/<context name>/peers/<peer name>/sources/<store name>/config.ini``):
+      the already mentioned ``sync`` and ``uri`` properties, but also a per-peer
+      sync format properties
+
+  Many properties have reasonable defaults, either defined in the
+  configuration layer or chosen at runtime by the SyncEvolution
+  engine reading the configuration, and therefore do not have to
+  be set.
+
+  The configuration layer in SyncEvolution has a very limited
+  understanding of the semantic of each property. It just knows about
+  some generic types (strings, boolean, integers, ...) and where
+  properties are supposed to be stored. It is the layer above that,
+  the one which actually tries to use the configuration, that
+  determines whether the property values make sense as
+  specified. Beware that it is possible to set properties to values
+  that conflict with other property values (triggering errors when
+  using the configuration) or to set properties that are not used
+  (typically they get ignored silently, unless an explicit error check
+  was implemented).
 
 configuration template
   Templates define the settings for specific peers. Some templates
@@ -189,57 +245,75 @@ configuration template
   add sync configs for different peers to that context without
   reseting the existing settings.
 
+  In SyncEvolution's predefined configuration templates, the following
+  names for datastores are used. Different names can be chosen for datastores
+  that are defined manually.
+
+  * addressbook: a list of contacts
+  * calendar: calendar *events*
+  * memo: plain text notes
+  * todo: task list
+  * calendar+todo: a virtual datastore combining one local "calendar" and
+    one "todo" datastore (required for synchronizing with some phones)
+
 local sync
   Traditionally, a sync config specifies SyncML as the synchronization
-  protocol. The peer must support SyncML for this to work. When the
-  peer acts as SyncML server, conflict resolution happens on the
-  peer, outside of the control of SyncEvolution.
+  protocol via the `syncURL` property. The peer must support SyncML for
+  this to work.
 
-  In a so called `local sync`_, SyncEvolution connects two of its own
-  backends and runs all of the synchronization logic itself on the host.
+  In a so called local sync, SyncEvolution acts as SyncML server
+  and client at the same time, connecting the two sides via internal
+  message passing. Both sides have their own set of datastores, which may
+  use CalDAV, CardDAV or ActiveSync to access the data.
+
+  See `Synchronization beyond SyncML`_.
+
+originating config
+  In a local sync, the sync config used to start the sync is called
+  the originating sync config, or just originating config.
 
 target config
-  In addition to the normal sync config, a local sync also uses a target
-  config. This target config is a special kind of sync config. It defines
-  sync properties that are necessary to access databases on the other
-  side of the local sync. Sync configs can have arbitrary names while
-  a target config must be named `target-config`.
+  In addition to the originating config, a local sync also uses a target
+  config. At the configuration level, this target config is just another
+  sync config. It becomes a target config when referenced by a sync config
+  for local syncing.
 
 
 COMMAND LINE CONVENTIONS
 ========================
 
-The ``<config>`` and the ``<source>`` strings in the command line synopsis are
-used to find the sync resp. source configs. Depending on which
+The ``<config>`` and the ``<store>`` strings in the command line synopsis are
+used to find the sync resp. datastore configs. Depending on which
 other parameters are given, different operations are executed.
 
-A config name has the format ``[<peer>][@<context>]``. When the context
-is not specified explicitly, SyncEvolution first searches for an
-existing configuration with the given name. If not found, it uses the
-``@default`` context as fallback. Thus the empty config name is an alias
-for ``@default``.
+The ``<config>`` string has the format ``[<peer>][@<context>]``. When
+the context is not specified explicitly, SyncEvolution first searches
+for an existing sync configuration with the given ``<peer>`` name. If
+not found, the configuration can only be created, but not read. It
+will be created in the ``@default`` context as fallback. The empty
+``<config>`` string is an alias for ``@default``.
 
 The ``<peer>`` part identifies a specific sync or target config inside
 the context. It is optional and does not have to be specified when not
-needed, for example when configuring the shared settings of sources
+needed, for example when configuring the shared settings of datastores
 (``--configure @default addressbook``) or accessing items inside a
-source (``--print-items @work calendar``).
+datastore (``--print-items @work calendar``).
 
-Listing sources on the command line limits the operation to those
-sources (called *active sources* below). If not given, all sources
-defined for the config are active. Some operations require
-the name of exactly one source.
+Listing datastores on the command line limits the operation to those
+datastores (called *active datastores* below). If not given, all datastores
+enabled for the config are active. Some operations require
+the name of exactly one datastore.
 
 Properties are set with key/value assignments and/or the
-``--sync/source-property`` keywords. Those keywords are only needed for
-the hypothetical situation that a sync and source property share the
-same name (not normally the case). Without them, SyncEvolution
+``--sync/store-property`` keywords. Those keywords are only needed for
+the hypothetical situation that a sync and datastore property share the
+same name (which was intentionally avoided). Without them, SyncEvolution
 automatically identifies which kind of property is meant based on the
 name.
 
 A ``<property>`` assignment has the following format::
 
-  [<source>/]<name>[@<context>|@<peer>@<context>]=<value>
+  [<store>/]<name>[@<context>|@<peer>@<context>]=<value>
 
 The optional ``<context>`` or ``<peer>@<context>`` suffix limits the scope
 of the value to that particular configuration. This is useful when
@@ -262,8 +336,8 @@ overrides ``@<context>``, which overrides `no suffix given`.
 Specifying some suffix which does not apply to the current operation
 does not trigger an error, so beware of typos.
 
-Source properties can be specified with a ``<source>/`` prefix. This
-allows limiting the value to the selected source. For example::
+Datastore properties can be specified with a ``<store>/`` prefix. This
+allows limiting the value to the selected datastore. For example::
 
   --configure "addressbook/database=My Addressbook" \
               "calendar/database=My Calendar" \
@@ -273,15 +347,15 @@ Another way to achieve the same effect is to run the ``--configure``
 operation twice, once for ``addressbook`` and once for ``calendar``::
 
   --configure "database=My Addressbook" @default addressbook
-  --configure "calendar/database=My Calendar" @default calendar
+  --configure "database=My Calendar" @default calendar
 
-If the same property is set both with and without a ``<source>/`` prefix,
-then the more specific value with that prefix is used for that source,
+If the same property is set both with and without a ``<store>/`` prefix,
+then the more specific value with that prefix is used for that datastore,
 regardless of the order on the command line. The following command
-enables all sources except for the addressbook::
+enables all datastores except for the addressbook::
 
-    --configure --source-property addressbook/sync=none \
-                --source-property sync=two-way \
+    --configure addressbook/sync=none \
+                sync=two-way \
                 <sync config>
 
 
@@ -290,7 +364,7 @@ USAGE
 
 ::
 
-   syncevolution --print-databases [<properties>] [<config> <source>]
+   syncevolution --print-databases [<properties>] [<config> <store>]
 
 If no additional arguments are given, then SyncEvolution will list all
 available backends and the databases that can be accessed through each
@@ -300,29 +374,29 @@ information (like credentials or URL of a remote server). This
 additional information can be provided on the command line with
 property assignments (``username=...``) or in an existing configuration.
 
-When listing all databases of all active sources, the output starts
+When listing all databases of all active datastores, the output starts
 with a heading that lists the values for the ``backend`` property which
 select the backend, followed by the databases.  Each database has a
 name and a unique ID (in brackets). Typically both can be used as
 value of the 'database' property. One database might be marked as
 ``default``. It will be used when ``database`` is not set explicitly.
 
-When selecting an existing source configuration or specifying the ``backend``
+When selecting an existing datastore configuration or specifying the ``backend``
 property on the command line, only the databases for that backend
 are listed and the initial line shows how that backend was selected
-(<config>/<source> resp. backend value).
+(<config>/<store> resp. backend value).
 
 Some backends do not support listing of databases. For example, the
 file backend synchronizes directories with one file per item and
 always needs an explicit ``database`` property because it cannot guess
 which directory it is meant to use. ::
 
-   syncevolution --create-database [<properties>] [<config> <source>]
+   syncevolution --create-database [<properties>] [<config> <store>]
 
 Creates a new database for the selected ``backend``, using the
 information given in the ``database`` property. As with
 ``--print-databases``, it is possible to give the properties directly
-without configuring a source first.
+without configuring a datastore first.
 
 The interpretation of the ``database`` property depends on the
 backend. Not all backends support this operation.
@@ -330,24 +404,24 @@ backend. Not all backends support this operation.
 The EDS backend uses the value of the ``database`` as name of the new
 database and assigns a unique URI automatically. ::
 
-   syncevolution --remove-database [<properties>] [<config> <source>]
+   syncevolution --remove-database [<properties>] [<config> <store>]
 
 Looks up the database based on the ``database`` property (depending
 on the backend, both name and a URI are valid), then deletes the data.
-Note that source configurations using the database are not removed. ::
+Note that datastore configurations using the database are not removed. ::
 
    syncevolution <config>
 
-Without the optional list of sources, all sources which are enabled in
+Without the optional list of datastores, all datastores which are enabled in
 their configuration file are synchronized. ::
 
-   syncevolution <config> <source> ...
+   syncevolution <config> <store> ...
 
 Otherwise only the ones mentioned on the command line are active. It
-is possible to configure sources without activating their
-synchronization: if the synchronization mode of a source is set to
-`disabled`, the source will be ignored. Explicitly listing such a
-source will synchronize it in `two-way` mode once.
+is possible to configure datastores without activating their
+synchronization: if the synchronization mode of a datastore is set to
+`disabled`, the datastore will be ignored. Explicitly listing such a
+datastore will synchronize it in `two-way` mode once.
 
 Progress and error messages are written into a log file that is
 preserved for each synchronization run. Details about that is found in
@@ -378,25 +452,29 @@ associated with this is that the server might not recognize items that
 it already has stored previously which then would lead to duplication
 of items. ::
 
-   syncevolution --configure <options for configuration> <config> [<source> ...]
+   syncevolution --configure <options for configuration> <config> [<store> ...]
 
 Options in the configuration can be modified via the command
-line. Source properties are changed for all sources unless sources are
-listed explicitly.  Some source properties have to be different for
-each source, in which case syncevolution must be called multiple times
-with one source listed in each invocation. ::
+line. The <config> and the optional <store> parameters define
+what gets created or modified. The remaining parameters define
+which values get set or modified.
+
+To change settings of specific datastores, either invoke syncevolution
+multiple times with exactly one <store> parameter or use the
+``[<store>/]`` prefix described above for property assignments. ::
 
    syncevolution --remove <config>
 
 Deletes the configuration. If the <config> refers to a specific
 peer, only that peer's configuration is removed. If it refers to
-a context, that context and all peers inside it are removed.
+a context, that context and all peers and datastores defined inside
+it are removed.
 
 Note that there is no confirmation question. Neither local data
 referenced by the configuration nor the content of log dirs are
 deleted. ::
 
-   syncevolution --run <options for run> <config> [<source> ...]
+   syncevolution --run <options for run> <config> [<store> ...]
 
 Options can also be overridden for just the current run, without
 changing the configuration. In order to prevent accidentally running a
@@ -404,35 +482,35 @@ sync session when a configuration change was intended, either
 --configure or --run must be given explicitly if options are specified
 on the command line. ::
 
-   syncevolution --status <config> [<source> ...]
+   syncevolution --status <config> [<store> ...]
 
 Prints what changes were made locally since the last synchronization.
 Depends on access to database dumps from the last run, so enabling the
 ``logdir`` property is recommended. ::
 
    syncevolution --print-servers|--print-configs|--print-peers
-   syncevolution --print-config [--quiet] <config> [main|<source> ...]
+   syncevolution --print-config [--quiet] <config> [main|<store> ...]
    syncevolution --print-sessions [--quiet] <config>
 
 These commands print information about existing configurations. When
 printing a configuration a short version without comments can be
-selected with --quiet. When sources are listed, only their
-configuration is shown. `Main` instead or in combination with sources
+selected with --quiet. When datastores are listed, only their
+configuration is shown. `Main` instead or in combination with datastores
 lists only the main peer configuration. ::
 
    syncevolution --restore <session directory> --before|--after
-                 [--dry-run] <config> <source> ...
+                 [--dry-run] <config> <store> ...
 
 This restores local data from the backups made before or after a
 synchronization session. The --print-sessions command can be used to
-find these backups. The source(s) have to be listed explicitly. There
+find these backups. The datastore(s) have to be listed explicitly. There
 is intentionally no default, because as with --remove there is no
 confirmation question. With --dry-run, the restore is only simulated.
 
 The session directory has to be specified explicitly with its path
 name (absolute or relative to current directory). It does not have to
 be one of the currently active log directories, as long as it contains
-the right database dumps for the selected sources.
+the right database dumps for the selected datastores.
 
 A restore tries to minimize the number of item changes (see section
 `Item Changes and Data Changes`_). This means that items that are
@@ -441,24 +519,24 @@ the peer during the next synchronization. If the peer somehow
 needs to get a clean copy of all local items, then use ``--sync
 refresh-from-local`` in the next run. ::
 
-  syncevolution --print-items <config> <source>
-  syncevolution [--delimiter <string>] --export <dir>|<file>|- [<config> [<source> [<luid> ...]]]
-  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [<config> <source>]
-  syncevolution --update <dir> <config> <source>
-  syncevolution [--delimiter <string>|none] --update <file>|- <config> <source> <luid> ...
-  syncevolution --delete-items <config> <source> (<luid> ... | *)
+  syncevolution --print-items <config> <store>
+  syncevolution [--delimiter <string>] --export <dir>|<file>|- [<config> [<store> [<luid> ...]]]
+  syncevolution [--delimiter <string>|none] --import <dir>|<file>|- [<config> <store>]
+  syncevolution --update <dir> <config> <store>
+  syncevolution [--delimiter <string>|none] --update <file>|- <config> <store> <luid> ...
+  syncevolution --delete-items <config> <store> (<luid> ... | *)
 
 Restore depends on the specific format of the automatic backups
 created by SyncEvolution. Arbitrary access to item data is provided
 with additional options. <luid> here is the unique local identifier
-assigned to each item in the source, transformed so that it contains
+assigned to each item in the datastore, transformed so that it contains
 only alphanumeric characters, dash and underscore. A star * in
 --delete-items selects all items for deletion. There are two ways
 of specifying luids: either as additional parameters after the
-config and source parameters (which may be empty in this case, but
+config and datastore parameters (which may be empty in this case, but
 must be given) or after the ``--luids`` keyword.
 
-<config> and <source> may be given to define the database which is to
+<config> and <store> may be given to define the database which is to
 be used. If not given or not refering to an existing configuration
 (which is not an error, due to historic reasons), the desired backend
 must be given via the ``backend`` property, like this::
@@ -479,7 +557,7 @@ question mark can be used to get the corresponding help text and/or
 a list of valid values.
 
 --sync|-s <mode>|?
-  Temporarily synchronize the active sources in that mode. Useful
+  Temporarily synchronize the active datastores in that mode. Useful
   for a `refresh-from-local` or `refresh-from-remote` sync which
   clears all data at one end and copies all items from the other.
 
@@ -494,12 +572,12 @@ a list of valid values.
 --print-servers|--print-configs|--print-peers|-p
   Prints the complete configuration for the selected <config>
   to stdout, including up-to-date comments for all properties. The
-  format is the normal .ini format with source configurations in
-  different sections introduced with [<source>] lines. Can be combined
-  with --sync-property and --source-property to modify the configuration
-  on-the-fly. When one or more sources are listed after the <config>
-  name on the command line, then only the configs of those sources are
-  printed. `main` selects the main configuration instead of source
+  format is the normal .ini format with datastore configurations in
+  different sections introduced with [<store>] lines. Can be combined
+  with --sync-property and --datastore-property to modify the configuration
+  on-the-fly. When one or more datastores are listed after the <config>
+  name on the command line, then only the configs of those datastores are
+  printed. `main` selects the main configuration instead of datastore
   configurations. Using --quiet suppresses the comments for each property.
   When setting a --template, then the reference configuration for
   that peer is printed instead of an existing configuration.
@@ -512,36 +590,36 @@ a list of valid values.
   --quiet, only the paths are listed.
 
 --configure|-c
-  Modify the configuration files for the selected peer and/or sources.
+  Modify the configuration files for the selected peer and/or datastores.
 
   If no such configuration exists, then a new one is created using one
   of the template configurations (see --template option). Choosing a
   template sets most of the relevant properties for the peer and the
-  default set of sources (see above for a list of those). Anything
+  default set of datastores (see above for a list of those). Anything
   specific to the user (like username/password) still has to be set
   manually.
 
-  When creating a new configuration and listing sources explicitly on the
-  command line, only those sources will be set to active in the new
+  When creating a new configuration and listing datastores explicitly on the
+  command line, only those datastores will be set to active in the new
   configuration, i.e. `syncevolution -c memotoo addressbook`
   followed by `syncevolution memotoo` will only synchronize the
-  address book. The other sources are created in a disabled state.
-  When modifying an existing configuration and sources are specified,
-  then the source properties of only those sources are modified.
+  address book. The other datastores are created in a disabled state.
+  When modifying an existing configuration and datastores are specified,
+  then the datastore properties of only those datastores are modified.
 
-  By default, creating a config requires a template. Source names on the
+  By default, creating a config requires a template. Datastore names on the
   command line must match those in the template. This allows catching
-  typos in the peer and source names. But it also prevents some advanced
+  typos in the peer and datastore names. But it also prevents some advanced
   use cases. Therefore it is possible to disable these checks in two ways::
 
     - use `--template none` or
-    - specify all required sync and source properties that are normally
+    - specify all required sync and datastore properties that are normally
       in the templates on the command line (syncURL, backend, ...)
 
 --run|-r
   To prevent accidental sync runs when a configuration change was
   intended, but the `--configure` option was not used, `--run` must be
-  specified explicitly when sync or source properties are selected
+  specified explicitly when sync or datastore properties are selected
   on the command line and they are meant to be used during a sync
   session triggered by the invocation.
 
@@ -568,7 +646,7 @@ a list of valid values.
   stores.
 
 \--export
-  Writes all items in the source or all items whose <luid> is
+  Writes all items in the datastore or all items whose <luid> is
   given into a directory if the --export parameter exists and is a
   directory. The <luid> of each item is used as file name. Otherwise it
   creates a new file under that name and writes the selected items
@@ -587,7 +665,7 @@ a list of valid values.
 
 \--import
   Adds all items found in the directory or input file to the
-  source.  When reading from a directory, each file is treated as one
+  datastore.  When reading from a directory, each file is treated as one
   item. Otherwise the input is split at the chosen delimiter. "none" as
   delimiter disables splitting of the input.
 
@@ -598,7 +676,7 @@ a list of valid values.
   must match with the number of items in the input.
 
 \--delete-items
-  Removes the specified items from the source. Most backends print
+  Removes the specified items from the datastore. Most backends print
   some progress information about this, but besides that, no further
   output is produced. Trying to remove an item which does not exist
   typically leads to an ERROR message, but is not reflected in a
@@ -608,14 +686,14 @@ a list of valid values.
   or in addition to listing individual luids to delete all items.
 
 --sync-property|-y <property>=<value>|<property>=?|?
-  Overrides a source-independent configuration property for the
+  Overrides a datastore-independent configuration property for the
   current synchronization run or permanently when --configure is used
   to update the configuration. Can be used multiple times.  Specifying
   an unused property will trigger an error message.
 
---source-property|-z <property>=<value>|<property>=?|?
+--datastore-property|--source-property|-z <property>=<value>|<property>=?|?
   Same as --sync-property, but applies to the configuration of all active
-  sources. `--sync <mode>` is a shortcut for `--source-property sync=<mode>`.
+  datastores. `--sync <mode>` is a shortcut for `--datastore-property sync=<mode>`.
 
 --template|-l <peer name>|default|?<device>
   Can be used to select from one of the built-in default configurations
@@ -675,7 +753,7 @@ CONFIGURATION PROPERTIES
 This section lists predefined properties. Backends can add their own
 properties at runtime if none of the predefined properties are
 suitable for a certain setting. Those additional properties are not
-listed here. Use ``--sync/source-property ?`` to get an up-to-date
+listed here. Use ``--sync/datastore-property ?`` to get an up-to-date
 list.
 
 The predefined properties may also be interpreted slightly differently
@@ -692,9 +770,9 @@ Sync properties
 ---------------
 << see "syncevolution --sync-property ?" >>
 
-Source properties
------------------
-<< see "syncevolution --source-property ?" >>
+Datastore properties
+--------------------
+<< see "syncevolution --datastore-property ?" >>
 
 
 EXAMPLES
@@ -724,11 +802,11 @@ Review configuration::
 
    syncevolution --print-config memotoo
 
-Synchronize all sources::
+Synchronize all datastores::
 
   syncevolution memotoo
 
-Deactivate all sources::
+Deactivate all datastores::
 
   syncevolution --configure \
                 sync=none \
@@ -766,7 +844,7 @@ clients, see `Exchanging Data`_::
                 memotoo@other
   
   syncevolution --configure \
-                --source-property database=<name of other address book> \
+                database=<name of other address book> \
                 @other addressbook
 
   syncevolution --configure \
@@ -793,8 +871,8 @@ servers via the SyncML protocol. Starting with release 1.2,
 SyncEvolution also supports other protocols like CalDAV and
 CardDAV.
 
-These protocols are implemented in backends which look like data
-sources. SyncEvolution then synchronizes data between a pair of
+These protocols are implemented in backends which behave like local
+datastores. SyncEvolution then synchronizes data between a pair of
 backends. Because the entire sync logic (matching of items, merging)
 is done locally by SyncEvolution, this mode of operation is called
 *local sync*.
@@ -805,29 +883,62 @@ Some examples of things that can be done with local sync:
 * mirror a local database as items in a directory, with format conversion
   and one-way or two-way data transfer (export vs. true syncing)
 
-Because local sync involves two sides, two configurations are
-needed. One is called the *target config*. By convention it must be
-called ``target-config@<some context name>``, for example
-``target-config@google-calendar``. The target config holds properties
-which apply to all sources inside that context, like user name, 
-password and URL for the server. Once configured, the target config
-can be used to list/import/export/update items via the SyncEvolution
-command line. It cannot be used for synchronization because it does
-not defined what the items are supposed to be synchronized with.
+Because local sync involves two sides, two sync configurations are
+needed. One is called the *target config*. Traditionally, this really
+was a configuration called ``target-config``, for example
+``target-config@google``. Using this particular name is no longer required.
 
-For synchronization, a second *sync config* is needed. This config has
-the same role as the traditional SyncML configs and is typically
+The target config can hold properties which apply to all datastores
+inside its context, like user name, password and URL for the server
+(more on that below) and sync settings (like logging and data
+backups). Once configured, the target config can be used to
+list/import/export/update items via the SyncEvolution command line. It
+cannot be used for synchronization because it does not defined what
+the items are supposed to be synchronized with.
+
+For synchronization, a second *originating config* is needed. This config has
+the same role as the traditional SyncML sync configs and is typically
 defined in the same implicit ``@default`` context as those
-configs. All configs in that context use the same local data. The sync
-config defines the database pairs and the sync mode (one-way, two-way, ...).
+configs. All configs in that context use the same local data, thus turning
+that local data into the hub through with data flows to all peers that the
+host is configured to sync with.
 
-The first step is to select a target config with
-``syncURL=local://@<some context name>``. Multiple sync configs can
-access the same target config. In the second step, the ``uri`` of each
-source in the sync config must be set to the name of the corresponding
-source in the target config.  The ``sync`` property in the sync config
-defines the direction of the data flow. It can be set temporarily when
-starting a synchronzation with the sync config.
+A sync config becomes an originating config in a local sync by setting
+the ``syncURL`` to the special URL ``local://[<target config
+name>][@<some context name>]``. This selects the target config to
+sync with. If the target config name is left out, the actual string
+``target-config`` is used as name. The context can be omitted if the
+target config name is unique. Originating and target config can be in
+the same context. Care must be taken to not use a datastore more than
+once in a local sync.
+
+In addition, ``peerIsClient=1`` must be set in the originating config,
+because SyncEvolution only supports running the SyncML client on the
+target side. It makes sense to use the local databases on
+originating side, because that side requires more frequent access to
+the data.
+
+The originating config defines the database pairs, either implicitly
+(by using the same datastore names on both sides, which is possible when
+different contexts are used) or explicitly (via the `uri` properties
+set for the datastores on the originating side). The originating config
+also defines the ``sync`` mode for each pair. ``uri`` and ``sync``
+values on the target side are ignored and do not have to be specified.
+
+As a special case, datastores used in combination with the target config
+may access the credentials and ``syncURL`` stored there as fallback when
+nothing was specified for the datastores directly. This makes sense for
+the WebDAV and ActiveSync backends where the credentials are typically
+the same and (depending on the web server) the same start URL can be
+used to find calendar and contact databases.
+
+  **Warning:** when setting password for the target config and using a
+  keyring, a ``syncURL`` or a unique ``remoteDeviceID`` string must be
+  set, because they are needed to identify the host in the keyring.
+
+If this feature is not used, the ``syncURL`` could be left empty because
+local sync itself does not use it. However, the command line expects
+it to be set to ``none`` explicitly to detect typos.
 
   **Warning:** because the client in the local sync starts the sync,
   ``preventSlowSync=0`` must be set in the target config to have an effect.
@@ -848,14 +959,14 @@ CardDAV services (using DNS SRV entries, ``.well-known`` URIs, properties
 of the current principal, ...).
 
 Alternatively, credentials can also be set in the ``databaseUser`` and
-``databasePassword`` properties of the source. The downside is that these
-values have to be set for each source and cannot be shared. The advantage
-is that, in combination with setting ``database``, such sources can be
+``databasePassword`` properties of the datastore. The downside is that these
+values have to be set for each datastore and cannot be shared. The advantage
+is that, in combination with setting ``database``, such datastores can be
 used as part of a normal SyncML server or client sync config. SyncEvolution
 then reads and writes data directly from the server and exchanges it
 via SyncML with the peer that is defined in the sync config.
 
-The ``database`` property of each source can be set to the URL of a
+The ``database`` property of each datastore can be set to the URL of a
 specific *collection* (= database in WebDAV terminology). If not set,
 then the WebDAV backend first locates the server based on ``username``
 or ``syncURL`` and then scans it for the default event resp. contact
@@ -876,22 +987,22 @@ To scan for collections, use::
                  backend=<caldav or carddav> \
                  username=<email address or user name> \
                  "password=!@#ABcd1234" \
-                 syncURL=<base URL of server, if auto-discovery is not supported>
+                 syncURL=<base URL of server, if server auto-discovery is not supported>
 
-Configuration templates for Google Calendar, Yahoo Calendar and a
+Configuration templates for Google Calendar/Contacts, Yahoo Calendar and a
 generic CalDAV/CardDAV server are included in SyncEvolution. The Yahoo
 template also contains an entry for contact synchronization, but using
 it is not recommended due to known server-side issues.
 
 The following commands set up synchronization with a generic WebDAV
-server that supports CalDAV, CardDAV and auto-discovery. For Google and Yahoo,
-replace ``webdav`` with ``google-calendar`` resp. ``yahoo`` and remove the
-``addressbook`` source when setting up the sync config. ::
+server that supports CalDAV, CardDAV and scanning starting at the
+root of the server. ::
 
    # configure target config
    syncevolution --configure \
                 --template webdav \
-                username=123456@example.com \
+                syncURL=http://example.com \
+                username=123456 \
                 "password=!@#ABcd1234" \
                 target-config@webdav
 
@@ -912,20 +1023,21 @@ replace ``webdav`` with ``google-calendar`` resp. ``yahoo`` and remove the
 
 Here are some alternative ways of configuring the target config::
 
-   # A) Server has one URL as starting point instead of DNS auto-discovery.
+   # A) Server supports DNS auto-discovery via domain name in the username.
    syncevolution --configure \
                 --template webdav \
-                username=123456 \
+                username=123456@example.com \
                 "password=!@#ABcd1234" \
-                syncURL=http://example.com \
                 target-config@webdav
 
    # B) Explicitly specify collections (from server documentation or --print-databases).
    #    The 'calendar' and 'addressbook' names are the ones expected by the sync config
-   #    above, additional sources can also be configured and/or the names can be changed.
+   #    above, additional datastores can also be configured and/or the names can be changed.
    syncevolution --configure \
                 username=123456 \
                 "password=!@#ABcd1234" \
+                --template none \
+                syncURL=http://example.com \
                 addressbook/backend=carddav \
                 addressbook/database=http://example.com/addressbooks/123456/ \
                 calendar/backend=caldav \
@@ -933,10 +1045,15 @@ Here are some alternative ways of configuring the target config::
                 target-config@webdav \
                 calendar addressbook
 
+When creating these target configs, the command line tool tries to
+verify that the datastores really work and (in the case of --template
+webdav) will enable only datastores which really work. This involves
+contacting the WebDAV server.
+
 Finally, here is how the ``@webdav`` context needs to be configured so that SyncML
 clients or servers can be added to it::
 
-   # configure sources
+   # configure datastores
    syncevolution --configure \
                 databaseUser=123456 \
                 "databasePassword=!@#ABcd1234" \
@@ -957,6 +1074,69 @@ clients or servers can be added to it::
    syncevolution --sync slow memotoo@webdav
 
 
+Google + OAuth
+--------------
+
+For Google there is no common start URL for CalDAV and CardDAV,
+therefore the "Google" template lists all that may be relevant and the
+setup is very similar to the generic ``webdav`` case, except that the
+syncURL does not have to be specified::
+
+   # configure target config
+   syncevolution --configure \
+                --template google \
+                username=john.doe@gmail.com \
+                "password=!@#ABcd1234" \
+                target-config@google
+
+   # configure sync config
+   syncevolution --configure \
+                 --template SyncEvolution_Client \
+                 syncURL=local://@google \
+                 username= \
+                 password= \
+                 google \
+                 calendar addressbook
+
+   # initial slow sync
+   syncevolution --sync slow google
+
+   # incremental sync
+   syncevolution google
+
+If your Google account is configured to use two-factor login, then you
+need to create an application specific password for SyncEvolution. See
+https://support.google.com/mail/answer/1173270
+
+Google already announced that they will turn off support for logging
+into their CalDAV/CardDAV services with plain username/password
+credentials. SyncEvolution supports the new login method, OAuth, but
+it depends on additional components to implement OAuth: GNOME Online
+Accounts, Ubuntu Online Accounts, or gSSO.
+
+Support for GNOME Online Accounts (GOA) is compiled into
+syncevolution.org binaries and therefore documented here. For
+instructions regarding binaries shipped by distributions please
+consult the documentation provided by the distribution or search the
+web.
+
+For Google Calendar, GOA >= 3.8 is required. For Google Contacts, GOA
+3.8 may work if it was patched by the distribution (as done in Debian
+Jessie), otherwise a version >= 3.10 is required.
+
+Use the GNOME Control Center to create an account for Google. It is
+not necessary to enable any of the data categories. That would turn on
+access in other GNOME apps (for example, Evolution), whereas
+SyncEvolution's use of the account is configured separately via the
+SyncEvolution command line.
+
+When configuring SyncEvolution for Google, follow the instructions
+above with ``username=goa:<Google email address>`` and empty password.
+If the email address does not uniquely identify the GOA account,
+the SyncEvolution command line will provide a list of accounts to choose
+from.
+
+
 NOTES
 =====
 
@@ -971,7 +1151,7 @@ needed. Calendar items and tasks can be sent and received in iCalendar
 possible because it cannot represent all data that Evolution stores.
 
 .. note:: The Evolution backends are mentioned as examples;
-   the same applies to other data sources.
+   the same applies to other datastores.
 
 How the server stores the items depends on its implementation and
 configuration. To check which data is preserved, one can use this
@@ -984,7 +1164,7 @@ calendars and tasks):
    to make the new address book usable in SyncEvolution)
 3. add a configuration for that second address book and the
    same URI on the SyncML server, see EXAMPLES_ above
-4. synchronize again, this time using the other data source
+4. synchronize again, this time using the other datastore
 
 Now one can either compare the address books in Evolution or do that
 automatically, described here for contacts:

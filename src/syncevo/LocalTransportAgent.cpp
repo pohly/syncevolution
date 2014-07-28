@@ -833,9 +833,9 @@ class LocalTransportAgentChild : public TransportAgent
 
                 if (!targetNodes.dataConfigExists()) {
                     if (targetName.empty()) {
-                        Exception::throwError(SE_HERE, "missing URI for one of the sources");
+                        Exception::throwError(SE_HERE, "missing URI for one of the datastores");
                     } else {
-                        Exception::throwError(SE_HERE, StringPrintf("%s: source not configured",
+                        Exception::throwError(SE_HERE, StringPrintf("%s: datastore not configured",
                                                                     fullTargetName.c_str()));
                     }
                 }
@@ -846,7 +846,7 @@ class LocalTransportAgentChild : public TransportAgent
                 // done before in this loop => error in original config.
                 if (!targetSource.isDisabled()) {
                     Exception::throwError(SE_HERE,
-                                          StringPrintf("%s: source targetted twice by %s",
+                                          StringPrintf("%s: datastore targetted twice by %s",
                                                        fullTargetName.c_str(),
                                                        serverConfig.first.c_str()));
                 }

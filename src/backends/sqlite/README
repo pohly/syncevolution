@@ -21,7 +21,7 @@ Install /tmp/syncsqlite.so by moving it into the
 installation.
 
 It then should show up as additional choice for the "type" property:
-   syncevolution --source-property type=?
+   syncevolution --datastore-property type=?
 
    ...
    SQLite Address Book = addressbook = contacts = sqlite-contacts

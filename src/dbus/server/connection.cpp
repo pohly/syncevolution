@@ -225,7 +225,7 @@ void Connection::process(const Caller_t &caller,
                     uint32_t contentType;
                     std::string serverURI;
                     if (!numSources) {
-                        SE_LOG_DEBUG(NULL, "SAN message with no sources, using selected modes");
+                        SE_LOG_DEBUG(NULL, "SAN message with no datastores, using selected modes");
                         // Synchronize all known sources with the default mode.
                         if (san.GetNthSync(0, syncType, contentType, serverURI)) {
                             SE_LOG_DEBUG(NULL, "SAN invalid header, using default modes");
@@ -233,7 +233,7 @@ void Connection::process(const Caller_t &caller,
                             SE_LOG_DEBUG(NULL, "SAN invalid sync type %d, using default modes", syncType);
                         } else {
                             m_syncMode = PrettyPrintSyncMode(SyncMode(syncType), true);
-                            SE_LOG_DEBUG(NULL, "SAN sync mode for all configured sources: %s", m_syncMode.c_str());
+                            SE_LOG_DEBUG(NULL, "SAN sync mode for all configured datastores: %s", m_syncMode.c_str());
                         }
                     } else {
                         for (int sync = 1; sync <= numSources; sync++) {
@@ -604,7 +604,7 @@ void Connection::ready()
                 // range selection for events)
                 if (boost::starts_with(sourceConfig->getURINonEmpty(), serverURI)) {
                     SE_LOG_DEBUG(NULL,
-                                 "SAN entry #%d = source %s with mode %s",
+                                 "SAN entry #%d = datastore %s with mode %s",
                                  (int)sync, source.c_str(), syncMode.c_str());
                     m_sourceModes[source] = syncMode;
                     found = true;

@@ -289,7 +289,7 @@ void ReadOperations::checkSource(const std::string &sourceName)
         }
     }
     if(it == sourceNames.end()) {
-        SE_THROW_EXCEPTION(NoSuchSource, "'" + m_configName + "' has no '" + sourceName + "' source");
+        SE_THROW_EXCEPTION(NoSuchSource, "'" + m_configName + "' has no '" + sourceName + "' datastore");
     }
     bool checked = false;
     try {
@@ -307,7 +307,7 @@ void ReadOperations::checkSource(const std::string &sourceName)
     }
 
     if (!checked) {
-        SE_THROW_EXCEPTION(SourceUnusable, "The source '" + sourceName + "' is not usable");
+        SE_THROW_EXCEPTION(SourceUnusable, "The datastore '" + sourceName + "' is not usable");
     }
 }
 void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &databases)
@@ -322,14 +322,14 @@ void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &d
         if (!source.get()) {
             continue;
         } else if (source->isInactive()) {
-            SE_THROW_EXCEPTION(NoSuchSource, "'" + m_configName + "' backend of source '" + sourceName + "' is not supported");
+            SE_THROW_EXCEPTION(NoSuchSource, "'" + m_configName + "' backend of datastore '" + sourceName + "' is not supported");
         } else {
             databases = source->getDatabases();
             return;
         }
     }
 
-    SE_THROW_EXCEPTION(NoSuchSource, "'" + m_configName + "' has no '" + sourceName + "' source");
+    SE_THROW_EXCEPTION(NoSuchSource, "'" + m_configName + "' has no '" + sourceName + "' datastore");
 }
 
 SE_END_CXX

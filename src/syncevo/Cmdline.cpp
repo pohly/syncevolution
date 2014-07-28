@@ -179,6 +179,7 @@ bool Cmdline::parse(vector<string> &parsed)
                 }
                 parsed.push_back(m_argv[opt]);
         } else if(boost::iequals(m_argv[opt], "--source-property") ||
+                  boost::iequals(m_argv[opt], "--datastore-property") ||
                   boost::iequals(m_argv[opt], "-z")) {
             opt++;
             if (!parseProp(SOURCE_PROPERTY_TYPE,
@@ -770,7 +771,7 @@ bool Cmdline::run() {
         if (!m_server.empty()) {
             // list for specific backend chosen via config
             if (m_sources.size() != 1) {
-                SE_THROW(StringPrintf("must specify exactly one source after the config name '%s'",
+                SE_THROW(StringPrintf("must specify exactly one datastore after the config name '%s'",
                                       m_server.c_str()));
             }
             sourceName = *m_sources.begin();
@@ -959,7 +960,7 @@ bool Cmdline::run() {
         string origPeer;
         if (m_migrate) {
             if (!m_sources.empty()) {
-                SE_LOG_ERROR(NULL, "cannot migrate individual sources");
+                SE_LOG_ERROR(NULL, "cannot migrate individual datastores");
                 return false;
             }
 
@@ -1295,7 +1296,7 @@ bool Cmdline::run() {
             }
 
             if (!sources.empty()) {
-                Exception::throwError(SE_HERE, string("no such source(s): ") + boost::join(sources, " "));
+                Exception::throwError(SE_HERE, string("no such datastore(s): ") + boost::join(sources, " "));
             }
         }
 
@@ -1368,9 +1369,9 @@ bool Cmdline::run() {
                     explanation.push_back(StringPrintf("configuration '%s' does not exist", m_server.c_str()));
                 }
                 if (haveSourceName && !sourceNodes.exists()) {
-                    explanation.push_back(StringPrintf("source '%s' does not exist", sourceName.c_str()));
+                    explanation.push_back(StringPrintf("datastore '%s' does not exist", sourceName.c_str()));
                 } else if (!haveSourceName) {
-                    explanation.push_back("no source selected");
+                    explanation.push_back("no datastore selected");
                 }
                 SyncSourceConfig sourceConfig(sourceName, sourceNodes);
                 if (!sourceConfig.getBackend().wasSet()) {
@@ -1650,7 +1651,7 @@ bool Cmdline::run() {
 
         // check whether there were any sources specified which do not exist
         if (!unmatchedSources.empty()) {
-            Exception::throwError(SE_HERE, string("no such source(s): ") + boost::join(unmatchedSources, " "));
+            Exception::throwError(SE_HERE, string("no such datastore(s): ") + boost::join(unmatchedSources, " "));
         }
 
         if (m_status) {
@@ -1682,7 +1683,7 @@ bool Cmdline::run() {
                 return false;
             }
             if (m_sources.empty()) {
-                usage(false, "Sources must be selected explicitly for --restore to prevent accidental restore.");
+                usage(false, "Datastores must be selected explicitly for --restore to prevent accidental restore.");
                 return false;
             }
             context->restore(m_restore,
@@ -1811,7 +1812,7 @@ bool Cmdline::parseProp(PropertyType propertyType,
 
             if (isSyncProp) {
                 if (isSourceProp) {
-                    usage(false, StringPrintf("property '%s' in %s could be both a sync and a source property, use --sync-property or --source-property to disambiguate it", propname, args.c_str()));
+                    usage(false, StringPrintf("property '%s' in %s could be both a sync and a datastore property, use --sync-property or --datastore-property to disambiguate it", propname, args.c_str()));
                     return false;
                 } else {
                     validProps = &m_validSyncProps;
@@ -1888,7 +1889,7 @@ bool Cmdline::parseProp(PropertyType propertyType,
                     if (validProps == &m_validSyncProps) {
                         // complain if sync property includes source prefix
                         if (!spec.m_source.empty()) {
-                            SE_LOG_ERROR(NULL, "%s: source name '%s' not allowed in sync property",
+                            SE_LOG_ERROR(NULL, "%s: datastore name '%s' not allowed in sync property",
                                          args.c_str(),
                                          spec.m_source.c_str());
                             return false;
@@ -3190,7 +3191,8 @@ protected:
 
         {
             TestCmdline cmdline("--configure",
-                                "--source-property", "uri = dummy",
+                                // Intentionally use legacy parameter name here.
+                                "--datastore-property", "uri = dummy",
                                 "scheduleworld",
                                 "xyz",
                                 NULL);
@@ -3262,7 +3264,7 @@ protected:
                                   "   not always obvious.\n"
                                   "   \n"
                                   "   When accepting a sync session in a SyncML server (HTTP server), only\n"
-                                  "   sources with sync != disabled are made available to the client,\n"
+                                  "   datastores with sync != disabled are made available to the client,\n"
                                   "   which chooses the final sync mode based on its own configuration.\n"
                                   "   When accepting a sync session in a SyncML client (local sync with\n"
                                   "   the server contacting SyncEvolution on a device), the sync mode\n"
@@ -3278,7 +3280,7 @@ protected:
                                   string(filter.m_cmdline->m_props[""].m_sourceProps[""]));
         CPPUNIT_ASSERT_EQUAL_DIFF("",                                  string(filter.m_cmdline->m_props[""].m_syncProps));
 
-        TestCmdline filter2("--source-property", "sync=refresh", NULL);
+        TestCmdline filter2("--datastore-property", "sync=refresh", NULL);
         CPPUNIT_ASSERT(filter2.m_cmdline->parse());
         CPPUNIT_ASSERT(!filter2.m_cmdline->run());
         CPPUNIT_ASSERT_NO_THROW(filter2.expectUsageError("[ERROR] No configuration name specified.\n"));
@@ -3287,10 +3289,10 @@ protected:
         CPPUNIT_ASSERT_EQUAL_DIFF("",
                                   string(filter2.m_cmdline->m_props[""].m_syncProps));
 
-        TestCmdline filter3("--source-property", "xyz=1", NULL);
+        TestCmdline filter3("--datastore-property", "xyz=1", NULL);
         CPPUNIT_ASSERT(!filter3.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL(string(""), filter3.m_out.str());
-        CPPUNIT_ASSERT_EQUAL(string("[ERROR] '--source-property xyz=1': no such property\n"), filter3.m_err.str());
+        CPPUNIT_ASSERT_EQUAL(string("[ERROR] '--datastore-property xyz=1': no such property\n"), filter3.m_err.str());
 
         TestCmdline filter4("xyz=1", NULL);
         CPPUNIT_ASSERT(!filter4.m_cmdline->parse());
@@ -3602,7 +3604,7 @@ protected:
             // updating "type" for peer is mapped to updating "backend",
             // "databaseFormat", "syncFormat", "forceSyncFormat"
             TestCmdline cmdline("--configure",
-                                "--source-property", "addressbook/type=file:text/vcard:3.0",
+                                "--datastore-property", "addressbook/type=file:text/vcard:3.0",
                                 "scheduleworld",
                                 NULL);
             cmdline.doit();
@@ -3624,7 +3626,7 @@ protected:
         {
             // updating type for context must not affect peer
             TestCmdline cmdline("--configure",
-                                "--source-property", "type=file:text/x-vcard:2.1",
+                                "--datastore-property", "type=file:text/x-vcard:2.1",
                                 "@default", "addressbook",
                                 NULL);
             cmdline.doit();
@@ -3742,7 +3744,7 @@ protected:
         }
 
         {
-            TestCmdline cmdline("--source-property", "?",
+            TestCmdline cmdline("--datastore-property", "?",
                                 NULL);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
@@ -3751,7 +3753,7 @@ protected:
         }
 
         {
-            TestCmdline cmdline("--source-property", "?",
+            TestCmdline cmdline("--datastore-property", "?",
                                 "--sync-property", "?",
                                 NULL);
             cmdline.doit();
@@ -3762,7 +3764,7 @@ protected:
 
         {
             TestCmdline cmdline("--sync-property", "?",
-                                "--source-property", "?",
+                                "--datastore-property", "?",
                                 NULL);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
@@ -3771,11 +3773,11 @@ protected:
         }
 
         {
-            TestCmdline cmdline("--source-property", "sync=?",
+            TestCmdline cmdline("--datastore-property", "sync=?",
                                 NULL);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
-            CPPUNIT_ASSERT_EQUAL_DIFF("'--source-property sync=?'\n",
+            CPPUNIT_ASSERT_EQUAL_DIFF("'--datastore-property sync=?'\n",
                                       filterIndented(cmdline.m_out.str()));
         }
 
@@ -3806,8 +3808,8 @@ protected:
         // create from scratch with only addressbook configured
         {
             TestCmdline cmdline("--configure",
-                                "--source-property", "database = file://tmp/test",
-                                "--source-property", "type = file:text/x-vcard",
+                                "--datastore-property", "database = file://tmp/test",
+                                "--datastore-property", "type = file:text/x-vcard",
                                 "@foobar",
                                 "addressbook",
                                 NULL);
@@ -3835,8 +3837,8 @@ protected:
         // add calendar
         {
             TestCmdline cmdline("--configure",
-                                "--source-property", "database@foobar = file://tmp/test2",
-                                "--source-property", "backend = calendar",
+                                "--datastore-property", "database@foobar = file://tmp/test2",
+                                "--datastore-property", "backend = calendar",
                                 "@foobar",
                                 "calendar",
                                 NULL);
@@ -3880,8 +3882,8 @@ protected:
         // disable all sources except for addressbook
         {
             TestCmdline cmdline("--configure",
-                                "--source-property", "addressbook/sync=two-way",
-                                "--source-property", "sync=none",
+                                "--datastore-property", "addressbook/sync=two-way",
+                                "--datastore-property", "sync=none",
                                 "scheduleworld@foobar",
                                 NULL);
             cmdline.doit();
@@ -3896,8 +3898,8 @@ protected:
         {
             TestCmdline cmdline("--configure",
                                 "--template", "SyncEvolution",
-                                "--source-property", "addressbook/type=file:text/vcard:3.0",
-                                "--source-property", "calendar/type=file:text/calendar:2.0",
+                                "--datastore-property", "addressbook/type=file:text/vcard:3.0",
+                                "--datastore-property", "calendar/type=file:text/calendar:2.0",
                                 "syncevo@syncevo",
                                 NULL);
             cmdline.doit();
@@ -3969,7 +3971,7 @@ protected:
 
         {
             TestCmdline cmdline("--configure",
-                                "--source-property", "sync = disabled",
+                                "--datastore-property", "sync = disabled",
                                 "scheduleworld",
                                 NULL);
             cmdline.doit();
@@ -3985,7 +3987,7 @@ protected:
 
         {
             TestCmdline cmdline("--configure",
-                                "--source-property", "sync = one-way-from-server",
+                                "--datastore-property", "sync = one-way-from-server",
                                 "scheduleworld",
                                 "addressbook",
                                 NULL);
@@ -4007,7 +4009,7 @@ protected:
         {
             TestCmdline cmdline("--configure",
                                 "--sync", "two-way",
-                                "-z", "database=source",
+                                "-z", "database=datastore",
                                 // note priority of suffix: most specific wins
                                 "--sync-property", "maxlogdirs@scheduleworld@default=20",
                                 "--sync-property", "maxlogdirs@default=10",
@@ -4026,10 +4028,10 @@ protected:
                                "sync = two-way");
             boost::replace_all(expected,
                                "# database = ",
-                               "database = source");
+                               "database = datastore");
             boost::replace_all(expected,
                                "database = xyz",
-                               "database = source");
+                               "database = datastore");
             boost::replace_all(expected,
                                "# maxlogdirs = 10",
                                "maxlogdirs = 20");
@@ -4501,7 +4503,7 @@ private:
             CPPUNIT_ASSERT(out.find("\nOptions:\n") == std::string::npos);
             CPPUNIT_ASSERT(boost::ends_with(out,
                                             "Remove item(s):\n"
-                                            "  syncevolution --delete-items [--] <config> <source> (<luid> ... | '*')\n\n"));
+                                            "  syncevolution --delete-items [--] <config> <store> (<luid> ... | '*')\n\n"));
             // exact error message
             CPPUNIT_ASSERT_EQUAL(error, err);
 
