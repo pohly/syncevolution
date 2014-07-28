@@ -2299,7 +2299,7 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
             self.session.CheckSource("", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.NoSuchSource: '' has no '' source")
+                                 "org.syncevolution.NoSuchSource: '' has no '' datastore")
         else:
             self.fail("no exception thrown")
 
@@ -2309,7 +2309,7 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
             self.session.GetDatabases("", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.NoSuchSource: '' has no '' source")
+                                 "org.syncevolution.NoSuchSource: '' has no '' datastore")
         else:
             self.fail("no exception thrown")
 
@@ -2567,19 +2567,19 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.session.CheckSource("", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.NoSuchSource: 'dummy-test' has no '' source")
+                                 "org.syncevolution.NoSuchSource: 'dummy-test' has no '' datastore")
         else:
             self.fail("no exception thrown")
 
     def testCheckSourceNoSourceName(self):
-        """TestSessionAPIsDummy.testCheckSourceNoSourceName -  test the right error is reported when the source doesn't exist """
+        """TestSessionAPIsDummy.testCheckSourceNoSourceName -  test the right error is reported when the datastore doesn't exist """
         self.setupConfig()
         try:
             self.session.CheckSource("dummy", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: 'dummy-test' "
-                                 "has no 'dummy' source")
+                                 "has no 'dummy' datastore")
         else:
             self.fail("no exception thrown")
 
@@ -2609,7 +2609,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.fail("no exception thrown")
 
     def testCheckSourceNoBackend(self):
-        """TestSessionAPIsDummy.testCheckSourceNoBackend -  test the right error is reported when the source is unusable"""
+        """TestSessionAPIsDummy.testCheckSourceNoBackend -  test the right error is reported when the datastore is unusable"""
         self.setupConfig()
         config = { "source/memo" : { "backend" : "file",
                                      "databaseFormat" : "text/calendar",
@@ -2624,7 +2624,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.fail("no exception thrown")
 
     def testCheckSource(self):
-        """TestSessionAPIsDummy.testCheckSource - testCheckSource - test all sources are okay"""
+        """TestSessionAPIsDummy.testCheckSource - testCheckSource - test all datastores are okay"""
         self.setupConfig()
         try:
             for source in self.sources:
@@ -2646,18 +2646,18 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.session.GetDatabases("", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.NoSuchSource: 'dummy-test' has no '' source")
+                                 "org.syncevolution.NoSuchSource: 'dummy-test' has no '' datastore")
         else:
             self.fail("no exception thrown")
 
     def testGetDatabasesEmpty(self):
-        """TestSessionAPIsDummy.testGetDatabasesEmpty -  test the right error is reported for non-existing source"""
+        """TestSessionAPIsDummy.testGetDatabasesEmpty -  test the right error is reported for non-existing datastore"""
         self.setupConfig()
         try:
             databases = self.session.GetDatabases("never_use_this_source_name", utf8_strings=True)
         except dbus.DBusException, ex:
             self.assertEqual(str(ex),
-                                 "org.syncevolution.NoSuchSource: 'dummy-test' has no 'never_use_this_source_name' source")
+                                 "org.syncevolution.NoSuchSource: 'dummy-test' has no 'never_use_this_source_name' datastore")
         else:
             self.fail("no exception thrown")
 
