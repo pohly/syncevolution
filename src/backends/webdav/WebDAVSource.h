@@ -79,6 +79,7 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     /* implementation of SyncSource interface */
     virtual void open();
     virtual bool isEmpty();
+    virtual bool isUsable();
     virtual void close();
     virtual Databases getDatabases();
     void getSynthesisInfo(SynthesisInfo &info,

@@ -267,6 +267,7 @@ class MapSyncSource :
     virtual void beginSync(const std::string &lastToken, const std::string &resumeToken);
     virtual std::string endSync(bool success);
     virtual bool isEmpty() { return dynamic_cast<SyncSource &>(*m_sub).getOperations().m_isEmpty(); }
+    virtual bool isUsable() { return dynamic_cast<SyncSource &>(*m_sub).isUsable(); }
     virtual InsertItemResult insertItem(const std::string &luid, const std::string &item);
     virtual void readItem(const std::string &luid, std::string &item);
     virtual void deleteItem(const string &luid);

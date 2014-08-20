@@ -1227,52 +1227,52 @@ bool Cmdline::run() {
                         sources.erase(entry);
                     }
 
-                    // check whether the sync source works; this can
-                    // take some time, so allow the user to abort
-                    SE_LOG_INFO(NULL, "%s: looking for databases...",
-                                source.c_str());
-                    // Even if the peer config does not exist yet
-                    // (fromScratch == true), the source config itself
-                    // may already exist with a username/password
-                    // using the keyring. Need to retrieve that
-                    // password before using the source.
-                    //
-                    // We need to check for databases again here,
-                    // because otherwise we don't know whether the
-                    // source is usable. The "database" property can
-                    // be empty in a usable source, and the "sync"
-                    // property in some potential other peer config
-                    // is not accessible.
-                    PasswordConfigProperty::checkPasswords(to->getUserInterfaceNonNull(),
-                                                           *to,
-                                                           PasswordConfigProperty::CHECK_PASSWORD_SOURCE|
-                                                           PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_PASSWORD|
-                                                           PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_USERNAME,
-                                                           boost::assign::list_of(source));
-                    SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
-                    auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
-                    if (syncSource.get() == NULL) {
-                        disable = "no backend available";
-                    } else {
-                        try {
-                            SyncSource::Databases databases = syncSource->getDatabases();
-                            if (databases.empty()) {
-                                disable = "no database to synchronize";
+                    // Only check the source if it is not already disabled.
+                    if (selected ||
+                        sourceConfig->getSync() != "disabled") {
+                        // Even if the peer config does not exist yet
+                        // (fromScratch == true), the source config itself
+                        // may already exist with a username/password
+                        // using the keyring. Need to retrieve that
+                        // password before using the source.
+                        //
+                        // We need to check for databases again here,
+                        // because otherwise we don't know whether the
+                        // source is usable. The "database" property can
+                        // be empty in a usable source, and the "sync"
+                        // property in some potential other peer config
+                        // is not accessible.
+                        PasswordConfigProperty::checkPasswords(to->getUserInterfaceNonNull(),
+                                                               *to,
+                                                               PasswordConfigProperty::CHECK_PASSWORD_SOURCE|
+                                                               PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_PASSWORD|
+                                                               PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_USERNAME,
+                                                               boost::assign::list_of(source));
+                        SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
+                        auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
+                        if (syncSource.get() == NULL) {
+                            disable = "no backend available";
+                        } else {
+                            try {
+                                syncSource->open();
+                                if (!syncSource->isUsable()) {
+                                    disable = "unusable";
+                                }
+                            } catch (...) {
+                                std::string explanation;
+                                Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
+                                disable = "backend failed: " + explanation;
                             }
-                        } catch (...) {
-                            std::string explanation;
-                            Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
-                            disable = "backend failed: " + explanation;
                         }
+                    } else {
+                        disable = "inactive";
                     }
+                    // Checking can take some time, so allow the user to abort.
                     s.checkForNormal();
-                    SE_LOG_INFO(NULL, "%s: %s\n",
-                                source.c_str(),
-                                disable.empty() ? "okay" : disable.c_str());
                 }
 
-                // Do sanity checking of source (can it be enabled?),
-                // but only set the sync mode if configuring a peer.
+                // Verify usability of source (can it be enabled?).
+                // Only set the sync mode if configuring a peer.
                 // A context-only config doesn't have the "sync"
                 // property.
                 string syncMode;
@@ -1281,13 +1281,31 @@ bool Cmdline::run() {
                     // and it cannot be enabled, otherwise disable it silently
                     if (selected) {
                         Exception::throwError(SE_HERE, source + ": " + disable);
+                    } else if (disable == "unusable") {
+                        // More detailed INFO message must have been
+                        // printed by isUsable().
+                    } else {
+                        // Print out own check result.
+                        SE_LOG_INFO(NULL, "%s: %s", source.c_str(), disable.c_str());
                     }
-                    syncMode = "disabled";
-                } else if (selected) {
-                    // user absolutely wants it: enable even if off by default
-                    ConfigProps filter = m_props.createSourceFilter(m_server, source);
-                    ConfigProps::const_iterator sync = filter.find("sync");
-                    syncMode = sync == filter.end() ? "two-way" : sync->second;
+                    if (sourceConfig->getSync() != "disabled") {
+                        syncMode = "disabled";
+                    }
+                } else {
+                    if (selected) {
+                        // user absolutely wants it: enable even if off by default
+                        ConfigProps filter = m_props.createSourceFilter(m_server, source);
+                        ConfigProps::const_iterator sync = filter.find("sync");
+                        syncMode = sync == filter.end() ? "two-way" : sync->second;
+                    }
+                    if (configureContext) {
+                        SE_LOG_INFO(NULL, "%s: configuring datastore",
+                                    source.c_str());
+                    } else {
+                        SE_LOG_INFO(NULL, "%s: configuring datastore with sync mode '%s'",
+                                    source.c_str(),
+                                    syncMode.empty() ? sourceConfig->getSync().c_str() : syncMode.c_str());
+                    }
                 }
                 if (!syncMode.empty() &&
                     !configureContext) {
@@ -3502,14 +3520,10 @@ protected:
                                 "foobar@default", NULL);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
-            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] addressbook: looking for databases...\n"
-                                             "[INFO] addressbook: okay\n"
-                                             "[INFO] calendar: looking for databases...\n"
-                                             "[INFO] calendar: okay\n"
-                                             "[INFO] memo: looking for databases...\n"
-                                             "[INFO] memo: okay\n"
-                                             "[INFO] todo: looking for databases...\n"
-                                             "[INFO] todo: okay\n"
+            CPPUNIT_ASSERT_EQUAL(std::string("[INFO] addressbook: inactive\n"
+                                             "[INFO] calendar: inactive\n"
+                                             "[INFO] memo: inactive\n"
+                                             "[INFO] todo: inactive\n"
                                              "[ERROR] Unsupported value for the \"keyring\" property, no such keyring found: no-such-keyring"),
                                  cmdline.m_err.str());
         }
@@ -3834,11 +3848,12 @@ protected:
                          CONFIG_CONTEXT_CUR_VERSION);
         CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
 
-        // add calendar
+        // add unusable calendar: it is unusable because the file backend
+        // cannot create the directory
         {
             TestCmdline cmdline("--configure",
-                                "--datastore-property", "database@foobar = file://tmp/test2",
-                                "--datastore-property", "backend = calendar",
+                                "--datastore-property", "database@foobar = file:///no-such-dir/test2",
+                                "--datastore-property", "backend = file",
                                 "@foobar",
                                 "calendar",
                                 NULL);
@@ -3847,8 +3862,8 @@ protected:
         res = scanFiles(root);
         removeRandomUUID(res);
         expected +=
-            "sources/calendar/config.ini:backend = calendar\n"
-            "sources/calendar/config.ini:database = file://tmp/test2\n"
+            "sources/calendar/config.ini:backend = file\n"
+            "sources/calendar/config.ini:database = file:///no-such-dir/test2\n"
             "sources/calendar/config.ini:# databaseFormat = \n"
             "sources/calendar/config.ini:# databaseUser = \n"
             "sources/calendar/config.ini:# databasePassword = \n";
@@ -3874,8 +3889,14 @@ protected:
                            "addressbook/config.ini:# databaseFormat = ",
                            "addressbook/config.ini:databaseFormat = text/x-vcard");
         boost::replace_all(expected,
+                           "calendar/config.ini:backend = calendar",
+                           "calendar/config.ini:backend = file");
+        boost::replace_all(expected,
                            "calendar/config.ini:# database = ",
-                           "calendar/config.ini:database = file://tmp/test2");
+                           "calendar/config.ini:database = file:///no-such-dir/test2");
+        boost::replace_all(expected,
+                           "calendar/config.ini:sync = two-way",
+                           "calendar/config.ini:sync = disabled");
         sortConfig(expected);
         CPPUNIT_ASSERT_EQUAL_DIFF(expected, res);
 

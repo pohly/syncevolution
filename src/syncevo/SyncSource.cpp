@@ -26,6 +26,7 @@
 #include <syncevo/SyncSource.h>
 #include <syncevo/SyncContext.h>
 #include <syncevo/util.h>
+#include <syncevo/SuspendFlags.h>
 
 #include <syncevo/SynthesisEngine.h>
 #include <synthesis/SDK_util.h>
@@ -248,6 +249,26 @@ void SyncSource::pushSynthesisAPI(sysync::SDK_InterfaceType *synthesisAPI)
 void SyncSource::popSynthesisAPI() {
     m_synthesisAPI.pop_back();
 }
+
+bool SyncSource::isUsable()
+{
+    if (getOperations().m_isEmpty) {
+        try {
+            SE_LOG_INFO(getDisplayName(), "checking usability...");
+            getOperations().m_isEmpty();
+            return true;
+        } catch (...) {
+            std::string explanation;
+            Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
+            SE_LOG_INFO(getDisplayName(), "%s", explanation.c_str());
+            return false;
+        }
+    } else {
+        // Cannot check, assume it is usable.
+        return true;
+    }
+}
+
 
 SourceRegistry &SyncSource::getSourceRegistry()
 {

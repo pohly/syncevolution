@@ -1968,6 +1968,31 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
     virtual void open() = 0;
 
     /**
+     * Checks whether the source as currently configured can access
+     * data. open() must have been called first.
+     *
+     * The default implementation calls Operations::m_isEmpty; this
+     * assumes that m_isEmpty really does something with the
+     * database. Derived classes which neither check their config in
+     * open() nor during m_isEmpty() should provide their own
+     * implementation of isUsable(). It might also be possible to
+     * check usability more efficiently.
+     *
+     * It is also possible to suppress the usability check by
+     * providing an implementation which always returns true, for
+     * example when checking would be too expensive or lead to
+     * unexpected operations (like accessing a remote server).
+     *
+     * If unusable, the implementation should print an INFO message
+     * explaining why the source is unusable. Whether that is an
+     * error will be determined by the caller.
+     *
+     * @return false if the source is definitely unusable, true if it
+     * is usable or might be
+     */
+    virtual bool isUsable();
+
+    /**
      * Returns the actual database that is in use. open() must
      * have been called first.
      *

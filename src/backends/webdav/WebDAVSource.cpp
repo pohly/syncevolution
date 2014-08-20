@@ -1560,6 +1560,23 @@ bool WebDAVSource::isEmpty()
     return revisions.empty();
 }
 
+bool WebDAVSource::isUsable()
+{
+    // Traditionally, this check used getDatabases() which
+    // succeeded with a fixed response if no credentials were given.
+    // Only if credentials were give was the source really checked,
+    // and that check was broken because it did not really verify
+    // that a given "database" really was a collection.
+    //
+    // It was also surprising that a simple configure operation
+    // resulted in a server access.
+    //
+    // So let's pretend that all WebDAV sources are usable for now
+    // until we figure out a better approach.
+    return true;
+}
+
+
 void WebDAVSource::close()
 {
     m_session.reset();
