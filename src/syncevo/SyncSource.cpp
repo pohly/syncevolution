@@ -280,19 +280,14 @@ RegisterSyncSource::RegisterSyncSource(const string &shortDescr,
     registry.push_back(this);
 }
 
-class InactiveSyncSource : public SyncSource
+class InactiveSyncSource : public DummySyncSource
 {
 public:
-    InactiveSyncSource(const SyncSourceParams &params) : SyncSource(params) {}
+    InactiveSyncSource(const SyncSourceParams &params) : DummySyncSource(params) {}
 
     virtual bool isInactive() const { return true; }
-    virtual void enableServerMode() {}
-    virtual bool serverModeEnabled() const { return false; }
-    virtual void getSynthesisInfo(SyncEvo::SyncSourceBase::SynthesisInfo&, SyncEvo::XMLConfigFragments&) { throwError(SE_HERE, "inactive"); }
     virtual Databases getDatabases() { throwError(SE_HERE, "inactive"); return Databases(); }
     virtual void open() { throwError(SE_HERE, "inactive"); }
-    virtual void close() { throwError(SE_HERE, "inactive"); }
-    virtual std::string getPeerMimeType() const { return ""; }
 };
 
 SyncSource *RegisterSyncSource::InactiveSource(const SyncSourceParams &params)
