@@ -56,6 +56,7 @@ MapSyncSource::MapSyncSource(const SyncSourceParams &params,
         m_operations.m_backupData = m_sub->getOperations().m_backupData;
         m_operations.m_restoreData = m_sub->getOperations().m_restoreData;
     }
+    m_operations.m_isEmpty = m_sub->getOperations().m_isEmpty;
 }
 
 void MapSyncSource::enableServerMode()

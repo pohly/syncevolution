@@ -2230,6 +2230,7 @@ class DummySyncSource : public SyncSource
 class VirtualSyncSource : public DummySyncSource 
 {
     std::vector< boost::shared_ptr<SyncSource> > m_sources;
+    bool isEmpty();
 
 public:
     /**

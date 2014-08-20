@@ -536,6 +536,8 @@ VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig 
                                              evoSyncSource.c_str()));
         }
     }
+
+    m_operations.m_isEmpty = boost::bind(&VirtualSyncSource::isEmpty, this);
 }
 
 void VirtualSyncSource::open()
@@ -545,6 +547,27 @@ void VirtualSyncSource::open()
         source->open();
     }
 }
+
+bool VirtualSyncSource::isEmpty()
+{
+    bool empty = true;
+    SuspendFlags &s = SuspendFlags::getSuspendFlags();
+
+    BOOST_FOREACH(boost::shared_ptr<SyncSource> &source, m_sources) {
+        // Operation might not be implemented, in which case we have to
+        // assume "not empty".
+        if (!source->getOperations().m_isEmpty ||
+            !source->getOperations().m_isEmpty()) {
+            empty = false;
+            // Keep checking, because isEmpty() is also used for
+            // isUsable() and we have to touch all sources for that.
+        }
+        // Operation might have been aborted by user, need to check.
+        s.checkForNormal();
+    }
+    return empty;
+}
+
 
 void VirtualSyncSource::close()
 {
