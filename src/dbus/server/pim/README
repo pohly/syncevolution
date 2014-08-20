@@ -292,21 +292,37 @@ Peers
 The following keys are supported for the configuration of a peer:
 
 - "protocol" - defines how to access the address book. "PBAB" (phone
-               book access protocol) and "file" (read vCard files from
-               directory) are implemented. "SyncML" and "CardDAV"
+               book access protocol), "files" (read vCard files from
+               directory) and "CardDAV" (one-way or two way syncing
+               with a CardDAV server) are implemented. "SyncML"
                could be added easily.
 
 - "transport" - defines how to establish the connection. The only
                 supported value is "Bluetooth" (for protocol=PBAP or
                 SyncML), which is also the default if not given
-                explicitly.
+                explicitly. Can be left unset for CardDAV.
 
 - "address" - the Bluetooth MAC address in the aa:bb:cc:dd:ee:ff
-              format (for transport=Bluetooth).
+              format (for transport=Bluetooth); for CardDAV, this can
+              be the name of a SyncEvolution configuration template
+              (for example, "Google") in which case the default
+              address book on that server will be used unless a
+              database is set explicitly
+
+- "username", "password" - the credentials to use for CardDAV, can be
+              left unset for PBAP and file
 
 - "database" - empty or unset for the internal address book
                (protocol=PBAP), or the path to the directory
-               (protocol=file).
+               (protocol=file), or the URL of a specific contact
+               collection (protocol=CardDAV, overrides the "address")
+
+- "syncmode" - "cache" for one-way syncing with local read-only data (the only
+               allowed value for protocol=PBAP and the default if unset),
+               "two-way" for two-way syncing with locally writable data.
+               In two-way mode, SyncEvolution minimizes user interaction
+               when resolving problems (no slow sync prevention, for
+               example).
 
 - "logdir" - a directory in which directories are created with debug
              information about sync session.
@@ -322,6 +338,7 @@ The following keys are supported for the configuration of a peer:
 Not supported via the API at the moment:
 - selecting a specific phone address book
 - selecting which vCard properties get cached
+- listing all available CardDAV contact collections
 
 Syncing
 =======
@@ -687,6 +704,14 @@ stored like that). It also reduces disk IO.
 If matching fails, a contact will get deleted and recreated. The end result
 in the unified address book is still the same, because folks does not
 rely on the ID for linking.
+
+With CardDAV, only the initial sync downloads all contacts. Any
+following sync uses locally stored meta data about the server to
+detect changes (added, updated, deleted contacts) and then applies
+these changes locally. If an incremental sync is impossible for
+whatever reason (for example, the local meta data about the CardDAV
+server got lost), SyncEvolution falls back to the PBAP approach of
+comparing local and remote data and updating the local side.
 
 Supported fields
 ----------------

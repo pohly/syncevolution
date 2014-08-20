@@ -1099,14 +1099,21 @@ static const char * const PEER_KEY_PROTOCOL = "protocol";
 // static const char * const PEER_SYNCML_PROTOCOL = "SyncML";
 static const char * const PEER_PBAP_PROTOCOL = "PBAP";
 static const char * const PEER_FILES_PROTOCOL = "files";
+static const char * const PEER_CARDDAV_PROTOCOL = "CardDAV";
 static const char * const PEER_KEY_TRANSPORT = "transport";
 static const char * const PEER_BLUETOOTH_TRANSPORT = "Bluetooth";
 // static const char * const PEER_IP_TRANSPORT = "IP";
 static const char * const PEER_DEF_TRANSPORT = PEER_BLUETOOTH_TRANSPORT;
 static const char * const PEER_KEY_ADDRESS = "address";
 static const char * const PEER_KEY_DATABASE = "database";
+static const char * const PEER_KEY_USERNAME = "username";
+static const char * const PEER_KEY_PASSWORD = "password";
 static const char * const PEER_KEY_LOGDIR = "logdir";
 static const char * const PEER_KEY_MAXSESSIONS = "maxsessions";
+static const char * const PEER_KEY_SYNCMODE = "syncmode";
+static const char * const PEER_CACHE_SYNCMODE = "cache";
+static const char * const PEER_TWO_WAY_SYNCMODE = "two-way";
+
 
 static std::string GetEssential(const StringMap &properties, const char *key,
                                 bool allowEmpty = false)
@@ -1134,6 +1141,9 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     std::string database = GetWithDef(properties, PEER_KEY_DATABASE);
     std::string logdir = GetWithDef(properties, PEER_KEY_LOGDIR);
     std::string maxsessions = GetWithDef(properties, PEER_KEY_MAXSESSIONS);
+    std::string username = GetWithDef(properties, PEER_KEY_USERNAME);
+    std::string password = GetWithDef(properties, PEER_KEY_PASSWORD);
+    std::string syncmode = GetWithDef(properties, PEER_KEY_SYNCMODE);
     unsigned maxLogDirs = 0;
     if (!maxsessions.empty()) {
         // https://svn.boost.org/trac/boost/ticket/5494
@@ -1166,6 +1176,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
     }
 
     if (protocol == PEER_PBAP_PROTOCOL ||
+        protocol == PEER_CARDDAV_PROTOCOL ||
         protocol == PEER_FILES_PROTOCOL) {
         // Create, modify or set local config.
         boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_LOCAL_CONFIG + context));
@@ -1206,8 +1217,20 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_LOCAL_SOURCE));
         source->setBackend("evolution-contacts");
         source->setDatabaseID(localDatabaseName);
-        source->setSync("local-cache");
         source->setURI(MANAGER_REMOTE_SOURCE);
+        if (protocol == PEER_CARDDAV_PROTOCOL &&
+            syncmode == PEER_TWO_WAY_SYNCMODE) {
+            source->setSync("two-way");
+        } else if (syncmode.empty() ||
+                   syncmode == PEER_CACHE_SYNCMODE) {
+            source->setSync("local-cache");
+        } else {
+            SE_THROW(StringPrintf("peer config: unsupported mode for %s: %s=%s",
+                                  protocol.c_str(),
+                                  PEER_KEY_SYNCMODE,
+                                  syncmode.c_str()));
+        }
+
         config->flush();
         // Ensure that database exists.
         SyncSourceParams params(MANAGER_LOCAL_SOURCE,
@@ -1241,11 +1264,29 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
         if (!maxsessions.empty()) {
             config->setMaxLogDirs(maxLogDirs);
         }
+        if (protocol == PEER_CARDDAV_PROTOCOL) {
+            if (!address.empty()) {
+                // Retrieve syncURL from template.
+                boost::shared_ptr<SyncConfig> peer(SyncConfig::createPeerTemplate(address));
+                if (!peer) {
+                    SE_THROW(StringPrintf("peer config: no such template: %s=%s",
+                                          PEER_KEY_ADDRESS, address.c_str()));
+                }
+                config->setSyncURL(peer->getSyncURL());
+            }
+            config->setSyncUsername(username);
+            config->setSyncPassword(password);
+        }
+
         source = config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE);
         if (protocol == PEER_PBAP_PROTOCOL) {
             // PBAP
             source->setDatabaseID("obex-bt://" + address);
             source->setBackend("pbap");
+        } else if (protocol == PEER_CARDDAV_PROTOCOL) {
+            // CardDAV
+            source->setDatabaseID(database);
+            source->setBackend("carddav");
         } else {
             // Local sync with files on the target side.
             // Format is hard-coded to vCard 3.0.
@@ -1549,14 +1590,18 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
                                       boost::signals2::at_front);
 
     // Determine sync mode. "pbap" is valid only when the remote
-    // source uses the PBAP backend. Otherwise we use "ephemeral",
-    // which ensures that absolutely no sync meta data gets written.
-    std::string syncMode = "ephemeral";
+    // source uses the PBAP backend. For the file backend, we use
+    // "ephemeral", which ensures that absolutely no sync meta data
+    // gets written (simulates PBAP). Everything else uses normal
+    // syncing.
+    std::string syncMode;
     std::string context = StringPrintf("@%s%s", MANAGER_PREFIX, uid.c_str());
     boost::shared_ptr<SyncConfig> config(new SyncConfig(MANAGER_REMOTE_CONFIG + context));
     boost::shared_ptr<PersistentSyncSourceConfig> source(config->getSyncSourceConfig(MANAGER_REMOTE_SOURCE));
     if (source->getBackend() == "PBAP Address Book") {
         syncMode = "pbap";
+    } else if (source->getBackend() == "file") {
+        syncMode = "ephemeral";
     }
 
     StringMap env;
