@@ -4535,6 +4535,9 @@ private:
                     out << "[" << levelToStr(level) << "] ";
                     m_all << "[" << levelToStr(level) << "] ";
                 }
+                if (options.m_prefix) {
+                    out << options.m_prefix << " :";
+                }
                 out << str;
                 m_all << str;
                 if (!boost::ends_with(str, "\n")) {
