@@ -109,6 +109,12 @@ public:
             options.m_level <= m_dbusLogLevel) {
             // send to parent
             string log = StringPrintfV(format, args);
+            if (options.m_prefix) {
+                std::string prefix = *options.m_prefix;
+                prefix += ": ";
+                boost::replace_all(log, "\n", prefix);
+                log.insert(0, prefix);
+            }
             string strLevel = Logger::levelToStr(options.m_level);
             try {
                 m_helper->emitLogOutput(strLevel, log, options.m_processName ? *options.m_processName : getProcessName());
