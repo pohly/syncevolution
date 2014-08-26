@@ -203,10 +203,37 @@ def done(*args):
         result = args[0]
     elif len(args) > 1:
         result = args
-def run():
+def run(syncing=False):
     global result
     result = None
-    loop.run()
+    if syncing:
+        print 'Running a sync, press CTRL-C to control it interactively.'
+        while result is None and error is None:
+            try:
+                loop.run()
+            except KeyboardInterrupt:
+                while True:
+                    print '[a]bort, [s]uspend, [r]esume, continue? ',
+                    response = sys.stdin.readline()
+                    try:
+                        if response == 'a\n':
+                            manager.StopSync(peername)
+                            break
+                        elif response == 's\n':
+                            manager.SuspendSync(peername)
+                            break
+                        elif response == 'r\n':
+                            manager.ResumeSync(peername)
+                            break
+                        elif response == '\n':
+                            break
+                        else:
+                            print 'Unknown response, try again.'
+                    except dbus.exceptions.DBusException, ex:
+                        print 'operation %s failed: %s' % (response, ex)
+    else:
+        loop.run()
+
     if error:
         print
         print error
@@ -259,7 +286,7 @@ if not error and options.sync:
         timeout.attach(loop.get_context())
 
     # Wait for completion of sync.
-    run()
+    run(syncing=True)
 
     # Stop polling, in case that we remove the peer.
     if timeout:
