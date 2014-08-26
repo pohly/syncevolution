@@ -40,6 +40,7 @@
 #include <syncevo/util.h>
 #include <syncevo/BoostHelper.h>
 #include <src/syncevo/SynthesisEngine.h>
+#include <syncevo/SuspendFlags.h>
 
 #include "gdbus-cxx-bridge.h"
 
@@ -282,6 +283,7 @@ public:
     void resetTransfer();
     void shutdown(void);
     void setFreeze(bool freeze);
+    void blockOnFreeze();
 
 private:
     PbapSession(PbapSyncSource &parent);
@@ -289,6 +291,7 @@ private:
     PbapSyncSource &m_parent;
     boost::weak_ptr<PbapSession> m_self;
     std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
+    bool m_frozen;
     enum {
         OBEXD_OLD, // obexd < 0.47
         OBEXD_NEW, // obexd == 0.47, file-based transfer
@@ -354,7 +357,8 @@ private:
 };
 
 PbapSession::PbapSession(PbapSyncSource &parent) :
-    m_parent(parent)
+    m_parent(parent),
+    m_frozen(false)
 {
 }
 
@@ -386,6 +390,24 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
                 completion.m_transferErrorMsg = "reason unknown";
             }
             m_transfers[path] = completion;
+        } else if (status == "active" && m_currentTransfer == path && m_frozen) {
+            // Retry Suspend() which must have failed earlier.
+            try {
+                GDBusCXX::DBusRemoteObject transfer(m_client->getConnection(),
+                                                    m_currentTransfer,
+                                                    OBC_TRANSFER_INTERFACE_NEW5,
+                                                    OBC_SERVICE_NEW5,
+                                                    true);
+                GDBusCXX::DBusClientCall0(transfer, "Suspend")();
+                SE_LOG_DEBUG(NULL, "successfully suspended transfer when it became active");
+            } catch (...) {
+                // Ignore all errors here. The worst that can happen is that
+                // the transfer continues to run. Once Bluez supports suspending
+                // queued transfers we shouldn't get here at all.
+                std::string explanation;
+                Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
+                SE_LOG_DEBUG(NULL, "ignoring failure of delayed suspend: %s", explanation.c_str());
+            }
         }
     }
 }
@@ -667,6 +689,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
 boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParams)
 {
     resetTransfer();
+    blockOnFreeze();
 
     // Update prepared filter to match pullData.
     Bluez5Filter currentFilter = m_filter5;
@@ -827,6 +850,8 @@ void PbapSession::continuePullAll(PullAll &state)
 {
     m_transfers.clear();
     state.m_transferStart.resetMonotonic();
+    blockOnFreeze();
+
     Bluez5PullAllResult tuple =
         m_obexAPI == BLUEZ5 ?
         GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state.m_tmpFile.filename(), state.m_filter) :
@@ -891,6 +916,7 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
     }
 
     Content::iterator it;
+    SuspendFlags &s = SuspendFlags::getSuspendFlags();
     while ((it = m_content.find(contactNumber)) == m_content.end() &&
            m_session &&
            (!m_session->transferComplete() ||
@@ -904,6 +930,7 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
         // some of the unread data (at least how it is implemented
         // now).
         while (!m_session->transferComplete() && m_tmpFile.moreData() < 128 * 1024) {
+            s.checkForNormal();
             g_main_context_iteration(NULL, true);
         }
         m_session->checkForError();
@@ -1024,37 +1051,81 @@ void PbapSession::shutdown(void)
 
 void PbapSession::setFreeze(bool freeze)
 {
-    SE_LOG_DEBUG(NULL, "PbapSession::setFreeze(%s", freeze ? "freeze" : "thaw");
+    SE_LOG_DEBUG(NULL, "PbapSession::setFreeze(%s, %s)",
+                 m_currentTransfer.c_str(),
+                 freeze ? "freeze" : "thaw");
+    if (freeze == m_frozen) {
+        SE_LOG_DEBUG(NULL, "no change in freeze state");
+        return;
+    }
     if (m_client.get()) {
         if (m_obexAPI == OBEXD_OLD) {
             SE_THROW("freezing OBEX transfer not possible with old obexd");
         }
-        // Suspend/Resume implemented since Bluez 5.15. If not
-        // implemented, we will get a D-Bus exception that is returned
-        // to the caller as error, which will abort the sync.
-        GDBusCXX::DBusRemoteObject transfer(m_client->getConnection(),
-                                            m_currentTransfer,
-                                            OBC_TRANSFER_INTERFACE_NEW5,
-                                            OBC_SERVICE_NEW5,
-                                            true);
-        try {
-            if (freeze) {
-                GDBusCXX::DBusClientCall0(transfer, "Suspend")();
-            } else {
-                GDBusCXX::DBusClientCall0(transfer, "Resume")();
+        if (!m_currentTransfer.empty()) {
+            // Suspend/Resume implemented since Bluez 5.15. If not
+            // implemented, we will get a D-Bus exception that is returned
+            // to the caller as error, which will abort the sync.
+            GDBusCXX::DBusRemoteObject transfer(m_client->getConnection(),
+                                                m_currentTransfer,
+                                                OBC_TRANSFER_INTERFACE_NEW5,
+                                                OBC_SERVICE_NEW5,
+                                                true);
+            try {
+                if (freeze) {
+                    GDBusCXX::DBusClientCall0(transfer, "Suspend")();
+                } else {
+                    GDBusCXX::DBusClientCall0(transfer, "Resume")();
+                }
+            } catch (...) {
+                std::string explanation;
+                Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
+
+                if (m_currentTransfer.empty() || transferComplete()) {
+                    // Transfer already finished. This causes obexd to report
+                    // "GDBus.Error:org.freedesktop.DBus.Error.UnknownObject: Method "xxx" with signature "" on interface "org.bluez.obex.Transfer1" doesn't exist."
+                    //
+                    // We can ignore any error for suspend/resume when
+                    // there is no active transfer. The sync engine will
+                    // handle suspending/resuming the processing of the data.
+                    SE_LOG_DEBUG(NULL, "ignore error after transfer completed: %s", explanation.c_str());
+                } else if (freeze && explanation.find("org.bluez.obex.Error.NotInProgress") != explanation.npos) {
+                    // Suspending failed because the transfer had not
+                    // started yet (still queuing), see
+                    // "org.bluez.obex.Transfer1 Suspend/Resume in
+                    // queued state" on linux-bluetooth.
+                    // Ignore this and retry the Suspend when the transfer
+                    // becomes active.
+                    SE_LOG_DEBUG(NULL, "must retry Suspend(), got error at the moment: %s", explanation.c_str());
+                } else {
+                    // Have to abort.
+                    GDBusCXX::DBusClientCall0(transfer, "Cancel")();
+
+                    // Bluez does not change the transfer status when cancelling it,
+                    // so our propChangedCb() doesn't get called. We need to record
+                    // the end of the transfer directly to stop the syncing.
+                    Completion completion = Completion::now();
+                    completion.m_transferErrorCode = "cancelled";
+                    completion.m_transferErrorMsg = "transfer cancelled because suspending not possible";
+                    m_transfers[m_currentTransfer] = completion;
+
+                    Exception::tryRethrow(explanation, true);
+                }
             }
-        } catch (...) {
-            // Abort the transfer if suspending is not possible.
-            GDBusCXX::DBusClientCall0(transfer, "Cancel")();
-            // Bluez does not change the transfer status when cancelling it,
-            // so our propChangedCb() doesn't get called. We need to record
-            // the end of the transfer directly to stop the syncing.
-            Completion completion = Completion::now();
-            completion.m_transferErrorCode = "cancelled";
-            completion.m_transferErrorMsg = "transfer cancelled because suspending not possible";
-            m_transfers[m_currentTransfer] = completion;
-            throw;
         }
+    }
+    // Handle setFreeze() before and after we have a running
+    // transfer by setting a flag and checking that flag before
+    // initiating a new transfer.
+    m_frozen = freeze;
+}
+
+void PbapSession::blockOnFreeze()
+{
+    SuspendFlags &s = SuspendFlags::getSuspendFlags();
+    while (m_frozen) {
+        s.checkForNormal();
+        g_main_context_iteration(NULL, true);
     }
 }
 
