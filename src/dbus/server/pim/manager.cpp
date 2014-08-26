@@ -1542,7 +1542,7 @@ void Manager::doSyncPeer(const boost::shared_ptr<Session> &session,
 {
     // Keep client informed about progress.
     emitSyncProgress(uid, "started", SyncResult());
-    session->m_doneSignal.connect(boost::bind(boost::ref(emitSyncProgress), uid, "done", SyncResult()));
+    session->m_doneSignal.connect(Session::DoneSignal_t::slot_type(boost::ref(emitSyncProgress), uid, "done", SyncResult()).track(m_self)); // emitSyncProgress indirectly relies in the "this" pointer
     session->m_sourceSynced.connect(boost::bind(&Manager::report2SyncProgress, m_self, uid, _1, _2));
     // React *before* Session updates its value for getLastProgress(). */
     session->m_progressSignal.connect(boost::bind(&Manager::progress2SyncProgress, m_self, uid, session.get(), _1, _2),
