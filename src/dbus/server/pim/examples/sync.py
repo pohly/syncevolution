@@ -68,8 +68,8 @@ parser.add_option("-m", "--mode",
                   action="store", default='',
                   help="Override default PBAP sync mode. One of 'all', 'text', 'incremental' (default).")
 parser.add_option("", "--sync-flags",
-                  action="store", default='',
-                  help="Additionall SyncPeerWithFlags() flags in JSON notation. For example: { 'pbap-chunk-transfer-time': 20, 'pbap-chunk-time-lambda': 0.5, 'pbap-chunk-max-count-photo': 100 }")
+                  action="store", default='{}',
+                  help="""Additionall SyncPeerWithFlags() flags in JSON notation. For example: '--sync-flags={ "pbap-chunk-transfer-time": 20, "pbap-chunk-time-lambda": 0.5, "pbap-chunk-max-count-photo": 100 }'""")
 parser.add_option("-f", "--progress-frequency",
                   action="store", type="float", default=0.0,
                   help="Override default progress event frequency.")
