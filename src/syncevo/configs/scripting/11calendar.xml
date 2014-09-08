@@ -163,8 +163,8 @@
       if (SUMMARY==EMPTY) SUMMARY="unnamed"; // in case description is empty as well
       // make sure that we have a DESCRIPTION, because some peers only support that;
       // can be avoided for peers where we are certain (from CtCaps) that they can
-      // receive the text as part of the summary
-      if (ISAVAILABLE(SUMMARY)!=TRUE && DESCRIPTION==EMPTY) DESCRIPTION=SUMMARY;
+      // receive the text as part of the summary; don't do this for VJOURNAL
+      if (ISAVAILABLE(SUMMARY)!=TRUE && DESCRIPTION==EMPTY && ISEVENT != 2) DESCRIPTION=SUMMARY;
       // do NOT send duration (some servers crash when doing so)
       DURATION = UNASSIGNED;
       // shape alarm
