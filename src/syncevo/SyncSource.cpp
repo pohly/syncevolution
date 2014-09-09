@@ -165,7 +165,7 @@ void SyncSourceBase::getDatastoreXML(string &xml, XMLConfigFragments &fragments)
         }
         xmlstream <<
             "        ]]></afterreadscript>\n"
-            "        <map name='data' references='itemdata' type='string'/>\n";
+            "        <map name='itemdata' references='itemdata' type='string'/>\n";
     }
     xmlstream << 
         "        <automap/>\n"
@@ -776,6 +776,16 @@ void SyncSourceSerialize::getSynthesisInfo(SynthesisInfo &info,
     } else if (type == "text/plain") {
         info.m_fieldlist = "Note";
         info.m_profile = "\"Note\", 2";
+    } else if (type == "raw/text/vcard") {
+        info.m_native = "vCard30";
+        info.m_fieldlist = "Raw";
+        info.m_datatypes =
+            "        <use datatype='raw-vcard' mode='rw' preferred='yes'/>\n";
+    } else if (type == "raw/text/calendar") {
+        info.m_native = "iCalendar20";
+        info.m_fieldlist = "Raw";
+        info.m_datatypes =
+            "        <use datatype='raw-calendar' mode='rw' preferred='yes'/>\n";
     } else {
         throwError(SE_HERE, string("default MIME type not supported: ") + type);
     }
@@ -831,6 +841,12 @@ std::string SyncSourceBase::getDataTypeSupport(const std::string &type,
         datatypes =
             "        <use datatype='note10' mode='rw' preferred='yes'/>\n"
             "        <use datatype='note11' mode='rw'/>\n";
+    } else if (type == "raw/text/vcard") {
+        datatypes =
+            "        <use datatype='raw-vcard' mode='rw' preferred='yes'/>\n";
+    } else if (type == "raw/text/calendar") {
+        datatypes =
+            "        <use datatype='raw-calendar' mode='rw' preferred='yes'/>\n";
     } else if (type.empty()) {
         throwError(SE_HERE, "no MIME type configured");
     } else {
@@ -845,14 +861,14 @@ sysync::TSyError SyncSourceSerialize::readItemAsKey(sysync::cItemID aID, sysync:
     std::string item;
 
     readItem(aID->item, item);
-    TSyError res = getSynthesisAPI()->setValue(aItemKey, "data", item.c_str(), item.size());
+    TSyError res = getSynthesisAPI()->setValue(aItemKey, "itemdata", item.c_str(), item.size());
     return res;
 }
 
 SyncSource::Operations::InsertItemAsKeyResult_t SyncSourceSerialize::insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID)
 {
     SharedBuffer data;
-    TSyError res = getSynthesisAPI()->getValue(aItemKey, "data", data);
+    TSyError res = getSynthesisAPI()->getValue(aItemKey, "itemdata", data);
 
     if (!res) {
         InsertItemResult inserted = insertItem("", data.get());
@@ -882,7 +898,7 @@ SyncSource::Operations::InsertItemAsKeyResult_t SyncSourceSerialize::insertItemA
 SyncSource::Operations::UpdateItemAsKeyResult_t SyncSourceSerialize::updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
     SharedBuffer data;
-    TSyError res = getSynthesisAPI()->getValue(aItemKey, "data", data);
+    TSyError res = getSynthesisAPI()->getValue(aItemKey, "itemdata", data);
 
     if (!res) {
         InsertItemResult inserted = insertItem(aID->item, data.get());

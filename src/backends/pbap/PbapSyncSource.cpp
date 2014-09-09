@@ -1327,7 +1327,7 @@ sysync::TSyError PbapSyncSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH
     }
     pcrecpp::StringPiece vcard;
     if (m_pullAll->getContact(aID->item, vcard)) {
-        return getSynthesisAPI()->setValue(aItemKey, "data", vcard.data(), vcard.size());
+        return getSynthesisAPI()->setValue(aItemKey, "itemdata", vcard.data(), vcard.size());
     } else {
         return sysync::DB_NotFound;
     }
