@@ -1,3 +1,357 @@
+SyncEvolution 1.4.99.3 -> 1.4.99.4, 10.09.2014
+==============================================
+
+One focus in this release was on minimizing CPU consumption and disk
+writes. The most common case, a two-way sync with no changes on either
+side, no longer rewrites any meta data files. CPU consumption during
+local sync was reduced to one third by exchanging messages via shared
+memory instead of internal D-Bus. Redundant vCard decode/encode on the
+sending side of PBAP and too agressive flushing of meta data during a
+normal sync were removed. Altogether, sending 1000 contacts with photo
+data in a refresh-from-server local sync takes only one sixth of the
+CPU cycles compared to 1.3.99.3 (measured with valgrind's callgrind on
+x86_64).
+
+Based on community feedback and discussions, the terminology used in
+SyncEvolution for configuration, local sync and database access was
+revised. Some usability issues with setting up access to databases
+were addressed. For Google, the obsolete SyncML config template was
+removed and CalDAV/CardDAV were merged into a single "Google"
+template.
+
+Using Google Calendar/Contacts with OAuth2 authentication on a
+headless server becomes a bit easier: it is possible to set up access
+on one system with a GUI using either gSSO or GNOME Online Accounts,
+then take the OAuth2 refresh token and use it in SyncEvolution on a
+different system. See
+http://cgit.freedesktop.org/SyncEvolution/syncevolution/tree/src/backends/oauth2/README
+
+Some issues accessing Apple iCloud were fixed such that CardDAV works
+by just giving SyncEvolution username=foobar@icloud.com and password. No
+throrough testing was done, so iCloud support is still experimental.
+
+The PIM Manager API also supports Google Contact syncing. Some
+problems with suspending a PBAP sync were fixed. Suspend/abort can
+be tested with the sync.py example.
+
+The EDS memo backend is able to switch between syncing in plain
+text and iCalendar 2.0 VJOURNAL automatically.
+
+
+Details:
+
+* oauth2: new backend using libsoup/libcurl
+
+  New backend implements identity provider for obtaining OAuth2 access
+  token for systems without HMI support.
+  Access token is obtained by making direct HTTP request to OAuth2 server
+  and using refresh token obtained by user in some other way.
+  New provider automatically updates stored refresh token when OAuth2
+  server is issuing new one.
+
+* PBAP: use raw text items
+
+  This avoids the redundant parse/generate step on the sending
+  side of the PBAP sync.
+
+* datatypes: raw text items with minimal conversion (FDO #52791)
+
+  When using "raw/text/calendar" or "raw/text/vcard" as SyncEvolution
+  "databaseFormat", all parsing and conversion is skipped. The backend's
+  data is identical to the item data in the engine. Finding duplicates
+  in a slow sync is very limited when using these types because the entire
+  item data must match exactly.
+
+  This is useful for the file backend when the goal is to store an exact copy
+  of what a peer has or for limited, read-only backends (PBAP). The downside
+  of using the raw types is that the peer is not given accurate information
+  about which vCard or iCalendar properties are supported, which may cause
+  some peers to not send all data.
+
+* engine: flush map items less frequently
+
+  The Synthesis API does not say explicitly, but in practice all map
+  items get updated in a tight loop. Rewriting the m_mappingNode (case
+  insensitive string comparisons) and serialization to disk
+  (std::ostrstream) consume a significant amount of CPU cycles and cause
+  extra disk writes that can be avoided by making some assumptions about
+  the sequence of API calls and flushing only once.
+
+* SoupTransport: drop CA file check
+
+  It used to be necessary to specify a CA file for libsoup to enable SSL
+  certificate checking. Nowadays libsoup uses the default CA store
+  unless told otherwise, so the check in SyncEvolution became
+  obsolete. However, now there is a certain risk that no SSL checking is
+  done although the user asked for it (when libsoup is not recent enough
+  or compiled correctly).
+
+* local sync: exchange SyncML messages via shared memory
+
+  Encoding/decoding of the uint8_t array in D-Bus took a surprisingly
+  large amount of CPU cycles relative to the rest of the SyncML message
+  processing. Now the actual data resides in memory-mapped temporary
+  files and the D-Bus messages only contain offset and size inside these
+  files. Both sides use memory mapping to read and write directly.
+
+  For caching 1000 contacts with photos on a fast laptop, total sync
+  time roughly drops from 6s to 3s.
+
+  To eliminate memory copies, memory handling in libsynthesis or rather,
+  libsmltk is tweaked such that it allocates the buffer used for SyncML
+  message data in the shared memory buffer directly. This relies on
+  knowledge of libsmltk internals, but those shouldn't change and if they
+  do, SyncEvolution will notice ("unexpected send buffer").
+
+* local sync: avoid updating meta data when nothing changed
+
+  The sync meta data (sync anchors, client change log) get updated after
+  a sync even if nothing changed and the existing meta data could be
+  used again. This can be skipped for local sync, because then
+  SyncEvolution can ensure that both sides skip updating the meta
+  data. With a remote SyncML server that is not possible and thus
+  SyncEvolution has to update its data.
+
+  This optimization is only used for local syncs with one source.  It is
+  based on the observation that when the server side calls
+  SaveAdminData, the client has sent its last message and the sync is
+  complete. At that point, SyncEvolution can check whether anything has
+  changed and if not, skip saving the server's admin data and stop the
+  sync without sending the real reply to the client.
+
+  Instead the client gets an empty message with "quitsync" as content
+  type. Then it takes shortcuts to close down without finalizing the
+  sync engine, because that would trigger writing of meta data
+  changes. The server continues its shutdown normally.
+
+  This optimization is limited to syncs with a single source, because
+  the assumption about when aborting is possible is harder to verify
+  when multiple sources are involved.
+
+* PIM: include CardDAV in CreatePeer()
+
+  This adds "protocol: CardDAV" as a valid value, with corresponding
+  changes to the interpretation of some existing properties and some new
+  ones. The API itself is not changed.
+
+  Suspending a CardDAV sync is possible. This freezes the internal
+  SyncML message exchange, so data exchange with the CardDAV server may
+  continue for a while after SuspendPeer().
+
+  Photo data is always downloaded immediately. The "pbap-sync" flag
+  in SyncPeerWithFlags() has no effect.
+
+  Syncing can be configured to be one-way (local side is read-only
+  cache) or two-way (local side is read/write). Meta data must be
+  written either way, to speed up caching or allow two-way syncing. The
+  most common case (no changes on either side) will have to be optimized
+  such that existing meta data is not touched and thus no disk writes
+  occur.
+
+* PIM: handle SuspendPeer() before and after transfer (FDO #82863)
+
+  A SuspendPeer() only succeeded while the underlying Bluetooth transfer
+  was active. Outside of that, Bluez errors caused SyncEvolution to
+  attempt a cancelation of the transfer and stopped the sync.
+
+  When the transfer was still queueing, obexd returns
+  org.bluez.obex.Error.NotInProgress. This is difficult to handle for
+  SyncEvolution: it cannot prevent the transfer from starting and has to
+  let it become active before it can suspend the transfer. Canceling
+  would lead to difficult to handle error cases (like partially parsed
+  data) and therefore is not done.
+
+  The Bluez team was asked to implement suspending of queued transfers
+  (see "org.bluez.obex.Transfer1 Suspend/Resume in queued state" on
+  linux-bluetooth@vger.kernel.org), so this case might not happen
+  anymore with future Bluez.
+
+  When the transfer completes before obexd processes the Suspend(),
+  org.freedesktop.DBus.Error.UnknownObject gets returned by
+  obexd. SyncEvolution can ignore errors which occur after the active
+  transfer completed. In addition, it should prevent starting the next
+  one. This may be relevant for transfer in chunks, although the sync
+  engine will also stop asking for data and thus typically no new
+  transfer gets triggered anyway.
+
+* PIM: add suspend/resume/abort to sync.py
+
+  CTRL-C while waiting for the end of a sync causes an interactive
+  prompt to appear where one can choose been suspend/resume/abort and
+  continuing to wait. CTRL-C again in the prompt aborts the script.
+
+* PIM: fix sync.py --sync-flags
+
+  The help text used single quotes for the JSON example instead of
+  the required double quotes. Running without --sync-flags was broken
+  because of trying to parse the empty string as JSON.
+
+* command line: revise usability checking of datastores
+
+  When configuring a new sync config, the command line checks whether a
+  datastore is usable before enabling it. If no datastores were listed
+  explicitly, only the usable ones get enabled. If unusable datastores
+  were explicitly listed, the entire configure operation fails.
+
+  This check was based on listing databases, which turned out to be too
+  unspecific for the WebDAV backend: when "database" was set to some URL
+  which is good enough to list databases, but not a database URL itself,
+  the sources where configured with that bad URL.
+
+  Now a new SyncSource::isUsable() operation is used, which by default
+  just falls back to calling the existing Operations::m_isEmpty. In
+  practice, all sources either check their config in open() or the
+  m_isEmpty operation, so the source is usable if no error is
+  enountered.
+
+  For WebDAV, the usability check is skipped because it would require
+  contacting a remote server, which is both confusing (why does a local
+  configure operation need the server?) and could fail even for valid
+  configs (server temporarily down). The check was incomplete anyway
+  because listing databases gave a fixed help text response when no
+  credentials were given. For usability checking that should have
+  resulted in "not usable" and didn't.
+
+  The output during the check was confusing: it always said "listing
+  databases" without giving a reason why that was done. The intention
+  was to give some feedback while a potentially expensive operation
+  ran. Now the isUsable() method itself prints "checking usability" if
+  (and only if!) such a check is really done.
+
+  Sometimes datastores were checked even when they were about to be
+  configure as "disabled" already. Now checking such datastores is
+  skipped.
+
+* EDS: memo syncing as iCalendar 2.0 (FDO #52714)
+
+  When syncing memos with a peer which also supports iCalendar 2.0 as
+  data format, the engine will now pick iCalendar 2.0 instead of
+  converting to/from plain text. The advantage is that some additional
+  properties like start date and categories can also be synchronized.
+
+  The code is a lot simpler, too, because the EDS specific iCalendar 2.0
+  <-> text conversion code can be removed.
+
+* datatypes: text/calendar+plain revised heuristic
+
+  When sending a VEVENT, DESCRIPTION was set to the SUMMARY if empty. This may
+  have been necessary for some peers, but for notes (= VJOURNAL) we don't know
+  that (hasn't been used in the past) and don't want to alter the item
+  unnecessarily, so skip that part and allow empty DESCRIPTION.
+
+  When receiving a plain text note, the "text/calendar+plain" type
+  used to store the first line as summary and the rest as description.
+  This may be correct in some cases and wrong in others.
+
+  The EDS backend implemented a different heuristic: there the first
+  line is copied into the summary and stays in the description. This
+  makes a bit more sense (the description alone is always enough to
+  understand the note). Therefore and to avoid behavioral changes
+  for EDS users when switching the EDS backend to use text/calendar+plain,
+  the engine now uses the same approach.
+
+* source -> datastore rename, improved terminology
+
+  The word "source" implies reading, while in fact access is read/write.
+  "datastore" avoids that misconception. Writing it in one word emphasizes
+  that it is single entity.
+
+  While renaming, also remove references to explicit --*-property
+  parameters. The only necessary use today is "--sync-property ?"
+  and "--datastore-property ?".
+
+  --datastore-property was used instead of the short --store-property
+  because "store" might be mistaken for the verb. It doesn't matter
+  that it is longer because it doesn't get typed often.
+
+  --source-property must remain valid for backward compatility.
+
+  As many user-visible instances of "source" as possible got replaced in
+  text strings by the newer term "datastore". Debug messages were left
+  unchanged unless some regex happened to match it.
+
+  The source code will continue to use the old variable and class names
+  based on "source".
+
+  Various documentation enhancements:
+    Better explain what local sync is and how it involves two sync
+    configs. "originating config" gets introduces instead of just
+    "sync config".
+
+    Better explain the relationship between contexts, sync configs,
+    and source configs ("a sync config can use the datastore configs in
+    the same context").
+
+    An entire section on config properties in the terminology
+    section. "item" added (Todd Wilson correctly pointed out that it was
+    missing).
+
+    Less focus on conflict resolution, as suggested by Graham Cobb.
+
+    Fix examples that became invalid when fixing the password
+    storage/lookup mechanism for GNOME keyring in 1.4.
+
+    The "command line conventions", "Synchronization beyond SyncML" and
+    "CalDAV and CardDAV" sections were updated. It's possible that the
+    other sections also contain slightly incorrect usage of the
+    terminology or are simply out-dated.
+
+* local sync: allow config name in syncURL=local://
+
+  Previously, only syncURL=local://@<context name> was allowed and used
+  the "target-config@context name" config as target side in the local
+  sync.
+
+  Now "local://config-name@context-name" or simply "local://config-name"
+  are also allowed. "target-config" is still the fallback if only a
+  context is give.
+
+  It also has one more special meaning: "--configure
+  target-config@google" will pick the "Google" template automatically
+  because it knows that the intention is to configure the target side
+  of a local sync. It does not know that when using some other name
+  for the config, in which case the template (if needed) must be
+  specified explicitly.
+
+  The process name in output from the target side now also includes the
+  configuration name if it is not the default "target-config".
+
+* Google: remove SyncML template, combine CalDAV/CardDAV
+
+  Google has turned off their SyncML server, so the corresponding
+  "Google Contacts" template became useless and needs to be removed. It
+  gets replaced by a "Google" template which combines the three
+  different URLs currently used by Google for CalDAV/CardDAV.
+
+  This new template can be used to configure a "target-config@google"
+  with default calendar and address book database already enabled. The
+  actual URL of these databases will be determined during the first
+  sync using them.
+
+  The template relies on the WebDAV backend's new capability to search
+  multiple different entries in the syncURL property for databases. To
+  avoid listing each calendar twice (once for the legacy URL, once with
+  the new one) when using basic username/password authentication, the
+  backend needs a special case for Google and detect that the legacy URL
+  does not need to be checked.
+
+* config: allow storing credentials for email address
+
+  When configuring a WebDAV server with username = email address and no
+  URL (which is possible if the server supports service discovery via
+  the domain in the email address), then storing the credentials in the
+  GNOME keyring used to fail with "cannot store password in GNOME
+  keyring, not enough attributes".
+
+  That is because GNOME keyring seemed to get confused when a network
+  login has no server name and some extra safeguards were added to
+  SyncEvolution to avoid this.
+
+  To store the credentials in the case above, the email address now gets
+  split into user and domain part and together get used to look up the
+  password.
+
+
 SyncEvolution 1.4.99.2 -> 1.4.99.3, 23.07.2014
 ==============================================
 
