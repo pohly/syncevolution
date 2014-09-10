@@ -1230,18 +1230,22 @@ std::string PbapSyncSource::getPeerMimeType() const
 void PbapSyncSource::getSynthesisInfo(SynthesisInfo &info,
                                       XMLConfigFragments &fragments)
 {
-    // We send vCards in either 2.1 or 3.0. The Synthesis engine
-    // handles both when parsing, so we don't have to be exact here.
-    info.m_native = "vCard21";
-    info.m_fieldlist = "contacts";
-    info.m_profile = "\"vCard\", 1";
-
-    // vCard 3.0 is the more sane format for exchanging with the
-    // Synthesis peer in a local sync, so use that by default.
-    std::string type = "text/vcard";
+    // Use vCard 3.0 with minimal conversion by default.
+    std::string type = "raw/text/vcard";
     SourceType sourceType = getSourceType();
     if (!sourceType.m_format.empty()) {
         type = sourceType.m_format;
+    }
+    if (type == "raw/text/vcard") {
+        // Raw mode.
+        info.m_native = "vCard30";
+        info.m_fieldlist = "Raw";
+        info.m_profile = "";
+    } else {
+        // Assume that it's something more traditional requiring parsing.
+        info.m_native = "vCard21";
+        info.m_fieldlist = "contacts";
+        info.m_profile = "\"vCard\", 1";
     }
     info.m_datatypes = getDataTypeSupport(type, sourceType.m_forceFormat);
 
