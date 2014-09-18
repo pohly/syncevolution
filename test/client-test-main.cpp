@@ -32,6 +32,7 @@
 #include <signal.h>
 #ifdef HAVE_VALGRIND_VALGRIND_H
 # include <valgrind/valgrind.h>
+# include <valgrind/memcheck.h>
 #endif
 #ifdef HAVE_EXECINFO_H
 # include <execinfo.h>
@@ -65,6 +66,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 
 #include <string>
@@ -99,7 +101,9 @@ public:
     ClientOutputter(CppUnit::TestResultCollector *result, std::ostream &stream) :
         CompilerOutputter(result, stream) {}
     void write() {
-        CompilerOutputter::write();
+        // Suppress writing useless test summary. We run only one test per process,
+        // so this Outputter would not show the overall results.
+        // CompilerOutputter::write();
     }
 };
 
@@ -269,12 +273,48 @@ static void printTests(CppUnit::Test *test, int indention)
     }
 }
 
+static void addEnabledTests(CppUnit::Test *test, bool parentEnabled,
+                            char **beginEnabled, char **endEnabled,
+                            std::list<std::string> &result)
+{
+    if (!test) {
+        return;
+    }
+
+    std::string name = test->getName();
+    bool enabled = false;
+    if (parentEnabled) {
+        enabled = true;
+    } else {
+        for (char **selected = beginEnabled;
+             selected < endEnabled;
+             selected++) {
+            if (name == *selected) {
+                enabled = true;
+                break;
+            }
+        }
+    }
+
+    if (dynamic_cast<CppUnit::TestLeaf *>(test)) {
+        if (enabled) {
+            result.push_back(name);
+        }
+    } else {
+        for (int i = 0; i < test->getChildTestCount(); i++) {
+            addEnabledTests(test->getChildTestAt(i), enabled,
+                            beginEnabled, endEnabled,
+                            result);
+        }
+    }
+}
+
 static void handler(int sig)
 {
     void *buffer[100];
     int size;
 
-    fprintf(stderr, "\ncaught signal %d\n", sig);
+    fprintf(stderr, "client-test %ld: \ncaught signal %d\n", (long)getpid(), sig);
     fflush(stderr);
 #ifdef HAVE_EXECINFO_H
     size = backtrace(buffer, sizeof(buffer)/sizeof(buffer[0]));
@@ -338,20 +378,75 @@ int main(int argc, char* argv[])
   }
 
   try {
-      // Run the tests.
+      // Find all enabled tests.
+      std::list<std::string> tests;
       if (argc <= 1) {
-          // all tests
-          runner.run("", false, true, false);
+          // All tests.
+          addEnabledTests(suite, true, NULL, NULL, tests);
       } else {
-          // run selected tests individually
-          for (int test = 1; test < argc; test++) {
-              runner.run(argv[test], false, true, false);
+          // Some selected tests.
+          addEnabledTests(suite, false, argv + 1, argv + argc, tests);
+      }
+
+      bool failed = false;
+      if (tests.size() == 1) {
+          // If one test, run it ourselves.
+          runner.run(tests.front(), false, true, false);
+          failed = syncListener.hasFailed();
+      } else {
+          // Otherwise act as test runner which invokes itself
+          // recursively for each test. This way we keep running
+          // even if one test crashes hard, valgrind can check
+          // each test individually and uses less memory.
+          BOOST_FOREACH (const std::string &name, tests) {
+#ifdef USE_SYSTEM
+              if (system(StringPrintf("%s %s", argv[0], name.c_str()).c_str())) {
+                  failed = true;
+              }
+#else
+              // Avoid the intermediate shell process that system() uses and
+              // do better result reporting.
+              pid_t child = fork();
+              if (child > 0) {
+                  while (true) {
+                      int status;
+                      pid_t completed = waitpid(child, &status, 0);
+                      if (completed == -1) {
+                          perror("waitpid");
+                          failed = true;
+                      } else {
+                          if (WIFEXITED(status)) {
+                              int retcode = WEXITSTATUS(status);
+                              if (retcode != 0) {
+                                  printf("%s (%ld): failed with return code %d", name.c_str(), (long)child, retcode);
+                                  failed = true;
+                              }
+                          } else if (WIFSIGNALED(status)) {
+                              printf("%s (%ld): killed by signal %d", name.c_str(), (long)child, WTERMSIG(status));
+                              failed = true;
+                          }
+                          fflush(stdout);
+                          break;
+                      }
+                  }
+              } else if (child == -1) {
+                  perror("fork");
+              } else {
+                  // Use the test name also as name of the process.
+                  execlp(argv[0], name.c_str(), name.c_str(), (char *)NULL);
+                  perror("execlp");
+                  _exit(1);
+              }
+#endif
           }
       }
 
       // Return error code 1 if the one of test failed.
+      if (tests.size() > 1) {
+          printf("%s", failed ? "FAILED" : "OK");
+      }
       ClientTest::shutdown();
-      return syncListener.hasFailed() ? 1 : 0;
+      return failed;
   } catch (invalid_argument e) {
       // Test path not resolved
       std::cout << std::endl
