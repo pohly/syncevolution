@@ -983,7 +983,8 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
             // time. Ignore clipped or suspended transfers, they are
             // not representative. Also avoid completely bogus
             // observations.
-            if (!m_wasSuspended &&
+            if (m_pullParams.m_timePerChunk > 0 &&
+                !m_wasSuspended &&
                 m_transferMaxCount == m_desiredMaxCount &&
                 m_lastTransferRate > 0 &&
                 m_lastContactSizeAverage > 0) {
