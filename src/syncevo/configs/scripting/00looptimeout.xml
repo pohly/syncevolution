@@ -1,0 +1,2 @@
+<!-- disable endless loop prevention, shouldn't be needed and may abort prematurely -->
+<looptimeout>0</looptimeout>
