@@ -1291,7 +1291,7 @@ void Manager::doSetPeer(const boost::shared_ptr<Session> &session,
             // Local sync with files on the target side.
             // Format is hard-coded to vCard 3.0.
             source->setDatabaseID("file://" + address);
-            source->setDatabaseFormat("text/vcard");
+            source->setDatabaseFormat("raw/text/vcard");
             source->setBackend("file");
         }
         config->flush();
