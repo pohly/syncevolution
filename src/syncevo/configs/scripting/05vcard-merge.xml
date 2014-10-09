@@ -14,6 +14,9 @@
      winningchanged = 0;
      loosingchanged = 0;
 
+     STRING ignorefields;
+     ignorefields = "";
+
      if (SESSIONVAR("keepPhotoData") &&
          WINNING.PHOTO == EMPTY &&
          LOOSING.PHOTO != EMPTY) {
@@ -53,6 +56,41 @@
        LOOSING.PHOTO_VALUE = EMPTY;
        LOOSING.PHOTO_TYPE = EMPTY;
        LOOSING.PHOTO = EMPTY;
+     }
+
+     // In cache mode, we don't care about the order of entries, so
+     // we do our own relaxed comparison and tell the engine to ignore
+     // fields if the only change is in the ordering.
+     if (CACHEDATA()) {
+       ignorefields = ignorefields + RELAXEDCOMPARE("TEL", "", "TEL_FLAGS", "TEL_SLOT", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("XDATE", "", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("EMAIL", "", "EMAIL_FLAGS", "EMAIL_SLOT", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("WEB", "", "WEB_FLAGS", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("CALURI");
+       ignorefields = ignorefields + RELAXEDCOMPARE("FBURL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("BLOGURL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("VIDEOURL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("RELATEDNAMES", "", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("IMPP", "", "IMPP_SERVICE", "IMPP_SLOT", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("AIM_HANDLE", "", "AIM_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("GADUGADU_HANDLE", "", "GADUGADU_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("GROUPWISE_HANDLE", "", "GROUPWISE_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("ICQ_HANDLE", "", "ICQ_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("JABBER_HANDLE", "", "JABBER_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("MSN_HANDLE", "", "MSN_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("YAHOO_HANDLE", "", "YAHOO_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("SKYPE_HANDLE", "", "SKYPE_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("SIP_HANDLE", "", "SIP_SLOT");
+       ignorefields = ignorefields + RELAXEDCOMPARE("EMAIL", "", "EMAIL_FLAGS", "EMAIL_SLOT", "LABEL");
+       ignorefields = ignorefields + RELAXEDCOMPARE("ADR", "ADR_STREET", "ADR_ADDTL", "ADR_STREET_FLAGS", "ADR_POBOX", "ADR_CITY", "ADR_REG", "ADR_ZIP", "ADR_COUNTRY", "", "LABEL");
+
+       // Always ignore the label. Otherwise reordering will cause unnecessary
+       // writes. We check for reordering more selectively above, but because
+       // the LABEL field is shared, we cannot do the same for it.
+       // The downside is that changes in just the label of an entry will not
+       // cause an update of the cache. Some other value must be modified, too,
+       // to trigger a write.
+       ignorefields = ignorefields + " LABEL";
      }
 
      // When running in caching mode, we end up executing the merge script,
@@ -379,5 +417,5 @@
      if (loosingchanged) { SETLOOSINGCHANGED(1); }
 
      // Continue merge.
-     MERGEFIELDS(mode);
+     MERGEFIELDS(mode, ignorefields);
    ]]></macro>
