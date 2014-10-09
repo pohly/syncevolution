@@ -127,34 +127,6 @@
           i = i - 1;
        }
 
-       i = SIZE(LOOSING.WEB) - 1;
-       while (i >= 0) {
-          val = LOOSING.WEB[i];
-          if (val != EMPTY &&
-              !CONTAINS(WINNING.WEB, val)) {
-             num = SIZE(WINNING.LABEL);
-             WINNING.WEB[num] = val;
-             WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
-             WINNING.LABEL[num] = LOOSING.LABEL[i];
-             winningchanged = 1;
-          }
-          i = i - 1;
-       }
-
-       i = SIZE(LOOSING.WEB) - 1;
-       while (i >= 0) {
-          val = LOOSING.WEB[i];
-          if (val != EMPTY &&
-              !CONTAINS(WINNING.WEB, val)) {
-             num = SIZE(WINNING.LABEL);
-             WINNING.WEB[num] = val;
-             WINNING.WEB_FLAGS[num] = LOOSING.WEB_FLAGS[i];
-             WINNING.LABEL[num] = LOOSING.LABEL[i];
-             winningchanged = 1;
-          }
-          i = i - 1;
-       }
-
        i = SIZE(LOOSING.CALURI) - 1;
        while (i >= 0) {
           val = LOOSING.CALURI[i];
@@ -198,18 +170,6 @@
               !CONTAINS(WINNING.VIDEOURL, val)) {
              num = SIZE(WINNING.VIDEOURL);
              WINNING.VIDEOURL[num] = val;
-             winningchanged = 1;
-          }
-          i = i - 1;
-       }
-
-       i = SIZE(LOOSING.CALURI) - 1;
-       while (i >= 0) {
-          val = LOOSING.CALURI[i];
-          if (val != EMPTY &&
-              !CONTAINS(WINNING.CALURI, val)) {
-             num = SIZE(WINNING.CALURI);
-             WINNING.CALURI[num] = val;
              winningchanged = 1;
           }
           i = i - 1;
