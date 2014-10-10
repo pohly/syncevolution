@@ -1009,6 +1009,14 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
             logging.printf("starting to kill unresponsive processes at %s: %s", time.asctime(), str(children))
         killed = []
         for pid, name in children.iteritems():
+            stacktrace = subprocess.Popen(['gdb',
+                                           '-ex', 'thread apply all bt',
+                                           '-ex', 'detach',
+                                           '-p', '%d' % pid],
+                                          stdout=subprocess.PIPE,
+                                          stderr=subprocess.STDOUT)
+            (out, err) = stacktrace.communicate()
+            logging.printf("stack backtrace for %d %s: %s", pid, name, out)
             if TryKill(pid, signal.SIGKILL):
                 logging.printf("killed %d %s", pid, name)
                 killed.append("%d %s" % (pid, name))
