@@ -6042,9 +6042,11 @@ void SyncTests::testTimeout()
     close(fd);
     if (!skipped) {
         CT_ASSERT_EQUAL(STATUS_TRANSPORT_FAILURE, report.getStatus());
-        CT_ASSERT(end - start >= 19);
-        CT_ASSERT(end - start < 40); // needs to be sufficiently larger than 20s timeout
-                                     // because under valgrind the startup time is considerable
+        std::string delta = StringPrintf("%lds", (long)(end - start));
+        CT_ASSERT_MESSAGE(delta, end - start >= 19);
+        // needs to be sufficiently larger than 20s timeout
+        // because under valgrind the startup time is considerable
+        CT_ASSERT_MESSAGE(delta, end - start < 50);
     }
 }
 
