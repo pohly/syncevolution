@@ -2147,6 +2147,8 @@ test = SyncEvolutionTest("filekde",
                          "CLIENT_TEST_PEER_CAN_RESTART=1 "
 
                          "CLIENT_TEST_FAILURES="
+                         # Neither client nor server detect duplicates based on UID/RECURRENCE-ID.
+                         "Client::Sync::file_event::testAddBothSides.*,"
                          # Different vcard flavor, need different test data (just as
                          # in testImport).
                          "Client::Sync::file_contact::testItems,"
