@@ -1,0 +1,146 @@
+@@ -34,16 +34,6 @@
+ 
+ BEGIN:VCARD
+ VERSION:3.0
+-UID:unique-id-user12
+-NICKNAME:user12
+-NOTE:ampersand entity &amp\; less-than entity &lt\;
+-FN:xml entities
+-N:xml;entities;;;
+-X-EVOLUTION-FILE-AS:xml\, entities
+-END:VCARD
+-
+-BEGIN:VCARD
+-VERSION:3.0
+ UID:unique-id-user13
+ NICKNAME:user13
+ NOTE:a colon is not a special character so here it comes : and not quoting necessary
+@@ -89,59 +79,6 @@
+ ROLE:
+ X-EVOLUTION-MANAGER:
+ X-EVOLUTION-ASSISTANT:
+-UID:unique-id-user2
+-NICKNAME:user2
+-X-EVOLUTION-SPOUSE:
+-NOTE:This user tests some of the advanced aspects of vcards:\n- non-ASCII c
+- haracters (with umlauts in the name)\n- line break (in this note and the
+-  mailing address)\n- long lines (in this note)\n- special characters (in
+-  this note)\n- tabs (in this note)\n\nVery long line\, very very long th
+- is time... still not finished... blah blah blah blah blah 1 2 3 4 5 6 7 
+- 8 9 10 11 12 13 14 15 16\n\ncomma \,\ncolon :\nsemicolon \;\nbackslash 
+- \\\n\nThe same\, in the middle of a line:\ncomma \, comma\ncolon : col
+- on\nsemicolon \; semicolon\nbackslash \\ backslash\n\nA tab 	tab done\n	
+- line starts with tab
+-FN:Umlaut Ä Ö Ü ß
+-N:Ü;Ä;Ö;Umlaut;ß
+-X-EVOLUTION-FILE-AS:Ü\, Ä
+-CATEGORIES:Business
+-X-EVOLUTION-BLOG-URL:
+-CALURI:
+-FBURL:
+-X-EVOLUTION-VIDEO-URL:
+-X-MOZILLA-HTML:FALSE
+-ADR;TYPE=HOME:test 5;Line 2;Umlaut Ä in Line 1;test 1;test 3;test 2;test 4
+-LABEL;TYPE=HOME:Umlaut Ä in Line 1\nLine 2\n\ntest 1\, test 3\ntest 2\ntest 5\ntest 4
+-END:VCARD
+-
+-BEGIN:VCARD
+-VERSION:3.0
+-URL:
+-TITLE:
+-ROLE:
+-X-EVOLUTION-MANAGER:
+-X-EVOLUTION-ASSISTANT:
+-UID:unique-id-user8
+-NICKNAME:user8
+-X-EVOLUTION-SPOUSE:
+-NOTE:Here are some special characters: comma \, colon : semicolon \;
+-FN:special characters
+-N:characters;special;;;
+-X-EVOLUTION-FILE-AS:characters\, special
+-X-EVOLUTION-BLOG-URL:
+-CALURI:
+-FBURL:
+-X-EVOLUTION-VIDEO-URL:
+-X-MOZILLA-HTML:FALSE
+-END:VCARD
+-
+-BEGIN:VCARD
+-VERSION:3.0
+-URL:
+-TITLE:
+-ROLE:
+-X-EVOLUTION-MANAGER:
+-X-EVOLUTION-ASSISTANT:
+ UID:unique-id-user7
+ NICKNAME:user7
+ X-EVOLUTION-SPOUSE:
+@@ -171,8 +108,6 @@
+ UID:unique-id-user1
+ NICKNAME:user1
+ BDAY:2006-01-08
+-X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
+-X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
+ X-EVOLUTION-ANNIVERSARY:2006-01-09
+ X-EVOLUTION-SPOUSE:Joan Doe
+ NOTE:This is a test case which uses almost all Evolution fields.
+@@ -182,8 +117,6 @@
+ CATEGORIES:TEST
+ X-EVOLUTION-BLOG-URL:web log
+ GEO:30.12;-130.34
+-CALURI:calender
+-FBURL:free/busy
+ X-EVOLUTION-VIDEO-URL:chat
+ X-MOZILLA-HTML:TRUE
+ ADR;TYPE=WORK:Test Box #2;;Test Drive 2;Test Town;Upper Test County;12346;O
+@@ -197,10 +130,10 @@
+ ADR:Test Box #3;;Test Drive 3;Test Megacity;Test County;12347;New Testonia
+ LABEL;TYPE=OTHER:Test Drive 3\nTest Megacity\, Test County\n12347\nTest Box
+   #3\nNew Testonia
+-EMAIL;TYPE=WORK;X-EVOLUTION-UI-SLOT=1:john.doe@work.com
+-EMAIL;TYPE=HOME;X-EVOLUTION-UI-SLOT=2:john.doe@home.priv
+-EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=3:john.doe@other.world
+-EMAIL;TYPE=OTHER;X-EVOLUTION-UI-SLOT=4:john.doe@yet.another.world
++EMAIL:john.doe@work.com
++EMAIL:john.doe@home.priv
++EMAIL:john.doe@other.world
++EMAIL:john.doe@yet.another.world
+ TEL;TYPE=work;TYPE=Voice;X-EVOLUTION-UI-SLOT=1:business 1
+ TEL;TYPE=homE;TYPE=VOICE;X-EVOLUTION-UI-SLOT=2:home 2
+ TEL;TYPE=CELL;X-EVOLUTION-UI-SLOT=3:mobile 3
+@@ -217,7 +150,6 @@
+ X-JABBER:JABBER DOE
+ X-MSN:MSN DOE
+ X-SKYPE:SKYPE DOE
+-X-SIP:SIP DOE
+ END:VCARD
+ 
+ BEGIN:VCARD
+@@ -288,27 +220,6 @@
+ END:VCARD
+ 
+ BEGIN:VCARD
+-VERSION:3.0
+-URL:
+-TITLE:
+-ROLE:
+-X-EVOLUTION-MANAGER:
+-X-EVOLUTION-ASSISTANT:
+-UID:unique-id-user6
+-NICKNAME:user6
+-X-EVOLUTION-SPOUSE:
+-NOTE:The first name is "First \; special \;".
+-FN:Mr. First \; special \; middle Last
+-N:Last;First \; special \;;middle;Mr.;
+-X-EVOLUTION-FILE-AS:Last\, First \; special \;
+-X-EVOLUTION-BLOG-URL:
+-CALURI:
+-FBURL:
+-X-EVOLUTION-VIDEO-URL:
+-X-MOZILLA-HTML:FALSE
+-END:VCARD
+-
+-BEGIN:VCARD
+ VERSION:3.0
+ URL:
+ TITLE:
