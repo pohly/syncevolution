@@ -98,6 +98,7 @@ my $radicale = $server =~ /radicale/;
 my $zimbra = $server =~ /zimbra/;
 my $evolution = $client =~ /evolution/;
 my $addressbook = $client =~ /addressbook/;
+my $akonadi = $server =~ /kde/;
 
 sub Usage {
   print "$0 <vcards.vcf\n";
@@ -741,6 +742,15 @@ sub NormalizeItem {
     if ($googleeas || $exchange) {
         # properties not supported by ActiveSync and/or activesyncd
         s/^(GEO)(;[^:;\n]*)*:.*\r?\n?//gm;
+    }
+
+    if ($akonadi) {
+        # Akonadi adds empty GEO propery....
+        s/^(GEO)(;[^:;\n]*)*:0+\.0+;0+\.0+\r?\n?//gm;
+        # ... and rounds other values.
+        s/^(GEO(?:;[^:;\n]*)*):([-+]?\d+)\.\d+;([-+]?\d+)\.\d+/$1:$2;$3/gm;
+        # does not preserve X-EVOLUTION-UI-SLOT=
+        s/^(\w+)([^:\n]*);X-EVOLUTION-UI-SLOT=\d+/$1$2/mg;
     }
 
     if ($googleeas || $exchange) {
