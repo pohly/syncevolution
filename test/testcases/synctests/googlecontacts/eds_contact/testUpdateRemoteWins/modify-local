@@ -14,7 +14,7 @@ for i in $IN/*; do
    # The second contact will also get modified locally.
    # Add a different BDAY than the peer.
    perl -e '$_ = join("", <>); if (/John [23] Doe/) {' \
-       -e 's/primary 8/primary 80/;' \
+       -e 's/primary 8/primary 8xx/;' \
        -e 's/END:VCARD/BDAY:2006-01-01\r\nEMAIL:new local email\r\nEND:VCARD/;' \
        -e 'print;' \
        -e '}' \

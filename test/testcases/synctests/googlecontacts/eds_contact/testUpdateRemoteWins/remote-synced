@@ -21,7 +21,7 @@ TEL;TYPE=FAX,WORK:businessfax 4
 TEL;TYPE=FAX,HOME:homefax 5
 TEL;TYPE=PAGER:pager 6
 TEL;TYPE=CAR:car 7
-TEL;TYPE=PREF:primary 80
+TEL;TYPE=PREF:primary 8xx
 EMAIL;TYPE=WORK:john.doe@work.com
 EMAIL;TYPE=HOME:john.doe@home.priv
 EMAIL:john.doe@other.world
@@ -133,7 +133,7 @@ TEL;TYPE=FAX,WORK:businessfax 4
 TEL;TYPE=FAX,HOME:homefax 5
 TEL;TYPE=PAGER:pager 6
 TEL;TYPE=CAR:car 7
-TEL;TYPE=PREF:primary 80
+TEL;TYPE=PREF:primary 8xx
 EMAIL;TYPE=WORK:john.doe@work.com
 EMAIL;TYPE=HOME:john.doe@home.priv
 EMAIL:john.doe@other.world
@@ -245,7 +245,7 @@ TEL;TYPE=FAX,WORK:businessfax 4
 TEL;TYPE=FAX,HOME:homefax 5
 TEL;TYPE=PAGER:pager 6
 TEL;TYPE=CAR:car 7
-TEL;TYPE=PREF:primary 80
+TEL;TYPE=PREF:primary 8xx
 EMAIL;TYPE=WORK:john.doe@work.com
 EMAIL;TYPE=HOME:john.doe@home.priv
 EMAIL:john.doe@other.world

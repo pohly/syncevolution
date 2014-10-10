@@ -20,7 +20,7 @@ for i in $IN/*; do
    #
    # Each -e generates a line break, so no \n is necessary inside the expanded vCard.
    perl -e '$_ = join("", <>); if (/John [12] Doe/) {' \
-       -e 's/primary 8/primary 80/;' \
+       -e 's/primary 8/primary 8xx/;' \
        -e 's!END:VCARD!BDAY:2006-01-08\r' \
        -e 'TEL;TYPE=HOME:new remote tel 1\r' \
        -e 'tel2.TEL:new remote tel 2\r' \
