@@ -815,7 +815,9 @@ XDG root.
         self.manager.Start()
         self.assertEqual("last/first", self.manager.GetSortOrder())
 
-    @timeout(os.environ.get('TESTPIM_TEST_SYNC_TESTCASES', False) and 300000 or 300)
+    @timeout(os.environ.get('TESTPIM_TEST_SYNC_TESTCASES', False) and 300000 or
+             usingValgrind() and 3000 or
+             300)
     @property("snapshot", "simple-sort")
     def testSync(self):
         '''TestContacts.testSync - test caching of a dummy peer which uses a real phone or a local directory as fallback'''
