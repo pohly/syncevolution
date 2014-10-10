@@ -3128,12 +3128,14 @@ void SyncTests::doCopy() {
     CT_ASSERT_NO_THROW(deleteAll());
     accessClientB->deleteAll();
 
+    bool allowLocalUpdate = getenv("CLIENT_TEST_MAY_COPY_BACK") != NULL;
+
     // insert into first database, copy to server
     CT_ASSERT_NO_THROW(allSourcesInsert());
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
-                       CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
+                       CheckSyncReport(0, allowLocalUpdate? -1 : 0, 0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // copy into second database
     accessClientB->doSync(__FILE__, __LINE__,
