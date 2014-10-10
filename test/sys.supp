@@ -1090,6 +1090,33 @@
    fun:g_dbus_connection_dispose
 }
 
+# ==18093== 1,934 (48 direct, 1,886 indirect) bytes in 1 blocks are definitely lost in loss record 8,719 of 8,806
+# ==18093==    at 0x4C2A5B0: calloc (vg_replace_malloc.c:618)
+# ==18093==    by 0x9C65A41: g_malloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==18093==    by 0x97275C8: _g_dbus_worker_send_message (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==18093==    by 0x9714D7A: g_dbus_connection_send_message_unlocked (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==18093==    by 0x9717AEF: g_dbus_connection_send_message (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==18093==    by 0x6AE9CE: GDBusCXX::EmitSignalHelper<false>::sendMsg(GDBusCXX::DBusMessagePtr const&) (gdbus-cxx-bridge.h:686)
+# ==18093==    by 0x69FC32: SyncEvo::Server::logOutput(GDBusCXX::DBusObject_t const&, SyncEvo::Logger::Level, std::string const&, std::string const&) (gdbus-cxx-bridge.h:905)
+# ==18093==    by 0x6C7F8F: SyncEvo::Logging2Server(SyncEvo::Server&, GDBusCXX::DBusObject_t const&, std::string const&, std::string const&, std::string const&) (session.cpp:974)
+# ==18093==    by 0x6D96E1: boost::detail::function::void_function_obj_invoker3<boost::_bi::bind_t<void, void (*)(SyncEvo::Server&, GDBusCXX::DBusObject_t const&, std::string const&, std::string const&, std::string const&), boost::_bi::list5<boost::reference_wrapper<SyncEvo::Server>, boost::_bi::value<char const*>, boost::arg<1>, boost::arg<2>, boost::arg<3> > >, void, std::string const&, std::string const&, std::string const&>::invoke(boost::detail::function::function_buffer&, std::string const&, std::string const&, std::string const&) (bind.hpp:525)
+# ==18093==    by 0x6DDC03: GDBusCXX::SignalWatch3<std::string, std::string, std::string>::internalCallback(_GDBusConnection*, char const*, char const*, char const*, char const*, _GVariant*, void*) (function_template.hpp:767)
+# ==18093==    by 0x97133A3: emit_signal_instance_in_idle_cb (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==18093==    by 0x9C5FDDC: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==18093==    by 0x9C601B7: g_main_context_iterate.isra.29 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==18093==    by 0x9C604E1: g_main_loop_run (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==18093==    by 0x6A0DAF: SyncEvo::Server::run() (server.cpp:543)
+# ==18093==    by 0x65FDE3: main (main.cpp:221)
+# ==18093== 
+{
+   pending log messages
+   Memcheck:Leak
+   ...
+   fun:_g_dbus_worker_send_message
+   ...
+   fun:*logOutput*
+}
+
 # ==658== 53,621 (1,512 direct, 52,109 indirect) bytes in 7 blocks are definitely lost in loss record 4,703 of 4,713
 # ==658==    at 0x4C29590: calloc (vg_replace_malloc.c:618)
 # ==658==    by 0x8815E18: g_malloc0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.3800.2)
@@ -2227,4 +2254,36 @@
    fun:*EDSRegistryLoader*dispose*
    ...
    fun:__run_exit_handlers
+}
+
+# ==168== 40 bytes in 1 blocks are definitely lost in loss record 2,829 of 5,551
+# ==168==    at 0x4C284C0: malloc (vg_replace_malloc.c:291)
+# ==168==    by 0x88A0FDB: _g_locale_get_charset_aliases.part.0 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x88A137E: _g_locale_charset_unalias (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x8835BF9: g_get_charset (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x887896A: g_strerror (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x82B1DE1: g_pollable_input_stream_default_read_nonblocking (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x82A3082: read_async_pollable (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x82A4AEA: g_input_stream_real_read_async (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x82A3D98: g_input_stream_read_async (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x8320E4B: _g_dbus_worker_do_read_unlocked (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x8320E7C: _g_dbus_worker_do_initial_read (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x8859DDC: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x885A1B7: g_main_context_iterate.isra.29 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x885A4E1: g_main_loop_run (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x8320EA5: gdbus_shared_thread_func (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
+# ==168==    by 0x8880AA4: g_thread_proxy (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
+# ==168==    by 0x9B040A3: start_thread (pthread_create.c:309)
+# ==168==    by 0xA620C2C: clone (clone.S:111)
+# ==168== 
+#
+# Seen in ./client-test SyncEvo::ForkExecTest::testNotFound on Debian Testing Jessie.
+{
+   g_locale_get_charset_aliases in g_strerror
+   Memcheck:Leak
+   fun:malloc
+   fun:_g_locale_get_charset_aliases*
+   fun:_g_locale_charset_unalias
+   fun:g_get_charset
+   fun:g_strerror
 }
