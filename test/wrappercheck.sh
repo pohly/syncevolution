@@ -33,6 +33,10 @@ while [ $# -gt 1 ] && [ "$1" != "--" ] ; do
             shift
             WAIT_FOR_DAEMON_OUTPUT="$1"
             ;;
+        --daemon-sleep)
+            shift
+            DAEMON_SLEEP="$1"
+            ;;
         *=*)
             ENV[${#ENV[*]}]="$1"
             ;;
@@ -67,6 +71,10 @@ fi
 
 if kill -0 $BACKGROUND_PID 2>/dev/null; then
     set +e
+    if [ "$DAEMON_SLEEP" ]; then
+        ( set +x; echo >&2 "*** 'sleep $DAEMON_SLEEP' for daemon to settle down" )
+        sleep $DAEMON_SLEEP
+    fi
     (set -x; "$@")
     RET=$?
     set -e
