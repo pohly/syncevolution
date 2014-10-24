@@ -54,6 +54,10 @@ while [ $# -gt 1 ] && [ "$1" != "--" ] ; do
 done
 shift
 
+if [ "$DAEMON_LOG" ] && [ "$WAIT_FOR_DAEMON_OUTPUT" ]; then
+    daemonmatches=$(grep -e "$WAIT_FOR_DAEMON_OUTPUT" "$DAEMON_LOG" | wc -l)
+fi
+
 ( set +x; echo >&2 "*** starting ${BACKGROUND[0]} as background daemon, output to ${DAEMON_LOG:-stderr}" )
 ( set -x; exec >>${DAEMON_LOG:-&2} 2>&1; exec env "${ENV[@]}" "${BACKGROUND[@]}" ) &
 BACKGROUND_PID=$!
@@ -61,7 +65,7 @@ PIDS+="$BACKGROUND_PID"
 
 if [ "$DAEMON_LOG" ] && [ "$WAIT_FOR_DAEMON_OUTPUT" ]; then
     ( set +x; echo >&2 "*** waiting for daemon to write '$WAIT_FOR_DAEMON_OUTPUT' into $DAEMON_LOG"
-        while ! grep -q -e "$WAIT_FOR_DAEMON_OUTPUT" "$DAEMON_LOG"; do
+        while [ $daemonmatches -eq $(grep -e "$WAIT_FOR_DAEMON_OUTPUT" "$DAEMON_LOG" | wc -l) ]; do
             if ! kill -0 $BACKGROUND_PID 2>/dev/null; then
                 break
             fi
