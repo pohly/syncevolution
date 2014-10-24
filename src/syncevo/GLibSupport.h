@@ -317,6 +317,7 @@ SE_GOBJECT_TYPE(GFileMonitor)
 SE_GLIB_TYPE(GMainLoop, g_main_loop)
 SE_GLIB_TYPE(GAsyncQueue, g_async_queue)
 SE_GLIB_TYPE(GHashTable, g_hash_table)
+SE_GLIB_TYPE(GIOChannel, g_io_channel)
 
 SE_BEGIN_CXX
 
