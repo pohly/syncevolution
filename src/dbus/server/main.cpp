@@ -45,15 +45,7 @@ using namespace GDBusCXX;
 
 namespace {
     GMainLoop *loop = NULL;
-    bool shutdownRequested = false;
     const char * const execName = "syncevo-dbus-server";
-
-void niam(int sig)
-{
-    shutdownRequested = true;
-    SuspendFlags::getSuspendFlags().handleSignal(sig);
-    g_main_loop_quit (loop);
-}
 
 bool parseDuration(int &duration, const char* value)
 {
@@ -189,10 +181,6 @@ int main(int argc, char **argv, char **envp)
         // process name for developers in this process, and not in
         // syncevo-dbus-helper.
         Logger::setProcessName("syncevo-dbus-server");
-
-        SE_LOG_DEBUG(NULL, "syncevo-dbus-server: catch SIGINT/SIGTERM in our own shutdown function");
-        signal(SIGTERM, niam);
-        signal(SIGINT, niam);
         boost::shared_ptr<SuspendFlags::Guard> guard = SuspendFlags::getSuspendFlags().activate();
 
         DBusErrorCXX err;
@@ -206,7 +194,7 @@ int main(int argc, char **argv, char **envp)
         // make this object the main owner of the connection
         boost::scoped_ptr<DBusObject> obj(new DBusObject(conn, "foo", "bar", true));
 
-        boost::shared_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, shutdownRequested, restart, conn, duration));
+        boost::shared_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, restart, conn, duration));
         server->setDBusLogLevel(levelDBus);
         server->activate();
 
@@ -225,13 +213,13 @@ int main(int argc, char **argv, char **envp)
 #endif
         server.reset();
         obj.reset();
-        guard.reset();
         SE_LOG_DEBUG(NULL, "flushing D-Bus connection");
         conn.flush();
         conn.reset();
         SE_LOG_INFO(NULL, "terminating, closing logging");
         syslogger.reset();
         redirect.reset();
+        guard.reset();
         SE_LOG_INFO(NULL, "terminating");
         return 0;
     } catch ( const std::exception &ex ) {

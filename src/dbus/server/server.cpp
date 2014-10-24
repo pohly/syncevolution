@@ -345,7 +345,6 @@ void Server::getSessions(std::vector<DBusObject_t> &sessions)
 }
 
 Server::Server(GMainLoop *loop,
-               bool &shutdownRequested,
                boost::shared_ptr<Restart> &restart,
                const DBusConnectionPtr &conn,
                int duration) :
@@ -354,7 +353,8 @@ Server::Server(GMainLoop *loop,
                      SessionCommon::SERVER_IFACE,
                      boost::bind(&Server::autoTermCallback, this)),
     m_loop(loop),
-    m_shutdownRequested(shutdownRequested),
+    m_suspendFlagsSource(0),
+    m_shutdownRequested(false),
     m_restart(restart),
     m_conn(conn),
     m_lastSession(time(NULL)),
@@ -411,8 +411,31 @@ Server::Server(GMainLoop *loop,
     m_configChangedSignal.connect(boost::bind(boost::ref(configChanged)));
 }
 
+gboolean Server::onSuspendFlagsChange(GIOChannel *source,
+                                      GIOCondition condition,
+                                      gpointer data) throw ()
+{
+    Server *me = static_cast<Server *>(data);
+    try {
+        if (!SuspendFlags::getSuspendFlags().isNormal()) {
+            me->m_shutdownRequested = true;
+            g_main_loop_quit(me->m_loop);
+            SE_LOG_INFO(NULL, "server shutting down because of SIGINT or SIGTERM");
+        }
+    } catch (...) {
+        Exception::handle();
+    }
+    // Keep watching, just in case that we catch multiple signals.
+    return TRUE;
+}
+
 void Server::activate()
 {
+    // Watch SuspendFlags fd to react to signals quickly.
+    int fd = SuspendFlags::getSuspendFlags().getEventFD();
+    GIOChannelCXX channel(g_io_channel_unix_new(fd), TRANSFER_REF);
+    m_suspendFlagsSource = g_io_add_watch(channel, G_IO_IN, onSuspendFlagsChange, this);
+
     // Activate our D-Bus object *before* interacting with D-Bus
     // any further. Otherwise GIO D-Bus will start processing
     // messages for us while we start up and reject them because
@@ -446,6 +469,9 @@ void Server::activate()
 Server::~Server()
 {
     // make sure all other objects are gone before destructing ourselves
+    if (m_suspendFlagsSource) {
+        g_source_remove(m_suspendFlagsSource);
+    }
     m_syncSession.reset();
     m_workQueue.clear();
     m_clients.clear();

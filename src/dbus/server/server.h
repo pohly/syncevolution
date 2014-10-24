@@ -64,7 +64,8 @@ class ServerLogger;
 class Server : public GDBusCXX::DBusObjectHelper
 {
     GMainLoop *m_loop;
-    bool &m_shutdownRequested;
+    guint m_suspendFlagsSource;
+    bool m_shutdownRequested;
     Timespec m_lastFileMod;
     boost::shared_ptr<SyncEvo::Restart> &m_restart;
     GDBusCXX::DBusConnectionPtr m_conn;
@@ -417,9 +418,13 @@ class Server : public GDBusCXX::DBusObjectHelper
     /** hooked into m_idleSignal, controls auto-termination */
     void onIdleChange(bool idle);
 
+    /** hooked up to SuspendFlags fd via g_io_add_watch */
+    static gboolean onSuspendFlagsChange(GIOChannel *source,
+                                         GIOCondition condition,
+                                         gpointer data) throw ();
+
 public:
     Server(GMainLoop *loop,
-           bool &shutdownRequested,
            boost::shared_ptr<Restart> &restart,
            const GDBusCXX::DBusConnectionPtr &conn,
            int duration);
