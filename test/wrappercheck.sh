@@ -11,6 +11,7 @@
 
 set -e
 set -x
+PS4='wrappercheck-$$ line ${LINENO}: '
 
 PIDS=
 
