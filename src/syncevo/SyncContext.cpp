@@ -2949,17 +2949,26 @@ void SyncContext::getConfigXML(bool isSync, string &xml, string &configname)
     substTag(xml, "maxobjsize", getMaxObjSize().get());
     if (m_serverMode) {
         UserIdentity id = getSyncUser();
-        Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
-        const string &user = cred.m_username;
-        const string &password = cred.m_password;
 
         /*
          * Do not check username/pwd if this local sync or over
-         * bluetooth transport. Need credentials for checking.
+         * bluetooth transport. Need credentials for checking,
+         * and IdentityProviderCredentials() throws an error when
+         * called for a provider which does not support plain
+         * credentials.
          */
-        if (!m_localSync &&
-            !boost::starts_with(getUsedSyncURL(), "obex-bt") &&
-            (!user.empty() || !password.empty())) {
+        bool withauth = !m_localSync && !boost::starts_with(getUsedSyncURL(), "obex-bt");
+        if (withauth) {
+            Credentials cred = IdentityProviderCredentials(id, getSyncPassword());
+            const string &user = cred.m_username;
+            const string &password = cred.m_password;
+
+            if (user.empty() && password.empty()) {
+                withauth = false;
+            }
+        }
+
+        if (withauth) {
             // require authentication with the configured password
             substTag(xml, "defaultauth",
                      "<requestedauth>md5</requestedauth>\n"
@@ -2967,6 +2976,11 @@ void SyncContext::getConfigXML(bool isSync, string &xml, string &configname)
                      "<autononce>yes</autononce>\n",
                      true);
         } else {
+            if (id.wasSet()) {
+                SE_LOG_WARNING(getConfigName(), "ignoring username %s, it is not needed",
+                               id.toString().c_str());
+            }
+
             // no authentication required
             substTag(xml, "defaultauth",
                      "<logininitscript>return TRUE</logininitscript>\n"
