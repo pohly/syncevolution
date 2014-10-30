@@ -90,6 +90,11 @@ public:
     {
         SE_LOG_DEBUG(NULL, "retrieving OAuth2 token, attempt %d", failedTokens);
 
+        // Refresh the access token instead of taking it from the cache when
+        // the previous access token was not accepted by the server.
+        g_hash_table_insert(m_sessionData, g_strdup("ForceTokenRefresh"),
+                            g_variant_ref_sink(g_variant_new_boolean(failedTokens == 1 ? TRUE : FALSE)));
+
         // Retry login if even the refreshed token failed.
         g_hash_table_insert(m_sessionData, g_strdup("UiPolicy"),
                             g_variant_ref_sink(g_variant_new_uint32(failedTokens >= 2 ? SIGNON_POLICY_REQUEST_PASSWORD : 0)));
