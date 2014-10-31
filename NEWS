@@ -1,3 +1,1009 @@
+SyncEvolution 1.4.1 -> 1.5, 31.10.2014
+======================================
+
+Based on community feedback and discussions, the terminology used in
+SyncEvolution for configuration, local sync and database access was
+revised. Some usability issues with setting up access to databases
+were addressed.
+
+Interoperability with WebDAV servers and in particular Google Contacts
+was enhanced considerably. Access to iCloud contacts was reported as
+working when using username=foobar@icloud.com and password, but is not
+formally tested. Syncing with iCloud calendars ran into a server
+limitation (reported as 17001498 "CalDAV REPORT drops calendar data")
+and needs further work (FDO #72133).
+
+Contact data gets converted to and from the format typically used by
+CardDAV servers, so now anniversary, spouse, manager, assistant and
+instant message information are exchanged properly. Custom labels get
+stored in EDS as extensions and no longer get lost when updating some
+other aspects of a contact. However, Evolution does not show custom
+labels and removes them when editing a property which has a custom
+label (BGO #730636).
+
+Scanning for CardDAV/CalDAV resources was enhanced. It now finds
+additional calendars with Google CalDAV.  For Google, the obsolete
+SyncML config template was removed and CalDAV/CardDAV were merged into
+a single "Google" template.
+
+Using Google Calendar/Contacts with OAuth2 authentication on a
+headless server becomes a bit easier: it is possible to set up access
+on one system with a GUI using either gSSO or GNOME Online Accounts,
+then take the OAuth2 refresh token and use it in SyncEvolution on a
+different system. See
+http://cgit.freedesktop.org/SyncEvolution/syncevolution/tree/src/backends/oauth2/README
+
+The PIM Manager API also supports Google Contact syncing. Some
+problems with suspending a PBAP sync were fixed. Suspend/abort can
+be tested with the sync.py example.
+
+Performance is better for local syncs and PBAP caching. The most
+common case, a two-way sync with no changes on either side, no longer
+rewrites any meta data files. CPU consumption during local sync was
+reduced to one third by exchanging messages via shared memory instead
+of internal D-Bus. Redundant vCard decode/encode on the sending side
+of PBAP and too agressive flushing of meta data during a normal sync
+were removed.
+
+The EDS memo backend is able to switch between syncing in plain
+text and iCalendar 2.0 VJOURNAL automatically.
+
+
+Details:
+
+* source -> datastore rename, improved terminology
+
+  The word "source" implies reading, while in fact access is read/write.
+  "datastore" avoids that misconception. Writing it in one word emphasizes
+  that it is single entity.
+
+  While renaming, also remove references to explicit --*-property
+  parameters. The only necessary use today is "--sync-property ?"
+  and "--datastore-property ?".
+
+  --datastore-property was used instead of the short --store-property
+  because "store" might be mistaken for the verb. It doesn't matter
+  that it is longer because it doesn't get typed often.
+
+  --source-property must remain valid for backward compatility.
+
+  As many user-visible instances of "source" as possible got replaced in
+  text strings by the newer term "datastore". Debug messages were left
+  unchanged unless some regex happened to match it.
+
+  The source code will continue to use the old variable and class names
+  based on "source".
+
+  Various documentation enhancements:
+    Better explain what local sync is and how it involves two sync
+    configs. "originating config" gets introduces instead of just
+    "sync config".
+
+    Better explain the relationship between contexts, sync configs,
+    and source configs ("a sync config can use the datastore configs in
+    the same context").
+
+    An entire section on config properties in the terminology
+    section. "item" added (Todd Wilson correctly pointed out that it was
+    missing).
+
+    Less focus on conflict resolution, as suggested by Graham Cobb.
+
+    Fix examples that became invalid when fixing the password
+    storage/lookup mechanism for GNOME keyring in 1.4.
+
+    The "command line conventions", "Synchronization beyond SyncML" and
+    "CalDAV and CardDAV" sections were updated. It's possible that the
+    other sections also contain slightly incorrect usage of the
+    terminology or are simply out-dated.
+
+* local sync: allow config name in syncURL=local://
+
+  Previously, only syncURL=local://@<context name> was allowed and used
+  the "target-config@context name" config as target side in the local
+  sync.
+
+  Now "local://config-name@context-name" or simply "local://config-name"
+  are also allowed. "target-config" is still the fallback if only a
+  context is give.
+
+  It also has one more special meaning: "--configure
+  target-config@google" will pick the "Google" template automatically
+  because it knows that the intention is to configure the target side
+  of a local sync. It does not know that when using some other name
+  for the config, in which case the template (if needed) must be
+  specified explicitly.
+
+  The process name in output from the target side now also includes the
+  configuration name if it is not the default "target-config".
+
+* command line: revise usability checking of datastores
+
+  When configuring a new sync config, the command line checks whether a
+  datastore is usable before enabling it. If no datastores were listed
+  explicitly, only the usable ones get enabled. If unusable datastores
+  were explicitly listed, the entire configure operation fails.
+
+  This check was based on listing databases, which turned out to be too
+  unspecific for the WebDAV backend: when "database" was set to some URL
+  which is good enough to list databases, but not a database URL itself,
+  the sources where configured with that bad URL.
+
+  Now a new SyncSource::isUsable() operation is used, which by default
+  just falls back to calling the existing Operations::m_isEmpty. In
+  practice, all sources either check their config in open() or the
+  m_isEmpty operation, so the source is usable if no error is
+  enountered.
+
+  For WebDAV, the usability check is skipped because it would require
+  contacting a remote server, which is both confusing (why does a local
+  configure operation need the server?) and could fail even for valid
+  configs (server temporarily down). The check was incomplete anyway
+  because listing databases gave a fixed help text response when no
+  credentials were given. For usability checking that should have
+  resulted in "not usable" and didn't.
+
+  The output during the check was confusing: it always said "listing
+  databases" without giving a reason why that was done. The intention
+  was to give some feedback while a potentially expensive operation
+  ran. Now the isUsable() method itself prints "checking usability" if
+  (and only if!) such a check is really done.
+
+  Sometimes datastores were checked even when they were about to be
+  configure as "disabled" already. Now checking such datastores is
+  skipped.
+
+* command line: fix --update from directory
+
+  The "--update <dir name>" operation was supposed to take the
+  item luids from the file names inside the directory. That part
+  had not been implemented, turning the operation accidentally
+  into an "--import".
+
+  Also missing was the escaping/unescaping of luids. Now the
+  same escaping is done as in command line output and command
+  line parsing to make the luids safe for use as file name.
+
+* sync output: hide "<source>: started" INFO messages
+
+  These messages get printed at the start of processing each
+  SyncML message. This is not particularly useful and just
+  adds noise to the output.
+
+* config: allow storing credentials for email address
+
+  When configuring a WebDAV server with username = email address and no
+  URL (which is possible if the server supports service discovery via
+  the domain in the email address), then storing the credentials in the
+  GNOME keyring used to fail with "cannot store password in GNOME
+  keyring, not enough attributes".
+
+  That is because GNOME keyring seemed to get confused when a network
+  login has no server name and some extra safeguards were added to
+  SyncEvolution to avoid this.
+
+  To store the credentials in the case above, the email address now gets
+  split into user and domain part and together get used to look up the
+  password.
+
+* config: ignore unnecessary username property
+
+  A local sync or Bluetooth sync do not need the 'username' property.
+  When it is set despite that, issue a warning.
+
+  Previously, the value was checked even when not needed, which
+  caused such syncs to fail when set to something other than a plain
+  username.
+
+* config templates: Funambol URLs
+
+  Funambol turned of the URL redirect from my.funambol.com to
+  onemedia.com. The Funambol template now uses the current URL.  Users
+  with existing Funambol configs must updated the syncURL property
+  manually to https://onemediahub.com/sync
+
+  Kudos to Daniel Clement for reporting the change.
+
+* EDS: memo syncing as iCalendar 2.0 (FDO #52714)
+
+  When syncing memos with a peer which also supports iCalendar 2.0 as
+  data format, the engine will now pick iCalendar 2.0 instead of
+  converting to/from plain text. The advantage is that some additional
+  properties like start date and categories can also be synchronized.
+
+  The code is a lot simpler, too, because the EDS specific iCalendar 2.0
+  <-> text conversion code can be removed.
+
+* SoupTransport: drop CA file check
+
+  It used to be necessary to specify a CA file for libsoup to enable SSL
+  certificate checking. Nowadays libsoup uses the default CA store
+  unless told otherwise, so the check in SyncEvolution became
+  obsolete. However, now there is a certain risk that no SSL checking is
+  done although the user asked for it (when libsoup is not recent enough
+  or compiled correctly).
+
+* CardDAV: use Apple/Google/CardDAV vCard flavor
+
+  In principle, CardDAV servers support arbitrary vCard 3.0
+  data. Extensions can be different and need to be preserved. However,
+  when multiple different clients or the server's Web UI interpret the
+  vCards, they need to agree on the semantic of these vCard extensions.
+
+  In practice, CardDAV was pushed by Apple and Apple clients are
+  probably the most common clients of CardDAV services. When the Google
+  Contacts Web UI creates or edits a contact, Google CardDAV will
+  send that data using the vCard flavor used by Apple.
+
+  Therefore it makes sense to exchange contacts with *all* CardDAV
+  servers using that format. This format could be made configurable in
+  SyncEvolution on a case-by-case basis; at the moment, it is
+  hard-coded.
+
+  During syncing, SyncEvolution takes care to translate between the
+  vCard flavor used internally (based on Evolution) and the CardDAV
+  vCard flavor. This mapping includes:
+
+  X-AIM/JABBER/... <-> IMPP + X-SERVICE-TYPE
+
+    Any IMPP property declared as X-SERVICE-TYPE=AIM will get
+    mapped to X-AIM. Same for others. Some IMPP service types
+    have no known X- property extension; they are stored in
+    EDS as IMPP. X- property extensions without a known X-SERVICE-TYPE
+    (for example, GaduGadu and Groupwise) are stored with
+    X-SERVICE-TYPE values chosen by SyncEvolution so that
+    Google CardDAV preserves them (GroupWise with mixed case
+    got translated by Google into Groupwise, so the latter is used).
+
+    Google always sends an X-ABLabel:Other for IMPP. This is ignored
+    because the service type overrides it.
+
+    The value itself also gets transformed during the mapping. IMPP uses
+    an URI as value, with a chat protocol (like "aim" or "xmpp") and
+    some protocol specific identifier. For each X- extension the
+    protocol is determined by the property name and the value is the
+    protocol specific identifier without URL encoding.
+
+  X-SPOUSE/MANAGER/ASSISTANT <-> X-ABRELATEDNAMES + X-ABLabel
+
+    The mapping is based on the X-ABLabel property attached to
+    the X-ABRELATEDNAMES property. This depends on the English
+    words "Spouse", "Manager", "Assistant" that Google CardDAV
+    and Apple devices seem to use regardless of the configured
+    language.
+
+    As with IMPP, only the subset of related names which have
+    a corresponding X- property extension get mapped. The rest
+    is stored in EDS using the X-ABRELATEDNAMES property.
+
+  X-ANNIVERSARY <-> X-ABDATE
+
+    Same here, with X-ABLabel:Anniversary as the special case
+    which gets mapped.
+
+  X-ABLabel parameter <-> property
+
+    CardDAV vCards have labels attached to arbitrary other properties
+    (TEL, ADR, X-ABDATE, X-ABRELATEDNAMES, ...) via vCard group tags:
+    item1.X-ABDATE:2010-01-01
+    item1.X-ABLabel:Anniversary
+
+    The advantage is that property values can contain arbitrary
+    characters, including line breaks and double quotation marks,
+    which is not possible in property parameters.
+
+    Neither EDS nor KDE (judging from the lack of responses on the
+    KDE-PIM mailing list) support custom labels. SyncEvolution could
+    have used grouping as it is done in CardDAV, but grouping is not
+    used much (not at all?) by the UIs working with the vCards in EDS
+    and KDE. It seemed easier to use a new X-ABLabel parameter.
+
+    Characters which cannot be stored in a parameter get converted
+    (double space to single space, line break to space, etc.) during
+    syncing. In practice, these characters don't appear in X-ABLabel
+    properties anyway because neither Apple nor Google UIs allow entering
+    them for custom labels.
+
+    The "Other" label is used by Google even in case where it adds no
+    information. For example, all XMPP properties have an associated
+    X-ABLabel=Other although the Web UI does not provide a means to edit
+    or show such a label. Editing the text before the value in the UI
+    changes the X-SERVICE-TYPE parameter value, not the X-ABLabel as for
+    other fields.
+
+    Therefore the "Other" label is ignored by removing it during syncing.
+
+  X-EVOLUTION-UI-SLOT (the parameter used in Evolution to determine the
+  order of properties in the UI) gets stored in CardDAV. The only exception
+  is Google CardDAV which got confused when an IMPP property had both
+  X-SERVICE-TYPE and X-EVOLUTION-UI-SLOT parameters set. For Google,
+  X-EVOLUTION-UI-SLOT is only sent on other properties and thus ordering
+  of chat information can get lost when syncing with Google.
+
+* synccompare: support grouping and quoted parameter strings
+
+  Grouped properties are sorted first according to the actual property
+  name, then related properties are moved to the place where their group
+  tag appears first. The first grouped property gets a "- " prefix, all
+  following ones are just indended with "  ". The actual group tag is not
+  part of the normalized output, because its value is irrelevant:
+
+  BDAY:19701230
+  - EMAIL:john@custom.com
+    X-ABLabel:custom-label2
+  ...
+  FN:Mr. John 1 Doe Sr.
+  - IMPP;X-SERVICE-TYPE=AIM:aim:aim
+    X-ABLabel:Other
+  ...
+  - X-ABDATE:19710101
+    X-ABLabel:Anniversary
+
+  Redundant tags (those set for only a single property, X-ABLabel:Other)
+  get removed as part of normalizing an item.
+
+* WebDAV: use server's order when listing collections
+
+  When doing a recursive scan of the home set, preserve the order of
+  entries as reported by the server and check the first one first. The
+  server knows better which entries are more relevant for the user (and
+  thus should be the default) or may have some other relevant
+  order. Previously, SyncEvolution replaced that order with sorting by
+  URL, which led to a predictable, but rather meaningless order.
+
+  For example, Google lists the users own calendar first, followed by
+  the shared calendars sorted alphabetical by their name. Now
+  SyncEvolution picks the main calendar as default correctly when
+  scanning from https://www.google.com/calendar/dav/.
+
+* WebDAV: improved database search (Google, Zimbra)
+
+  Zimbra has a principal URL that also serves as home set. When using it
+  as start URL, SyncEvolution only looked the URL once, without listing
+  its content, and thus did not find the databases.
+
+  When following the Zimbra principal URL indirectly, SyncEvolution did
+  check all of the collections there recursively. Unfortunately that
+  also includes many mail folders, causing the scan to abort after
+  checking 1000 collections (an internal safe guard).
+
+  The solution for both includes tracking what to do with a URL. For the
+  initial URL, only meta data about the URL itself gets
+  checked. Recursive scanning is only done for the home set. If that
+  home set contains many collections, scanning is still slow and may run
+  into the internal safe guard limit. This cannot be avoided because the
+  CalDAV spec explicitly states that the home set may contain normal
+  collections which contain other collections, so a client has to do the
+  recursive scan.
+
+  When looking at a specific calendar, Google CalDAV does not report
+  what the current principal or the home set is and therefore
+  SyncEvolution stopped after finding just the initial calendar. Now it
+  detects the lack of meta information and adds all parents also as
+  candidates that need to be looked at. The downside of this is that it
+  doesn't know anything about which parents are relevant, so it ends up
+  checking https://www.google.com/calendar/ and
+  https://www.google.com/.
+
+  In both cases Basic Auth gets rejected with a temporary redirect to
+  the Google login page, which is something that SyncEvolution must
+  ignore immediately during scanning without applying the resend
+  workaround for "temporary rejection of valid credentials" that can
+  happen for valid Google CalDAV URLs.
+
+* WebDAV: enhanced database search (Google Calendar)
+
+  Additional databases where not found for several
+  reasons. SyncEvolution ignored all shared calendars
+  (http://calendarserver.org/ns/shared) and Google marks the additional
+  calendars that way. The other problem was that the check for leaf
+  collections (= collections which cannot contain other desired
+  collections) incorrectly excluded those collections instead of only
+  preventing listing of their content.
+
+  With this change,
+  https://www.google.com/calendar/dav/?SyncEvolution=Google can be used
+  as starting point for Google Calendar.
+
+* WebDAV: fix database scan on iCloud
+
+  The calendar home set URL on iCloud (the one ending in /calendars/) is
+  declared as containing calendar data. That was enough for
+  SyncEvolution to accept it incorrectly as calendar. However, the home
+  set only contains calendar data indirectly.
+
+* WebDAV: support redirects between hosts and DNS SRV lookup based on URL
+
+  When finding a new URL, we must be prepared to reinitialize the Neon
+  session with the new host settings.
+
+  iCloud does not have .well-known support on its www.icloud.com
+  server. To support lookup with a non-icloudd.com email address, we
+  must do DNS SRV lookup when access to .well-known URLs fails. We do
+  this without a www prefix on the host first, because that is what happens
+  to work for icloud.com.
+
+  With these changes it becomes possible to do database scans on Apple
+  iCloud, using syncURL=https://www.icloud.com or
+  syncURL=https://icloud.com. Giving the syncURL like this is only
+  necessary for a username that does not end in @icloud.com. When
+  the syncURL is not set, the domain for DNS SRV lookup is taken
+  from the username.
+
+* WebDAV: more efficient item creation
+
+  PUT has the disadvantage that a client needs to choose a name and then
+  figure out what the real name on the server is. With Google CardDAV that
+  requires sending another request and only works because the server happens
+  to remember the original name (which is not guaranteed!).
+
+  POST works for new items without a name and happens to be implemented
+  by Google such that the response already includes all required
+  information (new name and revision string).
+
+  POST is checked for as described in RFC 5995 once before creating a new
+  item. Servers which don't support it continue to get a PUT.
+
+* WebDAV: send "User-Agent: SyncEvolution"
+
+  Apple iCloud servers reject requests unless they contain a User-Agent
+  header. The exact value doesn't seem to matter. Making the string
+  configurable might be better, but can still be done later when it
+  is more certain whether and for what it is needed.
+
+* WebDAV: refactor and fix DNS SRV lookup
+
+  The syncevo-webdav-lookup script was not packaged. It did not report
+  "not found" DNS results correctly and the caller did not check for
+  this either, so when looking up the information for a domain which
+  does not have DNS SRV entries, SyncEvolution ended up retrying for
+  while as if there had been a temporary lookup problem.
+
+* Google: remove SyncML template, combine CalDAV/CardDAV
+
+  Google has turned off their SyncML server, so the corresponding
+  "Google Contacts" template became useless and needs to be removed. It
+  gets replaced by a "Google" template which combines the three
+  different URLs currently used by Google for CalDAV/CardDAV.
+
+  This new template can be used to configure a "target-config@google"
+  with default calendar and address book database already enabled. The
+  actual URL of these databases will be determined during the first
+  sync using them.
+
+  The template relies on the WebDAV backend's new capability to search
+  multiple different entries in the syncURL property for databases. To
+  avoid listing each calendar twice (once for the legacy URL, once with
+  the new one) when using basic username/password authentication, the
+  backend needs a special case for Google and detect that the legacy URL
+  does not need to be checked.
+
+* Google Calendar: remove child hack, improve alarm hack (FDO #63881)
+
+  Google recently enhanced support for RECURRENCE-ID, so SyncEvolution
+  no longer needs to replace the property when uploading a single
+  detached event with RECURRENCE-ID. However, several things are still
+  broken in the server, with no workaround in SyncEvolution:
+  - Removing individual events gets ignored by the server;
+    a full "wipe out server data" might work (untested).
+  - When updating the parent event, all child events also get
+    updated even though they were included unchanged in the data
+    sent by SyncEvolution.
+  - The RECURRENCE-ID of a child event of an all-day recurring event
+    does not get stored properly.
+  - The update hack seems to fail for complex meetings: uploading them
+    once and then deleting them seems to make uploading them again
+    impossible.
+
+  All of these issues were reported to Google and are worked on there,
+  so perhaps the situation will improve. In the meantime, syncing with
+  Google CalDAV should better be limited to:
+  - Downloading a Google calendar in one-way mode.
+  - Two-way syncing of simple calendars without complex meeting
+    serieses.
+
+  While updating the Google workarounds, the alarm hack (sending a
+  new event without alarms twice to avoid the automatic server side
+  alarm) was simplified. Now the new event gets sent only once with a
+  pseudo-alarm.
+
+* CardDAV: implement read-ahead
+
+  Instead of downloading contacts one-by-one with GET, SyncEvolution now
+  looks at contacts that are most likely going to be needed soon and
+  gets all of them at once with addressbook-multiget REPORT.
+
+  The number of contacts per REPORT is 50 by default, configurable by
+  setting the SYNCEVOLUTION_CARDDAV_BATCH_SIZE env variable.
+
+  This has two advantages:
+  - It avoids round-trips to the server and thus speeds up a large
+    download (100 small contacts with individual GETs took 28s on
+    a fast connection, 3s with two REPORTs).
+  - It reduces the overall number of requests. Google CardDAV is known
+    to start issuing intermittent 401 authentication errors when the
+    number of contacts retrieved via GET is too large. Perhaps this
+    can be avoided with addressbook-multiget.
+
+* oauth2: new backend using libsoup/libcurl
+
+  New backend implements identity provider for obtaining OAuth2 access
+  token for systems without HMI support.
+  Access token is obtained by making direct HTTP request to OAuth2 server
+  and using refresh token obtained by user in some other way.
+  New provider automatically updates stored refresh token when OAuth2
+  server is issuing new one.
+
+* signon: make Accounts optional
+
+  The new "signon" provider only depends on lib[g]signon-glib. It uses
+  gSSO if found, else UOA. Instead of pulling parameters and the
+  identity via libaccounts-glib, the user of SyncEvolution now has to
+  ensure that the identity exists and pass all relevant parameters
+  in the "signon:" username.
+
+* gSSO: adapt to gSSO >= 2.0
+
+* signon: fix build
+
+  Static build was broken for gSSO and UOA (wrong path name to .la file)
+  and gSSO was not enabled properly (wrong condition check).
+
+* datatypes: raw text items with minimal conversion (FDO #52791)
+
+  When using "raw/text/calendar" or "raw/text/vcard" as SyncEvolution
+  "databaseFormat", all parsing and conversion is skipped. The backend's
+  data is identical to the item data in the engine. Finding duplicates
+  in a slow sync is very limited when using these types because the entire
+  item data must match exactly.
+
+  This is useful for the file backend when the goal is to store an exact copy
+  of what a peer has or for limited, read-only backends (PBAP). The downside
+  of using the raw types is that the peer is not given accurate information
+  about which vCard or iCalendar properties are supported, which may cause
+  some peers to not send all data.
+
+* datatypes: text/calendar+plain revised heuristic
+
+  When sending a VEVENT, DESCRIPTION was set to the SUMMARY if empty. This may
+  have been necessary for some peers, but for notes (= VJOURNAL) we don't know
+  that (hasn't been used in the past) and don't want to alter the item
+  unnecessarily, so skip that part and allow empty DESCRIPTION.
+
+  When receiving a plain text note, the "text/calendar+plain" type
+  used to store the first line as summary and the rest as description.
+  This may be correct in some cases and wrong in others.
+
+  The EDS backend implemented a different heuristic: there the first
+  line is copied into the summary and stays in the description. This
+  makes a bit more sense (the description alone is always enough to
+  understand the note). Therefore and to avoid behavioral changes
+  for EDS users when switching the EDS backend to use text/calendar+plain,
+  the engine now uses the same approach.
+
+* datatypes: avoid PHOTO corruption during merge (FDO #77065)
+
+  When handling an update/update conflict (both sides of the sync have an
+  updated contact) and photo data was moved into a local file by EDS, the engine
+  merged the file path and the photo data together and thus corrupted the photo.
+
+  The engine does not know about the special role of the photo property.
+  This needs to be handled by the merge script, and that script did not
+  cover this particular situation. Now the loosing side is cleared,
+  causing the engine to then copy the winning side over into the loosing
+  one.
+
+  Found by Renato Filho/Canonical when testing SyncEvolution for Ubuntu 14.04.
+
+* vcard profile: avoid data loss during merging
+
+  When resolving a merge conflict, repeating properties were taken
+  wholesale from the winning side (for example, all email addresses). If
+  a new email address had been added on the loosing side, it got lost.
+
+  Arguably it is better to preserve as much data as possible during a
+  conflict. SyncEvolution now does that in a merge script by checking
+  which properties in the loosing side do not exist in the winning side
+  and copying those entries.
+
+  Typically only the main value (email address, phone number) is checked
+  and not the additional meta data (like the type). Otherwise minor
+  differences (for example, both sides have same email address, but with
+  different types) would lead to duplicates.
+
+  Only addresses are treated differently: for them all attributes
+  (street, country, city, etc.) are compared, because there is no single
+  main value.
+
+* engine: UID support in contact data
+
+  Before, the UID property in a vCard was ignored by the engine.
+  Backends were responsible for ensuring that the property is
+  set if required by the underlying storage. This turned out to be
+  handled incompletely in the WebDAV backend.
+
+  This change moves this into the engine:
+  - UID is now field. It does not get used for matching
+    because the engine cannot rely on it being stored
+    by both sides.
+  - It gets parsed if present, but only generated if
+    explicitly enabled (because that is the traditional
+    behavior).
+  - It is never shown in the DevInf's CtCap
+    because the Synthesis engine would always show it
+    regardless whether a rule enabled the property.
+    That's because rules normally only get triggered
+    after exchanging DevInf and thus DevInf has to
+    be rule-independent. We don't want it shown because
+    then merging the incoming item during a local sync
+    would use the incoming UID, even if it is empty.
+  - Before writing, ensure that UID is set.
+
+  When updating an existing item, the Synthesis engine reads
+  the existing item, preserves the existing UID unless the peer
+  claims to support UID, and then updates with the existing UID.
+
+  This works for local sync (where SyncEvolution never claims
+  to support UID when talking to the other side). It will break
+  with peers which have UID in their CtCap although they
+  rewrite the UID and backends whose underlying storage cannot
+  handle UID changes during an update (for example, CardDAV).
+
+* engine: flush map items less frequently
+
+  The Synthesis API does not say explicitly, but in practice all map
+  items get updated in a tight loop. Rewriting the m_mappingNode (case
+  insensitive string comparisons) and serialization to disk
+  (std::ostrstream) consume a significant amount of CPU cycles and cause
+  extra disk writes that can be avoided by making some assumptions about
+  the sequence of API calls and flushing only once.
+
+* local sync: exchange SyncML messages via shared memory
+
+  Encoding/decoding of the uint8_t array in D-Bus took a surprisingly
+  large amount of CPU cycles relative to the rest of the SyncML message
+  processing. Now the actual data resides in memory-mapped temporary
+  files and the D-Bus messages only contain offset and size inside these
+  files. Both sides use memory mapping to read and write directly.
+
+  For caching 1000 contacts with photos on a fast laptop, total sync
+  time roughly drops from 6s to 3s.
+
+  To eliminate memory copies, memory handling in libsynthesis or rather,
+  libsmltk is tweaked such that it allocates the buffer used for SyncML
+  message data in the shared memory buffer directly. This relies on
+  knowledge of libsmltk internals, but those shouldn't change and if they
+  do, SyncEvolution will notice ("unexpected send buffer").
+
+* local sync: avoid updating meta data when nothing changed
+
+  The sync meta data (sync anchors, client change log) get updated after
+  a sync even if nothing changed and the existing meta data could be
+  used again. This can be skipped for local sync, because then
+  SyncEvolution can ensure that both sides skip updating the meta
+  data. With a remote SyncML server that is not possible and thus
+  SyncEvolution has to update its data.
+
+  It is based on the observation that when the server side calls
+  SaveAdminData, the client has sent its last message and the sync is
+  complete. At that point, SyncEvolution can check whether anything has
+  changed and if not, skip saving the server's admin data and stop the
+  sync without sending the real reply to the client.
+
+  Instead the client gets an empty message with "quitsync" as content
+  type. Then it takes shortcuts to close down without finalizing the
+  sync engine, because that would trigger writing of meta data
+  changes. The server continues its shutdown normally.
+
+  This optimization is limited to syncs with a single source, because
+  the assumption about when aborting is possible is harder to verify
+  when multiple sources are involved.
+
+* PBAP: support SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME <= 0
+
+  When set to 0 or less, the chunk size is not getting adapted at all
+  while still using transfers in chunks.
+
+* PBAP: use raw text items
+
+  This avoids the redundant parse/generate step on the sending
+  side of the PBAP sync.
+
+* PBAP syncing: updated photo not always stored
+
+  Because photo data was treated like a C string, changes after any
+  embedded null byte were ignored during a comparison.
+
+* ephemeral sync: don't write binfile client files (FDO #55921)
+
+  When doing PBAP caching, we don't want any meta data written because
+  the next sync would not use it anyway. With the latest libsynthesis
+  we can configure "/dev/null" as datadir for the client's binfiles and
+  libsynthesis will avoid writing them.
+
+  The PIM manager uses this for PBAP syncing automatically. For testing
+  it can be enabled by setting the SYNCEVOLUTION_EPHEMERAL env variable.
+
+* PBAP: avoid empty field filter
+
+  Empty field filter is supposed to mean "return all supported
+  fields". This used to work and stopped working with Android phones
+  after an update to 4.3 (seen on Galaxy S3); now the phone only
+  returns the mandatory TEL, FN, N fields.
+
+  The workaround is to replace the empty filter list with the list of
+  known and supported properties. This means we only pull data we really
+  need, but it also means we won't get to see any additional properties
+  that the phone might support.
+
+* PBAP: transfer in chunks (FDO #77272)
+
+  If enabled via env variables, PullAll transfers will be limited to
+  a certain numbers contacts at different offsets until all data got
+  pulled. See PBAP README for details.
+
+  When transfering in chunks, the enumeration of contacts for the engine
+  no longer matches the PBAP enumeration. Debug output uses "offset #x"
+  for PBAP and "ID y" for the engine.
+
+* PBAP: remove transfer via pipe
+
+  Using a pipe was never fully supported by obexd (blocks
+  obexd). Transfering in suitably sized chunks (FDO #77272) will be a
+  more obexd friendly solution with a similar effect (not having to
+  buffer the entire address book in memory).
+
+* PBAP: Suspend/ResumeSync() (FDO #72112)
+
+  By default, the new API freezes a sync by stopping to consume data on the
+  local side of the sync.
+
+  In addition, the information that the sync is freezing is now also handed
+  down to the transport and all sources. In the case of PBAP caching, the local
+  transport notifies the child where the PBAP source then uses Bluez
+  5.15 Transfer1.Suspend/Resume to freeze/thaw the actual OBEX transfer.
+
+  If that fails (for example, not implemented because Bluez is too old
+  or the transfer is still queueing), then the transfer gets cancelled
+  and the entire sync fails. This is desirable for PBAP caching and
+  Bluetooth because a failed sync can easily be recovered from (just
+  start it again) and the overall goal is to free up Bluetooth bandwidth
+  quickly.
+
+* PBAP: transfer data via pipe (part of FDO #72112)
+
+  The main advantage is that processed data can be discarded
+  immediately. When using a plain file, the entire address book must be
+  stored in it.
+
+  The drawback is that obexd does not react well to a full pipe. It
+  simply gets stuck in a blocking write(); in other words, all obexd
+  operations get frozen and obexd stops responding on D-Bus.
+
+* PIM: include CardDAV in CreatePeer()
+
+  This adds "protocol: CardDAV" as a valid value, with corresponding
+  changes to the interpretation of some existing properties and some new
+  ones. The API itself is not changed.
+
+  Suspending a CardDAV sync is possible. This freezes the internal
+  SyncML message exchange, so data exchange with the CardDAV server may
+  continue for a while after SuspendPeer().
+
+  Photo data is always downloaded immediately. The "pbap-sync" flag
+  in SyncPeerWithFlags() has no effect.
+
+  Syncing can be configured to be one-way (local side is read-only
+  cache) or two-way (local side is read/write). Meta data must be
+  written either way, to speed up caching or allow two-way syncing. The
+  most common case (no changes on either side) will have to be optimized
+  such that existing meta data is not touched and thus no disk writes
+  occur.
+
+* PIM: handle SuspendPeer() before and after transfer (FDO #82863)
+
+  A SuspendPeer() only succeeded while the underlying Bluetooth transfer
+  was active. Outside of that, Bluez errors caused SyncEvolution to
+  attempt a cancelation of the transfer and stopped the sync.
+
+  When the transfer was still queueing, obexd returns
+  org.bluez.obex.Error.NotInProgress. This is difficult to handle for
+  SyncEvolution: it cannot prevent the transfer from starting and has to
+  let it become active before it can suspend the transfer. Canceling
+  would lead to difficult to handle error cases (like partially parsed
+  data) and therefore is not done.
+
+  The Bluez team was asked to implement suspending of queued transfers
+  (see "org.bluez.obex.Transfer1 Suspend/Resume in queued state" on
+  linux-bluetooth@vger.kernel.org), so this case might not happen
+  anymore with future Bluez.
+
+  When the transfer completes before obexd processes the Suspend(),
+  org.freedesktop.DBus.Error.UnknownObject gets returned by
+  obexd. SyncEvolution can ignore errors which occur after the active
+  transfer completed. In addition, it should prevent starting the next
+  one. This may be relevant for transfer in chunks, although the sync
+  engine will also stop asking for data and thus typically no new
+  transfer gets triggered anyway.
+
+* PIM: add suspend/resume/abort to sync.py
+
+  CTRL-C while waiting for the end of a sync causes an interactive
+  prompt to appear where one can choose been suspend/resume/abort and
+  continuing to wait. CTRL-C again in the prompt aborts the script.
+
+* PIM: enhanced progress notifications (FDO #72114)
+
+  This adds GetPeerStatus() and "progress" events. Progress is reported based
+  on the "item received" Synthesis event and the total item count. A modified
+  libsynthesis is needed where the SyncML binfile client on the target side of
+  the local sync actually sends the total item count (via NumberOfChanges).
+  This cannot be done yet right at the start of the sync, only the second SyncML
+  message will have it. That is acceptable, because completion is reached very
+  quickly anyway for syncs involving only one message.
+
+  At the moment, SyncContext::displaySourceProgress() holds back "item
+  received" events until a different event needs to be emitted. Progress
+  reporting might get more fine-grained when adding allowing held back
+  events to be emitted at a fixed rate, every 0.1s. This is not done yet
+  because it seems to work well enough already.
+
+  For testing and demonstration purposes, sync.py gets command line
+  arguments for setting progress frequency and showing progress either
+  via listening to signals or polling.
+
+* PIM: add SyncPeerWithFlags() and 'pbap-sync' flag (FDO #70950)
+
+  The is new API and flag grant control over the PBAP sync mode.
+
+* PIM: fix phone number normalization
+
+  The parsed number always has a country code, whereas SyncEvolution expected it
+  to be zero for strings without an explicit country code. This caused a caller
+  ID lookup of numbers like "089788899" in DE to find only telephone numbers in
+  the current default country, instead of being more permissive and also finding
+  "+189788899". The corresponding unit test was broken and checked for the wrong
+  result. Found while investigating an unrelated test failure when updating
+  libphonenumber.
+
+* engine: enable batching by default (FDO #52669)
+
+  This reverts commit c435e937cd406e904c437eec51a32a6ec6163102.
+
+  Commit 7b636720a in libsynthesis fixes an unitialized memory read in
+  the asynchronous item update code path.
+
+  Testing confirms that we can now used batched writes reliably with EDS
+  (the only backend currently supporting asynchronous writes +
+  batching), so this change enables it again also for local and
+  SyncEvolution<->SyncEvolution sync (with asynchronous execution of
+  contact add/update overlapped with SyncML message exchanges) and other
+  SyncML syncs (with changes combined into batches and executed at the
+  end of each message).
+
+* Various compiler problems and warnings fixed; compiles with
+  --with-warnings=fatal on current Debian Testing and Ubuntu Trusty
+  (FDO #79316).
+
+* D-Bus server: fix unreliable shutdown handling
+
+  Occassionally, syncevo-dbus-server locked up after receiving
+  a CTRL-C. This primarily affected nightly testing, in particular (?)
+  on Ubuntu Lucid.
+
+* D-Bus: use streams for direct IPC with GIO
+
+  When using GIO, it is possible to avoid the DBusServer listening on a
+  publicly accessible address. Connection setup becomes more reliable,
+  too, because the D-Bus server side can detect that a child died
+  because the connection will be closed.
+
+  When using libdbus, the traditional server/listen and client/connect
+  model is still used.
+
+* LogRedirect: safeguard against memory corruption
+
+  When aborting, our AbortHandler gets called to close down logging.
+  This may involve memory allocation, which is unsafe. In FDO #76375, a
+  deadlock on a libc mutex was seen.
+
+  To ensure that the process shuts down anyway, install an alarm and give
+  the process five seconds to shut down before the SIGALRM signal will kill
+  it.
+
+
+Upgrading from releases <= 1.3.99.4:
+
+If the value of "username/databaseUser/proxyUser" contains a colon,
+the "user:" prefix must be added to the value, to continue treating it
+like a plain user name and not some reference to an unknown identity
+provider (like "id:", "goa:", "signon:", etc.).
+
+The lookup of passwords in GNOME Keyring was updated slightly in
+1.3.99.5. It may be necessary to set passwords anew if the old one is
+no longer found.
+
+Upgrading from release 1.2.x:
+
+The sync format of existing configurations for Mobical (aka Everdroid)
+must be updated manually, because the server has encoding problems when
+using vCard 3.0 (now the default for Evolution contacts):
+   syncevolution --configure \
+                 syncFormat=text/x-vcard \
+                 mobical addressbook
+
+The Funambol template explicitly enables usage of the
+"refresh-from-server" sync mode to avoid getting throttled with 417
+'retry later' errors. The same must be added to existing configs
+manually:
+   syncevolution --configure \
+                 enableRefreshSync=TRUE \
+                 funambol
+
+Upgrading from releases before 1.2:
+
+Old configurations can still be read. But writing, as it happens
+during a sync, must migrate the configuration first. Releases >= 1.2
+automatically migrates configurations. The old configurations
+will still be available (see "syncevolution --print-configs") but must
+be renamed manually to use them again under their original names with
+older SyncEvolution releases.
+
+
+SyncEvolution 1.4.99.4 -> 1.5, 31.10.2014
+=========================================
+
+Mostly a bug fix release.
+
+Details:
+
+* vcard: fix caching of PBAP contacts (FDO #84710)
+
+  After changing PBAP to send raw items, caching them led to unnecessary
+  disk writes and bogus "contacts changed" reports. That's because
+  the merge script relied on the exact order of properties, which was
+  only the same when doing the redundant decode/encode on the PBAP side.
+
+  Instead of reverting back to sending re-encoded items, better enhance
+  the contact merge script such that it detects contacts as unchanged
+  when just the order of entries in the property arrays is different.
+  This relies on an enhanced libsynthesis with the new RELAXEDCOMPARE()
+  and modified MERGEFIELDS().
+
+* sync: ignore unnecessary username property
+
+  A local sync or Bluetooth sync do not need the 'username' property.
+  When it is set despite that, issue a warning.
+
+  Previously, the value was checked even when not needed, which
+  caused such syncs to fail when set to something other than a plain
+  username.
+
+* D-Bus server: fix unreliable shutdown handling
+
+  Occassionally, syncevo-dbus-server locked up after receiving
+  a CTRL-C. This primarily affected nightly testing, in particular (?)
+  on Ubuntu Lucid.
+
+* scripting: prevent premature loop timeouts
+
+  The more complex "avoid data loss during merging" scripting ran for longer
+  than 5s limit under extreme conditions (full logging, busy system, running
+  under valgrind), which resulted in aborting the script and a 10500 "local
+  internal error" sync failure.
+
+* signon: fix providersignon.so (TC-1667)
+
+  The shared providersignon.so ended up being compiled with "gsso" as
+  prefix for the username. There also was a problem with invalid
+  reference counting.
+
+* PBAP: support SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME <= 0
+
+  When set to 0 or less, the chunk size is not getting adapted at all
+  while still using transfers in chunks.
+
+
 SyncEvolution 1.4.99.3 -> 1.4.99.4, 10.09.2014
 ==============================================
 
