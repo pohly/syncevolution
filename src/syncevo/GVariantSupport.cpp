@@ -42,7 +42,7 @@ GVariantCXX HashTable2Variant(const GHashTable *hashTable) throw ()
     while (g_hash_table_iter_next(&iter, (gpointer *)&key, (gpointer *)&value)) {
         g_variant_builder_add(&builder, "{sv}", key, g_variant_ref(value));
     }
-    GVariantStealCXX variant(g_variant_builder_end(&builder));
+    GVariantStealCXX variant(g_variant_ref_sink(g_variant_builder_end(&builder)));
     return variant;
 }
 

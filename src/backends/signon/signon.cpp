@@ -97,9 +97,7 @@ public:
         // so we have to use the "steal" variant to enable that assignment.
         GVariantStealCXX resultDataVar;
         GErrorCXX gerror;
-        // Enforce normal reference counting via _ref_sink.
-        GVariantCXX sessionDataVar(g_variant_ref_sink(HashTable2Variant(m_sessionData)),
-                                   TRANSFER_REF);
+        GVariantCXX sessionDataVar(HashTable2Variant(m_sessionData));
         PlainGStr buffer(g_variant_print(sessionDataVar, true));
         SE_LOG_DEBUG(NULL, "asking for OAuth2 token with method %s, mechanism %s and parameters %s",
                      signon_auth_session_get_method(m_authSession),
