@@ -76,6 +76,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/utility.hpp>
+#include <boost/type_traits/is_signed.hpp>
 
 /* The SyncEvolution exception handler must integrate into the D-Bus
  * C++ wrapper. In contrast to the rest of the code, that handler uses
@@ -1405,48 +1406,63 @@ template<> struct dbus_traits<int8_t> : dbus_traits<uint8_t>
     }
 };
 
-template<> struct dbus_traits<int16_t> :
-    public basic_marshal< int16_t, VariantTypeInt16 >
+/** runtime detection of integer representation */
+template<typename I, bool issigned, size_t bytes> struct dbus_traits_integer_switch {};
+template<typename I> struct dbus_traits_integer_switch<I, true, 2> :
+    public basic_marshal< I, VariantTypeInt16 >
 {
     static std::string getType() { return "n"; }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
-template<> struct dbus_traits<uint16_t> :
-    public basic_marshal< uint16_t, VariantTypeUInt16 >
+template<typename I> struct dbus_traits_integer_switch<I, false, 2> :
+    public basic_marshal< I, VariantTypeUInt16 >
 {
     static std::string getType() { return "q"; }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
-template<> struct dbus_traits<int32_t> :
-    public basic_marshal< int32_t, VariantTypeInt32 >
+template<typename I> struct dbus_traits_integer_switch<I, true, 4> :
+    public basic_marshal< I, VariantTypeInt32 >
 {
     static std::string getType() { return "i"; }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
-template<> struct dbus_traits<uint32_t> :
-    public basic_marshal< uint32_t, VariantTypeUInt32 >
+template<typename I> struct dbus_traits_integer_switch<I, false, 4> :
+    public basic_marshal< I, VariantTypeUInt32 >
 {
     static std::string getType() { return "u"; }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
-template<> struct dbus_traits<int64_t> :
-    public basic_marshal< int64_t, VariantTypeInt64 >
+template<typename I> struct dbus_traits_integer_switch<I, true, 8> :
+    public basic_marshal< I, VariantTypeInt64 >
 {
     static std::string getType() { return "x"; }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
-template<> struct dbus_traits<uint64_t> :
-    public basic_marshal< uint64_t, VariantTypeUInt64 >
+template<typename I> struct dbus_traits_integer_switch<I, false, 8> :
+    public basic_marshal< I, VariantTypeUInt64 >
 {
     static std::string getType() { return "t"; }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
 };
+
+template<typename I> struct dbus_traits_integer : public dbus_traits_integer_switch<I, boost::is_signed<I>::value, sizeof(I)> {};
+
+// Some of these types may have the same underlying representation, but they are
+// still considered different types by the compiler and thus we must have dbus_traits
+// for all of them.
+template<> struct dbus_traits<signed short> : public dbus_traits_integer<signed short> {};
+template<> struct dbus_traits<unsigned short> : public dbus_traits_integer<unsigned short> {};
+template<> struct dbus_traits<signed int> : public dbus_traits_integer<signed int> {};
+template<> struct dbus_traits<unsigned int> : public dbus_traits_integer<unsigned int> {};
+template<> struct dbus_traits<signed long> : public dbus_traits_integer<signed long> {};
+template<> struct dbus_traits<unsigned long> : public dbus_traits_integer<unsigned long> {};
+
 template<> struct dbus_traits<double> :
     public basic_marshal< double, VariantTypeDouble >
 {
