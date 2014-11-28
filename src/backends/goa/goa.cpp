@@ -197,10 +197,9 @@ public:
 
     virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_OAUTH2; }
 
-    virtual Credentials getCredentials() const { SE_THROW("only OAuth2 is supported"); }
+    virtual Credentials getCredentials() { SE_THROW("only OAuth2 is supported"); }
 
-    virtual std::string getOAuth2Bearer(int failedTokens,
-                                        const PasswordUpdateCallback &passwordUpdateCallback) const
+    virtual std::string getOAuth2Bearer(const PasswordUpdateCallback &passwordUpdateCallback)
     {
         m_account->m_ensureCredentials();
         std::string token = m_account->m_getAccessToken();

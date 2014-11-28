@@ -192,7 +192,6 @@ std::string Status2String(const ne_status *status)
 Session::Session(const boost::shared_ptr<Settings> &settings) :
     m_forceAuthorizationOnce(AUTH_ON_DEMAND),
     m_credentialsSent(false),
-    m_oauthTokenRejections(0),
     m_settings(settings),
     m_debugging(false),
     m_session(NULL),
@@ -643,29 +642,29 @@ bool Session::checkError(int error, int code, const ne_status *status,
                 SE_LOG_DEBUG(NULL, "credentials accepted");
                 m_settings->setCredentialsOkay(true);
             }
-            m_oauthTokenRejections = 0;
 
             return true;
         }
         break;
     case NE_AUTH: {
-        // Retry OAuth2-based request if we still have a valid token.
-        bool useOAuth2 = m_authProvider && m_authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2);
-        if (useOAuth2) {
-            // Try again with new token? Need to restore the counter,
-            // because it is relevant for getOAuth2Bearer() in preSend().
-            if (m_oauthTokenRejections < 2) {
-                if (!m_oauth2Bearer.empty() && m_credentialsSent) {
-                    SE_LOG_DEBUG(NULL, "discarding used and rejected OAuth2 token '%s'", m_oauth2Bearer.c_str());
-                    m_oauthTokenRejections++;
-                    m_oauth2Bearer.clear();
-                } else {
-                    SE_LOG_DEBUG(NULL, "OAuth2 token '%s' not used?!", m_oauth2Bearer.c_str());
-                }
+        if (m_authProvider) {
+            // The m_oauth2Bearer is empty if the getOAuth2Bearer() method
+            // raised an exception, and in that case we should not retry
+            // invoking that method again.
+            if (!m_oauth2Bearer.empty()) {
                 retry = true;
-                SE_LOG_DEBUG(NULL, "OAuth2 retry after %d failed tokens", m_oauthTokenRejections);
+            }
+
+            // If we have been using this OAuth token and we got NE_AUTH, it
+            // means that the token is invalid (probably it's expired); we must
+            // tell the AuthProvider to invalidate its cache so that next time
+            // we'll hopefully get a new working token.
+            if (m_credentialsSent) {
+                SE_LOG_DEBUG(NULL, "discarding used and rejected OAuth2 token '%s'", m_oauth2Bearer.c_str());
+                m_authProvider->invalidateCachedSecrets();
+                m_oauth2Bearer.clear();
             } else {
-                SE_LOG_DEBUG(NULL, "too many failed OAuth2 tokens, giving up");
+                SE_LOG_DEBUG(NULL, "OAuth2 token '%s' not used?!", m_oauth2Bearer.c_str());
             }
         }
 
@@ -980,8 +979,7 @@ void Session::checkAuthorization()
         // Count the number of times we asked for new tokens. This helps
         // the provider determine whether the token that it returns are valid.
         try {
-            m_oauth2Bearer = m_authProvider->getOAuth2Bearer(m_oauthTokenRejections,
-                                                             boost::bind(&Settings::updatePassword, m_settings, _1));
+            m_oauth2Bearer = m_authProvider->getOAuth2Bearer(boost::bind(&Settings::updatePassword, m_settings, _1));
             SE_LOG_DEBUG(NULL, "got new OAuth2 token '%s' for next request", m_oauth2Bearer.c_str());
         } catch (...) {
             std::string explanation;

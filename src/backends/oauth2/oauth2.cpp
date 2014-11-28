@@ -37,7 +37,7 @@ class RefreshTokenAuthProvider : public AuthProvider
     std::string m_clientID;
     std::string m_clientSecret;
     std::string m_refreshToken;
-    mutable std::string m_accessToken;
+    std::string m_accessToken;
 
 public:
     RefreshTokenAuthProvider(const char* tokenHost,
@@ -63,16 +63,11 @@ public:
 
     virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_OAUTH2; }
 
-    virtual Credentials getCredentials() const { SE_THROW("only OAuth2 is supported"); }
+    virtual Credentials getCredentials() { SE_THROW("only OAuth2 is supported"); }
 
-    virtual std::string getOAuth2Bearer(int failedTokens,
-                                        const PasswordUpdateCallback &passwordUpdateCallback) const
+    virtual std::string getOAuth2Bearer(const PasswordUpdateCallback &passwordUpdateCallback)
     {
-        SE_LOG_DEBUG(NULL, "retrieving OAuth2 token, attempt %d", failedTokens);
-        //in case of retry do not use cached access token, request it again
-        if (1 >= failedTokens) {
-            m_accessToken.clear();
-        }
+        SE_LOG_DEBUG(NULL, "retrieving OAuth2 token");
 
         if (m_accessToken.empty()) {
             const char *reply;
@@ -156,6 +151,9 @@ public:
         }
         return m_accessToken;
     }
+
+    virtual void invalidateCachedSecrets() { m_accessToken.clear(); }
+
     virtual std::string getUsername() const { return ""; }
 };
 

@@ -52,6 +52,8 @@ class SignonAuthProvider : public AuthProvider
     SignonAuthSessionCXX m_authSession;
     GHashTableCXX m_sessionData;
     std::string m_mechanism;
+    std::string m_accessToken;
+    bool m_invalidateCache;
 
 public:
     SignonAuthProvider(const SignonAuthSessionCXX &authSession,
@@ -59,21 +61,26 @@ public:
                        const std::string &mechanism) :
         m_authSession(authSession),
         m_sessionData(sessionData),
-        m_mechanism(mechanism)
+        m_mechanism(mechanism),
+        m_invalidateCache(false)
     {}
 
     virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_OAUTH2; }
 
-    virtual Credentials getCredentials() const { SE_THROW("only OAuth2 is supported"); }
+    virtual Credentials getCredentials() { SE_THROW("only OAuth2 is supported"); }
 
-    virtual std::string getOAuth2Bearer(int failedTokens,
-                                        const PasswordUpdateCallback &passwordUpdateCallback) const
+    virtual std::string getOAuth2Bearer(const PasswordUpdateCallback &passwordUpdateCallback)
     {
-        SE_LOG_DEBUG(NULL, "retrieving OAuth2 token, attempt %d", failedTokens);
+        SE_LOG_DEBUG(NULL, "retrieving OAuth2 token");
+
+        if (!m_accessToken.empty() && !m_invalidateCache) {
+            return m_accessToken;
+        }
 
         // Retry login if even the refreshed token failed.
-        g_hash_table_insert(m_sessionData, g_strdup("UiPolicy"),
-                            g_variant_ref_sink(g_variant_new_uint32(failedTokens >= 2 ? SIGNON_POLICY_REQUEST_PASSWORD : 0)));
+        g_hash_table_insert(m_sessionData, g_strdup("ForceTokenRefresh"),
+                            g_variant_ref_sink(g_variant_new_boolean(m_invalidateCache)));
+
         // We get assigned a plain pointer to an instance that we'll own,
         // so we have to use the "steal" variant to enable that assignment.
         GVariantStealCXX resultDataVar;
@@ -102,12 +109,17 @@ public:
         if (!tokenVar) {
             SE_THROW("no AccessToken in OAuth2 response");
         }
-        const char *token = g_variant_get_string(tokenVar, NULL);
-        if (!token) {
+        std::string newToken = g_variant_get_string(tokenVar, NULL);
+        if (newToken.empty()) {
             SE_THROW("AccessToken did not contain a string value");
+        } else if (m_invalidateCache && newToken == m_accessToken) {
+            SE_THROW("Got the same invalid AccessToken");
         }
-        return token;
+        m_accessToken = newToken;
+        return m_accessToken;
     }
+
+    virtual void invalidateCachedSecrets() { m_invalidateCache = true; }
 
     virtual std::string getUsername() const { return ""; }
 };

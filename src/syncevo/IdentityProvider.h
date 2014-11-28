@@ -83,7 +83,7 @@ class AuthProvider
     /**
      * Returns username/password credentials. Throws an error if not supported.
      */
-    virtual Credentials getCredentials() const = 0;
+    virtual Credentials getCredentials() = 0;
 
     /**
      * Returns the 'Bearer b64token' string required for logging into
@@ -95,24 +95,25 @@ class AuthProvider
      *
      * An application should:
      * - request a token and try to use it
-     * - in case of failure try to request a token again, and try to use it
-     *   again (in case the first token has expired just before using it)
-     * - if the second token also fails, request a third token with full
-     *   re-authentication as above.
-     * - if that fails, then give up.
+     * - in case the token is not working (expired), call
+     *   invalidateCachedSecrets() and then this method again.
+     * - if this method raises an exception, give up.
      *
-     * To achieve that, the caller must count how often he got a token that
-     * did not work.
-     *
-     * @param failedTokens           zero when asking for initial token, one for refresh, two for full re-authorization
      * @param passwordUpdateCallback callback function to be called when stored refresh token need to be updated.
      *                               Only parameter of this callback function is new value of refresh token.
      *
      * @return a base64 encoded token, ready to be used in "Authorization: Bearer %s"
      */
     typedef boost::function<void (const std::string &newPassword)> PasswordUpdateCallback;
-    virtual std::string getOAuth2Bearer(int failedTokens,
-                                        const PasswordUpdateCallback &passwordUpdateCallback) const = 0;
+    virtual std::string getOAuth2Bearer(const PasswordUpdateCallback &passwordUpdateCallback) = 0;
+
+    /**
+     * Informs the AuthProvider that the password or authentication token is
+     * wrong. If the AuthProvider keeps it in a cache, the next time that it's
+     * being asked for a password or token it should attempt to obtain a new
+     * value.
+     */
+    virtual void invalidateCachedSecrets() {}
 
     /**
      * Returns username at the remote service. Works for

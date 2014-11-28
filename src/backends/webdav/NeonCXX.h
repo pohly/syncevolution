@@ -326,14 +326,6 @@ class Session {
     bool m_credentialsSent;
 
     /**
-     * Count the number of consecutive times that an OAuth2 token
-     * failed to get accepted. This can happen when the current one
-     * expired and needs to be refreshed or we need re-authorization
-     * by the user.
-     */
-    int m_oauthTokenRejections;
-
-    /**
      * Cached token for OAuth2. Obtained before starting the request in run(),
      * used in preSend(), invalidated when it caused an authentication error
      * in checkError().
