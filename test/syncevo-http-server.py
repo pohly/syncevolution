@@ -40,7 +40,7 @@ timeout=100000
 
 class ChainedOpenSSLContextFactory(ssl.DefaultOpenSSLContextFactory):
     def __init__(self, privateKeyFileName, certificateChainFileName,
-                 sslmethod = SSL.SSLv3_METHOD):
+                 sslmethod = SSL.TLSv1_METHOD):
         """
         @param privateKeyFileName: Name of a file containing a private key
         @param certificateChainFileName: Name of a file containing a certificate chain
