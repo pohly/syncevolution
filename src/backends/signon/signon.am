@@ -38,7 +38,6 @@ MOSTLYCLEANFILES += $(src_backends_signon_libs)
 
 src_backends_signon_common_sources = \
   src/backends/signon/signon.h \
-  src/backends/signon/signon.cpp \
   $(NONE)
 
 if ENABLE_MODULES
@@ -57,7 +56,9 @@ src_backends_signon_common_cppflags = -DUSE_SIGNON -I$(top_srcdir)/test $(BACKEN
 src_backends_signon_common_dependencies = src/syncevo/libsyncevolution.la
 
 if USE_GSSO
-src_backends_signon_providergsso_la_SOURCES = $(src_backends_signon_common_sources)
+src_backends_signon_providergsso_la_SOURCES = \
+  src/backends/signon/signon-accounts.cpp \
+  $(src_backends_signon_common_sources)
 src_backends_signon_providergsso_la_LIBADD = $(GSSO_LIBS) $(ACCOUNTS_LIBS) $(src_backends_signon_common_libadd) 
 src_backends_signon_providergsso_la_LDFLAGS = $(src_backends_signon_common_ldflags)
 src_backends_signon_providergsso_la_CXXFLAGS = $(GSSO_CFLAGS) $(ACCOUNTS_CFLAGS) $(src_backends_signon_common_cxxflags)
@@ -66,7 +67,9 @@ src_backends_signon_providergsso_la_DEPENDENCIES = $(src_backends_signon_common_
 endif
 
 if USE_UOA
-src_backends_signon_provideruoa_la_SOURCES = $(src_backends_signon_common_sources)
+src_backends_signon_provideruoa_la_SOURCES = \
+  src/backends/signon/signon-accounts.cpp \
+  $(src_backends_signon_common_sources)
 src_backends_signon_provideruoa_la_LIBADD = $(UOA_LIBS) $(ACCOUNTS_LIBS) $(src_backends_signon_common_libadd)
 src_backends_signon_provideruoa_la_LDFLAGS = $(src_backends_signon_common_ldflags)
 src_backends_signon_provideruoa_la_CXXFLAGS = $(UOA_CFLAGS) $(ACCOUNTS_CFLAGS) $(src_backends_signon_common_cxxflags)
@@ -75,7 +78,9 @@ src_backends_signon_provideruoa_la_DEPENDENCIES = $(src_backends_signon_common_d
 endif
 
 if USE_SIGNON
-src_backends_signon_providersignon_la_SOURCES = $(src_backends_signon_common_sources)
+src_backends_signon_providersignon_la_SOURCES = \
+  src/backends/signon/signon.cpp \
+  $(src_backends_signon_common_sources)
 src_backends_signon_providersignon_la_LIBADD = $($(DEFAULT_SIGNON)_LIBS) $(ACCOUNTS_LIBS) $(src_backends_signon_common_libadd)
 src_backends_signon_providersignon_la_LDFLAGS = $(src_backends_signon_common_ldflags)
 src_backends_signon_providersignon_la_CXXFLAGS = $($(DEFAULT_SIGNON)_CFLAGS) $(ACCOUNTS_CFLAGS) $(src_backends_signon_common_cxxflags)
