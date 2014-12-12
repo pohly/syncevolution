@@ -63,18 +63,15 @@ typedef GListCXX<AgService, GList, ag_service_unref> ServiceListCXX;
 class SignonAuthProvider : public AuthProvider
 {
     SignonAuthSessionCXX m_authSession;
-    GHashTableCXX m_sessionData;
-    std::string m_mechanism;
+    AgAuthDataCXX m_authData;
     std::string m_accessToken;
     bool m_invalidateCache;
 
 public:
     SignonAuthProvider(const SignonAuthSessionCXX &authSession,
-                       const GHashTableCXX &sessionData,
-                       const std::string &mechanism) :
+                       const AgAuthDataCXX &authData) :
         m_authSession(authSession),
-        m_sessionData(sessionData),
-        m_mechanism(mechanism),
+        m_authData(authData),
         m_invalidateCache(false)
     {}
 
@@ -90,37 +87,40 @@ public:
             return m_accessToken;
         }
 
+        GVariantBuilder builder;
+        g_variant_builder_init(&builder, G_VARIANT_TYPE_VARDICT);
         if (m_invalidateCache) {
-            // Retry login if even the refreshed token failed.
-            g_hash_table_insert(m_sessionData, g_strdup("ForceTokenRefresh"),
-                                g_variant_ref_sink(g_variant_new_boolean(true)));
+            // Clear any tokens cached in Online Accounts
+            g_variant_builder_add(&builder, "{sv}", "ForceTokenRefresh",
+                                  g_variant_new_boolean(true));
         }
+        GVariantCXX extraOptions(g_variant_take_ref(g_variant_builder_end(&builder)), TRANSFER_REF);
 
         // We get assigned a plain pointer to an instance that we'll own,
         // so we have to use the "steal" variant to enable that assignment.
-        GVariantStealCXX resultDataVar;
+        GVariantStealCXX resultData;
         GErrorCXX gerror;
-        GVariantCXX sessionDataVar(HashTable2Variant(m_sessionData));
-        PlainGStr buffer(g_variant_print(sessionDataVar, true));
+        GVariantCXX sessionData(ag_auth_data_get_login_parameters(m_authData, extraOptions), TRANSFER_REF);
+        const char *mechanism = ag_auth_data_get_mechanism(m_authData);
+        PlainGStr buffer(g_variant_print(sessionData, true));
         SE_LOG_DEBUG(NULL, "asking for OAuth2 token with method %s, mechanism %s and parameters %s",
                      signon_auth_session_get_method(m_authSession),
-                     m_mechanism.c_str(),
+                     mechanism,
                      buffer.get());
 
 #define signon_auth_session_process_async_finish signon_auth_session_process_finish
-        SYNCEVO_GLIB_CALL_SYNC(resultDataVar, gerror, signon_auth_session_process_async,
-                               m_authSession, sessionDataVar, m_mechanism.c_str(), NULL);
-        buffer.reset(resultDataVar ? g_variant_print(resultDataVar, true) : NULL);
+        SYNCEVO_GLIB_CALL_SYNC(resultData, gerror, signon_auth_session_process_async,
+                               m_authSession, sessionData, mechanism, NULL);
+        buffer.reset(resultData ? g_variant_print(resultData, true) : NULL);
         SE_LOG_DEBUG(NULL, "OAuth2 token result: %s, %s",
                      buffer.get() ? buffer.get() : "<<null>>",
                      gerror ? gerror->message : "???");
-        if (!resultDataVar || gerror) {
+        if (!resultData || gerror) {
             SE_THROW_EXCEPTION_STATUS(StatusException,
                                       StringPrintf("could not obtain OAuth2 token: %s", gerror ? gerror->message : "???"),
                                       STATUS_FORBIDDEN);
         }
-        GHashTableCXX resultData(Variant2HashTable(resultDataVar));
-        GVariant *tokenVar = static_cast<GVariant *>(g_hash_table_lookup(resultData, (gpointer)"AccessToken"));
+        GVariantCXX tokenVar(g_variant_lookup_value(resultData, "AccessToken", G_VARIANT_TYPE_STRING), TRANSFER_REF);
         if (!tokenVar) {
             SE_THROW("no AccessToken in OAuth2 response");
         }
@@ -220,10 +220,6 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
     // SignonAuthServiceCXX authService(signon_auth_service_new(), TRANSFER_REF);
     guint signonID = ag_auth_data_get_credentials_id(authData);
     const char *method = ag_auth_data_get_method(authData);
-    const char *mechanism = ag_auth_data_get_mechanism(authData);
-
-    GVariantCXX sessionDataVar(ag_auth_data_get_login_parameters(authData, NULL), TRANSFER_REF);
-    GHashTableCXX sessionData(Variant2HashTable(sessionDataVar));
 
     SignonIdentityCXX identity(signon_identity_new_from_db(signonID), TRANSFER_REF);
     SE_LOG_DEBUG(NULL, "using signond identity %d", signonID);
@@ -231,7 +227,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
 
     // TODO (?): retrieve start URL from account system
 
-    provider.reset(new SignonAuthProvider(authSession, sessionData, mechanism));
+    provider.reset(new SignonAuthProvider(authSession, authData));
 
     return provider;
 }
