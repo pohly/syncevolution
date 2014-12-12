@@ -1463,6 +1463,13 @@ template<> struct dbus_traits<unsigned int> : public dbus_traits_integer<unsigne
 template<> struct dbus_traits<signed long> : public dbus_traits_integer<signed long> {};
 template<> struct dbus_traits<unsigned long> : public dbus_traits_integer<unsigned long> {};
 
+// Needed for int64_t and uint64. Not used internally, but occurs in
+// external D-Bus APIs (for example, Bluez5 obexd). The assumption here
+// is that "long long" is a valid type. If that assumption doesn't hold
+// on some platform, then we need a configure check and ifdefs here.
+template<> struct dbus_traits<signed long long> : public dbus_traits_integer<signed long long> {};
+template<> struct dbus_traits<unsigned long long> : public dbus_traits_integer<unsigned long long> {};
+
 template<> struct dbus_traits<double> :
     public basic_marshal< double, VariantTypeDouble >
 {
