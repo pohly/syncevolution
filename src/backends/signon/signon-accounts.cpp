@@ -65,6 +65,7 @@ class SignonAuthProvider : public AuthProvider
     SignonAuthSessionCXX m_authSession;
     AgAuthDataCXX m_authData;
     std::string m_accessToken;
+    Credentials m_credentials;
     bool m_invalidateCache;
 
 public:
@@ -75,9 +76,51 @@ public:
         m_invalidateCache(false)
     {}
 
-    virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_OAUTH2; }
+    virtual bool methodIsSupported(AuthMethod method) const {
+        // Unless the method name is "password", let's assume it's OAuth;
+        // note that we don't explicitly check if the method name is a
+        // OAuth one, because gSSO and UOA use different method names for
+        // their OAuth implementations
+        AuthMethod ourMethod =
+            (strcmp(ag_auth_data_get_method(m_authData), "password") == 0) ?
+            AUTH_METHOD_CREDENTIALS : AUTH_METHOD_OAUTH2;
+        return method == ourMethod;
+    }
 
-    virtual Credentials getCredentials() { SE_THROW("only OAuth2 is supported"); }
+    virtual Credentials getCredentials() {
+        SE_LOG_DEBUG(NULL, "retrieving password");
+
+        if (!m_credentials.m_password.empty() && !m_invalidateCache) {
+            return m_credentials;
+        }
+
+        GVariantBuilder builder;
+        g_variant_builder_init(&builder, G_VARIANT_TYPE_VARDICT);
+        if (m_invalidateCache) {
+            // Request the user's password
+            g_variant_builder_add(&builder, "{sv}", "UiPolicy",
+                                  g_variant_new_uint32(SIGNON_POLICY_REQUEST_PASSWORD));
+        }
+        GVariantCXX extraOptions(g_variant_take_ref(g_variant_builder_end(&builder)), TRANSFER_REF);
+
+        GVariantCXX resultData = authenticate(extraOptions);
+        GVariantCXX usernameVar(g_variant_lookup_value(resultData, "UserName", G_VARIANT_TYPE_STRING), TRANSFER_REF);
+        GVariantCXX passwordVar(g_variant_lookup_value(resultData, "Secret", G_VARIANT_TYPE_STRING), TRANSFER_REF);
+        if (!usernameVar || !passwordVar) {
+            SE_THROW("Username or password missing");
+        }
+        Credentials credentials;
+        credentials.m_username = g_variant_get_string(usernameVar, NULL);
+        credentials.m_password = g_variant_get_string(passwordVar, NULL);
+        if (credentials.m_password.empty()) {
+            SE_THROW("Got an empty password");
+        } else if (m_invalidateCache &&
+                   credentials.m_password == m_credentials.m_password) {
+            SE_THROW("Got the same invalid credentials");
+        }
+        m_credentials = credentials;
+        return m_credentials;
+    }
 
     virtual std::string getOAuth2Bearer(const PasswordUpdateCallback &passwordUpdateCallback)
     {
@@ -96,30 +139,7 @@ public:
         }
         GVariantCXX extraOptions(g_variant_take_ref(g_variant_builder_end(&builder)), TRANSFER_REF);
 
-        // We get assigned a plain pointer to an instance that we'll own,
-        // so we have to use the "steal" variant to enable that assignment.
-        GVariantStealCXX resultData;
-        GErrorCXX gerror;
-        GVariantCXX sessionData(ag_auth_data_get_login_parameters(m_authData, extraOptions), TRANSFER_REF);
-        const char *mechanism = ag_auth_data_get_mechanism(m_authData);
-        PlainGStr buffer(g_variant_print(sessionData, true));
-        SE_LOG_DEBUG(NULL, "asking for OAuth2 token with method %s, mechanism %s and parameters %s",
-                     signon_auth_session_get_method(m_authSession),
-                     mechanism,
-                     buffer.get());
-
-#define signon_auth_session_process_async_finish signon_auth_session_process_finish
-        SYNCEVO_GLIB_CALL_SYNC(resultData, gerror, signon_auth_session_process_async,
-                               m_authSession, sessionData, mechanism, NULL);
-        buffer.reset(resultData ? g_variant_print(resultData, true) : NULL);
-        SE_LOG_DEBUG(NULL, "OAuth2 token result: %s, %s",
-                     buffer.get() ? buffer.get() : "<<null>>",
-                     gerror ? gerror->message : "???");
-        if (!resultData || gerror) {
-            SE_THROW_EXCEPTION_STATUS(StatusException,
-                                      StringPrintf("could not obtain OAuth2 token: %s", gerror ? gerror->message : "???"),
-                                      STATUS_FORBIDDEN);
-        }
+        GVariantCXX resultData = authenticate(extraOptions);
         GVariantCXX tokenVar(g_variant_lookup_value(resultData, "AccessToken", G_VARIANT_TYPE_STRING), TRANSFER_REF);
         if (!tokenVar) {
             SE_THROW("no AccessToken in OAuth2 response");
@@ -137,6 +157,35 @@ public:
     virtual void invalidateCachedSecrets() { m_invalidateCache = true; }
 
     virtual std::string getUsername() const { return ""; }
+
+private:
+    GVariantCXX authenticate(GVariant *extraOptions) {
+        // We get assigned a plain pointer to an instance that we'll own,
+        // so we have to use the "steal" variant to enable that assignment.
+        GVariantStealCXX resultData;
+        GErrorCXX gerror;
+        GVariantCXX sessionData(ag_auth_data_get_login_parameters(m_authData, extraOptions), TRANSFER_REF);
+        const char *mechanism = ag_auth_data_get_mechanism(m_authData);
+        PlainGStr buffer(g_variant_print(sessionData, true));
+        SE_LOG_DEBUG(NULL, "asking for authentication with method %s, mechanism %s and parameters %s",
+                     signon_auth_session_get_method(m_authSession),
+                     mechanism,
+                     buffer.get());
+
+#define signon_auth_session_process_async_finish signon_auth_session_process_finish
+        SYNCEVO_GLIB_CALL_SYNC(resultData, gerror, signon_auth_session_process_async,
+                               m_authSession, sessionData, mechanism, NULL);
+        buffer.reset(resultData ? g_variant_print(resultData, true) : NULL);
+        SE_LOG_DEBUG(NULL, "authentication result: %s, %s",
+                     buffer.get() ? buffer.get() : "<<null>>",
+                     gerror ? gerror->message : "???");
+        if (!resultData || gerror) {
+            SE_THROW_EXCEPTION_STATUS(StatusException,
+                                      StringPrintf("could not authenticate: %s", gerror ? gerror->message : "???"),
+                                      STATUS_FORBIDDEN);
+        }
+        return resultData;
+    }
 };
 
 class StoreIdentityData
