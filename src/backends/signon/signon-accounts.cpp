@@ -224,56 +224,6 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
 
     GVariantCXX sessionDataVar(ag_auth_data_get_login_parameters(authData, NULL), TRANSFER_REF);
     GHashTableCXX sessionData(Variant2HashTable(sessionDataVar));
-#ifdef USE_GSSO
-    GVariant *realmsVariant = (GVariant *)g_hash_table_lookup(sessionData, "Realms");
-    PlainGStrArray realms(g_variant_dup_strv(realmsVariant, NULL));
-#endif
-
-    // Check that the service has a credentials ID. If not, create it and
-    // store its ID permanently.
-    if (!signonID) {
-        SE_LOG_DEBUG(NULL, "have to create signon identity");
-        SignonIdentityCXX identity(signon_identity_new(), TRANSFER_REF);
-        boost::shared_ptr<SignonIdentityInfo> identityInfo(signon_identity_info_new(), signon_identity_info_free);
-        signon_identity_info_set_caption(identityInfo.get(),
-                                         StringPrintf("created by SyncEvolution for account #%d and service %s",
-                                                      accountID,
-                                                      serviceName.empty() ? "<<none>>" : serviceName.c_str()).c_str());
-        const gchar *mechanisms[] = { mechanism ? mechanism : "*", NULL };
-        signon_identity_info_set_method(identityInfo.get(), method, mechanisms);
-#ifdef USE_GSSO
-        if (realms) {
-            signon_identity_info_set_realms(identityInfo.get(), realms);
-        }
-#endif
-        StoreIdentityData data;
-        signon_identity_store_credentials_with_info(identity, identityInfo.get(),
-                                                    StoreIdentityCB, &data);
-        GRunWhile(boost::lambda::var(data.m_running));
-        if (!data.m_id || data.m_gerror) {
-            SE_THROW(StringPrintf("failed to create signon identity: %s",
-                                  data.m_gerror ? data.m_gerror->message : "???"));
-        }
-
-        // Now store in account.
-        static const char CREDENTIALS_ID[] = "CredentialsId";
-        ag_account_set_variant(account, CREDENTIALS_ID, g_variant_new_uint32(data.m_id));
-#define ag_account_store_async_finish ag_account_store_finish
-        gboolean res;
-        SYNCEVO_GLIB_CALL_SYNC(res, gerror, ag_account_store_async,
-                               account, NULL);
-        if (!res) {
-            gerror.throwError(SE_HERE, "failed to store account");
-        }
-
-        authData = AgAuthDataCXX::steal(ag_account_service_get_auth_data(accountService));
-        signonID = ag_auth_data_get_credentials_id(authData);
-        if (!signonID) {
-            SE_THROW("still no signonID?!");
-        }
-        method = ag_auth_data_get_method(authData);
-        mechanism = ag_auth_data_get_mechanism(authData);
-    }
 
     SignonIdentityCXX identity(signon_identity_new_from_db(signonID), TRANSFER_REF);
     SE_LOG_DEBUG(NULL, "using signond identity %d", signonID);
