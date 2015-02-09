@@ -239,7 +239,7 @@ template<class C> class TrackGLib : public boost::intrusive_ptr<C> {
     TrackGLib(const TrackGLib &other) : Base_t(other) {}
     operator C * () const { return Base_t::get(); }
     operator bool () const { return Base_t::get() != NULL; }
-    C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
+    C * ref() const { return static_cast<C *>(intrusive_ptr_add_ref(Base_t::get())); }
 
     static  TrackGLib steal(C *ptr) { return TrackGLib(ptr, TRANSFER_REF); }
 };
