@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/find.hpp>
 #include <boost/scoped_ptr.hpp>
+#include <boost/lambda/lambda.hpp>
 
 #include <syncevo/LogRedirect.h>
 #include <syncevo/IdentityProvider.h>
@@ -1579,15 +1580,90 @@ void WebDAVSource::openPropCallback(Props_t &davProps,
     }
 }
 
+static const ne_propname getetag[] = {
+    { "DAV:", "getetag" },
+    { "DAV:", "resourcetype" },
+    { NULL, NULL }
+};
+
+static int FoundItem(bool &isEmpty,
+                     const std::string &href,
+                     const std::string &etag,
+                     const std::string &status)
+{
+    if (isEmpty) {
+        Neon::Status parsed;
+        // Err on the side of caution: if unsure about status, include item.
+        if (parsed.parse(status.c_str()) ||
+            parsed.klass == 2) {
+            isEmpty = false;
+        }
+    }
+    return isEmpty ? 0 : 100;
+}
+
 bool WebDAVSource::isEmpty()
 {
     contactServer();
 
-    // listing all items is relatively efficient, let's use that
-    // TODO: use truncated result search
-    RevisionMap_t revisions;
-    listAllItems(revisions);
-    return revisions.empty();
+    bool isEmpty;
+    if (!getContentMixed()) {
+        // Can use simple PROPFIND because we do not have to
+        // double-check that each item really contains the right data.
+        bool failed = false;
+        RevisionMap_t revisions;
+        Timespec deadline = createDeadline();
+        m_session->propfindURI(m_calendar.m_path, 1, getetag,
+                               boost::bind(&WebDAVSource::listAllItemsCallback,
+                                           this, _1, _2, boost::ref(revisions),
+                                           boost::ref(failed)),
+                               deadline);
+        if (failed) {
+            SE_THROW("incomplete listing of all items");
+        }
+        isEmpty = revisions.empty();
+    } else {
+        // Have to filter items on the server and set result to false
+        // when we get items back.
+        isEmpty = true;
+        const std::string query =
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
+            "<C:calendar-query xmlns:D=\"DAV:\"\n"
+            "xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n"
+            "<D:prop>\n"
+            "<D:getetag/>\n"
+            "</D:prop>\n"
+            // Only get items of the right kind. In listAllItems() we
+            // don't trust the server to implement this correctly and
+            // double-check by downloading the data and looking into
+            // it, but here we are less concerned. It is less important
+            // to have reliable "is empty" information as long as we
+            // err on the side of returning "not empty" too often.
+            "<C:filter>\n"
+            "<C:comp-filter name=\"VCALENDAR\">\n"
+            "<C:comp-filter name=\"" + getContent() + "\">\n"
+            "</C:comp-filter>\n"
+            "</C:comp-filter>\n"
+            "</C:filter>\n"
+            "</C:calendar-query>\n";
+        Timespec deadline = createDeadline();
+        getSession()->startOperation("REPORT 'check for items'", deadline);
+        while (true) {
+            Neon::XMLParser parser;
+            parser.initAbortingReportParser(boost::bind(FoundItem,
+                                                        boost::ref(isEmpty),
+                                                        _1, _2, _3));
+            Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
+            report.addHeader("Depth", "1");
+            report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
+            if (getSession()->run(report, NULL, !boost::lambda::var(isEmpty))) {
+                break;
+            }
+        }
+    }
+
+    SE_LOG_DEBUG(getDisplayName(), "is %s", isEmpty ? "empty" : "not empty");
+    return isEmpty;
 }
 
 bool WebDAVSource::isUsable()
@@ -1819,13 +1895,6 @@ std::string WebDAVSource::databaseRevision()
     string ctag = davProps[m_calendar.m_path]["http://calendarserver.org/ns/:getctag"];
     return ctag;
 }
-
-
-static const ne_propname getetag[] = {
-    { "DAV:", "getetag" },
-    { "DAV:", "resourcetype" },
-    { NULL, NULL }
-};
 
 void WebDAVSource::listAllItems(RevisionMap_t &revisions)
 {
