@@ -375,7 +375,8 @@ class Session {
      *
      * @return result of Session::checkError()
      */
-    bool run(Request &request, const std::set<int> *expectedCodes);
+    bool run(Request &request, const std::set<int> *expectedCodes,
+             const boost::function<bool ()> &aborted = boost::function<bool ()>());
 
     /**
      * to be called after each operation which might have produced debugging output by neon;
@@ -516,12 +517,15 @@ class XMLParser
     static int reset(std::string &buffer);
 
     /**
-     * called once a response is completely parse
+     * Called each time a response is completely parsed.
      *
      * @param href     the path for which the response was sent
      * @param etag     it's etag, empty if not requested or available
+     * @param status   it's status line, empty if not requested or unavailable
+     * @return non-zero for aborting the parsing
      */
-    typedef boost::function<void (const std::string &, const std::string &)> ResponseEndCB_t;
+    typedef boost::function<int (const std::string &, const std::string &, const std::string &)> ResponseEndCB_t;
+    typedef boost::function<void (const std::string &, const std::string &, const std::string &)> VoidResponseEndCB_t;
 
     /**
      * Setup parser for handling REPORT result.
@@ -539,7 +543,8 @@ class XMLParser
      *                      when expecting only one response, the callback
      *                      is not needed
      */
-    void initReportParser(const ResponseEndCB_t &responseEnd = ResponseEndCB_t());
+    void initReportParser(const VoidResponseEndCB_t &responseEnd = VoidResponseEndCB_t());
+    void initAbortingReportParser(const ResponseEndCB_t &responseEnd);
 
  private:
     ne_xml_parser *m_parser;
@@ -558,16 +563,18 @@ class XMLParser
     std::list<Callbacks> m_stack;
 
     /** buffers for initReportParser() */
-    std::string m_href, m_etag;
+    std::string m_href, m_etag, m_status;
 
     int doResponseEnd(const ResponseEndCB_t &responseEnd) {
+        int abort = 0;
         if (responseEnd) {
-            responseEnd(m_href, m_etag);
+            abort = responseEnd(m_href, m_etag, m_status);
         }
         // clean up for next response
         m_href.clear();
         m_etag.clear();
-        return 0;
+        m_status.clear();
+        return abort;
     }
 
     static int startCB(void *userdata, int parent,

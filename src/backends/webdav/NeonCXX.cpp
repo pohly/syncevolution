@@ -16,6 +16,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/bind.hpp>
+#include <boost/lambda/lambda.hpp>
 
 #include <syncevo/util.h>
 #include <syncevo/Logging.h>
@@ -889,7 +890,7 @@ int XMLParser::reset(std::string &buffer)
     return 0;
 }
 
-void XMLParser::initReportParser(const ResponseEndCB_t &responseEnd)
+void XMLParser::initAbortingReportParser(const ResponseEndCB_t &responseEnd)
 {
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "multistatus", _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "response", _2, _3),
@@ -899,11 +900,31 @@ void XMLParser::initReportParser(const ResponseEndCB_t &responseEnd)
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "href", _2, _3),
                 boost::bind(Neon::XMLParser::append, boost::ref(m_href), _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "propstat", _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "status", _2, _3) /* check status? */);
+    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "status", _2, _3),
+                boost::bind(Neon::XMLParser::append, boost::ref(m_status), _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "prop", _2, _3));
     pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "getetag", _2, _3),
                 boost::bind(Neon::XMLParser::append, boost::ref(m_etag), _2, _3));
 }
+
+static int VoidResponseEndCBWrapper(const XMLParser::VoidResponseEndCB_t &responseEnd,
+				    const std::string &href,
+				    const std::string &etag,
+				    const std::string &status)
+{
+    responseEnd(href, etag, status);
+    return 0;
+}
+
+void XMLParser::initReportParser(const VoidResponseEndCB_t &responseEnd)
+{
+    if (responseEnd) {
+        initAbortingReportParser(boost::bind(VoidResponseEndCBWrapper, responseEnd, _1, _2, _3));
+    } else {
+        initAbortingReportParser(ResponseEndCB_t());
+    }
+}
+
 
 Request::Request(Session &session,
                  const std::string &method,
@@ -974,7 +995,7 @@ void Session::checkAuthorization()
     }
 }
 
-bool Session::run(Request &request, const std::set<int> *expectedCodes)
+bool Session::run(Request &request, const std::set<int> *expectedCodes, const boost::function<bool ()> &aborted)
 {
     int error;
 
@@ -990,6 +1011,11 @@ bool Session::run(Request &request, const std::set<int> *expectedCodes)
         error = ne_request_dispatch(req);
     } else {
         error = ne_xml_dispatch_request(req, request.getParser()->get());
+    }
+
+    // Was request intentionally aborted?
+    if (error && aborted && aborted()) {
+        return true;
     }
 
     return checkError(error, request.getStatus()->code, request.getStatus(),
