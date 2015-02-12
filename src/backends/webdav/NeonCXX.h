@@ -247,6 +247,54 @@ struct URI {
 std::string Status2String(const ne_status *status);
 
 /**
+ * Wrapper around ne_status which manages ownership of the reason_phrase string.
+ */
+class Status : public ne_status
+{
+public:
+    Status() { memset(this, 0, sizeof(ne_status)); }
+    ~Status() { if (reason_phrase) free(reason_phrase); }
+    Status(const ne_status &other) :
+        ne_status(other)
+    {
+        if (other.reason_phrase) {
+            reason_phrase = strdup(other.reason_phrase);
+        }
+    }
+    Status &operator = (const ne_status &other)
+    {
+        if (this != &other) {
+            if (reason_phrase) {
+                free(reason_phrase);
+            }
+            *this = other;
+            if (other.reason_phrase) {
+                reason_phrase = strdup(other.reason_phrase);
+            }
+        }
+        return *this;
+    }
+
+    /** true if set */
+    operator bool () const { return klass != 0; }
+
+    /** parse and store result in current instance */
+    int parse(const char *status)
+    {
+        ne_status parsed;
+        memset(&parsed, 0, sizeof(parsed));
+        int result = ne_parse_statusline(status, &parsed);
+        if (!result) {
+            if (reason_phrase) {
+                free(reason_phrase);
+            }
+            memcpy(this, &parsed, sizeof(parsed));
+        }
+        return result;
+    }
+};
+
+/**
  * Wraps all session related activities.
  * Throws transport errors for fatal problems.
  */
