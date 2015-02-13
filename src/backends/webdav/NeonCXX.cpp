@@ -603,6 +603,12 @@ bool Session::checkError(int error, int code, const ne_status *status,
         }
     }
 
+    // Detect 403 returned by Google for a bad access token and treat that like
+    // 401 = NE_AUTH. Neon itself doesn't do that.
+    if (m_authProvider && error == NE_ERROR && code == 403) {
+        error = NE_AUTH;
+    }
+
     switch (error) {
     case NE_OK:
         // request itself completed, but might still have resulted in bad status
