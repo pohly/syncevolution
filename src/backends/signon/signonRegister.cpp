@@ -37,22 +37,22 @@ public:
         // same time, then this perhaps should be "signon" instead, which then would
         // pick either a gSSO or UAO backend depending on which is available.
 #if defined(USE_ACCOUNTS) && defined(USE_GSSO) || defined(STATIC_GSSO)
-        IdentityProvider("gsso",
-                         "gsso:<numeric account ID>[,<service name>]\n"
+        IdentityProvider(SE_SIGNON_PROVIDER_ID,
+                         SE_SIGNON_PROVIDER_ID ":<numeric account ID>[,<service name>]\n"
                          "   Authentication using libgsignond + libaccounts,\n"
                          "   using an account created and managed with libaccounts.\n"
                          "   The service name is optional. If not given, the\n"
                          "   settings from the account will be used.")
 #elif defined(USE_ACCOUNTS) && defined(USE_UOA) || defined(STATIC_UOA)
-        IdentityProvider("uoa",
-                         "uoa:<numeric account ID>[,<service name>]\n"
+        IdentityProvider(SE_SIGNON_PROVIDER_ID,
+                         SE_SIGNON_PROVIDER_ID ":<numeric account ID>[,<service name>]\n"
                          "   Authentication using libsignon + libaccounts,\n"
                          "   using an account created and managed with libaccounts.\n"
                          "   The service name is optional. If not given, the\n"
                          "   settings from the account will be used.")
 #elif defined(USE_SIGNON) || defined(STATIC_SIGNON)
-        IdentityProvider("signon",
-                         "signon:<parameters>]\n"
+        IdentityProvider(SE_SIGNON_PROVIDER_ID,
+                         SE_SIGNON_PROVIDER_ID ":<parameters>]\n"
                          "   Authentication using libgsignond with an identity created\n"
                          "   before calling SyncEvolution. The <parameters> string is a\n"
                          "   GVariant text dump suitable for g_variant_parse() (see\n"

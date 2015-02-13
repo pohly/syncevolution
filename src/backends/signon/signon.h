@@ -26,6 +26,14 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+#if defined(USE_ACCOUNTS) && defined(USE_GSSO) || defined(STATIC_GSSO)
+# define SE_SIGNON_PROVIDER_ID "gsso"
+#elif defined(USE_ACCOUNTS) && defined(USE_UOA) || defined(STATIC_UOA)
+# define SE_SIGNON_PROVIDER_ID "uoa"
+#elif defined(USE_SIGNON) || defined(STATIC_SIGNON)
+# define SE_SIGNON_PROVIDER_ID "signon"
+#endif
+
 class AuthProvider;
 boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
                                                          const InitStateString &password);

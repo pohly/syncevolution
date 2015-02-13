@@ -20,6 +20,7 @@
 #include <config.h>
 
 #include <syncevo/IdentityProvider.h>
+#include "signon.h"
 
 #ifdef USE_SIGNON
 #ifdef USE_GSSO
@@ -221,7 +222,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
     AgAccountId accountID;
     std::string serviceName;
     if (!re.FullMatch(username, &accountID, &serviceName)) {
-        SE_THROW(StringPrintf("username must have the format gsso:<account ID>,<service name>: %s",
+        SE_THROW(StringPrintf("username must have the format " SE_SIGNON_PROVIDER_ID ":<account ID>,<service name>: %s",
                               username.c_str()));
     }
     SE_LOG_DEBUG(NULL, "looking up account ID %d and service '%s'",
