@@ -25,6 +25,7 @@
 #include <syncevo/eds_abi_wrapper.h>
 #include <syncevo/icalstrdup.h>
 #include <syncevo/SmartPtr.h>
+#include <pcrecpp.h>
 
 SE_BEGIN_CXX
 
@@ -34,6 +35,18 @@ class IcalTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE_END();
 
 protected:
+    /**
+     * Ignore exact day in DTSTART because icaltz-util.c uses the
+     * transition day of the *current* year, instead of the one from
+     * the (arbitrary) 1970 year. The value is wrong either way,
+     * so fixing that bug is not important.
+     */
+    void patchDTSTART(std::string &vtimezone)
+    {
+        static const pcrecpp::RE re("(DTSTART:1970..)..");
+        re.GlobalReplace("\\1XX", &vtimezone);
+    }
+
     /**
      * Ensures that we get VTIMEZONE with RRULE from libical.
      *
@@ -59,9 +72,8 @@ protected:
         CPPUNIT_ASSERT(comp);
         SyncEvo::eptr<char> str(ical_strdup(icalcomponent_as_ical_string(comp)));
         CPPUNIT_ASSERT(str);
-        // We are very specific here. This'll work until we change our
-        // code or the zone data from Europe/Paris changes (not likely).
-        CPPUNIT_ASSERT_EQUAL(std::string(str), std::string(
+        // 2014 version of the VTIMEZONE
+        std::string expected =
             "BEGIN:VTIMEZONE\r\n"
             "TZID:/freeassociation.sourceforge.net/Tzfile/Europe/Paris\r\n"
             "X-LIC-LOCATION:Europe/Paris\r\n"
@@ -80,7 +92,13 @@ protected:
             "TZOFFSETTO:+0200\r\n"
             "END:DAYLIGHT\r\n"
             "END:VTIMEZONE\r\n"
-            ));
+        ;
+        patchDTSTART(expected);
+        std::string actual(str);
+        patchDTSTART(actual);
+        // We are very specific here. This'll work until we change our
+        // code or the zone data from Europe/Paris changes (not likely).
+        CPPUNIT_ASSERT_EQUAL(expected, actual);
     }
 };
 
