@@ -3236,6 +3236,9 @@ void SyncContext::initMain(const char *appname)
 #endif
     g_set_prgname(appname);
 
+    // Initialize SuspendFlags singleton.
+    SuspendFlags::getSuspendFlags();
+
     // redirect glib logging into our own logging
     g_log_set_default_handler(Logger::glogFunc, NULL);
 

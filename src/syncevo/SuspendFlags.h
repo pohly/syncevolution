@@ -65,7 +65,13 @@ class SuspendFlags
         ABORT_MAX
     };
 
-    /** access to singleton */
+    /**
+     * Access to singleton.
+     *
+     * Must be called once before the program becomes multi-threaded,
+     * to initialize the singleton. All further calls are thread-safe
+     * and signal-handler-safe, because they just return a pointer.
+     */
     static SuspendFlags &getSuspendFlags();
 
     /**

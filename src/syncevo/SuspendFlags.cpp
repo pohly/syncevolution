@@ -55,7 +55,6 @@ SuspendFlags::~SuspendFlags()
 SuspendFlags &SuspendFlags::getSuspendFlags()
 {
     // never free the instance, other singletons might depend on it
-    RecMutex::Guard guard = suspendRecMutex.lock();
     static SuspendFlags *flags;
     if (!flags) {
         flags = new SuspendFlags;
