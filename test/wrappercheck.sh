@@ -67,7 +67,7 @@ fi
 # We need to create a process group so that we can kill all processes started by the sub-shell.
 # ${BACKGROUND[*]} is used instead of ${BACKGROUND[@]} because although the later should have
 # avoided expansion of words (good!) somehow the quoting got messed up in practice (bad!).
-( set -x; exec >>${DAEMON_LOG:-&2} 2>&1; exec env "${ENV[@]}" setsid /bin/bash -c "set -x -o pipefail; ${BACKGROUND[*]} | $(dirname $0)/logger.py" ) &
+( set -x; exec >>${DAEMON_LOG:-&2} 2>&1; exec env "${ENV[@]}" setsid /bin/bash -c "set -x -o pipefail; ${BACKGROUND[*]} 2>&1 | $(dirname $0)/logger.py" ) &
 
 BACKGROUND_PID=$!
 PIDS+="$BACKGROUND_PID"
