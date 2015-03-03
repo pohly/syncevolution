@@ -102,7 +102,8 @@ struct PullParams
     /** Initial chunk offset, again in contacts. */
     uint16_t m_startOffset;
 
-    PullParams() { memset(this, 0, sizeof(*this)); }
+    // cppcheck-suppress memsetClassFloat
+    PullParams() { memset(this, 0, sizeof(*this)); m_timePerChunk = m_timeLambda = 0; }
 };
 
 /**
@@ -1265,7 +1266,6 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
 {
     if (aFirst) {
         PullParams params;
-        memset(&params, 0, sizeof(params));
 
         params.m_pullData = (m_PBAPSyncMode == PBAP_SYNC_TEXT ||
                              (m_PBAPSyncMode == PBAP_SYNC_INCREMENTAL && m_isFirstCycle)) ?
