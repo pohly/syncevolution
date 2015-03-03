@@ -627,6 +627,7 @@ class PlainGStr : public boost::shared_ptr<gchar>
         PlainGStr(const PlainGStr &other) : boost::shared_ptr<gchar>(other) {}    
         operator const gchar *() const { return &**this; }
         const gchar *c_str() const { return &**this; }
+        void reset(gchar *str) { *this = PlainGStr(str); }
 };
 
 /**
