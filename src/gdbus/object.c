@@ -1073,6 +1073,7 @@ char *printf_dyn(const char *format, va_list ap)
                 if (oldbuffer) {
                     free(oldbuffer);
                 }
+                va_end(aq);
                 return strdup("");
             }
             size = realsize;
