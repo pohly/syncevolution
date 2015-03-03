@@ -20,6 +20,7 @@ trap "[ \"$PIDS\" ] && kill -INT $PIDS" INT
 
 DAEMON_LOG=
 WAIT_FOR_DAEMON_OUTPUT=
+WAIT_FOR_DBUS_DAEMON=
 
 declare -a BACKGROUND
 declare -a ENV
@@ -29,6 +30,10 @@ while [ $# -gt 1 ] && [ "$1" != "--" ] ; do
         --daemon-log)
             shift
             DAEMON_LOG="$1"
+            ;;
+        --wait-for-dbus-daemon)
+            shift
+            WAIT_FOR_DBUS_DAEMON="$1"
             ;;
         --wait-for-daemon-output)
             shift
@@ -75,6 +80,14 @@ if [ "$DAEMON_LOG" ] && [ "$WAIT_FOR_DAEMON_OUTPUT" ]; then
             fi
             sleep 1
         done
+    )
+fi
+
+if [ "$WAIT_FOR_DBUS_DAEMON" ]; then
+    ( set +x; echo >&2 "*** waiting for daemon to connect to D-Bus as '$WAIT_FOR_DBUS_DAEMON'"
+      while ! (dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames | grep -q "$WAIT_FOR_DBUS_DAEMON"); do
+          sleep 1
+      done
     )
 fi
 
