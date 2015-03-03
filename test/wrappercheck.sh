@@ -15,8 +15,8 @@ PS4='wrappercheck-$$ line ${LINENO}: '
 
 PIDS=
 
-trap "kill -TERM $PIDS" TERM
-trap "kill -INT $PIDS" INT
+trap "[ \"$PIDS\" ] && kill -TERM $PIDS" TERM
+trap "[ \"$PIDS\" ] && kill -INT $PIDS" INT
 
 DAEMON_LOG=
 WAIT_FOR_DAEMON_OUTPUT=
