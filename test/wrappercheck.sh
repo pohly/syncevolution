@@ -106,10 +106,11 @@ else
 fi
 
 ( set +x; echo >&2 "*** killing and waiting for ${BACKGROUND[0]}" )
-if kill -INT -$BACKGROUND_PID 2>/dev/null && kill -TERM -$BACKGROUND_PID 2>/dev/null; then
+if kill -INT -$BACKGROUND_PID >&2 && kill -TERM -$BACKGROUND_PID >&2 || kill -INT $BACKGROUND_PID >&2 && kill -TERM $BACKGROUND_PID >&2; then
     perl -e "sleep(60); kill(9, -$BACKGROUND_PID);" &
     KILL_PID=$!
 else
+    ps x --forest >&2
     KILL_PID=
 fi
 set +e
