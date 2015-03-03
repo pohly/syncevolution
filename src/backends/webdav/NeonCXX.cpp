@@ -189,7 +189,7 @@ std::string Status2String(const ne_status *status)
 }
 
 Session::Session(const boost::shared_ptr<Settings> &settings) :
-    m_forceAuthorizationOnce(false),
+    m_forceAuthorizationOnce(AUTH_ON_DEMAND),
     m_credentialsSent(false),
     m_oauthTokenRejections(0),
     m_settings(settings),
@@ -324,9 +324,10 @@ int Session::getCredentials(void *userdata, const char *realm, int attempt, char
     }
 }
 
-void Session::forceAuthorization(const boost::shared_ptr<AuthProvider> &authProvider)
+void Session::forceAuthorization(ForceAuthorization forceAuthorization,
+                                 const boost::shared_ptr<AuthProvider> &authProvider)
 {
-    m_forceAuthorizationOnce = true;
+    m_forceAuthorizationOnce = forceAuthorization;
     m_authProvider = authProvider;
 }
 
@@ -355,8 +356,9 @@ void Session::preSend(ne_request *req, ne_buffer *header)
     // Only do this once when using normal username/password.
     // Always do it when using OAuth2.
     bool useOAuth2 = m_authProvider && m_authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2);
-    if (m_forceAuthorizationOnce || useOAuth2) {
-        m_forceAuthorizationOnce = false;
+    bool forceAlways = m_forceAuthorizationOnce == AUTH_ALWAYS;
+    if (m_forceAuthorizationOnce != AUTH_ON_DEMAND || useOAuth2) {
+        m_forceAuthorizationOnce = AUTH_ON_DEMAND;
         bool haveAuthorizationHeader = boost::starts_with(header->data, "Authorization:") ||
             strstr(header->data, "\nAuthorization:");
 
@@ -369,7 +371,7 @@ void Session::preSend(ne_request *req, ne_buffer *header)
             m_credentialsSent = true;
             // SmartPtr<char *> blob(ne_base64((const unsigned char *)m_oauth2Bearer.c_str(), m_oauth2Bearer.size()));
             ne_buffer_concat(header, "Authorization: Bearer ", m_oauth2Bearer.c_str() /* blob.get() */, "\r\n", (const char *)NULL);
-        } else if (m_uri.m_scheme == "https") {
+        } else if (forceAlways || m_uri.m_scheme == "https") {
             // append "Authorization: Basic" header if not present already
             if (!haveAuthorizationHeader) {
                 Credentials creds = m_authProvider->getCredentials();

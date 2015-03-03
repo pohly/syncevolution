@@ -620,7 +620,7 @@ void WebDAVSource::contactServer()
         m_session = Neon::Session::create(m_settings);
         SE_LOG_INFO(getDisplayName(), "using configured database=%s", database.c_str());
         // force authentication via username/password or OAuth2
-        m_session->forceAuthorization(m_settings->getAuthProvider());
+        m_session->forceAuthorization(Neon::Session::AUTH_HTTPS, m_settings->getAuthProvider());
         return;
     }
 
@@ -684,6 +684,7 @@ class Candidate {
 public:
     enum Flags {
         LIST = (1u << 0),       // Also list all members to find more candidates.
+        FORCE_AUTH = (1u << 1), // Force authentication for this candidate.
         NONE = 0
     };
 
@@ -1063,7 +1064,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     // Use OAuth2, if available.
                     boost::shared_ptr<AuthProvider> authProvider = m_settings->getAuthProvider();
                     if (authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
-                        m_session->forceAuthorization(authProvider);
+                        m_session->forceAuthorization(Neon::Session::AUTH_HTTPS, authProvider);
                     }
                     Neon::Session::PropfindPropCallback_t callback =
                         boost::bind(&WebDAVSource::openPropCallback,
@@ -1102,7 +1103,10 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             // http://tools.ietf.org/html/rfc4918#appendix-E
             // http://lists.w3.org/Archives/Public/w3c-dist-auth/2005OctDec/0243.html
             // http://thread.gmane.org/gmane.comp.web.webdav.neon.general/717/focus=719
-            m_session->forceAuthorization(m_settings->getAuthProvider());
+            m_session->forceAuthorization((candidate.m_flags & Candidate::FORCE_AUTH) ?
+                                          Neon::Session::AUTH_ALWAYS : // we really mean it, do it also for http
+                                          Neon::Session::AUTH_HTTPS,   // only when auth header is protected by https
+                                          m_settings->getAuthProvider());
             davProps.clear();
             // Avoid asking for CardDAV properties when only using CalDAV
             // and vice versa, to avoid breaking both when the server is only
@@ -1359,7 +1363,25 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                 // TODO:
                 // xmlns:d="DAV:"
                 // <d:current-user-principal><d:href>/m8/carddav/principals/__uids__/patrick.ohly@googlemail.com/</d:href></d:current-user-principal>
-                if (tried.isNew(principal)) {
+
+                if (principal.m_uri.m_path.empty()) {
+                    // Happens for example with Apple Calendar server and http:
+                    // <current-user-principal>
+                    //   <unauthenticated/>
+                    // </current-user-principal>
+                    // We get the property, but it contains no href.
+                    // Try again with authentication, even if not challenged to do so
+                    // at the HTTP level.
+                    // TODO (?): detect the <unauthenticated/> tag.
+                    Candidate withAuth(candidate);
+                    withAuth.m_flags |= Candidate::FORCE_AUTH;
+                    bool retry = tried.isNew(withAuth);
+                    SE_LOG_DEBUG(NULL, "empty current-user-prinicipal: %s",
+                                 retry ? "retry current URL with authentication" : "ignore it");
+                    if (retry) {
+                        next = withAuth;
+                    }
+                } else if (tried.isNew(principal)) {
                     next = principal;
                     SE_LOG_DEBUG(NULL, "follow current-user-prinicipal to %s", next.m_uri.toURL().c_str());
                 }

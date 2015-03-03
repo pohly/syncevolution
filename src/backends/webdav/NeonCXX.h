@@ -251,13 +251,21 @@ std::string Status2String(const ne_status *status);
  * Throws transport errors for fatal problems.
  */
 class Session {
+ public:
+    enum ForceAuthorization {
+        AUTH_ON_DEMAND,
+        AUTH_HTTPS,
+        AUTH_ALWAYS
+    };
+
+ private:
     /**
      * @param settings    must provide information about settings on demand
      */
     Session(const boost::shared_ptr<Settings> &settings);
     static boost::shared_ptr<Session> m_cachedSession;
 
-    bool m_forceAuthorizationOnce;
+    ForceAuthorization m_forceAuthorizationOnce;
     boost::shared_ptr<AuthProvider> m_authProvider;
 
     /**
@@ -382,7 +390,7 @@ class Session {
      * (when username/password are provided by AuthProvider) or all
      * requests to use OAuth2 authentication.
      */
-    void forceAuthorization(const boost::shared_ptr<AuthProvider> &authProvider);
+    void forceAuthorization(ForceAuthorization forceAuthorization, const boost::shared_ptr<AuthProvider> &authProvider);
 
  private:
     boost::shared_ptr<Settings> m_settings;
