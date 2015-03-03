@@ -723,6 +723,7 @@ std::string StringPrintfV(const char *format, va_list ap)
                 if (buffer) {
                     free(buffer);
                 }
+                va_end(aq);
                 return "";
             }
             size = realsize;
