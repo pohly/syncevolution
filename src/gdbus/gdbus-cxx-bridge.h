@@ -92,6 +92,10 @@ static inline void intrusive_ptr_release(DBusServer *server) { dbus_server_unref
 #include <boost/utility.hpp>
 #include <boost/tuple/tuple.hpp>
 
+#ifdef HAVE_GLIB
+# include <glib.h>
+#endif
+
 /* The connection is the only client-exposed type from the C API. To
  * keep changes to a minimum while supporting both dbus
  * implementations, this is made to be a define. The intention is to
@@ -1148,6 +1152,46 @@ template<> struct dbus_traits<std::string> : public dbus_traits_base
     static void append(DBusMessageIter &iter, const std::string &value)
     {
         const char *str = value.c_str();
+#ifdef HAVE_GLIB
+        // dbus_message_iter_append_basic() will log an assertion and
+        // return NULL (similar to GIO dbus in FDO #90118) when the
+        // string contains non-UTF-8 content.  We must check in
+        // advance to avoid the assertion, even if that means
+        // duplicating the check (once here and once inside
+        // dbus_message_iter_append_basic()).
+        //
+        // Strictly speaking, this is something that the caller should
+        // have checked for, but as this should only happen for
+        // invalid external data (like broken iCalendar 2.0 events,
+        // see FDO #90118) and the only reasonable error handling in
+        // SyncEvolution would consist of filtering the data, so it is
+        // less intrusive overall to do that here: a question mark
+        // substitutes all invalid bytes.
+        const char *start = value.c_str(),
+            *end = value.c_str() + value.size();
+        const gchar *invalid;
+        bool valid = g_utf8_validate(start, end - start, &invalid);
+        std::string buffer;
+        if (!valid) {
+            buffer.reserve(value.size());
+            while (true) {
+                // "Opposite conditions in nested 'if' blocks lead to a dead code block." is not true:
+                // The check is necessary for the following loop iterations.
+                // cppcheck-suppress oppositeInnerCondition
+                if (valid) {
+                    buffer.append(start, end - start);
+                    // Empty string is valid, so we end up here in all cases.
+                    break;
+                } else {
+                    buffer.append(start, invalid - start);
+                    buffer.append("?");
+                    start = invalid + 1;
+                }
+                valid = g_utf8_validate(start, end - start, &invalid);
+            }
+            str = buffer.c_str();
+        }
+#endif
         if (!dbus_message_iter_append_basic(&iter, dbus, &str)) {
             throw std::runtime_error("out of memory");
         }

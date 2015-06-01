@@ -1530,7 +1530,43 @@ template<> struct dbus_traits<std::string> : public dbus_traits_base
 
     static void append(GVariantBuilder &builder, const std::string &value)
     {
-        g_variant_builder_add_value(&builder, g_variant_new_string(value.c_str()));
+        // g_variant_new_string() will log an assertion and/or return NULL
+        // (as in FDO #90118) when the string contains non-UTF-8 content.
+        // We must check in advance to avoid the assertion, even if that
+        // means duplicating the check (once here and once inside g_variant_new_string().
+        //
+        // Strictly speaking, this is something that the caller should
+        // have checked for, but as this should only happen for
+        // invalid external data (like broken iCalendar 2.0 events,
+        // see FDO #90118) and the only reasonable error handling in
+        // SyncEvolution would consist of filtering the data, so it is
+        // less intrusive overall to do that here: a question mark
+        // substitutes all invalid bytes.
+        const char *start = value.c_str(),
+            *end = value.c_str() + value.size();
+        const gchar *invalid;
+        bool valid = g_utf8_validate(start, end - start, &invalid);
+        GVariant *tmp;
+        if (valid) {
+            tmp = g_variant_new_string(value.c_str());
+        } else {
+            std::string buffer;
+            buffer.reserve(value.size());
+            while (true) {
+                if (valid) {
+                    buffer.append(start, end - start);
+                    // Empty string is valid, so we end up here in all cases.
+                    break;
+                } else {
+                    buffer.append(start, invalid - start);
+                    buffer.append("?");
+                    start = invalid + 1;
+                }
+                valid = g_utf8_validate(start, end - start, &invalid);
+            }
+            tmp = g_variant_new_string(buffer.c_str());
+        }
+        g_variant_builder_add_value(&builder, tmp);
     }
 
     typedef std::string host_type;
