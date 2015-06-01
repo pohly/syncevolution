@@ -283,8 +283,8 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
     /** use this to send a message back from child to parent */
     typedef boost::shared_ptr< GDBusCXX::Result3< std::string, size_t, size_t > > ReplyPtr;
 
-    /** log output with level and message; process name will be added by parent */
-    GDBusCXX::SignalWatch2<string, string> m_logOutput;
+    /** log output with level, prefix and message; process name will be added by parent */
+    GDBusCXX::SignalWatch3<string, string, string> m_logOutput;
 
     /** LocalTransportAgentChild::setFreeze() */
     GDBusCXX::DBusClientCall0 m_setFreeze;
@@ -294,13 +294,16 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
     GDBusCXX::DBusClientCall3<std::string, size_t, size_t > m_sendMsg;
 };
 
-void LocalTransportAgent::logChildOutput(const std::string &level, const std::string &message)
+void LocalTransportAgent::logChildOutput(const std::string &level, const std::string &prefix, const std::string &message)
 {
     Logger::MessageOptions options(Logger::strToLevel(level.c_str()));
     options.m_processName = &m_clientConfig;
     // Child should have written this into its own log file and/or syslog/dlt already.
     // Only pass it on to a user of the command line interface.
     options.m_flags = Logger::MessageOptions::ALREADY_LOGGED;
+    if (!prefix.empty()) {
+        options.m_prefix = &prefix;
+    }
     SyncEvo::Logger::instance().messageWithOptions(options, "%s", message.c_str());
 }
 
@@ -316,7 +319,7 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
     m_parent->add(this, &LocalTransportAgent::storeSyncReport, LocalTransportParent::storeSyncReportName());
     m_parent->activate();
     m_child.reset(new LocalTransportChild(conn));
-    m_child->m_logOutput.activate(boost::bind(&LocalTransportAgent::logChildOutput, this, _1, _2));
+    m_child->m_logOutput.activate(boost::bind(&LocalTransportAgent::logChildOutput, this, _1, _2, _3));
 
     // now tell child what to do
     LocalTransportChild::ActiveSources_t sources;
@@ -688,7 +691,8 @@ public:
         add(m_logOutput);
     };
 
-    GDBusCXX::EmitSignal2<std::string,
+    GDBusCXX::EmitSignal3<std::string,
+                          std::string,
                           std::string,
                           true /* ignore transmission failures */> m_logOutput;
 };
@@ -719,12 +723,9 @@ public:
             m_parentLogger->process();
             boost::shared_ptr<LocalTransportChildImpl> child = m_child.lock();
             if (child) {
-                // prefix is used to set session path
-                // for general server output, the object path field is dbus server
-                // the object path can't be empty for object paths prevent using empty string.
                 string strLevel = Logger::levelToStr(options.m_level);
                 string log = StringPrintfV(format, args);
-                child->m_logOutput(strLevel, log);
+                child->m_logOutput(strLevel, options.m_prefix ? *options.m_prefix : "", log);
             }
         }
     }

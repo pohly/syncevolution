@@ -134,7 +134,7 @@ class LocalTransportAgent : public TransportAgent
      */
     boost::shared_ptr<LocalTransportChild> m_child;
 
-    void logChildOutput(const std::string &level, const std::string &message);
+    void logChildOutput(const std::string &level, const std::string &prefix, const std::string &message);
     void onChildConnect(const GDBusCXX::DBusConnectionPtr &conn);
     void onFailure(const std::string &error);
     void onChildQuit(int status);
