@@ -4264,6 +4264,8 @@ END:VCARD''')
         loop.run()
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
         self.checkSync()
+        input = open(xdg_root + "/client/0", "r")
+        self.assertIn("FN:John Doe", input.read())
         input = open(xdg_root + "/server/0", "r")
         self.assertIn("FN:John Doe", input.read())
 
