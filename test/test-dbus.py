@@ -8444,6 +8444,7 @@ Comparison was impossible.
 [INFO] @default/addressbook: started
 [INFO] @default/addressbook: sent 1
 [INFO remote@client] @client/addressbook: started
+[INFO remote@client] @client/addressbook: adding "John Doe"
 [INFO remote@client] @client/addressbook: received 1/1
 [INFO] @default/addressbook: first time sync done successfully
 [INFO remote@client] @client/addressbook: first time sync done successfully
@@ -8772,6 +8773,7 @@ END:VCARD                                END:VCARD
 [INFO] @default/addressbook: started
 [INFO] @default/addressbook: sent 1
 [INFO remote@client] @client/addressbook: started
+[INFO remote@client] @client/addressbook: updating "Joan Doe"
 [INFO remote@client] @client/addressbook: received 1/1
 [INFO] @default/addressbook: normal sync done successfully
 [INFO remote@client] @client/addressbook: normal sync done successfully
@@ -8869,6 +8871,7 @@ END:VCARD                              <
 [INFO] @default/addressbook: started
 [INFO] @default/addressbook: sent 1
 [INFO remote@client] @client/addressbook: started
+[INFO remote@client] @client/addressbook: deleting <0>
 [INFO remote@client] @client/addressbook: received 1/1
 [INFO] @default/addressbook: normal sync done successfully
 [INFO remote@client] @client/addressbook: normal sync done successfully
@@ -8982,6 +8985,7 @@ Comparison was impossible.
 [INFO] @default/calendar: started
 [INFO] @default/addressbook: sent 1
 [INFO remote@client] @client/addressbook: started
+[INFO remote@client] @client/addressbook: adding "John Doe"
 [INFO remote@client] @client/addressbook: received 1/1
 [INFO remote@client] @client/calendar: started
 [INFO] @default/addressbook: first time sync done successfully
@@ -9215,6 +9219,7 @@ no changes
 [INFO] @default/calendar: started
 [INFO] @default/addressbook: sent 1
 [INFO remote@client] @client/addressbook: started
+[INFO remote@client] @client/addressbook: updating "Joan Doe"
 [INFO remote@client] @client/addressbook: received 1/1
 [INFO remote@client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully
@@ -9337,6 +9342,7 @@ no changes
 [INFO] @default/calendar: started
 [INFO] @default/addressbook: sent 1
 [INFO remote@client] @client/addressbook: started
+[INFO remote@client] @client/addressbook: deleting <0>
 [INFO remote@client] @client/addressbook: received 1/1
 [INFO remote@client] @client/calendar: started
 [INFO] @default/addressbook: normal sync done successfully

@@ -57,6 +57,23 @@ FileSyncSource::FileSyncSource(const SyncSourceParams &params,
     if (dataformat.empty()) {
         throwError(SE_HERE, "a database format must be specified");
     }
+    std::list<std::string> fields;
+    std::string separator;
+    if (m_mimeType == "text/vcard" ||
+        m_mimeType == "text/x-vcard") {
+        fields.push_back("N_FIRST");
+        fields.push_back("N_MIDDLE");
+        fields.push_back("N_LAST");
+        separator = " ";
+    } else if (m_mimeType == "text/calendar" ||
+               m_mimeType == "text/x-vcalendar") {
+        fields.push_back("SUMMARY");
+        fields.push_back("LOCATION");
+        separator = ", ";
+    }
+    if (!fields.empty()) {
+        SyncSourceLogging::init(fields, separator, m_operations);
+    }
 }
 
 std::string FileSyncSource::getMimeType() const

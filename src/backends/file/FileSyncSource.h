@@ -54,7 +54,7 @@ SE_BEGIN_CXX
  * - type=file:text/vcard:3.0
  * - type=file:text/plain:1.0
  */
-class FileSyncSource : public TrackingSyncSource, private boost::noncopyable
+class FileSyncSource : public TrackingSyncSource, public SyncSourceLogging, private boost::noncopyable
 {
   public:
     FileSyncSource(const SyncSourceParams &params,
