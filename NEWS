@@ -1,3 +1,124 @@
+SyncEvolution 1.5 -> 1.5.1, 05.06.2015
+======================================
+
+Maintenance release. Binaries now also get compiled for Debian 8.0
+"Jessie".
+
+Details:
+
+* avoid time zone issue with Funambol server
+
+  The Funambol iCalendar 2.0 parser fails to handle time zones
+  with quotation marks around the TZID value, which is something
+  that SyncEvolution started to add in 1.4.99.3. While it is valid
+  to quote like that, it is not necessary, so avoid quoting in
+  this case to restore interoperability.
+
+* syncevo-http-server: stop using deprecated twisted.web.error (FDO #90419)
+
+  This has become a real problem for example on Fedora 22 where the
+  old name is no longer available.
+
+* syncevo-http-server: use TLS instead of SSLv3
+
+  This fixes a potential security risk and connection problems with clients
+  that don't support SSLv3 anymore.
+
+* syncing: avoid segfault for invalid text inside items (FDO #90118)
+
+  As reported by Canonical, syncing fails if data items contain
+  text which is not correct UTF-8 in one of the fields that
+  SyncEvolution logs in the command line output (like SUMMARY of
+  a calendar event).
+
+  That is because the byte string coming from the item is passed
+  unchecked to the D-Bus implementation for transmission via D-Bus. But
+  D-Bus strings must be correct UTF-8, so depending on the D-Bus library
+  in use, one gets a segfault (GIO D-Bus, due to an unchecked NULL
+  pointer access) or an "out of memory" error (libdbus, which checks for
+  NULL).
+
+  SyncEvolution now replaces invalid bytes with a question mark in its
+  output while preserving the rest of the text.
+
+* file backend: log item manipulation
+
+  Extracting a meaningful description of each item from the Synthesis
+  engine when updating and adding items is easy to do for items of
+  certain known types (contacts and calendar items).
+
+* command line: preserve log prefix of target side of local sync
+
+  In some cases, the prefix which was supposed to be embedded
+  in the log messages from the target side of a local sync got
+  lost on the way to the command line tool.
+
+  Primarily this affected the added/updated/deleted messages, as in:
+
+  [INFO remote@client] @client/addressbook: started
+  [INFO remote@client] updating "Joan Doe"
+  [INFO remote@client] @client/addressbook: received 1/1
+
+* compile fix: use ${PKG_CONFIG} instead of pkg-config.
+
+  This fixes the build on Exherbo that only has prefixed versions of
+  pkg-config.
+
+* WebDAV: handle 403 during Google OAuth authentication
+
+  When sending an access token with insufficient scope (for example,
+  because the Ubuntu Online Accounts service definition was incomplete,
+  as documented in FDO #86824), Google responds with a 403 "service
+  denied" error.
+
+  This is now dealt with by retrying, just as for a transient 401 error.
+
+* CalDAV: more efficient "is empty" check (FDO #86335)
+
+  Since 1.4.99.4, syncing WebDAV collections always checks first
+  whether there are items in the collections. This was partly done for
+  slow sync prevention (which is not necessary for empty collections),
+  partly for the "is the datastore usable" check.
+
+  However, this did not take into account that for CalDAV collections,
+  the entire content gets downloaded for this check. That is because
+  filtering by item type (VEVENT vs. VJOURNAL) is not implemented
+  correctly by all servers. So now all CalDAV syncs, whether incremental
+  or slow, always transfered all items, which is not the
+  intention (incremental syncs should be fast and efficient).
+
+  This release adds a more efficient isEmpty() check: for simple CardDAV
+  collections, only luid and etag get transferred, as in
+  listAllItems(). This is the behavior from 1.5.
+
+  For CalDAV, a report with a filter for the content type is used and
+  the transfer gets aborted after the first item, without actually
+  double-checking the content of the item. This is different from
+  listAllItems(), which really transfers the content. This extra content
+  check would only be needed for some old servers (Radical 0.7) and is
+  not essential, because reporting "not empty" even when empty is safe.
+
+* WebDAV: send Basic Auth via http in some cases (FDO #57248)
+
+  It turned out that finding databases on an Apple Calendar server accessed via
+  http depends on sending Basic Auth even when the server does not ask for it:
+  without authentication, there is no information about the current principal,
+  which is necessary for finding the user's databases.
+
+  To make this work again, sending the authentication header is now forced for
+  plain http if (and only if) the request which should have returned the
+  principal URL fails to include it. This implies sending the same request
+  twice, but as this scenario should be rare in practise (was only done for
+  testing), this is acceptable.
+
+* Ubuntu Online Accounts: support plain text credentials
+
+  The backend for UOA was rewritten by Alberto Mardegan and now also
+  can use plain username/password credentials stored in UOA.
+
+* various compiler error and warning fixes
+
+
 SyncEvolution 1.4.1 -> 1.5, 31.10.2014
 ======================================
 
