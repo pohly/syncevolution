@@ -140,28 +140,35 @@ bool relToAbs(string &path)
 
 void mkdir_p(const string &path)
 {
-    boost::scoped_array<char> dirs(new char[path.size() + 1]);
-    char *curr = dirs.get();
-    strcpy(curr, path.c_str());
-    do {
-        char *nextdir = strchr(curr, '/');
-        if (nextdir) {
-            *nextdir = 0;
-            nextdir++;
-        }
-        if (*curr) {
-            if (access(dirs.get(),
-                       nextdir ? (R_OK|X_OK) : (R_OK|X_OK|W_OK)) &&
-                (errno != ENOENT ||
-                 mkdir(dirs.get(), 0700))) {
-                Exception::throwError(SE_HERE, string(dirs.get()), errno);
+    // Try creating the requested directory. If that fails with ENOENT,
+    // try creating the parent first, then retry. The advantage over
+    // walking from top to bottom is that the we do not need read access
+    // to the parent directories (for example, /home is only a+x and
+    // not a+rx - FDO #91000).
+    int res = mkdir(path.c_str(), 0700);
+    if (res) {
+        switch (errno) {
+        case EEXIST:
+            // Assume that it is a directory. If not, using it as a directory
+            // will fail elsewhere.
+            break;
+        case ENOENT: {
+            // Need to create parent first.
+            std::string::size_type pos = path.rfind('/');
+            if (pos != std::string::npos) {
+                mkdir_p(path.substr(0, pos));
             }
+            res = mkdir(path.c_str(), 0700);
+            if (res) {
+                Exception::throwError(SE_HERE, path, errno);
+            }
+            break;
         }
-        if (nextdir) {
-            nextdir[-1] = '/';
+        default:
+            Exception::throwError(SE_HERE, path, errno);
+            break;
         }
-        curr = nextdir;
-    } while (curr);
+    }
 }
 
 void rm_r(const string &path, boost::function<bool (const string &,
