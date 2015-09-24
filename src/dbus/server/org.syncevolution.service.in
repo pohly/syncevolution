@@ -1,3 +1,4 @@
 [D-BUS Service]
 Name=org.syncevolution
 Exec=@libexecdir@/syncevo-dbus-server @SYNCEVO_DBUS_SERVER_ARGS@
+SystemdService=syncevo-dbus-server.service

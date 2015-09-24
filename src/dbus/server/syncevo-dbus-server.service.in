@@ -1,0 +1,7 @@
+[Unit]
+Description=personal information management synchronization service
+
+[Service]
+Type=dbus
+BusName=org.syncevolution
+ExecStart=@libexecdir@/syncevo-dbus-server @SYNCEVO_DBUS_SERVER_ARGS@
