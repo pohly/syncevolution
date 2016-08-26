@@ -1731,7 +1731,7 @@ bool Cmdline::run() {
 
 void Cmdline::readLUIDs(SyncSource *source, list<string> &luids)
 {
-    processLUIDs(source, boost::bind(&list<string>::push_back, boost::ref(luids), _1));
+    processLUIDs(source, boost::bind(static_cast<void (list<string>::*)(const string &)>(&list<string>::push_back), boost::ref(luids), _1));
 }
 
 void Cmdline::processLUIDs(SyncSource *source, const boost::function<void (const std::string &)> &process)
