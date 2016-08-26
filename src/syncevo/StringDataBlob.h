@@ -53,7 +53,7 @@ class StringDataBlob : public DataBlob
 
     virtual boost::shared_ptr<std::string> getData() { return m_data; }
     virtual std::string getName() const { return m_name; }
-    virtual bool exists() const { return m_data; }
+    virtual bool exists() const { return static_cast<bool>(m_data); }
     virtual bool isReadonly() const { return m_readonly; }
 };
 

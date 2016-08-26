@@ -255,7 +255,7 @@ class Logger
         Handle &operator = (const Handle &other) throw ();
         ~Handle() throw ();
 
-        operator bool () const { return m_logger; }
+        operator bool () const { return static_cast<bool>(m_logger); }
         bool operator == (Logger *logger) const { return m_logger.get() == logger; }
         Logger *get() const { return m_logger.get(); }
 

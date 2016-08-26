@@ -425,7 +425,7 @@ public:
     void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
 
     void initServer(SharedBuffer data, const std::string &messageType);
-    void setStubConnection(const boost::shared_ptr<Connection> c) { m_connection = c; m_useConnection = c; }
+    void setStubConnection(const boost::shared_ptr<Connection> c) { m_connection = c; m_useConnection = static_cast<bool>(c); }
     boost::weak_ptr<Connection> getStubConnection() { return m_connection; }
     bool useStubConnection() { return m_useConnection; }
 
