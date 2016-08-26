@@ -3324,7 +3324,7 @@ static void log(const char *text)
     CLIENT_TEST_LOG("%s", text);
 }
 
-static void logSyncSourceReport(SyncSource *source)
+static void logSyncSourceReport(const SyncSource *source)
 {
     CLIENT_TEST_LOG("source %s, start of cycle #%d: local new/mod/del/conflict %d/%d/%d/%d, remote %d/%d/%d/%d, mode %s",
                     source->getName().c_str(),
