@@ -147,10 +147,10 @@ AC_ARG_ENABLE(evolution-compatibility,
 
 AC_ARG_ENABLE(internal-icaltz,
               AS_HELP_STRING([--disable-internal-icaltz],
-                             [libical 1.0 updated its system zone data parsing code so that it produces VTIMEZONEs which are unsuitable for syncing. SyncEvolution ships with a copy of the older code and uses it by default.]),
+                             [libical 1.0 updated its system zone data parsing code so that it produces VTIMEZONEs which are unsuitable for syncing. SyncEvolution ships with a copy of the older code and uses it by default in combination with libical 1.0. Starting with libical v2, icaltzutil_set_exact_vtimezones_support and the code in libical is used again.]),
               [enable_icaltz_util="$enableval"
                test "$enable_icaltz_util" = "yes" || test "$enable_icaltz_util" = "no" || AC_ERROR([invalid value of --disable-internal-icaltz: $enableval])],
-              enable_icaltz_util="yes")
+              [PKG_CHECK_MODULES(LIBICAL2, libical >= 2, [enable_icaltz_util="no"], [enable_icaltz_util="yes"])])
 if test "$enable_icaltz_util" = "yes"; then
    AC_DEFINE(ENABLE_ICALTZ_UTIL, [1], [use internal icaltz-util.c])
    AC_DEFINE(DISABLE_ICALTZUTIL_GET_ZONE_DIRECTORY, [1], [use libical's icaltzutil_get_zone_directory()])
