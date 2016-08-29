@@ -94,7 +94,7 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
 
     // Create source status and progress entries for each source in
     // the parent. See Session::sourceProgress().
-    BOOST_FOREACH(const std::string source,
+    BOOST_FOREACH(const std::string &source,
                   getSyncSources()) {
         m_helper.emitSourceProgress(sysync::PEV_PREPARING,
                                     source,
