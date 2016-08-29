@@ -306,7 +306,7 @@ void Session::setNamedConfig(const std::string &configName,
         /** generate new sources in the config map */
         for (ReadOperations::Config_t::const_iterator it = config.begin(); it != config.end(); ++it) {
             string sourceName = it->first;
-            if(sourceName.find("source/") == 0) {
+            if (boost::starts_with(sourceName, "source/")) {
                 sourceName = sourceName.substr(7); ///> 7 is the length of "source/"
                 from->getSyncSourceNodes(sourceName);
             }

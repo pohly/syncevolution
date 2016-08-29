@@ -198,7 +198,7 @@ bool Cmdline::parse(vector<string> &parsed)
             m_template = m_argv[opt];
             m_configure = true;
             string temp = boost::trim_copy (m_template);
-            if (temp.find ("?") == 0){
+            if (boost::starts_with(temp, "?")) {
                 m_printTemplates = true;
                 m_dontrun = true;
                 m_template = temp.substr (1);
