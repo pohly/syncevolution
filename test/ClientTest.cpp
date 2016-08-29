@@ -856,7 +856,7 @@ bool LocalTests::compareDatabases(const char *refFile, TestingSyncSource &copy, 
 
     copyFile = getCurrentTest() + ".B.test.dat";
     simplifyFilename(copyFile);
-    SOURCE_ASSERT_EQUAL(&copy, 0, config.m_dump(client, copy, copyFile));
+    CT_ASSERT_EQUAL(0, config.m_dump(client, copy, copyFile));
 
     return compareDatabases(sourceFile, copyFile);
 }
