@@ -327,6 +327,7 @@ struct AppendArgs {
 /** default: skip it, not a result of the method */
 template<class A> struct Set
 {
+    // cppcheck-suppress uninitMemberVar
     Set(A &a) {}
     AppendArgs &set(AppendArgs &context) const {
         return context;
@@ -336,6 +337,7 @@ template<class A> struct Set
 /** same for const reference */
 template<class A> struct Set <const A &>
 {
+    // cppcheck-suppress uninitMemberVar
     Set(A &a) {}
     AppendArgs &set(AppendArgs &context) const {
         return context;
