@@ -992,9 +992,10 @@ fi
 
 dnl check for libical if needed by backend or icaltz-util.
 if test "$need_ical" = "yes" || test "$enable_icaltz_util" = "yes"; then
-   PKG_CHECK_MODULES(LIBICAL, libical,
-                     [true],
-                     [PKG_CHECK_MODULES(LIBICAL, libecal-1.2)])
+   PKG_CHECK_MODULES(LIBICAL, libical)
+   PKG_CHECK_MODULES(LIBICAL_AVAILABLE, libical >= 0.43,
+                     [AC_DEFINE(HAVE_LIBICAL_R, 1, [have recent enough libical with _r variants])],
+                     [true])
 fi
 
 dnl Use libical in eds_abi_wrapper if and only if required by some backend.
@@ -1046,24 +1047,6 @@ if test "$host" = "arm-apple-darwin"; then
    AC_DEFINE(IPHONE, 1, [compiling for iPhone])
    DEVICE_TYPE=iPhone
 fi
-
-dnl --enable-evolution-compatibility
-if test "$enable_evolution_compatibility" = "yes"; then
-   AC_DEFINE(EVOLUTION_COMPATIBILITY, 1, [avoid hard dependency on Evolution shared objects])
-   # don't link against libs wrapped by eds_abi_wrapper (no longer limited to EDS alone...)
-   ECAL_LIBS=
-   EBOOK_LIBS=
-   EPACKAGE_LIBS=
-   BLUEZ_LIBS=
-fi
-if test "$enable_evolution_compatibility" = "ical" || test "$enable_evolution_compatibility" = "yes"; then
-   AC_DEFINE(EVOLUTION_ICAL_COMPATIBILITY, 1, [work with both libical.so.0 and libical.so.1])
-fi
-AM_CONDITIONAL([ENABLE_EVOLUTION_COMPATIBILITY], [test "$enable_evolution_compatibility" = "yes"])
-PKG_CHECK_MODULES(LIBICAL_AVAILABLE,
-                  libical >= 0.43,
-                  AC_DEFINE(HAVE_LIBICAL_R, 1, [have recent enough libical with _r variants]),
-                  pass)
 
 dnl --enable-developer-mode
 if test "$enable_developer_mode" = "yes"; then
@@ -1145,6 +1128,7 @@ echo "Core SyncEvolution: $enable_core"
 for backend in $BACKENDS; do
     eval echo $backend: \${enable_${backend}}
 done
+echo "libical v1 timezone hack: $enable_icaltz_util"
 echo "DBus service: $enable_dbus_service"
 echo "org._01.pim support in DBus service: $enable_dbus_pim"
 echo "Notifications: $enable_notify"

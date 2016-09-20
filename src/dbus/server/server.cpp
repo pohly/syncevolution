@@ -696,6 +696,19 @@ void Server::dequeue(Session *session)
         sessionChanged(session->getPath(), false);
         m_activeSession = NULL;
         m_activeSessionRef.reset();
+        if (m_lastFileMod && !m_shutdownTimer) {
+            // File modification was detected while a session was active.
+            // Trigger the shutdown now that it is gone. As without a
+            // a session, the goal is to shut down SHUTDOWN_QUIESENCE_SECONDS
+            // after the last file modification.
+            Timespec now = Timespec::monotonic();
+            Timespec shutdown = m_lastFileMod + SHUTDOWN_QUIESENCE_SECONDS;
+            if (shutdown >= now) {
+                SE_LOG_DEBUG(NULL, "file modified, initiating shutdown after session finished");
+                m_shutdownTimer.activate((shutdown - now).seconds(),
+                                         boost::bind(&Server::shutdown, this));
+            }
+        }
         checkQueue();
     }
 
@@ -757,9 +770,15 @@ void Server::checkQueue()
         // Don't schedule new sessions. Instead return to Server::run().
         // But don't do it immediately: when done inside the Session.Detach()
         // call, the D-Bus response was not delivered reliably to the client
-        // which caused the shutdown.
-        SE_LOG_DEBUG(NULL, "shutting down in checkQueue(), idle and shutdown was requested");
-        addTimeout(boost::bind(quitLoop, m_loop), 0);
+        // which caused the shutdown. When Server::fileModified() already set
+        // a timeout then we don't need to do it again (solves a race
+        // condition in test-dbus.py's testSession2: without this check,
+        // if the file modification is detected before handling the Detach(),
+        // then the server shut down immediately after Detach()).
+        if (!m_shutdownTimer) {
+            SE_LOG_DEBUG(NULL, "shutting down in checkQueue(), idle and shutdown was requested");
+            addTimeout(boost::bind(quitLoop, m_loop), 0);
+        }
         return;
     }
 

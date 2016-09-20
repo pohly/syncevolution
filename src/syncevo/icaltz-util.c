@@ -643,21 +643,6 @@ icalcomponent *icaltimezone_get_component(icaltimezone *zone)
 	return comp;
 }
 
-/*
- * For including the .o file in binaries via -Wl,-usyncevo_fetch_timezone.
- * We cannot use -Wl,-uicaltzutil_fetch_timezone because that gets satisfied by
- * libical itself.
- */
-int syncevo_fetch_timezone;
-
-/*
- * Avoid lazy resolution of the methods that we export. client-test otherwise
- * ends up calling the libical version of the methods despite having its own
- * copy compiled into the executable, at least on Ubuntu Saucy and Trusty.
- */
-/* void *syncevo_fetch_timezone_p = &icaltzutil_fetch_timezone; */
-/* void *syncevo_get_component_p = &icaltimezone_get_component; */
-
 #ifdef ICALTZ_UTIL_MAIN
 int 
 main (int argc, char *argv [])

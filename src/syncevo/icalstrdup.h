@@ -38,7 +38,7 @@ extern "C" {
 #pragma }
 #endif /* __cplusplus */
 
-#if !defined(LIBICAL_MEMFIXES) || defined(EVOLUTION_COMPATIBILITY)
+#if !defined(LIBICAL_MEMFIXES)
 /**
  * The patch in http://bugzilla.gnome.org/show_bug.cgi?id=516408
  * changes the ownership of strings returned by some libical and libecal
@@ -51,8 +51,6 @@ extern "C" {
  * As soon as Evolution switches to upstream libical (planned for 2.25),
  * it probably will have to bump the libecal version because the API
  * is reverted so that binaries which free strings will crash.
- * When EVOLUTION_COMPATIBILITY is defined, SyncEvolution deals with
- * this by always checking at runtime what the memory handling is.
  *
  * This utility function ensures that the caller *always* owns the
  * returned string. When compiled against a current Evolution

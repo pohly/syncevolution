@@ -35,10 +35,8 @@ extern "C" {
 #define ZONES_TAB_SYSTEM_FILENAME "zone.tab"
 #endif
 
-#if !defined(EVOLUTION_COMPATIBILITY) || !defined(ENABLE_ICAL)
 const char *icaltzutil_get_zone_directory (void);
 extern const char *ical_tzid_prefix;
-#endif
 icalcomponent *icaltzutil_fetch_timezone (const char *location);
 
 #ifdef __cplusplus

@@ -875,12 +875,8 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
     // The function for doing the inlining was added in EDS 3.4.
     // In compatibility mode, we must check the function pointer for non-NULL.
     // In direct call mode, the existence check is done by configure.
-    if (raw
-#ifdef EVOLUTION_COMPATIBILITY
-        && e_contact_inline_local_photos
-#endif
-        ) {
-#if defined(EVOLUTION_COMPATIBILITY) || defined(HAVE_E_CONTACT_INLINE_LOCAL_PHOTOS)
+    if (raw) {
+#if defined(HAVE_E_CONTACT_INLINE_LOCAL_PHOTOS)
         if (!e_contact_inline_local_photos(contactptr, gerror)) {
             throwError(SE_HERE, string("inlining PHOTO file data in ") + luid, gerror);
         }

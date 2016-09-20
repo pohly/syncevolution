@@ -29,11 +29,10 @@ static SyncSource *createSource(const SyncSourceParams &params)
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe = sourceType.m_backend == "Evolution Address Book";
     bool maybeMe = sourceType.m_backend == "addressbook";
-    bool enabled;
+    const bool enabled = true;
 
     EDSAbiWrapperInit();
-    enabled = EDSAbiHaveEbook && EDSAbiHaveEdataserver;
-    
+
     if (isMe || maybeMe) {
         if (sourceType.m_format == "text/x-vcard") {
             return

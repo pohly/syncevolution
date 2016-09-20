@@ -31,10 +31,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe;
-    bool enabled;
+    const bool enabled = true;
 
     EDSAbiWrapperInit();
-    enabled = EDSAbiHaveEcal && EDSAbiHaveEdataserver;
 
     isMe = sourceType.m_backend == "Evolution Task List";
     if (isMe || sourceType.m_backend == "todo") {

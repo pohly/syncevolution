@@ -141,7 +141,7 @@ else
 REQUIRES_deb_neon =
 endif
 if ENABLE_ICAL
-REQUIRES_deb_ical = , libical0 | libical1 | libical1a
+REQUIRES_deb_ical = , libical0 | libical1 | libical1a | libical2
 endif
 VERSION_deb = 1:$(STABLE_VERSION)$(VERSION)
 VERSION_rpm = `echo $(VERSION) | sed -e s/-/_/g`
@@ -211,11 +211,8 @@ PLATFORM_FILES_kde = platformkde syncakonadi
 # Additional parameters for syncevolution-kde/evolution.deb.
 # Fake conflicts/replaces works around a bug in CheckInstall,
 # which creates empty, invalid entries for those unless
-# something is given. For Evolution we hard-code dependencies
-# (because with EDS compatibility turned on, several
-# alternatives will work at runtime) and conflict with
-# EDS 3.6, because that breaks the API and does not work for us
-# at the moment.
+# something is given. For Evolution we expect the caller
+# to provide the actual dependencies.
 SYNCEVOLUTION_kde_DEB_ARGS = \
 	--conflicts=syncevolution-foobar \
         --replaces=syncevolution-foobar
@@ -223,8 +220,8 @@ SYNCEVOLUTION_evolution_DEB_ARGS = \
 	--conflicts=syncevolution-foobar \
 	--replaces=syncevolution-foobar
 SYNCEVOLUTION_evolution_DEB_REQUIRES = \
-	, libebook1.2-5 | libebook1.2-6 | libebook1.2-7 | libebook1.2-8 | libebook1.2-9 | libebook1.2-10 | libebook1.2-11 | libebook-1.2-11 | libebook-1.2-12 | libebook-1.2-13 $(EXTRA_BACKENDS_EBOOK_REQUIRES) \
-	, libecal1.2-3 | libecal1.2-4 | libecal1.2-5 | libecal1.2-6 | libecal1.2-7 | libecal1.2-8 | libecal1.2-9 | libecal1.2-10 | libecal-1.2-10 | libecal-1.2-11 $(EXTRA_BACKENDS_ECAL_REQUIRES)
+	, $(EXTRA_BACKENDS_EBOOK_REQUIRES) \
+	, $(EXTRA_BACKENDS_ECAL_REQUIRES)
 
 syncevolution-%-deb: checkinstall/dist/$(distdir) checkinstall/dist/debian/control
 	(echo "SyncEvolution - meta package for $*" && cat $(srcdir)/description) >checkinstall/description-pak
@@ -296,29 +293,6 @@ dot_dist_hook:
 	  echo 'A git checkout is required to generate a ChangeLog.' >&2; \
 	fi
 
-if ENABLE_EVOLUTION_COMPATIBILITY
-# check .so (relevant for modular builds) and main syncevolution binary
-# (relevant in that case and for static builds) for dependencies on
-# problematic libraries and symbols
-#
-# Exclude *-[0-9].so, these are EXTRA_BACKENDS for which other rules apply.
-#
-# ical_strdup is an exception because it is in SyncEvolution.
-all_local_installchecks += toplevel_so_check
-toplevel_so_check:
-	for i in `find $(DESTDIR)/$(libdir)/syncevolution $(DESTDIR)/$(libdir)/libsyncevo* $(DESTDIR)/$(libdir)/libsynthesis* -name *.so | grep -v -e -[0-9].so` $(DESTDIR)/$(bindir)/syncevolution; \
-	do \
-	  if objdump -T -C $$i | grep -v :: | grep '\*UND\*' | sort | grep -v -w ical_strdup | grep -e ical -e " e_"; then \
-	    echo "$$i should not depend on EDS, libical or libbluetooth"; \
-	   exit 1; \
-	  fi; \
-	  if ldd $$i | grep -e libecal -e libebook -e libedata -e libical -e libbluetooth; then \
-	    echo "$$i should not be linked against EDS, libical or libbluetooth"; \
-	    exit 1; \
-	  fi; \
-	done
-endif
-
 # Check that no executable or shared object depends on symbols in
 # libraries that it does not link against. Unnecessarily linking
 # against libs is okay, that can be caught and fixed by
@@ -359,6 +333,11 @@ LINK_CHECK_ALLOWED += -e 'symbol ne_.*syncdav.so'
 # the release archive.
 LINK_CHECK_ALLOWED += -e '@GLIBCXX_[^ ]* used by'
 endif
+# libgdbussyncevo uses some symbols from libsyncevolution without
+# linking against it (circular dependency).
+LINK_CHECK_ALLOWED += -e SyncEvo.*libgdbussyncevo -e gsignond_pipe_stream_new.*libgdbussyncevo
+
+LINK_CHECK_ALLOWED += $(EXTRA_LINK_CHECK_ALLOWED)
 
 # Be strict about running 'syncevolution' only when not doing
 # cross-compilation: in that case, if running 'syncevolution' fails,
@@ -414,6 +393,9 @@ dist-hook: $(all_dist_hooks)
 install-exec-hook: $(all_install_exec_hooks)
 uninstall-hook: $(all_uninstall_hooks)
 
+# Can be overridden during make invocation to inject additional commands.
+CREATE_EXTRA_BACKENDS=true
+
 # Force sequential installation. This is a workaround for relinking failures
 # during concurrent distcheck (a backend was relinked against not yet installed
 # libsyncevolution.la).
@@ -424,6 +406,7 @@ uninstall-hook: $(all_uninstall_hooks)
 install-am: all-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-data-am
+	$(CREATE_EXTRA_BACKENDS) $(DESTDIR)/$(BACKENDS_DIRECTORY)
 	for i in $(EXTRA_BACKENDS); do $(INSTALL) $$i $(DESTDIR)/$(BACKENDS_DIRECTORY)/; done
 
 # Necessary for "make distcheck": must not leave files behind.

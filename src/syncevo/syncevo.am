@@ -14,6 +14,33 @@ src_syncevo_cxxflags += $(CPPUNIT_CFLAGS)
 src_syncevo_ldadd += $(CPPUNIT_LIBS)
 endif
 
+# libsyncevo-icaltz-util.so.1 replaces libical 1.0 system time zone
+# loading with the code from libical before 1.0, which produces
+# interoperable time zone definitions.
+#
+# The .so depends on libical.so.1 and thus won't load on
+# distros with libical.so.2, but there it isn't necessary
+# anymore because libical 2.0 supports producing interoperable
+# definitions again.
+#
+# Because the dynamic linker will find icaltzutil_fetch_timezone()
+# first in libical instead of libsyncevo-icaltz-util when both
+# are loaded, we have to provide the functions we want to override
+# in the actual binaries. libsyncevo-icaltz-util-wrapper.la does that.
+# It gets used in src/src.am.
+if ENABLE_ICALTZ_UTIL
+lib_LTLIBRARIES += src/syncevo/libsyncevo-icaltz-util.la
+noinst_LTLIBRARIES += src/syncevo/libsyncevo-icaltz-util-wrapper.la
+endif
+src_syncevo_libsyncevo_icaltz_util_la_SOURCES = \
+  src/syncevo/icaltz-util.h \
+  src/syncevo/icaltz-util.c
+src_syncevo_libsyncevo_icaltz_util_la_CFLAGS = $(LIBICAL_CFLAGS)
+src_syncevo_libsyncevo_icaltz_util_la_LIBADD = $(LIBICAL_LIBS)
+src_syncevo_libsyncevo_icaltz_util_wrapper_la_SOURCES = \
+  src/syncevo/icaltz-util-wrapper.c
+src_syncevo_libsyncevo_icaltz_util_wrapper_la_LIBADD = -ldl
+
 lib_LTLIBRARIES += src/syncevo/libsyncevolution.la
 
 src_syncevo_sources = \
@@ -159,15 +186,6 @@ if ENABLE_ICAL
 src_syncevo_sources += \
   src/syncevo/icalstrdup.c \
   src/syncevo/icalstrdup.h
-endif
-
-if ENABLE_ICALTZ_UTIL
-src_syncevo_sources += \
-  src/syncevo/icaltz-util.c \
-  src/syncevo/icaltz-util.h
-if !ENABLE_EVOLUTION_COMPATIBILITY
-src_syncevo_ldadd += $(LIBICAL_LIBS)
-endif
 endif
 
 src_syncevo_libsyncevolution_includedir= $(includedir)/syncevo
