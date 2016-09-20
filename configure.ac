@@ -182,18 +182,11 @@ AC_CHECK_HEADERS(byteswap.h endian.h sys/endian.h unistd.h stdint.h)
 AC_PATH_PROG([CPPUNIT_CONFIG], [cppunit-config], [no])
 
 # cppunit needed?
-if test "x$enable_unit_tests" = 'xyes' || test "x$enable_integration_tests" = 'xyes'; then
-  test "x$CPPUNIT_CONFIG" != 'xno' || AC_MSG_ERROR("cppunit-config not found.")
-fi
-if test "x$CPPUNIT_CONFIG" != 'xno'; then
-  # Export the flags if available, even if not enabled. This allows
-  # "make src/client-test" in cases where "make all" would not build
-  # client-test.
-  CPPUNIT_CXXFLAGS=`$CPPUNIT_CONFIG --cflags`
-  CPPUNIT_LDFLAGS=`$CPPUNIT_CONFIG --libs`
-fi
-AC_SUBST(CPPUNIT_CXXFLAGS)
-AC_SUBST(CPPUNIT_LDFLAGS)
+PKG_CHECK_MODULES(CPPUNIT, cppunit,
+                  [true],
+                  [if test "$enable_unit_tests" = 'yes' || test "$enable_integration_tests" = 'yes'; then
+                      AC_MSG_ERROR("cppunit.pc not found.")
+                   fi])
 
 if test "x$enable_unit_tests" = 'xyes'; then
         AC_DEFINE(ENABLE_UNIT_TESTS, 1, [enable unit tests inside the library's source code])

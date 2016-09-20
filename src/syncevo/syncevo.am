@@ -10,8 +10,8 @@ src_syncevo_ldadd = @SYNCEVOLUTION_LDADD@
 src_syncevo_ldadd += $(gdbus_build_dir)/libgdbussyncevo.la
 
 if ENABLE_UNIT_TESTS
-src_syncevo_cxxflags += $(CPPUNIT_CXXFLAGS)
-src_syncevo_ldadd += $(CPPUNIT_LDFLAGS)
+src_syncevo_cxxflags += $(CPPUNIT_CFLAGS)
+src_syncevo_ldadd += $(CPPUNIT_LIBS)
 endif
 
 lib_LTLIBRARIES += src/syncevo/libsyncevolution.la

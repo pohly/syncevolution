@@ -90,10 +90,10 @@ else
 CORE_SOURCES += $(BACKEND_REGISTRIES)
 endif
 
-CORE_CXXFLAGS = $(SYNTHESIS_CFLAGS) $(CPPUNIT_CXXFLAGS)
+CORE_CXXFLAGS = $(SYNTHESIS_CFLAGS) $(CPPUNIT_CFLAGS)
 CORE_LDADD = $(SYNCEVOLUTION_LDADD) src/syncevo/libsyncevolution.la $(GLIB_LIBS) $(GTHREAD_LIBS) $(GOBJECT_LIBS) $(LIBS)
 CORE_DEP = $(SYNCEVOLUTION_DEP) src/syncevo/libsyncevolution.la $(SYNTHESIS_DEP)
-CORE_LD_FLAGS = -Wl,-uSyncEvolution_Module_Version -Wl,--export-dynamic $(CPPUNIT_LDFLAGS) $(ADDITIONAL_LDFLAGS)
+CORE_LD_FLAGS = -Wl,-uSyncEvolution_Module_Version -Wl,--export-dynamic $(CPPUNIT_LIBS) $(ADDITIONAL_LDFLAGS)
 
 if ENABLE_ICALTZ_UTIL
 # Force inclusion of our own icaltz-util.o into binaries even though
@@ -295,8 +295,8 @@ endif
 src_client_test_undef = $(shell nm $(patsubst %.la,%.a,$(subst /lib,/.libs/lib,$(src_client_test_libs))) | grep funambolAutoRegisterRegistry | sed -e 's/.* /-Wl,-u/' )
 
 src_client_test_CPPFLAGS = -DHAVE_CONFIG_H -DENABLE_INTEGRATION_TESTS -DENABLE_UNIT_TESTS $(src_cppflags) $(QT_CPPFLAGS)
-src_client_test_CXXFLAGS = $(filter-out -O2, @CPPUNIT_CXXFLAGS@ $(PCRECPP_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(filter-out -O2 -g -W -Wall, $(QT_CXXFLAGS)) $(SYNCEVO_WFLAGS))
-src_client_test_LDFLAGS = @CPPUNIT_LDFLAGS@  $(src_client_test_undef) $(CORE_LD_FLAGS) $(QT_LDFLAGS)
+src_client_test_CXXFLAGS = $(filter-out -O2, @CPPUNIT_CFLAGS@ $(PCRECPP_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(filter-out -O2 -g -W -Wall, $(QT_CXXFLAGS)) $(SYNCEVO_WFLAGS))
+src_client_test_LDFLAGS = @CPPUNIT_LIBS@  $(src_client_test_undef) $(CORE_LD_FLAGS) $(QT_LDFLAGS)
 src_client_test_LDADD = $(src_client_test_libs) $(CORE_LDADD) $(PCRECPP_LIBS) $(SYNTHESIS_ENGINE) $(QT_LIBS)
 if !ENABLE_EVOLUTION_COMPATIBILITY
 src_client_test_LDADD += $(LIBICAL_LIBS)
