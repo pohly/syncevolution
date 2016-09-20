@@ -33,39 +33,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/foreach.hpp>
 
-#ifdef NOTIFY_COMPATIBILITY
-# include <dlfcn.h>
-#endif
-
 SE_BEGIN_CXX
-
-#ifdef NOTIFY_COMPATIBILITY
-/**
- * set to real old C notify_notification_new() (with widget pointer) or new one (without);
- * because of the x86/AMD64 calling conventions, calling the newer function with
- * one extra parameter is okay
- */
-gboolean (*notify_init)(const char *app_name);
-GList *(*notify_get_server_caps)(void);
-NotifyNotification *(*notify_notification_new)(const char *summary, const char *body, const char *icon, void *widget);
-void (*notify_notification_add_action)(NotifyNotification *notification,
-                                       const char *action,
-                                       const char *label,
-                                       NotifyActionCallback callback,
-                                       gpointer user_data,
-                                       GFreeFunc free_func);
-void (*notify_notification_clear_actions)(NotifyNotification *notification);
-gboolean (*notify_notification_close)(NotifyNotification *notification,
-                                      GError **error);
-gboolean (*notify_notification_show)(NotifyNotification *notification,
-                                     GError **error);
-
-static bool NotFound(const char *func)
-{
-    SE_LOG_DEBUG(NULL, "%s: not found", func);
-    return false;
-}
-#endif
 
 NotificationBackendLibnotify::NotificationBackendLibnotify()
     : m_initialized(false),
@@ -96,36 +64,6 @@ void NotificationBackendLibnotify::notifyAction(
 
 bool NotificationBackendLibnotify::init()
 {
-#ifdef NOTIFY_COMPATIBILITY
-    void *dlhandle = NULL;
-    int i;
-    for (i = 1; i <= 4; i++) {
-        dlhandle = dlopen(StringPrintf("libnotify.so.%d", i).c_str(), RTLD_LAZY|RTLD_GLOBAL);
-        if (!dlhandle) {
-            SE_LOG_DEBUG(NULL, "failed to load libnotify.so.%d: %s", i, dlerror());
-        } else {
-            break;
-        }
-    }
-    if (!dlhandle) {
-        return false;
-    }
-
-#define LOOKUP(_x) ((_x = reinterpret_cast<typeof(_x)>(dlsym(dlhandle, #_x))) || \
-                    NotFound(#_x))
-
-    if (!LOOKUP(notify_init) ||
-        !LOOKUP(notify_get_server_caps) ||
-        !LOOKUP(notify_notification_new) ||
-        !LOOKUP(notify_notification_add_action) ||
-        !LOOKUP(notify_notification_clear_actions) ||
-        !LOOKUP(notify_notification_close) ||
-        !LOOKUP(notify_notification_show)) {
-        return false;
-    }
-    SE_LOG_DEBUG(NULL, "using libnotify.so.%d", i);
-#endif
-
     m_initialized = notify_init("SyncEvolution");
     if(m_initialized) {
         GStringListFreeCXX list(notify_get_server_caps());
@@ -154,7 +92,7 @@ void NotificationBackendLibnotify::publish(
 #ifndef NOTIFY_CHECK_VERSION
 # define NOTIFY_CHECK_VERSION(_x,_y,_z) 0
 #endif
-#if !NOTIFY_CHECK_VERSION(0,7,0) || defined(NOTIFY_COMPATIBILITY)
+#if !NOTIFY_CHECK_VERSION(0,7,0)
     m_notification = notify_notification_new(summary.c_str(), body.c_str(), NULL, NULL);
 #else
     m_notification = notify_notification_new(summary.c_str(), body.c_str(), NULL);

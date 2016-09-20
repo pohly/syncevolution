@@ -543,17 +543,6 @@ if test "$enable_dbus_service" != "no"; then
                                              [AC_DEFINE(HAS_NOTIFY, 1,
                                                         [define if libnotify could be used in dbus service])])
 
-    AC_ARG_ENABLE(notify-compatibility,
-                  AS_HELP_STRING([--enable-notify-compatibility],
-                                 [increase compatibility with binary libnotify installations by loading libnotify.so.1..4 dynamically instead of linking against it]),
-                                 [enable_notify_compat="$enableval"],
-                                 [enable_notify_compat="no"]
-                 )
-    if test "$enable_notify_compat" = "yes"; then
-        AC_DEFINE(NOTIFY_COMPATIBILITY, 1, [dynamically open libnotify])
-        LIBNOTIFY_LIBS="`echo $LIBNOTIFY_LIBS | sed -e 's/\(-lnotify\|[^ ]*libnotify.la\)/-ldl/'`"
-    fi
-
     # Here we're using QtGui too because mlite fails to depend on it,
     # despite using QAction.
     PKG_CHECK_MODULES(MLITE, [mlite QtGui], HAVE_MLITE=yes, HAVE_MLITE=no)
@@ -638,7 +627,6 @@ if test "$enable_dbus_service" != "no"; then
                 ;;
     esac
 fi
-AM_CONDITIONAL([NOTIFY_COMPATIBILITY], [test "$enable_notify_compat" = "yes"])
 AM_CONDITIONAL([COND_DBUS_PIM], [test "$enable_dbus_pim" != "no"])
 
 AC_SUBST(DBUS_CFLAGS)
