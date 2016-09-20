@@ -731,11 +731,12 @@ bool Cmdline::run() {
     if (m_usage) {
         usage(true);
     } else if (m_version) {
+        bool debug = atoi(getEnv("SYNCEVOLUTION_DEBUG", "0")) >= 1;
         SE_LOG_SHOW(NULL, "SyncEvolution %s%s\n%s%s",
                     VERSION,
                     SyncContext::isStableRelease() ? "" : " (pre-release)",
-                    EDSAbiWrapperInfo(),
-                    SyncSource::backendsInfo().c_str());
+                    debug ? EDSAbiWrapperDebug() : EDSAbiWrapperInfo(),
+                    debug ? SyncSource::backendsDebug().c_str() : SyncSource::backendsInfo().c_str());
     } else if (m_printServers || boost::trim_copy(m_server) == "?") {
         dumpConfigs("Configured servers:",
                     SyncConfig::getConfigs());
