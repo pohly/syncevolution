@@ -342,6 +342,7 @@ class Action:
                         os.environ['HOME'] = context.stripSchrootDir(home)
                         for old, new, name in mapping:
                             newdir = os.path.join(home, new)
+                            stripped_newdir = context.stripSchrootDir(newdir)
                             olddir = os.path.join(home, old)
                             if not os.path.isdir(olddir):
                                 os.makedirs(olddir)
@@ -349,9 +350,9 @@ class Action:
                             print 'old', olddir, 'new', newdir
                             os.rename(olddir, newdir)
                             # Keep the old names as symlinks, just in case.
-                            os.symlink(newdir, olddir)
+                            os.symlink(stripped_newdir, olddir)
                             # Now use it via XDG env var *without* the schrootdir.
-                            os.environ[name] = context.stripSchrootDir(newdir)
+                            os.environ[name] = stripped_newdir
                     log('=== starting %s ===', self.name)
                     self.execute()
                 except:
