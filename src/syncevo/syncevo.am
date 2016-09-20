@@ -228,6 +228,7 @@ src_syncevo_libsyncevolution_la_SOURCES = $(src_syncevo_sources)
 nodist_src_syncevo_libsyncevolution_la_SOURCES = src/syncevo/SyncEvolutionXML.c
 CLEANFILES += src/syncevo/SyncEvolutionXML.c
 src_syncevo_libsyncevolution_la_LIBADD = \
+  -lpthread \
   @GIO_LIBS@ \
   $(GIOUNIX_LIBS) \
   @GTHREAD_LIBS@ \
