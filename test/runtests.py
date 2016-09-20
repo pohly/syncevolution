@@ -92,6 +92,15 @@ def copyLog(filename, dirname, htaccess, lineFilter=None):
     if os.path.isdir(filename):
         # copy whole directory, without any further processing at the moment
         shutil.copytree(filename, outname, symlinks=True)
+        # fix up permissions so that the content is world-readable
+        for root, dirs, files in os.walk(outname):
+            for entry in dirs:
+                path = os.path.join(root, entry)
+                os.chmod(path, os.stat(path).st_mode | stat.S_IROTH | stat.S_IXOTH | stat.S_IRGRP | stat.S_IXGRP)
+            for entry in files:
+                path = os.path.join(root, entry)
+                os.chmod(path, os.stat(path).st_mode | stat.S_IROTH | stat.S_IRGRP)
+        os.chmod(outname, os.stat(outname).st_mode | stat.S_IROTH | stat.S_IXOTH | stat.S_IRGRP | stat.S_IXGRP)
         return
 
     # .out files are typically small nowadays, so don't compress
