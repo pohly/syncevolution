@@ -9727,7 +9727,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(0, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=60")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook_slow_server=60")
     def testTimeoutOpen(self):
         """TestHTTP.testTimeoutOpen - slow down server in open, let client abort"""
         port = self.runHTTPServer()
@@ -9741,7 +9741,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(1, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=60")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook_slow_server=60")
     def testTimeoutListAll(self):
         """TestHTTP.testTimeoutListAll - slow down server in listAll, let client abort"""
         port = self.runHTTPServer()
@@ -9755,7 +9755,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(1, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=140")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook_slow_server=140")
     def testTimeoutSlow(self):
         """TestHTTP.testTimeoutSlow - slow down server in open with disabled keep-alive messages, let client abort"""
         port = self.runHTTPServer()
@@ -9770,7 +9770,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(1, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=140")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook_slow_server=140")
     def testThreadedOpen(self):
         """TestHTTP.testThreadedOpen - slow down server in open, let server send keep-alive messages at default rate"""
         if not self.haveMultithreadedSyncEvo:
@@ -9785,7 +9785,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(0, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=140")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook_slow_server=140")
     def testThreadedListAll(self):
         """TestHTTP.testThreadedListAll - slow down server in listAll, let server send keep-alive messages at default rate"""
         if not self.haveMultithreadedSyncEvo:
@@ -9801,7 +9801,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(0, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=%d" % (usingValgrind() and 80 or 40))
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook_slow_server=%d" % (usingValgrind() and 80 or 40))
     def testThreadedOpenQuick(self):
         """TestHTTP.testThreadedOpenQuick - slow down server in open, let server send keep-alive messages at faster rate"""
         port = self.runHTTPServer()
@@ -9815,7 +9815,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(0, code)
 
     @timeout(usingValgrind() and 400 or 200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook-slow-server=%d" % (usingValgrind() and 80 or 40))
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_addressbook_slow_server=%d" % (usingValgrind() and 80 or 40))
     def testThreadedListAllQuick(self):
         """TestHTTP.testThreadedListAllQuick - slow down server in listAll, let server send keep-alive messages at faster rate"""
         port = self.runHTTPServer()
@@ -9829,7 +9829,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         self.assertEqual(0, code)
 
     @timeout(200)
-    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook-slow-server=400")
+    @property("ENV", "SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_addressbook_slow_server=400")
     def testAbortThread(self):
         """TestHTTP.testAbortThread - slow down server in open, abort sync while waiting for background thread"""
         port = self.runHTTPServer()
@@ -9855,9 +9855,10 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         # Wait for session...
         while not self.session:
             self.loopIteration('waiting for session', may_block=True)
-        # ... and the confirmation that the background thread is running.
+        # ... and the confirmation that the background thread is running
+        # and sleeping in FileSyncSource::open().
         while not self.isWaiting:
-            self.loopIteration('background thread', may_block=True)
+            self.loopIteration('while opening file source', may_block=True)
 
         # We need to abort syncevo-dbus-server. Aborting the client via SIGTERM
         # would not abort the server.

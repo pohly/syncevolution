@@ -104,6 +104,7 @@ void FileSyncSource::open()
     bool createDir = false;
 
     std::string varname = StringPrintf("SYNCEVOLUTION_FILE_SOURCE_DELAY_OPEN_%s", getDisplayName().c_str());
+    boost::replace_all(varname, "-", "_");
     const char *delay = getenv(varname.c_str());
     if (delay) {
         int seconds = atoi(delay);
@@ -187,6 +188,7 @@ void FileSyncSource::listAllItems(RevisionMap_t &revisions)
     ReadDir dirContent(m_basedir);
 
     std::string varname = StringPrintf("SYNCEVOLUTION_FILE_SOURCE_DELAY_LISTALL_%s", getDisplayName().c_str());
+    boost::replace_all(varname, "-", "_");
     const char *delay = getenv(varname.c_str());
     if (delay) {
         int seconds = atoi(delay);
