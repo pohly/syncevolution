@@ -133,7 +133,7 @@ of the regular expressions'''
 
 def GrepNotifications(dbuslog):
     '''finds all Notify calls and returns their parameters as list of line lists'''
-    return re.findall(r'^method call .* dest=.* .*interface=org.freedesktop.Notifications; member=Notify\n((?:^   .*\n)*)',
+    return re.findall(r'^method call .* interface=org.freedesktop.Notifications; member=Notify\n((?:^   .*\n)*)',
                       dbuslog,
                       re.MULTILINE)
 
