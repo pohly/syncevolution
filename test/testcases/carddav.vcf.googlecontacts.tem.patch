@@ -1,5 +1,5 @@
-@@ -2,7 +2,7 @@
- VERSION:3.0
+@@ -3,7 +3,7 @@
+ REV:20160908T170847Z
  UID:unique-id-user17
  NICKNAME:user17
 -NOTE:triggers parser bug in Funambol 3.0: trailing = is mistaken for soft line break=
@@ -7,7 +7,7 @@
  FN:parserbug=
  N:parserbug=;;;;
  X-EVOLUTION-FILE-AS:parserbug=
-@@ -24,9 +24,7 @@
+@@ -27,9 +27,7 @@
  UID:unique-id-user11
  NICKNAME:user11
  NOTE:This is a long line without any special characters. This is a simpler 
@@ -18,8 +18,8 @@
  FN:long line
  N:line;long;;;
  X-EVOLUTION-FILE-AS:line\, long
-@@ -46,7 +44,7 @@
- VERSION:3.0
+@@ -51,7 +49,7 @@
+ REV:20160908T170847Z
  UID:unique-id-user13
  NICKNAME:user13
 -NOTE:a colon is not a special character so here it comes : and not quoting necessary
@@ -27,8 +27,8 @@
  FN:colon
  N:colon;unquoted;;;
  X-EVOLUTION-FILE-AS:colon\, unquoted
-@@ -56,7 +54,7 @@
- VERSION:3.0
+@@ -62,7 +60,7 @@
+ REV:20160908T170847Z
  UID:unique-id-user14
  NICKNAME:user14
 -NOTE:here are some quotation marks: single ' double " back ` - none of them is special
@@ -36,8 +36,8 @@
  FN:quotation marks
  N:marks;quotation;;;
  X-EVOLUTION-FILE-AS:marks\, quotation
-@@ -66,7 +64,7 @@
- VERSION:3.0
+@@ -73,7 +71,7 @@
+ REV:20160908T170847Z
  UID:unique-id-user15
  NICKNAME:user15
 -NOTE:Spouse's Name: foobar
@@ -45,7 +45,7 @@
  FN:spouse name
  N:name;spouse;;;
  X-EVOLUTION-FILE-AS:spouse\, name
-@@ -92,19 +90,10 @@
+@@ -101,19 +99,10 @@
  UID:unique-id-user2
  NICKNAME:user2
  X-EVOLUTION-SPOUSE:
@@ -66,7 +66,7 @@
  X-EVOLUTION-BLOG-URL:
  CALURI:
  FBURL:
-@@ -124,7 +113,7 @@
+@@ -134,7 +123,7 @@
  UID:unique-id-user8
  NICKNAME:user8
  X-EVOLUTION-SPOUSE:
@@ -75,7 +75,7 @@
  FN:special characters
  N:characters;special;;;
  X-EVOLUTION-FILE-AS:characters\, special
-@@ -146,7 +135,7 @@
+@@ -157,7 +146,7 @@
  NICKNAME:user7
  X-EVOLUTION-SPOUSE:
  NOTE:This test case uses line breaks. This is line 1.\nLine 2.\n\nLine brea
@@ -84,7 +84,7 @@
   ed itself...
  FN:line breaks
  N:breaks;line;;;
-@@ -204,7 +193,7 @@
+@@ -215,7 +204,7 @@
  IMPP;X-SERVICE-TYPE=MSN:msnim:MSN
  IMPP;X-SERVICE-TYPE=ICQ:aim:ICQ
  IMPP;X-SERVICE-TYPE=Jabber:xmpp:Jabber
@@ -93,7 +93,7 @@
  X-EVOLUTION-FILE-AS:Doe\, John
  X-MOZILLA-HTML:FALSE
  X-PHONETIC-FIRST-NAME:John
-@@ -246,15 +235,15 @@
+@@ -257,15 +246,15 @@
  item29.X-ABLabel:domestic-partner-label
  item30.X-ABRELATEDNAMES:custom relationship
  item30.X-ABLabel:custom-label5
@@ -114,7 +114,7 @@
  item35.X-ABLabel:Custom-label6
  END:VCARD
  
-@@ -376,107 +365,7 @@
+@@ -392,107 +381,7 @@
  UID:unique-id-user10
  NICKNAME:user10
  X-EVOLUTION-SPOUSE:
