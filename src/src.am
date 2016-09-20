@@ -102,6 +102,11 @@ if ENABLE_ICALTZ_UTIL
 CORE_LD_FLAGS += -Wl,-usyncevo_fetch_timezone
 endif
 
+# Used when build syncevolution.org binaries to link statically
+# against certain libraries with ABIs that changed between distros
+# (libpcrecpp, libopenobex).
+CORE_LDADD += $(EXTRACORELDADD)
+
 # put link to static c++ library into current directory, needed if compiling with --enable-static-c++
 src/libstdc++.a :
 	$(AM_V_GEN)path=`$(CXX) $(CORE_LDADD) $(LD_FLAGS) -print-file-name=src/libstdc++.a` && ln -s $$path .

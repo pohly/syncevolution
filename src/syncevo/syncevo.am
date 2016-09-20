@@ -315,7 +315,7 @@ src/syncevo/CmdlineHelp.c: src/syncevo/readme2c.pl $(top_srcdir)/README.rst
 
 # make sure that the installed development files are usable
 src_syncevo_install_check_local: $(top_srcdir)/src/syncevo/installcheck-local.sh
-	env PKG_CONFIG_PATH=$(DESTDIR)/$(pkgconfigdir):$$PKG_CONFIG_PATH $< "$(DESTDIR)/$(src_syncevo_libsyncevolution_includedir)" "$(DESTDIR)/$(includedir)" "$(DESTDIR)/$(libdir)"
+	env PKG_CONFIG_PATH=$(DESTDIR)/$(pkgconfigdir):$$PKG_CONFIG_PATH $< "$(DESTDIR)/$(src_syncevo_libsyncevolution_includedir)" "$(DESTDIR)/$(includedir)" "$(DESTDIR)/$(libdir)" "$(EXTRACORELDADD)"
 
 all_local_installchecks += src_syncevo_install_check_local
 dist_noinst_SCRIPTS += src/syncevo/installcheck-local.sh

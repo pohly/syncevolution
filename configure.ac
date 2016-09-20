@@ -116,6 +116,12 @@ AC_ARG_WITH(synthesis-revision,
                            [Identifies which source revision to use from --with-synthesis-src repository, empty string stands for latest. Default for default --synthesis-src: SYNTHESISSRC_REVISION]),
             [REVISION="$withval"])
 
+AC_ARG_WITH(extra-core-ldadd,
+            AS_HELP_STRING([--with-extra-core-ldadd=<linker options>],
+                           [Additional linker flags, used to produce more portable syncevolution.org binaries.]),
+            [EXTRACORELDADD="$withval"])
+AC_SUBST(EXTRACORELDADD)
+
 AC_ARG_ENABLE(shared,
               AS_HELP_STRING([--enable-shared],
                              [build backends as dynamically loadable modules]),
