@@ -332,7 +332,7 @@ RegisterSyncSourceTest::RegisterSyncSourceTest(const string &configName, const s
 
 static class ScannedModules {
 public:
-    ScannedModules() {
+    void init() {
 #ifdef ENABLE_MODULES
         list<pair <string, boost::shared_ptr<ReadDir> > > dirs;
         /* If enviroment variable SYNCEVOLUTION_BACKEND_DIR is set, will search
@@ -428,6 +428,10 @@ public:
     list<string> m_available;
     std::ostringstream debug, info;
 } scannedModules;
+
+void SyncSource::backendsInit() {
+    scannedModules.init();
+}
 
 string SyncSource::backendsInfo() {
     return scannedModules.info.str();

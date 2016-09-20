@@ -3257,6 +3257,9 @@ void SyncContext::initMain(const char *appname)
         SySync_ConsolePrintf = nopPrintf;
     }
 
+    // Load backends.
+    SyncSource::backendsInit();
+
     // invoke optional init parts, for example KDE KApplication init
     // in KDE backend
     GetInitMainSignal()(appname);

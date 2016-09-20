@@ -2125,6 +2125,13 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
                                            const char *prefix = getenv("CLIENT_TEST_EVOLUTION_PREFIX"));
 
     /**
+     * Initialize and/or load backends. No longer
+     * done automatically to give libsyncevolution
+     * better control over when backends get loaded.
+     */
+    static void backendsInit();
+
+    /**
      * Some information about available backends.
      * Multiple lines, formatted for users of the
      * command line.
