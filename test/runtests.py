@@ -540,7 +540,7 @@ class Context:
                 action = self.todo.pop(0)
 
                 # check whether it actually needs to be executed
-                if self.enabled and \
+                if not self.enabled or \
                        not action.name in self.enabled and \
                        not self.required(action.name):
                     # disabled
@@ -1025,7 +1025,7 @@ class SyncEvolutionTest(Action):
 parser = optparse.OptionParser()
 parser.add_option("-e", "--enable",
                   action="append", type="string", dest="enabled", default=[],
-                  help="use this to enable specific actions instead of executing all of them (can be used multiple times and accepts enable=test1,test2 test3,... test lists)")
+                  help="actions must be enabled explicitly (can be used multiple times and accepts enable=test1,test2 test3,... test lists)")
 parser.add_option("-n", "--no-logs",
                   action="store_true", dest="nologs",
                   help="print to stdout/stderr directly instead of redirecting into log files")
