@@ -1535,6 +1535,49 @@
    fun:g_main_context_dispatch
 }
 
+# ==212== 78 (72 direct, 6 indirect) bytes in 1 blocks are definitely lost in loss record 3,324 of 4,771
+# ==212==    at 0x4C2BBCF: malloc (vg_replace_malloc.c:299)
+# ==212==    by 0x8C5A728: g_malloc (gmem.c:94)
+# ==212==    by 0x8C71932: g_slice_alloc (gslice.c:1025)
+# ==212==    by 0x8C71FCD: g_slice_alloc0 (gslice.c:1051)
+# ==212==    by 0x8C9987E: g_system_thread_new (gthread-posix.c:1151)
+# ==212==    by 0x8C7BE9E: g_thread_new_internal (gthread.c:870)
+# ==212==    by 0x8C7BF57: g_thread_new (gthread.c:823)
+# ==212==    by 0x8C56280: g_get_worker_context (gmain.c:5699)
+# ==212==    by 0x86B7E16: g_task_thread_pool_init (gtask.c:1908)
+# ==212==    by 0x86B7E16: g_task_get_type (gtask.c:590)
+# ==212==    by 0x8715610: ensure_required_types (gdbusprivate.c:227)
+# ==212==    by 0x8715610: _g_dbus_shared_thread_ref (gdbusprivate.c:267)
+# ==212==    by 0x8715610: _g_dbus_worker_new (gdbusprivate.c:1649)
+# ==212==    by 0x8709216: initable_init (gdbusconnection.c:2573)
+# ==212==    by 0x868EA1E: g_initable_new_valist (ginitable.c:228)
+# ==212==    by 0x868EAD5: g_initable_new (ginitable.c:146)
+# ==212==    by 0x870749D: g_dbus_connection_new_sync (gdbusconnection.c:2774)
+# ==212==    by 0xBCC4A8: GDBusCXX::DBusServerCXX::listen(boost::function<void (GDBusCXX::DBusServerCXX&, GDBusCXX::DBusConnectionPtr&)> const&, GDBusCXX::DBusErrorCXX*) (gdbus-cxx-bridge.cpp:315)
+# ==212==    by 0xC4518B: SyncEvo::ForkExecParent::start() (ForkExec.cpp:188)
+# ==212==    by 0xC5B6BF: SyncEvo::ForkExecTest::testNotFound() (ForkExec.cpp:681)
+# ==212==    by 0x7FDE5B1: CppUnit::TestCaseMethodFunctor::operator()() const (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FD4EB2: CppUnit::DefaultProtector::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FDB7E1: CppUnit::ProtectorChain::protect(CppUnit::Functor const&, CppUnit::ProtectorContext const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FE3E4F: CppUnit::TestResult::protect(CppUnit::Functor const&, CppUnit::Test*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FDE38F: CppUnit::TestCase::run(CppUnit::TestResult*) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FE3D71: CppUnit::TestResult::runTest(CppUnit::Test*) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FE647D: CppUnit::TestRunner::run(CppUnit::TestResult&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0x7FE826F: CppUnit::TextTestRunner::run(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, bool, bool) (in /usr/lib/x86_64-linux-gnu/libcppunit-1.13.so.0.0.2)
+# ==212==    by 0xB5320E: main (client-test-main.cpp:394)
+# ==212==
+# First seen on Debian Stretch.
+{
+   g_dbus_connection_new_sync + thread pool
+   Memcheck:Leak
+   fun:malloc
+   fun:g_malloc
+   ...
+   fun:g_task_thread_pool_init
+   ...
+   fun:g_dbus_connection_new_sync
+}
+
 ### KDE ###
 
 # ==21052== 1,040 bytes in 26 blocks are possibly lost in loss record 5,184 of 5,271
