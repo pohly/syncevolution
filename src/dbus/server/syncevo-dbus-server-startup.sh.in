@@ -1,3 +1,20 @@
 #! /bin/sh
 sleep 120
-exec @libexecdir@/syncevo-dbus-server @SYNCEVO_DBUS_SERVER_ARGS@ 2>/dev/null 1>&1
+
+
+if type dbus-send >/dev/null 2>&1; then
+    # Use D-Bus activation to start it, to take advantage of
+    # systemd service management.
+    dbus-send \
+        --session \
+        --type=method_call \
+        --print-reply \
+        --dest=org.freedesktop.DBus \
+        /org/freedesktop/DBus \
+        org.freedesktop.DBus.StartServiceByName \
+        string:org.syncevolution \
+        uint32:0
+else
+    # Fall back to direct invocation.
+    exec @libexecdir@/syncevo-dbus-server @SYNCEVO_DBUS_SERVER_ARGS@ 2>/dev/null 1>&1
+fi
