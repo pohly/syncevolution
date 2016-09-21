@@ -1170,7 +1170,7 @@ class DBusObjectHelper : public DBusObject
  public:
     typedef boost::function<void (void)> Callback_t;
 
-    DBusObjectHelper(DBusConnectionPtr conn,
+    DBusObjectHelper(const DBusConnectionPtr &conn,
                      const std::string &path,
                      const std::string &interface,
                      const Callback_t &callback = Callback_t(),
