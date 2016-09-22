@@ -450,7 +450,7 @@ public:
         source(sourceParam),
         isSourceA(isSourceAParam) {}
 
-    TestingSyncSource *operator() () {
+    TestingSyncSource *operator() () const {
         CPPUNIT_ASSERT(createSource);
         return createSource(client, client.getClientID(), source, isSourceA);
     }
@@ -521,7 +521,7 @@ public:
      * @param uniqueUIDSuffix    gets added to UID of the inserted item if unique UIDs are necessary
      * @return the LUID of the inserted item
      */
-    virtual std::string insert(CreateSource createSource, const std::string &data, bool relaxed = false, std::string *inserted = NULL, const std::string &uniqueUIDSuffix = "");
+    virtual std::string insert(const CreateSource &createSource, const std::string &data, bool relaxed = false, std::string *inserted = NULL, const std::string &uniqueUIDSuffix = "");
 
     /**
      * assumes that exactly one element is currently inserted and updates it with the given item
@@ -529,17 +529,17 @@ public:
      * @param check     if true, then reopen the source and verify that the reported items are as expected
      * @param uniqueUIDSuffix    same UID suffix as when creating the item
      */
-    virtual void update(CreateSource createSource, const std::string &data, bool check = true, const std::string &uniqueUIDSuffix = "");
+    virtual void update(const CreateSource &createSource, const std::string &data, bool check = true, const std::string &uniqueUIDSuffix = "");
 
     /**
      * updates one item identified by its LUID with the given item
      *
      * The type of the item is cleared, as in insert() above.
      */
-    virtual void update(CreateSource createSource, const std::string &data, const std::string &luid);
+    virtual void update(const CreateSource &createSource, const std::string &data, const std::string &luid);
 
     /** deletes all items locally via sync source */
-    virtual void deleteAll(CreateSource createSource);
+    virtual void deleteAll(const CreateSource &createSource);
 
     /**
      * takes two databases, exports them,
@@ -583,7 +583,7 @@ public:
      * @param size            minimum size for new items
      * @return number of items inserted
      */
-    virtual std::list<std::string> insertManyItems(CreateSource createSource, int startIndex = 1, int numItems = 0, int size = -1);
+    virtual std::list<std::string> insertManyItems(const CreateSource &createSource, int startIndex = 1, int numItems = 0, int size = -1);
     virtual std::list<std::string> insertManyItems(TestingSyncSource *source, int startIndex = 1, int numItems = 0, int size = -1);
 
     /**
@@ -594,7 +594,7 @@ public:
      * @param luids       result from corresponding insertManyItems() call
      * @param offset      skip that many items at the start of luids before updating the following ones
      */
-    void updateManyItems(CreateSource createSource, int startIndex, int numItems, int size,
+    void updateManyItems(const CreateSource &createSource, int startIndex, int numItems, int size,
                          int revision,
                          std::list<std::string> &luids,
                          int offset);
@@ -602,14 +602,14 @@ public:
     /**
      * Delete items. Skips offset items in luids before deleting numItems.
      */
-    void removeManyItems(CreateSource createSource, int numItems,
+    void removeManyItems(const CreateSource &createSource, int numItems,
                          std::list<std::string> &luids,
                          int offset);
 
     /**
      * update every single item, using config.update
      */
-    virtual void updateData(CreateSource createSource);
+    virtual void updateData(const CreateSource &createSource);
 
     /**
      * create an artificial item for the current database

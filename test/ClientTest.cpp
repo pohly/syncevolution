@@ -657,7 +657,7 @@ void LocalTests::addTests() {
     }
 }
 
-std::string LocalTests::insert(CreateSource createSource, const std::string &data, bool relaxed, std::string *inserted, const std::string &uniqueUIDSuffix) {
+std::string LocalTests::insert(const CreateSource &createSource, const std::string &data, bool relaxed, std::string *inserted, const std::string &uniqueUIDSuffix) {
     restoreStorage(config, client);
 
     // create source
@@ -705,7 +705,7 @@ std::string LocalTests::insert(CreateSource createSource, const std::string &dat
 }
 
 /** deletes specific item locally via sync source */
-static std::string updateItem(CreateSource createSource, const ClientTestConfig &config, const std::string &uid, const std::string &data, std::string *updated = NULL) {
+static std::string updateItem(const CreateSource &createSource, const ClientTestConfig &config, const std::string &uid, const std::string &data, std::string *updated = NULL) {
     std::string newuid;
 
     CT_ASSERT(createSource.createSource);
@@ -728,7 +728,7 @@ static std::string updateItem(CreateSource createSource, const ClientTestConfig 
 }
 
 /** updates specific item locally via sync source */
-static void removeItem(CreateSource createSource, const std::string &luid)
+static void removeItem(const CreateSource &createSource, const std::string &luid)
 {
     CT_ASSERT(createSource.createSource);
 
@@ -740,7 +740,7 @@ static void removeItem(CreateSource createSource, const std::string &luid)
     SOURCE_ASSERT_NO_FAILURE(source.get(), source->deleteItem(luid));
 }
 
-void LocalTests::update(CreateSource createSource, const std::string &data, bool check, const std::string &uniqueUIDSuffix) {
+void LocalTests::update(const CreateSource &createSource, const std::string &data, bool check, const std::string &uniqueUIDSuffix) {
     CT_ASSERT(createSource.createSource);
 
     restoreStorage(config, client);
@@ -779,7 +779,7 @@ void LocalTests::update(CreateSource createSource, const std::string &data, bool
     backupStorage(config, client);
 }
 
-void LocalTests::update(CreateSource createSource, const std::string &data, const std::string &luid) {
+void LocalTests::update(const CreateSource &createSource, const std::string &data, const std::string &luid) {
     CT_ASSERT(createSource.createSource);
 
     restoreStorage(config, client);
@@ -794,7 +794,7 @@ void LocalTests::update(CreateSource createSource, const std::string &data, cons
 }
 
 /** deletes all items locally via sync source */
-void LocalTests::deleteAll(CreateSource createSource) {
+void LocalTests::deleteAll(const CreateSource &createSource) {
     CT_ASSERT(createSource.createSource);
 
     restoreStorage(config, client);
@@ -819,7 +819,7 @@ void LocalTests::deleteAll(CreateSource createSource) {
 }
 
 /** deletes specific item locally via sync source */
-static void deleteItem(CreateSource createSource, const std::string &uid) {
+static void deleteItem(const CreateSource &createSource, const std::string &uid) {
     CT_ASSERT(createSource.createSource);
 
     // create source
@@ -995,7 +995,7 @@ std::string LocalTests::createItem(int item, const std::string &revision, int si
  * @param size            minimum size for new items
  * @return LUIDs of all inserted items
  */
-std::list<std::string> LocalTests::insertManyItems(CreateSource createSource, int startIndex, int numItems, int size) {
+std::list<std::string> LocalTests::insertManyItems(const CreateSource &createSource, int startIndex, int numItems, int size) {
     std::list<std::string> luids;
 
     CT_ASSERT(!config.m_templateItem.empty());
@@ -1038,7 +1038,7 @@ std::list<std::string> LocalTests::insertManyItems(TestingSyncSource *source, in
     return luids;
 }
 
-void LocalTests::updateManyItems(CreateSource createSource, int startIndex, int numItems, int size,
+void LocalTests::updateManyItems(const CreateSource &createSource, int startIndex, int numItems, int size,
                                  int revision,
                                  std::list<std::string> &luids,
                                  int offset)
@@ -1066,7 +1066,7 @@ void LocalTests::updateManyItems(CreateSource createSource, int startIndex, int 
     backupStorage(config, client);
 }
 
-void LocalTests::removeManyItems(CreateSource createSource, int numItems,
+void LocalTests::removeManyItems(const CreateSource &createSource, int numItems,
                                  std::list<std::string> &luids,
                                  int offset)
 {
@@ -1085,7 +1085,7 @@ void LocalTests::removeManyItems(CreateSource createSource, int numItems,
 }
 
 // update every single item in the database
-void LocalTests::updateData(CreateSource createSource) {
+void LocalTests::updateData(const CreateSource &createSource) {
     // check additional requirements
     CT_ASSERT(config.m_update);
 
