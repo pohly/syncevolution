@@ -2,14 +2,30 @@
 #
 # Wrapper script which starts a new D-Bus session before
 # running a program and kills the D-Bus daemon when done.
+# This script is meant for a very specific environment
+# (SyncEvolution nightly testing).
+#
+# dbus-run-session (available since dbus 1.8) should be used instead
+# for normal use cases.
 
 unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID XDG_RUNTIME_DIR
 
 # Ensure that we have a unique, empty XDG_RUNTIME_DIR.
 export XDG_RUNTIME_DIR=`mktemp -d`
 
-# start D-Bus session
-eval `dbus-launch`
+# Start D-Bus session. We want to use the real D-Bus configuration
+# of the host here, because want to use some of its services (GNOME keyring,
+# GNOME/Ubuntu Online Accounts, etc.).
+for i in /etc/dbus-1/session.conf /usr/share/dbus-1/session.conf; do
+    if [ -e $i ]; then
+        DBUS_CONFIG=$i
+        break
+    fi
+done
+dbus-daemon --fork --config-file=$DBUS_CONFIG --print-address=3 --print-pid=4 \
+    3>$XDG_RUNTIME_DIR/dbus-bus-address 4>$XDG_RUNTIME_DIR/dbus-bus-pid
+DBUS_SESSION_BUS_PID="$(cat $XDG_RUNTIME_DIR/dbus-bus-pid)"
+DBUS_SESSION_BUS_ADDRESS="$(cat $XDG_RUNTIME_DIR/dbus-bus-address)"
 export DBUS_SESSION_BUS_ADDRESS
 
 if [ "$DBUS_SESSION_SH_SYSTEM_BUS" ]; then
@@ -17,7 +33,10 @@ if [ "$DBUS_SESSION_SH_SYSTEM_BUS" ]; then
     DBUS_SYSTEM_BUS_PID=$DBUS_SESSION_BUS_PID
     DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS
     export DBUS_SYSTEM_BUS_ADDRESS
-    eval `dbus-launch`
+    dbus-daemon --fork --config-file=$DBUS_CONFIG --print-address=3 --print-pid=4 \
+        3>$XDG_RUNTIME_DIR/dbus-2-bus-address 4>$XDG_RUNTIME_DIR/dbus-2-bus-pid
+    DBUS_SESSION_BUS_PID="$(cat $XDG_RUNTIME_DIR/dbus-2-bus-pid)"
+    DBUS_SESSION_BUS_ADDRESS="$(cat $XDG_RUNTIME_DIR/dbus-2-bus-address)"
 fi
 
 # Ensure that XDG dirs exist. Otherwise some daemons do not work correctly.
