@@ -1,3 +1,99 @@
+SyncEvolution 1.5.1 -> 1.5.2, xxxxxxxxxx
+========================================
+
+Maintenance release. syncevolution.org binaries are now getting
+compiled for distros >= Ubuntu Trusty 14.04 LTS, which allowed
+removing several hacks that were needed when building binaries that
+also had to run on older distros. Compilation from source for old
+distros should still work as before, but is not getting tested
+anymore.
+
+Compile problems with recent libraries (libical v2) and tools (GCC v6)
+were resolved. Syncing via Bluetooth with certain phones now should
+work reliably in incremental mode.
+
+Details:
+
+* ObexTransportAgent.cpp: properly shut down connection (FDO #91485)
+
+  Apparently there's a race condition in the OBEX transport that causes the
+  connection to phones via Bluetooth to be shut down prematurely.  Some phones
+  react by doing a slow sync instead of an incremental sync the next time.
+
+* support non-readable parent directories (FDO #91000)
+
+  The previous mkdir_p() walked down top to bottom and checked each path
+  entry as it went along. That approach failed unnecessarily when some
+  existing parent directory could not be read (non-readable /home, for
+  example).
+
+* avoid using dbus-launch (Debian #836399)
+
+  dbus-launch is considered deprecated because of the X11 dependency.
+  See https://lists.debian.org/debian-devel/2016/08/msg00554.html "Mass bug
+  filing: use and misuse of dbus-launch (dbus-x11)"
+
+  The dbus-session.sh script still needs to start the D-Bus daemon when used in the nightly
+  testing, so the code now does it by invoking the dbus-daemon directly.
+
+  syncevo-http-server still has some usage of dbus-launch left, but that's
+  strictly for systems which don't have the more modern D-Bus.
+
+* syncevo-dbus-server integrates better with systemd (FDO #92164)
+
+  A .service file allows the D-Bus daemon to start the service via systemd,
+  thus ensuring that the process environment is correct. Patch from Simon
+  McVittie. Auto-starting as part of the desktop login uses D-Bus activation
+  if the "dbus-send" tool is installed.
+
+* syncevolution.org: compile on Ubuntu Trusty, libical v1/v2 compatibility
+
+  syncevolution.org binaries are now getting compiled on Ubuntu Trusty and thus
+  no longer support distros with older EDS. The code should still compile
+  against older EDS (for example, for Maemo), but that is not getting tested
+  anymore.
+
+  This allows removing the dynamic linker hacks related to older libraries,
+  which was only used in those binaries. Instead, backends using libical or EDS
+  get compiled on Ubuntu Trusty and then the soname of those libs get patched to
+  make the backend module usable in combination with a different set of
+  libs. That patching is part of a script maintained in the syncevolution.org
+  build infrastructure.
+
+  This approach was already used before to generate different EDS backends
+  for EDS versions with the newer EClient API, because that turned out to be
+  easier than the dynamic loading approach. It works because none of the methods
+  used by SyncEvolution changed their ABI, only some other parts of the
+  libraries did. Should there ever be a situation again that cannot be handled
+  like this, then backends also get compiled on different distros than
+  Ubuntu Trusty (for example, the ActiveSync backend for Debian Stretch
+  is built on Debian Stretch).
+
+  libical still requires one special hack: system time zone loading in
+  libical v1 (and only in that version, v2 has builtin support again) must
+  be overridden such that time zones are generated with rules instead
+  of transitions because that is more compatible with the peers that
+  SyncEvolution exchanges data with.
+
+  That hack now relies on overriding the two relevant functions inside the main
+  binaries (has to be there, otherwise libical still ends up calling its own
+  internal implementation). The overriding code is in
+  libsyncevo-icaltz-util.so.0 and depends on libical.so.1. If
+  libsyncevo-icaltz-util.so.0 can be loaded, the wrappers in the main binary use
+  it, otherwise they fall through to the code from the current libical.so, which
+  then should be libical.so.2 or more recent.
+
+  This hack is active by default when libical v1 is detected during configuration.
+
+* optionally show debug output in --version output
+
+  SYNCEVOLUTION_DEBUG=1 syncevolution --daemon=no --version now
+  dumps also the debug information gathered by the binary
+  compatibility code. It was only available in sync logs before.
+
+* various build fixes for libical v2, GCC v6/C++14
+
+
 SyncEvolution 1.5 -> 1.5.1, 05.06.2015
 ======================================
 
