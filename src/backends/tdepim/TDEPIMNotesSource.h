@@ -17,7 +17,7 @@
  * 02110-1301  USA
  *
  *
- * $Id: TDEPIMNotesSource.h,v 1.5 2016/09/08 22:58:08 emanoil Exp $
+ * $Id: TDEPIMNotesSource.h,v 1.6 2016/09/20 12:56:49 emanoil Exp $
  *
  */
 
@@ -75,6 +75,8 @@ private:
 	* This functions is used internally to strip HTML from the note
 	*/
 	static TQString stripHtml(TQString input);
+
+    TQString lastModifiedNormalized(TQDateTime &d) const;
 
 	/** 
 	 * Implement some brief information extraction from the note

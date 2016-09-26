@@ -4,14 +4,12 @@
 **
 ** WARNING! All changes made in this file will be lost!
 **
-** $Id: KNotesIface_stub.cpp,v 1.2 2016/09/01 10:40:05 emanoil Exp $
-**
 *****************************************************************************/
 
 #include "KNotesIface_stub.h"
 #include <dcopclient.h>
 
-#include <tqdatastream.h>
+#include <kdatastream.h>
 
 
 KNotesIface_stub::KNotesIface_stub( const TQCString& app, const TQCString& obj )
@@ -78,32 +76,6 @@ TQString KNotesIface_stub::newNoteFromClipboard( const TQString& arg0 )
 	callFailed();
     }
     return result;
-}
-
-void KNotesIface_stub::showNote( const TQString& arg0 )
-{
-    if ( !dcopClient()  ) {
-	setStatus( CallFailed );
-	return;
-    }
-    TQByteArray data;
-    TQDataStream arg( data, IO_WriteOnly );
-    arg << arg0;
-    dcopClient()->send( app(), obj(), "showNote(TQString)", data );
-    setStatus( CallSucceeded );
-}
-
-void KNotesIface_stub::hideNote( const TQString& arg0 )
-{
-    if ( !dcopClient()  ) {
-	setStatus( CallFailed );
-	return;
-    }
-    TQByteArray data;
-    TQDataStream arg( data, IO_WriteOnly );
-    arg << arg0;
-    dcopClient()->send( app(), obj(), "hideNote(TQString)", data );
-    setStatus( CallSucceeded );
 }
 
 void KNotesIface_stub::killNote( const TQString& arg0 )
@@ -234,22 +206,9 @@ TQString KNotesIface_stub::text( const TQString& arg0 )
     return result;
 }
 
-void KNotesIface_stub::sync( const TQString& arg0 )
+int KNotesIface_stub::getRevision( const TQString& arg0 )
 {
-    if ( !dcopClient()  ) {
-	setStatus( CallFailed );
-	return;
-    }
-    TQByteArray data;
-    TQDataStream arg( data, IO_WriteOnly );
-    arg << arg0;
-    dcopClient()->send( app(), obj(), "sync(TQString)", data );
-    setStatus( CallSucceeded );
-}
-
-bool KNotesIface_stub::isNew( const TQString& arg0, const TQString& arg1 )
-{
-    bool result = false;
+    int result = 0;
     if ( !dcopClient()  ) {
 	setStatus( CallFailed );
 	return result;
@@ -258,9 +217,8 @@ bool KNotesIface_stub::isNew( const TQString& arg0, const TQString& arg1 )
     TQCString replyType;
     TQDataStream arg( data, IO_WriteOnly );
     arg << arg0;
-    arg << arg1;
-    if ( dcopClient()->call( app(), obj(), "isNew(TQString,TQString)", data, replyType, replyData ) ) {
-	if ( replyType == "bool" ) {
+    if ( dcopClient()->call( app(), obj(), "getRevision(TQString)", data, replyType, replyData ) ) {
+	if ( replyType == "int" ) {
 	    TQDataStream _reply_stream( replyData, IO_ReadOnly );
 	    _reply_stream >> result;
 	    setStatus( CallSucceeded );
@@ -273,9 +231,9 @@ bool KNotesIface_stub::isNew( const TQString& arg0, const TQString& arg1 )
     return result;
 }
 
-bool KNotesIface_stub::isModified( const TQString& arg0, const TQString& arg1 )
+TQDateTime KNotesIface_stub::getLastModified( const TQString& arg0 )
 {
-    bool result = false;
+    TQDateTime result;
     if ( !dcopClient()  ) {
 	setStatus( CallFailed );
 	return result;
@@ -284,9 +242,8 @@ bool KNotesIface_stub::isModified( const TQString& arg0, const TQString& arg1 )
     TQCString replyType;
     TQDataStream arg( data, IO_WriteOnly );
     arg << arg0;
-    arg << arg1;
-    if ( dcopClient()->call( app(), obj(), "isModified(TQString,TQString)", data, replyType, replyData ) ) {
-	if ( replyType == "bool" ) {
+    if ( dcopClient()->call( app(), obj(), "getLastModified(TQString)", data, replyType, replyData ) ) {
+	if ( replyType == "TQDateTime" ) {
 	    TQDataStream _reply_stream( replyData, IO_ReadOnly );
 	    _reply_stream >> result;
 	    setStatus( CallSucceeded );

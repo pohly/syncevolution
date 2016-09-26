@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301  USA
  *
- * $Id: TDEPIMAddressBookSourceRegister.cpp,v 1.4 2016/09/08 22:58:08 emanoil Exp $
+ * $Id: TDEPIMAddressBookSourceRegister.cpp,v 1.5 2016/09/20 12:56:49 emanoil Exp $
  *
  */
 
@@ -72,5 +72,61 @@ public:
 */
     }
 } registerMe;
+
+#ifdef ENABLE_TDEPIMABC
+#ifdef ENABLE_UNIT_TESTS
+
+class TDEAddressBookTest : public CppUnit::TestFixture {
+    CPPUNIT_TEST_SUITE(TDEAddressBookTest);
+    CPPUNIT_TEST(testInstantiate);
+    CPPUNIT_TEST_SUITE_END();
+
+protected:
+    static string addItem(boost::shared_ptr<TestingSyncSource> source,
+                          string &data) {
+        SyncSourceRaw::InsertItemResult res = source->insertItemRaw("", data);
+        return res.m_luid;
+    }
+
+    void testInstantiate() {
+        boost::shared_ptr<SyncSource> source;
+        // source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
+        // source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
+        source.reset(SyncSource::createTestingSource("addressbook", "tdepim-contacts", true));
+        source.reset(SyncSource::createTestingSource("addressbook", "TDE Contacts", true));
+ //       source.reset(SyncSource::createTestingSource("addressbook", "TDE Address Book:text/x-vcard", true));
+        source.reset(SyncSource::createTestingSource("addressbook", "TDE Address Book:text/vcard", true));
+    }
+
+    // TODO: support default databases
+
+    // void testOpenDefaultAddressBook() {
+    //     boost::shared_ptr<TestingSyncSource> source;
+    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL));
+    //     CPPUNIT_ASSERT_NO_THROW(source->open());
+    // }
+
+SYNCEVOLUTION_TEST_SUITE_REGISTRATION(TDEAddressBookTest);
+
+#endif // ENABLE_UNIT_TESTS
+
+namespace {
+#if 0
+}
+#endif
+
+static class vCard30Test : public RegisterSyncSourceTest {
+public:
+    vCard30Test() : RegisterSyncSourceTest("tdepim_contact", "eds_contact") {}
+
+    virtual void updateConfig(ClientTestConfig &config) const
+    {
+        config.m_type = "tdepim-contacts";
+    }
+} vCard30Test;
+
+}
+
+#endif //ENABLE_TDEPIMABC
 
 SE_END_CXX

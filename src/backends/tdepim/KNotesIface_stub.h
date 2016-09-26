@@ -4,8 +4,6 @@
 **
 ** WARNING! All changes made in this file will be lost!
 **
-** $Id: KNotesIface_stub.h,v 1.2 2016/09/01 10:40:05 emanoil Exp $
-**
 *****************************************************************************/
 
 #ifndef __KNOTESIFACE_STUB__
@@ -14,6 +12,7 @@
 #include <dcopstub.h>
 #include <dcopobject.h>
 #include <tqmap.h>
+#include <tqdatetime.h>
 #include <tqstring.h>
 
 
@@ -25,8 +24,6 @@ public:
     explicit KNotesIface_stub( const DCOPRef& ref );
     virtual TQString newNote( const TQString& name, const TQString& text );
     virtual TQString newNoteFromClipboard( const TQString& name );
-    virtual ASYNC showNote( const TQString& noteId );
-    virtual ASYNC hideNote( const TQString& noteId );
     virtual ASYNC killNote( const TQString& noteId );
     virtual ASYNC killNote( const TQString& noteId, bool force );
     virtual TQMap<TQString,TQString> notes();
@@ -34,9 +31,8 @@ public:
     virtual ASYNC setText( const TQString& noteId, const TQString& newText );
     virtual TQString name( const TQString& noteId );
     virtual TQString text( const TQString& noteId );
-    virtual ASYNC sync( const TQString& app );
-    virtual bool isNew( const TQString& app, const TQString& noteId );
-    virtual bool isModified( const TQString& app, const TQString& noteId );
+    virtual int getRevision( const TQString& noteId );
+    virtual TQDateTime getLastModified( const TQString& noteId );
 protected:
     KNotesIface_stub() : DCOPStub( never_use ) {}
 };

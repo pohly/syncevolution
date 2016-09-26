@@ -17,7 +17,7 @@
  * 02110-1301  USA
  *
  *
- * $Id: TDEPIMNotesSource.cpp,v 1.7 2016/09/12 19:57:27 emanoil Exp $
+ * $Id: TDEPIMNotesSource.cpp,v 1.9 2016/09/20 12:56:49 emanoil Exp $
  *
  */
 
@@ -83,6 +83,20 @@ TDEPIMNotesSource::~TDEPIMNotesSource() {
 	SE_LOG_DEBUG(getDisplayName(), "kNotes exit OK");
 }
 
+
+TQString TDEPIMNotesSource::lastModifiedNormalized(TQDateTime &d) const
+{
+	// if no modification date is available, always return the same 0-time stamp
+	// to avoid that 2 calls deliver different times which would be treated as changed entry
+	// this would result in 1.1.1970
+	if (!d.isValid())
+		d.setTime_t(0);
+
+	// We pass UTC, because we open the calendar in UTC
+// 	return d.toString(TQt::ISODate); 
+	return d.toString("yyyyMMddThhmmssZ");
+}
+
 TQString TDEPIMNotesSource::stripHtml(TQString input)
 {
 	TQString output = NULL;
@@ -107,6 +121,10 @@ TDEPIMNotesSource::Databases TDEPIMNotesSource::getDatabases()
 
 	Databases result;
 
+/* FIXME the Knotes interface provides only one resource for now
+* When in future it is able to do multiple resources, the interface must change
+* so that a resource is configurable just like the calendar resources are
+*/
 	const std::string name("tdenotes");
 	const std::string path("tdepimnotes");
 
@@ -153,7 +171,7 @@ void TDEPIMNotesSource::close()
 void TDEPIMNotesSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisions)
 {
 
-	KMD5 hash_value;
+// 	KMD5 hash_value;
 	TQMap <TDENoteID_t,TQString> fNotes = kn_iface->notes();
 	if (kn_iface->status() != DCOPStub::CallSucceeded)
 		Exception::throwError(SE_HERE, "internal error, DCOP call failed");
@@ -161,14 +179,14 @@ void TDEPIMNotesSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisio
 	TQMap<TDENoteID_t,TQString>::ConstIterator i;
 	for (i = fNotes.begin(); i != fNotes.end(); i++) {
 
-		TQString data = i.data() + '\n' + stripHtml(kn_iface->text(i.key()));
-		hash_value.update(data.utf8(),data.utf8().length());
+		TQDateTime dt = kn_iface->getLastModified(TQString(i.key().utf8()));
+		if (kn_iface->status() != DCOPStub::CallSucceeded)
+			Exception::throwError(SE_HERE, "internal error, DCOP call failed");
+		revisions[static_cast<const char*>(i.key().utf8())] = static_cast<const char*>(lastModifiedNormalized(dt).utf8());
 
-		std::string uid_str(i.key().utf8(),i.key().utf8().length());
-		revisions[uid_str] = hash_value.base64Digest().data();
-		hash_value.reset();
 /* DEBUG
 		SE_LOG_DEBUG(getDisplayName(), "KNotes UID: %s", static_cast<const char*>(i.key().utf8()) );
+		SE_LOG_DEBUG(getDisplayName(), "KNotes REV: %s", static_cast<const char*>(lastModifiedNormalized(dt).utf8()) );
 		SE_LOG_DEBUG(getDisplayName(), "KNotes DATA: %s", static_cast<const char*>(data.utf8()));
 */
 	}
@@ -179,15 +197,9 @@ TrackingSyncSource::InsertItemResult TDEPIMNotesSource::insertItem(const std::st
 
 		InsertItemResultState state = ITEM_OKAY;
 		TrackingSyncSource::InsertItemResult result;
-		KMD5 hash_value;
 
 		TQString uid  = TQString::fromUtf8(luid.data(), luid.size());
 		TQString data = TQString::fromUtf8(item.data(), item.size());
-
-		// store the hashed value of data to be able to find our new note later and get the id
-		hash_value.update(data.utf8(),data.utf8().length());
-		TQCString rev = hash_value.base64Digest();
-		hash_value.reset();
 
 		TQString summary = data.section('\n', 0, 0);  // first line is our title == summary
 		TQString body = data.section('\n', 1);  // rest
@@ -211,8 +223,10 @@ TrackingSyncSource::InsertItemResult TDEPIMNotesSource::insertItem(const std::st
 						Exception::throwError(SE_HERE, "internal error, add note failed");
 		}
 
-		std::string ret_uid(newuid.utf8(), newuid.utf8().length());
-		return InsertItemResult(ret_uid, rev.data(), state);
+		TQDateTime dt = kn_iface->getLastModified(newuid);
+		if (kn_iface->status() != DCOPStub::CallSucceeded)
+			Exception::throwError(SE_HERE, "internal error, DCOP call failed");
+		return InsertItemResult(static_cast<const char*>(newuid.utf8()), static_cast<const char*>(lastModifiedNormalized(dt).utf8()), state);
 
 }
 
@@ -221,8 +235,7 @@ void TDEPIMNotesSource::readItem(const std::string &luid, std::string &item, boo
 	TQString uid = TQString::fromUtf8(luid.data(),luid.size());
 	TQString data = kn_iface->name( uid ) + '\n' + stripHtml(kn_iface->text( uid ));
 
-	std::string data_str( data.utf8(), data.utf8().length() );
-	item.assign( data_str.c_str() );
+	item.assign( static_cast<const char*>(data.utf8()) );
 }
 
 void TDEPIMNotesSource::removeItem(const std::string &luid)
@@ -242,10 +255,9 @@ std::string TDEPIMNotesSource::getDescription(const std::string &luid)
 {
 	TQString uid = TQString::fromUtf8(luid.data(),luid.size());
 	TQString data = kn_iface->name( uid );
-	if ( data.length() > 0 ) {
-		std::string sum_str(data.utf8(),data.utf8().length());
-		return sum_str;
-	}
+	if ( data.length() > 0 )
+		return static_cast<const char*>(data.utf8());
+
         SE_LOG_DEBUG(getDisplayName(), "Resource id(%s) not found", luid.c_str() );
 	return "";
 }

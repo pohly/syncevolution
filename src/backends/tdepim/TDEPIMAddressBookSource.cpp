@@ -17,7 +17,7 @@
  * 02110-1301  USA
  *
  *
- * $Id: TDEPIMAddressBookSource.cpp,v 1.9 2016/09/12 19:57:27 emanoil Exp $
+ * $Id: TDEPIMAddressBookSource.cpp,v 1.10 2016/09/20 12:56:49 emanoil Exp $
  *
  */
 
@@ -125,17 +125,17 @@ TDEPIMAddressBookSource::Databases TDEPIMAddressBookSource::getDatabases()
 	while ( (res = it.current()) != 0 ) {
 		++it;
 
-		std::string name_str(res->resourceName().utf8(),res->resourceName().utf8().length());
-		std::string path_str(res->identifier().utf8(),res->identifier().utf8().length());
-		SE_LOG_DEBUG(getDisplayName(), "SUB Name  : %s , ID: %s", name_str.c_str(), path_str.c_str() );
+		SE_LOG_DEBUG(getDisplayName(), "SUB Name  : %s , ID: %s", 
+			static_cast<const char*>(res->resourceName().utf8()), 
+			static_cast<const char*>(res->identifier().utf8()) );
 	/*
 	 * we pull only active resources thus user has freedom to decide what wants to be visible for sync
 	 */
 		if ( res->isActive() ) {
 			result.push_back (
 				Database ( 
-					name_str,		// the name of the resource
-					path_str,		// the path - (we use the resource uid)
+					static_cast<const char*>(res->resourceName().utf8()), // the name of the resource
+					static_cast<const char*>(res->identifier().utf8()),   // the path - (we use the resource uid)
 					first,			// default or not
 					res->readOnly()		// read only or not
 				)
@@ -156,12 +156,11 @@ void TDEPIMAddressBookSource::open()
 	TDEABC::Resource *res;
 	while ( (res = it.current()) != 0 ) {
 		++it;
-		std::string path_str(res->identifier().utf8(),res->identifier().utf8().length());
-		if ( id.compare(path_str) == 0 ) {
+		if ( id.compare(static_cast<const char*>(res->identifier().utf8())) == 0 ) {
 			if ( ! res->isActive() )
 				Exception::throwError(SE_HERE, "internal error, configured resource is not active");
 			ticketPtr = res->requestSaveTicket();
-			SE_LOG_DEBUG(getDisplayName(), "TDE address book id: %s ", path_str.c_str() );
+			SE_LOG_DEBUG(getDisplayName(), "TDE address book id: %s ", static_cast<const char*>(res->identifier().utf8()) );
 			break;
 		}
 	}
@@ -199,11 +198,12 @@ void TDEPIMAddressBookSource::listAllItems(RevisionMap_t &revisions)
 	for (TDEABC::Resource::Iterator it=workbookPtr->begin(); it!=workbookPtr->end(); it++) {
 		TDEABC::Addressee ab = (*it);
 		TQString lm = lastModifiedNormalized(ab);
-		std::string uid_str(ab.uid().utf8(),ab.uid().utf8().length());
-		std::string lm_str(lm.utf8(),lm.utf8().length());
-		revisions[uid_str] = lm_str;
+		revisions[static_cast<const char*>(ab.uid().utf8())] = static_cast<const char*>(lm.utf8());
 // 		m_categories.append(a.categories()); // Set filter categories
-		SE_LOG_DEBUG(getDisplayName(), "Addressee UID: %s last changed(%s)",uid_str.c_str(),lm_str.c_str() );
+		SE_LOG_DEBUG(getDisplayName(), "Addressee UID: %s last changed(%s)",
+			static_cast<const char*>(ab.uid().utf8()),
+			static_cast<const char*>(lm.utf8())
+		);
 	}
 }
 
@@ -261,10 +261,11 @@ TrackingSyncSource::InsertItemResult TDEPIMAddressBookSource::insertItem(const s
 	TDEABC::Addressee addresseeNew = workbookPtr->findByUid(uidOld);
 
 	TQString revision = lastModifiedNormalized(addresseeNew);
-	std::string uid_str(uidOld.utf8(),uidOld.utf8().length());
-	std::string rev_str(revision.utf8(),revision.utf8().length());
-	SE_LOG_DEBUG(getDisplayName(), "TDE addressbook UID= %s ADD/UPDATE (REV=%s) OK",uid_str.c_str(),rev_str.c_str() );
-	return InsertItemResult(uid_str, rev_str, state);
+
+	SE_LOG_DEBUG(getDisplayName(), "TDE addressbook UID= %s ADD/UPDATE (REV=%s) OK",
+		static_cast<const char*>(uidOld.utf8()),
+		static_cast<const char*>(revision.utf8()) );
+	return InsertItemResult(static_cast<const char*>(uidOld.utf8()), static_cast<const char*>(revision.utf8()), state);
 }
 
 void TDEPIMAddressBookSource::readItem(const std::string &luid, std::string &item, bool raw)
@@ -288,12 +289,10 @@ void TDEPIMAddressBookSource::readItem(const std::string &luid, std::string &ite
 	else
 		data = converter.createVCard(addressee, TDEABC::VCardConverter::v3_0);
 
-	std::string data_str(data.utf8(),data.utf8().length());
-
-	item.assign(data_str.c_str());
+	item.assign(static_cast<const char*>(data.utf8()));
 /* DEBUG
  	SE_LOG_DEBUG(getDisplayName(), "Item id ( %s )", luid.c_str() );
- 	SE_LOG_DEBUG(getDisplayName(), "data %s", data_str.c_str());
+ 	SE_LOG_DEBUG(getDisplayName(), "data %s", static_cast<const char*>(data.utf8()));
 */
 }
 
@@ -341,9 +340,9 @@ std::string TDEPIMAddressBookSource::getDescription(const string &luid)
 		desc.append((*it).number()).append(", ");
 	}
 	desc.append("\n");
-	std::string desc_str(desc.utf8(),desc.utf8().length());
-	SE_LOG_DEBUG(getDisplayName(), "User summary %s", desc_str.c_str());
-	return desc_str;
+
+	SE_LOG_DEBUG(getDisplayName(), "User summary %s", static_cast<const char*>(desc.utf8()));
+	return static_cast<const char*>(desc.utf8());
 }
 
 void TDEPIMAddressBookSource::getSynthesisInfo(SynthesisInfo &info,

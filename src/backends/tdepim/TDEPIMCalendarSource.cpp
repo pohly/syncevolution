@@ -17,7 +17,7 @@
  * 02110-1301  USA
  *
  *
- * $Id: TDEPIMCalendarSource.cpp,v 1.12 2016/09/12 19:57:27 emanoil Exp $
+ * $Id: TDEPIMCalendarSource.cpp,v 1.14 2016/09/20 12:56:49 emanoil Exp $
  *
  */
 
@@ -105,20 +105,18 @@ TDEPIMCalendarSource::Databases TDEPIMCalendarSource::getDatabases()
 	KCal::CalendarResourceManager * mgr = calendarResPtr->resourceManager();
 	/*
 	 * we pull only active resources so the user has some freedom to decide 
-	 * what he wants to be visible for sync this will result in setting
+	 * what will be visible for sync 
 	 */
 	for (KRES::Manager<KCal::ResourceCalendar>::ActiveIterator i = mgr->activeBegin(); i != mgr->activeEnd(); i++) {
 
-		std::string name_str(( *i )->resourceName().utf8(),( *i )->resourceName().utf8().length());
-		std::string path_str(( *i )->identifier().utf8(),( *i )->identifier().utf8().length());
 // 		std::string info_str(( *i )->infoText( ).utf8(),( *i )->infoText( ).utf8().length());
 // 		SE_LOG_DEBUG(getDisplayName(), "resource: NAME(%s), ID(%s), INFO(%s)", 
 // 					name_str.c_str(), path_str.c_str(), info_str.c_str());
 
 		result.push_back (
 			Database ( 
-				name_str,		// the name of the resource
-				path_str,		// the path - (we use the resource uid)
+				static_cast<const char*>(( *i )->resourceName().utf8()),		// the name of the resource
+				static_cast<const char*>(( *i )->identifier().utf8()),		// the path - (we use the resource uid)
 				first,			// default or not
 				( *i )->readOnly()	// read only or not
 			)
@@ -136,11 +134,11 @@ void TDEPIMCalendarSource::open()
 
 	KCal::CalendarResourceManager * mgr = calendarResPtr->resourceManager();
 	/*
-	 * we pull only active resources thus user has freedom to decide what wants to be visible for sync
+	 * we pull only active resources so the user has some freedom to decide 
+	 * what will be visible for sync 
 	 */
 	for (KRES::Manager<KCal::ResourceCalendar>::ActiveIterator i = mgr->activeBegin(); i != mgr->activeEnd(); i++) {
-		std::string path_str(( *i )->identifier().utf8(),( *i )->identifier().utf8().length());
-		if ( path_str == id ) {
+		if ( static_cast<const char*>(( *i )->identifier().utf8()) == id ) {
 // 			SE_LOG_DEBUG(getDisplayName(), "Resource id: %s found", path_str.c_str() );
 			calendarPtr = ( *i ) ;
 			break;
@@ -196,34 +194,31 @@ void TDEPIMCalendarSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revi
 	  case TDEPIM_TASKS:
 		e = calendarPtr->rawEvents( KCal::EventSortUnsorted , KCal::SortDirectionAscending );
 		for (KCal::Event::List::ConstIterator i = e.begin(); i != e.end(); i++) {
-			id = (*i)->uid();
 			lm = lastModifiedNormalized((*i));
-			std::string id_str(id.utf8(),id.utf8().length());
-			std::string lm_str(lm.utf8(),lm.utf8().length());
-			revisions[id_str] = lm_str;
-        		SE_LOG_DEBUG(getDisplayName(), "Event UID: %s last changed( %s )", id_str.c_str(), lm_str.c_str());
+			revisions[static_cast<const char*>((*i)->uid().utf8())] = static_cast<const char*>(lm.utf8());
+        		SE_LOG_DEBUG(getDisplayName(), "Event UID: %s last changed( %s )", 
+        			static_cast<const char*>((*i)->uid().utf8()), 
+        			static_cast<const char*>(lm.utf8()));
 		}
 		break;
 	  case TDEPIM_TODO:
 		t = calendarPtr->rawTodos( KCal::TodoSortUnsorted , KCal::SortDirectionAscending );
 		for (KCal::Todo::List::ConstIterator i = t.begin(); i != t.end(); i++) {
-			id = (*i)->uid();
 			lm = lastModifiedNormalized((*i));
-			std::string id_str(id.utf8(),id.utf8().length());
-			std::string lm_str(lm.utf8(),lm.utf8().length());
-			revisions[id_str] = lm_str;
-        		SE_LOG_DEBUG(getDisplayName(), "Todos UID: %s last changed( %s )", id_str.c_str(), lm_str.c_str());
+			revisions[static_cast<const char*>((*i)->uid().utf8())] = static_cast<const char*>(lm.utf8());
+        		SE_LOG_DEBUG(getDisplayName(), "Todos UID: %s last changed( %s )", 
+        			static_cast<const char*>((*i)->uid().utf8()), 
+        			static_cast<const char*>(lm.utf8()));
 		}
 		break;
 	  case TDEPIM_JOURNAL:
 		j = calendarPtr->rawJournals( KCal::JournalSortUnsorted , KCal::SortDirectionAscending );
 		for (KCal::Journal::List::ConstIterator i = j.begin(); i != j.end(); i++) {
-			id = (*i)->uid();
 			lm = lastModifiedNormalized((*i));
-			std::string id_str(id.utf8(),id.utf8().length());
-			std::string lm_str(lm.utf8(),lm.utf8().length());
-			revisions[id_str] = lm_str;
-        		SE_LOG_DEBUG(getDisplayName(), "Journal UID: %s last changed( %s )", id_str.c_str(), lm_str.c_str());
+			revisions[static_cast<const char*>((*i)->uid().utf8())] = static_cast<const char*>(lm.utf8());
+        		SE_LOG_DEBUG(getDisplayName(), "Journal UID: %s last changed( %s )", 
+        			static_cast<const char*>((*i)->uid().utf8()), 
+        			static_cast<const char*>(lm.utf8()));
 		}
 		break;
 	  default:
@@ -234,7 +229,7 @@ void TDEPIMCalendarSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revi
 
 TrackingSyncSource::InsertItemResult TDEPIMCalendarSource::insertItem(const std::string &luid, const std::string &item, bool raw)
 {
-
+// 	SE_LOG_DEBUG(getDisplayName(), "Item payload: ( %s )", item.data() );
 	InsertItemResultState state = ITEM_OKAY;
 	TrackingSyncSource::InsertItemResult result;
 	KCal::ICalFormat format;
@@ -291,10 +286,10 @@ TrackingSyncSource::InsertItemResult TDEPIMCalendarSource::insertItem(const std:
 		Exception::throwError(SE_HERE, "internal error, unable to get item from calendar");
 
 	TQString lm=lastModifiedNormalized(newinc);
-	std::string ret_uid(newinc->uid().utf8(), newinc->uid().utf8().length());
-	std::string ret_rev(lm.utf8(), lm.utf8().length());
-	SE_LOG_DEBUG(getDisplayName(), "Item ( %s : %s ) done.", ret_uid.c_str() , ret_rev.c_str() );
-   return InsertItemResult(ret_uid, ret_rev, state);
+	SE_LOG_DEBUG(getDisplayName(), "Item ( %s : %s ) done.", 
+		static_cast<const char*>(newinc->uid().utf8()), 
+		static_cast<const char*>(lm.utf8() ));
+   return InsertItemResult(static_cast<const char*>(newinc->uid().utf8()), static_cast<const char*>(lm.utf8()), state);
 }
 
 void TDEPIMCalendarSource::readItem(const std::string &luid, std::string &item, bool raw)
@@ -327,10 +322,7 @@ void TDEPIMCalendarSource::readItem(const std::string &luid, std::string &item, 
 	// Convert the data to icalendar 
 	TQString data = iCalFmt.toString( &cal );
 
-// it should be possible to use data.utf8() directly, as it returns char array
-// but no time to test so far
-	std::string data_str( data.utf8(), data.utf8().length() );
-	item.assign(data_str.c_str());
+	item.assign(static_cast<const char*>(data.utf8()));
 	SE_LOG_DEBUG(getDisplayName(), "Item id ( %s )", luid.c_str() );
 // 	SE_LOG_DEBUG(getDisplayName(), "TDE calendar Data: %s\n", data_str.c_str() );
 }
@@ -355,10 +347,8 @@ void TDEPIMCalendarSource::removeItem(const std::string &luid)
 std::string TDEPIMCalendarSource::getDescription(const std::string &luid)
 {
 	KCal::Incidence *inc = calendarPtr->incidence(TQString::fromUtf8(luid.data(),luid.size()));
-	if ( inc ) {
-		std::string sum_str(inc->summary().utf8(),inc->summary().utf8().length());
-		return sum_str;
-	}
+	if ( inc )
+		return static_cast<const char*>(inc->summary().utf8());
         SE_LOG_DEBUG(getDisplayName(), "Resource id(%s) not found", luid.c_str() );
 	return "";
 }
