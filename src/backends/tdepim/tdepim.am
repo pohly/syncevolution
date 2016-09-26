@@ -1,0 +1,65 @@
+dist_noinst_DATA += src/backends/tdepim/configure-sub.in \
+  src/backends/tdepim/README
+
+src_backends_tdepim_lib = src/backends/tdepim/synctdepimcal.la \
+   src/backends/tdepim/synctdepimabc.la \
+   src/backends/tdepim/synctdepimnotes.la
+
+MOSTLYCLEANFILES += $(src_backends_tdepim_lib)
+if ENABLE_MODULES
+src_backends_tdepim_backenddir = $(BACKENDS_DIRECTORY)
+src_backends_tdepim_backend_LTLIBRARIES = $(src_backends_tdepim_lib)
+else
+noinst_LTLIBRARIES += $(src_backends_tdepim_lib)
+endif
+
+src_backends_tdepim_synctdepimcal_src = \
+  src/backends/tdepim/TDEPIMSyncSource.h \
+  src/backends/tdepim/TDEPIMSyncSource.cpp \
+  src/backends/tdepim/TDEPIMCalendarSource.h \
+  src/backends/tdepim/TDEPIMCalendarSource.cpp \
+  $(NOP)
+
+src_backends_tdepim_synctdepimabc_src = \
+  src/backends/tdepim/TDEPIMSyncSource.h \
+  src/backends/tdepim/TDEPIMSyncSource.cpp \
+  src/backends/tdepim/TDEPIMAddressBookSource.h \
+  src/backends/tdepim/TDEPIMAddressBookSource.cpp
+
+src_backends_tdepim_synctdepimnotes_src = \
+  src/backends/tdepim/TDEPIMSyncSource.h \
+  src/backends/tdepim/TDEPIMSyncSource.cpp \
+  src/backends/tdepim/KNotesIface_stub.h \
+  src/backends/tdepim/KNotesIface_stub.cpp \
+  src/backends/tdepim/TDEPIMNotesSource.h \
+  src/backends/tdepim/TDEPIMNotesSource.cpp
+
+src_backends_tdepim_cppflags = \
+   $(SYNCEVOLUTION_CFLAGS) \
+   -I$(top_srcdir)/test \
+   $(BACKEND_CPPFLAGS) \
+   -I$(top_srcdir)/src/backends/tdepim
+
+#src_backends_tdepim_src = $(src_backends_tdepim_synctdepimcal_src) $(src_backends_tdepim_synctdepimabc_src)
+
+src_backends_tdepim_synctdepimcal_la_SOURCES = $(src_backends_tdepim_synctdepimcal_src)
+src_backends_tdepim_synctdepimcal_la_LIBADD = $(TDEPIMCAL_LIBS) $(SYNCEVOLUTION_LIBS)
+src_backends_tdepim_synctdepimcal_la_CPPFLAGS = $(TDEPIMCAL_CFLAGS) $(src_backends_tdepim_cppflags)
+src_backends_tdepim_synctdepimcal_la_LDFLAGS = -module -avoid-version -ldl
+src_backends_tdepim_synctdepimcal_la_CXXFLAGS = $(TDEPIMCAL_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS)  $(src_backends_tdepim_cppflags)
+src_backends_tdepim_synctdepimcal_la_DEPENDENCIES = src/syncevo/libsyncevolution.la
+
+src_backends_tdepim_synctdepimabc_la_SOURCES = $(src_backends_tdepim_synctdepimabc_src)
+src_backends_tdepim_synctdepimabc_la_LIBADD = $(TDEPIMABC_LIBS) $(SYNCEVOLUTION_LIBS)
+src_backends_tdepim_synctdepimabc_la_LDFLAGS = -module -avoid-version
+src_backends_tdepim_synctdepimabc_la_CXXFLAGS = $(TDEPIMABC_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS)  $(src_backends_tdepim_cppflags)
+src_backends_tdepim_synctdepimabc_la_CPPFLAGS = $(TDEPIMABC_CFLAGS) $(src_backends_tdepim_cppflags)
+src_backends_tdepim_synctdepimabc_la_DEPENDENCIES = src/syncevo/libsyncevolution.la
+
+src_backends_tdepim_synctdepimnotes_la_SOURCES = $(src_backends_tdepim_synctdepimnotes_src)
+src_backends_tdepim_synctdepimnotes_la_LIBADD = $(TDEPIMNOTES_LIBS) $(TDEPIM_LIBS) $(SYNCEVOLUTION_LIBS)
+src_backends_tdepim_synctdepimnotes_la_LDFLAGS = -module -avoid-version
+src_backends_tdepim_synctdepimnotes_la_CXXFLAGS = $(TDEPIMCAL_CFLAGS) $(TDEPIM_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(SYNCEVO_WFLAGS)
+src_backends_tdepim_synctdepimnotes_la_CPPFLAGS = $(TDEPIMCAL_CFLAGS) $(TDEPIM_CFLAGS) $(src_backends_tdepim_cppflags)
+# $(src_backends_tdepim_synctdepimnotes_cppflags)
+src_backends_tdepim_synctdepimnotes_la_DEPENDENCIES = src/syncevo/libsyncevolution.la

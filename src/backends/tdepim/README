@@ -1,0 +1,171 @@
+Getting started with TDM on Debian jessie:
+1st install libtdepim1-trinity-dev and tdelibs14-trinity-dev
+2nd use this on your own risk - take backups!
+
+# Debugging in TDE:
+[x] 5300 libtdepim
+[x] 5300 knotes
+[x] 5800 libkcal
+
+# Configuring without Evolution, without Akonadi and with TDEPIM
+# This is good for testing (static libs)
+<path>/syncevolution/configure --with-synthesis-src=<path>/libsynthesis \
+	CFLAGS="-g -Wall -Werror -Wno-unknown-pragmas" \
+	CXXFLAGS="-g -Wall -Werror -Wno-unknown-pragmas" \
+	--disable-shared --enable-static \
+	--disable-akonadi \
+	--disable-ebook \
+	--disable-ecal \
+	--disable-goa \
+	--disable-kcalextended \
+	--disable-kwallet \
+	--enable-tdepimabc \
+	--enable-tdepimcal \
+	--enable-tdewallet 
+
+# Configure to build
+ Important: You would most probably set --prefix
+======== configure script build-test-syncevo.sh start =======
+export PKG_CONFIG_PATH=/opt/trinity/lib/pkgconfig:$PKG_CONFIG_PATH
+
+if [[ $1 == "static" ]]; then
+LIBVAR="--disable-shared --enable-static"
+else
+LIBVAR="--enable-shared"
+fi
+
+./configure --prefix=/tmp/test \
+	$LIBVAR \
+        --enable-maintainer-mode \
+        --enable-shared \
+        --enable-gui \
+        --enable-gtk=3 \
+        --enable-core \
+        --enable-bluetooth \
+        --enable-tdepimabc \
+        --enable-tdepimcal \
+        --enable-tdepimnotes \
+        --disable-tdewallet \
+        --enable-sqlite \
+        --enable-file \
+        --enable-dav \
+        --without-gio-gdbus \
+        --disable-ssl-certificate-check \
+        --disable-akonadi \
+        --disable-ebook \
+        --disable-ecal \
+        --disable-goa \
+        --disable-kcalextended \
+        --disable-kwallet \
+        --disable-maemocal \
+        --disable-oauth2 \
+        --disable-qtcontacts \
+        --disable-gsso \
+        --disable-uoa \
+        --disable-sign
+
+
+======== configure script build-test-syncevo.sh end =======
+
+# Now build shared
+bash autogen.sh && bash ../build-test-syncevo.sh && make
+
+# or static
+bash autogen.sh && bash ../build-test-syncevo.sh static && make
+
+# Static creates src/syncevolution and src/client-test which can be 
+# run under a debugger directly.
+
+# Install
+ make install
+
+# Set up environment for testing
+ export LD_LIBRARY_PATH=/tmp/test/lib/syncevolution/backends:/tmp/test/lib:$LD_LIBRARY_PATH
+ export LD_RUN_PATH=$LD_LIBRARY_PATH:$LD_RUN_PATH
+ export PATH=/tmp/test/bin:$PATH
+
+# Backup your contacts and calendar file (if you use the standard one)
+cp ~/.trinity/share/apps/tdeabc/std.vcf ~/$(date +%Y%m%d)_std.vcf
+cp ~/.trinity/share/apps/korganizer/std.ics ~/$(date +%Y%m%d)_std.ics
+
+# You could also make tar.gz of the above directories.
+# In this case it is better to clean up first
+
+# Clean up all lock and cache files
+rm -rf .cache/syncevolution/ \
+	.config/syncevolution/ \
+	~/.trinity/share/apps/tdeabc/lock/*.trinity_share_apps_tdeabc_std.vcf* \
+	~/.trinity/share/apps/tdeabc/std.vcf__*
+
+# Query databases:
+ syncevolution --print-databases
+
+# Configuring syncevolution for contacts with TDEPIM as backend:
+ syncevolution --configure --datastore-property sync=none \
+              --sync-property username=... \
+              --sync-property password=... \
+              scheduleworld
+ syncevolution --configure --datastore-property sync=two-way \
+                addressbook/backend=tdepim-contacts \
+                addressbook/database="kxXrRFzP9c" \
+                addressbook/databaseFormat="text/vcard" \
+              scheduleworld addressbook
+
+# Nokia phone 5530
+template=nokia
+# Nokia phone N9
+template=Nokia_N900
+deviceAddress="XX:XX:XX:XX:XX:XX"
+
+# configure local store
+syncevolution --configure \
+                addressbook/backend=tdepim-contacts \
+                addressbook/database="xnCaZWvsal" \
+                addressbook/databaseFormat="text/vcard" \
+                calendar/backend=tdepim-calendar \
+                calendar/database="kOBUWNvG42" \
+                calendar/databaseFormat="text/calendar" \
+                todo/backend=tdepim-tasks \
+                todo/database="kOBUWNvG42" \
+                todo/databaseFormat="text/calendar" \
+              memo/backend=tdepim-notes \
+              memo/database=tdenotes \
+              memo/databaseFormat="text/plain" \
+       @default addressbook calendar todo memo
+
+# add your phone
+# for N9 it is important to set uri to the calendar you want to sync with
+# this is equivalent to the database above
+syncevolution --configure \
+       --template ${template} \
+       peerIsClient=1 \
+       dumpData=0 \
+       printChanges=0 \
+       syncURL=obex-bt://${deviceAddress} \
+       calendar/uri="PC-SYNC" \
+       calendar/databaseFormat="text/x-vcalendar" \
+       todo/uri="PC-SYNC" \
+       todo/databaseFormat="text/x-vcalendar" \
+       memo/uri="notes" \
+       memo/databaseFormat="text/plain" \
+       nokia_N9
+
+
+# Initial run:
+ syncevolution --sync slow nokia_N9 addressbook
+ syncevolution --sync slow nokia_N9 calendar+todo
+ syncevolution --sync slow nokia_N9 memo
+
+# All following syncs run:
+ syncevolution nokia_N9 addressbook
+ syncevolution nokia_N9 calendar+todo
+ syncevolution nokia_N9 memo
+
+# Sync all configured 
+ syncevolution nokia_N9 addressbook calendar+todo memo
+
+# Useful information
++ https://syncevolution.org/wiki/kde-akonadi
++ https://syncevolution.org/documentation/syncevolution-usage
++ https://syncevolution.org/documentation/getting-started
++ https://syncevolution.org/wiki/howto

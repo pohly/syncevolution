@@ -1,0 +1,60 @@
+dnl -*- mode: Autoconf; -*-
+dnl Invoke autogen.sh to produce a configure script.
+
+TDEWALLETFOUND=no
+
+# first check for tqmake-qt3.
+AC_CHECK_PROGS([TQMAKE], [tqmake tqmake])
+PKG_CHECK_MODULES(TQT, tqt, TQTFOUND=yes, [TQTFOUND=no])
+
+# Check for TDE Wallet. There is no .pc file for it,
+# so fall back to normal header file and library checking.
+# libtdepim1-trinity-dev and tdelibs14-trinity-dev >= 14.0.2 provides the necessary files.
+# it could be backwords compat but we do not guarantee success
+
+if ! test "$TDEWALLET_CFLAGS"; then
+    TDEWALLET_CFLAGS="-I/opt/trinity/include"
+    if test "$TQMAKE"; then
+       TDEWALLET_CFLAGS="$TDEWALLET_CFLAGS $TQT_CFLAGS"
+    fi
+fi
+if ! test "$TDEWALLET_LIBS"; then
+   TDEWALLET_LIBS="-L/opt/trinity/lib"
+    if test "$TQMAKE"; then
+       TDEWALLET_LIBS="$TDEWALLET_LIBS $TQT_LIBS"
+    fi
+fi
+
+AC_LANG_PUSH(C++)
+old_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $TDEWALLET_CFLAGS"
+AC_CHECK_HEADERS(tdewallet.h, [TDEWALLETFOUND=yes], [TDEWALLETFOUND=no], [])
+CPPFLAGS="$old_CPPFLAGS"
+AC_LANG_POP(C++)
+
+# In contrast to the GNOME KEYRING, the TDE Wallet is
+# currently considered optional. "configure" will never enable
+# by default, because that is a change that might not be
+# expected by traditional users.
+AC_ARG_ENABLE(tdewallet,
+              AS_HELP_STRING([--enable-tdewallet], [enable access to TDE Wallet]),
+              [enable_tdewallet="$enableval"
+                test $TDEWALLETFOUND = "yes" || test "$enable_tdewallet" = "no" || AC_MSG_ERROR([--enable-tdewallet requires packages libtdepim1-trinity-dev, tdelibs14-trinity-dev, but they were not found])],
+              [enable_tdewallet="no"])
+
+if test "$enable_tdewallet" = "yes"; then
+    have_keyring=yes
+    # conditional compilation in preprocessor
+    AC_DEFINE(ENABLE_TDEWALLET, 1, [TDE Wallet available])
+    # link into static executables, similar to a SyncSource
+    SYNCSOURCES="$SYNCSOURCES src/backends/tde/platformtde.la"
+else
+    # avoid unneeded dependencies on TDE Wallet
+    TDEWALLET_CFLAGS=
+    TDEWALLET_LIBS=
+fi
+AC_SUBST(TDEWALLET_LIBS)
+AC_SUBST(TDEWALLET_CFLAGS)
+
+# conditional compilation in make
+AM_CONDITIONAL([ENABLE_TDEWALLET], [test "$enable_tdewallet" = "yes"])

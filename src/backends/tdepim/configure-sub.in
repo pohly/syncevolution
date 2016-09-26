@@ -1,0 +1,144 @@
+dnl -*- mode: Autoconf; -*-
+dnl Invoke autogen.sh to produce a configure script.
+
+TDEPIMFOUND=no
+TDEPIMCALFOUND=no
+TDEPIMABCFOUND=no
+TDEPIMDCOPFOUND=no
+TDEPIMNOTESFOUND=no
+
+AC_CHECK_PROGS([TQMAKE], [tqmake tqmake])
+PKG_CHECK_MODULES(TQT, tqt, TQTFOUND=yes, [TQTFOUND=no])
+
+# Check for TDEPIM. There is no .pc file for it,
+# so fall back to normal header file and library checking.
+# libtdepim1-trinity-dev and tdelibs14-trinity-dev >= 14.0.2 provides the necessary files.
+# it could be backwords compat but we do not guarantee success
+
+if ! test "$TDEPIM_CFLAGS"; then
+    TDEPIM_CFLAGS="-I/opt/trinity/include"
+    if test "$TQMAKE"; then
+       TDEPIM_CFLAGS="$TDEPIM_CFLAGS $TQT_CFLAGS"
+    fi
+fi
+if ! test "$TDEPIM_LIBS"; then
+   TDEPIM_LIBS="-L/opt/trinity/lib"
+    if test "$TQMAKE"; then
+       TDEPIM_LIBS="$TDEPIM_LIBS $TQT_LIBS"
+    fi
+fi
+
+AC_LANG_PUSH(C++)
+old_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $TDEPIM_CFLAGS"
+AC_CHECK_HEADERS(libkcal/calendarresources.h, [TDEPIMCALFOUND=yes], [TDEPIMCALFOUND=no], [])
+CPPFLAGS="$old_CPPFLAGS"
+AC_LANG_POP(C++)
+
+AC_LANG_PUSH(C++)
+old_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $TDEPIM_CFLAGS"
+AC_CHECK_HEADERS(tdeabc/stdaddressbook.h, [TDEPIMABCFOUND=yes], [TDEPIMABCFOUND=no], [])
+CPPFLAGS="$old_CPPFLAGS"
+AC_LANG_POP(C++)
+
+AC_LANG_PUSH(C++)
+old_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $TDEPIM_CFLAGS"
+AC_CHECK_HEADERS(dcopclient.h, [TDEPIMDCOPFOUND=yes], [TDEPIMDCOPFOUND=no], [])
+CPPFLAGS="$old_CPPFLAGS"
+AC_LANG_POP(C++)
+
+AC_LANG_PUSH(C++)
+old_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $TDEPIM_CFLAGS"
+AC_CHECK_HEADERS(KNotesIface.h, [TDEPIMNOTESFOUND=yes], [TDEPIMNOTESFOUND=no], [])
+CPPFLAGS="$old_CPPFLAGS"
+AC_LANG_POP(C++)
+
+# In contrast to the Evolution backend, the tdepim backend is
+# currently considered optional. "configure" will enable it only
+# if explicitly enabled
+SE_ARG_ENABLE_BACKEND(tdepimcal, tdepim,
+                      [AS_HELP_STRING([--enable-tdepimcal],
+                                      [enable access to PIM calendar in TDE (default off)])],
+                      [enable_tdepimcal="$enableval"], [enable_tdepimcal="no"]
+                     )
+SE_ARG_ENABLE_BACKEND(tdepimabc, tdepim,
+                      [AS_HELP_STRING([--enable-tdepimabc],
+                                      [enable access to PIM addressbook in TDE (default off)])],
+                      [enable_tdepimabc="$enableval"], [enable_tdepimabc="no"]
+                     )
+
+SE_ARG_ENABLE_BACKEND(tdepimnotes, tdepim,
+                      [AS_HELP_STRING([--enable-tdepimnotes],
+                                      [enable access to TDE NOTES (default off)])],
+                      [enable_tdepimnotes="$enableval"], [enable_tdepimnotes="no"]
+                     )
+#if test "x${TDEPIMCALFOUND}" = "xyes" &&  test "x${TDEPIMABCFOUND}" = "xyes" && test "x${TDEPIMDCOPFOUND}" = "xyes"; then
+#       TDEPIMFOUND="yes"
+#fi
+
+if test $enable_tdepimcal = yes ; then
+        test $TDEPIMCALFOUND = yes ||  AC_MSG_ERROR([--enable-tdepimcal requires packages libtdepim1-trinity-dev, 
+          tdelibs14-trinity-dev, but they were not found])
+        AC_DEFINE(ENABLE_TDEPIMCAL, 1, [TDE PIM Calendar available])
+else
+        # avoid unneeded dependencies on TDEPIM
+        TDEPIMCAL_CFLAGS=
+        TDEPIMCAL_LIBS=
+fi
+
+if test $enable_tdepimabc = yes ; then
+        test $TDEPIMABCFOUND = yes ||  AC_MSG_ERROR([--enable-tdepimabc requires packages libtdepim1-trinity-dev, 
+          tdelibs14-trinity-dev, but they were not found])
+        AC_DEFINE(ENABLE_TDEPIMABC, 1, [TDE PIM Address Book available])
+else
+        # avoid unneeded dependencies on TDEPIM
+        TDEPIMABC_CFLAGS=
+        TDEPIMABC_LIBS=
+fi
+
+if test $enable_tdepimnotes = yes ; then
+        test $TDEPIMNOTESFOUND = yes ||  AC_MSG_ERROR([--enable-tdepimnotes requires packages tdelibs14-trinity-dev, 
+          tdepim-trinity-dev, but they were not found])
+        AC_DEFINE(ENABLE_TDEPIMNOTES, 1, [TDE PIM Address Book available])
+else
+        # avoid unneeded dependencies on TDEPIM
+        TDEPIMNOTES_CFLAGS=
+        TDEPIMNOTES_LIBS=
+fi
+
+if test "x${TDEPIMCALFOUND}" = "xyes"; then
+    TDEPIMCAL_CFLAGS="$TDEPIM_CFLAGS"
+    TDEPIMCAL_LIBS="$TDEPIM_LIBS -ltdecore -lkcal -ltderesources"
+fi
+
+if test "x${TDEPIMABCFOUND}" = "xyes"; then
+    TDEPIMABC_CFLAGS="$TDEPIM_CFLAGS"
+    TDEPIMABC_LIBS="$TDEPIM_LIBS -ltdecore -ltdeabc -ltderesources"
+fi
+
+if test "x${TDEPIMDCOPFOUND}" = "xyes"; then
+    TDEPIMNOTES_CFLAGS="$TDEPIM_CFLAGS -I."
+    TDEPIMNOTES_LIBS="$TDEPIM_LIBS -L. -ltdecore -lDCOP"
+fi
+
+AC_SUBST(TDEPIMCAL_LIBS)
+AC_SUBST(TDEPIMABC_LIBS)
+AC_SUBST(TDEPIMNOTES_LIBS)
+AC_SUBST(TDEPIMCAL_CFLAGS)
+AC_SUBST(TDEPIMABC_CFLAGS)
+AC_SUBST(TDEPIMNOTES_CFLAGS)
+
+# conditional compilation in make
+AM_CONDITIONAL([ENABLE_TDEPIMCAL], [test "$enable_tdepimcal" = "yes"])
+AM_CONDITIONAL([ENABLE_TDEPIMABC], [test "$enable_tdepimabc" = "yes"])
+AM_CONDITIONAL([ENABLE_TDEPIMNOTES], [test "$enable_tdepimnotes" = "yes"])
+
+# # let others include TDEPIM backend's header file
+# # (not strictly necessary, could be avoided by not
+# # including TDEPIM header files in public header file
+# # of source)
+
+BACKEND_CPPFLAGS="$BACKEND_CPPFLAGS $TDEPIMCAL_CFLAGS $TDEPIMABC_CFLAGS $TDEPINOTES_CFLAGS"
