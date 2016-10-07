@@ -20,6 +20,11 @@
  *
  */
 
+#include "TDEPIMAddressBookSource.h"
+
+#include <syncevo/util.h>
+#include <syncevo/SyncSource.h>
+
 SE_BEGIN_CXX
 
 static SyncSource *createSource(const SyncSourceParams &params)
@@ -105,6 +110,7 @@ protected:
     //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL));
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
+};
 
 SYNCEVOLUTION_TEST_SUITE_REGISTRATION(TDEAddressBookTest);
 

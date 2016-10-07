@@ -26,13 +26,13 @@
 
 #include "config.h"
 
-#include "KNotesIface_stub.h"
-#include <syncevo/TrackingSyncSource.h>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
 #ifdef ENABLE_TDEPIMNOTES
+
+#include "KNotesIface_stub.h"
+#include <syncevo/TrackingSyncSource.h>
 
 /**
  * Implements access to TDE memo lists (stored as knotes items),

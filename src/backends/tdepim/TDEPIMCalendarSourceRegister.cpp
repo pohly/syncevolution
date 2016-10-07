@@ -25,7 +25,10 @@
 // #include "TDEPIMNotesSource.h"
 // #include "test.h"
 
-#include "TDEPIMSyncSource.h"
+#include "TDEPIMCalendarSource.h"
+
+#include <syncevo/util.h>
+#include <syncevo/SyncSource.h>
 
 SE_BEGIN_CXX
 
