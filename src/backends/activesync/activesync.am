@@ -27,7 +27,4 @@ src_backends_activesync_syncactivesync_la_DEPENDENCIES = src/syncevo/libsyncevol
 # activated by EASCLIENT_DEPENDENCIES: usually empty, unless --with-activesyncd-src is used
 $(src_backends_activesync_src) src/backends/activesync/ActiveSyncSourceRegister.cpp: $(EASCLIENT_DEPENDENCIES)
 $(EASCLIENT_DEPENDENCIES): $(LIBEASCLIENT_LA_DEPENDENCIES)
-	cd src/backends/activesync/activesyncd/build && $(MAKE)
-	for i in libeasaccount/src libeasclient eas-daemon/libeas libeastest/src eas-daemon/src; do \
-		(cd src/backends/activesync/activesyncd/build/$$i && $(MAKE) DESTDIR= install) || exit 1; \
-	done
+	cd src/backends/activesync/activesyncd/build && $(MAKE) && $(MAKE) DESTDIR= install
