@@ -23,9 +23,9 @@
 #ifndef TDEPIMSYNCSOURCE_H
 #define TDEPIMSYNCSOURCE_H
 
-// #include "config.h"
+#include "config.h"
 
-//#ifdef ENABLE_TDEPIM
+#ifdef ENABLE_TDEPIM
 
 #include <tdeapplication.h>
 #include <syncevo/util.h>
@@ -52,5 +52,5 @@ private:
 };
 
 SE_END_CXX
-//#endif // ENABLE_TDEPIM
+#endif // ENABLE_TDEPIM
 #endif // TDEPIMSYNCSOURCE_H

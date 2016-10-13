@@ -27,6 +27,9 @@
 
 #include "TDEPIMSyncSource.h"
 
+#include <syncevo/util.h>
+#include <syncevo/SyncSource.h>
+
 SE_BEGIN_CXX
 
 static SyncSource *createSource ( const SyncSourceParams &params )

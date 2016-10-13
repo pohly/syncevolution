@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) 2016 Emanoil Kotsev emanoil.kotsev@fincom.at
  *
@@ -25,7 +26,10 @@
 // #include "TDEPIMNotesSource.h"
 // #include "test.h"
 
-#include "TDEPIMSyncSource.h"
+#include "TDEPIMCalendarSource.h"
+
+#include <syncevo/util.h>
+#include <syncevo/SyncSource.h>
 
 SE_BEGIN_CXX
 
@@ -43,7 +47,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 
 	bool isMe = sourceType.m_backend == "TDE PIM Calendar";
 #ifndef ENABLE_TDEPIMCAL
-	if (isMe || sourceType.m_backend == "calendar" ) return RegisterSyncSource::InactiveSource(params);
+	if (isMe) return RegisterSyncSource::InactiveSource(params);
 #else
 	if (isMe || sourceType.m_backend == "calendar" ) {
 		if ( sourceType.m_format == "" || 
@@ -57,7 +61,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 	
 	isMe = sourceType.m_backend == "TDE PIM Task List";
 #ifndef ENABLE_TDEPIMCAL
-	if (isMe || sourceType.m_backend == "todo") return RegisterSyncSource::InactiveSource(params);
+	if (isMe) return RegisterSyncSource::InactiveSource(params);
 #else
 	if (isMe || sourceType.m_backend == "todo") {
 		if ( sourceType.m_format == "" || 
@@ -71,7 +75,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 	
 	isMe = sourceType.m_backend == "TDE PIM Memos";
 #ifndef ENABLE_TDEPIMCAL
-	if (isMe || sourceType.m_backend == "memo") return RegisterSyncSource::InactiveSource(params);
+	if (isMe) return RegisterSyncSource::InactiveSource(params);
 #else
 	if (isMe || sourceType.m_backend == "memo") {
 		if ( sourceType.m_format == "" || 

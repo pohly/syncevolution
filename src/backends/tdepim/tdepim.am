@@ -13,26 +13,36 @@ else
 noinst_LTLIBRARIES += $(src_backends_tdepim_lib)
 endif
 
-src_backends_tdepim_synctdepimcal_src = \
+
+src_backends_tdepim_synctdepimcal_src =
+if ENABLE_TDEPIMCAL
+src_backends_tdepim_synctdepimcal_src += \
   src/backends/tdepim/TDEPIMSyncSource.h \
   src/backends/tdepim/TDEPIMSyncSource.cpp \
   src/backends/tdepim/TDEPIMCalendarSource.h \
   src/backends/tdepim/TDEPIMCalendarSource.cpp \
   $(NOP)
+endif
 
-src_backends_tdepim_synctdepimabc_src = \
+src_backends_tdepim_synctdepimabc_src =
+if ENABLE_TDEPIMABC
+src_backends_tdepim_synctdepimabc_src += \
   src/backends/tdepim/TDEPIMSyncSource.h \
   src/backends/tdepim/TDEPIMSyncSource.cpp \
   src/backends/tdepim/TDEPIMAddressBookSource.h \
   src/backends/tdepim/TDEPIMAddressBookSource.cpp
+endif
 
-src_backends_tdepim_synctdepimnotes_src = \
+src_backends_tdepim_synctdepimnotes_src =
+if ENABLE_TDEPIMNOTES
+src_backends_tdepim_synctdepimnotes_src += \
   src/backends/tdepim/TDEPIMSyncSource.h \
   src/backends/tdepim/TDEPIMSyncSource.cpp \
   src/backends/tdepim/KNotesIface_stub.h \
   src/backends/tdepim/KNotesIface_stub.cpp \
   src/backends/tdepim/TDEPIMNotesSource.h \
   src/backends/tdepim/TDEPIMNotesSource.cpp
+endif
 
 src_backends_tdepim_cppflags = \
    $(SYNCEVOLUTION_CFLAGS) \
