@@ -27,13 +27,13 @@
 #include "config.h"
 
 #include <syncevo/declarations.h>
-SE_BEGIN_CXX
 
 #ifdef ENABLE_TDEPIMNOTES
 
 #include "KNotesIface_stub.h"
 #include <syncevo/TrackingSyncSource.h>
 
+SE_BEGIN_CXX
 /**
  * Implements access to TDE memo lists (stored as knotes items),
  * exporting/importing the memos in plain UTF-8 text. 

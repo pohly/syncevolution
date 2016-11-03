@@ -37,11 +37,12 @@
 #include <syncevo/UserInterface.h>
 #include <syncevo/SyncConfig.h>
 
+
+#include <tdewallet.h>
+#include <dcopclient.h>
 #include <tdeapplication.h>
 #include <tdeaboutdata.h>
 #include <tdecmdlineargs.h>
-
-#include <tdewallet.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -51,22 +52,18 @@ SE_BEGIN_CXX
 
 void TDEInitMainSlot(const char *appname)
 {
-	
-	int argc = 1;
-	static char *argv[] = { const_cast<char *>(appname), NULL };
 
-	TDEAboutData aboutData( "syncevotdewlt", // internal program name
-		"SyncEvolution-TDEPIM-plugin",              // displayable program name.
-		"0.1",                               // version string
-		"SyncEvolution TDEPIM plugin",            // short porgram description
-		TDEAboutData::License_GPL,             // license type
-		"(c) 2016, emanoil.kotsev@fincom.at" // copyright statement
-	);
+	//connect to dcop
+	DCOPClient *kn_dcop = TDEApplication::kApplication()->dcopClient();
+	if (!kn_dcop)
+		Exception::throwError(SE_HERE, "internal init error, unable to make new dcop instance for tdenotes");
 
-	TDECmdLineArgs::init(argc, argv, &aboutData);
-	
-	TDEApplication syncevotdewallet( "syncevolution-tdewallet" );
-	syncevotdewlt.dcopClient()->registerAs(syncevotdewallet.name());
+	TQString appId = kn_dcop->registerAs("syncevolution-tdewallet");
+
+/*	SyncSourceLogging::init(InitList<std::string>("SUMMARY") + "LOCATION",
+				" ",
+				m_operations);
+*/
 	
 }
 
@@ -125,7 +122,8 @@ bool TDEWalletLoadPasswordSlot(const InitStateTri &keyring,
 		TQString(key.authtype.c_str())+','+
 		TQString::number(key.port);
 	
-	TQString wallet_name = TDEWallet::Wallet::NetworkWallet();
+//	TQString wallet_name = TDEWallet::Wallet::NetworkWallet();
+	TQString wallet_name = TDEWallet::Wallet::LocalWallet();
 	
 	const TQString folder("Syncevolution");
 	
