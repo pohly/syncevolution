@@ -165,7 +165,7 @@ private:
         // so we have to use the "steal" variant to enable that assignment.
         GVariantStealCXX resultData;
         GErrorCXX gerror;
-        GVariantCXX sessionData(ag_auth_data_get_login_parameters(m_authData, extraOptions), TRANSFER_REF);
+        GVariantCXX sessionData(g_variant_ref_sink(ag_auth_data_get_login_parameters(m_authData, extraOptions)), TRANSFER_REF);
         const char *mechanism = ag_auth_data_get_mechanism(m_authData);
         PlainGStr buffer(g_variant_print(sessionData, true));
         SE_LOG_DEBUG(NULL, "asking for authentication with method %s, mechanism %s and parameters %s",
