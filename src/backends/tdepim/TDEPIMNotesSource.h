@@ -86,8 +86,7 @@ private:
 
 };
 
-#endif // ENABLE_TDEPIMNOTES
-
-
 SE_END_CXX
+
+#endif // ENABLE_TDEPIMNOTES
 #endif // INCL_TDEPIMNOTESSOURCE
