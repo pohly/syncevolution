@@ -1827,8 +1827,10 @@ class ActiveSyncTest(SyncEvolutionTest):
         # created during compile. We have to predict the location here.
         if compile.installed:
             self.activesyncd = os.path.join(compile.installdir, "usr", "libexec", "activesyncd")
+            self.activesyncd_schema_dir = ""
         else:
             self.activesyncd =  os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "libexec", "activesyncd")
+            self.activesyncd_schema_dir = os.path.join(compile.builddir, "src", "backends", "activesync", "activesyncd", "install", "share", "glib-2.0", "schemas")
 
         SyncEvolutionTest.__init__(self, name,
                                    compile,
@@ -1866,7 +1868,8 @@ class ActiveSyncTest(SyncEvolutionTest):
 
                                    "CLIENT_TEST_LOG=activesyncd.log "
                                    ,
-                                   testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.log",
+                                   testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.log" + \
+                                                        ((" GSETTINGS_SCHEMA_DIR=%s" % self.activesyncd_schema_dir) if self.activesyncd_schema_dir else ""),
                                                         os.path.join(sync.basedir, "test", "wrappercheck.sh"),
                                                         options.testprefix,
                                                         self.activesyncd,
@@ -1883,6 +1886,8 @@ class ActiveSyncTest(SyncEvolutionTest):
         env['EAS_SOUP_LOGGER'] = '1'
         env['EAS_DEBUG'] = '5'
         env['EAS_DEBUG_DETACHED_RECURRENCES'] = '1'
+        if self.activesyncd_schema_dir:
+            env['GSETTINGS_SCHEMA_DIR'] = self.activesyncd_schema_dir
         activesyncd = subprocess.Popen(args,
                                        env=env)
         try:
