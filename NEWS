@@ -1,4 +1,4 @@
-SyncEvolution 1.5.1 -> 1.5.2, xxxxxxxxxx
+SyncEvolution 1.5.1 -> 1.5.2, 08.11.2016
 ========================================
 
 Maintenance release. syncevolution.org binaries are now getting
@@ -11,6 +11,9 @@ anymore.
 Compile problems with recent libraries (libical v2) and tools (GCC v6)
 were resolved. Syncing via Bluetooth with certain phones now should
 work reliably in incremental mode.
+
+New backends for the Trinity Desktop Environment (TDE) were added to
+the source code.
 
 Details:
 
