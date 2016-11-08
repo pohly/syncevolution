@@ -35,6 +35,7 @@ Makefile.in
 /stamp-h1
 /syncevolution.1
 /syncevolution-*.tar.gz
+/test-driver
 
 # for Maemo build
 /libsynthesis
