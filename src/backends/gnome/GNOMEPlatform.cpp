@@ -95,6 +95,23 @@ public:
     }
 };
 
+/**
+ * Sometimes libsecret and GNOME Keyring fail to initialize
+ * the encryption: https://bugzilla.gnome.org/show_bug.cgi?id=778357
+ * If that happens, then trying with a new SecretService instance
+ * may work.
+ *
+ * When libsecret detects that, we get a well-defined error.
+ * When GNOME Keyring detects it, the error is less obvious.
+ */
+static bool IsSharedSecretError(const GErrorCXX &gerror)
+{
+    bool result = gerror.matches(SECRET_ERROR, SECRET_ERROR_PROTOCOL) /* = "received an invalid or unencryptable secret" */ ||
+        strstr(gerror->message, "The secret was transferred or encrypted in an invalid way");
+    SE_LOG_DEBUG(NULL, "IsSharedSecretError: %d/%d/%s: %s", (int)gerror->domain, (int)gerror->code, gerror->message, result ? "yes" : "no");
+    return result;
+}
+
 bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
                            const std::string &passwordName,
                            const std::string &descr,
@@ -106,24 +123,49 @@ bool GNOMELoadPasswordSlot(const InitStateTri &keyring,
         return false;
     }
 
-    GErrorCXX gerror;
     LibSecretHash hash(key);
-    PlainGStr result(secret_password_lookupv_sync(SECRET_SCHEMA_COMPAT_NETWORK,
-                                                  hash,
-                                                  NULL,
-                                                  gerror));
+    for (int i = 0; ; i++ ) {
+        GErrorCXX gerror;
+        PlainGStr result(secret_password_lookupv_sync(SECRET_SCHEMA_COMPAT_NETWORK,
+                                                      hash,
+                                                      NULL,
+                                                      gerror));
 
-    // if find password stored in gnome keyring
-    if (gerror) {
-        gerror.throwError(SE_HERE, StringPrintf("looking up password '%s'", descr.c_str()));
-    } else if (result) {
-        SE_LOG_DEBUG(NULL, "%s: loaded password from GNOME keyring using %s",
-                     key.description.c_str(),
-                     key.toString().c_str());
-        password = result;
-    } else {
-        SE_LOG_DEBUG(NULL, "password not in GNOME keyring using %s",
-                     key.toString().c_str());
+        // if find password stored in gnome keyring
+        if (gerror) {
+            /* It is uncertain whether we end up here at all when such
+               an error occurs. Check just in case. */
+            if (IsSharedSecretError(gerror) &&
+                i < 3) {
+                SE_LOG_DEBUG(NULL, "disconnecting secret service: %u/%d = %s", gerror->domain, gerror->code, gerror->message);
+                secret_service_disconnect();
+            } else {
+                gerror.throwError(SE_HERE, StringPrintf("looking up password '%s'", descr.c_str()));
+            }
+        } else if (result.get()) {
+            SE_LOG_DEBUG(NULL, "%s: loaded password from GNOME keyring using %s",
+                         key.description.c_str(),
+                         key.toString().c_str());
+            password = result;
+            break;
+        } else {
+            /*
+             * There have been cases where "received an invalid or
+             * unencryptable secret" was printed to the console right
+             * before we end up here. Apparently the error doesn't
+             * get propagated properly to us.
+             *
+             * To cope with that, we try to disconnect and check again.
+             */
+            if (i < 3) {
+                SE_LOG_DEBUG(NULL, "disconnecting secret service: password not found");
+                secret_service_disconnect();
+            } else {
+                SE_LOG_DEBUG(NULL, "password not in GNOME keyring using %s",
+                             key.toString().c_str());
+                break;
+            }
+        }
     }
 
     return true;
@@ -149,7 +191,6 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
                               key.toString().c_str()));
     }
 
-    GErrorCXX gerror;
     LibSecretHash hash(key);
     std::string label;
     if (!key.user.empty() && !key.server.empty()) {
@@ -158,19 +199,30 @@ bool GNOMESavePasswordSlot(const InitStateTri &keyring,
     } else {
         label = passwordName;
     }
-    gboolean result = secret_password_storev_sync(SECRET_SCHEMA_COMPAT_NETWORK,
-                                                  hash,
-                                                  NULL,
-                                                  label.c_str(),
-                                                  password.c_str(),
-                                                  NULL,
-                                                  gerror);
-    if (!result) {
-        gerror.throwError(SE_HERE, StringPrintf("%s: saving password '%s' in GNOME keyring",
-                                                key.description.c_str(),
-                                                key.toString().c_str()));
+    for (int i = 0; ; i++) {
+        GErrorCXX gerror;
+        gboolean result = secret_password_storev_sync(SECRET_SCHEMA_COMPAT_NETWORK,
+                                                      hash,
+                                                      NULL,
+                                                      label.c_str(),
+                                                      password.c_str(),
+                                                      NULL,
+                                                      gerror);
+        if (result) {
+            SE_LOG_DEBUG(NULL, "saved password in GNOME keyring using %s", key.toString().c_str());
+            break;
+        }
+
+        if (IsSharedSecretError(gerror) &&
+            i < 3) {
+            SE_LOG_DEBUG(NULL, "disconnecting secret service: %u/%d = %s", gerror->domain, gerror->code, gerror->message);
+            secret_service_disconnect();
+        } else {
+            gerror.throwError(SE_HERE, StringPrintf("%s: saving password '%s' in GNOME keyring",
+                                                    key.description.c_str(),
+                                                    key.toString().c_str()));
+        }
     }
-    SE_LOG_DEBUG(NULL, "saved password in GNOME keyring using %s", key.toString().c_str());
 
     // handled
     return true;
