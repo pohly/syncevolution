@@ -1374,7 +1374,9 @@ if options.sourcedir:
     if options.nosourcedircopy:
         if options.cppcheck:
             sync = CppcheckSource("syncevolution", options.sourcedir,
-                                  "--enable=warning,performance,portability --inline-suppr")
+                                  "--enable=warning,performance,portability --inline-suppr " +
+                                  # bogus: cppcheck warning: uninitMemberVar - Member variable 'OperationWrapperSwitch::m_source' is not initialized in the constructor.
+                                  "--suppress=uninitMemberVar:*/SyncSource.h")
         else:
             sync = NopSource("syncevolution", options.sourcedir)
     else:
