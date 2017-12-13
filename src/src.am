@@ -57,7 +57,6 @@ SYNCEVOLUTION_LDADD += @SYNCSOURCES@
 SYNCEVOLUTION_DEP += @SYNCSOURCES@
 endif
 dist_noinst_DATA += \
-  src/shlibs.local \
   src/synthesis-includes/Makefile.am \
   src/synthesis-includes/Makefile.in
 
