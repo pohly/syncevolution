@@ -4,3 +4,4 @@ The test data was adapted to cope with some bugs/limitations:
   and get lost.
 - ORG department and unit get merged.
 
+- no PHOTO data because the server may re-encode the image

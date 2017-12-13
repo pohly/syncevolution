@@ -2,4 +2,4 @@ Because the remote side wins and replaces values for common
 properties, the X-EVOLUTION-UI-SLOT gets lost when receiving a remote
 update or having the remote side win an update conflict.
 
-local-synced takes that into account.
+local-synced takes that into account. - no PHOTO data because the server may re-encode the image

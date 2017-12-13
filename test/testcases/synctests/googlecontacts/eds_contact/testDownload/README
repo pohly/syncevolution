@@ -14,3 +14,4 @@ The test data was adapted to cope with some bugs:
   finally the Google parser strips the trailing white space.
 
 - Google swallows one space before the \n in custom-label5.
+- no PHOTO data because the server may re-encode the image
