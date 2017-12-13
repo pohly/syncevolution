@@ -74,10 +74,8 @@ PIDS+="$BACKGROUND_PID"
 
 if [ "$DAEMON_LOG" ] && [ "$WAIT_FOR_DAEMON_OUTPUT" ]; then
     ( set +x; echo >&2 "*** waiting for daemon to write '$WAIT_FOR_DAEMON_OUTPUT' into $DAEMON_LOG"
-        while [ $daemonmatches -eq $(grep -e "$WAIT_FOR_DAEMON_OUTPUT" "$DAEMON_LOG" | wc -l) ]; do
-            if ! kill -0 $BACKGROUND_PID 2>/dev/null; then
-                break
-            fi
+        while kill -0 $BACKGROUND_PID 2>/dev/null &&
+              [ $daemonmatches -eq $(grep -e "$WAIT_FOR_DAEMON_OUTPUT" "$DAEMON_LOG" | wc -l) ]; do
             sleep 1
         done
     )
@@ -85,7 +83,8 @@ fi
 
 if [ "$WAIT_FOR_DBUS_DAEMON" ]; then
     ( set +x; echo >&2 "*** waiting for daemon to connect to D-Bus as '$WAIT_FOR_DBUS_DAEMON'"
-      while ! (dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames | grep -q "$WAIT_FOR_DBUS_DAEMON"); do
+      while kill -0 $BACKGROUND_PID 2>/dev/null &&
+            ! (dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames | grep -q "$WAIT_FOR_DBUS_DAEMON"); do
           sleep 1
       done
     )
