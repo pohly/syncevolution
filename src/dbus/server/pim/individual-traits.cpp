@@ -26,6 +26,8 @@
 #include "persona-details.h"
 #include "folks.h"
 
+#include <boost/typeof/typeof.hpp>
+
 SE_GLIB_TYPE(GDateTime, g_date_time)
 SE_GOBJECT_TYPE(GTimeZone)
 SE_GOBJECT_TYPE(GObject)
@@ -396,7 +398,7 @@ static void DBus2AbstractField(GDBusCXX::ExtractArgs &context,
     typedef std::vector< std::pair< std::string, std::vector<std::string> > > Details_t;
 
     Details_t value;
-    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
     GeeHashSetCXX set(gee_hash_set_new(detailType,
                                        g_object_ref,
                                        g_object_unref,
@@ -435,7 +437,7 @@ static void DBus2SimpleAbstractField(GDBusCXX::ExtractArgs &context,
     typedef std::vector<std::string> Details_t;
 
     Details_t value;
-    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
     GeeHashSetCXX set(gee_hash_set_new(detailType,
                                        g_object_ref,
                                        g_object_unref,
@@ -463,7 +465,7 @@ static void DBus2Role(GDBusCXX::ExtractArgs &context,
     typedef std::vector<StringMap> Details_t;
 
     Details_t value;
-    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
     GeeHashSetCXX set(gee_hash_set_new(FOLKS_TYPE_ROLE_FIELD_DETAILS,
                                        g_object_ref,
                                        g_object_unref,
@@ -502,7 +504,7 @@ static void DBus2Groups(GDBusCXX::ExtractArgs &context,
                         PersonaDetails &details)
 {
     std::list<std::string> value;
-    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
     GeeHashSetCXX set(gee_hash_set_new(G_TYPE_STRING, (GBoxedCopyFunc)g_strdup, g_free, NULL, NULL, NULL, NULL, NULL, NULL), TRANSFER_REF);
     BOOST_FOREACH(const std::string &entry, value) {
         gee_collection_add(GEE_COLLECTION(set.get()),
@@ -524,7 +526,7 @@ static void DBus2Addr(GDBusCXX::ExtractArgs &context,
     typedef std::vector< std::pair< StringMap, std::vector<std::string> > > Details_t;
 
     Details_t value;
-    GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+    GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
     GeeHashSetCXX set(gee_hash_set_new(FOLKS_TYPE_POSTAL_ADDRESS_FIELD_DETAILS,
                                        g_object_ref,
                                        g_object_unref,
@@ -612,7 +614,7 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                 new GValueObjectCXX(g_file_icon_new(file.get()), TRANSFER_REF));
         } else if (key == CONTACT_HASH_BIRTHDAY) {
             boost::tuple<int, int, int> value;
-            GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+            GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
             GDateTimeCXX local(g_date_time_new_local(value.get<0>(),
                                                      value.get<1>(),
                                                      value.get<2>(),
@@ -623,7 +625,7 @@ void DBus2PersonaDetails(GDBusCXX::ExtractArgs &context,
                                 new GValueDateTimeCXX(g_date_time_to_utc(local.get()), TRANSFER_REF));
         } else if (key == CONTACT_HASH_LOCATION) {
             boost::tuple<double, double> value;
-            GDBusCXX::dbus_traits<typeof(value)>::get(context, valueIter, value);
+            GDBusCXX::dbus_traits<BOOST_TYPEOF(value)>::get(context, valueIter, value);
             FolksLocationCXX location(folks_location_new(value.get<0>(),
                                                          value.get<1>()),
                                       TRANSFER_REF);

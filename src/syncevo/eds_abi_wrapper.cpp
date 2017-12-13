@@ -26,6 +26,8 @@
 #include <dlfcn.h>
 #include <stdarg.h>
 
+#include <boost/typeof/typeof.hpp>
+
 #include <syncevo/declarations.h>
 namespace {
 static std::string &getLookupDebug() { static std::string lookupDebug; return lookupDebug; }
@@ -100,10 +102,10 @@ dbus_connection_send_with_reply (void *connection,
                                  void **pending_return,
                                  int timeout_milliseconds)
 {
-    static typeof(dbus_connection_send_with_reply) *real_func;
+    static BOOST_TYPEOF(dbus_connection_send_with_reply) *real_func;
 
     if (!real_func) {
-        real_func = (typeof(dbus_connection_send_with_reply) *)dlsym(RTLD_NEXT, "dbus_connection_send_with_reply");
+        real_func = (BOOST_TYPEOF(dbus_connection_send_with_reply) *)dlsym(RTLD_NEXT, "dbus_connection_send_with_reply");
     }
     return real_func ?
         real_func(connection, message, pending_return,

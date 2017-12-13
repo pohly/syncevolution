@@ -69,6 +69,7 @@
 #include <boost/lambda/if.hpp>
 #include <boost/lambda/casts.hpp>
 #include <boost/lambda/switch.hpp>
+#include <boost/typeof/typeof.hpp>
 
 #include <pcrecpp.h>
 
@@ -3401,15 +3402,15 @@ void SyncTests::doRestartSync(SyncMode mode)
         (boost::lambda::if_then(boost::lambda::var(needToConnect),
                                 (boost::lambda::var(needToConnect) = false,
                                  boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
-                                                                         typeof(&SyncSource::Operations::StartDataRead_t::getPreSignal),
-                                                                         typeof(start)>,
+                                                                         BOOST_TYPEOF(&SyncSource::Operations::StartDataRead_t::getPreSignal),
+                                                                         BOOST_TYPEOF(start)>,
                                                          boost::lambda::_1,
                                                          &SyncSource::Operations::m_startDataRead,
                                                          &SyncSource::Operations::StartDataRead_t::getPreSignal,
                                                          boost::cref(start)),
                                  boost::lambda::bind(connectSourceSignal<SyncSource::Operations::EndDataWrite_t,
-                                                                         typeof(&SyncSource::Operations::EndDataWrite_t::getPostSignal),
-                                                                         typeof(end)>,
+                                                                         BOOST_TYPEOF(&SyncSource::Operations::EndDataWrite_t::getPostSignal),
+                                                                         BOOST_TYPEOF(end)>,
                                                          boost::lambda::_1,
                                                          &SyncSource::Operations::m_endDataWrite,
                                                          &SyncSource::Operations::EndDataWrite_t::getPostSignal,
@@ -3748,8 +3749,8 @@ void SyncTests::testManyRestarts()
         (boost::lambda::if_then(boost::lambda::var(needToConnect),
                                 (boost::lambda::var(needToConnect) = false,
                                  boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
-                                                                         typeof(&SyncSource::Operations::StartDataRead_t::getPreSignal),
-                                                                         typeof(start)>,
+                                                                         BOOST_TYPEOF(&SyncSource::Operations::StartDataRead_t::getPreSignal),
+                                                                         BOOST_TYPEOF(start)>,
                                                          boost::lambda::_1,
                                                          &SyncSource::Operations::m_startDataRead,
                                                          &SyncSource::Operations::StartDataRead_t::getPreSignal,

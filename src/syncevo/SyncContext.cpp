@@ -59,6 +59,7 @@ using namespace std;
 #include <boost/bind.hpp>
 #include <boost/utility.hpp>
 #include <boost/lambda/bind.hpp>
+#include <boost/typeof/typeof.hpp>
 
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -3284,8 +3285,8 @@ void SyncContext::initMain(const char *appname)
         typedef void (*LogFunc_t)(int level, const char *str);
         void (*set_log_function)(LogFunc_t func);
         
-        set_log_level = (typeof(set_log_level))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_level");
-        set_log_function = (typeof(set_log_function))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_function");
+        set_log_level = (BOOST_TYPEOF(set_log_level))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_level");
+        set_log_function = (BOOST_TYPEOF(set_log_function))dlsym(RTLD_DEFAULT, "gnutls_global_set_log_function");
 
         if (set_log_level && set_log_function) {
             set_log_level(atoi(gnutlsdbg));

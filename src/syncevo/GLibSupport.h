@@ -43,6 +43,7 @@ typedef void *GMainLoop;
 #include <boost/type_traits/function_traits.hpp>
 #include <boost/utility/value_init.hpp>
 #include <boost/lambda/lambda.hpp>
+#include <boost/typeof/typeof.hpp>
 
 #include <iterator>
 #include <memory>
@@ -937,9 +938,9 @@ template<class F, F *finish> struct GAsyncReady2<void, F, finish, GAsyncResult *
  * first switch based on arity of the finish function, then on its type
  */
 #define SYNCEVO_GLIB_CALL_ASYNC_CXX(_prepare) \
-    GAsyncReadyCXX< boost::remove_pointer<typeof(_prepare ## _finish)>::type, \
+    GAsyncReadyCXX< boost::remove_pointer<BOOST_TYPEOF(_prepare ## _finish)>::type, \
                     & _prepare ## _finish, \
-                    boost::function_traits<boost::remove_pointer<typeof(_prepare ## _finish)>::type>::arity >
+                    boost::function_traits<boost::remove_pointer<BOOST_TYPEOF(_prepare ## _finish)>::type>::arity >
 
 /**
  * Macro for asynchronous methods which use a GAsyncReadyCallback to
@@ -1042,7 +1043,7 @@ template<> class GAsyncReadyDoneCXX<void>
     do { \
         bool done = false; \
         SYNCEVO_GLIB_CALL_ASYNC(_prepare, \
-                                GAsyncReadyDoneCXX<boost::function<typeof(_prepare ## _finish)>::result_type>::createCB(_res, _gerror, done), \
+                                GAsyncReadyDoneCXX<boost::function<BOOST_TYPEOF(_prepare ## _finish)>::result_type>::createCB(_res, _gerror, done), \
                                 _args); \
         GRunWhile(! boost::lambda::var(done)); \
     } while (false); \
