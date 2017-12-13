@@ -351,6 +351,7 @@ RUN_SYNCEVOLUTION_CHECK=die if $$?; return $$buffer;
 endif
 
 # patch README.rst properties on-the-fly
+if COND_CMDLINE
 README.patched.rst: README.rst src/syncevolution
 	$(AM_V_GEN)perl -e '$$syncfound=0; $$sourcefound=0; $$res=0;' \
 	                -e 'sub run { $$cmd = shift; $$buffer = `env LD_LIBRARY_PATH=src/syncevo/.libs:src/gdbus/.libs:src/gdbusxx/.libs:src/build-synthesis/src/.libs:$$ENV{LD_LIBRARY_PATH} $$cmd`; $(RUN_SYNCEVOLUTION_CHECK) }' \
@@ -365,6 +366,14 @@ README.patched.rst: README.rst src/syncevolution
 	                -e 'die "<<source-property>> tag not in README.rst?!" unless $$sourcefound;' \
 	                -e 'exit $$res;' \
 	                $< >$@
+else
+# Simpler version without inserting the actual sync and datastore properties.
+README.patched.rst: README.rst
+	$(AM_V_GEN)perl -p \
+	                -e 's/^:Version: .*/:Version: $(VERSION)/;' \
+	                -e 's/:Date: .*/":Date: " . `date +%Y-%m-%d`/e;' \
+	                $< >$@
+endif
 CLEANFILES += README.patched.rst
 
 # produce man pages

@@ -18,11 +18,13 @@ include $(top_srcdir)/src/syncevo/syncevo.am
 src_cppflags += -I$(top_srcdir)/src/syncevo
 include $(top_srcdir)/src/backends/backends.am
 src_cppflags += $(addprefix -I$(top_srcdir)/,$(BACKENDS)) -I$(SYNTHESIS_SUBDIR)
-bin_PROGRAMS += src/syncevolution
 bin_SCRIPTS += src/synccompare
 include $(top_srcdir)/src/templates/templates.am
 else
 src_cppflags += -I$(top_srcdir)/$(SYNTHESIS_SUBDIR_INCLUDES)
+endif
+if COND_CMDLINE
+bin_PROGRAMS += src/syncevolution
 endif
 
 include $(top_srcdir)/src/dbus/dbus.am
@@ -182,8 +184,8 @@ distclean-local:
 	rm -rf $(SYNTHESIS_SUBDIR)
 	rm -rf $(CLEAN_CLIENT_SRC)
 
-# Local sync helper executable. Built unconditionally at the moment,
-# thus creating a hard dependency on D-Bus.
+# Local sync helper executable. Depends on D-Bus for internal communication.
+if COND_LOCAL_SYNC
 libexec_PROGRAMS += src/syncevo-local-sync
 src_syncevo_local_sync_SOURCES = \
 	src/syncevo-local-sync.cpp \
@@ -196,7 +198,7 @@ src_syncevo_local_sync_CPPFLAGS = -DHAVE_CONFIG_H -I$(gdbus_dir) $(src_cppflags)
 src_syncevo_local_sync_CXXFLAGS = $(PCRECPP_CFLAGS) $(SYNCEVOLUTION_CXXFLAGS) $(CORE_CXXFLAGS) $(GLIB_CFLAGS) $(DBUS_CFLAGS) $(LIBSOUP_CFLAGS) $(SYNCEVO_WFLAGS)
 src_syncevo_local_sync_LDFLAGS = $(PCRECPP_LIBS) $(CORE_LD_FLAGS) $(LIBSOUP_LIBS)
 src_syncevo_local_sync_DEPENDENCIES = $(top_builddir)/$(gdbus_build_dir)/libgdbussyncevo.la $(EXTRA_LTLIBRARIES) $(CORE_DEP) $(SYNTHESIS_DEP)
-
+endif
 
 # Do the linking here, as with all SyncEvolution executables.
 # Sources are compiled in dbus/server.

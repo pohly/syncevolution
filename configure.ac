@@ -477,6 +477,18 @@ AC_ARG_ENABLE(core,
               enable_core="$enableval",
               enable_core="yes")
 AM_CONDITIONAL([COND_CORE], [test "$enable_core" = "yes"])
+AC_ARG_ENABLE(cmdline,
+              AS_HELP_STRING([--enable-cmdline],
+                             [enables building the SyncEvolution command line tool, syncevolution]),
+              enable_cmdline="$enableval",
+              enable_cmdline="yes")
+AM_CONDITIONAL([COND_CMDLINE], [test "$enable_cmdline" = "yes"])
+AC_ARG_ENABLE(local-sync,
+              AS_HELP_STRING([--enable-local-sync],
+                             [enables building the local synchronization support, in particular syncevo-local-sync]),
+              enable_local_sync="$enableval",
+              enable_local_sync="yes")
+AM_CONDITIONAL([COND_LOCAL_SYNC], [test "$enable_local_sync" = "yes"])
 
 AC_ARG_ENABLE(dbus-service,
               AS_HELP_STRING([--enable-dbus-service=args],
