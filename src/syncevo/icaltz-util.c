@@ -184,7 +184,7 @@ decode (const void *ptr)
 	else
 	{
 		const unsigned char *p = ptr;
-		int result = *p & (1 << (CHAR_BIT - 1)) ? ~0 : 0;
+		unsigned result = *p & (1 << (CHAR_BIT - 1)) ? ~0 : 0;
 
 		result = (result << 8) | *p++;
 		result = (result << 8) | *p++;
