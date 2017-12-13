@@ -608,7 +608,10 @@ class SyncContext : public SyncConfig {
         int32_t m_extra1, m_extra2, m_extra3;
 
         SyncSourceEvent() :
-            m_type(sysync::PEV_NOP)
+            m_type(sysync::PEV_NOP),
+            m_extra1(0),
+            m_extra2(0),
+            m_extra3(0)
         {}
 
         SyncSourceEvent(sysync::TProgressEventEnum type,
