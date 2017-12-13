@@ -475,7 +475,7 @@ bool SyncEvolution_ReadNextMapItem( CContext aContext, MapID mID, bool aFirst )
 {
     SyncSource *source = DBC( aContext );
     if (!source) {
-        return LOCERR_WRONGUSAGE;
+        return false;
     }
     bool res = false;
     try {
