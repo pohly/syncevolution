@@ -146,6 +146,12 @@ class IndividualDataCompare : public std::binary_function<IndividualData, Indivi
     {
         return m_compare->compare(a.m_criteria, b.m_criteria);
     }
+
+    IndividualDataCompare & operator = (const IndividualDataCompare &other)
+    {
+        m_compare = other.m_compare;
+        return *this;
+    }
 };
 
 /**

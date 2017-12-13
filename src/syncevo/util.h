@@ -363,6 +363,7 @@ template<class T> class Init {
     Init() : m_value(boost::value_initialized<T>()) {}
     Init(const Init &other) : m_value(other.m_value) {}
     Init & operator = (const T &val) { m_value = val; return *this; }
+    Init & operator = (const Init &other) { m_value = other.m_value; return *this; }
     operator const T & () const { return m_value; }
     operator T & () { return m_value; }
  private:

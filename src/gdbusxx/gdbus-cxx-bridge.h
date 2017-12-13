@@ -197,6 +197,13 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
       m_name(other.m_name)
       {}
 
+    DBusConnectionPtr & operator = (const DBusConnectionPtr &other)
+    {
+        *static_cast<boost::intrusive_ptr<GDBusConnection> *>(this) = static_cast<const boost::intrusive_ptr<GDBusConnection> &>(other);
+        m_name = other.m_name;
+        return *this;
+    }
+
     GDBusConnection *reference(void) throw()
     {
         GDBusConnection *conn = get();
