@@ -66,7 +66,6 @@ private:
 	TQString appId;
 
 	KNotesIface_stub *kn_iface;
-	DCOPClient *kn_dcop;
 
 	/** Ugly hack to restart KNotes if it was running */
 	bool knotesWasRunning;
