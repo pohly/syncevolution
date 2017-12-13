@@ -1694,7 +1694,7 @@ void SyncSourceAdmin::entry2mapid(const string &key, const string &value, sysync
 
 void SyncSourceAdmin::init(SyncSource::Operations &ops,
                            const boost::shared_ptr<ConfigNode> &config,
-                           const std::string adminPropertyName,
+                           const std::string &adminPropertyName,
                            const boost::shared_ptr<ConfigNode> &mapping)
 {
     m_configNode = config;

@@ -857,7 +857,6 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
     PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
     PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
 
-
     OperationWrapperSwitch(SyncSourceName &source) :
         m_source(source),
         m_pre(OperationSlotInvoker(source)),
@@ -2150,7 +2149,7 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
 
     /* implementation of SyncSourceBase */
     virtual std::string getName() const { return SyncSourceConfig::getName(); }
-    virtual std::string getDisplayName() const { return m_name.c_str(); }
+    virtual std::string getDisplayName() const { return m_name; }
     virtual void setDisplayName(const std::string &name) { m_name = name; }
     virtual long getNumDeleted() const { return m_numDeleted; }
     virtual void setNumDeleted(long num) { m_numDeleted = num; }
@@ -2994,7 +2993,7 @@ class SyncSourceAdmin : public virtual SyncSourceBase
     /** flexible initialization */
     void init(SyncSource::Operations &ops,
               const boost::shared_ptr<ConfigNode> &config,
-              const std::string adminPropertyName,
+              const std::string &adminPropertyName,
               const boost::shared_ptr<ConfigNode> &mapping);
 
     /**

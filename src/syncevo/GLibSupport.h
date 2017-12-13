@@ -408,7 +408,7 @@ struct GErrorCXX {
     GError *release() { GError *gerror = m_gerror; m_gerror = NULL; return gerror; }
 
     /** checks whether the current error is the one passed as parameters */
-    bool matches(GQuark domain, gint code) { return g_error_matches(m_gerror, domain, code); }
+    bool matches(GQuark domain, gint code) const { return g_error_matches(m_gerror, domain, code); }
 
     /**
      * Use this when passing GErrorCXX instance to C functions which need to set it.
