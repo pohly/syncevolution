@@ -391,6 +391,9 @@ public:
         }
     }
 
+    // Not implemented, only declared to keep cppcheck happy.
+    TestingSyncSourcePtr &operator = (const TestingSyncSourcePtr &other);
+
     enum Flags {
         SLOW,           /**< erase anchor, start accessing database from scratch */
         INCREMENTAL     /**< allow source to do incremental data read */
@@ -3163,8 +3166,6 @@ void SyncTests::refreshClient(SyncOptions options) {
 
 // delete all items, locally and on server using refresh-from-client sync
 void SyncTests::testDeleteAllRefresh() {
-    source_it it;
-
     // start with clean local data
     CT_ASSERT_NO_THROW(allSourcesDeleteAll());
 
@@ -3177,7 +3178,7 @@ void SyncTests::testDeleteAllRefresh() {
     deleteAll(DELETE_ALL_REFRESH);
 
     // nothing stored locally?
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceA()));
         SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
@@ -3189,7 +3190,7 @@ void SyncTests::testDeleteAllRefresh() {
            "check",
            SyncOptions(SYNC_SLOW,
                        CheckSyncReport(0,0,0, 0,0,0, true, SYNC_SLOW)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceA()));
         SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
@@ -3240,8 +3241,6 @@ void SyncTests::testDeleteAllSync()
 // test that a refresh sync from an empty server leads to an empty datatbase
 // and no changes are sent to server during next two-way sync
 void SyncTests::testRefreshFromServerSemantic() {
-    source_it it;
-
     // clean client and server
     CT_ASSERT_NO_THROW(deleteAll());
 
@@ -3253,7 +3252,7 @@ void SyncTests::testRefreshFromServerSemantic() {
                        CheckSyncReport(0,0,-1, 0,0,0, true, SYNC_REFRESH_FROM_REMOTE)));
 
     // check
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceA()));
         SOURCE_ASSERT_EQUAL(source.get(), 0, countItems(source.get()));
@@ -3268,8 +3267,6 @@ void SyncTests::testRefreshFromServerSemantic() {
 // test that a refresh sync from an empty client leads to an empty datatbase
 // and no changes are sent to server during next two-way sync
 void SyncTests::testRefreshFromClientSemantic() {
-    source_it it;
-
     // clean client and server
     CT_ASSERT_NO_THROW(deleteAll());
 
@@ -3303,8 +3300,6 @@ void SyncTests::testRefreshFromClientSemantic() {
 // - refresh from client
 // => no items should now be listed as new, updated or deleted for this client during another sync
 void SyncTests::testRefreshStatus() {
-    source_it it;
-
     CT_ASSERT_NO_THROW(allSourcesInsert(false));
     CT_ASSERT_NO_THROW(allSourcesDeleteAll());
     CT_ASSERT_NO_THROW(allSourcesInsert());
@@ -3832,8 +3827,7 @@ void SyncTests::testUpdate() {
     // setup client A, B and server so that they all contain the same item
     CT_ASSERT_NO_THROW(doCopy());
 
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->update(it->second->createSourceA, it->second->config.m_updateItem));
     }
 
@@ -3856,8 +3850,7 @@ void SyncTests::testComplexUpdate() {
     // setup client A, B and server so that they all contain the same item
     CT_ASSERT_NO_THROW(doCopy());
 
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         it->second->update(it->second->createSourceA,
                            /* this test might get executed with some sources which have
                               a complex update item while others don't: use the normal update item
@@ -3915,13 +3908,12 @@ void SyncTests::testMerge() {
     CT_ASSERT_NO_THROW(doCopy());
 
     // update in client A
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->update(it->second->createSourceA, it->second->config.m_mergeItem1));
     }
 
     // update in client B
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->update(it->second->createSourceA, it->second->config.m_mergeItem2));
     }
 
@@ -3941,7 +3933,7 @@ void SyncTests::testMerge() {
                                       CheckSyncReport(-1,-1,-1, -1,-1,-1, true, SYNC_TWO_WAY)));
 
     // figure out how the conflict during ".conflict" was handled
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         TestingSyncSourcePtr copy;
         SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(it->second->createSourceA()));
         int numItems = 0;
@@ -3979,8 +3971,7 @@ void SyncTests::testTwinning() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // import test data
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->testImport());
     }
 
@@ -4017,8 +4008,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
 
     // check that everything is empty, also resets change tracking
     // in second sources of each client
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4026,7 +4016,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
             CT_ASSERT_NO_THROW(source.reset());
         }
     }
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4036,14 +4026,14 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
     }
 
     // add one item on first client, copy to server, and check change tracking via second source
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insertManyItems(it->second->createSourceA, 200, 1));
     }
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4057,7 +4047,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
 
     // add a different item on second client, one-way-from-server
     // => one item added locally, none sent to server
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insertManyItems(it->second->createSourceA, 2, 1));
 
         if (it->second->config.m_createSourceB) {
@@ -4074,7 +4064,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
                           "recv",
                           SyncOptions(oneWayFromRemote,
                                       CheckSyncReport(1,0,0, 0,0,0, true, SYNC_ONE_WAY_FROM_REMOTE)));
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4092,7 +4082,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
            "check",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,0, true, SYNC_TWO_WAY)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4105,7 +4095,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
     }
 
     // delete items on clientA, sync to server
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
 
         if (it->second->config.m_createSourceB) {
@@ -4122,7 +4112,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
            "delete",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4140,7 +4130,7 @@ void SyncTests::doOneWayFromRemote(SyncMode oneWayFromRemote) {
                           "delete",
                           SyncOptions(oneWayFromRemote,
                                       CheckSyncReport(0,0,1, 0,0,0, true, SYNC_ONE_WAY_FROM_REMOTE)));
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4181,8 +4171,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
 
     // check that everything is empty, also resets change tracking
     // in second sources of each client
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4190,7 +4179,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
             CT_ASSERT_NO_THROW(source.reset());
         }
     }
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4200,14 +4189,14 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
     }
 
     // add one item on first client, copy to server, and check change tracking via second source
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insertManyItems(it->second->createSourceA, 1, 1));
     }
     doSync(__FILE__, __LINE__,
            "send",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4221,7 +4210,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
 
     // add a different item on second client, one-way-from-client
     // => no item added locally, one sent to server
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insertManyItems(it->second->createSourceA, 2, 1));
 
         if (it->second->config.m_createSourceB) {
@@ -4238,7 +4227,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
                           "send",
                           SyncOptions(oneWayFromLocal,
                                       CheckSyncReport(0,0,0, 1,0,0, true, SYNC_ONE_WAY_FROM_LOCAL)));
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4256,7 +4245,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
            "check",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(1,0,0, 0,0,0, true, SYNC_TWO_WAY)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4269,7 +4258,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
     }
 
     // delete items on client B, sync to server
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->deleteAll(it->second->createSourceA));
 
         if (it->second->config.m_createSourceB) {
@@ -4286,7 +4275,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
                           "delete",
                           SyncOptions(oneWayFromLocal,
                                       CheckSyncReport(0,0,0, 0,0,1, true, SYNC_ONE_WAY_FROM_LOCAL)));
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4304,7 +4293,7 @@ void SyncTests::doOneWayFromLocal(SyncMode oneWayFromLocal) {
            "delete",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,1, 0,0,0, true, SYNC_TWO_WAY)));
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4420,8 +4409,7 @@ void SyncTests::testItems() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // import data
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->testImport());
     }
 
@@ -4439,8 +4427,7 @@ void SyncTests::testItemsXML() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // import data
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->testImport());
     }
 
@@ -4460,8 +4447,7 @@ void SyncTests::testExtensions() {
     CT_ASSERT_NO_THROW(deleteAll());
 
     // import data and create reference data
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->testImport());
 
         string refDir = getCurrentTest() + "." + it->second->config.m_sourceName + ".ref.dat";
@@ -4488,7 +4474,7 @@ void SyncTests::testExtensions() {
     CT_ASSERT_NO_THROW(accessClientB->refreshClient(SyncOptions()));
 
     // update on client B
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->updateData(it->second->createSourceB));
     }
 
@@ -4497,7 +4483,7 @@ void SyncTests::testExtensions() {
     doSync(__FILE__, __LINE__, "patch", SyncOptions(SYNC_TWO_WAY));
 
     bool equal = true;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         string refDir = getCurrentTest() + "." + it->second->config.m_sourceName + ".ref.dat";
         simplifyFilename(refDir);
         TestingSyncSourcePtr source;
@@ -4538,8 +4524,7 @@ void SyncTests::testAddUpdate() {
     accessClientB->refreshClient();
 
     // add item
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA, it->second->config.m_insertItem, false));
     }
     doSync(__FILE__, __LINE__,
@@ -4548,7 +4533,7 @@ void SyncTests::testAddUpdate() {
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // update it
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->update(it->second->createSourceB, it->second->config.m_updateItem));
     }
     doSync(__FILE__, __LINE__,
@@ -4592,9 +4577,8 @@ void SyncTests::testManyItems() {
 
     // import artificial data: make them large to generate some
     // real traffic and test buffer handling
-    source_it it;
     int num_items = defNumItems();
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insertManyItems(it->second->createSourceA, 0, num_items, 2000));
     }
 
@@ -4636,9 +4620,8 @@ void SyncTests::testManyDeletes() {
 
     // import artificial data: make them small, we just want
     // many of them
-    source_it it;
     int num_items = defNumItems();
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insertManyItems(it->second->createSourceA, 0, num_items, 100));
     }
 
@@ -4794,8 +4777,7 @@ void SyncTests::testDeleteBothSides()
            "delete-item-A",
            SyncOptions(SYNC_TWO_WAY,
                        CheckSyncReport(0,0,0, 0,0,1, true, SYNC_TWO_WAY)));
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -4811,7 +4793,7 @@ void SyncTests::testDeleteBothSides()
                           "delete-item-B",
                           SyncOptions(SYNC_TWO_WAY,
                                       CheckSyncReport(0,0,0, 0,0,-1, true, SYNC_TWO_WAY)));
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         if (it->second->config.m_createSourceB) {
             TestingSyncSourcePtr source;
             SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
@@ -5086,14 +5068,12 @@ void SyncTests::testAddBothSidesRefresh()
  */
 void SyncTests::testLinkedItemsParentChild()
 {
-    source_it it;
-
     // clean server, client A and client B
     CT_ASSERT_NO_THROW(deleteAll());
     accessClientB->refreshClient();
 
     // create and copy parent item
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT(!it->second->config.m_linkedItems.empty());
         CT_ASSERT(it->second->config.m_linkedItems[0].size() >= 2);
         TestingSyncSourcePtr source;
@@ -5107,7 +5087,7 @@ void SyncTests::testLinkedItemsParentChild()
                        CheckSyncReport(0,0,0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // create independent item, refresh client B and server
-    for (it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
+    for (source_it it = accessClientB->sources.begin(); it != accessClientB->sources.end(); ++it) {
         CT_ASSERT_NO_THROW(it->second->insert(it->second->createSourceA,
                                               it->second->config.m_insertItem,
                                               false));
@@ -5118,7 +5098,7 @@ void SyncTests::testLinkedItemsParentChild()
                                       CheckSyncReport(1,0,0, 1,0,0, true, SYNC_TWO_WAY)));
 
     // add child on client A
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT(!it->second->config.m_linkedItems.empty());
         CT_ASSERT(it->second->config.m_linkedItems[0].size() >= 2);
         TestingSyncSourcePtr source;
@@ -5149,14 +5129,12 @@ void SyncTests::testLinkedItemsParentChild()
  */
 void SyncTests::testLinkedItemsChild()
 {
-    source_it it;
-
     // clean server, client A and client B
     CT_ASSERT_NO_THROW(deleteAll());
     accessClientB->refreshClient();
 
     // create and copy child item
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT(!it->second->config.m_linkedItems.empty());
         CT_ASSERT(it->second->config.m_linkedItems[0].size() >= 2);
         TestingSyncSourcePtr source;
@@ -5187,14 +5165,12 @@ void SyncTests::testLinkedItemsChild()
  */
 void SyncTests::testLinkedItemsChildParent()
 {
-    source_it it;
-
     // clean server, client A and client B
     CT_ASSERT_NO_THROW(deleteAll());
     accessClientB->refreshClient();
 
     // create and copy child item
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT(!it->second->config.m_linkedItems[0].empty());
         CT_ASSERT(it->second->config.m_linkedItems[0].size() >= 2);
         TestingSyncSourcePtr source;
@@ -5212,7 +5188,7 @@ void SyncTests::testLinkedItemsChildParent()
                                       CheckSyncReport(1,0,0, 0,0,0, true, SYNC_TWO_WAY)));
 
     // add parent on client A
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         CT_ASSERT(!it->second->config.m_linkedItems.empty());
         CT_ASSERT(it->second->config.m_linkedItems[0].size() >= 2);
         TestingSyncSourcePtr source;
@@ -5252,8 +5228,7 @@ void SyncTests::doVarSizes(bool withMaxMsgSize,
     CT_ASSERT_NO_THROW(deleteAll());
 
     // insert items, doubling their size, then restart with small size
-    source_it it;
-    for (it = sources.begin(); it != sources.end(); ++it) {
+    for (source_it it = sources.begin(); it != sources.end(); ++it) {
         int item = 1;
         restoreStorage(it->second->config, client);
         TestingSyncSourcePtr source;
@@ -8384,8 +8359,9 @@ void CheckSyncReport::check(const std::string &name, const SyncSourceReport &sou
     }
 }
 
-/** @} */
-/** @endcond */
+SE_END_CXX
+
 #endif // ENABLE_INTEGRATION_TESTS
 
-SE_END_CXX
+/** @} */
+/** @endcond */
