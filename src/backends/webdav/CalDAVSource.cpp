@@ -721,8 +721,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
                 eptr<icalcomponent> fullcal = event.m_calendar;
                 loadItem(event);
                 event.m_sequence++;
-                lastmodtime = icaltime_from_timet(event.m_lastmodtime, false);
-                lastmodtime.is_utc = 1;
+                lastmodtime = icaltime_from_timet_with_zone(event.m_lastmodtime, false, icaltimezone_get_utc_timezone());
                 event.m_calendar = fullcal;
                 for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
                      comp;

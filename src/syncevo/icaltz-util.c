@@ -224,7 +224,7 @@ find_transidx (time_t *transitions, ttinfo *types, int *trans_idx, long int num_
 	struct icaltimetype itime;
 
 	now = time (NULL);
-	itime = icaltime_from_timet (now, 0);
+	itime = icaltime_from_timet_with_zone (now, 0, NULL);
 	itime.month = itime.day = 1;
 	itime.hour = itime.minute = itime.second = 0;
 	year_start = icaltime_as_timet(itime);
@@ -304,13 +304,13 @@ adjust_dtstart_day_to_rrule (icalcomponent *comp, struct icalrecurrencetype rule
 	icalrecur_iterator *iter;
 
 	now = time (NULL);
-	itime = icaltime_from_timet (now, 0);
+	itime = icaltime_from_timet_with_zone (now, 0, NULL);
 	itime.month = itime.day = 1;
 	itime.hour = itime.minute = itime.second = 0;
 	year_start = icaltime_as_timet(itime);
 
 	comp_start = icalcomponent_get_dtstart (comp);
-	start = icaltime_from_timet (year_start, 0);
+	start = icaltime_from_timet_with_zone (year_start, 0, NULL);
 
 	iter = icalrecur_iterator_new (rule, start);
 	iter_start = icalrecur_iterator_next (iter);
@@ -478,7 +478,7 @@ icaltzutil_fetch_timezone (const char *location)
 			trans = transitions [stdidx] + types [zp_idx].gmtoff;
 		else
 			trans = types [zp_idx].gmtoff;
-		icaltime = icaltime_from_timet (trans, 0);
+		icaltime = icaltime_from_timet_with_zone (trans, 0, NULL);
 		dtstart = icaltime;
 		dtstart.year = 1970;
 		dtstart.minute = dtstart.second = 0;
@@ -520,7 +520,7 @@ icaltzutil_fetch_timezone (const char *location)
 			trans = transitions [dstidx] + types [zp_idx].gmtoff;
 		else
 			trans = types [zp_idx].gmtoff;
-		icaltime = icaltime_from_timet (trans, 0);
+		icaltime = icaltime_from_timet_with_zone (trans, 0, NULL);
 		dtstart = icaltime;
 		dtstart.year = 1970;
 		dtstart.minute = dtstart.second = 0;
