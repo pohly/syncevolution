@@ -1694,6 +1694,16 @@ test = SyncEvolutionTest("googlecalendar", compile,
                          "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsInsertChildTwice,"
                          "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsUpdateChild,"
                          "Client::Source::google_caldav::LinkedItemsAllDayGoogle::testLinkedItemsUpdateChildNoIDs,"
+                         # A child without parent has its RECURRENCE-ID turned into UTC.
+                         # https://stackoverflow.com/questions/47811670/detached-recurrence-without-parent-event
+                         "Client::Source::google_caldav::LinkedItemsDefault::testLinkedItemsChild,"
+                         "Client::Source::google_caldav::LinkedItemsDefault::testLinkedItemsInsertChildTwice,"
+                         "Client::Source::google_caldav::LinkedItemsDefault::testLinkedItemsUpdateChild,"
+                         "Client::Source::google_caldav::LinkedItemsDefault::testLinkedItemsUpdateChildNoIDs,"
+                         "Client::Source::google_caldav::LinkedItemsWithVALARM::testLinkedItemsChild,"
+                         "Client::Source::google_caldav::LinkedItemsWithVALARM::testLinkedItemsInsertChildTwice,"
+                         "Client::Source::google_caldav::LinkedItemsWithVALARM::testLinkedItemsUpdateChild,"
+                         "Client::Source::google_caldav::LinkedItemsWithVALARM::testLinkedItemsUpdateChildNoIDs,"
                          ,
                          testPrefix=options.testprefix)
 context.add(test)
