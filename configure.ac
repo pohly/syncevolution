@@ -62,6 +62,14 @@ dnl check for programs.
 AC_PROG_CXX
 AC_PROG_MAKE_SET
 
+dnl Use the most recent C++ standard that is supported by the code.
+dnl We can fall back to older versions, but not below C++11.
+dnl Akonadi/Qt don't work with C++17 yet, so we can't enable that.
+AX_CXX_COMPILE_STDCXX_14(noext, optional)
+if test "$HAVE_CXX14" -ne 1; then
+    AX_CXX_COMPILE_STDCXX_11(noext, mandatory)
+fi
+
 # Boost headers: boost/foreach.hpp is needed (1.33/Debian Etch
 # doesn't have it, 1.34/Ubuntu 8.10 Hardy does). 1.35 is available
 # as Debian Etch backport.
