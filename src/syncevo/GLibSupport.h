@@ -731,7 +731,7 @@ template<class T, class F, F *finish, class A1, class A3, class A4, class A5> st
             A5_t retval3 = boost::value_initialized<A5_t>();
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, &retval1, &retval2, &retval3);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t, retval1, retval2, retval3);
         } catch (...) {
             // called from C, must not let exception escape
@@ -756,7 +756,7 @@ template<class T, class F, F *finish, class A1, class A3, class A4> struct GAsyn
             A4_t retval2 = boost::value_initialized<A4_t>();
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, &retval1, &retval2, gerror);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t, retval1, retval2, gerror);
         } catch (...) {
             // called from C, must not let exception escape
@@ -780,7 +780,7 @@ template<class T, class F, F *finish, class A1, class A3, class A4> struct GAsyn
             A4_t retval2 = boost::value_initialized<A4_t>();
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, &retval1, &retval2);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t, retval1, retval2);
         } catch (...) {
             // called from C, must not let exception escape
@@ -803,7 +803,7 @@ template<class T, class F, F *finish, class A1, class A3> struct GAsyncReady4<T,
             A3_t retval = boost::value_initialized<A3_t>();
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, &retval, gerror);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t, retval, gerror);
         } catch (...) {
             // called from C, must not let exception escape
@@ -823,7 +823,7 @@ template <class T, class F, F *finish, class A1> struct GAsyncReady3<T, F, finis
             GErrorCXX gerror;
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result, gerror);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t, gerror);
         } catch (...) {
             // called from C, must not let exception escape
@@ -844,7 +844,7 @@ template<class F, F *finish, class A1> struct GAsyncReady3<void, F, finish, A1, 
             GErrorCXX gerror;
             finish(reinterpret_cast<A1>(sourceObject),
                    result, gerror);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(gerror);
         } catch (...) {
             // called from C, must not let exception escape
@@ -864,7 +864,7 @@ template<class T, class F, F *finish, class A1> struct GAsyncReady2<T, F, finish
         try {
             T t = finish(reinterpret_cast<A1>(sourceObject),
                          result);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t);
         } catch (...) {
             // called from C, must not let exception escape
@@ -884,7 +884,7 @@ template<class T, class F, F *finish> struct GAsyncReady2<T, F, finish, GAsyncRe
         try {
             GErrorCXX gerror;
             T t = finish(result, gerror);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(t, gerror);
         } catch (...) {
             // called from C, must not let exception escape
@@ -904,7 +904,7 @@ template<class F, F *finish, class A1> struct GAsyncReady2<void, F, finish, A1, 
         try {
             finish(reinterpret_cast<A1>(sourceObject),
                    result);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)();
         } catch (...) {
             // called from C, must not let exception escape
@@ -924,7 +924,7 @@ template<class F, F *finish> struct GAsyncReady2<void, F, finish, GAsyncResult *
         try {
             GErrorCXX gerror;
             finish(result, gerror);
-            std::auto_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
+            std::unique_ptr<CXXFunctionCB_t> cb(static_cast<CXXFunctionCB_t *>(userData));
             (*cb)(gerror);
         } catch (...) {
             // called from C, must not let exception escape

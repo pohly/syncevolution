@@ -291,7 +291,7 @@ private:
 
     PbapSyncSource &m_parent;
     boost::weak_ptr<PbapSession> m_self;
-    std::auto_ptr<GDBusCXX::DBusRemoteObject> m_client;
+    std::unique_ptr<GDBusCXX::DBusRemoteObject> m_client;
     bool m_frozen;
     enum {
         OBEXD_OLD, // obexd < 0.47
@@ -333,14 +333,14 @@ private:
     Transfers m_transfers;
     std::string m_currentTransfer;
 
-    std::auto_ptr<GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> >
+    std::unique_ptr<GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> >
         m_errorSignal;
     void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
                  const std::string &msg);
 
     // Bluez 5
     typedef GDBusCXX::SignalWatch4<GDBusCXX::Path_t, std::string, Params, std::vector<std::string> > PropChangedSignal_t;
-    std::auto_ptr<PropChangedSignal_t> m_propChangedSignal;
+    std::unique_ptr<PropChangedSignal_t> m_propChangedSignal;
     void propChangedCb(const GDBusCXX::Path_t &path,
                        const std::string &interface,
                        const Params &changed,
@@ -348,13 +348,13 @@ private:
 
     // new obexd API
     typedef GDBusCXX::SignalWatch1<GDBusCXX::Path_t> CompleteSignal_t;
-    std::auto_ptr<CompleteSignal_t> m_completeSignal;
+    std::unique_ptr<CompleteSignal_t> m_completeSignal;
     void completeCb(const GDBusCXX::Path_t &path);
     typedef GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, boost::variant<int64_t> > PropertyChangedSignal_t;
-    std::auto_ptr<PropertyChangedSignal_t> m_propertyChangedSignal;
+    std::unique_ptr<PropertyChangedSignal_t> m_propertyChangedSignal;
     void propertyChangedCb(const GDBusCXX::Path_t &path, const std::string &name, const boost::variant<int64_t> &value);
 
-    std::auto_ptr<GDBusCXX::DBusRemoteObject> m_session;
+    std::unique_ptr<GDBusCXX::DBusRemoteObject> m_session;
 };
 
 PbapSession::PbapSession(PbapSyncSource &parent) :

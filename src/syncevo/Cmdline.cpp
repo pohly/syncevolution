@@ -810,7 +810,7 @@ bool Cmdline::run() {
         if (!m_server.empty() || backend != sourceFilter.end()) {
             // list for specific backend
             params.m_name = sourceName;
-            auto_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
+            unique_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
             if (source.get() != NULL) {
                 if (!m_server.empty() && nodes) {
                     // ensure that we have passwords for this config
@@ -836,7 +836,7 @@ bool Cmdline::run() {
                             // don't have a source name, so let's fall
                             // back to the backend instead.
                             params.m_name = type.m_backend;
-                            auto_ptr<SyncSource> source(SyncSource::createSource(params, false));
+                            unique_ptr<SyncSource> source(SyncSource::createSource(params, false));
                             (this->*operation)(source.get(), header);
                         } catch (...) {
                             SE_LOG_ERROR(NULL, "%s:\naccessing databases failed", header.c_str());
@@ -1250,7 +1250,7 @@ bool Cmdline::run() {
                                                                PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_USERNAME,
                                                                boost::assign::list_of(source));
                         SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
-                        auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
+                        unique_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
                         if (syncSource.get() == NULL) {
                             disable = "no backend available";
                         } else {

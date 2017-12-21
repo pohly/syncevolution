@@ -3970,7 +3970,7 @@ SyncMLStatus SyncContext::doSync()
         sysync::STEPCMD_CLIENTSTART;
     SharedSession session = m_engine.OpenSession(m_sessionID);
     SharedBuffer sendBuffer;
-    std::auto_ptr<SessionSentinel> sessionSentinel(new SessionSentinel(*this, session));
+    std::unique_ptr<SessionSentinel> sessionSentinel(new SessionSentinel(*this, session));
 
     if (m_serverMode && !m_localSync) {
         m_engine.WriteSyncMLBuffer(session,

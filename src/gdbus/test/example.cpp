@@ -65,7 +65,7 @@ class Test {
 
     static gboolean method_idle(gpointer data)
     {
-        std::auto_ptr<async> mydata(static_cast<async *>(data));
+        std::unique_ptr<async> mydata(static_cast<async *>(data));
         std::cout << "replying to method_async" << std::endl;
         mydata->m_result->done("Hello World, asynchronous and delayed");
         return false;
@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    std::auto_ptr<DBusTest> test(new DBusTest(conn));
+    std::unique_ptr<DBusTest> test(new DBusTest(conn));
     test->activate();
     test->signal(42, "hello world", std::map<int32_t, int32_t>());
     test->deactivate();

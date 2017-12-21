@@ -699,7 +699,7 @@ public:
 
 class ChildLogger : public Logger
 {
-    std::auto_ptr<LogRedirect> m_parentLogger;
+    std::unique_ptr<LogRedirect> m_parentLogger;
     boost::weak_ptr<LocalTransportChildImpl> m_child;
 
 public:

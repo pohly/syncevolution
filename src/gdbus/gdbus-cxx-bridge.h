@@ -1977,7 +1977,7 @@ class DBusResult : virtual public Result
 
     virtual Watch *createWatch(const boost::function<void (void)> &callback)
     {
-        std::auto_ptr<Watch> watch(new Watch(m_conn, callback));
+        std::unique_ptr<Watch> watch(new Watch(m_conn, callback));
         watch->activate(dbus_message_get_sender(m_msg.get()));
         return watch.release();
     }

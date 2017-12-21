@@ -56,7 +56,7 @@ using namespace Akonadi;
  *
  * To avoid double frees, we need to disable auto-deletion.
  * This method does that. Use like this:
- * std::auto_ptr<CollectionStatisticsJob> statisticsJob(DisableAutoDelete(new CollectionStatisticsJob(m_collection)));
+ * std::unique_ptr<CollectionStatisticsJob> statisticsJob(DisableAutoDelete(new CollectionStatisticsJob(m_collection)));
  */
 template<class J> J *DisableAutoDelete(J *job) { job->setAutoDelete(false); return job; }
 
@@ -80,7 +80,7 @@ bool AkonadiSyncSource::isEmpty()
     }
 
     //To Check if the respective collection is Empty, without actually loading the collections
-    std::auto_ptr<CollectionStatisticsJob> statisticsJob(DisableAutoDelete(new CollectionStatisticsJob(m_collection)));
+    std::unique_ptr<CollectionStatisticsJob> statisticsJob(DisableAutoDelete(new CollectionStatisticsJob(m_collection)));
     if (!statisticsJob->exec()) {
         throwError(SE_HERE, "Error fetching the collection stats");
     }
@@ -129,8 +129,8 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
     // as the default one used by the source.
     // res.push_back("Contacts", "some-KDE-specific-ID", isDefault);
 
-    std::auto_ptr<CollectionFetchJob> fetchJob(DisableAutoDelete(new CollectionFetchJob(Collection::root(),
-                                                                                        CollectionFetchJob::Recursive)));
+    std::unique_ptr<CollectionFetchJob> fetchJob(DisableAutoDelete(new CollectionFetchJob(Collection::root(),
+                                                                                          CollectionFetchJob::Recursive)));
 
     fetchJob->fetchScope().setContentMimeTypes(m_mimeTypes);
 
@@ -193,8 +193,8 @@ void AkonadiSyncSource::open()
     // Verify that the collection exists and ensure that
     // m_collection.contentMimeTypes() returns valid information. The
     // collection constructed so far only contains the collection ID.
-    std::auto_ptr<CollectionFetchJob> fetchJob(DisableAutoDelete(new CollectionFetchJob(m_collection,
-                                                                                        CollectionFetchJob::Base)));
+    std::unique_ptr<CollectionFetchJob> fetchJob(DisableAutoDelete(new CollectionFetchJob(m_collection,
+                                                                                          CollectionFetchJob::Base)));
     if (!fetchJob->exec()) {
         throwError(SE_HERE, StringPrintf("cannot fetch collection %s", id.c_str()));
     }
@@ -228,7 +228,7 @@ void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisio
     }
 
     // copy all local IDs and the corresponding revision
-    std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(m_collection)));
+    std::unique_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(m_collection)));
     if (!fetchJob->exec()) {
         throwError(SE_HERE, "listing items");
     }
@@ -260,7 +260,7 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
     if (luid.empty()) {
         item.setMimeType(m_mimeTypes.front());
         item.setPayloadFromData(QByteArray(data.c_str()));
-        std::auto_ptr<ItemCreateJob> createJob(DisableAutoDelete(new ItemCreateJob(item, m_collection)));
+        std::unique_ptr<ItemCreateJob> createJob(DisableAutoDelete(new ItemCreateJob(item, m_collection)));
         if (!createJob->exec()) {
             throwError(SE_HERE, string("storing new item ") + luid);
             return InsertItemResult("", "", ITEM_OKAY);
@@ -268,13 +268,13 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
         item = createJob->item();
     } else {
         Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
-        std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(Item(syncItemId))));
+        std::unique_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(Item(syncItemId))));
         if (!fetchJob->exec()) {
             throwError(SE_HERE, string("checking item ") + luid);
         }
         item = fetchJob->items().first();
         item.setPayloadFromData(QByteArray(data.c_str()));
-        std::auto_ptr<ItemModifyJob> modifyJob(DisableAutoDelete(new ItemModifyJob(item)));
+        std::unique_ptr<ItemModifyJob> modifyJob(DisableAutoDelete(new ItemModifyJob(item)));
         // TODO: SyncEvolution must pass the known revision that
         // we are updating.
         // TODO: check that the item has not been updated in the meantime
@@ -304,7 +304,7 @@ void AkonadiSyncSource::removeItem(const string &luid)
 
     // Delete the item from our collection
     // TODO: check that the revision is right (need revision from SyncEvolution)
-    std::auto_ptr<ItemDeleteJob> deleteJob(DisableAutoDelete(new ItemDeleteJob(Item(syncItemId))));
+    std::unique_ptr<ItemDeleteJob> deleteJob(DisableAutoDelete(new ItemDeleteJob(Item(syncItemId))));
     if (!deleteJob->exec()) {
         throwError(SE_HERE, string("deleting item " ) + luid);
     }
@@ -319,7 +319,7 @@ void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, boo
 
     Entity::Id syncItemId = QByteArray(luid.c_str()).toLongLong();
 
-    std::auto_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(Item(syncItemId))));
+    std::unique_ptr<ItemFetchJob> fetchJob(DisableAutoDelete(new ItemFetchJob(Item(syncItemId))));
     fetchJob->fetchScope().fetchFullPayload();
     if (fetchJob->exec()) {
         if (fetchJob->items().empty()) {

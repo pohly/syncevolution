@@ -484,7 +484,7 @@ Watch::~Watch()
 void getWatch(ExtractArgs &context,
               boost::shared_ptr<Watch> &value)
 {
-    std::auto_ptr<Watch> watch(new Watch(context.m_conn));
+    std::unique_ptr<Watch> watch(new Watch(context.m_conn));
     watch->activate((context.m_msg && *context.m_msg) ?
                     g_dbus_message_get_sender(*context.m_msg) :
                     context.m_sender);

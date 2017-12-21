@@ -465,15 +465,15 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
     }
 
     const SourceRegistry &registry(getSourceRegistry());
-    auto_ptr<SyncSource> source;
+    unique_ptr<SyncSource> source;
     BOOST_FOREACH(const RegisterSyncSource *sourceInfos, registry) {
-        auto_ptr<SyncSource> nextSource(sourceInfos->m_create(params));
+        unique_ptr<SyncSource> nextSource(sourceInfos->m_create(params));
         if (nextSource.get()) {
             if (source.get()) {
                 Exception::throwError(SE_HERE, params.getDisplayName() + ": backend " + sourceType.m_backend +
                                         " is ambiguous, avoid the alias and pick a specific backend instead directly");
             }
-            source = nextSource;
+            source = std::move(nextSource);
         }
     }
     if (source.get()) {

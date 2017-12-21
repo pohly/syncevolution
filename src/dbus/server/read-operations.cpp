@@ -295,7 +295,7 @@ void ReadOperations::checkSource(const std::string &sourceName)
     try {
         // this can already throw exceptions when the config is invalid
         SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
-        auto_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, config.get()));
+        unique_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, config.get()));
 
         if (syncSource.get()) {
             syncSource->open();
@@ -318,7 +318,7 @@ void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &d
     SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
     const SourceRegistry &registry(SyncSource::getSourceRegistry());
     BOOST_FOREACH(const RegisterSyncSource *sourceInfo, registry) {
-        auto_ptr<SyncSource> source(sourceInfo->m_create(params));
+        unique_ptr<SyncSource> source(sourceInfo->m_create(params));
         if (!source.get()) {
             continue;
         } else if (source->isInactive()) {

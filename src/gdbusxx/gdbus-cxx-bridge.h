@@ -60,6 +60,7 @@
 
 #include <stdint.h>
 #include <gio/gio.h>
+#include <glib-object.h>
 
 #include <map>
 #include <list>
@@ -111,8 +112,14 @@ typedef GDBusMessage message_type;
 typedef GVariantBuilder builder_type;
 typedef GVariantIter reader_type;
 
+struct GDBusMessageUnref
+{
+    void operator () (GDBusMessage *ptr) const { g_object_unref(ptr); }
+};
+typedef std::unique_ptr<GDBusMessage, GDBusMessageUnref> GDBusMessageUnique;
+
 /**
- * Simple auto_ptr for GVariant.
+ * Simple unique_ptr for GVariant.
  */
 class GVariantCXX : boost::noncopyable
 {
@@ -443,7 +450,7 @@ struct AppendArgs {
     GDBusMessage *m_msg;
     GVariantBuilder m_builder;
 
-    AppendArgs(const std::auto_ptr<GDBusMessage> &msg) {
+    AppendArgs(const GDBusMessageUnique &msg) {
         m_msg = msg.get();
         if (!m_msg) {
             throw std::runtime_error("NULL GDBusMessage reply");
@@ -2725,7 +2732,7 @@ class DBusResult : virtual public Result
 
     virtual Watch *createWatch(const boost::function<void (void)> &callback)
     {
-        std::auto_ptr<Watch> watch(new Watch(m_conn, callback));
+        std::unique_ptr<Watch> watch(new Watch(m_conn, callback));
         watch->activate(g_dbus_message_get_sender(m_msg.get()));
         return watch.release();
     }
@@ -3182,7 +3189,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -3275,7 +3282,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -3366,7 +3373,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -3455,7 +3462,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -3543,7 +3550,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -3629,7 +3636,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -3713,7 +3720,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -3796,7 +3803,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -3878,7 +3885,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -3957,7 +3964,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -4034,7 +4041,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -4110,7 +4117,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -4182,7 +4189,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -4253,7 +4260,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -4322,7 +4329,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
             typename dbus_traits<A3>::host_type a3;
@@ -4390,7 +4397,7 @@ struct MakeMethodEntry< boost::function<R (A1, A2)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
@@ -4456,7 +4463,7 @@ struct MakeMethodEntry< boost::function<void (A1, A2)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
             typename dbus_traits<A2>::host_type a2;
 
@@ -4521,7 +4528,7 @@ struct MakeMethodEntry< boost::function<R (A1)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
             typename dbus_traits<A1>::host_type a1;
 
@@ -4584,7 +4591,7 @@ struct MakeMethodEntry< boost::function<void (A1)> >
                                         GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<A1>::host_type a1;
 
             try {
@@ -4643,7 +4650,7 @@ struct MakeMethodEntry< boost::function<R ()> >
                                        GDBusMessage *msg, void *data)
     {
         try {
-            std::auto_ptr<GDBusMessage> reply;
+            GDBusMessageUnique reply;
             typename dbus_traits<R>::host_type r;
 
             try {

@@ -65,7 +65,7 @@ static const boost::locale::collator_base::level_type DEFAULT_COLLATION_LEVEL =
 class CompareBoost : public IndividualCompare, private boost::noncopyable {
     std::locale m_locale;
     const boost::locale::collator<char> &m_collator;
-    std::auto_ptr<icu::Transliterator> m_trans;
+    std::unique_ptr<icu::Transliterator> m_trans;
 
 public:
     CompareBoost(const std::locale &locale);

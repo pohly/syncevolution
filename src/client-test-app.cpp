@@ -436,7 +436,7 @@ public:
 private:
     bool m_initialized;
     string m_clientID;
-    std::auto_ptr<TestEvolution> m_clientB;
+    std::unique_ptr<TestEvolution> m_clientB;
     const TestRegistry &m_configs;
 
     /** prefix, username, password to be used for local databases */

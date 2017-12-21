@@ -162,7 +162,7 @@ public:
     }
 
     virtual SyncContext *createSyncClient() {
-        std::auto_ptr<SyncContext> context(new SyncContext(m_server, true));
+        std::unique_ptr<SyncContext> context(new SyncContext(m_server, true));
         boost::shared_ptr<SimpleUserInterface> ui(new SimpleUserInterface(context->getKeyring()));
         context->setUserInterface(ui);
         return context.release();
@@ -365,9 +365,9 @@ static void stripComponent(std::string &data,
  * is created for each source (see TestEvolution::createSource() and
  * SyncConfig::getSyncSourceNodes()).
  */
-class TestingSyncSourcePtr : public std::auto_ptr<TestingSyncSource>
+class TestingSyncSourcePtr : public std::unique_ptr<TestingSyncSource>
 {
-    typedef std::auto_ptr<TestingSyncSource> base_t;
+    typedef std::unique_ptr<TestingSyncSource> base_t;
     bool m_active;
 
     static StringMap m_anchors;
@@ -1110,10 +1110,10 @@ void LocalTests::testOpen() {
     // check requirements
     CT_ASSERT(config.m_createSourceA);
 
-    // Intentionally use the plain auto_ptr here and
+    // Intentionally use the plain unique_ptr here and
     // call open directly. That way it is a bit more clear
     // what happens and where it fails, if it fails.
-    std::auto_ptr<TestingSyncSource> source;
+    std::unique_ptr<TestingSyncSource> source;
     CT_ASSERT_NO_THROW(source.reset(createSourceA()));
     // got a sync source?
     CT_ASSERT(source.get() != 0);
@@ -1689,7 +1689,7 @@ void LocalTests::testRemoveProperties() {
     // compare
     TestingSyncSourcePtr copy;
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceA(), TestingSyncSourcePtr::SLOW));
-    std::auto_ptr<ScopedEnvChange> envProps;
+    std::unique_ptr<ScopedEnvChange> envProps;
     if (currentServer() == "googlecontacts") {
         // Google CardDAV server does not remove X- properties when
         // they are not sent at all. TODO (?): send them as empty
@@ -6036,7 +6036,7 @@ static void UpdateLocal(const std::string &config, const std::string &source,
     // The local side also uses the Cmdline class because then we only
     // need to implement one way of updating items. But first we need to
     // get the actual data.
-    std::auto_ptr<Cmdline> cmdline;
+    std::unique_ptr<Cmdline> cmdline;
 
     rm_r(actualLocalData);
     mkdir_p(actualLocalData);
@@ -6085,7 +6085,7 @@ void SyncTests::testUpload()
     std::string localSyncedTestdata = getPeerTestdata(config.m_sourceName, testname, "local-synced");
     CT_ASSERT_MESSAGE(localSyncedTestdata, !access(localSyncedTestdata.c_str(), R_OK));
 
-    std::auto_ptr<Cmdline> cmdline;
+    std::unique_ptr<Cmdline> cmdline;
 
     // Import locally into empty database.
     sources[0].second->deleteAll(sources[0].second->createSourceA);
@@ -6171,7 +6171,7 @@ void SyncTests::testDownload()
     std::string remoteSyncedTestdata = getPeerTestdata(config.m_sourceName, testname, "remote-synced");
     CT_ASSERT_MESSAGE(remoteSyncedTestdata, !access(remoteSyncedTestdata.c_str(), R_OK));
 
-    std::auto_ptr<Cmdline> cmdline;
+    std::unique_ptr<Cmdline> cmdline;
 
     // Wipe remote directly, then import.
     cmdline.reset(new TestCmdline("--daemon=no",
@@ -6277,7 +6277,7 @@ void SyncTests::doUpdateConflict(const std::string &testname, bool localWins)
     // Export from remote directly.
     std::string actualRemoteData = getCurrentTest() + ".remote.test.dat";
     simplifyFilename(actualRemoteData);
-    std::auto_ptr<Cmdline> cmdline;
+    std::unique_ptr<Cmdline> cmdline;
     rm_r(actualRemoteData);
     mkdir_p(actualRemoteData);
     cmdline.reset(new TestCmdline("--daemon=no",

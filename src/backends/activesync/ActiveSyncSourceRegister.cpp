@@ -188,7 +188,7 @@ static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t
                                           const std::string &clientID,
                                           int source, bool isSourceA)
 {
-    std::auto_ptr<TestingSyncSource> res(create(client, clientID, source, isSourceA));
+    std::unique_ptr<TestingSyncSource> res(create(client, clientID, source, isSourceA));
 
     // Mangle username: if the base username in the config is account
     // "foo", then source B uses "foo_B", because otherwise it'll end
