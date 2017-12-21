@@ -231,12 +231,9 @@ else
     have_libcurl="no"
 fi
 
-PKG_CHECK_MODULES(LIBSOUP, libsoup-gnome-2.4,
-                  [have_libsoup="yes"
-                   AC_DEFINE(HAVE_LIBSOUP_SOUP_GNOME_FEATURES_H, 1, [enable GNOME specific libsoup])],
-                  [PKG_CHECK_MODULES(LIBSOUP, libsoup-2.4,
-                                     have_libsoup="yes",
-                                     have_libsoup="no")])
+PKG_CHECK_MODULES(LIBSOUP, libsoup-2.4 >= 2.42,
+                           have_libsoup="yes",
+                           have_libsoup="no")
 
 PKG_CHECK_MODULES(LIBOPENOBEX, openobex, have_obex="yes", have_obex="no")
 have_bluetooth="no"

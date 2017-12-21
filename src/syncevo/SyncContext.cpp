@@ -1682,7 +1682,7 @@ boost::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainl
     } else if (boost::starts_with(url, "http://") ||
         boost::starts_with(url, "https://")) {
 #ifdef ENABLE_LIBSOUP
-        boost::shared_ptr<SoupTransportAgent> agent(new SoupTransportAgent(static_cast<GMainLoop *>(gmainloop)));
+        boost::shared_ptr<SoupTransportAgent> agent(SoupTransportAgent::create(static_cast<GMainLoop *>(gmainloop)));
         agent->setConfig(*this);
         InitializeTransport(agent, timeout);
         return agent;

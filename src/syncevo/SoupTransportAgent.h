@@ -26,8 +26,11 @@
 
 #include <syncevo/TransportAgent.h>
 #include <syncevo/SmartPtr.h>
+#include <syncevo/timeout.h>
 #include <libsoup/soup.h>
 #include <glib.h>
+
+#include <boost/weak_ptr.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -55,7 +58,7 @@ class SoupTransportAgent : public HTTPTransportAgent
      *                  transport will increase the reference count;
      *                  if NULL a new loop in the default context is used
      */
-    SoupTransportAgent(GMainLoop *loop = NULL);
+    static boost::shared_ptr<SoupTransportAgent> create(GMainLoop *loop = NULL);
     ~SoupTransportAgent();
 
     virtual void setURL(const std::string &url);
@@ -72,8 +75,8 @@ class SoupTransportAgent : public HTTPTransportAgent
     virtual Status wait(bool noReply = false);
     virtual void getReply(const char *&data, size_t &len, std::string &contentType);
     virtual void setTimeout(int seconds);
-    gboolean processCallback();
  private:
+    boost::weak_ptr<SoupTransportAgent> m_self;
     std::string m_proxyUser;
     std::string m_proxyPassword;
     std::string m_cacerts;
@@ -86,11 +89,10 @@ class SoupTransportAgent : public HTTPTransportAgent
     std::string m_failure;
 
     SoupMessage *m_message;
-    GLibEvent m_timeoutEventSource;
+    Timeout m_timeout;
     int m_timeoutSeconds;
 
-    /** This function is called regularly to detect timeout */
-    static gboolean TimeoutCallback (gpointer data);
+    SoupTransportAgent(GMainLoop *loop);
 
     /** response, copied from SoupMessage */
     eptr<SoupBuffer, SoupBuffer, GLibUnref> m_response;
@@ -102,6 +104,8 @@ class SoupTransportAgent : public HTTPTransportAgent
                                 gpointer user_data);
     void HandleSessionCallback(SoupSession *session,
                                SoupMessage *msg);
+    void handleTimeout();
+    static void handleTimeoutWrapper(const boost::weak_ptr<SoupTransportAgent> &agent);
 };
 
 SE_END_CXX

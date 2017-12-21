@@ -25,28 +25,28 @@
 #include <libsoup/soup-status.h>
 #include <syncevo/Logging.h>
 
-#ifdef HAVE_LIBSOUP_SOUP_GNOME_FEATURES_H
-#include <libsoup/soup-gnome-features.h>
-#endif
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
+boost::shared_ptr<SoupTransportAgent> SoupTransportAgent::create(GMainLoop *loop)
+{
+    boost::shared_ptr<SoupTransportAgent> self(new SoupTransportAgent(loop));
+    self->m_self = self;
+    return self;
+}
+
 SoupTransportAgent::SoupTransportAgent(GMainLoop *loop) :
     m_verifySSL(false),
-    m_session(soup_session_async_new()),
+    m_session(soup_session_new_with_options("timeout", 0, (void *)NULL)),
     m_loop(loop ?
            g_main_loop_ref(loop) :
            g_main_loop_new(NULL, TRUE),
            "Soup main loop"),
     m_status(INACTIVE),
+    m_message(NULL),
     m_timeoutSeconds(0),
     m_response(0)
 {
-#ifdef HAVE_LIBSOUP_SOUP_GNOME_FEATURES_H
-    // use default GNOME proxy settings
-    soup_session_add_feature_by_type(m_session.get(), SOUP_TYPE_PROXY_RESOLVER_GNOME);
-#endif
 }
 
 SoupTransportAgent::~SoupTransportAgent()
@@ -138,12 +138,14 @@ void SoupTransportAgent::send(const char *data, size_t len)
     soup_message_set_request(message.get(), m_contentType.c_str(),
                              SOUP_MEMORY_TEMPORARY, data, len);
     m_status = ACTIVE;
+    // We just keep a pointer for the timeout, without owning the message.
+    m_message = message.get();
     if (m_timeoutSeconds) {
-        m_message = message.get();
-        m_timeoutEventSource = g_timeout_add_seconds(m_timeoutSeconds, TimeoutCallback, static_cast<gpointer> (this));
+        m_timeout.runOnce(m_timeoutSeconds,
+                          boost::bind(&SoupTransportAgent::handleTimeoutWrapper, m_self));
     }
     soup_session_queue_message(m_session.get(), message.release(),
-                               SessionCallback, static_cast<gpointer>(this));
+                               SessionCallback, new boost::weak_ptr<SoupTransportAgent>(m_self));
 }
 
 void SoupTransportAgent::cancel()
@@ -188,7 +190,6 @@ TransportAgent::Status SoupTransportAgent::wait(bool noReply)
         SE_THROW_EXCEPTION(TransportException, failure);
     }
 
-    m_timeoutEventSource.set(0);
     return m_status;
 }
 
@@ -208,18 +209,29 @@ void SoupTransportAgent::SessionCallback(SoupSession *session,
                                          SoupMessage *msg,
                                          gpointer user_data)
 {
-    static_cast<SoupTransportAgent *>(user_data)->HandleSessionCallback(session, msg);
+    // A copy of the weak_ptr was created for us, which we need to delete now.
+    boost::weak_ptr<SoupTransportAgent> *self = static_cast< boost::weak_ptr<SoupTransportAgent> *>(user_data);
+    boost::shared_ptr<SoupTransportAgent> agent(self->lock());
+    delete self;
+
+    if (agent.get()) {
+        agent->HandleSessionCallback(session, msg);
+    }
 }
 
 void SoupTransportAgent::HandleSessionCallback(SoupSession *session,
                                                SoupMessage *msg)
 {
+    // Message is no longer pending, so timeout no longer needed either.
+    m_message = NULL;
+    m_timeout.deactivate();
+
     // keep a reference to the data 
     m_responseContentType = "";
     if (msg->response_body) {
         m_response = soup_message_body_flatten(msg->response_body);
-        const char *soupContentType = soup_message_headers_get(msg->response_headers,
-                                                               "Content-Type");
+        const char *soupContentType = soup_message_headers_get_one(msg->response_headers,
+                                                                   "Content-Type");
         if (soupContentType) {
             m_responseContentType = soupContentType;
         }
@@ -246,19 +258,24 @@ void SoupTransportAgent::HandleSessionCallback(SoupSession *session,
     g_main_loop_quit(m_loop.get());
 }
 
-gboolean SoupTransportAgent::processCallback()
+void SoupTransportAgent::handleTimeout()
 {
-    //stop the message processing and mark status as timeout
-    guint message_status = SOUP_STATUS_CANCELLED;
-    soup_session_cancel_message(m_session.get(), m_message, message_status);
-    m_status = TIME_OUT;
-    return FALSE;
+    // Stop the message processing and mark status as timeout, if message is really still
+    // pending.
+    if (m_message) {
+        guint message_status = SOUP_STATUS_CANCELLED;
+        soup_session_cancel_message(m_session.get(), m_message, message_status);
+        g_main_loop_quit(m_loop.get());
+        m_status = TIME_OUT;
+    }
 }
 
-gboolean SoupTransportAgent::TimeoutCallback(gpointer transport)
+void SoupTransportAgent::handleTimeoutWrapper(const boost::weak_ptr<SoupTransportAgent> &agent)
 {
-    SoupTransportAgent * sTransport = static_cast<SoupTransportAgent *>(transport);
-    return sTransport->processCallback();
+    boost::shared_ptr<SoupTransportAgent> self(agent.lock());
+    if (self.get()) {
+        self->handleTimeout();
+    }
 }
 
 SE_END_CXX
