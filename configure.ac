@@ -78,8 +78,13 @@ AX_BOOST_BASE(1.34)
 # TODO: Fix code to pass with -pedantic -Wextra.
 # -Wno-unknown-pragmas needed because icalstrdup.h
 # currently uses the "#pragma }" trick. Should remove that.
-# Fix code to work without deprecated methods: G GDK GDK_PIXBUF CAIRO PANGO GTK
 DK_ARG_ENABLE_WARNINGS([SYNCEVO_WFLAGS],
+                       [-Wall -Wno-unknown-pragmas],
+                       [-Wall -Wno-unknown-pragmas],
+                       [])
+
+# Fix code to work without deprecated methods: G GDK GDK_PIXBUF CAIRO PANGO GTK
+DK_ARG_ENABLE_WARNINGS([SYNCEVO_WFLAGS_DEPRECATED],
                        [-Wall -Wno-unknown-pragmas -Wno-deprecated-declarations],
                        [-Wall -Wno-unknown-pragmas -Wno-deprecated-declarations],
                        [])

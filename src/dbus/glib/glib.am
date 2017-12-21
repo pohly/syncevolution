@@ -24,7 +24,7 @@ noinst_PROGRAMS += src/dbus/glib/test-syncevo-dbus
 
 src_dbus_glib_test_syncevo_dbus_SOURCES = src/dbus/glib/test.c
 src_dbus_glib_test_syncevo_dbus_LDADD = $(DBUS_GLIB_LIBS) $(src_dbus_glib_lib)
-src_dbus_glib_test_syncevo_dbus_CFLAGS = $(DBUS_GLIB_CFLAGS) $(SYNCEVO_WFLAGS)
+src_dbus_glib_test_syncevo_dbus_CFLAGS = $(DBUS_GLIB_CFLAGS) $(SYNCEVO_WFLAGS_DEPRECATED)
 src_dbus_glib_test_syncevo_dbus_CPPFLAGS = $(src_dbus_glib_cppflags)
 
 src_dbus_glib_built_sources = \
@@ -89,7 +89,7 @@ src_dbus_glib_libsyncevo_dbus_la_CFLAGS = \
   -I$(top_srcdir) \
   -I$(top_builddir) \
   $(DBUS_GLIB_CFLAGS) \
-  $(SYNCEVO_WFLAGS)
+  $(SYNCEVO_WFLAGS_DEPRECATED)
 
 src_dbus_glib_libsyncevo_dbus_la_LIBADD = \
   $(DBUS_GLIB_LIBS)

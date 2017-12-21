@@ -79,7 +79,7 @@ src_gtk3_ui_sync_ui_CFLAGS = \
   -DTHEMEDIR=\""$(src_gtk3_ui_themercdir)"\" \
   -DLIBEXECDIR=\"@libexecdir@\" \
   -DSYNCEVOLUTION_LOCALEDIR=\"${SYNCEVOLUTION_LOCALEDIR}\" \
-  $(SYNCEVO_WFLAGS)
+  $(SYNCEVO_WFLAGS_DEPRECATED)
 src_gtk3_ui_sync_ui_CPPFLAGS = \
   -I$(top_builddir) \
   -I$(top_srcdir) \
