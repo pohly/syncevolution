@@ -2362,3 +2362,33 @@
    fun:g_get_charset
    fun:g_strerror
 }
+
+# ==7252== 32 bytes in 1 blocks are definitely lost in loss record 3,745 of 7,871
+# ==7252==    at 0x99ABCFC: g_closure_new_simple (gclosure.c:211)
+# ==7252==    by 0x99AD31F: g_cclosure_new (gclosure.c:944)
+# ==7252==    by 0x99C63F8: g_signal_connect_data (gsignal.c:2510)
+# ==7252==    by 0x5C440D3: source_initable_init (e-source.c:2019)
+# ==7252==    by 0x9664246: g_initable_new_valist (ginitable.c:248)
+# ==7252==    by 0x96642F8: g_initable_new (ginitable.c:162)
+# ==7252==    by 0x5C41B4B: e_source_new (e-source.c:2506)
+# ==7252==    by 0x5C60187: source_registry_new_source (e-source-registry.c:706)
+# ==7252==    by 0x5C6033E: source_registry_object_manager_thread (e-source-registry.c:1124)
+# ==7252==    by 0x9C635F4: g_thread_proxy (gthread.c:784)
+# ==7252==    by 0x8605518: start_thread (pthread_create.c:456)
+# ==7252==    by 0xA89AA5E: clone (clone.S:97)
+# ==7252== 
+{
+   source_registry_new_source thread + closure
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:g_closure_new_simple
+   fun:g_cclosure_new
+   fun:g_signal_connect_data
+   fun:source_initable_init
+   fun:g_initable_new_valist
+   fun:g_initable_new
+   fun:e_source_new
+   fun:source_registry_new_source
+   fun:source_registry_object_manager_thread
+   fun:g_thread_proxy
+}
