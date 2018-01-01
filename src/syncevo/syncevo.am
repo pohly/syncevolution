@@ -210,6 +210,7 @@ src_syncevo_libsyncevolution_include_HEADERS = \
   src/syncevo/IdentityProvider.h \
   src/syncevo/GuardFD.h \
   src/syncevo/util.h \
+  src/syncevo/timeout.h \
   src/syncevo/BoostHelper.h \
   src/syncevo/SuspendFlags.h \
   src/syncevo/SyncContext.h \

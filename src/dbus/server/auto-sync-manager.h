@@ -29,9 +29,9 @@
 #include <syncevo/SyncContext.h>
 #include <syncevo/SmartPtr.h>
 #include <syncevo/util.h>
+#include <syncevo/timeout.h>
 
 #include "notification-manager-factory.h"
-#include "timeout.h"
 
 SE_BEGIN_CXX
 

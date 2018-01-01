@@ -27,6 +27,7 @@
 #include <gdbus-cxx-bridge.h>
 
 #include <syncevo/SuspendFlags.h>
+#include <syncevo/timeout.h>
 
 #include "session-common.h"
 #include "read-operations.h"
@@ -34,7 +35,6 @@
 #include "source-progress.h"
 #include "source-status.h"
 #include "timer.h"
-#include "timeout.h"
 #include "resource.h"
 #include "dbus-callbacks.h"
 

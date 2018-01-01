@@ -20,10 +20,11 @@
 #ifndef INFO_REQ_H
 #define INFO_REQ_H
 
+#include <syncevo/timeout.h>
+
 #include <string>
 
 #include "gdbus-cxx-bridge.h"
-#include "timeout.h"
 
 #include <boost/signals2.hpp>
 

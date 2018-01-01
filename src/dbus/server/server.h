@@ -27,10 +27,10 @@
 #include <boost/signals2.hpp>
 
 #include <syncevo/SyncConfig.h>
+#include <syncevo/timeout.h>
 
 #include "exceptions.h"
 #include "auto-term.h"
-#include "timeout.h"
 #include "dbus-callbacks.h"
 #include "read-operations.h"
 

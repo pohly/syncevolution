@@ -23,13 +23,13 @@
 #include <boost/bind.hpp>
 
 #include <syncevo/GLibSupport.h>
+#include <syncevo/timeout.h>
 
 #include "server.h"
 #include "info-req.h"
 #include "connection.h"
 #include "bluez-manager.h"
 #include "session.h"
-#include "timeout.h"
 #include "restart.h"
 #include "client.h"
 #include "auto-sync-manager.h"
