@@ -66,7 +66,6 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
     ESourceListCXX sources(e_source_registry_list_sources(registry, extension));
     string id = getDatabaseID();
     ESource *source = findSource(sources, id);
-    bool created = false;
 
     if (!source) {
         if (refBuiltin && (id.empty() || id == "<<system>>")) {
@@ -78,7 +77,6 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
         } else {
             throwError(SE_HERE, string("database not found: '") + id + "'");
         }
-        created = true;
     } else {
         client = EClientCXX::steal(newClient(source, gerror));
     }
@@ -95,19 +93,19 @@ EClientCXX EvolutionSyncSource::openESource(const char *extension,
                            (void *)"Evolution Data Server has died unexpectedly.");
 
 
+    int retries = 0;
     while (true) {
         // Always allow EDS to create the database. "only-if-exists =
         // true" does not make sense.
         if (!e_client_open_sync(client, false, NULL, gerror)) {
-            if (gerror && g_error_matches(gerror, E_CLIENT_ERROR, E_CLIENT_ERROR_BUSY)) {
+            if (retries < 5) {
+                // EDS 3.18 and 3.26 have various race conditions during startup.
+                // Try a few times.
+                // https://bugzilla.gnome.org/show_bug.cgi?id=791306
+                SE_LOG_DEBUG(NULL, "Opening EDS source: ignoring error, trying again: %s", gerror->message);
                 gerror.clear();
                 sleep(1);
-            } else if (created) {
-                // Opening newly created address books often failed in
-                // old EDS releases - try again. Probably covered by
-                // more recently added E_CLIENT_ERROR_BUSY check above.
-                gerror.clear();
-                sleep(5);
+                retries++;
             } else {
                 throwError(SE_HERE, "opening database", gerror);
             }
