@@ -2392,3 +2392,23 @@
    fun:source_registry_object_manager_thread
    fun:g_thread_proxy
 }
+
+# ==8315== Invalid write of size 4
+# ==8315==    at 0x4009B42: check_match (dl-lookup.c:107)
+# ==8315==  Address 0xffeffbe70 is on thread 1's stack
+# ==8315== 
+{
+   dl-lookup 4
+   Memcheck:Addr4
+   fun:check_match
+}
+
+# ==8315== Invalid read of size 1
+# ==8315==    at 0x4009B42: check_match (dl-lookup.c:107)
+# ==8315==  Address 0xffeffbe70 is on thread 1's stack
+# ==8315== 
+{
+   dl-lookup 1
+   Memcheck:Addr1
+   fun:check_match
+}
