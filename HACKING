@@ -44,9 +44,10 @@ The test framework also requires CPPUnit:
 
 For the GUI and its D-Bus based service backend:
    apt-get install xsltproc \
+                   libdbus-glib-1-dev \
                    libglib2.0-dev \
                    libgtk2.0-dev libglade2-dev \
-                   libgnome-keyring-dev \
+                   libsecret-1-dev \
                    libgconf2-dev libgnomevfs2-dev
 
 Optional packages for GUI:

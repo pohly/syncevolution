@@ -1,3 +1,63 @@
+SyncEvolution 1.5.2 -> 1.5.3, 03.01.2018
+========================================
+
+Maintenance release. syncevolution.org binaries are now getting
+compiled for distros >= Ubuntu Xenial 16.04 LTS. Usage of deprecated
+libraries (GNOME keyring) and APIs (SoupAsyncSession) was
+replaced. libical v3 is supported.
+
+The code now compiles more cleanly with recent compilers and depends
+on C++11 support.
+
+Details:
+
+* EDS: more generic open retry handling
+
+  Recent EDS started to exhibit race conditions when opening a database (for
+  example, https://bugzilla.gnome.org/show_bug.cgi?id=791306). Opening was
+  already tried again for a certain known error in some old EDS version. Now it
+  is tried five times with a delay of one second for all errors.
+
+* SoupTransportAgent: require libsoup 2.42, no deprecated methods
+
+  This allows us to get rid of deprecated function calls. We no longer
+  need to set a default proxy either, the newer libsoup does that itself
+  by default.
+
+* C++: replace auto_ptr with unique_ptr, require C++11
+
+  auto_ptr has been deprecated for a while now. unique_ptr can
+  be taken for granted now, so use that instead.
+
+* testing: work around Google CalDAV RECURRENCE-ID
+
+  Stand-alone events with RECURRENCE-ID get mangled by the server:
+  it converts the RECURRENCE-ID time to UTC. Reported in:
+  https://stackoverflow.com/questions/47811670/detached-recurrence-without-parent-event
+
+* GNOME: replace gnome-keyring with libsecret (FDO #104219)
+
+  The GNOME keyring library has been obsoleted for a long time now,
+  long enough that the replacement libsecret is available on all
+  supported distros. Therefore we can switch unconditionally.
+
+* libical: support libical v3 (FDO #104220)
+
+  libical v3 removes some deprecated functions (like icaltime_from_timet)
+  and removes the "is_utc" member from icaltimetype. The replacement
+  code works with old and new libical and thus needs no ifdefs.
+
+  Original author: Milan Crha
+
+* syncevolution.org: fixed packaging (FDO #98014, FDO #100549)
+
+  The activesyncd package missing dependencies on libgnome-keyring0 and
+  libglib2.0-bin and therefore failed to work when installed on a minimal
+  system without those.
+
+* various build and test fixes/workarounds
+
+
 SyncEvolution 1.5.1 -> 1.5.2, 08.11.2016
 ========================================
 
