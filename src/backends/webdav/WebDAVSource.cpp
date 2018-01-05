@@ -10,7 +10,6 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/find.hpp>
 #include <boost/scoped_ptr.hpp>
-#include <boost/lambda/lambda.hpp>
 
 #include <syncevo/LogRedirect.h>
 #include <syncevo/IdentityProvider.h>
@@ -1656,7 +1655,7 @@ bool WebDAVSource::isEmpty()
             Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
             report.addHeader("Depth", "1");
             report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
-            if (getSession()->run(report, NULL, !boost::lambda::var(isEmpty))) {
+            if (getSession()->run(report, NULL, [&isEmpty] () { return !isEmpty; })) {
                 break;
             }
         }
