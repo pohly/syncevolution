@@ -42,7 +42,6 @@ using namespace std;
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/foreach.hpp>
-#include <boost/lambda/lambda.hpp>
 
 #include <syncevo/declarations.h>
 
@@ -628,7 +627,7 @@ bool EvolutionContactSource::getContactFromCache(const string &luid, EContact **
             SE_LOG_DEBUG(getDisplayName(), "reading: in %s cache", m_contactCache->m_running ? "running" : "loaded");
             if (m_contactCache->m_running) {
                 m_cacheStalls++;
-                GRunWhile(boost::lambda::var(m_contactCache->m_running));
+                GRunWhile([this] () { return this->m_contactCache->m_running; });
             }
             // Problem?
             checkCacheForError(m_contactCache);
