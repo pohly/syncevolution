@@ -25,8 +25,8 @@
 #endif
 
 #include <boost/bind.hpp>
-#include <boost/lambda/bind.hpp>
 #include <set>
+#include <exception>
 
 #include <string.h>
 
@@ -297,27 +297,23 @@ void GRunWhile(const boost::function<bool ()> &check, bool checkFirst)
     }
 }
 
-static std::string NoThrow(const boost::function<void ()> &action) throw ()
-{
-    try {
-        action();
-    } catch (...) {
-        // 
-        std::string explanation;
-        Exception::handle(explanation, HANDLE_EXCEPTION_NO_ERROR);
-        return explanation;
-    }
-    return "";
-}
-
 void GRunInMain(const boost::function<void ()> &action)
 {
-    std::string explanation;
+    std::exception_ptr exception;
 
-    // Wrap in NoThrow, then rethrow exception in current thread if there was a problem.
-    GRunWhile((boost::lambda::var(explanation) = boost::lambda::bind(NoThrow, action), false), false);
-    if (!explanation.empty()) {
-        Exception::tryRethrow(explanation, true);
+    // Catch exceptions, then rethrow exception in current thread if there was a problem.
+    auto wrapper = [&action, &exception] () mutable noexcept {
+        try {
+            action();
+        } catch (...) {
+            exception = std::current_exception();
+        }
+        // Stop running, action is done.
+        return false;
+    };
+    GRunWhile(wrapper, false);
+    if (!exception) {
+        std::rethrow_exception(exception);
     }
 }
 

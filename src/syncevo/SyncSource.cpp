@@ -37,7 +37,6 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/lambda/lambda.hpp>
 
 #include <ctype.h>
 #include <errno.h>
@@ -614,10 +613,11 @@ SyncSource::Databases VirtualSyncSource::getDatabases()
 
 void SyncSourceSession::init(SyncSource::Operations &ops)
 {
-    ops.m_startDataRead = boost::bind(&SyncSourceSession::startDataRead, this, _1, _2);
-    ops.m_endDataRead = boost::lambda::constant(sysync::LOCERR_OK);
-    ops.m_startDataWrite = boost::lambda::constant(sysync::LOCERR_OK);
-    ops.m_endDataWrite = boost::bind(&SyncSourceSession::endDataWrite, this, _1, _2);
+    ops.m_startDataRead = [this] (const char *lastToken, const char *resumeToken) { return this->startDataRead(lastToken, resumeToken); };
+    auto ok = [] () { return sysync::LOCERR_OK; };
+    ops.m_endDataRead = ok;
+    ops.m_startDataWrite = ok;
+    ops.m_endDataWrite = [this] (bool success, char **newToken) { return this->endDataWrite(success, newToken); };
 }
 
 sysync::TSyError SyncSourceSession::startDataRead(const char *lastToken, const char *resumeToken)
@@ -1711,11 +1711,6 @@ void SyncSourceAdmin::init(SyncSource::Operations &ops,
         // tell the Synthesis engine not to call these (normally needed
         // for suspend/resume, which we don't support in volatile mode
         // because we don't store any meta data persistently).
-        //
-        // ops.m_readNextMapItem = boost::lambda::constant(false);
-        // ops.m_insertMapItem = boost::lambda::constant(sysync::LOCERR_OK);
-        // ops.m_updateMapItem = boost::lambda::constant(sysync::LOCERR_OK);
-        // ops.m_deleteMapItem = boost::lambda::constant(sysync::LOCERR_OK);
     } else {
         ops.m_readNextMapItem = boost::bind(&SyncSourceAdmin::readNextMapItem,
                                             this, _1, _2);

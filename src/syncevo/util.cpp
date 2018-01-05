@@ -33,8 +33,6 @@
 #include <boost/scoped_array.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/lambda/lambda.hpp>
-#include <boost/lambda/bind.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -786,8 +784,7 @@ double Sleep(double seconds)
                                             SleepTimeout,
                                             &triggered),
                               "glib timeout");
-            GRunWhile(! boost::lambda::var(triggered) &&
-                      boost::lambda::bind(&SuspendFlags::getState, boost::ref(s)) == SuspendFlags::NORMAL);
+            GRunWhile([&triggered, &s] () { return !triggered && s.getState() == SuspendFlags::NORMAL; } );
             // SleepTimeout already removed the source if it was triggered
             // and returned false. No need to auto-destruct it again.
             if (triggered) {
