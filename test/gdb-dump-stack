@@ -1,0 +1,79 @@
+# Use this file with
+# gdb --batch --return-child-result -x gdb-dump-stack <some command>
+# to get full stack backtraces when the command or any of its
+# children fails.
+
+# It is important that we keep processes running in parallel,
+# otherwise we risk deadlocks once multiple processes are involved.
+set non-stop on
+
+# Keep track also of child processes.
+set detach-on-fork off
+set follow-fork-mode parent
+
+python
+class Exited (gdb.Function):
+  """Return 1 if current threat has exited, else 0."""
+
+  def __init__ (self):
+    super (Exited, self).__init__("exited")
+
+  def invoke (self):
+    thread = gdb.selected_thread()
+    if thread is None or thread.is_exited():
+        return 1
+    else:
+        return 0
+
+class FindStopped (gdb.Function):
+  """Dump stack backtrace of all stopped threads and continue them."""
+
+  def __init__ (self):
+    super (FindStopped, self).__init__("find_stopped")
+
+  def invoke (self):
+    for inferior in  gdb.inferiors():
+        if inferior.is_valid():
+            for thread in inferior.threads():
+                if thread.is_valid() and thread.is_stopped():
+                    thread.switch()
+                    return 1
+    return 0
+
+Exited()
+FindStopped()
+end
+
+# Start the command. Returns once something needs our attention.
+run
+
+# Continously deal with events that normally require user intervention:
+# - a process was stopped because of something (like a segfault)
+# - a process has quit
+while 1
+    if $find_stopped()
+        # The stopped thread is now selected, so we can dump some information about
+        # it, then continue it.
+        info inferiors
+        bt
+        continue
+    else
+        inferior 1
+        if $exited()
+            # No stopped thread, current thread has quit -> we are done.
+            loop_break
+        else
+            # We need to do something, otherwise we would busy-loop
+            # while all threads are running. Therefore we interrupt
+            # and restart the main thread.
+            #
+            # In (unlikely?) case that some other thread stops by
+            # itself while we do that, we continue all threads to
+            # avoid potential deadlocks (main thread running again but
+            # waiting for stopped thread that we don't know about).
+            # The downside is that we don't print a stack backtrace
+            # of such a thread.
+            interrupt
+            continue -a
+    end
+end
