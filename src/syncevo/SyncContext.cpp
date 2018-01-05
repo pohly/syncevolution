@@ -4065,8 +4065,7 @@ SyncMLStatus SyncContext::doSync()
             // eventually because we stop exchanging SyncML messages.
             if (!aborting && !suspending && m_syncFreeze == SYNC_FREEZE_FROZEN) {
                 SE_LOG_DEBUG(NULL, "freezing sync");
-                GRunWhile(boost::lambda::var(m_syncFreeze) == SYNC_FREEZE_FROZEN &&
-                          boost::lambda::bind(&SuspendFlags::isNormal, &flags));
+                GRunWhile([this, &flags] () { return this->m_syncFreeze == SYNC_FREEZE_FROZEN && flags.isNormal(); });
             }
 
             if (stepCmd == sysync::STEPCMD_NEEDDATA) {
