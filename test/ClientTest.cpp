@@ -64,12 +64,6 @@
 #include <boost/bind.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/assign.hpp>
-#include <boost/lambda/lambda.hpp>
-#include <boost/lambda/bind.hpp>
-#include <boost/lambda/if.hpp>
-#include <boost/lambda/casts.hpp>
-#include <boost/lambda/switch.hpp>
-#include <boost/typeof/typeof.hpp>
 
 #include <pcrecpp.h>
 
@@ -3315,11 +3309,6 @@ void SyncTests::testRefreshStatus() {
                        CheckSyncReport(0,0,0, 0,0,0, true, SYNC_TWO_WAY)));
 }
 
-static void log(const char *text)
-{
-    CLIENT_TEST_LOG("%s", text);
-}
-
 static void logSyncSourceReport(const SyncSource *source)
 {
     CLIENT_TEST_LOG("source %s, start of cycle #%d: local new/mod/del/conflict %d/%d/%d/%d, remote %d/%d/%d/%d, mode %s",
@@ -3372,17 +3361,15 @@ void SyncTests::doRestartSync(SyncMode mode)
     // Also requests a restart at the very beginning, once. Must be
     // done before m_endDataWrite, because then it might be too late
     // to restart.
-    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
-        (boost::lambda::if_then(boost::lambda::bind(&Cycles_t::empty, boost::ref(results)),
-                                (boost::lambda::bind(log, "requesting restart"),
-                                 boost::lambda::bind(SyncContext::requestAnotherSync))),
-         (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, &boost::lambda::_1)]
-          [boost::lambda::bind(&SyncSource::getName, &boost::lambda::_1)] =
-          boost::lambda::_1),
-         boost::lambda::bind(logSyncSourceReport,
-                             &boost::lambda::_1),
-         boost::lambda::constant(STATUS_OK)
-         );
+    auto start = [&results] (SyncSource &source, const char *, const char *) {
+        if (results.empty()) {
+            CLIENT_TEST_LOG("requesting restart");
+            SyncContext::requestAnotherSync();
+        }
+        results[source.getRestarts()][source.getName()] = source;
+        logSyncSourceReport(&source);
+        return STATUS_OK;
+    };
 
     // Triggered at the end of each m_endDataWrite.
     //
@@ -3390,34 +3377,23 @@ void SyncTests::doRestartSync(SyncMode mode)
     // it. Because the cycle is other, those changes won't
     // interfere with the cycle. Doing real concurrent
     // changes is something for another tests...
-    boost::function<SyncSource::Operations::EndDataWrite_t::PostSignal::signature_type> end =
-        boost::bind(boost::function<SyncMLStatus ()>(
-                                                     (boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
-                                                                             (boost::lambda::bind(log, "inserting one item"),
-                                                                              boost::lambda::bind(&SyncTests::allSourcesInsert, this, true))),
-                                                      boost::lambda::constant(STATUS_OK)
-                                                      )));
+    std::function<SyncSource::Operations::EndDataWrite_t::PostSignal::signature_type> end;
+    end = [&startCount, this] (SyncSource &source, OperationExecution, sysync::TSyError, bool, char **) mutable {
+        if (++startCount % this->sources.size() == 0) {
+            CLIENT_TEST_LOG("inserting one item");
+            this->allSourcesInsert(true);
+        }
+        return STATUS_OK;
+    };
 
-    SyncOptions::Callback_t setup =
-        (boost::lambda::if_then(boost::lambda::var(needToConnect),
-                                (boost::lambda::var(needToConnect) = false,
-                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
-                                                                         BOOST_TYPEOF(&SyncSource::Operations::StartDataRead_t::getPreSignal),
-                                                                         BOOST_TYPEOF(start)>,
-                                                         boost::lambda::_1,
-                                                         &SyncSource::Operations::m_startDataRead,
-                                                         &SyncSource::Operations::StartDataRead_t::getPreSignal,
-                                                         boost::cref(start)),
-                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::EndDataWrite_t,
-                                                                         BOOST_TYPEOF(&SyncSource::Operations::EndDataWrite_t::getPostSignal),
-                                                                         BOOST_TYPEOF(end)>,
-                                                         boost::lambda::_1,
-                                                         &SyncSource::Operations::m_endDataWrite,
-                                                         &SyncSource::Operations::EndDataWrite_t::getPostSignal,
-                                                         boost::cref(end))
-                                )),
-         boost::lambda::constant(false)
-        );
+    auto setup = [&needToConnect, start, &end] (SyncContext &context, SyncOptions &options) mutable {
+        if (needToConnect) {
+            needToConnect = false;
+            connectSourceSignal(context, &SyncSource::Operations::m_startDataRead, &SyncSource::Operations::StartDataRead_t::getPreSignal, start);
+            connectSourceSignal(context,  &SyncSource::Operations::m_endDataWrite, &SyncSource::Operations::EndDataWrite_t::getPostSignal, end);
+        }
+        return false;
+    };
 
     bool canRestart = getenv("CLIENT_TEST_PEER_CAN_RESTART") != NULL &&
         !isServerMode();
@@ -3479,19 +3455,15 @@ void SyncTests::doRestartSync(SyncMode mode)
     }
 
     // update item while the sync runs
-#ifndef __clang_analyzer__
     needToConnect = true;
-#endif
-    startCount = 0;
     results.clear();
-    end =
-        boost::bind(boost::function<SyncMLStatus ()>(
-                                                     (boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
-                                                                             (boost::lambda::bind(log, "update one item"),
-                                                                              boost::lambda::bind(&SyncTests::allSourcesUpdate, this))),
-                                                      STATUS_OK)
-                                                     ));
-
+    end = [&startCount, this] (SyncSource &source, OperationExecution, sysync::TSyError, bool, char **) mutable {
+        if (++startCount % this->sources.size() == 0) {
+            CLIENT_TEST_LOG("update one item");
+            this->allSourcesUpdate();
+        }
+        return STATUS_OK;
+    };
 
     CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
                               "update",
@@ -3541,18 +3513,15 @@ void SyncTests::doRestartSync(SyncMode mode)
     }
 
     // delete item while the sync runs
-#ifndef __clang_analyzer__
     needToConnect = true;
-#endif
-    startCount = 0;
     results.clear();
-    end =
-        boost::bind(boost::function<SyncMLStatus ()>(
-                                                     (boost::lambda::if_then(++boost::lambda::var(startCount) == sources.size(),
-                                                                             (boost::lambda::bind(log, "delete one item"),
-                                                                              boost::lambda::bind(&SyncTests::allSourcesDeleteAll, this))),
-                                                      STATUS_OK)
-                                                     ));
+    end = [&startCount, this] (SyncSource &source, OperationExecution, sysync::TSyError, bool, char **) mutable {
+        if (++startCount % this->sources.size() == 0) {
+            CLIENT_TEST_LOG("delete one item");
+            this->allSourcesDeleteAll();
+        }
+        return STATUS_OK;
+    };
 
     CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
                               "delete",
@@ -3666,98 +3635,50 @@ void SyncTests::testManyRestarts()
     //
     // It records the current source statistics for later checking,
     // logs it, and does the item changes.
-    boost::function<SyncSource::Operations::StartDataRead_t::PreSignal::signature_type> start =
-        (boost::lambda::if_then(boost::lambda::var(startCount) % sources.size() == 0,
-         (
-           boost::lambda::switch_statement(boost::lambda::var(startCount) / sources.size(),
-               boost::lambda::case_statement<0>(
-                  (boost::lambda::bind(log, "insert 1 item, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 1, 1, boost::ref(luids)),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<1>(
-                  (boost::lambda::bind(log, "insert 2 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 2, 2, boost::ref(luids)),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<2>(
-                  (boost::lambda::bind(log, "insert 4 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 4, 4, boost::ref(luids)),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<3>(
-                  (boost::lambda::bind(log, "insert 8 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesInsertMany, this, 8, 8, boost::ref(luids)),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<4>(
-                  (boost::lambda::bind(log, "update 1 item, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 1, 1, 1, boost::ref(luids), 0),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<5>(
-                  (boost::lambda::bind(log, "update 2 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 2, 2, 1, boost::ref(luids), 1),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<6>(
-                  (boost::lambda::bind(log, "update 4 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 4, 4, 1, boost::ref(luids), 3),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<7>(
-                  (boost::lambda::bind(log, "update 8 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesUpdateMany, this, 8, 8, 1, boost::ref(luids), 7),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  ))
-           ),
-           // must break up switch statement, it only has a limited number of case slots
-           boost::lambda::switch_statement(boost::lambda::var(startCount) / sources.size(),
-               boost::lambda::case_statement<8>(
-                  (boost::lambda::bind(log, "delete 1 item, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 1, boost::ref(luids), 0),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<9>(
-                  (boost::lambda::bind(log, "delete 2 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 2, boost::ref(luids), 1),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<10>(
-                  (boost::lambda::bind(log, "delete 4 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 4, boost::ref(luids), 3),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  )),
-               boost::lambda::case_statement<11>(
-                  (boost::lambda::bind(log, "delete 8 items, restart"),
-                   boost::lambda::bind(&SyncTests::allSourcesRemoveMany, this, 8, boost::ref(luids), 7),
-                   boost::lambda::bind(SyncContext::requestAnotherSync)
-                  ))
-           )
-          )
-         ),
-         (boost::lambda::var(results)[boost::lambda::bind(&SyncSource::getRestarts, &boost::lambda::_1)]
-          [boost::lambda::bind(&SyncSource::getName, &boost::lambda::_1)] = boost::lambda::_1
-         ),
-         boost::lambda::bind(logSyncSourceReport,
-                             &boost::lambda::_1),
-         ++boost::lambda::var(startCount),
-         boost::lambda::constant(STATUS_OK)
-         );
+    auto start = [&startCount, &results, this, &luids] (SyncSource &source, const char *, const char *) mutable {
+        if (startCount % this->sources.size() == 0) {
+            int count;
+            switch (startCount / this->sources.size()) {
+            case 0:
+            case 1:
+            case 2:
+            case 3:
+                count = 1 << (startCount / this->sources.size()); // 1, 2, 4, 8
+                CLIENT_TEST_LOG("insert %d item, restart", count);
+                this->allSourcesInsertMany(count, count, luids);
+                break;
+            case 4:
+            case 5:
+            case 6:
+            case 7:
+                count = 1 << (startCount / this->sources.size() - 4); // 1, 2, 4, 8
+                CLIENT_TEST_LOG("insert %d item, restart", count);
+                this->allSourcesUpdateMany(count, count, 1, luids, count - 1);
+                break;
+            case 8:
+            case 9:
+            case 10:
+            case 11:
+                count = 1 << (startCount / this->sources.size() - 8); // 1, 2, 4, 8
+                CLIENT_TEST_LOG("delete %d item, restart", count);
+                this->allSourcesRemoveMany(count, luids, count - 1);
+                break;
+            }
+            SyncContext::requestAnotherSync();
+        }
+        results[source.getRestarts()][source.getName()] = source;
+        logSyncSourceReport(&source);
+        ++startCount;
+        return STATUS_OK;
+    };
 
-    SyncOptions::Callback_t setup =
-        (boost::lambda::if_then(boost::lambda::var(needToConnect),
-                                (boost::lambda::var(needToConnect) = false,
-                                 boost::lambda::bind(connectSourceSignal<SyncSource::Operations::StartDataRead_t,
-                                                                         BOOST_TYPEOF(&SyncSource::Operations::StartDataRead_t::getPreSignal),
-                                                                         BOOST_TYPEOF(start)>,
-                                                         boost::lambda::_1,
-                                                         &SyncSource::Operations::m_startDataRead,
-                                                         &SyncSource::Operations::StartDataRead_t::getPreSignal,
-                                                         boost::cref(start))
-                                )),
-         boost::lambda::constant(false)
-        );
+    auto setup = [&needToConnect, start] (SyncContext &context, SyncOptions &options) mutable {
+        if (needToConnect) {
+            needToConnect = false;
+            connectSourceSignal(context, &SyncSource::Operations::m_startDataRead, &SyncSource::Operations::StartDataRead_t::getPreSignal, start);
+        }
+        return false;
+    };
 
     CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
                               SyncOptions(SYNC_TWO_WAY,
