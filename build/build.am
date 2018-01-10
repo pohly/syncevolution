@@ -3,7 +3,6 @@ dist_noinst_SCRIPTS += build/gen-git-version.sh \
 
 EXTRA_DIST += \
 	build/export-foreign-git.sh \
-	build/export-gdbus.sh \
 	build/export-synthesis-xml.sh \
 	build/gen-backends-am.sh \
 	build/gen-backends.sh \

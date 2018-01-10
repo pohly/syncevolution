@@ -520,33 +520,15 @@ if test "$enable_dbus_service" != "no" && test "$enable_dbus_service" != "yes"; 
 fi
 AC_SUBST(SYNCEVO_DBUS_SERVER_ARGS)
 
-AC_ARG_WITH([gio-gdbus],
-            AS_HELP_STRING([--with-gio-gdbus],
-                           [enables use of GIO's GDBus instead of the in-tree, Bluez gdbus.]),
-            with_gio_gdbus="$withval",
-            PKG_CHECK_EXISTS([gio-2.0 >= 2.30],
-                             [with_gio_gdbus="yes"],
-                             [with_gio_gdbus="no"]))
-AM_CONDITIONAL([COND_GIO_GDBUS], [test "x$with_gio_gdbus" = "xyes"])
-
-# We only need to check for dbus-1 if gio-gdbus is not used.
-#
 # Local sync depends on D-Bus communication between parent
 # and child process (works without a D-Bus daemon), and local
 # sync is not an optional feature. Could be made one if
 # someone is interested enough.
 #
-# Therefore, at the moment, either libdbus or gio-gdbus are needed
+# Therefore, at the moment, gio-gdbus is needed
 # unconditionally. glib is needed in all cases now.
 need_glib=yes
-AS_IF([test "x$with_gio_gdbus" = "xyes"],
-      [PKG_CHECK_MODULES([DBUS], [gio-2.0 >= 2.26])
-       AC_DEFINE([WITH_GIO_GDBUS],[],[Set if using GIO GDBus])],
-      [PKG_CHECK_MODULES(DBUS, dbus-1, dummy=yes,
-                         AC_MSG_ERROR(libdbus-1 is required))
-       AC_CHECK_LIB(dbus-1, dbus_watch_get_unix_fd, dummy=yes,
-                    AC_DEFINE(NEED_DBUS_WATCH_GET_UNIX_FD, 1,
-                    [Define to 1 if you need the dbus_watch_get_unix_fd() function.]))])
+PKG_CHECK_MODULES([DBUS], [gio-2.0 >= 2.26])
 
 if test "$enable_dbus_service" != "no"; then
     if test -z "$XSLT"; then
@@ -1154,7 +1136,6 @@ echo "libical v1 timezone hack: $enable_icaltz_util"
 echo "DBus service: $enable_dbus_service"
 echo "org._01.pim support in DBus service: $enable_dbus_pim"
 echo "Notifications: $enable_notify"
-echo "GIO GDBus: $with_gio_gdbus"
 echo "GNOME keyring: $enable_gnome_keyring"
 if test "$enable_gui" = "no"; then
     echo "UI (DBus client): no"

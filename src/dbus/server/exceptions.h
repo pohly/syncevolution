@@ -25,19 +25,11 @@
 
 // Can't use the GDBusCXX::message_type typedef here because it's not
 // defined till we include gdbus-cxx-bridge.h below.
-#ifdef WITH_GIO_GDBUS
 // Forward decleration can't be used here due to later typedef _GDBusMessage GDBusMessage.
 #include <gio/gio.h>
-#else
-struct DBusMessage;
-#endif
 
 SE_BEGIN_CXX
-#ifdef WITH_GIO_GDBUS
 GDBusMessage *SyncEvoHandleException(GDBusMessage *msg);
-#else
-DBusMessage  *SyncEvoHandleException(DBusMessage *msg);
-#endif
 SE_END_CXX
 // This needs to be defined before including gdbus-cxx-bridge.h!
 #define DBUS_CXX_EXCEPTION_HANDLER SyncEvo::SyncEvoHandleException

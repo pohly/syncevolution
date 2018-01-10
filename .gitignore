@@ -118,9 +118,6 @@ Makefile.in
 /src/dbus/server/syncevo-dbus-server-startup.sh
 /src/dbus/server/syncevo-dbus-server.desktop
 
-# src/gdbus
-/src/gdbus/example
-
 # src/gtk-ui
 /src/gtk-ui/sync-ui
 /src/gtk-ui/sync.desktop
