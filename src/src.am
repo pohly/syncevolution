@@ -5,13 +5,8 @@ include $(top_srcdir)/src/gnome-bluetooth/gnome-bluetooth.am
 src_cppflags += -I$(top_srcdir)/src/gnome-bluetooth
 endif
 
-if COND_GIO_GDBUS
 include $(top_srcdir)/src/gdbusxx/gdbusxx.am
 src_cppflags += -I$(top_srcdir)/src/gdbusxx
-else
-include $(top_srcdir)/src/gdbus/gdbus.am
-src_cppflags += -I$(top_srcdir)/src/gdbus
-endif
 
 if COND_CORE
 include $(top_srcdir)/src/syncevo/syncevo.am

@@ -16,14 +16,8 @@ endif
 
 SUBDIRS += .
 
-# choose D-Bus implementation
-if COND_GIO_GDBUS
 gdbus_dir = $(top_srcdir)/src/gdbusxx
 gdbus_build_dir = src/gdbusxx
-else
-gdbus_dir = $(top_srcdir)/src/gdbus
-gdbus_build_dir = src/gdbus
-endif
 
 disted_docs =
 distbin_docs =
@@ -353,7 +347,7 @@ endif
 if COND_CMDLINE
 README.patched.rst: README.rst src/syncevolution
 	$(AM_V_GEN)perl -e '$$syncfound=0; $$sourcefound=0; $$res=0;' \
-	                -e 'sub run { $$cmd = shift; $$buffer = `env LD_LIBRARY_PATH=src/syncevo/.libs:src/gdbus/.libs:src/gdbusxx/.libs:src/build-synthesis/src/.libs:$$ENV{LD_LIBRARY_PATH} $$cmd`; $(RUN_SYNCEVOLUTION_CHECK) }' \
+	                -e 'sub run { $$cmd = shift; $$buffer = `env LD_LIBRARY_PATH=src/syncevo/.libs:src/gdbusxx/.libs:src/build-synthesis/src/.libs:$$ENV{LD_LIBRARY_PATH} $$cmd`; $(RUN_SYNCEVOLUTION_CHECK) }' \
 	                -e 'while (<>) {' \
 	                -e 's/^:Version: .*/:Version: $(VERSION)/;' \
 	                -e 's/:Date: .*/":Date: " . `date +%Y-%m-%d`/e;' \
