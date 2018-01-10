@@ -774,17 +774,20 @@ class OperationSlotInvoker {
 
 
 /**
- * Helper class, needs to be specialized based on number of parameters
- * and return type.
+ * Helper class, needs to be specialized based on return type of
+ * the implementation of the operation:
+ * - for a simple sysync::TSyError, we just call the operation
+ *   and pre/post signals
+ * - for a boost::variant containing either a sysync::TSyError
+ *   or a callback, we handle suspend/resume for the operation
  */
-template<class F, int arity, class R> class OperationWrapperSwitch;
+template<typename F> class OperationWrapperSwitch;
 
-/** one parameter, sysync::TSyError type */
-template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
+/** sysync::TSyError  */
+template<typename ...A> class OperationWrapperSwitch<sysync::TSyError (A...)>
 {
  public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
+    typedef boost::function<sysync::TSyError (A...)> OperationType;
 
     /**
      * The pre-signal is invoked with the same parameters as
@@ -797,7 +800,7 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
      * error code extracted from the first exception (see
      * OperationSlotInvoker).
      */
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &),
+    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, A...),
         OperationSlotInvoker> PreSignal;
 
     /**
@@ -813,24 +816,24 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
      * to override the final result, but this won't interrupt
      * calling the rest of the slots.
      */
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError),
+    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError, A...),
         OperationSlotInvoker> PostSignal;
 
     /**
      * invokes signals and implementation of operation,
      * combines all return codes into one
      */
-    sysync::TSyError operator () () const throw ()
+    sysync::TSyError operator () (A... args) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
-        res = m_pre(dynamic_cast<SyncSource &>(m_source));
+        res = m_pre(dynamic_cast<SyncSource &>(m_source), args...);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
             if (m_operation) {
                 try {
-                    res = m_operation();
+                    res = m_operation(args...);
                     exec = OPERATION_FINISHED;
                 } catch (...) {
                     res = Exception::handle(m_source.getDisplayName());
@@ -841,7 +844,7 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
                 exec = OPERATION_EMPTY;
             }
         }
-        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res);
+        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, args...);
         if (newres != sysync::LOCERR_OK) {
             res = newres;
         }
@@ -873,81 +876,19 @@ template<class F> class OperationWrapperSwitch<F, 0, sysync::TSyError>
     PostSignal m_post;
 };
 
-template<class F> class OperationWrapperSwitch<F, 1, sysync::TSyError>
+/** variant as return type, at least one parameter (usually the item ID, will be used as key to retrieve previously stored state) */
+template<typename C, typename A1, typename ...A> class OperationWrapperSwitch<boost::variant<sysync::TSyError, C> (A1, A...)>
 {
  public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
-    typedef typename boost::function<F>::arg1_type arg1_type;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, arg1_type a1),
+    typedef boost::function<boost::variant<sysync::TSyError, C> (A1, A...)> OperationType;
+    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, A1, A...),
         OperationSlotInvoker> PreSignal;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError,
-                                                  arg1_type a1),
+    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError, A1, A...),
         OperationSlotInvoker> PostSignal;
+    typedef KeyConverter<A1> Converter;
+    typedef std::map<typename Converter::key_type, C> Pending;
 
-    sysync::TSyError operator () (arg1_type a1) const throw ()
-    {
-        sysync::TSyError res;
-        OperationExecution exec;
-        res = m_pre(dynamic_cast<SyncSource &>(m_source), a1);
-        if (res != sysync::LOCERR_OK) {
-            exec = OPERATION_SKIPPED;
-        } else {
-            if (m_operation) {
-                try {
-                    res = m_operation(a1);
-                    exec = OPERATION_FINISHED;
-                } catch (...) {
-                    res = Exception::handle(m_source.getDisplayName());
-                    exec = OPERATION_EXCEPTION;
-                }
-            } else {
-                res = sysync::LOCERR_NOTIMP;
-                exec = OPERATION_EMPTY;
-            }
-        }
-        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1);
-        if (newres != sysync::LOCERR_OK) {
-            res = newres;
-        }
-        return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
-    }
-
-    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
-    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
-
-    OperationWrapperSwitch(SyncSourceName &source) :
-        m_source(source),
-        m_pre(OperationSlotInvoker(source)),
-        m_post(OperationSlotInvoker(source))
-    {
-    }
-
- protected:
-    OperationType m_operation;
-
- private:
-    SyncSourceName &m_source;
-    PreSignal m_pre;
-    PostSignal m_post;
-};
-
-template<class F, class V> class OperationWrapperSwitch<F, 1, V>
-{
- public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
-    typedef typename boost::function<F>::arg1_type arg1_type;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, arg1_type a1),
-        OperationSlotInvoker> PreSignal;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError,
-                                          arg1_type a1),
-        OperationSlotInvoker> PostSignal;
-    typedef KeyConverter<arg1_type> Converter;
-    typedef ContinueOperation<sysync::TSyError (arg1_type)> Continue;
-    typedef std::map<typename Converter::key_type, Continue> Pending;
-
-    sysync::TSyError operator () (arg1_type a1) const throw ()
+    sysync::TSyError operator () (A1 a1, A... args) const throw ()
     {
         sysync::TSyError res;
         OperationExecution exec;
@@ -956,24 +897,24 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
         typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
         bool continuing = it != m_pending.end();
 
-        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1);
+        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1, args...);
         if (res != sysync::LOCERR_OK) {
             exec = OPERATION_SKIPPED;
         } else {
             if (continuing) {
-                res = it->second(a1);
+                res = it->second(a1, args...);
                 if (res != sysync::LOCERR_AGAIN) {
                     const_cast<Pending &>(m_pending).erase(it);
                 }
             } else if (m_operation) {
                 try {
-                    V newres = m_operation(a1);
+                    boost::variant<sysync::TSyError, C> newres = m_operation(a1, args...);
                     sysync::TSyError *completed = boost::get<sysync::TSyError>(&newres);
                     if (completed) {
                         res = *completed;
                     } else {
                         res = sysync::LOCERR_AGAIN;
-                        Continue cont = boost::get<Continue>(newres);
+                        C cont = boost::get<C>(newres);
                         const_cast<Pending &>(m_pending).insert(std::make_pair(Converter::toKey(a1), cont));
                     }
                     exec = OPERATION_FINISHED;
@@ -987,298 +928,7 @@ template<class F, class V> class OperationWrapperSwitch<F, 1, V>
             }
         }
         if (res != sysync::LOCERR_AGAIN) {
-            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1);
-            if (newres != sysync::LOCERR_OK) {
-                res = newres;
-            }
-        }
-        return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
-    }
-
-    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
-    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
-
-    OperationWrapperSwitch(SyncSourceName &source) :
-        m_source(source),
-        m_pre(OperationSlotInvoker(source)),
-        m_post(OperationSlotInvoker(source))
-    {
-    }
-
- protected:
-    OperationType m_operation;
-
- private:
-    SyncSourceName &m_source;
-    PreSignal m_pre;
-    PostSignal m_post;
-    Pending m_pending;
-};
-
-template<class F> class OperationWrapperSwitch<F, 2, sysync::TSyError>
-{
- public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
-    typedef typename boost::function<F>::arg1_type arg1_type;
-    typedef typename boost::function<F>::arg2_type arg2_type;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, arg1_type a1, arg2_type a2),
-        OperationSlotInvoker> PreSignal;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError,
-                                                  arg1_type a1, arg2_type a2),
-        OperationSlotInvoker> PostSignal;
-
-    sysync::TSyError operator () (arg1_type a1, arg2_type a2) const throw ()
-    {
-        sysync::TSyError res;
-        OperationExecution exec;
-        res = m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2);
-        if (res != sysync::LOCERR_OK) {
-            exec = OPERATION_SKIPPED;
-        } else {
-            if (m_operation) {
-                try {
-                    res = m_operation(a1, a2);
-                    exec = OPERATION_FINISHED;
-                } catch (...) {
-                    res = Exception::handle(m_source.getDisplayName());
-                    exec = OPERATION_EXCEPTION;
-                }
-            } else {
-                res = sysync::LOCERR_NOTIMP;
-                exec = OPERATION_EMPTY;
-            }
-        }
-        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2);
-        if (newres != sysync::LOCERR_OK) {
-            res = newres;
-        }
-        return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
-    }
-
-    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
-    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
-
-    OperationWrapperSwitch(SyncSourceName &source) :
-        m_source(source),
-        m_pre(OperationSlotInvoker(source)),
-        m_post(OperationSlotInvoker(source))
-    {
-    }
-
- protected:
-    OperationType m_operation;
-
- private:
-    SyncSourceName &m_source;
-    PreSignal m_pre;
-    PostSignal m_post;
-};
-
-template<class F, class V> class OperationWrapperSwitch<F, 2, V>
-{
- public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
-    typedef typename boost::function<F>::arg1_type arg1_type;
-    typedef typename boost::function<F>::arg2_type arg2_type;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, arg1_type a1, arg2_type a2),
-        OperationSlotInvoker> PreSignal;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError,
-                                                  arg1_type a1, arg2_type a2),
-        OperationSlotInvoker> PostSignal;
-    typedef KeyConverter<arg1_type> Converter;
-    typedef ContinueOperation<sysync::TSyError (arg1_type, arg2_type)> Continue;
-    typedef std::map<typename Converter::key_type, Continue> Pending;
-
-    sysync::TSyError operator () (arg1_type a1, arg2_type a2) const throw ()
-    {
-        sysync::TSyError res;
-        OperationExecution exec;
-
-        // Marking m_pending "volatile" didn't work, find() not defined for that.
-        typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
-        bool continuing = it != m_pending.end();
-
-        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2);
-        if (res != sysync::LOCERR_OK) {
-            exec = OPERATION_SKIPPED;
-        } else {
-            if (continuing) {
-                res = it->second(a1, a2);
-                if (res != sysync::LOCERR_AGAIN) {
-                    const_cast<Pending &>(m_pending).erase(it);
-                }
-            } else if (m_operation) {
-                try {
-                    V newres = m_operation(a1, a2);
-                    sysync::TSyError *completed = boost::get<sysync::TSyError>(&newres);
-                    if (completed) {
-                        res = *completed;
-                    } else {
-                        res = sysync::LOCERR_AGAIN;
-                        Continue cont = boost::get<Continue>(newres);
-                        const_cast<Pending &>(m_pending).insert(std::make_pair(Converter::toKey(a1), cont));
-                    }
-                    exec = OPERATION_FINISHED;
-                } catch (...) {
-                    res = Exception::handle(m_source.getDisplayName());
-                    exec = OPERATION_EXCEPTION;
-                }
-            } else {
-                res = sysync::LOCERR_NOTIMP;
-                exec = OPERATION_EMPTY;
-            }
-        }
-        if (res != sysync::LOCERR_AGAIN) {
-            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2);
-            if (newres != sysync::LOCERR_OK) {
-                res = newres;
-            }
-        }
-        return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
-    }
-
-    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
-    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
-
-    OperationWrapperSwitch(SyncSourceName &source) :
-        m_source(source),
-        m_pre(OperationSlotInvoker(source)),
-        m_post(OperationSlotInvoker(source))
-    {
-    }
-
- protected:
-    OperationType m_operation;
-
- private:
-    SyncSourceName &m_source;
-    PreSignal m_pre;
-    PostSignal m_post;
-    Pending m_pending;
-};
-
-template<class F> class OperationWrapperSwitch<F, 3, sysync::TSyError>
-{
- public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
-    typedef typename boost::function<F>::arg1_type arg1_type;
-    typedef typename boost::function<F>::arg2_type arg2_type;
-    typedef typename boost::function<F>::arg3_type arg3_type;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, arg1_type a1, arg2_type a2, arg3_type a3),
-        OperationSlotInvoker> PreSignal;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError,
-                                                  arg1_type a1, arg2_type a2, arg3_type a3),
-        OperationSlotInvoker> PostSignal;
-
-    sysync::TSyError operator () (arg1_type a1, arg2_type a2, arg3_type a3) const throw ()
-    {
-        sysync::TSyError res;
-        OperationExecution exec;
-        res = m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2, a3);
-        if (res != sysync::LOCERR_OK) {
-            exec = OPERATION_SKIPPED;
-        } else {
-            if (m_operation) {
-                try {
-                    res = m_operation(a1, a2, a3);
-                    exec = OPERATION_FINISHED;
-                } catch (...) {
-                    res = Exception::handle(m_source.getDisplayName());
-                        exec = OPERATION_EXCEPTION;
-                }
-            } else {
-                res = sysync::LOCERR_NOTIMP;
-                exec = OPERATION_EMPTY;
-            }
-        }
-        sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2, a3);
-        if (newres != sysync::LOCERR_OK) {
-            res = newres;
-        }
-        return res == STATUS_FATAL ? STATUS_DATASTORE_FAILURE : res;
-    }
-
-    PreSignal &getPreSignal() const { return const_cast<PreSignal &>(m_pre); }
-    PostSignal &getPostSignal() const { return const_cast<PostSignal &>(m_post); }
-
-    OperationWrapperSwitch(SyncSourceName &source) :
-        m_source(source),
-        m_pre(OperationSlotInvoker(source)),
-        m_post(OperationSlotInvoker(source))
-    {
-    }
-
- protected:
-    OperationType m_operation;
-
- private:
-    SyncSourceName &m_source;
-    PreSignal m_pre;
-    PostSignal m_post;
-
-};
-
-template<class F, class V> class OperationWrapperSwitch<F, 3, V>
-{
- public:
-    typedef sysync::TSyError result_type;
-    typedef boost::function<F> OperationType;
-    typedef typename boost::function<F>::arg1_type arg1_type;
-    typedef typename boost::function<F>::arg2_type arg2_type;
-    typedef typename boost::function<F>::arg3_type arg3_type;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, arg1_type a1, arg2_type a2, arg3_type a3),
-        OperationSlotInvoker> PreSignal;
-    typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError,
-                                                  arg1_type a1, arg2_type a2, arg3_type a3),
-        OperationSlotInvoker> PostSignal;
-    typedef KeyConverter<arg1_type> Converter;
-    typedef ContinueOperation<sysync::TSyError (arg1_type, arg2_type, arg3_type)> Continue;
-    typedef std::map<typename Converter::key_type, Continue> Pending;
-
-    sysync::TSyError operator () (arg1_type a1, arg2_type a2, arg3_type a3) const throw ()
-    {
-        sysync::TSyError res;
-        OperationExecution exec;
-
-        // Marking m_pending "volatile" didn't work, find() not defined for that.
-        typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
-        bool continuing = it != m_pending.end();
-
-        res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1, a2, a3);
-        if (res != sysync::LOCERR_OK) {
-            exec = OPERATION_SKIPPED;
-        } else {
-            if (continuing) {
-                res = it->second(a1, a2, a3);
-                if (res != sysync::LOCERR_AGAIN) {
-                    const_cast<Pending &>(m_pending).erase(it);
-                }
-            } else if (m_operation) {
-                try {
-                    V newres = m_operation(a1, a2, a3);
-                    sysync::TSyError *completed = boost::get<sysync::TSyError>(&newres);
-                    if (completed) {
-                        res = *completed;
-                    } else {
-                        res = sysync::LOCERR_AGAIN;
-                        Continue cont = boost::get<Continue>(newres);
-                        const_cast<Pending &>(m_pending).insert(std::make_pair(Converter::toKey(a1), cont));
-                    }
-                    exec = OPERATION_FINISHED;
-                } catch (...) {
-                    res = Exception::handle(m_source.getDisplayName());
-                    exec = OPERATION_EXCEPTION;
-                }
-            } else {
-                res = sysync::LOCERR_NOTIMP;
-                exec = OPERATION_EMPTY;
-            }
-        }
-        if (res != sysync::LOCERR_AGAIN) {
-            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, a2, a3);
+            sysync::TSyError newres = m_post(dynamic_cast<SyncSource &>(m_source), exec, res, a1, args...);
             if (newres != sysync::LOCERR_OK) {
                 res = newres;
             }
@@ -1333,9 +983,9 @@ template<class F, class V> class OperationWrapperSwitch<F, 3, V>
  * supported arguments in boost::signals2/boost::function.
  */
 template<class F> class OperationWrapper :
-public OperationWrapperSwitch<F, boost::function<F>::arity, typename boost::function<F>::result_type>
+public OperationWrapperSwitch<F>
 {
-    typedef OperationWrapperSwitch<F, boost::function<F>::arity, typename boost::function<F>::result_type> inherited;
+    typedef OperationWrapperSwitch<F> inherited;
  public:
     OperationWrapper(SyncSourceName &source): inherited(source) {}
 
