@@ -58,26 +58,26 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
 
     /** called by main event loop: initiate a sync operation */
     void sync(const SessionCommon::SyncParams &params,
-              const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result);
+              const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result);
 
     /**
      * called by run(): do the sync operation
      * @return true if the helper is meant to terminate
      */
     bool doSync(const SessionCommon::SyncParams &params,
-                const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result);
+                const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result);
 
     void restore(const std::string &configName,
                  const string &dir, bool before, const std::vector<std::string> &sources,
-                 const boost::shared_ptr< GDBusCXX::Result1<bool> > &result);
+                 const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
     bool doRestore(const std::string &configName,
                    const string &dir, bool before, const std::vector<std::string> &sources,
-                   const boost::shared_ptr< GDBusCXX::Result1<bool> > &result);
+                   const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
 
     void execute(const vector<string> &args, const map<string, string> &vars,
-                 const boost::shared_ptr< GDBusCXX::Result1<bool> > &result);
+                 const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
     bool doExecute(const vector<string> &args, const map<string, string> &vars,
-                   const boost::shared_ptr< GDBusCXX::Result1<bool> > &result);
+                   const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
 
     /** SessionHelper.PasswordResponse */
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
@@ -104,38 +104,38 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     boost::shared_ptr<ForkExecChild> getForkExecChild() { return m_forkexec; }
 
     /** Server.LogOutput for the session D-Bus object */
-    GDBusCXX::EmitSignal3<std::string,
-        std::string, std::string, true> emitLogOutput;
+    GDBusCXX::EmitSignalOptional<std::string,
+        std::string, std::string> emitLogOutput;
 
     /** SyncContext::displaySyncProgress */
-    GDBusCXX::EmitSignal4<sysync::TProgressEventEnum,
-        int32_t, int32_t, int32_t, true> emitSyncProgress;
+    GDBusCXX::EmitSignalOptional<sysync::TProgressEventEnum,
+        int32_t, int32_t, int32_t> emitSyncProgress;
 
     /** SyncContext::displaySourceProgress */
-    GDBusCXX::EmitSignal6<sysync::TProgressEventEnum,
+    GDBusCXX::EmitSignalOptional<sysync::TProgressEventEnum,
         std::string, SyncMode,
-        int32_t, int32_t, int32_t, true> emitSourceProgress;
+        int32_t, int32_t, int32_t> emitSourceProgress;
 
     /** SyncContext::m_sourceSyncedSignal */
-    GDBusCXX::EmitSignal2<std::string, SyncSourceReport, true> emitSourceSynced;
+    GDBusCXX::EmitSignalOptional<std::string, SyncSourceReport> emitSourceSynced;
 
     /** SyncContext::reportStepCmd -> true/false for "waiting on IO" */
-    GDBusCXX::EmitSignal1<bool, true> emitWaiting;
+    GDBusCXX::EmitSignalOptional<bool> emitWaiting;
 
     /** SyncContext::syncSuccessStart */
-    GDBusCXX::EmitSignal0Template<true> emitSyncSuccessStart;
+    GDBusCXX::EmitSignalOptional<> emitSyncSuccessStart;
 
     /** Cmdline::configWasModified() */
-    GDBusCXX::EmitSignal0Template<true> emitConfigChanged;
+    GDBusCXX::EmitSignalOptional<> emitConfigChanged;
 
     /** SyncContext::askPassword */
-    GDBusCXX::EmitSignal2<std::string, ConfigPasswordKey> emitPasswordRequest;
+    GDBusCXX::EmitSignal<std::string, ConfigPasswordKey> emitPasswordRequest;
 
     /** send message to parent's connection (buffer, type, url) */
-    GDBusCXX::EmitSignal3<GDBusCXX::DBusArray<uint8_t>, std::string, std::string> emitMessage;
+    GDBusCXX::EmitSignal<GDBusCXX::DBusArray<uint8_t>, std::string, std::string> emitMessage;
 
     /** tell parent's connection to shut down */
-    GDBusCXX::EmitSignal0Template<false> emitShutdown;
+    GDBusCXX::EmitSignal<> emitShutdown;
 
     /** store the next message received by the session's connection */
     void storeMessage(const GDBusCXX::DBusArray<uint8_t> &message,

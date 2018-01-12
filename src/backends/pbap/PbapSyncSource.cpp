@@ -333,13 +333,13 @@ private:
     Transfers m_transfers;
     std::string m_currentTransfer;
 
-    std::unique_ptr<GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string> >
+    std::unique_ptr<GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, std::string> >
         m_errorSignal;
     void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
                  const std::string &msg);
 
     // Bluez 5
-    typedef GDBusCXX::SignalWatch4<GDBusCXX::Path_t, std::string, Params, std::vector<std::string> > PropChangedSignal_t;
+    typedef GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, Params, std::vector<std::string> > PropChangedSignal_t;
     std::unique_ptr<PropChangedSignal_t> m_propChangedSignal;
     void propChangedCb(const GDBusCXX::Path_t &path,
                        const std::string &interface,
@@ -347,10 +347,10 @@ private:
                        const std::vector<std::string> &invalidated);
 
     // new obexd API
-    typedef GDBusCXX::SignalWatch1<GDBusCXX::Path_t> CompleteSignal_t;
+    typedef GDBusCXX::SignalWatch<GDBusCXX::Path_t> CompleteSignal_t;
     std::unique_ptr<CompleteSignal_t> m_completeSignal;
     void completeCb(const GDBusCXX::Path_t &path);
-    typedef GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, boost::variant<int64_t> > PropertyChangedSignal_t;
+    typedef GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, boost::variant<int64_t> > PropertyChangedSignal_t;
     std::unique_ptr<PropertyChangedSignal_t> m_propertyChangedSignal;
     void propertyChangedCb(const GDBusCXX::Path_t &path, const std::string &name, const boost::variant<int64_t> &value);
 
@@ -399,7 +399,7 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
                                                     OBC_TRANSFER_INTERFACE_NEW5,
                                                     OBC_SERVICE_NEW5,
                                                     true);
-                GDBusCXX::DBusClientCall0(transfer, "Suspend")();
+                GDBusCXX::DBusClientCall<>(transfer, "Suspend")();
                 SE_LOG_DEBUG(NULL, "successfully suspended transfer when it became active");
             } catch (...) {
                 // Ignore all errors here. The worst that can happen is that
@@ -537,7 +537,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     try {
         SE_LOG_DEBUG(NULL, "trying to use bluez 5 obexd service %s", OBC_SERVICE_NEW5);
         session =
-            GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
+            GDBusCXX::DBusClientCall<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
     } catch (const std::exception &error) {
         if (!strstr(error.what(), "org.freedesktop.DBus.Error.ServiceUnknown") &&
             !strstr(error.what(), "org.freedesktop.DBus.Error.UnknownObject")) {
@@ -556,7 +556,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         try {
             SE_LOG_DEBUG(NULL, "trying to use new obexd service %s", OBC_SERVICE_NEW);
             session =
-                GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
+                GDBusCXX::DBusClientCall<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(address, params);
         } catch (const std::exception &error) {
             if (!strstr(error.what(), "org.freedesktop.DBus.Error.ServiceUnknown")) {
                 throw;
@@ -573,7 +573,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         m_client.reset(new GDBusCXX::DBusRemoteObject(conn, "/", OBC_CLIENT_INTERFACE,
                                                       OBC_SERVICE, true));
         params["Destination"] = std::string(address);
-        session = GDBusCXX::DBusClientCall1<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(params);
+        session = GDBusCXX::DBusClientCall<GDBusCXX::DBusObject_t>(*m_client, "CreateSession")(params);
     }
 
     if (session.empty()) {
@@ -619,7 +619,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
             m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
 
             // same for error
-            m_errorSignal.reset(new GDBusCXX::SignalWatch3<GDBusCXX::Path_t, std::string, std::string>
+            m_errorSignal.reset(new GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, std::string>
                                 (GDBusCXX::SignalFilter(m_client->getConnection(),
                                                         session,
                                                         OBC_TRANSFER_INTERFACE_NEW,
@@ -647,7 +647,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     SE_LOG_DEBUG(NULL, "PBAP session created: %s", m_session->getPath());
 
     // get filter list so that we can continue validating our format specifier
-    m_filterFields = GDBusCXX::DBusClientCall1< Properties >(*m_session, "ListFilterFields")();
+    m_filterFields = GDBusCXX::DBusClientCall< Properties >(*m_session, "ListFilterFields")();
     SE_LOG_DEBUG(NULL, "supported PBAP filter fields:\n    %s",
                  boost::join(m_filterFields, "\n    ").c_str());
 
@@ -680,7 +680,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         }
     }
 
-    GDBusCXX::DBusClientCall0(*m_session, "Select")(std::string("int"), std::string("PB"));
+    GDBusCXX::DBusClientCall<>(*m_session, "Select")(std::string("int"), std::string("PB"));
     m_filter5["Format"] = version == "2.1" ? "vcard21" : "vcard30";
     m_filter5["Fields"] = filter;
 
@@ -734,8 +734,8 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParam
     if (m_obexAPI == OBEXD_OLD ||
         m_obexAPI == OBEXD_NEW) {
         try {
-            GDBusCXX::DBusClientCall0(*m_session, "SetFilter")(filter);
-            GDBusCXX::DBusClientCall0(*m_session, "SetFormat")(format);
+            GDBusCXX::DBusClientCall<>(*m_session, "SetFilter")(filter);
+            GDBusCXX::DBusClientCall<>(*m_session, "SetFormat")(format);
         } catch (...) {
             // Ignore failure, can happen with 0.48. Instead send filter together
             // with PullAll method call.
@@ -759,7 +759,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParam
         // Beware, this will lead to a "Complete" signal in obexd
         // 0.47. We need to be careful with looking at the right
         // transfer to determine whether PullAll completed.
-        state->m_numContacts = GDBusCXX::DBusClientCall1<uint16_t>(*m_session, "GetSize")();
+        state->m_numContacts = GDBusCXX::DBusClientCall<uint16_t>(*m_session, "GetSize")();
         SE_LOG_DEBUG(NULL, "Expecting %d contacts.", state->m_numContacts);
 
         state->m_tmpFile.create(TmpFile::FILE);
@@ -791,12 +791,12 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParam
         Bluez5PullAllResult tuple =
             pullAllWithFiltersFallback ?
             // 0.48
-            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter) :
+            GDBusCXX::DBusClientCall<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter) :
             m_obexAPI == OBEXD_NEW ?
             // 0.47
-            GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename()) :
+            GDBusCXX::DBusClientCall<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state->m_tmpFile.filename()) :
             // 5.x
-            GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter);
+            GDBusCXX::DBusClientCall<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state->m_tmpFile.filename(), currentFilter);
         const GDBusCXX::DBusObject_t &transfer = tuple.first;
         const Params &properties = tuple.second;
         m_currentTransfer = transfer;
@@ -823,7 +823,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParam
         // of obex-client < 0.47. Not sure what we should do about
         // this: disable incremental sync for old obex-client?  Reject
         // it?  Catch the error and add a better exlanation?
-        GDBusCXX::DBusClientCall1<std::string> pullall(*m_session, "PullAll");
+        GDBusCXX::DBusClientCall<std::string> pullall(*m_session, "PullAll");
         state->m_buffer = pullall();
         state->addVCards(0, state->m_buffer);
         state->m_numContacts = state->m_content.size();
@@ -855,9 +855,9 @@ void PbapSession::continuePullAll(PullAll &state)
 
     Bluez5PullAllResult tuple =
         m_obexAPI == BLUEZ5 ?
-        GDBusCXX::DBusClientCall2<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state.m_tmpFile.filename(), state.m_filter) :
+        GDBusCXX::DBusClientCall<GDBusCXX::DBusObject_t, Params>(*m_session, "PullAll")(state.m_tmpFile.filename(), state.m_filter) :
         // must be 0.48
-        GDBusCXX::DBusClientCall1<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state.m_tmpFile.filename(), state.m_filter);
+        GDBusCXX::DBusClientCall<std::pair<GDBusCXX::DBusObject_t, Params> >(*m_session, "PullAll")(state.m_tmpFile.filename(), state.m_filter);
 
     const GDBusCXX::DBusObject_t &transfer = tuple.first;
     const Params &properties = tuple.second;
@@ -1039,7 +1039,7 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
 
 void PbapSession::shutdown(void)
 {
-    GDBusCXX::DBusClientCall0 removeSession(*m_client, "RemoveSession");
+    GDBusCXX::DBusClientCall<> removeSession(*m_client, "RemoveSession");
 
     // always clear pointer, even if method call fails
     GDBusCXX::DBusObject_t path(m_session->getPath());
@@ -1075,9 +1075,9 @@ void PbapSession::setFreeze(bool freeze)
                                                 true);
             try {
                 if (freeze) {
-                    GDBusCXX::DBusClientCall0(transfer, "Suspend")();
+                    GDBusCXX::DBusClientCall<>(transfer, "Suspend")();
                 } else {
-                    GDBusCXX::DBusClientCall0(transfer, "Resume")();
+                    GDBusCXX::DBusClientCall<>(transfer, "Resume")();
                 }
             } catch (...) {
                 std::string explanation;
@@ -1101,7 +1101,7 @@ void PbapSession::setFreeze(bool freeze)
                     SE_LOG_DEBUG(NULL, "must retry Suspend(), got error at the moment: %s", explanation.c_str());
                 } else {
                     // Have to abort.
-                    GDBusCXX::DBusClientCall0(transfer, "Cancel")();
+                    GDBusCXX::DBusClientCall<>(transfer, "Cancel")();
 
                     // Bluez does not change the transfer status when cancelling it,
                     // so our propChangedCb() doesn't get called. We need to record

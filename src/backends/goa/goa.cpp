@@ -65,7 +65,7 @@ class GOAManager : private GDBusCXX::DBusRemoteObject
                      Properties
                      > Interfaces;
     typedef std::map<GDBusCXX::DBusObject_t, Interfaces> ManagedObjects;
-    GDBusCXX::DBusClientCall1<ManagedObjects> m_getManagedObjects;
+    GDBusCXX::DBusClientCall<ManagedObjects> m_getManagedObjects;
 
  public:
     GOAManager(const GDBusCXX::DBusConnectionPtr &conn);
@@ -88,8 +88,8 @@ public:
     GOAAccount(const GDBusCXX::DBusConnectionPtr &conn,
                const std::string &path);
 
-    GDBusCXX::DBusClientCall1<int32_t> m_ensureCredentials;
-    GDBusCXX::DBusClientCall1<std::string> m_getAccessToken;
+    GDBusCXX::DBusClientCall<int32_t> m_ensureCredentials;
+    GDBusCXX::DBusClientCall<std::string> m_getAccessToken;
 };
 
 GOAManager::GOAManager(const GDBusCXX::DBusConnectionPtr &conn) :

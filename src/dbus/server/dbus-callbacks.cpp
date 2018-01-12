@@ -25,7 +25,7 @@
 
 SE_BEGIN_CXX
 
-uint32_t dbusErrorCallback(const boost::shared_ptr<GDBusCXX::Result> &result)
+uint32_t dbusErrorCallback(const boost::shared_ptr<GDBusCXX::ResultBase> &result)
 {
     try {
         // If there is no pending exception, the process will abort
@@ -52,7 +52,7 @@ uint32_t dbusErrorCallback(const boost::shared_ptr<GDBusCXX::Result> &result)
     return 500;
 }
 
-ErrorCb_t createDBusErrorCb(const boost::shared_ptr<GDBusCXX::Result> &result)
+ErrorCb_t createDBusErrorCb(const boost::shared_ptr<GDBusCXX::ResultBase> &result)
 {
     return boost::bind(dbusErrorCallback, result);
 }

@@ -81,7 +81,7 @@ private:
     };
 
     Server &m_server;
-    GDBusCXX::SignalWatch1<uint32_t> m_stateChanged;
+    GDBusCXX::SignalWatch<uint32_t> m_stateChanged;
     NetworkManagerProperties m_properties;
 };
 
