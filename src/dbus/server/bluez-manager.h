@@ -101,9 +101,9 @@ private:
         std::vector<boost::shared_ptr<BluezDevice> > m_devices;
 
         /** represents 'DeviceRemoved' signal of org.bluez.Adapter*/
-        GDBusCXX::SignalWatch1<GDBusCXX::DBusObject_t> m_deviceRemoved;
+        GDBusCXX::SignalWatch<GDBusCXX::DBusObject_t> m_deviceRemoved;
         /** represents 'DeviceAdded' signal of org.bluez.Adapter*/
-        GDBusCXX::SignalWatch1<GDBusCXX::DBusObject_t> m_deviceAdded;
+        GDBusCXX::SignalWatch<GDBusCXX::DBusObject_t> m_deviceAdded;
 
         friend class BluezDevice;
     };
@@ -147,7 +147,7 @@ private:
         /** whether the calling of 'GetProperties' is returned */
         bool m_reply;
 
-        typedef GDBusCXX::SignalWatch2<std::string, boost::variant<std::vector<std::string>, std::string> > PropertySignal;
+        typedef GDBusCXX::SignalWatch<std::string, boost::variant<std::vector<std::string>, std::string> > PropertySignal;
         /** represents 'PropertyChanged' signal of org.bluez.Device */
         PropertySignal m_propertyChanged;
 
@@ -185,7 +185,7 @@ private:
                                    const std::string &productValue, std::string &productName);
 
     /** represents 'DefaultAdapterChanged' signal of org.bluez.Adapter*/
-    GDBusCXX::SignalWatch1<GDBusCXX::DBusObject_t> m_adapterChanged;
+    GDBusCXX::SignalWatch<GDBusCXX::DBusObject_t> m_adapterChanged;
 
     /** flag to indicate whether the calls are all returned */
     bool m_done;

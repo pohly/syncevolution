@@ -116,11 +116,11 @@ void LocaledListener::onPropertiesChange(const std::string &interface,
                       invalidated.end(),
                       LOCALED_LOCALE_PROPERTY) != invalidated.end()) {
             SE_LOG_DEBUG(NULL, "localed: Locale changed, need to get new value");
-            m_propertiesGet.start(std::string(LOCALED_INTERFACE),
-                                  std::string(LOCALED_LOCALE_PROPERTY),
-                                  boost::bind(&LocaledListener::processLocaleProperty, m_self,
+            m_propertiesGet.start(boost::bind(&LocaledListener::processLocaleProperty, m_self,
                                               _1, _2, false,
-                                              result));
+                                              result),
+                                  std::string(LOCALED_INTERFACE),
+                                  std::string(LOCALED_LOCALE_PROPERTY));
         }
         SE_LOG_DEBUG(NULL, "localed: ignoring irrelevant property change");
     }
@@ -163,9 +163,9 @@ void LocaledListener::check(const boost::function<void (const LocaleEnv &env)> &
 {
     if (getConnection()) {
         SE_LOG_DEBUG(NULL, "localed: get current Locale property");
-        m_propertiesGet.start(std::string(LOCALED_INTERFACE),
-                              std::string(LOCALED_LOCALE_PROPERTY),
-                              boost::bind(&LocaledListener::processLocaleProperty, m_self, _1, _2, true, result));
+        m_propertiesGet.start(boost::bind(&LocaledListener::processLocaleProperty, m_self, _1, _2, true, result),
+                              std::string(LOCALED_INTERFACE),
+                              std::string(LOCALED_LOCALE_PROPERTY));
     } else {
         processLocaleProperty(LocaleVariant(), "no D-Bus connection", true, result);
     }

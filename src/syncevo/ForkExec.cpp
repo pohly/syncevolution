@@ -74,13 +74,13 @@ public:
     bool hasWatches() const { return !m_watches.empty(); }
 
 private:
-    void watch(const boost::shared_ptr< GDBusCXX::Result0> &result)
+    void watch(const boost::shared_ptr< GDBusCXX::Result<> > &result)
     {
         SE_LOG_DEBUG(NULL, "ForkExecParentDBusAPI %s: received 'Watch' method call from child",
                      getPath());
         m_watches.push_back(result);
     }
-    std::list< boost::shared_ptr< GDBusCXX::Result0> > m_watches;
+    std::list< boost::shared_ptr< GDBusCXX::Result<> > > m_watches;
 };
 #endif // GDBUS_CXX_HAVE_DISCONNECT
 
@@ -563,7 +563,7 @@ void ForkExecChild::connect()
             m_watch(*this, "Watch")
         {}
 
-        GDBusCXX::DBusClientCall0 m_watch;
+        GDBusCXX::DBusClientCall<> m_watch;
     } parent(conn, getInstance());
     parent.m_watch.start(boost::bind(&ForkExecChild::connectionLost, this));
 #endif
