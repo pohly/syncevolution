@@ -318,12 +318,12 @@ class ECalClientViewSyncHandler {
     bool processSync(GErrorCXX &gerror)
     {
         // Listen for view signals
-        m_view.connectSignal<void (ECalClientView *ebookview,
-                                   const GSList *contacts)>("objects-added",
-                                                            boost::bind(m_process, _2));
-        m_view.connectSignal<void (EBookClientView *ebookview,
-                                   const GError *error)>("complete",
-                                                         boost::bind(&ECalClientViewSyncHandler::completed, this, _2));
+        m_view.connectSignal<ECalClientView *,
+                             const GSList *>()("objects-added",
+                                               boost::bind(m_process, _2));
+        m_view.connectSignal<EBookClientView *,
+                             const GError *>()("complete",
+                                               boost::bind(&ECalClientViewSyncHandler::completed, this, _2));
 
         // Start the view
         e_cal_client_view_start (m_view, m_error);
