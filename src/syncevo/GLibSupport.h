@@ -76,103 +76,6 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
 
 #ifdef HAVE_GLIB
 
-// Signal callback. Specializations will handle varying number of parameters.
-template<class S> struct GObjectSignalHandler {
-    // static void handler();
-    // No specialization defined for the requested function prototype.
-};
-
-template<> struct GObjectSignalHandler<void ()> {
-    static void handler(gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void ()> *>(data))();
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1> struct GObjectSignalHandler<void (A1)> {
-    static void handler(A1 a1, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1)> *>(data))(a1);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2> struct GObjectSignalHandler<void (A1, A2)> {
-    static void handler(A1 a1, A2 a2, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2)> *>(data))(a1, a2);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3> struct GObjectSignalHandler<void (A1, A2, A3)> {
-    static void handler(A1 a1, A2 a2, A3 a3, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3)> *>(data))(a1, a2, a3);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3, class A4> struct GObjectSignalHandler<void (A1, A2, A3, A4)> {
-    static void handler(A1 a1, A2 a2, A3 a3, A4 a4, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3, A4)> *>(data))(a1, a2, a3, a4);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3, class A4, class A5> struct GObjectSignalHandler<void (A1, A2, A3, A4, A5)> {
-    static void handler(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3, A4, A5)> *>(data))(a1, a2, a3, a4, a5);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3, class A4, class A5, class A6> struct GObjectSignalHandler<void (A1, A2, A3, A4, A5, A6)> {
-    static void handler(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3, A4, A5, A6)> *>(data))(a1, a2, a3, a4, a5, a6);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3, class A4, class A5, class A6, class A7> struct GObjectSignalHandler<void (A1, A2, A3, A4, A5, A6, A7)> {
-    static void handler(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> *>(data))(a1, a2, a3, a4, a5, a6, a7);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8> struct GObjectSignalHandler<void (A1, A2, A3, A4, A5, A6, A7, A8)> {
-    static void handler(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> *>(data))(a1, a2, a3, a4, a5, a6, a7, a8);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-template<class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9> struct GObjectSignalHandler<void (A1, A2, A3, A4, A5, A6, A7, A8, A9)> {
-    static void handler(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9, gpointer data) throw () {
-        try {
-            (*reinterpret_cast< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9)> *>(data))(a1, a2, a3, a4, a5, a6, a7, a8, a9);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
-};
-
 enum RefOwnership
 {
     TRANSFER_REF = false, /**<
@@ -185,19 +88,39 @@ enum RefOwnership
                            */
 };
 
+template<typename C, typename ...A> class ConnectHandle
+{
+    C *m_object;
+ public:
+ ConnectHandle(C *object) :
+    m_object(object)
+    {}
+
+    template<typename CB> guint operator () (const char *signal, CB &&callback) const {
+        auto c_callback = [] (A... a, gpointer data) noexcept {
+            try {
+                (*reinterpret_cast<CB *>(data))(a...);
+            } catch (...) {
+                Exception::handle(HANDLE_EXCEPTION_FATAL);
+            }
+        };
+        auto c_destroy = [] (gpointer data, GClosure *closure) noexcept {
+            try {
+                delete reinterpret_cast<CB *>(data);
+            } catch (...) {
+                Exception::handle(HANDLE_EXCEPTION_FATAL);
+            }
+        };
+        return g_signal_connect_data(m_object, signal,
+                                     G_CALLBACK(static_cast<void (*)(A..., gpointer)>(c_callback)),
+                                     new CB(std::forward<CB>(callback)),
+                                     c_destroy,
+                                     GConnectFlags(0));
+    }
+};
 
 template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
     typedef boost::intrusive_ptr<C> Base_t;
-
-    // Frees the instance of boost::function which was allocated
-    // by connectSignal.
-    template<class S> static void signalDestroy(gpointer data, GClosure *closure) throw () {
-        try {
-            delete reinterpret_cast< boost::function<void ()> *>(data);
-        } catch (...) {
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-    }
 
  public:
     TrackGObject(C *ptr, RefOwnership ownership) : Base_t(ptr, (bool)ownership) {}
@@ -209,13 +132,8 @@ template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
 
     static  TrackGObject steal(C *ptr) { return TrackGObject(ptr, TRANSFER_REF); }
 
-    template<class S> guint connectSignal(const char *signal,
-                                          const boost::function<S> &callback) {
-        return g_signal_connect_data(Base_t::get(), signal,
-                                     G_CALLBACK(&GObjectSignalHandler<S>::handler),
-                                     new boost::function<S>(callback),
-                                     &signalDestroy<S>,
-                                     GConnectFlags(0));
+    template<typename ...A> auto connectSignal() const {
+        return ConnectHandle<C, A...>(Base_t::get());
     }
     void disconnectSignal(guint handlerID) {
         g_signal_handler_disconnect(static_cast<gpointer>(Base_t::get()),
@@ -258,8 +176,14 @@ template<class C> class StealGLib : public TrackGLib<C> {
  * functions must be put into the boost namespace. The type itself is
  * *inside* the SyncEvolution namespace.
  *
- * connectSignal() connects a GObject signal to a boost::function with
- * the function signature S. Returns the handler ID, which can be
+ * connectSignal() connects a GObject signal to any callable.
+ * The type signature of the signal has to be specified explicitly
+ * as template parameters. The type of the callable then is
+ * determined automatically. To make this work, an temporary
+ * helper instance is needed, i.e. there are two function
+ * calls involved.
+ *
+ * Returns the handler ID, which can be
  * passed to g_signal_handler_disconnect() to remove the connection.
  *
  * Example:
@@ -277,12 +201,9 @@ template<class C> class StealGLib : public TrackGLib<C> {
  * GObjectCXX object(...);
  * // Define signature explicitly because it cannot be guessed from
  * // boost::bind() result.
- * object.connectSignal<void (GObject *gobject, GParamSpec *pspec)>("notify",
- *                                                                  boost::bind(...));
- * // Signature is taken from boost::function parameter.
  * guint handlerID =
- *     object.connectSignal("notify",
- *                          boost::function<void (GObject *, GParamSpec *)>(boost::bind(...)));
+ *    object.connectSignal<GObject *, GParamSpec *)>()("notify",
+ *                                                     boost::bind(...));
  * object.disconnectSignal(handlerID);
  * SE_END_CXX
  */
