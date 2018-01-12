@@ -76,7 +76,7 @@ SE_BEGIN_CXX
  * relaying them to the D-Bus client. Example:
  *
  *  void runOperationAsync(RunOperation op,
- *                         const boost::shared_ptr<GDBusCXX::Result0> &dbusResult,
+ *                         const boost::shared_ptr< GDBusCXX::Result<> > &dbusResult,
  *                         const SuccessCb_t &helperReady)
  *  ...
  *     useHelperAsync(SimpleResult(helperReady,
@@ -134,14 +134,14 @@ template <class P> Result<P> makeCb(const boost::function<P> &onSuccess,
  * @param result    failed() is called here 
  * @return status code (see SyncML.h)
  */
-uint32_t dbusErrorCallback(const boost::shared_ptr<GDBusCXX::Result> &result);
+uint32_t dbusErrorCallback(const boost::shared_ptr<GDBusCXX::ResultBase> &result);
 
 /**
  * Creates an error callback which can be used to return a pending
  * exception as a D-Bus error. Template call which is parameterized
  * with the GDBusCXX::Result* class that takes the error.
  */
-ErrorCb_t createDBusErrorCb(const boost::shared_ptr<GDBusCXX::Result> &result);
+ErrorCb_t createDBusErrorCb(const boost::shared_ptr<GDBusCXX::ResultBase> &result);
 
 /**
  * Creates a result object which passes back results and turns
@@ -149,9 +149,9 @@ ErrorCb_t createDBusErrorCb(const boost::shared_ptr<GDBusCXX::Result> &result);
  * name.
  * TODO: interface name
  */
-template<class R1> Result<void (const R1 &)> createDBusCb(const boost::shared_ptr< GDBusCXX::Result1<R1> > &result)
+template<class R1> Result<void (const R1 &)> createDBusCb(const boost::shared_ptr< GDBusCXX::Result<R1> > &result)
 {
-    return Result<void (const R1 &)>(boost::bind(&GDBusCXX::Result1<R1>::done,
+    return Result<void (const R1 &)>(boost::bind(&GDBusCXX::Result<R1>::done,
                                                  result,
                                                  _1),
                                      createDBusErrorCb(result));
@@ -162,9 +162,9 @@ template<class R1> Result<void (const R1 &)> createDBusCb(const boost::shared_pt
  * exceptions into dbus_error instances with the given interface name.
  * TODO: interface name
  */
-static inline Result<void ()> createDBusCb(const boost::shared_ptr< GDBusCXX::Result0 > &result)
+static inline Result<void ()> createDBusCb(const boost::shared_ptr< GDBusCXX::Result<> > &result)
 {
-    return Result<void ()>(boost::bind(&GDBusCXX::Result0::done,
+    return Result<void ()>(boost::bind(&GDBusCXX::Result<>::done,
                                        result),
                            createDBusErrorCb(result));
 }

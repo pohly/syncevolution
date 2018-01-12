@@ -88,35 +88,35 @@ public:
     m_shutdownConnection(*this, "Shutdown", false)
     {}
 
-    /* GDBusCXX::DBusClientCall1<ReadOperations::Config_t>          m_getNamedConfig; */
-    /* GDBusCXX::DBusClientCall1<bool>                              m_setNamedConfig; */
-    /* GDBusCXX::DBusClientCall1<std::vector<StringMap> >           m_getReports; */
-    /* GDBusCXX::DBusClientCall0                                    m_checkSource; */
-    /* GDBusCXX::DBusClientCall1<ReadOperations::SourceDatabases_t> m_getDatabases; */
-    GDBusCXX::DBusClientCall2<bool, SyncReport> m_sync;
-    GDBusCXX::DBusClientCall1<bool> m_setFreeze;
-    GDBusCXX::DBusClientCall1<bool> m_restore;
-    GDBusCXX::DBusClientCall1<bool> m_execute;
-    /* GDBusCXX::DBusClientCall0                                    m_serverShutdown; */
-    GDBusCXX::DBusClientCall0 m_passwordResponse;
-    GDBusCXX::DBusClientCall0 m_storeMessage;
-    GDBusCXX::DBusClientCall0 m_connectionState;
-    /* GDBusCXX::DBusClientCall0                                    m_setActive; */
-    /* GDBusCXX::SignalWatch3<std::string, uint32_t, */
+    /* GDBusCXX::DBusClientCall<ReadOperations::Config_t>          m_getNamedConfig; */
+    /* GDBusCXX::DBusClientCall<bool>                              m_setNamedConfig; */
+    /* GDBusCXX::DBusClientCall<std::vector<StringMap> >           m_getReports; */
+    /* GDBusCXX::DBusClientCall<>                                    m_checkSource; */
+    /* GDBusCXX::DBusClientCall<ReadOperations::SourceDatabases_t> m_getDatabases; */
+    GDBusCXX::DBusClientCall<bool, SyncReport> m_sync;
+    GDBusCXX::DBusClientCall<bool> m_setFreeze;
+    GDBusCXX::DBusClientCall<bool> m_restore;
+    GDBusCXX::DBusClientCall<bool> m_execute;
+    /* GDBusCXX::DBusClientCall<>                                    m_serverShutdown; */
+    GDBusCXX::DBusClientCall<> m_passwordResponse;
+    GDBusCXX::DBusClientCall<> m_storeMessage;
+    GDBusCXX::DBusClientCall<> m_connectionState;
+    /* GDBusCXX::DBusClientCall<>                                    m_setActive; */
+    /* GDBusCXX::SignalWatch<std::string, uint32_t, */
     /*                        SessionCommon::SourceStatuses_t>      m_statusChanged; */
-    GDBusCXX::SignalWatch3<std::string, std::string, std::string> m_logOutput;
-    GDBusCXX::SignalWatch4<sysync::TProgressEventEnum,
+    GDBusCXX::SignalWatch<std::string, std::string, std::string> m_logOutput;
+    GDBusCXX::SignalWatch<sysync::TProgressEventEnum,
                            int32_t, int32_t, int32_t> m_syncProgress;
-    GDBusCXX::SignalWatch6<sysync::TProgressEventEnum,
+    GDBusCXX::SignalWatch<sysync::TProgressEventEnum,
                            std::string, SyncMode,
                            int32_t, int32_t, int32_t> m_sourceProgress;
-    GDBusCXX::SignalWatch2<std::string, SyncSourceReport> m_sourceSynced;
-    GDBusCXX::SignalWatch1<bool> m_waiting;
-    GDBusCXX::SignalWatch0 m_syncSuccessStart;
-    GDBusCXX::SignalWatch0 m_configChanged;
-    GDBusCXX::SignalWatch2<std::string, ConfigPasswordKey> m_passwordRequest;
-    GDBusCXX::SignalWatch3<DBusArray<uint8_t>, std::string, std::string> m_sendMessage;
-    GDBusCXX::SignalWatch0 m_shutdownConnection;
+    GDBusCXX::SignalWatch<std::string, SyncSourceReport> m_sourceSynced;
+    GDBusCXX::SignalWatch<bool> m_waiting;
+    GDBusCXX::SignalWatch<> m_syncSuccessStart;
+    GDBusCXX::SignalWatch<> m_configChanged;
+    GDBusCXX::SignalWatch<std::string, ConfigPasswordKey> m_passwordRequest;
+    GDBusCXX::SignalWatch<DBusArray<uint8_t>, std::string, std::string> m_sendMessage;
+    GDBusCXX::SignalWatch<> m_shutdownConnection;
 };
 
 void Session::attach(const Caller_t &caller)
@@ -448,7 +448,8 @@ void Session::sync2(const std::string &mode, const SessionCommon::SourceModes_t 
     // the error is recorded before ending the session. Premature
     // exits by the helper are handled by D-Bus, which then will abort
     // the pending method call.
-    m_helper->m_sync.start(params, boost::bind(&Session::dbusResultCb, m_me, "sync()", _1, _2, _3));
+    m_helper->m_sync.start(boost::bind(&Session::dbusResultCb, m_me, "sync()", _1, _2, _3),
+                           params);
 }
 
 void Session::abort()
@@ -480,12 +481,12 @@ void Session::setFreezeAsync(bool freeze, const Result<void (bool)> &result)
                  freeze ? "freeze" : "thaw",
                  m_forkExecParent ? "send to helper" : "no effect, because no helper");
     if (m_forkExecParent) {
-        m_helper->m_setFreeze.start(freeze,
-                                    boost::bind(&Session::setFreezeDone,
+        m_helper->m_setFreeze.start(boost::bind(&Session::setFreezeDone,
                                                 m_me,
                                                 _1, _2,
                                                 freeze,
-                                                result));
+                                                result),
+                                    freeze);
     } else {
         // Had no effect.
         result.done(false);
@@ -1146,8 +1147,8 @@ void Session::passwordResponse(bool timedOut, bool aborted, const std::string &p
     if (m_helper) {
         // Ignore communicaton failures with helper here,
         // we'll notice that elsewhere
-        m_helper->m_passwordResponse.start(timedOut, aborted, password,
-                                           boost::function<void (const std::string &)>());
+        m_helper->m_passwordResponse.start(boost::function<void (const std::string &)>(),
+                                           timedOut, aborted, password);
     }
 }
 
@@ -1388,8 +1389,8 @@ void Session::restore2(const string &dir, bool before, const std::vector<std::st
     }
 
     // helper is ready, tell it what to do
-    m_helper->m_restore.start(m_configName, dir, before, sources,
-                              boost::bind(&Session::dbusResultCb, m_me, "restore()", _1, SyncReport(), _2));
+    m_helper->m_restore.start(boost::bind(&Session::dbusResultCb, m_me, "restore()", _1, SyncReport(), _2),
+                              m_configName, dir, before, sources);
 }
 
 void Session::execute(const vector<string> &args, const map<string, string> &vars)
@@ -1419,8 +1420,8 @@ void Session::execute2(const vector<string> &args, const map<string, string> &va
     }
 
     // helper is ready, tell it what to do
-    m_helper->m_execute.start(args, vars,
-                              boost::bind(&Session::dbusResultCb, m_me, "execute()", _1, SyncReport(), _2));
+    m_helper->m_execute.start(boost::bind(&Session::dbusResultCb, m_me, "execute()", _1, SyncReport(), _2),
+                              args, vars);
 }
 
 /*Implementation of Session.CheckPresence */
@@ -1477,8 +1478,8 @@ void Session::storeMessage(const DBusArray<uint8_t> &message,
     PushLogger<Logger> guard(m_me);
     // ignore errors
     if (m_helper) {
-        m_helper->m_storeMessage.start(message, type,
-                                       boost::function<void (const std::string &)>());
+        m_helper->m_storeMessage.start(boost::function<void (const std::string &)>(),
+                                       message, type);
     }
 }
 
@@ -1487,8 +1488,8 @@ void Session::connectionState(const std::string &error)
     PushLogger<Logger> guard(m_me);
     // ignore errors
     if (m_helper) {
-        m_helper->m_connectionState.start(error,
-                                          boost::function<void (const std::string &)>());
+        m_helper->m_connectionState.start(boost::function<void (const std::string &)>(),
+                                          error);
     }
 }
 

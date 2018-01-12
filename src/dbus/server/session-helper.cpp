@@ -213,14 +213,14 @@ bool SessionHelper::connected()
 }
 
 void SessionHelper::sync(const SessionCommon::SyncParams &params,
-                         const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result)
+                         const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result)
 {
     m_operation = boost::bind(&SessionHelper::doSync, this, params, result);
     g_main_loop_quit(m_loop);
 }
 
 bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
-                           const boost::shared_ptr< GDBusCXX::Result2<bool, SyncReport> > &result)
+                           const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result)
 {
     try {
         m_sync.reset(new DBusSync(params, *this));
@@ -247,7 +247,7 @@ bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
 
 void SessionHelper::restore(const std::string &configName,
                             const string &dir, bool before, const std::vector<std::string> &sources,
-                            const boost::shared_ptr< GDBusCXX::Result1<bool> > &result)
+                            const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
     m_operation = boost::bind(&SessionHelper::doRestore, this, configName, dir, before, sources, result);
     g_main_loop_quit(m_loop);
@@ -255,7 +255,7 @@ void SessionHelper::restore(const std::string &configName,
 
 bool SessionHelper::doRestore(const std::string &configName,
                               const string &dir, bool before, const std::vector<std::string> &sources,
-                              const boost::shared_ptr< GDBusCXX::Result1<bool> > &result)
+                              const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
     try {
         SessionCommon::SyncParams params;
@@ -287,14 +287,14 @@ bool SessionHelper::doRestore(const std::string &configName,
 
 
 void SessionHelper::execute(const vector<string> &args, const map<string, string> &vars,
-                            const boost::shared_ptr< GDBusCXX::Result1<bool> > &result)
+                            const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
     m_operation = boost::bind(&SessionHelper::doExecute, this, args, vars, result);
     g_main_loop_quit(m_loop);
 }
 
 bool SessionHelper::doExecute(const vector<string> &args, const map<string, string> &vars,
-                              const boost::shared_ptr< GDBusCXX::Result1<bool> > &result)
+                              const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
     try {
         CmdlineWrapper cmdline(*this, args, vars);

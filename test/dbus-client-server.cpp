@@ -19,7 +19,7 @@ class Test
 {
     GDBusCXX::DBusObjectHelper m_server;
     // GDBusCXX::DBusRemoteObject m_dbusAPI;
-    // GDBusCXX::SignalWatch0 m_disconnected;
+    // GDBusCXX::SignalWatch<> m_disconnected;
 
 public:
     Test(const GDBusCXX::DBusConnectionPtr &conn) :
@@ -122,8 +122,8 @@ public:
     {
     }
 
-    GDBusCXX::DBusClientCall1<std::string> m_hello;
-    GDBusCXX::DBusClientCall0 m_kill;
+    GDBusCXX::DBusClientCall<std::string> m_hello;
+    GDBusCXX::DBusClientCall<> m_kill;
 };
 
 static void onChildConnectKill(const GDBusCXX::DBusConnectionPtr &conn,
@@ -171,21 +171,22 @@ static void callServer(const GDBusCXX::DBusConnectionPtr &conn)
     std::cout << proxy.m_hello(std::string("blocking world, II")) << std::endl;
 
     try {
-        GDBusCXX::DBusClientCall1<std::string> nosuchcall(proxy, "nosuchcall");
+        GDBusCXX::DBusClientCall<std::string> nosuchcall(proxy, "nosuchcall");
         std::cout << nosuchcall(std::string("ignoreme")) << std::endl;
     } catch (const std::runtime_error &ex) {
         std::cout << "caught exception, as expected: " << ex.what() << std::endl;
     }
 
-    GDBusCXX::DBusClientCall2<std::string, std::string> getstrings(proxy, "GetStrings");
+    GDBusCXX::DBusClientCall<std::string, std::string> getstrings(proxy, "GetStrings");
     std::pair<std::string, std::string> r = getstrings();
     std::cout << "Got pair: (" << r.first << ", " << r.second << ")" << std::endl;
 
-    GDBusCXX::DBusClientCall3<std::string, int, std::string> getmixed(proxy, "GetMixed");
-    std::cout << "Got tuple: " << getmixed() << std::endl;
+    GDBusCXX::DBusClientCall<std::string, int, std::string> getmixed(proxy, "GetMixed");
+    auto result = getmixed();
+    std::cout << "Got tuple: " << std::get<0>(result) << " " << std::get<1>(result) << " " << std::get<2>(result) << std::endl;
 
     std::cout << "calling server" << std::endl;
-    proxy.m_hello.start(std::string("world"), boost::bind(helloCB, loop.get(), _1, _2));
+    proxy.m_hello.start(boost::bind(helloCB, loop.get(), _1, _2), std::string("world"));
     // keep connection open until child quits
     guard.reset(new  GDBusCXX::DBusObject(conn, "foo", "bar", true));
 }

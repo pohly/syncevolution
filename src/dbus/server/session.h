@@ -331,12 +331,12 @@ class Session : public GDBusCXX::DBusObjectHelper,
     void fireProgress(bool flush = false);
 
     /** Session.StatusChanged */
-    GDBusCXX::EmitSignal3<const std::string &,
-                          uint32_t,
-                          const SourceStatuses_t &> emitStatus;
+    GDBusCXX::EmitSignal<const std::string &,
+                         uint32_t,
+                         const SourceStatuses_t &> emitStatus;
     /** Session.ProgressChanged */
-    GDBusCXX::EmitSignal2<int32_t,
-                          const APISourceProgresses_t &> emitProgress;
+    GDBusCXX::EmitSignal<int32_t,
+                         const APISourceProgresses_t &> emitProgress;
 public:
     boost::signals2::signal<void (const std::string &,
                                   uint32_t,

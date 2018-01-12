@@ -326,33 +326,32 @@ class Server : public GDBusCXX::DBusObjectHelper
                       const std::map<string, string> &response);
 
     /** Server.SessionChanged */
-    GDBusCXX::EmitSignal2<const GDBusCXX::DBusObject_t &,
-                bool> sessionChanged;
+    GDBusCXX::EmitSignal<const GDBusCXX::DBusObject_t &, bool> sessionChanged;
 
     /** Server.PresenceChanged */
-    GDBusCXX::EmitSignal3<const std::string &,
-                const std::string &,
-                const std::string &> presence;
+    GDBusCXX::EmitSignal<const std::string &,
+                         const std::string &,
+                         const std::string &> presence;
 
     /**
      * Server.TemplatesChanged, triggered each time m_syncDevices, the
      * input for the templates, is changed
      */
-    GDBusCXX::EmitSignal0 templatesChanged;
+    GDBusCXX::EmitSignal<> templatesChanged;
 
     /**
      * Server.ConfigChanged, triggered each time a session ends
      * which modified its configuration
      */
-    GDBusCXX::EmitSignal0 configChanged;
+    GDBusCXX::EmitSignal<> configChanged;
 
     /** Server.InfoRequest */
-    GDBusCXX::EmitSignal6<const std::string &,
-                          const GDBusCXX::DBusObject_t &,
-                          const std::string &,
-                          const std::string &,
-                          const std::string &,
-                          const std::map<string, string> &> infoRequest;
+    GDBusCXX::EmitSignal<const std::string &,
+                         const GDBusCXX::DBusObject_t &,
+                         const std::string &,
+                         const std::string &,
+                         const std::string &,
+                         const std::map<string, string> &> infoRequest;
 
     /** wrapper around Server.LogOutput, filters  by DBusLogLevel */
     void logOutput(const GDBusCXX::DBusObject_t &path,
@@ -365,10 +364,10 @@ class Server : public GDBusCXX::DBusObjectHelper
 
  private:
     /** Server.LogOutput */
-    GDBusCXX::EmitSignal4<const GDBusCXX::DBusObject_t &,
-                          const std::string &,
-                          const std::string &,
-                          const std::string &> m_logOutputSignal;
+    GDBusCXX::EmitSignal<const GDBusCXX::DBusObject_t &,
+                         const std::string &,
+                         const std::string &,
+                         const std::string &> m_logOutputSignal;
 
     friend class InfoReq;
 
