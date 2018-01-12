@@ -141,7 +141,7 @@ class LocalTransportAgent : public TransportAgent
     void askPassword(const std::string &passwordName,
                      const std::string &descr,
                      const ConfigPasswordKey &key,
-                     const boost::shared_ptr< GDBusCXX::Result1<const std::string &> > &reply);
+                     const boost::shared_ptr< GDBusCXX::Result<const std::string &> > &reply);
     void storeSyncReport(const std::string &report);
     void storeReplyMsg(const std::string &contentType,
                        size_t offset, size_t len,

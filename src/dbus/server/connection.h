@@ -119,15 +119,15 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
     /** wrapper around sendAbort */
     void abort();
     /** Connection.Abort */
-    GDBusCXX::EmitSignal0 sendAbort;
+    GDBusCXX::EmitSignal<> sendAbort;
     bool m_abortSent;
 
     /** Connection.Reply */
-    GDBusCXX::EmitSignal5<const GDBusCXX::DBusArray<uint8_t> &,
-                          const std::string &,
-                          const StringMap &,
-                          bool,
-                          const std::string &> reply;
+    GDBusCXX::EmitSignal<const GDBusCXX::DBusArray<uint8_t> &,
+                         const std::string &,
+                         const StringMap &,
+                         bool,
+                         const std::string &> reply;
 
     Connection(Server &server,
                const GDBusCXX::DBusConnectionPtr &conn,

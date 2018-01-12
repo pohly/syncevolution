@@ -85,8 +85,8 @@ class LocaledListener : public GDBusCXX::DBusRemoteObject
     typedef boost::variant<LocaleEnv> LocaleVariant;
     typedef std::map<std::string, LocaleVariant> Properties;
     typedef std::vector<std::string> Invalidated;
-    GDBusCXX::SignalWatch3<std::string, Properties, Invalidated> m_propertiesChanged;
-    GDBusCXX::DBusClientCall1<LocaleVariant> m_propertiesGet;
+    GDBusCXX::SignalWatch<std::string, Properties, Invalidated> m_propertiesChanged;
+    GDBusCXX::DBusClientCall<LocaleVariant> m_propertiesGet;
 
     LocaledListener();
     void onPropertiesChange(const std::string &interface,

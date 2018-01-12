@@ -251,11 +251,11 @@ private:
     // the number of returned dbus calls 
     unsigned int m_replyCounter;
     // listen to dbus server signal 'SessionChanged'
-    SignalWatch2<DBusObject_t, bool> m_sessionChanged;
+    SignalWatch<DBusObject_t, bool> m_sessionChanged;
     // listen to dbus server signal 'LogOutput'
-    SignalWatch4<DBusObject_t, string, string, string> m_logOutput;
+    SignalWatch<DBusObject_t, string, string, string> m_logOutput;
     // listen to dbus server signal 'InfoRequest'
-    SignalWatch6<string, 
+    SignalWatch<string, 
                  DBusObject_t,
                  string,
                  string,
@@ -396,7 +396,7 @@ private:
     bool m_runSync;
 
     /** signal watch 'StatusChanged' */
-    SignalWatch3<std::string, uint32_t, SourceStatuses_t> m_statusChanged;
+    SignalWatch<std::string, uint32_t, SourceStatuses_t> m_statusChanged;
 
     /** InfoReq map. store all infoReq belongs to this session */
     map<string, boost::shared_ptr<InfoReq> > m_infoReqs;
@@ -587,7 +587,7 @@ bool RemoteDBusServer::checkStarted(bool printError)
 void RemoteDBusServer::attachSync()
 {
     resetReplies();
-    DBusClientCall1<boost::shared_ptr<Watch> > attach(*this, "Attach");
+    DBusClientCall<boost::shared_ptr<Watch> > attach(*this, "Attach");
     attach.start(boost::bind(&RemoteDBusServer::attachCb, this, _1, _2));
     while(!done()) {
         g_main_loop_run(m_loop);
@@ -605,7 +605,7 @@ void RemoteDBusServer::attachCb(const boost::shared_ptr<Watch> &watch, const str
         m_attached = true;
 
         // do a version check now before calling replyInc()
-        DBusClientCall1< StringMap > getVersions(*this, "GetVersions");
+        DBusClientCall< StringMap > getVersions(*this, "GetVersions");
         getVersions.start(boost::bind(&RemoteDBusServer::versionCb, this, _1, _2));
     } else {
         // done with attach phase, skip version check
@@ -661,8 +661,8 @@ void RemoteDBusServer::infoResponse(const string &id,
                                     const StringMap &resp)
 {
     //call Server.InfoResponse
-    DBusClientCall0 call(*this, "InfoResponse");
-    call.start(id, state, resp, boost::bind(&RemoteDBusServer::infoResponseCb, this, _1));
+    DBusClientCall<> call(*this, "InfoResponse");
+    call.start(boost::bind(&RemoteDBusServer::infoResponseCb, this, _1), id, state, resp);
 }
 
 void RemoteDBusServer::infoResponseCb(const string &error)
@@ -707,12 +707,12 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
     //3) execute 'arguments' once it is active
 
     // start a new session
-    DBusClientCall1<DBusObject_t> startSession(*this, "StartSessionWithFlags");
+    DBusClientCall<DBusObject_t> startSession(*this, "StartSessionWithFlags");
     std::vector<std::string> flags;
     if (!runSync) {
         flags.push_back("no-sync");
     }
-    startSession.start(peer, flags, boost::bind(&RemoteDBusServer::startSessionCb, this, _1, _2));
+    startSession.start(boost::bind(&RemoteDBusServer::startSessionCb, this, _1, _2), peer, flags);
 
     // wait until 'StartSession' returns
     resetReplies();
@@ -736,7 +736,7 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
                                           "/org/freedesktop/DBus",
                                           "org.freedesktop.DBus",
                                           "");
-        GDBusCXX::SignalWatch3<std::string, std::string, std::string> nameOwnerChanged(daemon,
+        GDBusCXX::SignalWatch<std::string, std::string, std::string> nameOwnerChanged(daemon,
                                                                                        "NameOwnerChanged");
         nameOwnerChanged.activate(boost::bind(&RemoteDBusServer::nameOwnerChangedCB, this,
                                               _1, _2, _3));
@@ -815,7 +815,7 @@ void RemoteDBusServer::runningSessions()
     //1) get all sessions
     //2) check each session and collect running sessions
     //3) get config name of running sessions and print them
-    vector<DBusObject_t> sessions = DBusClientCall1< vector<DBusObject_t> >(*this, "GetSessions")();
+    vector<DBusObject_t> sessions = DBusClientCall< vector<DBusObject_t> >(*this, "GetSessions")();
 
     if (sessions.empty()) {
         SE_LOG_SHOW(NULL, "Background sync daemon is idle.");
@@ -831,11 +831,11 @@ void RemoteDBusServer::runningSessions()
             // showing the exception string instead of showing some
             // more comprehensible error message. Unlikely, so don't
             // bother...
-            boost::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
-                DBusClientCall3<string, uint32_t, RemoteSession::SourceStatuses_t>(session, "GetStatus")();
-            std::string syncStatus = boost::get<0>(status);
+            std::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
+                DBusClientCall<string, uint32_t, RemoteSession::SourceStatuses_t>(session, "GetStatus")();
+            std::string syncStatus = std::get<0>(status);
             if (boost::istarts_with(syncStatus, "running")) {
-                Config_t config = DBusClientCall1<Config_t>(session, "GetConfig")(false);
+                Config_t config = DBusClientCall<Config_t>(session, "GetConfig")(false);
                 session.setConfigName(config);
 
                 if (!session.configName().empty()) {
@@ -878,7 +878,7 @@ bool RemoteDBusServer::monitor(const string &peer)
     //1) get all sessions
     //2) check each session and collect running sessions or
     //3) peak one session with the given peer and monitor it
-    vector<DBusObject_t> sessions = DBusClientCall1< vector<DBusObject_t> >(*this, "GetSessions")();
+    vector<DBusObject_t> sessions = DBusClientCall< vector<DBusObject_t> >(*this, "GetSessions")();
 
     if (sessions.empty()) {
         SE_LOG_SHOW(NULL, "Background sync daemon is idle, no session available to be be monitored.");
@@ -890,11 +890,11 @@ bool RemoteDBusServer::monitor(const string &peer)
         BOOST_FOREACH(const DBusObject_t &path, sessions) {
             boost::shared_ptr<RemoteSession> session(new RemoteSession(*this, path));
 
-            boost::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
-                DBusClientCall3<string, uint32_t, RemoteSession::SourceStatuses_t>(*session, "GetStatus")();
-            std::string syncStatus = boost::get<0>(status);
+            std::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
+                DBusClientCall<string, uint32_t, RemoteSession::SourceStatuses_t>(*session, "GetStatus")();
+            std::string syncStatus = std::get<0>(status);
             if (boost::istarts_with(syncStatus, "running")) {
-                Config_t config = DBusClientCall1<Config_t>(*session, "GetConfig")(false);
+                Config_t config = DBusClientCall<Config_t>(*session, "GetConfig")(false);
                 session->setConfigName(config);
 
                 if (peer.empty() ||
@@ -942,8 +942,8 @@ void RemoteSession::executeAsync(const vector<string> &args)
     m_output = true;
     map<string, string> vars;
     getEnvVars(vars);
-    DBusClientCall0 call(*this, "Execute");
-    call.start(args, vars, boost::bind(&RemoteSession::executeCb, this, _1));
+    DBusClientCall<> call(*this, "Execute");
+    call.start(boost::bind(&RemoteSession::executeCb, this, _1), args, vars);
 }
 
 void RemoteSession::executeCb(const string &error)
@@ -998,7 +998,7 @@ static void interruptCb(const std::string &error)
 void RemoteSession::interruptAsync(const char *operation)
 {
     // call Suspend() without checking result
-    DBusClientCall0 suspend(*this, operation);
+    DBusClientCall<> suspend(*this, operation);
     suspend.start(interruptCb);
 }
 

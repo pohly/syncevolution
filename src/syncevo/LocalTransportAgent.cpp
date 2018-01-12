@@ -274,9 +274,9 @@ class LocalTransportParent : private GDBusCXX::DBusRemoteObject
     {}
 
     /** LocalTransportAgent::askPassword() */
-    GDBusCXX::DBusClientCall1<std::string> m_askPassword;
+    GDBusCXX::DBusClientCall<std::string> m_askPassword;
     /** LocalTransportAgent::storeSyncReport() */
-    GDBusCXX::DBusClientCall0 m_storeSyncReport;
+    GDBusCXX::DBusClientCall<> m_storeSyncReport;
 };
 
 /**
@@ -308,17 +308,17 @@ class LocalTransportChild : public GDBusCXX::DBusRemoteObject
      */
     typedef std::map<std::string, StringPair> ActiveSources_t;
     /** use this to send a message back from child to parent */
-    typedef boost::shared_ptr< GDBusCXX::Result3< std::string, size_t, size_t > > ReplyPtr;
+    typedef boost::shared_ptr< GDBusCXX::Result< std::string, size_t, size_t > > ReplyPtr;
 
     /** log output with level, prefix and message; process name will be added by parent */
-    GDBusCXX::SignalWatch3<string, string, string> m_logOutput;
+    GDBusCXX::SignalWatch<string, string, string> m_logOutput;
 
     /** LocalTransportAgentChild::setFreeze() */
-    GDBusCXX::DBusClientCall0 m_setFreeze;
+    GDBusCXX::DBusClientCall<> m_setFreeze;
     /** LocalTransportAgentChild::startSync() */
-    GDBusCXX::DBusClientCall3<std::string, size_t, size_t > m_startSync;
+    GDBusCXX::DBusClientCall<std::string, size_t, size_t > m_startSync;
     /** LocalTransportAgentChild::sendMsg() */
-    GDBusCXX::DBusClientCall3<std::string, size_t, size_t > m_sendMsg;
+    GDBusCXX::DBusClientCall<std::string, size_t, size_t > m_sendMsg;
 };
 
 void LocalTransportAgent::logChildOutput(const std::string &level, const std::string &prefix, const std::string &message)
@@ -369,7 +369,8 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
     // be set in the target sync config. For backward compatibility we
     // must disable slow sync when it is set on either side.
 
-    m_child->m_startSync.start(m_clientConfig,
+    m_child->m_startSync.start(boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3, _4),
+                               m_clientConfig,
                                StringPair(m_server->getConfigName(),
                                           m_server->isEphemeral() ?
                                           "ephemeral" :
@@ -379,8 +380,7 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
                                std::make_pair(m_server->getSyncUser(),
                                               m_server->getSyncPassword()),
                                props,
-                               sources,
-                               boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3, _4));
+                               sources);
 }
 
 void LocalTransportAgent::onFailure(const std::string &error)
@@ -399,13 +399,13 @@ void LocalTransportAgent::onChildQuit(int status)
     g_main_loop_quit(m_loop.get());
 }
 
-static void GotPassword(const boost::shared_ptr< GDBusCXX::Result1<const std::string &> > &reply,
+static void GotPassword(const boost::shared_ptr< GDBusCXX::Result<const std::string &> > &reply,
                         const std::string &password)
 {
     reply->done(password);
 }
 
-static void PasswordException(const boost::shared_ptr< GDBusCXX::Result1<const std::string &> > &reply)
+static void PasswordException(const boost::shared_ptr< GDBusCXX::Result<const std::string &> > &reply)
 {
     // TODO: refactor, this is the same as dbusErrorCallback
     try {
@@ -426,7 +426,7 @@ static void PasswordException(const boost::shared_ptr< GDBusCXX::Result1<const s
 void LocalTransportAgent::askPassword(const std::string &passwordName,
                                       const std::string &descr,
                                       const ConfigPasswordKey &key,
-                                      const boost::shared_ptr< GDBusCXX::Result1<const std::string &> > &reply)
+                                      const boost::shared_ptr< GDBusCXX::Result<const std::string &> > &reply)
 {
     // pass that work to our own SyncContext and its UI - currently blocks
     SE_LOG_DEBUG(NULL, "local sync parent: asked for password %s, %s",
@@ -511,8 +511,8 @@ void LocalTransportAgent::send(const char *data, size_t len)
     if (m_child) {
         size_t offset = SMLTKSharedMemory::singleton().toLocalOffset(data, len);
         m_status = ACTIVE;
-        m_child->m_sendMsg.start(m_contentType, offset, len,
-                                 boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3, _4));
+        m_child->m_sendMsg.start(boost::bind(&LocalTransportAgent::storeReplyMsg, m_self, _1, _2, _3, _4),
+                                 m_contentType, offset, len);
     } else {
         m_status = FAILED;
         SE_THROW_EXCEPTION(TransportException,
@@ -645,11 +645,11 @@ public:
         std::string password;
         std::string error;
         bool havePassword = false;
-        m_parent->m_askPassword.start(passwordName, descr, key,
-                                      boost::bind(&LocalTransportUI::storePassword, this,
+        m_parent->m_askPassword.start(boost::bind(&LocalTransportUI::storePassword, this,
                                                   boost::ref(password), boost::ref(error),
                                                   boost::ref(havePassword),
-                                                  _1, _2));
+                                                  _1, _2),
+                                      passwordName, descr, key);
         SuspendFlags &s = SuspendFlags::getSuspendFlags();
         while (!havePassword) {
             if (s.getState() != SuspendFlags::NORMAL) {
@@ -718,10 +718,10 @@ public:
         add(m_logOutput);
     };
 
-    GDBusCXX::EmitSignal3<std::string,
-                          std::string,
-                          std::string,
-                          true /* ignore transmission failures */> m_logOutput;
+    /* ignore transmission failures */
+    GDBusCXX::EmitSignalOptional<std::string,
+                                 std::string,
+                                 std::string> m_logOutput;
 };
 
 class ChildLogger : public Logger
@@ -1150,8 +1150,8 @@ public:
             if (m_parent) {
                 std::string report = m_clientReport.toString();
                 SE_LOG_DEBUG(NULL, "child sending sync report after failure:\n%s", report.c_str());
-                m_parent->m_storeSyncReport.start(report,
-                                                  boost::bind(&LocalTransportAgentChild::syncReportReceived, this, _1));
+                m_parent->m_storeSyncReport.start(boost::bind(&LocalTransportAgentChild::syncReportReceived, this, _1),
+                                                  report);
                 // wait for acknowledgement for report once:
                 // we are in some kind of error state, better
                 // do not wait too long
@@ -1167,8 +1167,8 @@ public:
             // send final report, ignore result
             std::string report = m_clientReport.toString();
             SE_LOG_DEBUG(NULL, "child sending sync report:\n%s", report.c_str());
-            m_parent->m_storeSyncReport.start(report,
-                                              boost::bind(&LocalTransportAgentChild::syncReportReceived, this, _1));
+            m_parent->m_storeSyncReport.start(boost::bind(&LocalTransportAgentChild::syncReportReceived, this, _1),
+                                              report);
             while (!m_reportSent && m_parent &&
                    s.getState() == SuspendFlags::NORMAL) {
                 step("waiting for parent's ACK for sync report");
