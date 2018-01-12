@@ -520,9 +520,10 @@ ExtractArgs::ExtractArgs(GDBusConnection *conn,
                          const char *sender,
                          const char *path,
                          const char *interface,
-                         const char *signal)
+                         const char *signal,
+                         GVariant *params)
 {
-    init(conn, NULL, NULL, sender, path, interface, signal);
+    init(conn, NULL, params, sender, path, interface, signal);
 }
 
 ExtractResponse::ExtractResponse(GDBusConnection *conn, GDBusMessage *msg)

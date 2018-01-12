@@ -47,7 +47,7 @@ BluezManager::BluezManager(Server &server) :
 {
     if (getConnection()) {
         m_done = false;
-        DBusClientCall1<DBusObject_t> getAdapter(*this, "DefaultAdapter");
+        DBusClientCall<DBusObject_t> getAdapter(*this, "DefaultAdapter");
         getAdapter.start(boost::bind(&BluezManager::defaultAdapterCb, this, _1, _2 ));
         m_adapterChanged.activate(boost::bind(&BluezManager::defaultAdapterChanged, this, _1));
     } else {
@@ -84,7 +84,7 @@ BluezManager::BluezAdapter::BluezAdapter(BluezManager &manager, const string &pa
     m_manager(manager), m_devNo(0), m_devReplies(0),
     m_deviceRemoved(*this,  "DeviceRemoved"), m_deviceAdded(*this, "DeviceCreated")
 {
-    DBusClientCall1<std::vector<DBusObject_t> > listDevices(*this, "ListDevices");
+    DBusClientCall<std::vector<DBusObject_t> > listDevices(*this, "ListDevices");
     listDevices.start(boost::bind(&BluezAdapter::listDevicesCb, this, _1, _2));
     m_deviceRemoved.activate(boost::bind(&BluezAdapter::deviceRemoved, this, _1));
     m_deviceAdded.activate(boost::bind(&BluezAdapter::deviceCreated, this, _1));
@@ -135,7 +135,7 @@ BluezManager::BluezDevice::BluezDevice (BluezAdapter &adapter, const string &pat
                                path, "org.bluez.Device", "org.bluez"),
     m_adapter(adapter), m_reply(false), m_propertyChanged(*this, "PropertyChanged")
 {
-    DBusClientCall1<PropDict> getProperties(*this, "GetProperties");
+    DBusClientCall<PropDict> getProperties(*this, "GetProperties");
     getProperties.start(boost::bind(&BluezDevice::getPropertiesCb, this, _1, _2));
 
     m_propertyChanged.activate(boost::bind(&BluezDevice::propertyChanged, this, _1, _2));
@@ -171,12 +171,12 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
                                                          SyncConfig::MATCH_FOR_SERVER_MODE);
                 server.addDevice(deviceDesc);
                 if(hasPnpInfoService(uuids)) {
-                    DBusClientCall1<ServiceDict> discoverServices(*this,
+                    DBusClientCall<ServiceDict> discoverServices(*this,
                                                                   "DiscoverServices");
                     static const std::string PNP_INFO_UUID("0x1200");
-                    discoverServices.start(PNP_INFO_UUID,
-                                           boost::bind(&BluezDevice::discoverServicesCb,
-                                                       this, _1, _2));
+                    discoverServices.start(boost::bind(&BluezDevice::discoverServicesCb,
+                                                       this, _1, _2),
+                                           PNP_INFO_UUID);
                 }
             }
             break;

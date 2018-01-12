@@ -51,7 +51,7 @@ private:
     bool m_available;
     Server &m_server;
 
-    GDBusCXX::SignalWatch2 <std::string, boost::variant<std::string> > m_propertyChanged;
+    GDBusCXX::SignalWatch <std::string, boost::variant<std::string> > m_propertyChanged;
 };
 
 SE_END_CXX

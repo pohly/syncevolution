@@ -1132,7 +1132,7 @@
 # ==18093==    by 0x69FC32: SyncEvo::Server::logOutput(GDBusCXX::DBusObject_t const&, SyncEvo::Logger::Level, std::string const&, std::string const&) (gdbus-cxx-bridge.h:905)
 # ==18093==    by 0x6C7F8F: SyncEvo::Logging2Server(SyncEvo::Server&, GDBusCXX::DBusObject_t const&, std::string const&, std::string const&, std::string const&) (session.cpp:974)
 # ==18093==    by 0x6D96E1: boost::detail::function::void_function_obj_invoker3<boost::_bi::bind_t<void, void (*)(SyncEvo::Server&, GDBusCXX::DBusObject_t const&, std::string const&, std::string const&, std::string const&), boost::_bi::list5<boost::reference_wrapper<SyncEvo::Server>, boost::_bi::value<char const*>, boost::arg<1>, boost::arg<2>, boost::arg<3> > >, void, std::string const&, std::string const&, std::string const&>::invoke(boost::detail::function::function_buffer&, std::string const&, std::string const&, std::string const&) (bind.hpp:525)
-# ==18093==    by 0x6DDC03: GDBusCXX::SignalWatch3<std::string, std::string, std::string>::internalCallback(_GDBusConnection*, char const*, char const*, char const*, char const*, _GVariant*, void*) (function_template.hpp:767)
+# ==18093==    by 0x6DDC03: GDBusCXX::SignalWatch<std::string, std::string, std::string>::internalCallback(_GDBusConnection*, char const*, char const*, char const*, char const*, _GVariant*, void*) (function_template.hpp:767)
 # ==18093==    by 0x97133A3: emit_signal_instance_in_idle_cb (in /usr/lib/x86_64-linux-gnu/libgio-2.0.so.0.4000.0)
 # ==18093==    by 0x9C5FDDC: g_main_context_dispatch (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)
 # ==18093==    by 0x9C601B7: g_main_context_iterate.isra.29 (in /lib/x86_64-linux-gnu/libglib-2.0.so.0.4000.0)

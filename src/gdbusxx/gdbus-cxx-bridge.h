@@ -118,6 +118,11 @@ struct GDBusMessageUnref
 };
 typedef std::unique_ptr<GDBusMessage, GDBusMessageUnref> GDBusMessageUnique;
 
+namespace {
+    // Helper function for concatenating an arbitrary number of strings.
+    template<typename A1, typename ...A> std::string concat(const A1 &a1, A... a) { return std::string(a1) + concat(a...); }
+}
+
 /**
  * Simple unique_ptr for GVariant.
  */
@@ -414,14 +419,29 @@ struct dbus_traits_base
 };
 
 /**
+ * A combination of different types have their signature concatenated
+ * and are asynchronous if any individual type is asynchronous.
+ */
+template <typename ...C> struct dbus_traits_many {};
+template<typename C1, typename ...C> struct dbus_traits_many<C1, C...> {
+    static std::string getSignature() { return dbus_traits<C1>::getSignature() + dbus_traits_many<C...>::getSignature(); }
+    static const bool asynchronous = dbus_traits<C1>::asynchronous || dbus_traits_many<C...>::asynchronous;
+};
+template<> struct dbus_traits_many<> {
+    static std::string getSignature() { return ""; }
+    static const bool asynchronous = false;
+};
+
+/**
  * Append a varying number of parameters as result to the
- * message, using AppendRetvals(msg) << res1 << res2 << ...;
+ * message, using AppendRetvals(msg) << res1 << res2 << ...
+ * or AppendRetvals(msg).append(res1, res2, ...).
  *
  * Types can be anything that has a dbus_traits, including
  * types which are normally recognized as input parameters in D-Bus
  * method calls.
  */
-class AppendRetvals {
+class AppendRetvals : private boost::noncopyable {
     GDBusMessage *m_msg;
     GVariantBuilder m_builder;
 
@@ -440,14 +460,24 @@ class AppendRetvals {
         dbus_traits<A>::append(m_builder, a);
         return *this;
     }
+
+    template<typename A1, typename ...A> void append(A1 a1, A... args) {
+        dbus_traits<A1>::append(m_builder, a1);
+        append(args...);
+    }
+    void append() {}
 };
+
 
 /**
  * Append a varying number of method parameters as result to the reply
  * message, using AppendArgs(msg) << Set<A1>(res1) << Set<A2>(res2) << ...;
  */
-struct AppendArgs {
+class AppendArgs : private boost::noncopyable {
     GDBusMessage *m_msg;
+
+ public:
+    // public because several other helper classes need access
     GVariantBuilder m_builder;
 
     AppendArgs(const GDBusMessageUnique &msg) {
@@ -472,7 +502,7 @@ struct AppendArgs {
      * would be recognized by << as parameters and thus get
      * skipped.
      */
-    template<class A> AppendArgs & operator + (const A &a) {
+    template<class A> AppendArgs & operator += (const A &a) {
         dbus_traits<A>::append(m_builder, a);
         return *this;
     }
@@ -515,15 +545,13 @@ template<class A> struct Set <A &>
  * which are marshalled depends on the specialization of Get and thus
  * ultimately on the prototype of the method.
  */
-struct ExtractArgs {
+struct ExtractArgs : private boost::noncopyable {
     // always set
     GDBusConnection *m_conn;
+    GVariantIter m_iter;
 
     // only set when handling a method call
     GDBusMessage **m_msg;
-
-    // only set for method call or response
-    GVariantIter m_iter;
 
     // only set when m_msg is NULL (happens when handling signal)
     const char *m_sender;
@@ -551,7 +579,8 @@ protected:
                 const char *sender,
                 const char *path,
                 const char *interface,
-                const char *signal);
+                const char *signal,
+                GVariant *params);
 
     /** syntactic sugar: redirect >> into Get instance */
     template<class A> ExtractArgs & operator >> (const A &a) {
@@ -705,11 +734,11 @@ template<bool optional> class EmitSignalHelper
     }
 };
 
-template<bool optional = false> class EmitSignal0Template : private EmitSignalHelper<optional>
+template<bool optional = false> class EmitSignal0 : private EmitSignalHelper<optional>
 {
  public:
-    EmitSignal0Template(const DBusObject &object,
-                        const std::string &signal) :
+    EmitSignal0(const DBusObject &object,
+                const std::string &signal) :
         EmitSignalHelper<optional>(object, signal)
     {}
 
@@ -740,43 +769,44 @@ template<bool optional = false> class EmitSignal0Template : private EmitSignalHe
     }
 };
 
-typedef EmitSignal0Template<false> EmitSignal0;
-
 void appendArgInfo(GPtrArray *pa, const std::string &type);
 
-template <typename Arg>
-void appendNewArg(GPtrArray *pa)
-{
-    // "in" direction
-    appendArgInfo(pa, dbus_traits<Arg>::getSignature());
-}
+template<typename ...A> struct AppendSignature;
+ template<typename A1, typename ...A> struct AppendSignature<A1, A...> {
+    static void appendArgs(GPtrArray *pa) {
+        // "in" direction
+        appendArgInfo(pa, dbus_traits<A1>::getSignature());
+        AppendSignature<A...>::appendArgs(pa);
+    }
+    static void appendArgsForReply(GPtrArray *pa) {
+        // "out" direction
+        appendArgInfo(pa, dbus_traits<A1>::getReply());
+        AppendSignature<A...>::appendArgsForReply(pa);
+    }
+    static void appendArgsForReturn(GPtrArray *pa) {
+        // "out" direction, type must not be skipped
+        appendArgInfo(pa, dbus_traits<A1>::getType());
+        AppendSignature<A...>::appendArgsForReturn(pa);
+    }
+};
+template<> struct AppendSignature<> {
+    static void appendArgs(GPtrArray *pa) {}
+    static void appendArgsForReply(GPtrArray *pa) {}
+    static void appendArgsForReturn(GPtrArray *pa) {}
+};
 
-template <typename Arg>
-void appendNewArgForReply(GPtrArray *pa)
-{
-    // "out" direction
-    appendArgInfo(pa, dbus_traits<Arg>::getReply());
-}
-
-template <typename Arg>
-void appendNewArgForReturn(GPtrArray *pa)
-{
-    // "out" direction, type must not be skipped
-    appendArgInfo(pa, dbus_traits<Arg>::getType());
-}
-
-template <typename A1, bool optional = false>
-class EmitSignal1 : private EmitSignalHelper<optional>
+template <bool optional, typename ...A>
+class EmitSignalBase : private EmitSignalHelper<optional>
 {
  public:
-    EmitSignal1(const DBusObject &object,
-                const std::string &signal) :
+    EmitSignalBase(const DBusObject &object,
+                   const std::string &signal) :
         EmitSignalHelper<optional>(object, signal)
     {}
 
     typedef void result_type;
 
-    void operator () (A1 a1)
+    void operator () (A... args)
     {
         DBusMessagePtr msg(g_dbus_message_new_signal(EmitSignalHelper<optional>::m_object.getPath(),
                                                      EmitSignalHelper<optional>::m_object.getInterface(),
@@ -787,7 +817,7 @@ class EmitSignal1 : private EmitSignalHelper<optional>
             }
             throwFailure(EmitSignalHelper<optional>::m_signal, "g_dbus_message_new_signal()", NULL);
         }
-        AppendRetvals(msg) << a1;
+        AppendRetvals(msg).append(args...);
         EmitSignalHelper<optional>::sendMsg(msg);
     }
 
@@ -796,7 +826,7 @@ class EmitSignal1 : private EmitSignalHelper<optional>
         GDBusSignalInfo *entry = g_new0(GDBusSignalInfo, 1);
 
         GPtrArray *args = g_ptr_array_new();
-        appendNewArg<A1>(args);
+        AppendSignature<A...>::appendArgs(args);
         g_ptr_array_add(args, NULL);
 
         entry->name = g_strdup(EmitSignalHelper<optional>::m_signal.c_str());
@@ -806,231 +836,8 @@ class EmitSignal1 : private EmitSignalHelper<optional>
         return entry;
     }
 };
-
-template <typename A1, typename A2, bool optional = false>
-class EmitSignal2 : private EmitSignalHelper<optional>
-{
- public:
-    EmitSignal2(const DBusObject &object,
-                const std::string &signal) :
-        EmitSignalHelper<optional>(object, signal)
-    {}
-
-    typedef void result_type;
-
-    void operator () (A1 a1, A2 a2)
-    {
-        DBusMessagePtr msg(g_dbus_message_new_signal(EmitSignalHelper<optional>::m_object.getPath(),
-                                                     EmitSignalHelper<optional>::m_object.getInterface(),
-                                                     EmitSignalHelper<optional>::m_signal.c_str()));
-        if (!msg) {
-            if (optional) {
-                return;
-            }
-            throwFailure(EmitSignalHelper<optional>::m_signal, "g_dbus_message_new_signal()", NULL);
-        }
-        AppendRetvals(msg) << a1 << a2;
-        EmitSignalHelper<optional>::sendMsg(msg);
-    }
-
-    GDBusSignalInfo *makeSignalEntry() const
-    {
-        GDBusSignalInfo *entry = g_new0(GDBusSignalInfo, 1);
-
-        GPtrArray *args = g_ptr_array_new();
-        appendNewArg<A1>(args);
-        appendNewArg<A2>(args);
-        g_ptr_array_add(args, NULL);
-
-        entry->name = g_strdup(EmitSignalHelper<optional>::m_signal.c_str());
-        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-template <typename A1, typename A2, typename A3, bool optional = false>
-class EmitSignal3 : private EmitSignalHelper<optional>
-{
- public:
-    EmitSignal3(const DBusObject &object,
-                const std::string &signal) :
-        EmitSignalHelper<optional>(object, signal)
-    {}
-
-    typedef void result_type;
-
-    void operator () (A1 a1, A2 a2, A3 a3)
-    {
-        DBusMessagePtr msg(g_dbus_message_new_signal(EmitSignalHelper<optional>::m_object.getPath(),
-                                                     EmitSignalHelper<optional>::m_object.getInterface(),
-                                                     EmitSignalHelper<optional>::m_signal.c_str()));
-        if (!msg) {
-            if (optional) {
-                return;
-            }
-            throwFailure(EmitSignalHelper<optional>::m_signal, "g_dbus_message_new_signal()", NULL);
-        }
-        AppendRetvals(msg) << a1 << a2 << a3;
-        EmitSignalHelper<optional>::sendMsg(msg);
-    }
-
-    GDBusSignalInfo *makeSignalEntry() const
-    {
-        GDBusSignalInfo *entry = g_new0(GDBusSignalInfo, 1);
-
-        GPtrArray *args = g_ptr_array_new();
-        appendNewArg<A1>(args);
-        appendNewArg<A2>(args);
-        appendNewArg<A3>(args);
-        g_ptr_array_add(args, NULL);
-
-        entry->name = g_strdup(EmitSignalHelper<optional>::m_signal.c_str());
-        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-template <typename A1, typename A2, typename A3, typename A4, bool optional = false>
-class EmitSignal4 : private EmitSignalHelper<optional>
-{
- public:
-    EmitSignal4(const DBusObject &object,
-                const std::string &signal) :
-        EmitSignalHelper<optional>(object, signal)
-    {}
-
-    typedef void result_type;
-
-    void operator () (A1 a1, A2 a2, A3 a3, A4 a4)
-    {
-        DBusMessagePtr msg(g_dbus_message_new_signal(EmitSignalHelper<optional>::m_object.getPath(),
-                                                     EmitSignalHelper<optional>::m_object.getInterface(),
-                                                     EmitSignalHelper<optional>::m_signal.c_str()));
-        if (!msg) {
-            if (optional) {
-                return;
-            }
-            throwFailure(EmitSignalHelper<optional>::m_signal, "g_dbus_message_new_signal()", NULL);
-        }
-        AppendRetvals(msg) << a1 << a2 << a3 << a4;
-        EmitSignalHelper<optional>::sendMsg(msg);
-    }
-
-    GDBusSignalInfo *makeSignalEntry() const
-    {
-        GDBusSignalInfo *entry = g_new0(GDBusSignalInfo, 1);
-
-        GPtrArray *args = g_ptr_array_new();
-        appendNewArg<A1>(args);
-        appendNewArg<A2>(args);
-        appendNewArg<A3>(args);
-        appendNewArg<A4>(args);
-        g_ptr_array_add(args, NULL);
-
-        entry->name = g_strdup(EmitSignalHelper<optional>::m_signal.c_str());
-        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5, bool optional = false>
-class EmitSignal5 : private EmitSignalHelper<optional>
-{
- public:
-    EmitSignal5(const DBusObject &object,
-                const std::string &signal) :
-        EmitSignalHelper<optional>(object, signal)
-    {}
-
-    typedef void result_type;
-
-    void operator () (A1 a1, A2 a2, A3 a3, A4 a4, A5 a5)
-    {
-        DBusMessagePtr msg(g_dbus_message_new_signal(EmitSignalHelper<optional>::m_object.getPath(),
-                                                     EmitSignalHelper<optional>::m_object.getInterface(),
-                                                     EmitSignalHelper<optional>::m_signal.c_str()));
-        if (!msg) {
-            if (optional) {
-                return;
-            }
-            throwFailure(EmitSignalHelper<optional>::m_signal, "g_dbus_message_new_signal()", NULL);
-        }
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
-        EmitSignalHelper<optional>::sendMsg(msg);
-    }
-
-    GDBusSignalInfo *makeSignalEntry() const
-    {
-        GDBusSignalInfo *entry = g_new0(GDBusSignalInfo, 1);
-
-        GPtrArray *args = g_ptr_array_new();
-        appendNewArg<A1>(args);
-        appendNewArg<A2>(args);
-        appendNewArg<A3>(args);
-        appendNewArg<A4>(args);
-        appendNewArg<A5>(args);
-        g_ptr_array_add(args, NULL);
-
-        entry->name = g_strdup(EmitSignalHelper<optional>::m_signal.c_str());
-        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6, bool optional = false>
-class EmitSignal6 : private EmitSignalHelper<optional>
-{
- public:
-    EmitSignal6(const DBusObject &object,
-                const std::string &signal) :
-        EmitSignalHelper<optional>(object, signal)
-    {}
-
-    typedef void result_type;
-
-    void operator () (A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6)
-    {
-        DBusMessagePtr msg(g_dbus_message_new_signal(EmitSignalHelper<optional>::m_object.getPath(),
-                                                     EmitSignalHelper<optional>::m_object.getInterface(),
-                                                     EmitSignalHelper<optional>::m_signal.c_str()));
-        if (!msg) {
-            if (optional) {
-                return;
-            }
-            throwFailure(EmitSignalHelper<optional>::m_signal, "g_dbus_message_new_signal()", NULL);
-        }
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
-        EmitSignalHelper<optional>::sendMsg(msg);
-    }
-
-    GDBusSignalInfo *makeSignalEntry() const
-    {
-        GDBusSignalInfo *entry = g_new0(GDBusSignalInfo, 1);
-
-        GPtrArray *args = g_ptr_array_sized_new(7);
-        appendNewArg<A1>(args);
-        appendNewArg<A2>(args);
-        appendNewArg<A3>(args);
-        appendNewArg<A4>(args);
-        appendNewArg<A5>(args);
-        appendNewArg<A6>(args);
-        g_ptr_array_add(args, NULL);
-
-        entry->name = g_strdup(EmitSignalHelper<optional>::m_signal.c_str());
-        entry->args = (GDBusArgInfo **)g_ptr_array_free (args, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
+template<typename ...A> using EmitSignal = EmitSignalBase<false, A...>;
+template<typename ...A> using EmitSignalOptional = EmitSignalBase<true, A...>;
 
 struct FunctionWrapperBase {
     void* m_func_ptr;
@@ -1781,11 +1588,11 @@ template<class A, class B> struct dbus_traits< std::pair<A,B> > : public dbus_tr
 /**
  * a boost::tuple - maps to D-Bus struct
  */
-template<class A, class B> struct dbus_traits< boost::tuple<A,B> > : public dbus_traits_base
+template<typename ...A> struct dbus_traits< boost::tuple<A...> > : public dbus_traits_base
 {
     static std::string getContainedType()
     {
-        return dbus_traits<A>::getType() + dbus_traits<B>::getType();
+        return concat(dbus_traits<A...>::getType());
     }
     static std::string getType()
     {
@@ -1793,8 +1600,8 @@ template<class A, class B> struct dbus_traits< boost::tuple<A,B> > : public dbus
     }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
-    typedef boost::tuple<A,B> host_type;
-    typedef const boost::tuple<A,B> &arg_type;
+    typedef boost::tuple<A...> host_type;
+    typedef const boost::tuple<A...> &arg_type;
 
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &t)
@@ -1806,104 +1613,37 @@ template<class A, class B> struct dbus_traits< boost::tuple<A,B> > : public dbus
 
         GVariantIter tupIter;
         g_variant_iter_init(&tupIter, var);
-        dbus_traits<A>::get(context, tupIter, boost::tuples::get<0>(t));
-        dbus_traits<B>::get(context, tupIter, boost::tuples::get<1>(t));
+        get_all(context, tupIter, t);
     }
 
     static void append(GVariantBuilder &builder, arg_type t)
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
-        dbus_traits<A>::append(builder, boost::tuples::get<0>(t));
-        dbus_traits<B>::append(builder, boost::tuples::get<1>(t));
+        append_all(builder, t);
         g_variant_builder_close(&builder);
     }
-};
 
-/**
- * a boost::tuple - maps to D-Bus struct
- */
-template<class A, class B, class C> struct dbus_traits< boost::tuple<A,B,C> > : public dbus_traits_base
-{
-    static std::string getContainedType()
-    {
-        return dbus_traits<A>::getType() + dbus_traits<B>::getType() + dbus_traits<C>::getType();
-    }
-    static std::string getType()
-    {
-        return "(" + getContainedType() + ")";
-    }
-    static std::string getSignature() {return getType(); }
-    static std::string getReply() { return ""; }
-    typedef boost::tuple<A,B,C> host_type;
-    typedef const boost::tuple<A,B,C> &arg_type;
+ private:
+    // Compile-time recursion for each tuple element.
 
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, host_type &t)
-    {
-        GVariantCXX var(g_variant_iter_next_value(&iter));
-        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
-            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
-        }
-
-        GVariantIter tupIter;
-        g_variant_iter_init(&tupIter, var);
-        dbus_traits<A>::get(context, tupIter, boost::tuples::get<0>(t));
-        dbus_traits<B>::get(context, tupIter, boost::tuples::get<1>(t));
-        dbus_traits<C>::get(context, tupIter, boost::tuples::get<2>(t));
+    template<std::size_t i = 0, typename... Tp>
+        static typename std::enable_if<i == sizeof...(Tp), void>::type
+        get_all(ExtractArgs &context, GVariantIter &tupIter, boost::tuple<Tp...> &t) {}
+    template<std::size_t i = 0, typename... Tp>
+        static typename std::enable_if<i < sizeof...(Tp), void>::type
+        get_all(ExtractArgs &context, GVariantIter &tupIter, boost::tuple<Tp...> &t) {
+        dbus_traits<decltype(boost::tuples::get<i>(t))>::get(context, tupIter, boost::tuples::get<i>(t));
+        get_all<i + 1, Tp...>(t);
     }
 
-    static void append(GVariantBuilder &builder, arg_type t)
-    {
-        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
-        dbus_traits<A>::append(builder, boost::tuples::get<0>(t));
-        dbus_traits<B>::append(builder, boost::tuples::get<1>(t));
-        dbus_traits<C>::append(builder, boost::tuples::get<2>(t));
-        g_variant_builder_close(&builder);
-    }
-};
-
-/**
- * a boost::tuple - maps to D-Bus struct
- */
-template<class A, class B, class C, class D> struct dbus_traits< boost::tuple<A,B,C,D> > : public dbus_traits_base
-{
-    static std::string getContainedType()
-    {
-        return dbus_traits<A>::getType() + dbus_traits<B>::getType() + dbus_traits<C>::getType() + dbus_traits<D>::getType();
-    }
-    static std::string getType()
-    {
-        return "(" + getContainedType() + ")";
-    }
-    static std::string getSignature() {return getType(); }
-    static std::string getReply() { return ""; }
-    typedef boost::tuple<A,B,C,D> host_type;
-    typedef const boost::tuple<A,B,C,D> &arg_type;
-
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, host_type &t)
-    {
-        GVariantCXX var(g_variant_iter_next_value(&iter));
-        if (var == NULL || !g_variant_type_is_subtype_of(g_variant_get_type(var), G_VARIANT_TYPE_TUPLE)) {
-            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
-        }
-
-        GVariantIter tupIter;
-        g_variant_iter_init(&tupIter, var);
-        dbus_traits<A>::get(context, tupIter, boost::tuples::get<0>(t));
-        dbus_traits<B>::get(context, tupIter, boost::tuples::get<1>(t));
-        dbus_traits<C>::get(context, tupIter, boost::tuples::get<2>(t));
-        dbus_traits<D>::get(context, tupIter, boost::tuples::get<3>(t));
-    }
-
-    static void append(GVariantBuilder &builder, arg_type t)
-    {
-        g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
-        dbus_traits<A>::append(builder, boost::tuples::get<0>(t));
-        dbus_traits<B>::append(builder, boost::tuples::get<1>(t));
-        dbus_traits<C>::append(builder, boost::tuples::get<2>(t));
-        dbus_traits<D>::append(builder, boost::tuples::get<3>(t));
-        g_variant_builder_close(&builder);
+    template<std::size_t i = 0, typename... Tp>
+        static typename std::enable_if<i == sizeof...(Tp), void>::type
+        append_all(GVariantBuilder &builder, const boost::tuple<Tp...>& t) {}
+    template<std::size_t i = 0, typename... Tp>
+        static typename std::enable_if<i < sizeof...(Tp), void>::type
+        append_all(GVariantBuilder &builder, const boost::tuple<Tp...>& t) {
+        dbus_traits<decltype(boost::tuples::get<i>(t))>::append(builder, boost::tuples::get<i>(t));
+        append_all<i + 1, Tp...>(t);
     }
 };
 
@@ -2109,214 +1849,64 @@ struct append_visitor : public boost::static_visitor<>
  * application is interested on only a sub set of possible value types
  * in variant.
  */
-template<class BV> struct dbus_variant_base : public dbus_traits_base
+namespace {
+    template<typename V, typename ...M> struct get_one_type;
+    template<typename V, typename M1, typename ...M> struct get_one_type<V, M1, M...> {
+        static void get(ExtractArgs &context, GVariantIter &varIter, const char *type, V &value) {
+            if (dbus_traits<M1>::getSignature() == type) {
+                M1 val;
+                dbus_traits<M1>::get(context, varIter, val);
+                value = val;
+            } else {
+                // try next type
+                get_one_type<V, M...>::get(context, varIter, type, value);
+            }
+        }
+    };
+    template<typename V> struct get_one_type<V> {
+        static void get(ExtractArgs &context, GVariantIter &varIter, const char *type, V &value) {
+            // If we end up here, nothing that was passed to us via D-Bus matches
+            // any of the types that can be stored in the boost::variant.
+            // We simply ignore this and continue with an empty variant.
+        }
+    };
+}
+
+
+template <class ...M> struct dbus_traits <boost::variant <M...> >
 {
     static std::string getType() { return "v"; }
     static std::string getSignature() { return getType(); }
     static std::string getReply() { return ""; }
 
-    typedef BV host_type;
-    typedef const BV &arg_type;
+    typedef boost::variant<M...> host_type;
+    typedef const boost::variant<M...> &arg_type;
 
-    static void append(GVariantBuilder &builder, const BV &value)
+    static void append(GVariantBuilder &builder, const boost::variant<M...> &value)
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
         boost::apply_visitor(append_visitor(builder), value);
         g_variant_builder_close(&builder);
     }
-};
 
-
-template <class V> struct dbus_traits <boost::variant <V> > :
-    public dbus_variant_base< boost::variant <V> >
-{
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, boost::variant <V> &value)
+    static void get(ExtractArgs &context, GVariantIter &iter, boost::variant<M...> &value)
     {
         GVariantCXX var(g_variant_iter_next_value(&iter));
         if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
             throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
         }
 
+        // Determine actual type contained in the variant.
         GVariantIter varIter;
         g_variant_iter_init(&varIter, var);
         GVariantCXX varVar(g_variant_iter_next_value(&varIter));
         const char *type = g_variant_get_type_string(varVar);
-        if (dbus_traits<V>::getSignature() != type) {
-            //ignore unrecognized sub type in variant
-            return;
-        }
-
-        V val;
-        // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
+        // Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
         g_variant_iter_init(&varIter, var);
-        dbus_traits<V>::get(context, varIter, val);
-        value = val;
+        // Now extract it.
+        get_one_type<boost::variant<M...>, M...>::get(context, varIter, type, value);
     }
 };
-
-template <class V1, class V2> struct dbus_traits <boost::variant <V1, V2> > :
-    public dbus_variant_base< boost::variant <V1, V2> >
-{
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, boost::variant <V1, V2> &value)
-    {
-        GVariantCXX var(g_variant_iter_next_value(&iter));
-        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
-            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
-        }
-
-        GVariantIter varIter;
-        g_variant_iter_init(&varIter, var);
-        GVariantCXX varVar(g_variant_iter_next_value(&varIter));
-        const char *type = g_variant_get_type_string(varVar);
-        if (dbus_traits<V1>::getSignature() == type) {
-            V1 val;
-            // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V1>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V2>::getSignature() == type) {
-            V2 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V2>::get(context, varIter, val);
-            value = val;
-        } else {
-            // ignore unrecognized sub type in variant
-            return;
-        }
-    }
-};
-
-template <class V1, class V2, class V3> struct dbus_traits <boost::variant <V1, V2, V3> > :
-    public dbus_variant_base< boost::variant <V1, V2, V3> >
-{
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, boost::variant <V1, V2, V3> &value)
-    {
-        GVariantCXX var(g_variant_iter_next_value(&iter));
-        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
-            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
-        }
-
-        GVariantIter varIter;
-        g_variant_iter_init(&varIter, var);
-        GVariantCXX varVar(g_variant_iter_next_value(&varIter));
-        const char *type = g_variant_get_type_string(varVar);
-        if (dbus_traits<V1>::getSignature() == type) {
-            V1 val;
-            // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V1>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V2>::getSignature() == type) {
-            V2 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V2>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V3>::getSignature() == type) {
-            V3 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V3>::get(context, varIter, val);
-            value = val;
-        } else {
-            // ignore unrecognized sub type in variant
-            return;
-        }
-    }
-};
-
-template <class V1, class V2, class V3, class V4> struct dbus_traits <boost::variant <V1, V2, V3, V4> > :
-    public dbus_variant_base< boost::variant <V1, V2, V3, V4> >
-{
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, boost::variant <V1, V2, V3> &value)
-    {
-        GVariantCXX var(g_variant_iter_next_value(&iter));
-        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
-            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
-        }
-
-        GVariantIter varIter;
-        g_variant_iter_init(&varIter, var);
-        GVariantCXX varVar(g_variant_iter_next_value(&varIter));
-        const char *type = g_variant_get_type_string(varVar);
-        if (dbus_traits<V1>::getSignature() == type) {
-            V1 val;
-            // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V1>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V2>::getSignature() == type) {
-            V2 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V2>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V3>::getSignature() == type) {
-            V3 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V3>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V4>::getSignature() == type) {
-            V4 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V4>::get(context, varIter, val);
-            value = val;
-        } else {
-            // ignore unrecognized sub type in variant
-            return;
-        }
-    }
-};
-
-template <class V1, class V2, class V3, class V4, class V5> struct dbus_traits <boost::variant <V1, V2, V3, V4, V5> > :
-    public dbus_variant_base< boost::variant <V1, V2, V3, V4, V5> >
-{
-    static void get(ExtractArgs &context,
-                    GVariantIter &iter, boost::variant <V1, V2, V3> &value)
-    {
-        GVariantCXX var(g_variant_iter_next_value(&iter));
-        if (var == NULL || !g_variant_type_equal(g_variant_get_type(var), G_VARIANT_TYPE_VARIANT)) {
-            throw std::runtime_error("g_variant failure " GDBUS_CXX_SOURCE_INFO);
-        }
-
-        GVariantIter varIter;
-        g_variant_iter_init(&varIter, var);
-        GVariantCXX varVar(g_variant_iter_next_value(&varIter));
-        const char *type = g_variant_get_type_string(varVar);
-        if (dbus_traits<V1>::getSignature() == type) {
-            V1 val;
-            // Note: Reset the iterator so that the call to dbus_traits<V>::get() will get the right variant;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V1>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V2>::getSignature() == type) {
-            V2 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V2>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V3>::getSignature() == type) {
-            V3 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V3>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V4>::getSignature() == type) {
-            V4 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V4>::get(context, varIter, val);
-            value = val;
-        } else if (dbus_traits<V5>::getSignature() == type) {
-            V5 val;
-            g_variant_iter_init(&varIter, var);
-            dbus_traits<V5>::get(context, varIter, val);
-            value = val;
-        } else {
-            // ignore unrecognized sub type in variant
-            return;
-        }
-    }
-};
-
 
 /**
  * A recursive variant. Can represent values of a certain type V and
@@ -2589,7 +2179,7 @@ class DBusCXXException
     virtual const char* getMessage() const { return "unknown"; }
 };
 
-static GDBusMessage *handleException(GDBusMessage *&callerMsg)
+static inline GDBusMessage *handleException(GDBusMessage *&callerMsg)
 {
     // We provide a reply to the message. Clear the "msg" variable
     // in our caller's context to make it as done.
@@ -2674,11 +2264,11 @@ template <> struct dbus_traits< boost::shared_ptr<Watch> >  : public dbus_traits
 };
 
 /**
- * base class for D-Bus results,
+ * implementation class for D-Bus results,
  * keeps references to required objects and provides the
- * failed() method
+ * failed() and done() methods (pure virtual in the public Result API class)
  */
-class DBusResult : virtual public Result
+template<typename ...A> class DBusResult : virtual public Result<A...>
 {
  protected:
     DBusConnectionPtr m_conn;     /**< connection via which the message was received */
@@ -2736,338 +2326,20 @@ class DBusResult : virtual public Result
         watch->activate(g_dbus_message_get_sender(m_msg.get()));
         return watch.release();
     }
-};
 
-class DBusResult0 :
-    public Result0,
-    public DBusResult
-{
- public:
-    DBusResult0(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done()
+    virtual void done(A... args)
     {
         DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
         if (!reply) {
             throw std::runtime_error("no GDBusMessage");
         }
+        AppendRetvals(reply).append(args...);
         sendMsg(reply);
     }
 
-    static std::string getSignature() { return ""; }
-};
-
-template <typename A1>
-class DBusResult1 :
-    public Result1<A1>,
-    public DBusResult
-{
- public:
-    DBusResult1(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() { return dbus_traits<A1>::getSignature(); }
-
-    static const bool asynchronous = dbus_traits<A1>::asynchronous;
-};
-
-template <typename A1, typename A2>
-class DBusResult2 :
-    public Result2<A1, A2>,
-    public DBusResult
-{
- public:
-    DBusResult2(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult1<A2>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult1<A2>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3>
-class DBusResult3 :
-    public Result3<A1, A2, A3>,
-    public DBusResult
-{
- public:
-    DBusResult3(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult2<A2, A3>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult2<A2, A3>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4>
-class DBusResult4 :
-    public Result4<A1, A2, A3, A4>,
-    public DBusResult
-{
- public:
-    DBusResult4(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4;
-        sendMsg(reply);
-    }
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult3<A2, A3, A4>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult3<A2, A3, A4>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5>
-class DBusResult5 :
-    public Result5<A1, A2, A3, A4, A5>,
-    public DBusResult
-{
- public:
-    DBusResult5(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult4<A2, A3, A4, A5>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult4<A2, A3, A4, A5>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5,
-          typename A6>
-class DBusResult6 :
-    public Result6<A1, A2, A3, A4, A5, A6>,
-    public DBusResult
-{
- public:
-    DBusResult6(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult5<A2, A3, A4, A5, A6>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult5<A2, A3, A4, A5, A6>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5,
-          typename A6, typename A7>
-class DBusResult7 :
-    public Result7<A1, A2, A3, A4, A5, A6, A7>,
-    public DBusResult
-{
- public:
-    DBusResult7(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult6<A2, A3, A4, A5, A6, A7>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult6<A2, A3, A4, A5, A6, A7>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5,
-          typename A6, typename A7, typename A8>
-class DBusResult8 :
-    public Result8<A1, A2, A3, A4, A5, A6, A7, A8>,
-    public DBusResult
-{
- public:
-    DBusResult8(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult7<A2, A3, A4, A5, A6, A7, A8>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult7<A2, A3, A4, A5, A6, A7, A8>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5,
-          typename A6, typename A7, typename A8, typename A9>
-class DBusResult9 :
-    public Result9<A1, A2, A3, A4, A5, A6, A7, A8, A9>,
-    public DBusResult
-{
- public:
-    DBusResult9(GDBusConnection *conn,
-                GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult8<A2, A3, A4, A5, A6, A7, A8, A9>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult8<A2, A3, A4, A5, A6, A7, A8, A9>::asynchronous;
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5,
-          typename A6, typename A7, typename A8, typename A9, typename A10>
-class DBusResult10 :
-    public Result10<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10>,
-    public DBusResult
-{
- public:
-    DBusResult10(GDBusConnection *conn,
-                 GDBusMessage *msg) :
-        DBusResult(conn, msg)
-    {}
-
-    virtual void done(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9, A10 a10)
-    {
-        DBusMessagePtr reply(g_dbus_message_new_method_reply(m_msg.get()));
-        if (!reply) {
-            throw std::runtime_error("no GDBusMessage");
-        }
-        AppendRetvals(reply) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
-        sendMsg(reply);
-    }
-
-    static std::string getSignature() {
-        return dbus_traits<A1>::getSignature() +
-            DBusResult9<A2, A3, A4, A5, A6, A7, A8, A9, A10>::getSignature();
-    }
-
-    static const bool asynchronous =
-        dbus_traits<A1>::asynchronous ||
-        DBusResult9<A2, A3, A4, A5, A6, A7, A8, A9, A10>::asynchronous;
-};
+    static std::string getSignature() { return dbus_traits_many<A...>::getSignature(); }
+    static const bool asynchronous = dbus_traits_many<A...>::asynchronous;
+ };
 
 /**
  * Helper class for constructing a DBusResult: while inside the
@@ -3099,22 +2371,15 @@ template <class DBusR> class DBusResultGuard : public boost::shared_ptr<DBusR>
     }
 };
 
-/**
- * A parameter which points towards one of our Result* structures.
- * All of the types contained in it count towards the Reply signature.
- * The requested Result type itself is constructed here.
- *
- * @param R      Result0, Result1<type>, ...
- * @param DBusR  the class implementing R
- */
-template <class R, class DBusR> struct dbus_traits_result
+template <typename ...A>
+struct dbus_traits< boost::shared_ptr<Result<A...> > >
 {
-    static std::string getType() { return DBusR::getSignature(); }
+    static std::string getType() { return DBusResult<A...>::getSignature(); }
     static std::string getSignature() { return ""; }
     static std::string getReply() { return getType(); }
 
-    typedef DBusResultGuard<DBusR> host_type;
-    typedef boost::shared_ptr<R> &arg_type;
+    typedef DBusResultGuard< DBusResult<A...> > host_type;
+    typedef boost::shared_ptr< Result<A...> > &arg_type;
     static const bool asynchronous = true;
 
     static void get(ExtractArgs &context,
@@ -3124,95 +2389,75 @@ template <class R, class DBusR> struct dbus_traits_result
     }
 };
 
-template <>
-struct dbus_traits< boost::shared_ptr<Result0> > :
-    public dbus_traits_result<Result0, DBusResult0>
-{};
-template <class A1>
-struct dbus_traits< boost::shared_ptr< Result1<A1> > >:
-    public dbus_traits_result< Result1<A1>, DBusResult1<A1> >
-{};
-template <class A1, class A2>
-struct dbus_traits< boost::shared_ptr< Result2<A1, A2> > >:
-    public dbus_traits_result< Result2<A1, A2>, DBusResult2<A1, A2> >
-{};
-template <class A1, class A2, class A3>
-    struct dbus_traits< boost::shared_ptr< Result3<A1, A2, A3> > >:
-    public dbus_traits_result< Result3<A1, A2, A3>, DBusResult3<A1, A2, A3> >
-{};
-template <class A1, class A2, class A3, class A4>
-    struct dbus_traits< boost::shared_ptr< Result4<A1, A2, A3, A4> > >:
-    public dbus_traits_result< Result4<A1, A2, A3, A4>, DBusResult4<A1, A2, A3, A4> >
-{};
-template <class A1, class A2, class A3, class A4, class A5>
-    struct dbus_traits< boost::shared_ptr< Result5<A1, A2, A3, A4, A5> > >:
-    public dbus_traits_result< Result5<A1, A2, A3, A4, A5>, DBusResult5<A1, A2, A3, A4, A5> >
-{};
-template <class A1, class A2, class A3, class A4, class A5, class A6>
-    struct dbus_traits< boost::shared_ptr< Result6<A1, A2, A3, A4, A5, A6> > >:
-    public dbus_traits_result< Result6<A1, A2, A3, A4, A5, A6>, DBusResult6<A1, A2, A3, A4, A5, A6> >
-{};
-template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
-    struct dbus_traits< boost::shared_ptr< Result7<A1, A2, A3, A4, A5, A6, A7> > >:
-    public dbus_traits_result< Result7<A1, A2, A3, A4, A5, A6, A7>, DBusResult7<A1, A2, A3, A4, A5, A6, A7> >
-{};
-template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
-    struct dbus_traits< boost::shared_ptr< Result8<A1, A2, A3, A4, A5, A6, A7, A8> > >:
-    public dbus_traits_result< Result8<A1, A2, A3, A4, A5, A6, A7, A8>, DBusResult8<A1, A2, A3, A4, A5, A6, A7, A8> >
-{};
-template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
-    struct dbus_traits< boost::shared_ptr< Result9<A1, A2, A3, A4, A5, A6, A7, A8, A9> > >:
-    public dbus_traits_result< Result9<A1, A2, A3, A4, A5, A6, A7, A8, A9>, DBusResult9<A1, A2, A3, A4, A5, A6, A7, A8, A9> >
-{};
-template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
-    struct dbus_traits< boost::shared_ptr< Result10<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> > >:
-    public dbus_traits_result< Result10<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10>, DBusResult10<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> >
-{};
-
-/** ===> 10 parameters */
-template <class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7, class A8, class A9, class A10>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)> >
-{
-    typedef void (Mptr)(A1, A2, A3, A4, A5, A6, A7, A8, A9, A10);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M bind(Mptr C::*method, I instance) {
-        // this fails because bind() only supports up to 9 parameters, including
-        // the initial this pointer
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7, _8, _9 /* _10 */);
+namespace {
+    // Call function with values from a tuple as parameters.
+    // std::index_sequence is C++14
+    template<typename F, typename T, std::size_t ...I> auto apply_impl(F &&f, T &t, std::index_sequence<I...>) {
+	return std::forward<F>(f)(std::get<I>(t)...);
+    }
+    template<typename F, typename ...T> auto apply(F &&f, std::tuple<T...> &t) {
+	return apply_impl(std::forward<F>(f), t, std::index_sequence_for<T...>());
     }
 
-    static const bool asynchronous = dbus_traits< DBusResult10<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> >::asynchronous;
+    // Convert functions parameters between tuple and D-Bus message.
+    template<typename T, int i, typename ...A> struct args;
+    template<typename T, int i, typename A1, typename ...A> struct args<T, i, A1, A...> {
+        // Input parameters.
+        static void get(ExtractArgs &ea, T &t) {
+            ea >> Get<A1>(std::get<i>(t));
+            args<T, i + 1, A...>::get(ea, t);
+        }
+        // Output parameters.
+        static void set(AppendArgs &aa, T &t) {
+            aa << Set<A1>(std::get<i>(t));
+            args<T, i + 1, A...>::set(aa, t);
+        }
+    };
+    template<typename T, int i> struct args<T, i> {
+        static void get(ExtractArgs &ea, T &t) {}
+        static void set(AppendArgs &aa, T &t) {}
+    };
+}
+
+/** return value */
+template <typename R, typename ...A>
+struct MakeMethodEntry< boost::function<R (A...)> >
+{
+    typedef R (Mptr)(A...);
+    typedef boost::function<Mptr> M;
+
+    template <class I, class C> static auto boostptr(Mptr C::*method, I instance) {
+        return [method, instance] (A... a) {
+            return (instance->*method)(a...);
+        };
+    }
+
+    static const bool asynchronous = dbus_traits_many<A...>::asynchronous;
 
     static GDBusMessage *methodFunction(GDBusConnection *conn,
                                         GDBusMessage *msg, void *data)
     {
         try {
             GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-            typename dbus_traits<A8>::host_type a8;
-            typename dbus_traits<A9>::host_type a9;
-            typename dbus_traits<A10>::host_type a10;
+            typedef std::tuple<typename dbus_traits<A>::host_type...> T;
+            R r;
+            T t;
 
             try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4) >> Get<A5>(a5)
-                                       >> Get<A6>(a6) >> Get<A7>(a7) >> Get<A8>(a8) >> Get<A9>(a9) >> Get<A10>(a10);
+                // Extract all input parameters.
+                ExtractArgs ea(conn, msg);
+                args<T, 0, A...>::get(ea, t);
 
-                (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+                r = apply(*static_cast<M *>(data), t);
                 if (asynchronous) {
                     return NULL;
                 }
 
+                // Send response with all output parameters.
                 reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4) << Set<A5>(a5)
-                                  << Set<A6>(a6) << Set<A7>(a7) << Set<A8>(a8) << Set<A9>(a9) << Set<A10>(a10);
+                AppendArgs aa(reply);
+                aa += r;
+                args<T, 0, A...>::set(aa, t);
             } catch (...) {
                 return handleException(msg);
             }
@@ -3227,29 +2472,12 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
 
         GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        appendNewArg<A8>(inArgs);
-        appendNewArg<A9>(inArgs);
-        appendNewArg<A10>(inArgs);
+        AppendSignature<A...>::appendArgs(inArgs);
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        appendNewArgForReply<A8>(outArgs);
-        appendNewArgForReply<A9>(outArgs);
-        appendNewArgForReply<A10>(outArgs);
+        AppendSignature<R>::appendArgsForReturn(outArgs);
+        AppendSignature<A...>::appendArgsForReply(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
@@ -3261,53 +2489,43 @@ struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9
     }
 };
 
-/** 9 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7, class A8, class A9>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> >
+/** no return value */
+template <typename ...A>
+struct MakeMethodEntry< boost::function<void (A...)> >
 {
-    typedef R (Mptr)(A1, A2, A3, A4, A5, A6, A7, A8, A9);
+    typedef void (Mptr)(A...);
     typedef boost::function<Mptr> M;
 
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        // this fails because bind() only supports up to 9 parameters, including
-        // the initial this pointer
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7, _8, _9);
+    template <class I, class C> static auto boostptr(Mptr C::*method, I instance) {
+        return [method, instance] (A... a) {
+            return (instance->*method)(a...);
+        };
     }
 
-    static const bool asynchronous = DBusResult9<A1, A2, A3, A4, A5, A6, A7, A8, A9>::asynchronous;
+    static const bool asynchronous = dbus_traits_many<A...>::asynchronous;
 
     static GDBusMessage *methodFunction(GDBusConnection *conn,
                                         GDBusMessage *msg, void *data)
     {
         try {
             GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-            typename dbus_traits<A8>::host_type a8;
-            typename dbus_traits<A9>::host_type a9;
+            typedef std::tuple<typename dbus_traits<A>::host_type...> T;
+            T t;
 
             try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4) >> Get<A5>(a5)
-                                       >> Get<A6>(a6) >> Get<A7>(a7) >> Get<A8>(a8) >> Get<A9>(a9);
+                // Extract all input parameters.
+                ExtractArgs ea(conn, msg);
+                args<T, 0, A...>::get(ea, t);
 
-                r = (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7, a8, a9);
-
+                apply(*static_cast<M *>(data), t);
                 if (asynchronous) {
                     return NULL;
                 }
 
+                // Send response with all output parameters.
                 reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4) << Set<A5>(a5)
-                                      << Set<A6>(a6) << Set<A7>(a7) << Set<A8>(a8) << Set<A9>(a9);
-
+                AppendArgs aa(reply);
+                args<T, 0, A...>::set(aa, t);
             } catch (...) {
                 return handleException(msg);
             }
@@ -3322,28 +2540,11 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
         GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
 
         GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        appendNewArg<A8>(inArgs);
-        appendNewArg<A9>(inArgs);
+        AppendSignature<A...>::appendArgs(inArgs);
         g_ptr_array_add(inArgs, NULL);
 
         GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        appendNewArgForReply<A8>(outArgs);
-        appendNewArgForReply<A9>(outArgs);
+        AppendSignature<A...>::appendArgsForReply(outArgs);
         g_ptr_array_add(outArgs, NULL);
 
         entry->name     = g_strdup(name);
@@ -3355,1377 +2556,41 @@ struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8, A9)> 
     }
 };
 
-/** ===> 9 parameters */
-template <class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7, class A8, class A9>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8, A9)> >
+template<typename ...R> struct DBusClientCallReturnType;
+// no return value: return void, with an empty tuple as buffer
+template<> struct DBusClientCallReturnType<>
 {
-    typedef void (Mptr)(A1, A2, A3, A4, A5, A6, A7, A8, A9);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7, _8, _9);
-    }
-
-    static const bool asynchronous = DBusResult9<A1, A2, A3, A4, A5, A6, A7, A8, A9>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-            typename dbus_traits<A8>::host_type a8;
-            typename dbus_traits<A9>::host_type a9;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4) >> Get<A5>(a5)
-                                       >> Get<A6>(a6) >> Get<A7>(a7) >> Get<A8>(a8) >> Get<A9>(a9);
-
-                (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7, a8, a9);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4) << Set<A5>(a5)
-                                  << Set<A6>(a6) << Set<A7>(a7) << Set<A8>(a8) << Set<A9>(a9);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        appendNewArg<A8>(inArgs);
-        appendNewArg<A9>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        appendNewArgForReply<A8>(outArgs);
-        appendNewArgForReply<A9>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
+    typedef std::tuple<> Buffer_t;
+    typedef void Return_t;
+    static const void returnResult(const Buffer_t &result) {}
+};
+// single return value is not wrapped in a tuple.
+template<typename R1> struct DBusClientCallReturnType<R1>
+{
+    typedef std::tuple<R1> Buffer_t;
+    typedef R1 Return_t;
+    static const Return_t &returnResult(const Buffer_t &result) { return std::get<0>(result); }
+};
+// two return values: std::pair
+template<typename R1, typename R2> struct DBusClientCallReturnType<R1, R2>
+{
+    typedef std::tuple<R1, R2> Buffer_t;
+    typedef std::pair<R1, R2> Return_t;
+    static const Return_t returnResult(const Buffer_t &result) { return Return_t(std::get<0>(result), std::get<1>(result)); }
+};
+// General case: at least three return values in a tuple
+template<typename R1, typename R2, typename R3, typename ...R> struct DBusClientCallReturnType<R1, R2, R3, R...>
+{
+    typedef std::tuple<R1, R2, R3, R...> Buffer_t;
+    typedef Buffer_t Return_t;
+    static const Return_t &returnResult(const Buffer_t &result) { return result; }
 };
 
-/** 8 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7, class A8>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7, A8)> >
+template<typename ...R> class DBusClientCall
 {
-    typedef R (Mptr)(A1, A2, A3, A4, A5, A6, A7, A8);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7, _8);
-    }
-
-    static const bool asynchronous = DBusResult8<A1, A2, A3, A4, A5, A6, A7, A8>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-            typename dbus_traits<A8>::host_type a8;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4) >>
-                    Get<A5>(a5) >> Get<A6>(a6) >> Get<A7>(a7) >> Get<A8>(a8);
-
-                r = (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7, a8);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4)
-                                      << Set<A5>(a5) << Set<A6>(a6) << Set<A7>(a7) << Set<A8>(a8);
-
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        appendNewArg<A8>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        appendNewArgForReply<A8>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 8 parameters */
-template <class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7, class A8>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7, A8)> >
-{
-    typedef void (Mptr)(A1, A2, A3, A4, A5, A6, A7, A8);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7, _8);
-    }
-
-    static const bool asynchronous = DBusResult8<A1, A2, A3, A4, A5, A6, A7, A8>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-            typename dbus_traits<A8>::host_type a8;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4)
-                                       >> Get<A5>(a5) >> Get<A6>(a6) >> Get<A7>(a7) >> Get<A8>(a8);
-
-                (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7, a8);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4)
-                                  << Set<A5>(a5) << Set<A6>(a6) << Set<A7>(a7) << Set<A8>(a8);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        appendNewArg<A8>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        appendNewArgForReply<A8>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 7 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6, A7)> >
-{
-    typedef R (Mptr)(A1, A2, A3, A4, A5, A6, A7);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7);
-    }
-
-    static const bool asynchronous = DBusResult7<A1, A2, A3, A4, A5, A6, A7>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4)
-                                       >> Get<A5>(a5) >> Get<A6>(a6) >> Get<A7>(a7);
-
-                r = (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4)
-                                      << Set<A5>(a5) << Set<A6>(a6) << Set<A7>(a7);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 7 parameters */
-template <class A1, class A2, class A3, class A4, class A5,
-          class A6, class A7>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6, A7)> >
-{
-    typedef void (Mptr)(A1, A2, A3, A4, A5, A6, A7);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6, _7);
-    }
-
-    static const bool asynchronous = DBusResult7<A1, A2, A3, A4, A5, A6, A7>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-            typename dbus_traits<A7>::host_type a7;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4)
-                                       >> Get<A5>(a5) >> Get<A6>(a6) >> Get<A7>(a7);
-
-                (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6, a7);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4)
-                                  << Set<A5>(a5) << Set<A6>(a6) << Set<A7>(a7);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        appendNewArg<A7>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        appendNewArgForReply<A7>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 6 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3, class A4, class A5,
-          class A6>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5, A6)> >
-{
-    typedef R (Mptr)(A1, A2, A3, A4, A5, A6);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6);
-    }
-
-    static const bool asynchronous = DBusResult6<A1, A2, A3, A4, A5, A6>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3)
-                                       >> Get<A4>(a4) >> Get<A5>(a5) >> Get<A6>(a6);
-
-                r = (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3)
-                                      << Set<A4>(a4) << Set<A5>(a5) << Set<A6>(a6);
-
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 6 parameters */
-template <class A1, class A2, class A3, class A4, class A5,
-          class A6>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5, A6)> >
-{
-    typedef void (Mptr)(A1, A2, A3, A4, A5, A6);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5, _6);
-    }
-
-    static const bool asynchronous = DBusResult6<A1, A2, A3, A4, A5, A6>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3)
-                                       >> Get<A4>(a4) >> Get<A5>(a5) >> Get<A6>(a6);
-
-                (*static_cast<M *>(data))(a1, a2, a3, a4, a5, a6);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3)
-                                  << Set<A4>(a4) << Set<A5>(a5) << Set<A6>(a6);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        appendNewArg<A6>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        appendNewArgForReply<A6>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 5 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3, class A4, class A5>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4, A5)> >
-{
-    typedef R (Mptr)(A1, A2, A3, A4, A5);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5);
-    }
-
-    static const bool asynchronous = DBusResult5<A1, A2, A3, A4, A5>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3)
-                                       >> Get<A4>(a4) >> Get<A5>(a5);
-
-                r = (*static_cast<M *>(data))(a1, a2, a3, a4, a5);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3)
-                                      << Set<A4>(a4) << Set<A5>(a5);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 5 parameters */
-template <class A1, class A2, class A3, class A4, class A5>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4, A5)> >
-{
-    typedef void (Mptr)(A1, A2, A3, A4, A5);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4, _5);
-    }
-
-    static const bool asynchronous = DBusResult5<A1, A2, A3, A4, A5>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3)
-                                       >> Get<A4>(a4) >> Get<A5>(a5);
-
-                (*static_cast<M *>(data))(a1, a2, a3, a4, a5);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3)
-                                  << Set<A4>(a4) << Set<A5>(a5);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        appendNewArg<A5>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        appendNewArgForReply<A5>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 4 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3, class A4>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3, A4)> >
-{
-    typedef R (Mptr)(A1, A2, A3, A4);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4);
-    }
-
-    static const bool asynchronous = DBusResult4<A1, A2, A3, A4>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4);
-
-                r = (*static_cast<M *>(data))(a1, a2, a3, a4);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 4 parameters */
-template <class A1, class A2, class A3, class A4>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3, A4)> >
-{
-    typedef void (Mptr)(A1, A2, A3, A4);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3, _4);
-    }
-
-    static const bool asynchronous = DBusResult4<A1, A2, A3, A4>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3) >> Get<A4>(a4);
-
-                (*static_cast<M *>(data))(a1, a2, a3, a4);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3) << Set<A4>(a4);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        appendNewArg<A4>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        appendNewArgForReply<A4>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 3 arguments, 1 return value */
-template <class R,
-          class A1, class A2, class A3>
-struct MakeMethodEntry< boost::function<R (A1, A2, A3)> >
-{
-    typedef R (Mptr)(A1, A2, A3);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3);
-    }
-
-    static const bool asynchronous = DBusResult3<A1, A2, A3>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3);
-
-                r = (*static_cast<M *>(data))(a1, a2, a3);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 3 parameters */
-template <class A1, class A2, class A3>
-struct MakeMethodEntry< boost::function<void (A1, A2, A3)> >
-{
-    typedef void (Mptr)(A1, A2, A3);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2, _3);
-    }
-
-    static const bool asynchronous = DBusResult3<A1, A2, A3>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2) >> Get<A3>(a3);
-
-                (*static_cast<M *>(data))(a1, a2, a3);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2) << Set<A3>(a3);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        appendNewArg<A3>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        appendNewArgForReply<A3>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 2 arguments, 1 return value */
-template <class R,
-          class A1, class A2>
-struct MakeMethodEntry< boost::function<R (A1, A2)> >
-{
-    typedef R (Mptr)(A1, A2);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2);
-    }
-
-    static const bool asynchronous = DBusResult2<A1, A2>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2);
-
-                r = (*static_cast<M *>(data))(a1, a2);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1) << Set<A2>(a2);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 2 parameters */
-template <class A1, class A2>
-struct MakeMethodEntry< boost::function<void (A1, A2)> >
-{
-    typedef void (Mptr)(A1, A2);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1, _2);
-    }
-
-    static const bool asynchronous = DBusResult2<A1, A2>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1) >> Get<A2>(a2);
-
-                (*static_cast<M *>(data))(a1, a2);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1) << Set<A2>(a2);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        appendNewArg<A2>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        appendNewArgForReply<A2>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 1 argument, 1 return value */
-template <class R,
-          class A1>
-struct MakeMethodEntry< boost::function<R (A1)> >
-{
-    typedef R (Mptr)(A1);
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1);
-    }
-
-    static const bool asynchronous = DBusResult1<A1>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-            typename dbus_traits<A1>::host_type a1;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1);
-
-                r = (*static_cast<M *>(data))(a1);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r << Set<A1>(a1);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        appendNewArgForReply<A1>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 1 parameter */
-template <class A1>
-struct MakeMethodEntry< boost::function<void (A1)> >
-{
-    typedef void (Mptr)(A1);
-    typedef boost::function<void (A1)> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance, _1);
-    }
-
-    static const bool asynchronous = DBusResult1<A1>::asynchronous;
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<A1>::host_type a1;
-
-            try {
-                ExtractArgs(conn, msg) >> Get<A1>(a1);
-
-                (*static_cast<M *>(data))(a1);
-
-                if (asynchronous) {
-                    return NULL;
-                }
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) << Set<A1>(a1);
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *inArgs = g_ptr_array_new();
-        appendNewArg<A1>(inArgs);
-        g_ptr_array_add(inArgs, NULL);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReply<A1>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = (GDBusArgInfo **)g_ptr_array_free(inArgs,  FALSE);
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** 0 arguments, 1 return value */
-template <class R>
-struct MakeMethodEntry< boost::function<R ()> >
-{
-    typedef R (Mptr)();
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance);
-    }
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                       GDBusMessage *msg, void *data)
-    {
-        try {
-            GDBusMessageUnique reply;
-            typename dbus_traits<R>::host_type r;
-
-            try {
-                r = (*static_cast<M *>(data))();
-
-                reply.reset(g_dbus_message_new_method_reply(msg));
-                AppendArgs(reply) + r;
-            } catch (...) {
-                return handleException(msg);
-            }
-            return reply.release();
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        GPtrArray *outArgs = g_ptr_array_new();
-        appendNewArgForReturn<R>(outArgs);
-        g_ptr_array_add(outArgs, NULL);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = NULL;
-        entry->out_args = (GDBusArgInfo **)g_ptr_array_free(outArgs, FALSE);
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-/** ===> 0 parameter */
-template <>
-struct MakeMethodEntry< boost::function<void ()> >
-{
-    typedef void (Mptr)();
-    typedef boost::function<Mptr> M;
-
-    template <class I, class C> static M boostptr(Mptr C::*method, I instance) {
-        return boost::bind(method, instance);
-    }
-
-    static GDBusMessage *methodFunction(GDBusConnection *conn,
-                                        GDBusMessage *msg, void *data)
-    {
-        try {
-            (*static_cast<M *>(data))();
-
-            GDBusMessage *reply = g_dbus_message_new_method_reply(msg);
-            return reply;
-        } catch (...) {
-            return handleException(msg);
-        }
-    }
-
-    static GDBusMethodInfo *make(const char *name)
-    {
-        GDBusMethodInfo *entry = g_new0(GDBusMethodInfo, 1);
-
-        entry->name     = g_strdup(name);
-        entry->in_args  = NULL;
-        entry->out_args = NULL;
-
-        entry->ref_count = 1;
-        return entry;
-    }
-};
-
-template <class Cb, class Ret>
-struct TraitsBase
-{
-    typedef Cb Callback_t;
-    typedef Ret Return_t;
+    typedef boost::function<void (R..., const std::string &)> Callback_t;
+    typedef typename DBusClientCallReturnType<R...>::Return_t Return_t;
+    typedef typename DBusClientCallReturnType<R...>::Buffer_t Buffer_t;
 
     struct CallbackData
     {
@@ -4737,177 +2602,7 @@ struct TraitsBase
             : m_conn(conn), m_callback(callback)
         {}
     };
-};
 
-struct VoidReturn {};
-
-struct VoidTraits : public TraitsBase<boost::function<void (const std::string &)>, VoidReturn>
-{
-    typedef TraitsBase<boost::function<void (const std::string &)>, VoidReturn> base;
-    typedef base::Callback_t Callback_t;
-    typedef base::Return_t Return_t;
-
-    static Return_t demarshal(DBusMessagePtr &/*reply*/, const DBusConnectionPtr &/*conn*/)
-    {
-        return Return_t();
-    }
-
-    static void handleMessage(DBusMessagePtr &reply, base::CallbackData *data, GError* error)
-    {
-        std::string error_msg;
-        //unmarshal the return results and call user callback
-        if (error != NULL || g_dbus_message_to_gerror(reply.get(), &error)) {
-            if (boost::starts_with(error->message, "GDBus.Error:")) {
-                error_msg = error->message + 12;
-            } else {
-                error_msg = error->message;
-            }
-        }
-        if (data->m_callback) {
-            data->m_callback(error_msg);
-        }
-        delete data;
-        if (error != NULL) {
-            g_error_free (error);
-        }
-    }
-};
-
-template <class R1>
-struct Ret1Traits : public TraitsBase<boost::function<void (const R1 &, const std::string &)>, R1>
-{
-    typedef TraitsBase<boost::function<void (const R1 &, const std::string &)>, R1> base;
-    typedef typename base::Callback_t Callback_t;
-    typedef typename base::Return_t Return_t;
-
-    static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
-    {
-        typename dbus_traits<R1>::host_type r;
-
-        ExtractResponse(conn.get(), reply.get()) >> Get<R1>(r);
-        return r;
-    }
-
-    static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, GError* error)
-    {
-        typename dbus_traits<R1>::host_type r;
-        std::string error_msg;
-
-        if (error == NULL && !g_dbus_message_to_gerror(reply.get(), &error)) {
-            ExtractResponse(data->m_conn.get(), reply.get()) >> Get<R1>(r);
-        } else if (boost::starts_with(error->message, "GDBus.Error:")) {
-            error_msg = error->message + 12;
-        } else {
-            error_msg = error->message;
-        }
-
-        //unmarshal the return results and call user callback
-        if (data->m_callback) {
-            data->m_callback(r, error_msg);
-        }
-        delete data;
-        // cppcheck-suppress nullPointer
-        // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
-        if (error != NULL) {
-            g_error_free (error);
-        }
-    }
-};
-
-template <class R1, class R2>
-struct Ret2Traits : public TraitsBase<boost::function<void (const R1 &, const R2 &, const std::string &)>, std::pair<R1, R2> >
-{
-    typedef TraitsBase<boost::function<void (const R1 &, const R2 &, const std::string &)>, std::pair<R1, R2> > base;
-    typedef typename base::Callback_t Callback_t;
-    typedef typename base::Return_t Return_t;
-
-    static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
-    {
-        Return_t r;
-
-        ExtractResponse(conn.get(), reply.get()) >> Get<R1>(r.first) >> Get<R2>(r.second);
-        return r;
-    }
-
-    static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, GError* error)
-    {
-        typename dbus_traits<R1>::host_type r1;
-        typename dbus_traits<R2>::host_type r2;
-        std::string error_msg;
-
-        if (error == NULL && !g_dbus_message_to_gerror(reply.get(), &error)) {
-            ExtractResponse(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2);
-        } else if (boost::starts_with(error->message, "GDBus.Error:")) {
-            error_msg = error->message + 12;
-        } else {
-            error_msg = error->message;
-        }
-
-        //unmarshal the return results and call user callback
-        if (data->m_callback) {
-            data->m_callback(r1, r2, error_msg);
-        }
-        delete data;
-        // cppcheck-suppress nullPointer
-        // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
-        if (error != NULL) {
-            g_error_free (error);
-        }
-    }
-};
-
-template <class R1, class R2, class R3>
-struct Ret3Traits : public TraitsBase<boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)>, boost::tuple<R1, R2, R3> >
-{
-    typedef TraitsBase<boost::function<void (const R1 &, const R2 &, const R3 &, const std::string &)>, boost::tuple<R1, R2, R3> > base;
-    typedef typename base::Callback_t Callback_t;
-    typedef typename base::Return_t Return_t;
-
-    static Return_t demarshal(DBusMessagePtr &reply, const DBusConnectionPtr &conn)
-    {
-        Return_t r;
-
-        ExtractResponse(conn.get(), reply.get()) >> Get<R1>(boost::get<0>(r)) >> Get<R2>(boost::get<1>(r)) >> Get<R3>(boost::get<2>(r));
-        return r;
-    }
-
-    static void handleMessage(DBusMessagePtr &reply, typename base::CallbackData *data, GError* error)
-    {
-        typename dbus_traits<R1>::host_type r1;
-        typename dbus_traits<R2>::host_type r2;
-        typename dbus_traits<R3>::host_type r3;
-        std::string error_msg;
-
-        if (error == NULL && !g_dbus_message_to_gerror(reply.get(), &error)) {
-            ExtractResponse(data->m_conn.get(), reply.get()) >> Get<R1>(r1) >> Get<R2>(r2) >> Get<R3>(r3);
-        } else if (boost::starts_with(error->message, "GDBus.Error:")) {
-            error_msg = error->message + 12;
-        } else {
-            error_msg = error->message;
-        }
-
-        //unmarshal the return results and call user callback
-        if (data->m_callback) {
-            data->m_callback(r1, r2, r3, error_msg);
-        }
-        delete data;
-        // cppcheck-suppress nullPointer
-        // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
-        if (error != NULL) {
-            g_error_free (error);
-        }
-    }
-};
-
-template <class CallTraits>
-class DBusClientCall
-{
-public:
-    typedef typename CallTraits::Callback_t Callback_t;
-    typedef typename CallTraits::Return_t Return_t;
-    typedef typename CallTraits::base::CallbackData CallbackData;
-
-protected:
     const std::string m_destination;
     const std::string m_path;
     const std::string m_interface;
@@ -4919,9 +2614,32 @@ protected:
         try {
             CallbackData *data = static_cast<CallbackData *>(user_data);
 
-            GError *err = NULL;
-            DBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &err));
-            CallTraits::handleMessage(reply, data, err);
+            GError *error = NULL;
+            DBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &error));
+            Buffer_t r;
+            std::string error_msg;
+
+            if (error == NULL && !g_dbus_message_to_gerror(reply.get(), &error)) {
+                // unmarshal the return results into tuple
+                GDBusMessage *replyPtr = reply.get();
+                ExtractArgs ea(data->m_conn.get(), replyPtr);
+                args<Buffer_t, 0, R...>::get(ea, r);
+            } else if (boost::starts_with(error->message, "GDBus.Error:")) {
+                error_msg = error->message + 12;
+            } else {
+                error_msg = error->message;
+            }
+
+            if (data->m_callback) {
+                // call user callback with tuple values + error message
+                apply([&error_msg, data] (R... r) { data->m_callback(r..., error_msg); }, r);
+            }
+            delete data;
+            // cppcheck-suppress nullPointer
+            // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
+            if (error != NULL) {
+                g_error_free (error);
+            }
         } catch (const std::exception &ex) {
             g_error("unexpected exception caught in dbusCallback(): %s", ex.what());
         } catch (...) {
@@ -4965,7 +2683,13 @@ protected:
         if (error || g_dbus_message_to_gerror(reply.get(), &error)) {
             DBusErrorCXX(error).throwFailure(m_method);
         }
-        return CallTraits::demarshal(reply, m_conn);
+
+        Buffer_t r;
+        GDBusMessage *replyPtr = reply.get();
+        ExtractArgs ea(m_conn.get(), replyPtr);
+        args<Buffer_t, 0, R...>::get(ea, r);
+
+        return DBusClientCallReturnType<R...>::returnResult(r);
     }
 
 public:
@@ -4981,260 +2705,22 @@ public:
     GDBusConnection *getConnection() { return m_conn.get(); }
     std::string getMethod() const { return m_method; }
 
-    Return_t operator () ()
+    template<typename ...A> void start(const Callback_t &callback, const A &... args) const
     {
         DBusMessagePtr msg;
         prepare(msg);
+        AppendRetvals(msg).append(args...);
+        send(msg, callback);
+    }
+
+    template<typename ...A> Return_t operator () (const A  &... args) const
+    {
+        DBusMessagePtr msg;
+        prepare(msg);
+        AppendRetvals(msg).append(args...);
         return sendAndReturn(msg);
     }
 
-    void start(const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        send(msg, callback);
-    }
-
-    template <class A1>
-    Return_t operator () (const A1 &a1) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1;
-        return sendAndReturn(msg);
-    }
-
-    template <class A1>
-    void start(const A1 &a1, const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2>
-    Return_t operator () (const A1 &a1, const A2 &a2) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2;
-        return sendAndReturn(msg);
-    }
-
-    template <class A1, class A2>
-    void start(const A1 &a1, const A2 &a2, const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5, const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-               const A6 &a6,
-               const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-               const A6 &a6, const A7 &a7,
-               const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-               const A6 &a6, const A7 &a7, const A8 &a8,
-               const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-               const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9,
-               const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9;
-        send(msg, callback);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
-    void operator () (const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-                      const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
-        sendAndReturn(msg);
-    }
-
-    template <class A1, class A2, class A3, class A4, class A5, class A6, class A7, class A8, class A9, class A10>
-    void start(const A1 &a1, const A2 &a2, const A3 &a3, const A4 &a4, const A5 &a5,
-               const A6 &a6, const A7 &a7, const A8 &a8, const A9 &a9, const A10 &a10,
-               const Callback_t &callback) const
-    {
-        DBusMessagePtr msg;
-        prepare(msg);
-        AppendRetvals(msg) << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10;
-        send(msg, callback);
-    }
-};
-
-/*
- * A DBus Client Call object handling zero or more parameter and
- * zero return value.
- */
-class DBusClientCall0 : public DBusClientCall<VoidTraits>
-{
-public:
-    DBusClientCall0 (const DBusRemoteObject &object, const std::string &method)
-        : DBusClientCall<VoidTraits>(object, method)
-    {
-    }
-};
-
-/** 1 return value and 0 or more parameters */
-template <class R1>
-class DBusClientCall1 : public DBusClientCall<Ret1Traits<R1> >
-{
-public:
-    DBusClientCall1 (const DBusRemoteObject &object, const std::string &method)
-        : DBusClientCall<Ret1Traits<R1> >(object, method)
-    {
-    }
-};
-
-/** 2 return value and 0 or more parameters */
-template <class R1, class R2>
-class DBusClientCall2 : public DBusClientCall<Ret2Traits<R1, R2> >
-{
-public:
-    DBusClientCall2 (const DBusRemoteObject &object, const std::string &method)
-        : DBusClientCall<Ret2Traits<R1, R2> >(object, method)
-    {
-    }
-};
-
-/** 3 return value and 0 or more parameters */
-template <class R1, class R2, class R3>
-class DBusClientCall3 : public DBusClientCall<Ret3Traits<R1, R2, R3> >
-{
-public:
-    DBusClientCall3 (const DBusRemoteObject &object, const std::string &method)
-        : DBusClientCall<Ret3Traits<R1, R2, R3> >(object, method)
-    {
-    }
 };
 
 /**
@@ -5356,11 +2842,7 @@ class Criteria : public std::list<std::string> {
     std::string createMatchRule() const { return boost::join(*this, ","); }
 };
 
-/**
- * Common functionality of all SignalWatch* classes.
- * @param T     boost::function with the right signature
- */
-template <class T> class SignalWatch : public SignalFilter
+template <typename ...A> class SignalWatch : public SignalFilter
 {
  public:
     SignalWatch(const DBusRemoteObject &object,
@@ -5385,7 +2867,7 @@ template <class T> class SignalWatch : public SignalFilter
                 }
             }
             if (m_manualMatch) {
-                DBusClientCall0(GDBusCXX::DBusRemoteObject(getConnection(),
+                DBusClientCall<>(GDBusCXX::DBusRemoteObject(getConnection(),
                                                            "/org/freedesktop/DBus",
                                                            "org.freedesktop.DBus",
                                                            "org.freedesktop.DBus"),
@@ -5396,16 +2878,10 @@ template <class T> class SignalWatch : public SignalFilter
         }
     }
 
-    typedef T Callback_t;
+    typedef boost::function<void (A...)> Callback_t;
     const Callback_t &getCallback() const { return m_callback; }
 
- protected:
-    guint m_tag;
-    T m_callback;
-    bool m_manualMatch;
-    std::string m_matchRule;
-
-    void activateInternal(const Callback_t &callback, GDBusSignalCallback cb)
+    void activate(const Callback_t &callback)
     {
         m_callback = callback;
         m_tag = g_dbus_connection_signal_subscribe(getConnection(),
@@ -5417,7 +2893,7 @@ template <class T> class SignalWatch : public SignalFilter
                                                    (getFlags() & SIGNAL_FILTER_PATH_PREFIX) ?
                                                    G_DBUS_SIGNAL_FLAGS_NO_MATCH_RULE :
                                                    G_DBUS_SIGNAL_FLAGS_NONE,
-                                                   cb,
+                                                   internalCallback,
                                                    this,
                                                    NULL);
 
@@ -5435,7 +2911,7 @@ template <class T> class SignalWatch : public SignalFilter
             criteria.add("member", getSignal());
             criteria.add("path_namespace", getPath());
             m_matchRule = criteria.createMatchRule();
-            DBusClientCall0(GDBusCXX::DBusRemoteObject(getConnection(),
+            DBusClientCall<>(GDBusCXX::DBusRemoteObject(getConnection(),
                                                        "/org/freedesktop/DBus",
                                                        "org.freedesktop.DBus",
                                                        "org.freedesktop.DBus"),
@@ -5443,23 +2919,12 @@ template <class T> class SignalWatch : public SignalFilter
             m_manualMatch = true;
         }
     }
-};
 
-class SignalWatch0 : public SignalWatch< boost::function<void (void)> >
-{
-    typedef boost::function<void (void)> Callback_t;
-
- public:
-    SignalWatch0(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch0(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
+ private:
+    guint m_tag;
+    Callback_t m_callback;
+    bool m_manualMatch;
+    std::string m_matchRule;
 
     static void internalCallback(GDBusConnection *conn,
                                  const gchar *sender,
@@ -5470,381 +2935,24 @@ class SignalWatch0 : public SignalWatch< boost::function<void (void)> >
                                  gpointer data) throw ()
     {
         try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
+            auto watch = static_cast< SignalWatch<A...> *>(data);
+            ExtractArgs context(conn, sender, path, interface, signal, params);
             if (!watch->matches(context)) {
                 return;
             }
 
-            const Callback_t &cb = watch->getCallback();
-            cb();
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in internalCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in internalCallback()");
-        }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (void)> >::activateInternal(callback, internalCallback);
-    }
-};
-
-template <typename A1>
-class SignalWatch1 : public SignalWatch< boost::function<void (const A1 &)> >
-{
-    typedef boost::function<void (const A1 &)> Callback_t;
-
- public:
-    SignalWatch1(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch1(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
-
-    static void internalCallback(GDBusConnection *conn,
-                                 const gchar *sender,
-                                 const gchar *path,
-                                 const gchar *interface,
-                                 const gchar *signal,
-                                 GVariant *params,
-                                 gpointer data) throw()
-    {
-        try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
-            if (!watch->matches(context)) {
-                return;
-            }
-
-            typename dbus_traits<A1>::host_type a1;
+            typedef std::tuple<typename dbus_traits<A>::host_type...> T;
+            T t;
 
             GVariantIter iter;
             g_variant_iter_init(&iter, params);
-            dbus_traits<A1>::get(context, iter, a1);
-            const Callback_t &cb = watch->getCallback();
-            cb(a1);
+            args<T, 0, A...>::get(context, t);
+            apply(watch->m_callback, t);
         } catch (const std::exception &ex) {
             g_error("unexpected exception caught in internalCallback(): %s", ex.what());
         } catch (...) {
             g_error("unexpected exception caught in internalCallback()");
         }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (const A1 &)> >::activateInternal(callback, internalCallback);
-    }
-};
-
-template <typename A1, typename A2>
-class SignalWatch2 : public SignalWatch< boost::function<void (const A1 &, const A2 &)> >
-{
-    typedef boost::function<void (const A1 &, const A2 &)> Callback_t;
-
- public:
-    SignalWatch2(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch2(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
-
-    static void internalCallback(GDBusConnection *conn,
-                                 const gchar *sender,
-                                 const gchar *path,
-                                 const gchar *interface,
-                                 const gchar *signal,
-                                 GVariant *params,
-                                 gpointer data) throw ()
-    {
-        try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
-            if (!watch->matches(context)) {
-                return;
-            }
-
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-
-            GVariantIter iter;
-            g_variant_iter_init(&iter, params);
-            dbus_traits<A1>::get(context, iter, a1);
-            dbus_traits<A2>::get(context, iter, a2);
-            const Callback_t &cb = watch->getCallback();
-            cb(a1, a2);
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in internalCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in internalCallback()");
-        }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (const A1 &, const A2 &)> >::activateInternal(callback,
-                                                                                        internalCallback);
-    }
-};
-
-template <typename A1, typename A2, typename A3>
-class SignalWatch3 : public SignalWatch< boost::function<void (const A1 &, const A2 &, const A3 &)> >
-{
-    typedef boost::function<void (const A1 &, const A2 &, const A3 &)> Callback_t;
-
- public:
-    SignalWatch3(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch3(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
-
-    static void internalCallback(GDBusConnection *conn,
-                                 const gchar *sender,
-                                 const gchar *path,
-                                 const gchar *interface,
-                                 const gchar *signal,
-                                 GVariant *params,
-                                 gpointer data) throw ()
-    {
-        try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
-            if (!watch->matches(context)) {
-                return;
-            }
-
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-
-            GVariantIter iter;
-            g_variant_iter_init(&iter, params);
-            dbus_traits<A1>::get(context, iter, a1);
-            dbus_traits<A2>::get(context, iter, a2);
-            dbus_traits<A3>::get(context, iter, a3);
-            const Callback_t &cb = watch->getCallback();
-            cb(a1, a2, a3);
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in internalCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in internalCallback()");
-        }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (const A1 &,
-                                           const A2 &,
-                                           const A3 &)> >::activateInternal(callback,
-                                                                            internalCallback);
-    }
-};
-
-template <typename A1, typename A2, typename A3, typename A4>
-class SignalWatch4 : public SignalWatch< boost::function<void (const A1 &, const A2 &,
-                                                               const A3 &, const A4 &)> >
-{
-    typedef boost::function<void (const A1 &, const A2 &, const A3 &, const A4 &)> Callback_t;
-
- public:
-    SignalWatch4(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch4(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
-
-    static void internalCallback(GDBusConnection *conn,
-                                 const gchar *sender,
-                                 const gchar *path,
-                                 const gchar *interface,
-                                 const gchar *signal,
-                                 GVariant *params,
-                                 gpointer data) throw ()
-    {
-        try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
-            if (!watch->matches(context)) {
-                return;
-            }
-
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-
-            GVariantIter iter;
-            g_variant_iter_init(&iter, params);
-            dbus_traits<A1>::get(context, iter, a1);
-            dbus_traits<A2>::get(context, iter, a2);
-            dbus_traits<A3>::get(context, iter, a3);
-            dbus_traits<A4>::get(context, iter, a4);
-            const Callback_t &cb = watch->getCallback();
-            cb(a1, a2, a3, a4);
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in internalCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in internalCallback()");
-        }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (const A1 &, const A2 &,
-                                           const A3 &, const A4 &)> >::activateInternal(callback,
-                                                                                        internalCallback);
-    }
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5>
-class SignalWatch5 : public SignalWatch< boost::function<void (const A1 &, const A2 &, const A3 &, const A4 &, const A5 &)> >
-{
-    typedef boost::function<void (const A1 &, const A2 &, const A3 &, const A4 &, const A5 &)> Callback_t;
-
- public:
-    SignalWatch5(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch5(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
-
-    static void internalCallback(GDBusConnection *conn,
-                                 const gchar *sender,
-                                 const gchar *path,
-                                 const gchar *interface,
-                                 const gchar *signal,
-                                 GVariant *params,
-                                 gpointer data)
-    {
-        try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
-            if (!watch->matches(context)) {
-                return;
-            }
-
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-
-            GVariantIter iter;
-            g_variant_iter_init(&iter, params);
-            dbus_traits<A1>::get(context, iter, a1);
-            dbus_traits<A2>::get(context, iter, a2);
-            dbus_traits<A3>::get(context, iter, a3);
-            dbus_traits<A4>::get(context, iter, a4);
-            dbus_traits<A5>::get(context, iter, a5);
-            const Callback_t &cb = watch->getCallback();
-            cb(a1, a2, a3, a4, a5);
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in internalCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in internalCallback()");
-        }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (const A1 &, const A2 &,
-                                           const A3 &, const A4 &,
-                                           const A5 &)> >::activateInternal(callback, internalCallback);
-    }
-};
-
-template <typename A1, typename A2, typename A3, typename A4, typename A5, typename A6>
-class SignalWatch6 : public SignalWatch< boost::function<void (const A1 &, const A2 &, const A3 &,
-                                                               const A4 &, const A5 &, const A6 &)> >
-{
-    typedef boost::function<void (const A1 &, const A2 &, const A3 &,
-                                  const A4 &, const A5 &, const A6 &)> Callback_t;
-
-
- public:
-    SignalWatch6(const DBusRemoteObject &object,
-                 const std::string &signal,
-                 bool = true)
-        : SignalWatch<Callback_t>(object, signal)
-    {
-    }
-
-    SignalWatch6(const SignalFilter &filter)
-        : SignalWatch<Callback_t>(filter)
-    {}
-
-    static void internalCallback(GDBusConnection *conn,
-                                 const gchar *sender,
-                                 const gchar *path,
-                                 const gchar *interface,
-                                 const gchar *signal,
-                                 GVariant *params,
-                                 gpointer data) throw ()
-    {
-        try {
-            SignalWatch<Callback_t> *watch = static_cast< SignalWatch<Callback_t> *>(data);
-            ExtractArgs context(conn, sender, path, interface, signal);
-            if (!watch->matches(context)) {
-                return;
-            }
-
-            typename dbus_traits<A1>::host_type a1;
-            typename dbus_traits<A2>::host_type a2;
-            typename dbus_traits<A3>::host_type a3;
-            typename dbus_traits<A4>::host_type a4;
-            typename dbus_traits<A5>::host_type a5;
-            typename dbus_traits<A6>::host_type a6;
-
-            GVariantIter iter;
-            g_variant_iter_init(&iter, params);
-            dbus_traits<A1>::get(context, iter, a1);
-            dbus_traits<A2>::get(context, iter, a2);
-            dbus_traits<A3>::get(context, iter, a3);
-            dbus_traits<A4>::get(context, iter, a4);
-            dbus_traits<A5>::get(context, iter, a5);
-            dbus_traits<A6>::get(context, iter, a6);
-            const Callback_t &cb = watch->getCallback();
-            cb(a1, a2, a3, a4, a5, a6);
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in internalCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in internalCallback()");
-        }
-    }
-
-    void activate(const Callback_t &callback)
-    {
-        SignalWatch< boost::function<void (const A1 &, const A2 &,
-                                           const A3 &, const A4 &,
-                                           const A5 &, const A6 &)> >::activateInternal(callback,
-                                                                                        internalCallback);
     }
 };
 
