@@ -2609,44 +2609,6 @@ template<typename ...R> class DBusClientCall
     const std::string m_method;
     const DBusConnectionPtr m_conn;
 
-    static void dbusCallback (GObject *src_obj, GAsyncResult *res, void *user_data) throw ()
-    {
-        try {
-            CallbackData *data = static_cast<CallbackData *>(user_data);
-
-            GError *error = NULL;
-            DBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &error));
-            Buffer_t r;
-            std::string error_msg;
-
-            if (error == NULL && !g_dbus_message_to_gerror(reply.get(), &error)) {
-                // unmarshal the return results into tuple
-                GDBusMessage *replyPtr = reply.get();
-                ExtractArgs ea(data->m_conn.get(), replyPtr);
-                args<Buffer_t, 0, R...>::get(ea, r);
-            } else if (boost::starts_with(error->message, "GDBus.Error:")) {
-                error_msg = error->message + 12;
-            } else {
-                error_msg = error->message;
-            }
-
-            if (data->m_callback) {
-                // call user callback with tuple values + error message
-                apply([&error_msg, data] (R... r) { data->m_callback(r..., error_msg); }, r);
-            }
-            delete data;
-            // cppcheck-suppress nullPointer
-            // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
-            if (error != NULL) {
-                g_error_free (error);
-            }
-        } catch (const std::exception &ex) {
-            g_error("unexpected exception caught in dbusCallback(): %s", ex.what());
-        } catch (...) {
-            g_error("unexpected exception caught in dbusCallback()");
-        }
-    }
-
     void prepare(DBusMessagePtr &msg) const
     {
         // Constructor steals reference, reset() doesn't!
@@ -2662,10 +2624,47 @@ template<typename ...R> class DBusClientCall
 
     void send(DBusMessagePtr &msg, const Callback_t &callback) const
     {
+        // We store a copy of the callback on the heap for use in a plain-C callback.
         CallbackData *data = new CallbackData(m_conn, callback);
+        auto c_callback = [] (GObject *src_obj, GAsyncResult *res, void *user_data) noexcept {
+            try {
+                CallbackData *data = static_cast<CallbackData *>(user_data);
+
+                GError *error = NULL;
+                DBusMessagePtr reply(g_dbus_connection_send_message_with_reply_finish(data->m_conn.get(), res, &error));
+                Buffer_t r;
+                std::string error_msg;
+
+                if (error == NULL && !g_dbus_message_to_gerror(reply.get(), &error)) {
+                    // unmarshal the return results into tuple
+                    GDBusMessage *replyPtr = reply.get();
+                    ExtractArgs ea(data->m_conn.get(), replyPtr);
+                    args<Buffer_t, 0, R...>::get(ea, r);
+                } else if (boost::starts_with(error->message, "GDBus.Error:")) {
+                    error_msg = error->message + 12;
+                } else {
+                    error_msg = error->message;
+                }
+
+                if (data->m_callback) {
+                    // call user callback with tuple values + error message
+                    apply([&error_msg, data] (R... r) { data->m_callback(r..., error_msg); }, r);
+                }
+                delete data;
+                // cppcheck-suppress nullPointer
+                // Looks invalid: cppcheck warning: nullPointer - Possible null pointer dereference: error - otherwise it is redundant to check it against null.
+                if (error != NULL) {
+                    g_error_free (error);
+                }
+            } catch (const std::exception &ex) {
+                g_error("unexpected exception caught in dbusCallback(): %s", ex.what());
+            } catch (...) {
+                g_error("unexpected exception caught in dbusCallback()");
+            }
+        };
         g_dbus_connection_send_message_with_reply(m_conn.get(), msg.get(), G_DBUS_SEND_MESSAGE_FLAGS_NONE,
                                                   G_MAXINT, // no timeout
-                                                  NULL, NULL, dbusCallback, data);
+                                                  NULL, NULL, c_callback, data);
     }
 
     Return_t sendAndReturn(DBusMessagePtr &msg) const
