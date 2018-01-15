@@ -143,7 +143,12 @@ void SoupTransportAgent::send(const char *data, size_t len)
     m_message = message.get();
     if (m_timeoutSeconds) {
         m_timeout.runOnce(m_timeoutSeconds,
-                          boost::bind(&SoupTransportAgent::handleTimeoutWrapper, m_self));
+                          [agent = m_self] () {
+                              boost::shared_ptr<SoupTransportAgent> self(agent.lock());
+                              if (self.get()) {
+                                  self->handleTimeout();
+                              }
+                          });
     }
     soup_session_queue_message(m_session.get(), message.release(),
                                SessionCallback, new boost::weak_ptr<SoupTransportAgent>(m_self));
@@ -268,14 +273,6 @@ void SoupTransportAgent::handleTimeout()
         soup_session_cancel_message(m_session.get(), m_message, message_status);
         g_main_loop_quit(m_loop.get());
         m_status = TIME_OUT;
-    }
-}
-
-void SoupTransportAgent::handleTimeoutWrapper(const boost::weak_ptr<SoupTransportAgent> &agent)
-{
-    boost::shared_ptr<SoupTransportAgent> self(agent.lock());
-    if (self.get()) {
-        self->handleTimeout();
     }
 }
 
