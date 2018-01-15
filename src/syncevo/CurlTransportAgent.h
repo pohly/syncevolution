@@ -95,11 +95,9 @@ class CurlTransportAgent : public HTTPTransportAgent
     char m_curlErrorText[CURL_ERROR_SIZE];
 
     /** CURLOPT_READFUNCTION, stream == CurlTransportAgent */
-    static size_t readDataCallback(void *buffer, size_t size, size_t nmemb, void *stream) throw();
     size_t readData(void *buffer, size_t size) throw();
 
     /** CURLOPT_WRITEFUNCTION, stream == CurlTransportAgent */
-    static size_t writeDataCallback(void *ptr, size_t size, size_t nmemb, void *stream) throw();
     size_t writeData(void *buffer, size_t size) throw();
 
     /** CURLOPT_PROGRESS callback, use this function to detect user abort */

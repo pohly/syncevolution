@@ -47,6 +47,12 @@ CurlTransportAgent::CurlTransportAgent() :
      * its read callback and reply is stored in write callback
      */
     CURLcode code;
+    auto readDataCallback = [] (void *buffer, size_t size, size_t nmemb, void *stream) noexcept {
+        return static_cast<CurlTransportAgent *>(stream)->readData(buffer, size * nmemb);
+    };
+    auto writeDataCallback = [] (void *buffer, size_t size, size_t nmemb, void *stream) noexcept {
+        return static_cast<CurlTransportAgent *>(stream)->writeData(buffer, size * nmemb);
+    };
     if ((code = curl_easy_setopt(m_easyHandle, CURLOPT_NOPROGRESS, false)) ||
         (code = curl_easy_setopt(m_easyHandle, CURLOPT_PROGRESSFUNCTION, progressCallback)) ||
         (code = curl_easy_setopt(m_easyHandle, CURLOPT_WRITEFUNCTION, writeDataCallback)) ||
@@ -234,11 +240,6 @@ void CurlTransportAgent::getReply(const char *&data, size_t &len, std::string &c
     }
 }
 
-size_t CurlTransportAgent::writeDataCallback(void *buffer, size_t size, size_t nmemb, void *stream) throw()
-{
-    return static_cast<CurlTransportAgent *>(stream)->writeData(buffer, size * nmemb);
-}
-
 size_t CurlTransportAgent::writeData(void *buffer, size_t size) throw()
 {
     bool increase = false;
@@ -261,11 +262,6 @@ size_t CurlTransportAgent::writeData(void *buffer, size_t size) throw()
            size);
     m_replyLen += size;
     return size;
-}
-
-size_t CurlTransportAgent::readDataCallback(void *buffer, size_t size, size_t nmemb, void *stream) throw()
-{
-    return static_cast<CurlTransportAgent *>(stream)->readData(buffer, size * nmemb);
 }
 
 size_t CurlTransportAgent::readData(void *buffer, size_t size) throw()

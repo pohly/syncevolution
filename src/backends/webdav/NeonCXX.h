@@ -467,30 +467,11 @@ class Session {
                     const std::set<int> *expectedCodes = NULL);
 
     /** ne_set_server_auth() callback */
-    static int getCredentials(void *userdata, const char *realm, int attempt, char *username, char *password) throw();
+    int getCredentials(const char *realm, int attempt, char *username, char *password) noexcept;
 
     /** ne_ssl_set_verify() callback */
-    static int sslVerify(void *userdata, int failures, const ne_ssl_certificate *cert) throw();
+    int sslVerify(int failures, const ne_ssl_certificate *cert) noexcept;
 
-    /** ne_props_result callback which invokes a PropfindURICallback_t as user data */
-    static void propsResult(void *userdata, const ne_uri *uri,
-                            const ne_prop_result_set *results) throw();
-
-    /** iterate over properties in result set */
-    static void propsIterate(const URI &uri, const ne_prop_result_set *results,
-                             const PropfindPropCallback_t &callback);
-
-    /** ne_propset_iterator callback which invokes pair<URI, PropfindPropCallback_t> */
-    static int propIterator(void *userdata,
-                            const ne_propname *pname,
-                            const char *value,
-                            const ne_status *status) throw();
-
-    // use pointers here, g++ 4.2.3 has issues with references (which was used before)
-    typedef std::pair<const URI *, const PropfindPropCallback_t *> PropIteratorUserdata_t;
-
-    /** Neon callback for preSend() */
-    static void preSendHook(ne_request *req, void *userdata, ne_buffer *header) throw();
     /** implements forced Basic authentication, if requested */
     void preSend(ne_request *req, ne_buffer *header);
 };
