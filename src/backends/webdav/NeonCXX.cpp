@@ -215,6 +215,9 @@ Session::Session(const boost::shared_ptr<Settings> &settings) :
     m_session = ne_session_create(m_uri.m_scheme.c_str(),
                                   m_uri.m_host.c_str(),
                                   m_uri.m_port);
+    auto getCredentials = [] (void *userdata, const char *realm, int attempt, char *username, char *password) noexcept {
+        return static_cast<Session *>(userdata)->getCredentials(realm, attempt, username, password);
+    };
     ne_set_server_auth(m_session, getCredentials, this);
     if (m_uri.m_scheme == "https") {
         // neon only initializes session->ssl_context if
@@ -222,6 +225,9 @@ Session::Session(const boost::shared_ptr<Settings> &settings) :
         // of ne_gnutls.c if ne_ssl_trust_default_ca()
         // is called for non-https. So better call these
         // functions only when needed.
+        auto sslVerify = [] (void *userdata, int failures, const ne_ssl_certificate *cert) noexcept {
+            return static_cast<Session *>(userdata)->sslVerify(failures, cert);
+        };
         ne_ssl_set_verify(m_session, sslVerify, this);
         ne_ssl_trust_default_ca(m_session);
 
@@ -263,6 +269,13 @@ Session::Session(const boost::shared_ptr<Settings> &settings) :
     }
     ne_set_read_timeout(m_session, seconds);
     ne_set_connect_timeout(m_session, seconds);
+    auto preSendHook = [] (ne_request *req, void *userdata, ne_buffer *header) noexcept {
+        try {
+            static_cast<Session *>(userdata)->preSend(req, header);
+        } catch (...) {
+            Exception::handle();
+        }
+    };
     ne_hook_pre_send(m_session, preSendHook, this);
 }
 
@@ -292,11 +305,10 @@ boost::shared_ptr<Session> Session::create(const boost::shared_ptr<Settings> &se
 }
 
 
-int Session::getCredentials(void *userdata, const char *realm, int attempt, char *username, char *password) throw()
+int Session::getCredentials(const char *realm, int attempt, char *username, char *password) noexcept
 {
     try {
-        Session *session = static_cast<Session *>(userdata);
-        boost::shared_ptr<AuthProvider> authProvider = session->m_settings->getAuthProvider();
+        boost::shared_ptr<AuthProvider> authProvider = m_settings->getAuthProvider();
         if (authProvider && authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
             // We have to fail here because we cannot provide neon
             // with a username/password combination. Instead we rely
@@ -307,10 +319,10 @@ int Session::getCredentials(void *userdata, const char *realm, int attempt, char
         } else if (!attempt) {
             // try again with credentials
             std::string user, pw;
-            session->m_settings->getCredentials(realm, user, pw);
+            m_settings->getCredentials(realm, user, pw);
             SyncEvo::Strncpy(username, user.c_str(), NE_ABUFSIZ);
             SyncEvo::Strncpy(password, pw.c_str(), NE_ABUFSIZ);
-            session->m_credentialsSent = true;
+            m_credentialsSent = true;
             SE_LOG_DEBUG(NULL, "retry request with credentials");
             return 0;
         } else {
@@ -329,15 +341,6 @@ void Session::forceAuthorization(ForceAuthorization forceAuthorization,
 {
     m_forceAuthorizationOnce = forceAuthorization;
     m_authProvider = authProvider;
-}
-
-void Session::preSendHook(ne_request *req, void *userdata, ne_buffer *header) throw()
-{
-    try {
-        static_cast<Session *>(userdata)->preSend(req, header);
-    } catch (...) {
-        Exception::handle();
-    }
 }
 
 void Session::preSend(ne_request *req, ne_buffer *header)
@@ -389,12 +392,9 @@ void Session::preSend(ne_request *req, ne_buffer *header)
     }
 }
 
-
-int Session::sslVerify(void *userdata, int failures, const ne_ssl_certificate *cert) throw()
+int Session::sslVerify(int failures, const ne_ssl_certificate *cert) noexcept
 {
     try {
-        Session *session = static_cast<Session *>(userdata);
-
         static const Flag descr[] = {
             { NE_SSL_NOTYETVALID, "certificate not yet valid" },
             { NE_SSL_EXPIRED, "certificate has expired" },
@@ -405,14 +405,14 @@ int Session::sslVerify(void *userdata, int failures, const ne_ssl_certificate *c
 
         SE_LOG_DEBUG(NULL,
                      "%s: SSL verification problem: %s",
-                     session->getURL().c_str(),
+                     getURL().c_str(),
                      Flags2String(failures, descr).c_str());
-        if (!session->m_settings->verifySSLCertificate()) {
+        if (!m_settings->verifySSLCertificate()) {
             SE_LOG_DEBUG(NULL, "ignoring bad certificate");
             return 0;
         }
         if (failures == NE_SSL_IDMISMATCH &&
-            !session->m_settings->verifySSLHost()) {
+            !m_settings->verifySSLHost()) {
             SE_LOG_DEBUG(NULL, "ignoring hostname mismatch");
             return 0;
         }
@@ -452,12 +452,20 @@ void Session::propfindURI(const std::string &path, int depth,
     checkAuthorization();
     handler = boost::shared_ptr<ne_propfind_handler>(ne_propfind_create(m_session, path.c_str(), depth),
                                                      PropFindDeleter());
+    auto propsResult = [] (void *userdata, const ne_uri *uri,
+                           const ne_prop_result_set *results) noexcept {
+        try {
+            PropfindURICallback_t *callback = static_cast<PropfindURICallback_t *>(userdata);
+            (*callback)(URI::fromNeon(*uri), results);
+        } catch (...) {
+            Exception::handle();
+        }
+    };
+    void *userdata = const_cast<void *>(static_cast<const void *>(&callback));
     if (props != NULL) {
-	error = ne_propfind_named(handler.get(), props,
-                                  propsResult, const_cast<void *>(static_cast<const void *>(&callback)));
+	error = ne_propfind_named(handler.get(), props, propsResult, userdata);
     } else {
-	error = ne_propfind_allprop(handler.get(),
-                                    propsResult, const_cast<void *>(static_cast<const void *>(&callback)));
+	error = ne_propfind_allprop(handler.get(), propsResult, userdata);
     }
 
     // remain valid as long as "handler" is valid
@@ -471,49 +479,32 @@ void Session::propfindURI(const std::string &path, int depth,
     }
 }
 
-void Session::propsResult(void *userdata, const ne_uri *uri,
-                          const ne_prop_result_set *results) throw()
-{
-    try {
-        PropfindURICallback_t *callback = static_cast<PropfindURICallback_t *>(userdata);
-        (*callback)(URI::fromNeon(*uri), results);
-    } catch (...) {
-        Exception::handle();
-    }
-}
-
 void Session::propfindProp(const std::string &path, int depth,
                            const ne_propname *props,
                            const PropfindPropCallback_t &callback,
                            const Timespec &deadline)
 {
-    propfindURI(path, depth, props,
-                boost::bind(&Session::propsIterate, _1, _2, boost::cref(callback)),
-                deadline);
-}
+    // use pointers here, g++ 4.2.3 has issues with references (which was used before)
+    using PropIteratorUserdata_t = std::pair<const URI *, const PropfindPropCallback_t *>;
 
-void Session::propsIterate(const URI &uri, const ne_prop_result_set *results,
-                           const PropfindPropCallback_t &callback)
-{
-    PropIteratorUserdata_t data(&uri, &callback);
-    ne_propset_iterate(results,
-                       propIterator,
-                       &data);
-}
-
-int Session::propIterator(void *userdata,
-                           const ne_propname *pname,
-                           const char *value,
-                           const ne_status *status) throw()
-{
-    try {
-        const PropIteratorUserdata_t *data = static_cast<const PropIteratorUserdata_t *>(userdata);
-        (*data->second)(*data->first, pname, value, status);
-        return 0;
-    } catch (...) {
-        Exception::handle();
-        return 1; // abort iterating
-    }
+    auto propIterate = [&callback] (const URI &uri, const ne_prop_result_set *results) {
+        PropIteratorUserdata_t data(&uri, &callback);
+        auto propIterator = [] (void *userdata,
+                                const ne_propname *pname,
+                                const char *value,
+                                const ne_status *status) noexcept {
+            try {
+                const PropIteratorUserdata_t *data = static_cast<const PropIteratorUserdata_t *>(userdata);
+                (*data->second)(*data->first, pname, value, status);
+                return 0;
+            } catch (...) {
+                Exception::handle();
+                return 1; // abort iterating
+            }
+        };
+        ne_propset_iterate(results, propIterator, &data);
+    };
+    propfindURI(path, depth, props, propIterate, deadline);
 }
 
 void Session::startOperation(const string &operation, const Timespec &deadline)

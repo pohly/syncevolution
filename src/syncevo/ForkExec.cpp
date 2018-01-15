@@ -152,29 +152,6 @@ ForkExecParent::~ForkExecParent()
 #endif
 }
 
-/**
- * Redirect stdout to stderr.
- *
- * Child setup function, called insided forked process before exec().
- * only async-signal-safe functions allowed according to http://developer.gnome.org/glib/2.30/glib-Spawning-Processes.html#GSpawnChildSetupFunc
- */
-void ForkExecParent::forked(gpointer data) throw()
-{
-    ForkExecParent *me = static_cast<ForkExecParent *>(data);
-
-    // When debugging, undo the LogRedirect output redirection that
-    // we inherited from the parent process. That ensures that
-    // any output is printed directly, instead of going through
-    // the parent's output processing in LogRedirect.
-    if (getenv("SYNCEVOLUTION_DEBUG")) {
-        LogRedirect::removeRedirect();
-    }
-
-    if (me->m_mergedStdoutStderr) {
-        dup2(STDERR_FILENO, STDOUT_FILENO);
-    }
-}
-
 void ForkExecParent::start()
 {
     if (m_watchChild) {
@@ -245,11 +222,33 @@ void ForkExecParent::start()
 
     GErrorCXX gerror;
     int err = -1, out = -1;
+
+    /**
+     * Redirect stdout to stderr.
+     *
+     * Child setup function, called insided forked process before exec().
+     * only async-signal-safe functions allowed according to http://developer.gnome.org/glib/2.30/glib-Spawning-Processes.html#GSpawnChildSetupFunc
+     */
+    auto forked = [] (gpointer data) noexcept {
+        ForkExecParent *me = static_cast<ForkExecParent *>(data);
+
+        // When debugging, undo the LogRedirect output redirection that
+        // we inherited from the parent process. That ensures that
+        // any output is printed directly, instead of going through
+        // the parent's output processing in LogRedirect.
+        if (getenv("SYNCEVOLUTION_DEBUG")) {
+            LogRedirect::removeRedirect();
+        }
+
+        if (me->m_mergedStdoutStderr) {
+            dup2(STDERR_FILENO, STDOUT_FILENO);
+        }
+    };
+
     if (!g_spawn_async_with_pipes(NULL, // working directory
                                   static_cast<gchar **>(m_argv.get()),
                                   static_cast<gchar **>(m_env.get()),
                                   (GSpawnFlags)(flags | G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
-                                  // child setup function: redirect stdout to stderr, undo LogRedirect
                                   forked, this,
                                   &m_childPid,
                                   NULL, // set stdin to /dev/null

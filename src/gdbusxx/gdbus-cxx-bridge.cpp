@@ -109,23 +109,21 @@ struct OwnNameAsyncData
         }
     }
 
-    static void freeData(gpointer userData) throw ()
-    {
-        delete static_cast< boost::shared_ptr<OwnNameAsyncData> *>(userData);
-    }
-
     static boost::shared_ptr<OwnNameAsyncData> ownName(GDBusConnection *conn,
                                                        const std::string &name,
                                                        boost::function<void (bool)> obtainedCB =
                                                        boost::function<void (bool)>()) {
         boost::shared_ptr<OwnNameAsyncData> data(new OwnNameAsyncData(name, obtainedCB));
+        auto free_data = [] (gpointer userData) noexcept {
+            delete static_cast< boost::shared_ptr<OwnNameAsyncData> *>(userData);
+        };
         g_bus_own_name_on_connection(conn,
                                      data->m_name.c_str(),
                                      G_BUS_NAME_OWNER_FLAGS_NONE,
                                      OwnNameAsyncData::busNameAcquired,
                                      OwnNameAsyncData::busNameLost,
                                      new boost::shared_ptr<OwnNameAsyncData>(data),
-                                     OwnNameAsyncData::freeData);
+                                     free_data);
         return data;
     }
 
