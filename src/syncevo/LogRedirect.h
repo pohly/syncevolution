@@ -128,7 +128,7 @@ class LogRedirect : public LoggerStdout
     void restore() throw();
     /** @return true if data was available */
     bool process(FDs &fds) throw();
-    static void abortHandler(int sig) throw();
+    static void abortHandler(int sig) noexcept;
 
     void init();
 
@@ -162,7 +162,7 @@ class LogRedirect : public LoggerStdout
     /**
      * Remove redirection (if any) after a fork and before an exec.
      */
-    static void removeRedirect() throw();
+    static void removeRedirect() noexcept;
 
     /**
      * Meant to be used for redirecting output of a specific command
