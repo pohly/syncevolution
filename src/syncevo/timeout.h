@@ -25,8 +25,7 @@
 #include <syncevo/SmartPtr.h>
 #include <syncevo/util.h>
 
-#include <boost/utility.hpp>
-#include <boost/bind.hpp>
+#include <functional>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -47,7 +46,7 @@ SE_BEGIN_CXX
 class Timeout : boost::noncopyable
 {
     guint m_tag;
-    boost::function<bool ()> m_callback;
+    std::function<bool ()> m_callback;
 
 public:
     enum {
@@ -76,13 +75,36 @@ public:
      * @param seconds   a value < 0 runs the function as soon as the process is idle,
      *                  otherwise in the specified amount of time
      */
-    void activate(int seconds,
-                  const boost::function<bool ()> &callback,
-                  int priority = G_PRIORITY_DEFAULT)
+    template<typename Callback> void activate(int seconds,
+                                              Callback &&callback,
+                                              int priority = G_PRIORITY_DEFAULT)
     {
         deactivate();
 
-        m_callback = callback;
+        auto triggered = [] (gpointer data) noexcept {
+            Timeout *me = static_cast<Timeout *>(data);
+            gboolean runAgain = false;
+            uint tag = me->m_tag;
+            try {
+                // Be extra careful and don't trigger a deactivated callback.
+                if (me->m_callback) {
+                    runAgain = me->m_callback();
+                }
+            } catch (...) {
+                // Something unexpected went wrong, can only shut down.
+                Exception::handle(HANDLE_EXCEPTION_FATAL);
+            }
+            if (!runAgain && // Returning false will automatically deactivate the source, remember that.
+                me->m_tag == tag // Beware that the callback may have already reused the Timeout instance.
+                // In that case, we must not reset the new tag and callback.
+                ) {
+                me->m_tag = 0;
+                me->m_callback = 0;
+            }
+            return runAgain;
+        };
+
+        m_callback = std::forward<Callback>(callback);
         m_tag = seconds < 0 ?
             g_idle_add(triggered, static_cast<gpointer>(this)) :
             g_timeout_add_seconds(seconds, triggered, static_cast<gpointer>(this));
@@ -91,25 +113,31 @@ public:
         }
     }
 
-    void activate(const boost::function<bool ()> &idleCallback,
-                  int priority = G_PRIORITY_DEFAULT_IDLE)
+    template<typename Callback> void activate(Callback &&idleCallback,
+                                              int priority = G_PRIORITY_DEFAULT_IDLE)
     {
-        activate(-1, idleCallback, priority);
+        activate(-1, std::forward<Callback>(idleCallback), priority);
     }
 
     /**
      * invoke the callback once
      */
-    void runOnce(int seconds,
-                 const boost::function<void ()> &callback,
-                 int priority = G_PRIORITY_DEFAULT)
+    template<typename Callback> void runOnce(int seconds,
+                                             Callback &&callback,
+                                             int priority = G_PRIORITY_DEFAULT)
     {
-        activate(seconds, boost::bind(&Timeout::once, callback), priority);
+        // C++14... would have to use std::bind with C++11.
+        auto once = [callback = std::forward<Callback>(callback)] () {
+            callback();
+            return false;
+        };
+
+        activate(seconds, once, priority);
     }
-    void runOnce(const boost::function<void ()> &idleCallback,
+    template<typename Callback> void runOnce(Callback &&idleCallback,
                  int priority = G_PRIORITY_DEFAULT)
     {
-        runOnce(-1, idleCallback, priority);
+        runOnce(-1, std::forward<Callback>(idleCallback), priority);
     }
 
     /**
@@ -128,34 +156,6 @@ public:
     operator bool () const { return m_tag != 0; }
 
 private:
-    static gboolean triggered(gpointer data) throw ()
-    {
-        Timeout *me = static_cast<Timeout *>(data);
-        bool runAgain = false;
-        uint tag = me->m_tag;
-        try {
-            // Be extra careful and don't trigger a deactivated callback.
-            if (me->m_callback) {
-                runAgain = me->m_callback();
-            }
-        } catch (...) {
-            // Something unexpected went wrong, can only shut down.
-            Exception::handle(HANDLE_EXCEPTION_FATAL);
-        }
-        if (!runAgain && // Returning false will automatically deactivate the source, remember that.
-            me->m_tag == tag // Beware that the callback may have already reused the Timeout instance.
-                             // In that case, we must not reset the new tag and callback.
-            ) {
-            me->m_tag = 0;
-            me->m_callback = 0;
-        }
-        return runAgain;
-    }
-
-    static bool once(const boost::function<void ()> &callback) {
-        callback();
-        return false;
-    }
 };
 
 SE_END_CXX
