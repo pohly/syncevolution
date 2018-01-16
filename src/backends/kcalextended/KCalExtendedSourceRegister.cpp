@@ -126,7 +126,7 @@ class KCalExtendedSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("KCalExtended", "KCalExtended:text/calendar:2.0", true));
     }
 };

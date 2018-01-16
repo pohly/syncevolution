@@ -147,14 +147,14 @@ class TDECalendarTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE_END();
 
 protected:
-    static string addItem(boost::shared_ptr<TestingSyncSource> source,
+    static string addItem(std::shared_ptr<TestingSyncSource> source,
                           string &data) {
         SyncSourceRaw::InsertItemResult res = source->insertItemRaw("", data);
         return res.m_luid;
     }
 
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         // source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
         // source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
         source.reset(SyncSource::createTestingSource("addressbook", "tdepim-contacts", true));
@@ -180,19 +180,19 @@ protected:
     // TODO: support default databases
 
     // void testOpenDefaultCalendar() {
-    //     boost::shared_ptr<TestingSyncSource> source;
+    //     std::shared_ptr<TestingSyncSource> source;
     //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "tdepim-calendar", true, NULL));
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultTodo() {
-    //     boost::shared_ptr<TestingSyncSource> source;
+    //     std::shared_ptr<TestingSyncSource> source;
     //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("tasks", "tdepim-tasks", true, NULL));
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultMemo() {
-    //     boost::shared_ptr<TestingSyncSource> source;
+    //     std::shared_ptr<TestingSyncSource> source;
     //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL));
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
@@ -203,7 +203,7 @@ protected:
             prefix = "SyncEvolution_Test_";
         }
 
-        boost::shared_ptr<TestingSyncSource> source;
+        std::shared_ptr<TestingSyncSource> source;
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "tdepim-calendar", true, prefix));
         CPPUNIT_ASSERT_NO_THROW(source->open());
 

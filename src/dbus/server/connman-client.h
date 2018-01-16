@@ -39,11 +39,6 @@ class ConnmanClient : public GDBusCXX::DBusRemoteObject
 public:
     ConnmanClient (Server &server);
 
-    void propertyChanged(const std::string &name,
-                         const boost::variant<std::vector<std::string>, std::string> &prop);
-
-    void getPropCb(const std::map <std::string, boost::variant<std::string> >& props, const std::string &error);
-
     /** TRUE if watching ConnMan status */
     bool isAvailable() { return m_available; }
 

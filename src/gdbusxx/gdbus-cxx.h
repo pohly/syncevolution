@@ -22,7 +22,8 @@
 
 #include <string>
 #include <stdexcept>
-#include <boost/function.hpp>
+#include <functional>
+
 #include <boost/noncopyable.hpp>
 
 namespace GDBusCXX {
@@ -122,10 +123,10 @@ class ResultBase : private boost::noncopyable
      * is requested.
      *
      * Alternatively a method can ask to get called with a life Watch
-     * by specifying "const boost::shared_ptr<Watch> &" as parameter
+     * by specifying "const std::shared_ptr<Watch> &" as parameter
      * and then calling its setCallback().
      */
-    virtual Watch *createWatch(const boost::function<void (void)> &callback) = 0;
+    virtual Watch *createWatch(const std::function<void (void)> &callback) = 0;
 };
 template<typename ...A> class Result : public ResultBase
 {

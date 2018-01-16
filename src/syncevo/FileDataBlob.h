@@ -48,8 +48,8 @@ class FileDataBlob : public DataBlob
     FileDataBlob(const std::string &path, const std::string &fileName, bool readonly);
     FileDataBlob(const std::string &fullpath, bool readonly);
 
-    boost::shared_ptr<std::ostream> write();
-    boost::shared_ptr<std::istream> read();
+    std::shared_ptr<std::ostream> write();
+    std::shared_ptr<std::istream> read();
 
     virtual std::string getName() const;
     virtual bool exists() const;

@@ -76,7 +76,7 @@ class QtContactsSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("qtcontacts", "qtcontacts:text/vcard:3.0", true));
         source.reset(SyncSource::createTestingSource("qtcontacts", "QtContacts", true));
     }

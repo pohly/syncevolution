@@ -137,7 +137,7 @@ class EvolutionContactSource : public EvolutionSyncSource,
 
         Pending() : m_status(MODIFYING) {}
     };
-    typedef std::list< boost::shared_ptr<Pending> >PendingContainer_t;
+    typedef std::list< std::shared_ptr<Pending> >PendingContainer_t;
 
     /**
      * Batched "contact add/update" operations.
@@ -148,14 +148,12 @@ class EvolutionContactSource : public EvolutionSyncSource,
     PendingContainer_t m_batchedUpdate;
     InitState<int> m_numRunningOperations;
 
-    InsertItemResult checkBatchedInsert(const boost::shared_ptr<Pending> &pending);
-    void completedAdd(const boost::shared_ptr<PendingContainer_t> &batched, gboolean success, /* const GStringListFreeCXX &uids */ GSList *uids, const GError *gerror) throw ();
-    void completedUpdate(const boost::shared_ptr<PendingContainer_t> &batched, gboolean success, const GError *gerror) throw ();
+    InsertItemResult checkBatchedInsert(const std::shared_ptr<Pending> &pending);
     virtual void flushItemChanges();
     virtual void finishItemChanges();
 
     // Read-ahead of item data.
-    boost::shared_ptr<ContactCache> m_contactCache, m_contactCacheNext;
+    std::shared_ptr<ContactCache> m_contactCache, m_contactCacheNext;
     int m_cacheMisses, m_cacheStalls;
     int m_contactReads; /**< number of readItemAsKey() calls */
     int m_contactsFromDB; /**< number of contacts requested from DB (including ones not found) */
@@ -164,9 +162,9 @@ class EvolutionContactSource : public EvolutionSyncSource,
     ReadAheadOrder m_readAheadOrder;
     ReadAheadItems m_nextLUIDs;
 
-    void checkCacheForError(boost::shared_ptr<ContactCache> &cache);
+    void checkCacheForError(std::shared_ptr<ContactCache> &cache);
     void invalidateCachedContact(const std::string &luid);
-    void invalidateCachedContact(boost::shared_ptr<ContactCache> &cache, const std::string &luid);
+    void invalidateCachedContact(std::shared_ptr<ContactCache> &cache, const std::string &luid);
     bool getContact(const string &luid, EContact **contact, GErrorCXX &gerror);
     bool getContactFromCache(const string &luid, EContact **contact, GErrorCXX &gerror);
     enum ReadingMode
@@ -174,8 +172,7 @@ class EvolutionContactSource : public EvolutionSyncSource,
         START,    /**< luid is needed, must be read  */
         CONTINUE  /**< luid is from old request, find next ones */
     };
-    boost::shared_ptr<ContactCache> startReading(const std::string &luid, ReadingMode mode);
-    void completedRead(const boost::weak_ptr<ContactCache> &cachePtr, gboolean success, GSList *contactsPtr, const GError *gerror) throw();
+    std::shared_ptr<ContactCache> startReading(const std::string &luid, ReadingMode mode);
     void logCacheStats(Logger::Level level);
 
     // Use the information provided to us to implement read-ahead efficiently.

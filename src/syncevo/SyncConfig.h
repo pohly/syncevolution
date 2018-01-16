@@ -23,10 +23,11 @@
 #include <syncevo/FilterConfigNode.h>
 #include <syncevo/SafeConfigNode.h>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
+
 #include <list>
+#include <memory>
 #include <string>
 #include <sstream>
 #include <set>
@@ -366,7 +367,7 @@ class ConfigProperty {
     virtual const std::string getDescr(const std::string &serverName,
                                   FilterConfigNode &globalConfigNode,
                                   const std::string &sourceName = std::string(),
-                                  const boost::shared_ptr<FilterConfigNode> &sourceConfigNode=boost::shared_ptr<FilterConfigNode>()) const { return m_descr.empty() ? serverName : m_descr; }
+                                  const std::shared_ptr<FilterConfigNode> &sourceConfigNode=std::shared_ptr<FilterConfigNode>()) const { return m_descr.empty() ? serverName : m_descr; }
 
     /** split \n separated comment into lines without \n, appending them to commentLines */
     static void splitComment(const std::string &comment, std::list<std::string> &commentLines);
@@ -801,8 +802,8 @@ class PasswordConfigProperty : public ConfigProperty {
                                              const std::string &serverName,
                                              FilterConfigNode &globalConfigNode,
                                              const std::string &sourceName = std::string(),
-                                             const boost::shared_ptr<FilterConfigNode> &sourceConfigNode =
-                                             boost::shared_ptr<FilterConfigNode>()) const = 0;
+                                             const std::shared_ptr<FilterConfigNode> &sourceConfigNode =
+                                             std::shared_ptr<FilterConfigNode>()) const = 0;
 
     static std::string getUsername(const ConfigProperty &usernameProperty,
                                    const FilterConfigNode &node);
@@ -953,7 +954,7 @@ class SyncConfig {
      *               Used by SyncContext for local sync.
      */
     SyncConfig(const std::string &peer,
-               boost::shared_ptr<ConfigTree> tree = boost::shared_ptr<ConfigTree>(),
+               std::shared_ptr<ConfigTree> tree = std::shared_ptr<ConfigTree>(),
                const std::string &redirectPeerRootPath = "");
 
 
@@ -1063,7 +1064,7 @@ class SyncConfig {
 
         TemplateDescription (const std::string &name, const std::string &description);
 
-        static bool compare_op (boost::shared_ptr<TemplateDescription> &left, boost::shared_ptr<TemplateDescription> &right);
+        static bool compare_op (std::shared_ptr<TemplateDescription> &left, std::shared_ptr<TemplateDescription> &right);
     };
 
     enum MatchMode {
@@ -1076,7 +1077,7 @@ class SyncConfig {
         INVALID
     };
 
-    typedef std::list<boost::shared_ptr <TemplateDescription> > TemplateList;
+    typedef std::list<std::shared_ptr <TemplateDescription> > TemplateList;
 
     /* This information is available if the device supports the
      * Device Id Profile.
@@ -1107,7 +1108,7 @@ class SyncConfig {
         /** match mode used for matching templates */
         MatchMode m_matchMode;
         /** the PnPInformation for the device if available */
-        boost::shared_ptr<PnpInformation> m_pnpInformation;
+        std::shared_ptr<PnpInformation> m_pnpInformation;
 
         DeviceDescription(const std::string &deviceId,
                           const std::string &deviceName,
@@ -1161,7 +1162,7 @@ class SyncConfig {
      * "none" returns an empty template (default sync properties and dev ID set).
      * @return NULL if no such template
      */
-    static boost::shared_ptr<SyncConfig> createPeerTemplate(const std::string &peer);
+    static std::shared_ptr<SyncConfig> createPeerTemplate(const std::string &peer);
 
     /**
      * true if the main configuration file already exists;
@@ -1289,15 +1290,15 @@ class SyncConfig {
      * The visible properties are passed through the config filter,
      * which can be modified.
      */
-    boost::shared_ptr<FilterConfigNode> getProperties(bool hidden = false) { return m_props[hidden]; }
-    boost::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const { return const_cast<SyncConfig *>(this)->getProperties(hidden); }
+    std::shared_ptr<FilterConfigNode> getProperties(bool hidden = false) { return m_props[hidden]; }
+    std::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const { return const_cast<SyncConfig *>(this)->getProperties(hidden); }
 
     /**
      * Returns the right config node for a certain property,
      * depending on visibility and sharing.
      */
-    boost::shared_ptr<FilterConfigNode> getNode(const ConfigProperty &prop);
-    boost::shared_ptr<const FilterConfigNode> getNode(const ConfigProperty &prop) const 
+    std::shared_ptr<FilterConfigNode> getNode(const ConfigProperty &prop);
+    std::shared_ptr<const FilterConfigNode> getNode(const ConfigProperty &prop) const 
     {
         return const_cast<SyncConfig *>(this)->getNode(prop);
     }
@@ -1306,8 +1307,8 @@ class SyncConfig {
      * Returns the right config node for a certain registered property,
      * looked up by name. NULL if not found.
      */
-    boost::shared_ptr<FilterConfigNode> getNode(const std::string &propName);
-    boost::shared_ptr<const FilterConfigNode> getNode(const std::string &propName) const
+    std::shared_ptr<FilterConfigNode> getNode(const std::string &propName);
+    std::shared_ptr<const FilterConfigNode> getNode(const std::string &propName) const
     {
         return const_cast<SyncConfig *>(this)->getNode(propName);
     }
@@ -1325,8 +1326,8 @@ class SyncConfig {
      *
      * Can be called for sources which do not exist yet.
      */
-    virtual boost::shared_ptr<PersistentSyncSourceConfig> getSyncSourceConfig(const std::string &name);
-    virtual boost::shared_ptr<const PersistentSyncSourceConfig> getSyncSourceConfig(const std::string &name) const {
+    virtual std::shared_ptr<PersistentSyncSourceConfig> getSyncSourceConfig(const std::string &name);
+    virtual std::shared_ptr<const PersistentSyncSourceConfig> getSyncSourceConfig(const std::string &name) const {
         return const_cast<SyncConfig *>(this)->getSyncSourceConfig(name);
     }
 
@@ -1683,28 +1684,28 @@ private:
     Bool m_ephemeral;
 
     /** holds all config nodes relative to the root that we found */
-    boost::shared_ptr<ConfigTree> m_tree;
+    std::shared_ptr<ConfigTree> m_tree;
 
     /**
      * Same instance as m_tree, except that we know that it is a FileConfigTree.
      */
-    boost::shared_ptr<FileConfigTree> m_fileTree;
+    std::shared_ptr<FileConfigTree> m_fileTree;
 
     /** access to global sync properties, independent of
         the context (for example, "defaultPeer") */
-    boost::shared_ptr<FilterConfigNode> m_globalNode;
-    boost::shared_ptr<ConfigNode> m_globalHiddenNode;
+    std::shared_ptr<FilterConfigNode> m_globalNode;
+    std::shared_ptr<ConfigNode> m_globalHiddenNode;
 
     /** access to properties shared between peers */
-    boost::shared_ptr<FilterConfigNode> m_contextNode;
-    boost::shared_ptr<ConfigNode> m_contextHiddenNode;
+    std::shared_ptr<FilterConfigNode> m_contextNode;
+    std::shared_ptr<ConfigNode> m_contextHiddenNode;
 
     /** access to properties specific to a peer */
-    boost::shared_ptr<FilterConfigNode> m_peerNode;
-    boost::shared_ptr<ConfigNode> m_hiddenPeerNode;
+    std::shared_ptr<FilterConfigNode> m_peerNode;
+    std::shared_ptr<ConfigNode> m_hiddenPeerNode;
 
     /** multiplexer for the other config nodes */
-    boost::shared_ptr<FilterConfigNode> m_props[2];
+    std::shared_ptr<FilterConfigNode> m_props[2];
 
     /**
      * temporary override for all sync source settings
@@ -1755,11 +1756,11 @@ class SyncSourceNodes {
      *                        when source is accessed independently of peer
      */
     SyncSourceNodes(bool havePeerNode,
-                    const boost::shared_ptr<FilterConfigNode> &sharedNode,
-                    const boost::shared_ptr<FilterConfigNode> &peerNode,
-                    const boost::shared_ptr<ConfigNode> &hiddenPeerNode,
-                    const boost::shared_ptr<ConfigNode> &trackingNode,
-                    const boost::shared_ptr<ConfigNode> &serverNode,
+                    const std::shared_ptr<FilterConfigNode> &sharedNode,
+                    const std::shared_ptr<FilterConfigNode> &peerNode,
+                    const std::shared_ptr<ConfigNode> &hiddenPeerNode,
+                    const std::shared_ptr<ConfigNode> &trackingNode,
+                    const std::shared_ptr<ConfigNode> &serverNode,
                     const std::string &cacheDir);
 
     friend class SyncConfig;
@@ -1774,38 +1775,38 @@ class SyncSourceNodes {
      * Returns the right config node for a certain property,
      * depending on visibility and sharing.
      */
-    boost::shared_ptr<FilterConfigNode> getNode(const ConfigProperty &prop) const;
+    std::shared_ptr<FilterConfigNode> getNode(const ConfigProperty &prop) const;
 
     /**
      * Read-write access to all configurable properties of the source.
      * The visible properties are passed through the config filter,
      * which can be modified.
      */
-    boost::shared_ptr<FilterConfigNode> getProperties(bool hidden = false) const { return m_props[hidden]; }
+    std::shared_ptr<FilterConfigNode> getProperties(bool hidden = false) const { return m_props[hidden]; }
 
     /** read-write access to SyncML server specific config node */
-    boost::shared_ptr<ConfigNode> getServerNode() const { return m_serverNode; }
+    std::shared_ptr<ConfigNode> getServerNode() const { return m_serverNode; }
 
     /** read-write access to backend specific tracking node */
-    boost::shared_ptr<ConfigNode> getTrackingNode() const { return m_trackingNode; }
+    std::shared_ptr<ConfigNode> getTrackingNode() const { return m_trackingNode; }
 
     std::string getCacheDir() const { return m_cacheDir; }
 
  protected:
     const bool m_havePeerNode;
-    const boost::shared_ptr<FilterConfigNode> m_sharedNode;
-    const boost::shared_ptr<FilterConfigNode> m_peerNode;
-    const boost::shared_ptr<ConfigNode> m_hiddenPeerNode;
-    const boost::shared_ptr<ConfigNode> m_trackingNode;
-    const boost::shared_ptr<ConfigNode> m_serverNode;
+    const std::shared_ptr<FilterConfigNode> m_sharedNode;
+    const std::shared_ptr<FilterConfigNode> m_peerNode;
+    const std::shared_ptr<ConfigNode> m_hiddenPeerNode;
+    const std::shared_ptr<ConfigNode> m_trackingNode;
+    const std::shared_ptr<ConfigNode> m_serverNode;
     const std::string m_cacheDir;
 
     /** multiplexer for the other nodes */
-    boost::shared_ptr<FilterConfigNode> m_props[2];
+    std::shared_ptr<FilterConfigNode> m_props[2];
 };
 
 /**
- * nop deleter for boost::shared_ptr<SyncConfig>
+ * nop deleter for std::shared_ptr<SyncConfig>
  */
 struct SyncConfigNOP
 {
@@ -1822,11 +1823,11 @@ class ConstSyncSourceNodes : private SyncSourceNodes
        SyncSourceNodes(other)
     {}
 
-    boost::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const {
+    std::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const {
         return const_cast<SyncSourceNodes *>(static_cast<const SyncSourceNodes *>(this))->getProperties(hidden);
     }
-    boost::shared_ptr<const ConfigNode> getServerNode() const { return m_serverNode; }
-    boost::shared_ptr<const ConfigNode> getTrackingNode() const { return m_trackingNode; } 
+    std::shared_ptr<const ConfigNode> getServerNode() const { return m_serverNode; }
+    std::shared_ptr<const ConfigNode> getTrackingNode() const { return m_trackingNode; } 
 };
 
 struct SourceType {
@@ -1870,10 +1871,10 @@ class SyncSourceConfig {
      * The visible properties are passed through the config filter,
      * which can be modified.
      */
-    boost::shared_ptr<FilterConfigNode> getProperties(bool hidden = false) {
+    std::shared_ptr<FilterConfigNode> getProperties(bool hidden = false) {
         return m_nodes.getProperties(hidden);
     }
-    boost::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const { return const_cast<SyncSourceConfig *>(this)->getProperties(hidden); }
+    std::shared_ptr<const FilterConfigNode> getProperties(bool hidden = false) const { return const_cast<SyncSourceConfig *>(this)->getProperties(hidden); }
 
     virtual std::string getName() const { return m_name; }
 
@@ -1888,20 +1889,20 @@ class SyncSourceConfig {
      * Returns the right config node for a certain property,
      * depending on visibility and sharing.
      */
-    boost::shared_ptr<FilterConfigNode> getNode(const ConfigProperty &prop) {
+    std::shared_ptr<FilterConfigNode> getNode(const ConfigProperty &prop) {
         return m_nodes.getNode(prop);
     }
-    boost::shared_ptr<const FilterConfigNode> getNode(const ConfigProperty &prop) const {
+    std::shared_ptr<const FilterConfigNode> getNode(const ConfigProperty &prop) const {
         return m_nodes.getNode(prop);
     }
 
     /** access to SyncML server specific config node */
-    boost::shared_ptr<ConfigNode> getServerNode() { return m_nodes.getServerNode(); }
-    boost::shared_ptr<const ConfigNode> getServerNode() const { return m_nodes.getServerNode(); }
+    std::shared_ptr<ConfigNode> getServerNode() { return m_nodes.getServerNode(); }
+    std::shared_ptr<const ConfigNode> getServerNode() const { return m_nodes.getServerNode(); }
 
     /** access to backend specific tracking node */
-    boost::shared_ptr<ConfigNode> getTrackingNode() { return m_nodes.getTrackingNode(); }
-    boost::shared_ptr<const ConfigNode> getTrackingNode() const { return m_nodes.getTrackingNode(); }
+    std::shared_ptr<ConfigNode> getTrackingNode() { return m_nodes.getTrackingNode(); }
+    std::shared_ptr<const ConfigNode> getTrackingNode() const { return m_nodes.getTrackingNode(); }
 
     /** sync mode for sync sources */
     static StringConfigProperty m_sourcePropSync;
@@ -1998,7 +1999,7 @@ class SingleFileConfigTree;
  */
 class TemplateConfig
 {
-    boost::shared_ptr<SingleFileConfigTree> m_template;
+    std::shared_ptr<SingleFileConfigTree> m_template;
     ConfigProps m_metaProps;
     std::string m_id;
     std::string m_templateName;

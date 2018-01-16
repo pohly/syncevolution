@@ -58,7 +58,7 @@ static void handleErrorCB(EClient */*client*/, const gchar *error_msg, gpointer 
 
 EClientCXX EvolutionSyncSource::openESource(const char *extension,
                                             ESource *(*refBuiltin)(ESourceRegistry *),
-                                            const boost::function<EClient *(ESource *, GError **gerror)> &newClient)
+                                            const std::function<EClient *(ESource *, GError **gerror)> &newClient)
 {
     EClientCXX client;
     GErrorCXX gerror;

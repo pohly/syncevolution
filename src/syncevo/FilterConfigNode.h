@@ -21,11 +21,11 @@
 # define INCL_EVOLUTION_FILTER_CONFIG_NODE
 
 #include <syncevo/ConfigNode.h>
-#include <boost/shared_ptr.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 #include <string>
@@ -48,11 +48,11 @@ class FilterConfigNode : public ConfigNode {
     typedef ConfigProps ConfigFilter;
 
     /** read-write access to underlying node */
-    FilterConfigNode(const boost::shared_ptr<ConfigNode> &node,
+    FilterConfigNode(const std::shared_ptr<ConfigNode> &node,
                      const ConfigFilter &filter = ConfigFilter());
 
     /** read-only access to underlying node */
-    FilterConfigNode(const boost::shared_ptr<const ConfigNode> &node,
+    FilterConfigNode(const std::shared_ptr<const ConfigNode> &node,
                      const ConfigFilter &filter = ConfigFilter());
 
     virtual std::string getName() const { return m_readOnlyNode->getName(); }
@@ -80,8 +80,8 @@ class FilterConfigNode : public ConfigNode {
 
  private:
     ConfigFilter m_filter;
-    boost::shared_ptr<ConfigNode> m_node;
-    boost::shared_ptr<const ConfigNode> m_readOnlyNode;
+    std::shared_ptr<ConfigNode> m_node;
+    std::shared_ptr<const ConfigNode> m_readOnlyNode;
 };
 
 

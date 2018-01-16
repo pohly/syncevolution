@@ -26,12 +26,13 @@
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/function.hpp>
 #include <boost/utility/value_init.hpp>
 #include <boost/type_traits/is_class.hpp>
 
 #include <stdarg.h>
 
+#include <memory>
+#include <functional>
 #include <vector>
 #include <sstream>
 #include <string>
@@ -100,6 +101,51 @@ template<typename C> auto reverse(C &container)
 }
 
 /**
+ * enable_weak_from_this and it's shared_from_this() have one
+ * limitation: the call fails when invoked during
+ * destruction. Obviously a shared pointer cannot be constructed
+ * anymore because the reference count already reached zero, but a
+ * weak_ptr might still make sense even though it cannot be locked
+ * anymore. Some classes (e.g. Session) rely on that in common utility
+ * code.  To overcome this limitation, a weak_ptr must be created
+ * already when constructing the instance.
+ *
+ * Usage:
+ * class Foo : public enable_weak_from_this<Foo> {
+ *    Foo();
+ *    // Due to the complex syntax for declaring template
+ *    // methods as friends, make_weak_shared is an empty
+ *    // class with template methods.
+ *    friend make_weak_shared;
+ * };
+ *
+ * auto ptr = make_weak_shared::make<Foo>();
+ */
+template <class C> class enable_weak_from_this {
+    std::weak_ptr<C> m_me;
+
+ public:
+    auto weak_from_this() const { return m_me; }
+    auto shared_from_this() const {
+        auto ptr = m_me.lock();
+        if (!ptr) {
+            throw std::bad_weak_ptr();
+        }
+        return ptr;
+    }
+    void set_weak(const std::shared_ptr<C> &ptr) { m_me = ptr; }
+};
+
+class make_weak_shared {
+ public:
+    template<class C, typename ...A> static std::shared_ptr<C> make(A &&...a) {
+        std::shared_ptr<C> ptr(new C(std::forward<A>(a)...));
+        ptr->set_weak(ptr);
+        return ptr;
+    }
+};
+
+/**
  * remove multiple slashes in a row and dots directly after a slash if not followed by filename,
  * remove trailing /
  */
@@ -141,7 +187,7 @@ inline bool rm_r_all(const std::string &path, bool isDir) { return true; }
  *                 to be deleted (return true in that case); called with full path
  *                 to entry and true if known to be a directory
  */
-void rm_r(const std::string &path, boost::function<bool (const std::string &,
+void rm_r(const std::string &path, std::function<bool (const std::string &,
                                                     bool)> filter = rm_r_all);
 
 /**
@@ -481,7 +527,7 @@ GetWithDef(const C &map,
 }
 
 /**
- * a nop destructor which doesn't do anything, for boost::shared_ptr
+ * a nop destructor which doesn't do anything, for std::shared_ptr
  */
 struct NopDestructor
 {
@@ -613,14 +659,14 @@ std::string getCurrentTime();
  * is true, otherwise it will only be invoked in the main thread. Use that
  * latter mode for code which must run in the main thread.
  */
-void GRunWhile(const boost::function<bool ()> &check, bool checkFirst = true);
+void GRunWhile(const std::function<bool ()> &check, bool checkFirst = true);
 
 /**
  * Runs the action in the main thread once, then returns.  Any
  * exception thrown by the action will be caught and rethrown in the
  * calling thread.
  */
-void GRunInMain(const boost::function<void ()> &action);
+void GRunInMain(const std::function<void ()> &action);
 
 /**
  * True iff the calling thread is handling the main event loop.  Can

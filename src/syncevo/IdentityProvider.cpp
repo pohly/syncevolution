@@ -65,10 +65,10 @@ public:
     virtual std::string getUsername() const { return m_creds.m_username; }
 };
 
-boost::shared_ptr<AuthProvider> AuthProvider::create(const UserIdentity &identity,
+std::shared_ptr<AuthProvider> AuthProvider::create(const UserIdentity &identity,
                                                      const InitStateString &password)
 {
-    boost::shared_ptr<AuthProvider> authProvider;
+    std::shared_ptr<AuthProvider> authProvider;
 
     if (identity.m_provider == USER_IDENTITY_PLAIN_TEXT) {
         SE_LOG_DEBUG(NULL, "using plain username/password for %s", identity.toString().c_str());

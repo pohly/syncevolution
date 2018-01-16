@@ -43,7 +43,6 @@
 #include <list>
 #include <algorithm>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
@@ -441,7 +440,7 @@ bool Cmdline::dontRun() const
     }
 }
 
-void Cmdline::makeObsolete(boost::shared_ptr<SyncConfig> &from)
+void Cmdline::makeObsolete(std::shared_ptr<SyncConfig> &from)
 {
     string oldname = from->getRootPath();
     string newname, suffix;
@@ -454,7 +453,7 @@ void Cmdline::makeObsolete(boost::shared_ptr<SyncConfig> &from)
         suffix = newsuffix.str();
         newname = oldname + suffix;
         if (from->hasPeerProperties()) {
-            boost::shared_ptr<SyncConfig> renamed(new SyncConfig(from->getPeerName() + suffix));
+            auto renamed = std::make_shared<SyncConfig>(from->getPeerName() + suffix);
             if (renamed->exists()) {
                 // don't pick a config name which has the same peer name
                 // as some other, existing config
@@ -489,8 +488,8 @@ void Cmdline::makeObsolete(boost::shared_ptr<SyncConfig> &from)
     from.reset(new SyncConfig(newConfigName));
 }
 
-void Cmdline::copyConfig(const boost::shared_ptr<SyncConfig> &from,
-                         const boost::shared_ptr<SyncConfig> &to,
+void Cmdline::copyConfig(const std::shared_ptr<SyncConfig> &from,
+                         const std::shared_ptr<SyncConfig> &to,
                          const set<string> &selectedSources)
 {
     const set<string> *sources = NULL;
@@ -533,8 +532,8 @@ void Cmdline::copyConfig(const boost::shared_ptr<SyncConfig> &from,
     to->copy(*from, sources);
 }
 
-void Cmdline::finishCopy(const boost::shared_ptr<SyncConfig> &from,
-                         const boost::shared_ptr<SyncContext> &to)
+void Cmdline::finishCopy(const std::shared_ptr<SyncConfig> &from,
+                         const std::shared_ptr<SyncContext> &to)
 {
     // give a change to do something before flushing configs to files
     to->preFlush(to->getUserInterfaceNonNull());
@@ -599,11 +598,11 @@ void Cmdline::finishCopy(const boost::shared_ptr<SyncConfig> &from,
 
 void Cmdline::migratePeer(const std::string &fromPeer, const std::string &toPeer)
 {
-    boost::shared_ptr<SyncConfig> from(new SyncConfig(fromPeer));
+    auto from = std::make_shared<SyncConfig>(fromPeer);
     makeObsolete(from);
     // hack: move to different target config for createSyncClient()
     m_server = toPeer;
-    boost::shared_ptr<SyncContext> to(createSyncClient());
+    std::shared_ptr<SyncContext> to(createSyncClient());
 
     // Special case for Memotoo: explicitly set preferred sync format
     // to vCard 3.0 as part of the SyncEvolution 1.1.x -> 1.2 migration,
@@ -613,7 +612,7 @@ void Cmdline::migratePeer(const std::string &fromPeer, const std::string &toPeer
         vector<string> urls = from->getSyncURL();
         if (urls.size() == 1 &&
             urls[0] == "http://sync.memotoo.com/syncML") {
-            boost::shared_ptr<SyncContext> to(createSyncClient());
+            std::shared_ptr<SyncContext> to(createSyncClient());
             m_props[to->getContextName()].m_sourceProps["addressbook"].insert(make_pair("syncFormat", "text/vcard"));
         }
     }
@@ -657,18 +656,6 @@ public:
         }
     }
 };
-
-static void ShowLUID(SyncSourceLogging *logging, const std::string &luid)
-{
-    string description;
-    if (logging) {
-        description = logging->getDescription(luid);
-    }
-    SE_LOG_SHOW(NULL, "%s%s%s",
-                CmdlineLUID::fromLUID(luid).c_str(),
-                description.empty() ? "" : ": ",
-                description.c_str());
-}
 
 static void ExportLUID(SyncSourceRaw *raw,
                        ostream *out,
@@ -754,9 +741,9 @@ bool Cmdline::run() {
     } else if (m_printDatabases || m_createDatabase || m_removeDatabase) {
         // manipulate databases
         const SourceRegistry &registry(SyncSource::getSourceRegistry());
-        boost::shared_ptr<SyncSourceNodes> nodes;
+        std::shared_ptr<SyncSourceNodes> nodes;
         std::string header;
-        boost::shared_ptr<SyncContext> context;
+        std::shared_ptr<SyncContext> context;
         FilterConfigNode::ConfigFilter sourceFilter;
         std::string sourceName;
         FilterConfigNode::ConfigFilter::const_iterator backend;
@@ -789,11 +776,11 @@ bool Cmdline::run() {
             sourceFilter = m_props.createSourceFilter(m_server, "");
             backend = sourceFilter.find("backend");
             context.reset(createSyncClient());
-            boost::shared_ptr<FilterConfigNode> sharedNode(new VolatileConfigNode());
-            boost::shared_ptr<FilterConfigNode> configNode(new VolatileConfigNode());
-            boost::shared_ptr<FilterConfigNode> hiddenNode(new VolatileConfigNode());
-            boost::shared_ptr<FilterConfigNode> trackingNode(new VolatileConfigNode());
-            boost::shared_ptr<FilterConfigNode> serverNode(new VolatileConfigNode());
+            auto sharedNode = std::make_shared<VolatileConfigNode>();
+            auto configNode = std::make_shared<VolatileConfigNode>();
+            auto hiddenNode = std::make_shared<VolatileConfigNode>();
+            auto trackingNode = std::make_shared<VolatileConfigNode>();
+            auto serverNode = std::make_shared<VolatileConfigNode>();
             nodes.reset(new SyncSourceNodes(true, sharedNode, configNode, hiddenNode, trackingNode, serverNode, ""));
             header = backend != sourceFilter.end() ?
                 backend->second :
@@ -844,7 +831,7 @@ bool Cmdline::run() {
             }
         }
     } else if (m_printConfig) {
-        boost::shared_ptr<SyncConfig> config;
+        std::shared_ptr<SyncConfig> config;
         ConfigProps syncFilter;
         SourceProps sourceFilters;
 
@@ -896,7 +883,7 @@ bool Cmdline::run() {
 
         if (m_sources.empty() ||
             m_sources.find("main") != m_sources.end()) {
-            boost::shared_ptr<FilterConfigNode> syncProps(config->getProperties());
+            std::shared_ptr<FilterConfigNode> syncProps(config->getProperties());
             syncProps->setFilter(syncFilter);
             dumpProperties(*syncProps, config->getRegistry(), flags);
         }
@@ -908,7 +895,7 @@ bool Cmdline::run() {
                 m_sources.find(name) != m_sources.end()) {
                 SE_LOG_SHOW(NULL, "[%s]", name.c_str());
                 SyncSourceNodes nodes = config->getSyncSourceNodes(name);
-                boost::shared_ptr<FilterConfigNode> sourceProps = nodes.getProperties();
+                std::shared_ptr<FilterConfigNode> sourceProps = nodes.getProperties();
                 sourceProps->setFilter(sourceFilters.createSourceFilter(name));
                 dumpProperties(*sourceProps, SyncSourceConfig::getRegistry(),
                                flags | ((name != *(--sources.end())) ? HIDE_LEGEND : DUMP_PROPS_NORMAL));
@@ -953,8 +940,8 @@ bool Cmdline::run() {
         // another config (template resp. old one). Migration also moves
         // the old config. The target configuration is determined by m_server,
         // but the exact semantic of it depends on the operation.
-        boost::shared_ptr<SyncConfig> from;
-        boost::shared_ptr<SyncContext> to;
+        std::shared_ptr<SyncConfig> from;
+        std::shared_ptr<SyncContext> to;
         string origPeer;
         if (m_migrate) {
             if (!m_sources.empty()) {
@@ -1210,7 +1197,7 @@ bool Cmdline::run() {
             SuspendFlags &s = SuspendFlags::getSuspendFlags();
 
             for (const string &source: configuredSources) {
-                boost::shared_ptr<PersistentSyncSourceConfig> sourceConfig(to->getSyncSourceConfig(source));
+                std::shared_ptr<PersistentSyncSourceConfig> sourceConfig(to->getSyncSourceConfig(source));
                 string disable = "";
                 set<string>::iterator entry = sources.find(source);
                 bool selected = entry != sources.end();
@@ -1342,7 +1329,7 @@ bool Cmdline::run() {
             usage(false, "too many parameters for --remove");
             return false;
         } else {
-            boost::shared_ptr<SyncConfig> config;
+            std::shared_ptr<SyncConfig> config;
             config.reset(new SyncConfig(m_server));
             if (!config->exists()) {
                 Exception::throwError(SE_HERE, string("no such configuration: ") + m_server);
@@ -1353,7 +1340,7 @@ bool Cmdline::run() {
         }
     } else if (m_accessItems) {
         // need access to specific source
-        boost::shared_ptr<SyncContext> context;
+        std::shared_ptr<SyncContext> context;
         context.reset(createSyncClient());
 
         // operating on exactly one source (can be optional)
@@ -1420,7 +1407,17 @@ bool Cmdline::run() {
             err = ops.m_startDataRead("", "");
             CHECK_ERROR("reading items");
             source->setReadAheadOrder(SyncSourceBase::READ_ALL_ITEMS);
-            processLUIDs(source, boost::bind(ShowLUID, logging, _1));
+            auto showLUID = [logging] (const std::string &luid) {
+                string description;
+                if (logging) {
+                    description = logging->getDescription(luid);
+                }
+                SE_LOG_SHOW(NULL, "%s%s%s",
+                            CmdlineLUID::fromLUID(luid).c_str(),
+                            description.empty() ? "" : ": ",
+                            description.c_str());
+            };
+            processLUIDs(source, showLUID);
         } else if (m_deleteItems) {
             if (!ops.m_deleteItem) {
                 source->throwError(SE_HERE, "deleting items not supported");
@@ -1570,14 +1567,10 @@ bool Cmdline::run() {
                 if (m_luids.empty()) {
                     // Read all items.
                     raw->setReadAheadOrder(SyncSourceBase::READ_ALL_ITEMS);
-                    processLUIDs(source, boost::bind(ExportLUID,
-                                                     raw,
-                                                     out,
-                                                     boost::ref(m_delimiter),
-                                                     boost::ref(m_itemPath),
-                                                     boost::ref(haveItem),
-                                                     boost::ref(haveNewline),
-                                                     _1));
+                    auto exportOne = [this, raw, out, &haveItem, &haveNewline] (const std::string &luid) {
+                        ExportLUID(raw, out, m_delimiter, m_itemPath, haveItem, haveNewline, luid);
+                    };
+                    processLUIDs(source, exportOne);
                 } else {
                     SyncSourceBase::ReadAheadItems luids;
                     luids.reserve(m_luids.size());
@@ -1603,7 +1596,7 @@ bool Cmdline::run() {
         }
 
         std::set<std::string> unmatchedSources;
-        boost::shared_ptr<SyncContext> context;
+        std::shared_ptr<SyncContext> context;
         context.reset(createSyncClient());
         context->setConfigProps(m_props);
         context->setQuiet(m_quiet);
@@ -1617,7 +1610,7 @@ bool Cmdline::run() {
             // accidentally when the sync mode is modified
             // temporarily.
             for (const std::string &source: context->getSyncSources()) {
-                boost::shared_ptr<PersistentSyncSourceConfig> source_config =
+                std::shared_ptr<PersistentSyncSourceConfig> source_config =
                     context->getSyncSourceConfig(source);
                 if (!source_config->isDisabled()) {
                     context->setConfigFilter(false, source, m_props.createSourceFilter(m_server, source));
@@ -1626,7 +1619,7 @@ bool Cmdline::run() {
         } else {
             // apply (possibly empty) source filter to selected sources
             for (const std::string &source: m_sources) {
-                boost::shared_ptr<PersistentSyncSourceConfig> source_config =
+                std::shared_ptr<PersistentSyncSourceConfig> source_config =
                         context->getSyncSourceConfig(source);
                 ConfigProps filter = m_props.createSourceFilter(m_server, source);
                 if (!source_config || !source_config->exists()) {
@@ -1721,10 +1714,13 @@ bool Cmdline::run() {
 
 void Cmdline::readLUIDs(SyncSource *source, list<string> &luids)
 {
-    processLUIDs(source, boost::bind(static_cast<void (list<string>::*)(const string &)>(&list<string>::push_back), boost::ref(luids), _1));
+    auto append = [&luids] (const std::string &luid) {
+        luids.push_back(luid);
+    };
+    processLUIDs(source, append);
 }
 
-void Cmdline::processLUIDs(SyncSource *source, const boost::function<void (const std::string &)> &process)
+void Cmdline::processLUIDs(SyncSource *source, const std::function<void (const std::string &)> &process)
 {
     const SyncSource::Operations &ops = source->getOperations();
     sysync::ItemIDType id;
@@ -3298,7 +3294,7 @@ protected:
         rm_r(m_testDir);
         {
             TestCmdline cmdline(NULL, NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(false, keyring.wasSet());
@@ -3306,7 +3302,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3314,7 +3310,7 @@ protected:
         }
         {
             TestCmdline cmdline("--sync-property", "keyring=True", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3322,7 +3318,7 @@ protected:
         }
         {
             TestCmdline cmdline("keyring=True", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3330,7 +3326,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=true", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3338,7 +3334,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=1", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3346,7 +3342,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=Yes", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3354,7 +3350,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=false", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3362,7 +3358,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=0", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3370,7 +3366,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=NO", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3378,7 +3374,7 @@ protected:
         }
         {
             TestCmdline cmdline("--keyring=GNOME", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3422,7 +3418,7 @@ protected:
 
         {
             TestCmdline cmdline("@foobar", NULL);
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(false, keyring.wasSet());
@@ -3433,7 +3429,7 @@ protected:
         {
             TestCmdline cmdline("--keyring", "--configure", "@default", NULL);
             cmdline.doit();
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3442,7 +3438,7 @@ protected:
         {
             TestCmdline cmdline("--keyring=KDE", "--configure", "@default", NULL);
             cmdline.doit();
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3456,7 +3452,7 @@ protected:
         {
             TestCmdline cmdline("keyring=KDE", "--configure", "@default", NULL);
             cmdline.doit();
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -3465,7 +3461,7 @@ protected:
         {
             TestCmdline cmdline("keyring=yes", "--configure", "@default", NULL);
             cmdline.doit();
-            boost::shared_ptr<SyncContext> context = cmdline.parse();
+            std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
             CPPUNIT_ASSERT_EQUAL(true, keyring.wasSet());
@@ -4415,7 +4411,7 @@ private:
      */
     class TestCmdline : public Logger {
         void init() {
-            addLogger(boost::shared_ptr<Logger>(this, NopDestructor()));
+            addLogger(std::shared_ptr<Logger>(this, NopDestructor()));
 
             m_argv.reset(new const char *[m_argvstr.size() + 1]);
             m_argv[0] = "client-test";
@@ -4452,12 +4448,12 @@ private:
             removeLogger(this);
         }
 
-        boost::shared_ptr<SyncContext> parse()
+        std::shared_ptr<SyncContext> parse()
         {
             if (!m_cmdline->parse()) {
-                return boost::shared_ptr<SyncContext>();
+                return std::shared_ptr<SyncContext>();
             }
-            boost::shared_ptr<SyncContext> context(new SyncContext(m_cmdline->m_server));
+            auto context = std::make_shared<SyncContext>(m_cmdline->m_server);
             context->setConfigFilter(true, "", m_cmdline->m_props.createSyncFilter(m_cmdline->m_server));
             return context;
         }

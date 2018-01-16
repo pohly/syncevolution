@@ -28,7 +28,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-IniBaseConfigNode::IniBaseConfigNode(const boost::shared_ptr<DataBlob> &data) :
+IniBaseConfigNode::IniBaseConfigNode(const std::shared_ptr<DataBlob> &data) :
     m_data(data)
 {
 }
@@ -50,25 +50,25 @@ void IniBaseConfigNode::flush()
     std::stringstream temp;
     toFile(temp);
     std::string newcontent = temp.str();
-    boost::shared_ptr<std::istream> oldfile = m_data->read();
+    std::shared_ptr<std::istream> oldfile = m_data->read();
     std::string oldcontent;
     if (!ReadFile(*oldfile, oldcontent) ||
         oldcontent != newcontent) {
-        boost::shared_ptr<std::ostream> newfile = m_data->write();
+        std::shared_ptr<std::ostream> newfile = m_data->write();
         *newfile << newcontent;
     }
 
     m_modified = false;
 }
 
-IniFileConfigNode::IniFileConfigNode(const boost::shared_ptr<DataBlob> &data) :
+IniFileConfigNode::IniFileConfigNode(const std::shared_ptr<DataBlob> &data) :
     IniBaseConfigNode(data)
 {
     read();
 }
 
 IniFileConfigNode::IniFileConfigNode(const std::string &path, const std::string &fileName, bool readonly) :
-    IniBaseConfigNode(boost::shared_ptr<DataBlob>(new FileDataBlob(path, fileName, readonly)))
+    IniBaseConfigNode(std::make_shared<FileDataBlob>(path, fileName, readonly))
 {
     read();
 }
@@ -83,7 +83,7 @@ void IniFileConfigNode::toFile(std::ostream &file) {
 
 void IniFileConfigNode::read()
 {
-    boost::shared_ptr<std::istream> file(m_data->read());
+    std::shared_ptr<std::istream> file(m_data->read());
     std::string line;
     while (getline(*file, line)) {
         m_lines.push_back(line);
@@ -281,21 +281,21 @@ void IniFileConfigNode::clear()
     m_modified = true;
 }
 
-IniHashConfigNode::IniHashConfigNode(const boost::shared_ptr<DataBlob> &data) :
+IniHashConfigNode::IniHashConfigNode(const std::shared_ptr<DataBlob> &data) :
     IniBaseConfigNode(data)
 {
     read();
 }
 
 IniHashConfigNode::IniHashConfigNode(const std::string &path, const std::string &fileName, bool readonly) :
-    IniBaseConfigNode(boost::shared_ptr<DataBlob>(new FileDataBlob(path, fileName, readonly)))
+    IniBaseConfigNode(std::make_shared<FileDataBlob>(path, fileName, readonly))
 {
     read();
 }
 
 void IniHashConfigNode::read()
 {
-    boost::shared_ptr<std::istream> file(m_data->read());
+    std::shared_ptr<std::istream> file(m_data->read());
     std::string line;
     while (std::getline(*file, line)) {
         std::string property, value;

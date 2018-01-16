@@ -6,7 +6,6 @@
 #include <iostream>
 #include <signal.h>
 
-#include <boost/bind.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/tuple/tuple_io.hpp>
 
@@ -283,8 +282,7 @@ int main(int argc, char **argv)
 
         if (opt_fork_exec || opt_fork_exec_failure) {
             boost::scoped_ptr<Test> testptr;
-            boost::shared_ptr<SyncEvo::ForkExecParent> forkexec =
-                SyncEvo::ForkExecParent::create(opt_fork_exec_failure ? "/bin/false" : argv[0]);
+            auto forkexec = SyncEvo::make_weak_shared::make<SyncEvo::ForkExecParent>(opt_fork_exec_failure ? "/bin/false" : argv[0]);
             if (opt_kill) {
                 forkexec->addEnvVar("DBUS_CLIENT_SERVER_KILL", opt_kill);
             }
@@ -297,7 +295,7 @@ int main(int argc, char **argv)
             g_main_loop_run(loop.get());
         } else if (opt_server) {
             boost::scoped_ptr<Test> testptr;
-            boost::shared_ptr<GDBusCXX::DBusServerCXX> server =
+            std::shared_ptr<GDBusCXX::DBusServerCXX> server =
                 GDBusCXX::DBusServerCXX::listen(boost::bind(newClientConnection, _1, _2, boost::ref(testptr)),
                                                 &dbusError);
             if (!server) {
@@ -307,8 +305,7 @@ int main(int argc, char **argv)
 
             g_main_loop_run(loop.get());
         } else if (SyncEvo::ForkExecChild::wasForked()) {
-            boost::shared_ptr<SyncEvo::ForkExecChild> forkexec =
-                SyncEvo::ForkExecChild::create();
+            auto forkexec = SyncEvo::make_weak_shared::make<SyncEvo::ForkExecChild>();
 
             forkexec->m_onConnect.connect(!g_strcmp0(getenv("DBUS_CLIENT_SERVER_KILL"), "child") ? calledByServer :
                                           !g_strcmp0(getenv("DBUS_CLIENT_SERVER_KILL"), "server") ? killServer :

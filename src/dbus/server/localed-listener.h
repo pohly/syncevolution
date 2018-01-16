@@ -22,8 +22,10 @@
 
 #include <gdbus-cxx-bridge.h>
 #include <boost/signals2.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/weak_ptr.hpp>
+
+#include <memory>
+
+#include <syncevo/util.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -31,14 +33,14 @@ SE_BEGIN_CXX
 /**
  * The D-Bus binding for http://www.freedesktop.org/wiki/Software/systemd/localed/
  */
-class LocaledListener : public GDBusCXX::DBusRemoteObject
+class LocaledListener : public GDBusCXX::DBusRemoteObject, public enable_weak_from_this<LocaledListener>
 {
  public:
     /**
      * Singleton - at most one instance of LocaledListener will exist.
      * It lives as long as one of the create() callers keeps the reference.
      */
-    static boost::shared_ptr<LocaledListener> create();
+    static std::shared_ptr<LocaledListener> create();
 
     /**
      * array of var=value, for example LANG, LC_NUMERIC, etc.
@@ -56,7 +58,7 @@ class LocaledListener : public GDBusCXX::DBusRemoteObject
      * either with the current settings from localed or, if
      * retrieving those fails, with the current environment.
      */
-    void check(const boost::function<void (const LocaleEnv &env)> &result);
+    void check(const std::function<void (const LocaleEnv &env)> &result);
 
     /**
      * Updates current environment to match the one in the parameter.
@@ -81,7 +83,6 @@ class LocaledListener : public GDBusCXX::DBusRemoteObject
     LocaleChangedSignal m_localeChanged;
 
  private:
-    boost::weak_ptr<LocaledListener> m_self;
     typedef boost::variant<LocaleEnv> LocaleVariant;
     typedef std::map<std::string, LocaleVariant> Properties;
     typedef std::vector<std::string> Invalidated;
@@ -92,7 +93,7 @@ class LocaledListener : public GDBusCXX::DBusRemoteObject
     void onPropertiesChange(const std::string &interface,
                             const Properties &properties,
                             const Invalidated &invalidated);
-    typedef boost::function<void (const LocaleEnv &env)> ProcessLocalePropCB_t;
+    typedef std::function<void (const LocaleEnv &env)> ProcessLocalePropCB_t;
     void processLocaleProperty(const LocaleVariant &locale,
                                const std::string &error,
                                bool mustCall,

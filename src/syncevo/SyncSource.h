@@ -29,9 +29,10 @@
 #include <synthesis/syerror.h>
 #include <synthesis/blobs.h>
 
-#include <boost/function.hpp>
 #include <boost/signals2.hpp>
 #include <boost/variant.hpp>
+
+#include <functional>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -61,7 +62,7 @@ struct SyncSourceParams {
      */
     SyncSourceParams(const string &name,
                      const SyncSourceNodes &nodes,
-                     const boost::shared_ptr<SyncConfig> &context,
+                     const std::shared_ptr<SyncConfig> &context,
                      const string &contextName = "") :
         m_name(name),
         m_nodes(nodes),
@@ -73,7 +74,7 @@ struct SyncSourceParams {
 
     string m_name;
     SyncSourceNodes m_nodes;
-    boost::shared_ptr<SyncConfig> m_context;
+    std::shared_ptr<SyncConfig> m_context;
     string m_contextName;
 };
 
@@ -209,7 +210,7 @@ struct ClientTestConfig {
      * @param isSourceA true if the requested SyncSource is the first one accessing that
      *                  data, otherwise the second
      */
-    typedef boost::function<TestingSyncSource *(ClientTest &, const std::string &, int, bool)> createsource_t;
+    typedef std::function<TestingSyncSource *(ClientTest &, const std::string &, int, bool)> createsource_t;
 
     /**
      * Creates a sync source which references the primary database;
@@ -280,7 +281,7 @@ struct ClientTestConfig {
      *                          in test items inside the running test to avoid reuse
      *                          if necessary (Google CalDAV + UID/SEQUENCE => 409 error)
      */
-    boost::function<std::string (const std::string &data, bool update, const std::string &uniqueUIDSuffix)> m_mangleItem;
+    std::function<std::string (const std::string &data, bool update, const std::string &uniqueUIDSuffix)> m_mangleItem;
 
     /**
      * Items have a UID which really has to be unique among all items
@@ -346,7 +347,7 @@ struct ClientTestConfig {
         StringMap m_options; /**< used to pass additional parameters to the test */
         /** for testLinkedItemsSubset: create the additional VEVENT that is added when talking to Exchange;
             parameters are start, skip, index and total number of items in that test */
-        boost::function<std::string (int, int, int, int)> m_testLinkedItemsSubsetAdditional;
+        std::function<std::string (int, int, int, int)> m_testLinkedItemsSubsetAdditional;
     } LinkedItems_t;
 
     /**
@@ -409,7 +410,7 @@ struct ClientTestConfig {
      * @param file       a file name
      * @return error code, 0 for success
      */
-    boost::function<int (ClientTest &, TestingSyncSource &, const std::string &)> m_dump;
+    std::function<int (ClientTest &, TestingSyncSource &, const std::string &)> m_dump;
 
     /**
      * import test items: which these are is determined entirely by
@@ -427,7 +428,7 @@ struct ClientTestConfig {
      *                   if not empty, then update instead of adding the items
      * @return error string, empty for success
      */
-    boost::function<std::string (ClientTest &, TestingSyncSource &, const ClientTestConfig &,
+    std::function<std::string (ClientTest &, TestingSyncSource &, const ClientTestConfig &,
                                  const std::string &, std::string &, std::list<std::string> *)> m_import;
 
     /**
@@ -437,7 +438,7 @@ struct ClientTestConfig {
      * @param fileB      second file name
      * @return true if the content of the files is considered equal
      */
-    boost::function<bool (ClientTest &, const std::string &, const std::string &)> m_compare;
+    std::function<bool (ClientTest &, const std::string &, const std::string &)> m_compare;
 
     /**
      * A file with test cases in the format expected by import and compare.
@@ -496,8 +497,8 @@ struct ClientTestConfig {
      * genericUpdate works for vCard and iCalendar by updating FN, N, resp. SUMMARY
      * and can be used as implementation of update.
      */
-    boost::function<void (std::string &)> m_update;
-    boost::function<void (std::string &)> m_genericUpdate;
+    std::function<void (std::string &)> m_update;
+    std::function<void (std::string &)> m_genericUpdate;
 
     /**
      * A list of m_sourceName values of other ClientTestConfigs
@@ -705,14 +706,14 @@ template<> struct KeyConverter<sysync::cItemID>
  * when the function is not done yet and wants to be called again
  * for the same item.
  */
-template <class F> class ContinueOperation : public boost::function<F>
+template <class F> class ContinueOperation : public std::function<F>
 {
  public:
     ContinueOperation()
     {}
 
-    ContinueOperation(const boost::function<F> &callback) : 
-        boost::function<F>(callback)
+    ContinueOperation(const std::function<F> &callback) : 
+        std::function<F>(callback)
     {}
 };
 
@@ -787,7 +788,7 @@ template<typename F> class OperationWrapperSwitch;
 template<typename ...A> class OperationWrapperSwitch<sysync::TSyError (A...)>
 {
  public:
-    typedef boost::function<sysync::TSyError (A...)> OperationType;
+    typedef std::function<sysync::TSyError (A...)> OperationType;
 
     /**
      * The pre-signal is invoked with the same parameters as
@@ -880,7 +881,7 @@ template<typename ...A> class OperationWrapperSwitch<sysync::TSyError (A...)>
 template<typename C, typename A1, typename ...A> class OperationWrapperSwitch<boost::variant<sysync::TSyError, C> (A1, A...)>
 {
  public:
-    typedef boost::function<boost::variant<sysync::TSyError, C> (A1, A...)> OperationType;
+    typedef std::function<boost::variant<sysync::TSyError, C> (A1, A...)> OperationType;
     typedef boost::signals2::signal<SyncMLStatus (SyncSource &, A1, A...),
         OperationSlotInvoker> PreSignal;
     typedef boost::signals2::signal<SyncMLStatus (SyncSource &, OperationExecution, sysync::TSyError, A1, A...),
@@ -957,7 +958,7 @@ template<typename C, typename A1, typename ...A> class OperationWrapperSwitch<bo
 };
 
 /**
- * This mimics a boost::function with the same signature. The function
+ * This mimics a std::function with the same signature. The function
  * signature F must have a sysync::TSyError error return code, as in most
  * of the Synthesis DB API, or a boost::variant of sysync::TSyError and
  * ContinueOperation<F>.
@@ -980,7 +981,7 @@ template<typename C, typename A1, typename ...A> class OperationWrapperSwitch<bo
  * number or parameters in the operation cannot exceed six, because
  * adding three more parameters in the post-signal would push the
  * total number of parameters in that signal beyond the limit of nine
- * supported arguments in boost::signals2/boost::function.
+ * supported arguments in boost::signals2/std::function.
  */
 template<class F> class OperationWrapper :
 public OperationWrapperSwitch<F>
@@ -990,13 +991,13 @@ public OperationWrapperSwitch<F>
     OperationWrapper(SyncSourceName &source): inherited(source) {}
 
     /** operation implemented? */
-    operator bool () const { return inherited::m_operation; }
+    operator bool () const { return static_cast<bool>(inherited::m_operation); }
 
     /**
      * Only usable by derived classes via read/write m_operations:
      * sets the actual implementation of the operation.
      */
-    void operator = (const boost::function<F> &operation)
+    void operator = (const std::function<F> &operation)
     {
         inherited::m_operation = operation;
     }
@@ -1152,11 +1153,11 @@ class SyncSourceBase : public SyncSourceName {
                 BACKUP_OTHER
             } m_mode;
             string m_dirname;
-            boost::shared_ptr<ConfigNode> m_node;
+            std::shared_ptr<ConfigNode> m_node;
             BackupInfo() {}
             BackupInfo(Mode mode,
                        const string &dirname,
-                       const boost::shared_ptr<ConfigNode> &node) :
+                       const std::shared_ptr<ConfigNode> &node) :
                 m_mode(mode),
                 m_dirname(dirname),
                 m_node(node)
@@ -1165,11 +1166,11 @@ class SyncSourceBase : public SyncSourceName {
         struct ConstBackupInfo {
             BackupInfo::Mode m_mode;
             string m_dirname;
-            boost::shared_ptr<const ConfigNode> m_node;
+            std::shared_ptr<const ConfigNode> m_node;
             ConstBackupInfo() {}
             ConstBackupInfo(BackupInfo::Mode mode,
                             const string &dirname,
-                            const boost::shared_ptr<const ConfigNode> &node) :
+                            const std::shared_ptr<const ConfigNode> &node) :
                 m_mode(mode),
                 m_dirname(dirname),
                 m_node(node)
@@ -1194,7 +1195,7 @@ class SyncSourceBase : public SyncSourceName {
         typedef void (BackupData_t)(const ConstBackupInfo &oldBackup,
                                     const BackupInfo &newBackup,
                                     BackupReport &report);
-        boost::function<BackupData_t> m_backupData;
+        std::function<BackupData_t> m_backupData;
 
         /**
          * Restore database from data stored in backupData().
@@ -1210,7 +1211,7 @@ class SyncSourceBase : public SyncSourceName {
         typedef void (RestoreData_t)(const ConstBackupInfo &oldBackup,
                                      bool dryrun,
                                      SyncSourceReport &report);
-        boost::function<RestoreData_t> m_restoreData;
+        std::function<RestoreData_t> m_restoreData;
 
         /**
          * initialize information about local changes and items
@@ -1226,7 +1227,7 @@ class SyncSourceBase : public SyncSourceName {
          * Such sources should leave the functor empty.
          */
         typedef void (CheckStatus_t)(SyncSourceReport &local);
-        boost::function<CheckStatus_t> m_checkStatus;
+        std::function<CheckStatus_t> m_checkStatus;
 
         /**
          * A quick check whether the source currently has data.
@@ -1240,7 +1241,7 @@ class SyncSourceBase : public SyncSourceName {
          * to choose.
          */
         typedef bool (IsEmpty_t)();
-        boost::function<IsEmpty_t> m_isEmpty;
+        std::function<IsEmpty_t> m_isEmpty;
 
         /**
          * Synthesis DB API callbacks. For documentation see the
@@ -1315,7 +1316,7 @@ class SyncSourceBase : public SyncSourceName {
         // not currently wrapped because it has a different return type;
         // templates could be adapted to handle that
         typedef bool (ReadNextMapItem_t)(sysync::MapID mID, bool aFirst);
-        boost::function<ReadNextMapItem_t> m_readNextMapItem;
+        std::function<ReadNextMapItem_t> m_readNextMapItem;
 
         typedef OperationWrapper<sysync::TSyError (sysync::cMapID mID)> InsertMapItem_t;
         InsertMapItem_t m_insertMapItem;
@@ -1327,13 +1328,13 @@ class SyncSourceBase : public SyncSourceName {
         DeleteMapItem_t m_deleteMapItem;
 
         // not wrapped, too many parameters
-        typedef boost::function<sysync::TSyError (sysync::cItemID aID, const char *aBlobID,
+        typedef std::function<sysync::TSyError (sysync::cItemID aID, const char *aBlobID,
                                                   void **aBlkPtr, size_t *aBlkSize,
                                                   size_t *aTotSize,
                                                   bool aFirst, bool *aLast)> ReadBlob_t;
         ReadBlob_t m_readBlob;
 
-        typedef boost::function<sysync::TSyError (sysync::cItemID aID, const char *aBlobID,
+        typedef std::function<sysync::TSyError (sysync::cItemID aID, const char *aBlobID,
                                                   void *aBlkPtr, size_t aBlkSize,
                                                   size_t aTotSize,
                                                   bool aFirst, bool aLast)> WriteBlob_t;
@@ -1867,7 +1868,7 @@ class DummySyncSource : public SyncSource
        SyncSource(params) {}
 
      DummySyncSource(const std::string &name, const std::string &contextName) :
-       SyncSource(SyncSourceParams(name, SyncSourceNodes(), boost::shared_ptr<SyncConfig>(), contextName)) {}
+       SyncSource(SyncSourceParams(name, SyncSourceNodes(), std::shared_ptr<SyncConfig>(), contextName)) {}
 
     virtual Databases getDatabases() { return Databases(); }
     virtual void open() {}
@@ -1888,7 +1889,7 @@ class DummySyncSource : public SyncSource
  */
 class VirtualSyncSource : public DummySyncSource 
 {
-    std::vector< boost::shared_ptr<SyncSource> > m_sources;
+    std::vector< std::shared_ptr<SyncSource> > m_sources;
     bool isEmpty();
 
 public:
@@ -2138,7 +2139,7 @@ class SyncSourceRaw : virtual public SyncSourceBase {
          *
          * @param check   will be called again later to poll for completion
          */
-        InsertItemResult(const boost::function<InsertItemResult ()> &check) :
+        InsertItemResult(const std::function<InsertItemResult ()> &check) :
         m_state(ITEM_AGAIN),
             m_continue(check)
         {}
@@ -2604,10 +2605,6 @@ class SyncSourceLogging : public virtual SyncSourceBase
  private:
     std::list<std::string> m_fields;
     std::string m_sep;
-
-    SyncMLStatus insertItemAsKey(sysync::KeyH aItemKey, sysync::ItemID newID);
-    SyncMLStatus updateItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID);
-    SyncMLStatus deleteItem(sysync::cItemID aID);
 };
 
 /**
@@ -2617,9 +2614,9 @@ class SyncSourceLogging : public virtual SyncSourceBase
  */
 class SyncSourceAdmin : public virtual SyncSourceBase
 {
-    boost::shared_ptr<ConfigNode> m_configNode;
+    std::shared_ptr<ConfigNode> m_configNode;
     std::string m_adminPropertyName;
-    boost::shared_ptr<ConfigNode> m_mappingNode;
+    std::shared_ptr<ConfigNode> m_mappingNode;
     bool m_mappingLoaded;
 
     ConfigProps m_mapping;
@@ -2642,9 +2639,9 @@ class SyncSourceAdmin : public virtual SyncSourceBase
  public:
     /** flexible initialization */
     void init(SyncSource::Operations &ops,
-              const boost::shared_ptr<ConfigNode> &config,
+              const std::shared_ptr<ConfigNode> &config,
               const std::string &adminPropertyName,
-              const boost::shared_ptr<ConfigNode> &mapping);
+              const std::shared_ptr<ConfigNode> &mapping);
 
     /**
      * simpler initialization, using the default placement of data

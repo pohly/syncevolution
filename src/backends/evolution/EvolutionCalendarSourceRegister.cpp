@@ -124,14 +124,14 @@ class EvolutionCalendarTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE_END();
 
 protected:
-    static string addItem(boost::shared_ptr<TestingSyncSource> source,
+    static string addItem(std::shared_ptr<TestingSyncSource> source,
                           string &data) {
         SyncSourceRaw::InsertItemResult res = source->insertItemRaw("", data);
         return res.m_luid;
     }
 
     void testInstantiate() {
-        boost::shared_ptr<TestingSyncSource> source;
+        std::shared_ptr<TestingSyncSource> source;
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "calendar", true));
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-calendar", true));
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "Evolution Calendar:text/calendar", true));
@@ -148,19 +148,19 @@ protected:
     }
 
     void testOpenDefaultCalendar() {
-        boost::shared_ptr<TestingSyncSource> source;
+        std::shared_ptr<TestingSyncSource> source;
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-calendar", true, NULL));
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
     void testOpenDefaultTodo() {
-        boost::shared_ptr<TestingSyncSource> source;
+        std::shared_ptr<TestingSyncSource> source;
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-tasks", true, NULL));
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
     void testOpenDefaultMemo() {
-        boost::shared_ptr<TestingSyncSource> source;
+        std::shared_ptr<TestingSyncSource> source;
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-memos", true, NULL));
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
@@ -171,7 +171,7 @@ protected:
             prefix = "SyncEvolution_Test_";
         }
 
-        boost::shared_ptr<TestingSyncSource> source;
+        std::shared_ptr<TestingSyncSource> source;
         source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "evolution-calendar", true, prefix));
         CPPUNIT_ASSERT_NO_THROW(source->open());
 

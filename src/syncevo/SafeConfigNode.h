@@ -21,9 +21,9 @@
 # define INCL_EVOLUTION_SAFE_CONFIG_NODE
 
 #include <syncevo/ConfigNode.h>
-#include <boost/shared_ptr.hpp>
 
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 #include <string>
@@ -43,10 +43,10 @@ SE_BEGIN_CXX
 class SafeConfigNode : public ConfigNode {
  public:
     /** read-write access to underlying node */
-    SafeConfigNode(const boost::shared_ptr<ConfigNode> &node);
+    SafeConfigNode(const std::shared_ptr<ConfigNode> &node);
 
     /** read-only access to underlying node */
-    SafeConfigNode(const boost::shared_ptr<const ConfigNode> &node);
+    SafeConfigNode(const std::shared_ptr<const ConfigNode> &node);
 
     /**
      * chooses which characters are accepted by underlying node:
@@ -75,8 +75,8 @@ class SafeConfigNode : public ConfigNode {
     virtual void clear() { m_node->clear(); }
 
  private:
-    boost::shared_ptr<ConfigNode> m_node;
-    boost::shared_ptr<const ConfigNode> m_readOnlyNode;
+    std::shared_ptr<ConfigNode> m_node;
+    std::shared_ptr<const ConfigNode> m_readOnlyNode;
     bool m_strictMode;
 
     /**

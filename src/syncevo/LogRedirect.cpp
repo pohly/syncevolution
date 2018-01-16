@@ -698,7 +698,7 @@ class LogRedirectTest : public CppUnit::TestFixture {
         LogBuffer(LogRedirect::Mode mode = LogRedirect::STDERR_AND_STDOUT)
         {
             m_redirect.reset(new LogRedirect(mode));
-            addLogger(boost::shared_ptr<Logger>(this, NopDestructor()));
+            addLogger(std::shared_ptr<Logger>(this, NopDestructor()));
         }
         ~LogBuffer()
         {

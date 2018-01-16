@@ -26,9 +26,9 @@
 SE_BEGIN_CXX
 
 class FinalizeWrite {
-    boost::shared_ptr<std::string> m_data;
+    std::shared_ptr<std::string> m_data;
 public:
-    FinalizeWrite(const boost::shared_ptr<std::string> &data) :
+    FinalizeWrite(const std::shared_ptr<std::string> &data) :
         m_data(data)
     {}
 
@@ -42,22 +42,23 @@ public:
 };
 
 StringDataBlob::StringDataBlob(const std::string &name,
-                               const boost::shared_ptr<std::string> &data,
+                               const std::shared_ptr<std::string> &data,
                                bool readonly) :
     m_name(name),
     m_data(data),
     m_readonly(readonly)
 {
 }
- 
-boost::shared_ptr<std::ostream> StringDataBlob::write()
+
+std::shared_ptr<std::ostream> StringDataBlob::write()
 {
-    return boost::shared_ptr<std::ostringstream>(new std::ostringstream, FinalizeWrite(m_data));
+    // std::shared_ptr with custom deleter.
+    return std::shared_ptr<std::ostringstream>(new std::ostringstream, FinalizeWrite(m_data));
 }
 
-boost::shared_ptr<std::istream> StringDataBlob::read()
+std::shared_ptr<std::istream> StringDataBlob::read()
 {
-    return boost::shared_ptr<std::istream>(new std::istringstream(m_data ? *m_data : ""));
+    return std::make_shared<std::istringstream>(m_data ? *m_data : "");
 }
 
 SE_END_CXX

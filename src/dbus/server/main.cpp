@@ -79,7 +79,7 @@ static Logger::Level checkLogLevel(const char *option, int logLevel)
 int main(int argc, char **argv, char **envp)
 {
     // remember environment for restart
-    boost::shared_ptr<Restart> restart;
+    std::shared_ptr<Restart> restart;
     restart.reset(new Restart(argv, envp));
 
     // Internationalization for auto sync messages.
@@ -212,7 +212,7 @@ int main(int argc, char **argv, char **envp)
         // process name for developers in this process, and not in
         // syncevo-dbus-helper.
         Logger::setProcessName("syncevo-dbus-server");
-        boost::shared_ptr<SuspendFlags::Guard> guard = SuspendFlags::getSuspendFlags().activate();
+        std::shared_ptr<SuspendFlags::Guard> guard = SuspendFlags::getSuspendFlags().activate();
 
         DBusErrorCXX err;
         DBusConnectionPtr conn = dbus_get_bus_connection("SESSION",
@@ -225,12 +225,12 @@ int main(int argc, char **argv, char **envp)
         // make this object the main owner of the connection
         boost::scoped_ptr<DBusObject> obj(new DBusObject(conn, "foo", "bar", true));
 
-        boost::shared_ptr<SyncEvo::Server> server(new SyncEvo::Server(loop, restart, conn, duration));
+        auto server = std::make_shared<SyncEvo::Server>(loop, restart, conn, duration);
         server->setDBusLogLevel(levelDBus);
         server->activate();
 
 #ifdef ENABLE_DBUS_PIM
-        boost::shared_ptr<GDBusCXX::DBusObjectHelper> manager(SyncEvo::CreateContactManager(server, startPIM));
+        std::shared_ptr<GDBusCXX::DBusObjectHelper> manager(SyncEvo::CreateContactManager(server, startPIM));
 #endif
 
         if (gdbus) {

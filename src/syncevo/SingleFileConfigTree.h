@@ -52,38 +52,38 @@ class SingleFileConfigTree : public ConfigTree {
     /**
      * @param data          access to complete file data
      */
-    SingleFileConfigTree(const boost::shared_ptr<DataBlob> &data);
+    SingleFileConfigTree(const std::shared_ptr<DataBlob> &data);
     SingleFileConfigTree(const std::string &fullpath);
 
     /**
      * same as open(), with full file name (like sources/addressbook/config.ini)
      * instead of path + type
      */
-    boost::shared_ptr<ConfigNode> open(const std::string &filename);
+    std::shared_ptr<ConfigNode> open(const std::string &filename);
 
     /* ConfigTree API */
     virtual void flush();
     virtual void reload();
     virtual void remove(const std::string &path);
     virtual void reset();
-    virtual boost::shared_ptr<ConfigNode> open(const std::string &path,
+    virtual std::shared_ptr<ConfigNode> open(const std::string &path,
                                                PropertyType type,
                                                const std::string &otherId = std::string(""));
-    virtual boost::shared_ptr<ConfigNode> add(const std::string &path,
-                                              const boost::shared_ptr<ConfigNode> &bode);
+    virtual std::shared_ptr<ConfigNode> add(const std::string &path,
+                                              const std::shared_ptr<ConfigNode> &bode);
     std::list<std::string> getChildren(const std::string &path);
 
  private:
-    boost::shared_ptr<DataBlob> m_data;
+    std::shared_ptr<DataBlob> m_data;
 
     /**
      * maps from normalized file name (see normalizePath()) to content for that name
      */
-    typedef std::map<std::string, boost::shared_ptr<std::string> > FileContent_t;
+    typedef std::map<std::string, std::shared_ptr<std::string> > FileContent_t;
     FileContent_t m_content;
 
     /** cache of all nodes ever accessed */
-    typedef std::map< std::string, boost::shared_ptr<ConfigNode> > NodeCache_t;
+    typedef std::map< std::string, std::shared_ptr<ConfigNode> > NodeCache_t;
     NodeCache_t m_nodes;
 
     /**

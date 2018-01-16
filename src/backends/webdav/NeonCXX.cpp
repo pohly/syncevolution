@@ -15,8 +15,6 @@
 #include <list>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/bind.hpp>
-#include <boost/lambda/lambda.hpp>
 
 #include <syncevo/util.h>
 #include <syncevo/Logging.h>
@@ -187,7 +185,7 @@ std::string Status2String(const ne_status *status)
                         status->reason_phrase ? status->reason_phrase : "\"\"");
 }
 
-Session::Session(const boost::shared_ptr<Settings> &settings) :
+Session::Session(const std::shared_ptr<Settings> &settings) :
     m_forceAuthorizationOnce(AUTH_ON_DEMAND),
     m_credentialsSent(false),
     m_settings(settings),
@@ -285,9 +283,9 @@ Session::~Session()
     ne_sock_exit();
 }
 
-boost::shared_ptr<Session> Session::m_cachedSession;
+std::shared_ptr<Session> Session::m_cachedSession;
 
-boost::shared_ptr<Session> Session::create(const boost::shared_ptr<Settings> &settings)
+std::shared_ptr<Session> Session::create(const std::shared_ptr<Settings> &settings)
 {
     URI uri = URI::parse(settings->getURL());
     if (m_cachedSession &&
@@ -306,7 +304,7 @@ boost::shared_ptr<Session> Session::create(const boost::shared_ptr<Settings> &se
 int Session::getCredentials(const char *realm, int attempt, char *username, char *password) noexcept
 {
     try {
-        boost::shared_ptr<AuthProvider> authProvider = m_settings->getAuthProvider();
+        std::shared_ptr<AuthProvider> authProvider = m_settings->getAuthProvider();
         if (authProvider && authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
             // We have to fail here because we cannot provide neon
             // with a username/password combination. Instead we rely
@@ -335,7 +333,7 @@ int Session::getCredentials(const char *realm, int attempt, char *username, char
 }
 
 void Session::forceAuthorization(ForceAuthorization forceAuthorization,
-                                 const boost::shared_ptr<AuthProvider> &authProvider)
+                                 const std::shared_ptr<AuthProvider> &authProvider)
 {
     m_forceAuthorizationOnce = forceAuthorization;
     m_authProvider = authProvider;
@@ -444,11 +442,11 @@ void Session::propfindURI(const std::string &path, int depth,
     startOperation("PROPFIND", deadline);
 
  retry:
-    boost::shared_ptr<ne_propfind_handler> handler;
+    std::shared_ptr<ne_propfind_handler> handler;
     int error;
 
     checkAuthorization();
-    handler = boost::shared_ptr<ne_propfind_handler>(ne_propfind_create(m_session, path.c_str(), depth),
+    handler = std::shared_ptr<ne_propfind_handler>(ne_propfind_create(m_session, path.c_str(), depth),
                                                      PropFindDeleter());
     auto propsResult = [] (void *userdata, const ne_uri *uri,
                            const ne_prop_result_set *results) noexcept {
@@ -806,116 +804,113 @@ XMLParser &XMLParser::pushHandler(const StartCB_t &start,
 {
     m_stack.push_back(Callbacks(start, data, end));
     Callbacks &cb = m_stack.back();
+
+    auto startCB = [] (void *userdata, int parent,
+                       const char *nspace, const char *name,
+                       const char **atts) noexcept {
+        Callbacks *cb = static_cast<Callbacks *>(userdata);
+        try {
+            return cb->m_start(parent, nspace, name, atts);
+        } catch (...) {
+            Exception::handle();
+            SE_LOG_ERROR(NULL, "startCB %s %s failed", nspace, name);
+            return -1;
+        }
+    };
+
+    auto dataCB = [] (void *userdata, int state,
+                      const char *cdata, size_t len) noexcept {
+        Callbacks *cb = static_cast<Callbacks *>(userdata);
+        try {
+            return cb->m_data ?
+                cb->m_data(state, cdata, len) :
+                0;
+        } catch (...) {
+            Exception::handle();
+            SE_LOG_ERROR(NULL, "dataCB failed");
+            return -1;
+        }
+    };
+
+    auto endCB = [] (void *userdata, int state,
+                     const char *nspace, const char *name) noexcept {
+        Callbacks *cb = static_cast<Callbacks *>(userdata);
+        try {
+            return cb->m_end ?
+                cb->m_end(state, nspace, name) :
+                0;
+        } catch (...) {
+            Exception::handle();
+            SE_LOG_ERROR(NULL, "endCB %s %s failed", nspace, name);
+            return -1;
+        }
+    };
+
     ne_xml_push_handler(m_parser,
                         startCB, dataCB, endCB,
                         &cb);
     return *this;
 }
 
-int XMLParser::startCB(void *userdata, int parent,
-                       const char *nspace, const char *name,
-                       const char **atts)
+XMLParser::StartCB_t XMLParser::accept(const std::string &nspaceExpected,
+                                       const std::string &nameExpected)
 {
-    Callbacks *cb = static_cast<Callbacks *>(userdata);
-    try {
-        return cb->m_start(parent, nspace, name, atts);
-    } catch (...) {
-        Exception::handle();
-        SE_LOG_ERROR(NULL, "startCB %s %s failed", nspace, name);
-        return -1;
-    }
+    return [nspaceExpected, nameExpected] (int state, const char *nspace, const char *name, const char **attributes) {
+        if (nspace && nspaceExpected == nspace &&
+            name && nameExpected == name) {
+            return 1;
+        } else {
+            return 0;
+        }
+    };
 }
 
-int XMLParser::dataCB(void *userdata, int state,
-                      const char *cdata, size_t len)
+XMLParser::DataCB_t XMLParser::append(std::string &buffer)
 {
-    Callbacks *cb = static_cast<Callbacks *>(userdata);
-    try {
-        return cb->m_data ?
-            cb->m_data(state, cdata, len) :
-            0;
-    } catch (...) {
-        Exception::handle();
-        SE_LOG_ERROR(NULL, "dataCB failed");
-        return -1;
-    }
-}
-
-int XMLParser::endCB(void *userdata, int state, 
-                     const char *nspace, const char *name)
-{
-    Callbacks *cb = static_cast<Callbacks *>(userdata);
-    try {
-        return cb->m_end ?
-            cb->m_end(state, nspace, name) :
-            0;
-    } catch (...) {
-        Exception::handle();
-        SE_LOG_ERROR(NULL, "endCB %s %s failed", nspace, name);
-        return -1;
-    }
-}
-
-
-int XMLParser::accept(const std::string &nspaceExpected,
-                      const std::string &nameExpected,
-                      const char *nspace,
-                      const char *name)
-{
-    if (nspace && nspaceExpected == nspace &&
-        name && nameExpected == name) {
-        return 1;
-    } else {
+    return [&buffer] (int state, const char *newdata, size_t len) {
+        buffer.append(newdata, len);
         return 0;
-    }
-}
-
-int XMLParser::append(std::string &buffer,
-                      const char *data,
-                      size_t len)
-{
-    buffer.append(data, len);
-    return 0;
-}
-
-int XMLParser::reset(std::string &buffer)
-{
-    buffer.clear();
-    return 0;
+    };
 }
 
 void XMLParser::initAbortingReportParser(const ResponseEndCB_t &responseEnd)
 {
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "multistatus", _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "response", _2, _3),
-                Neon::XMLParser::DataCB_t(),
-                boost::bind(&Neon::XMLParser::doResponseEnd,
-                            this, responseEnd));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "href", _2, _3),
-                boost::bind(Neon::XMLParser::append, boost::ref(m_href), _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "propstat", _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "status", _2, _3),
-                boost::bind(Neon::XMLParser::append, boost::ref(m_status), _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "prop", _2, _3));
-    pushHandler(boost::bind(Neon::XMLParser::accept, "DAV:", "getetag", _2, _3),
-                boost::bind(Neon::XMLParser::append, boost::ref(m_etag), _2, _3));
-}
-
-static int VoidResponseEndCBWrapper(const XMLParser::VoidResponseEndCB_t &responseEnd,
-				    const std::string &href,
-				    const std::string &etag,
-				    const std::string &status)
-{
-    responseEnd(href, etag, status);
-    return 0;
+    pushHandler(accept("DAV:", "multistatus"));
+    pushHandler(accept("DAV:", "response"),
+                {},
+                [this, responseEnd] (int state, const char *nspace, const char *name) {
+                    int abort = 0;
+                    if (responseEnd) {
+                        abort = responseEnd(m_href, m_etag, m_status);
+                    }
+                    // clean up for next response
+                    m_href.clear();
+                    m_etag.clear();
+                    m_status.clear();
+                    return abort;
+                });
+    pushHandler(accept("DAV:", "href"),
+                append(m_href));
+    pushHandler(accept("DAV:", "propstat"));
+    pushHandler(accept("DAV:", "status"),
+                append(m_status));
+    pushHandler(accept("DAV:", "prop"));
+    pushHandler(accept("DAV:", "getetag"),
+                append(m_etag));
 }
 
 void XMLParser::initReportParser(const VoidResponseEndCB_t &responseEnd)
 {
     if (responseEnd) {
-        initAbortingReportParser(boost::bind(VoidResponseEndCBWrapper, responseEnd, _1, _2, _3));
+        auto end = [responseEnd] (const std::string &href,
+                                  const std::string &etag,
+                                  const std::string &status) {
+            responseEnd(href, etag, status);
+            return 0;
+        };
+        initAbortingReportParser(end);
     } else {
-        initAbortingReportParser(ResponseEndCB_t());
+        initAbortingReportParser();
     }
 }
 
@@ -974,7 +969,10 @@ void Session::checkAuthorization()
         // Count the number of times we asked for new tokens. This helps
         // the provider determine whether the token that it returns are valid.
         try {
-            m_oauth2Bearer = m_authProvider->getOAuth2Bearer(boost::bind(&Settings::updatePassword, m_settings, _1));
+            auto update_password = [this] (const std::string& password) {
+                m_settings->updatePassword(password);
+            };
+            m_oauth2Bearer = m_authProvider->getOAuth2Bearer(update_password);
             SE_LOG_DEBUG(NULL, "got new OAuth2 token '%s' for next request", m_oauth2Bearer.c_str());
         } catch (...) {
             std::string explanation;
@@ -988,7 +986,7 @@ void Session::checkAuthorization()
     }
 }
 
-bool Session::run(Request &request, const std::set<int> *expectedCodes, const boost::function<bool ()> &aborted)
+bool Session::run(Request &request, const std::set<int> *expectedCodes, const std::function<bool ()> &aborted)
 {
     int error;
 
@@ -999,8 +997,13 @@ bool Session::run(Request &request, const std::set<int> *expectedCodes, const bo
     ne_request *req = request.getRequest();
     if (result) {
         result->clear();
+        auto addResultData = [] (void *userdata, const char *buf, size_t len) {
+            Request *me = static_cast<Request *>(userdata);
+            me->m_result->append(buf, len);
+            return 0;
+        };
         ne_add_response_body_reader(req, ne_accept_2xx,
-                                    Request::addResultData, &request);
+                                    addResultData, &request);
         error = ne_request_dispatch(req);
     } else {
         error = ne_xml_dispatch_request(req, request.getParser()->get());
@@ -1015,13 +1018,6 @@ bool Session::run(Request &request, const std::set<int> *expectedCodes, const bo
                       request.getResponseHeader("Location"),
                       request.getPath(),
                       expectedCodes);
-}
-
-int Request::addResultData(void *userdata, const char *buf, size_t len)
-{
-    Request *me = static_cast<Request *>(userdata);
-    me->m_result->append(buf, len);
-    return 0;
 }
 
 }

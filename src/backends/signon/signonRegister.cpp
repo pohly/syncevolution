@@ -64,10 +64,10 @@ public:
 #endif
     {}
 
-    virtual boost::shared_ptr<AuthProvider> create(const InitStateString &username,
+    virtual std::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password)
     {
-        boost::shared_ptr<AuthProvider> provider;
+        std::shared_ptr<AuthProvider> provider;
         provider = createSignonAuthProvider(username, password);
         return provider;
     }

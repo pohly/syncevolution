@@ -23,7 +23,6 @@
 #include <syncevo/TransportAgent.h>
 #include <syncevo/SmartPtr.h>
 #include <syncevo/SynthesisEngine.h>
-#include <boost/weak_ptr.hpp>
 
 #include <gdbus-cxx-bridge.h>
 

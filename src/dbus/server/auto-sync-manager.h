@@ -21,8 +21,6 @@
 #define AUTO_SYNC_MANAGER_H
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/weak_ptr.hpp>
 #include <boost/signals2.hpp>
 
 #include <syncevo/SyncML.h>
@@ -55,16 +53,15 @@ class Session;
  * Syncs triggered by local or remote changes will be added
  * later.
  */
-class AutoSyncManager
+class AutoSyncManager : public enable_weak_from_this<AutoSyncManager>, private boost::noncopyable
 {
     Server &m_server;
-    boost::weak_ptr<AutoSyncManager> m_me;
 
     /** true if we currently hold a ref for AutoTerm */
     bool m_autoTermLocked;
 
     /** currently running auto sync session */
-    boost::shared_ptr<Session> m_session;
+    std::shared_ptr<Session> m_session;
 
     /** connects m_server.m_idleSignal with schedule() */
     boost::signals2::connection m_idleConnection;
@@ -173,11 +170,11 @@ class AutoSyncManager
      * enabled (to track when and if they ran) and deleted configs
      * (because they might get recreated).
      */
-    typedef std::map<std::string, boost::shared_ptr<AutoSyncTask> > PeerMap;
+    typedef std::map<std::string, std::shared_ptr<AutoSyncTask> > PeerMap;
     PeerMap m_peerMap;
 
     /** used to send notifications */
-    boost::shared_ptr<NotificationManagerBase> m_notificationManager;
+    std::shared_ptr<NotificationManagerBase> m_notificationManager;
 
     /**
      * It reads all peers which are enabled to do auto sync and store them in
@@ -197,7 +194,7 @@ class AutoSyncManager
      * Watch further progress (if auto sync session),
      * record start time (in all cases).
      */
-    void sessionStarted(const boost::shared_ptr<Session> &session);
+    void sessionStarted(const std::shared_ptr<Session> &session);
 
     /** Show "sync started" notification. */
     void autoSyncSuccessStart(AutoSyncTask *task);
@@ -211,7 +208,7 @@ class AutoSyncManager
     AutoSyncManager(Server &server);
 
  public:
-    static boost::shared_ptr<AutoSyncManager> createAutoSyncManager(Server &server);
+    static std::shared_ptr<AutoSyncManager> createAutoSyncManager(Server &server);
 
     /**
      * prevent dbus server automatic termination when it has

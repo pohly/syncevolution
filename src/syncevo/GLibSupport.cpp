@@ -24,7 +24,7 @@
 #include "test.h"
 #endif
 
-#include <boost/bind.hpp>
+#include <functional>
 #include <set>
 #include <exception>
 
@@ -183,7 +183,7 @@ static void changed(GFileMonitor *monitor,
                     gpointer userdata)
 {
     GLibNotify::callback_t *callback = static_cast<GLibNotify::callback_t *>(userdata);
-    if (!callback->empty()) {
+    if (*callback) {
         (*callback)(file1, file2, event);
     }
 }
@@ -207,7 +207,7 @@ GLibNotify::GLibNotify(const char *file,
 
 class PendingChecks
 {
-    typedef std::set<const boost::function<bool ()> *> Checks;
+    typedef std::set<const std::function<bool ()> *> Checks;
     Checks m_checks;
     DynMutex m_mutex;
     Cond m_cond;
@@ -224,7 +224,7 @@ public:
      * Called by additional threads. Returns when check()
      * returned false.
      */
-    void blockOnCheck(const boost::function<bool ()> &check, bool checkFirst);
+    void blockOnCheck(const std::function<bool ()> &check, bool checkFirst);
 };
 
 void PendingChecks::runChecks()
@@ -259,7 +259,7 @@ void PendingChecks::runChecks()
     }
 }
 
-void PendingChecks::blockOnCheck(const boost::function<bool ()> &check, bool checkFirst)
+void PendingChecks::blockOnCheck(const std::function<bool ()> &check, bool checkFirst)
 {
     DynMutex::Guard guard = m_mutex.lock();
     // When we get here, the conditions for returning may already have
@@ -278,7 +278,7 @@ void PendingChecks::blockOnCheck(const boost::function<bool ()> &check, bool che
     }
 }
 
-void GRunWhile(const boost::function<bool ()> &check, bool checkFirst)
+void GRunWhile(const std::function<bool ()> &check, bool checkFirst)
 {
     static PendingChecks checks;
     if (g_main_context_is_owner(g_main_context_default())) {
@@ -296,7 +296,7 @@ void GRunWhile(const boost::function<bool ()> &check, bool checkFirst)
     }
 }
 
-void GRunInMain(const boost::function<void ()> &action)
+void GRunInMain(const std::function<void ()> &action)
 {
     std::exception_ptr exception;
 
@@ -336,18 +336,6 @@ class GLibTest : public CppUnit::TestFixture {
         GFileMonitorEvent m_event;
     };
 
-    static void notifyCallback(std::list<Event> &events,
-                               GFile *file1,
-                               GFile *file2,
-                               GFileMonitorEvent event)
-    {
-        Event tmp;
-        tmp.m_file1.reset(file1);
-        tmp.m_file2.reset(file2);
-        tmp.m_event = event;
-        events.push_back(tmp);
-    }
-
     static gboolean timeout(gpointer data)
     {
         g_main_loop_quit(static_cast<GMainLoop *>(data));
@@ -363,7 +351,16 @@ class GLibTest : public CppUnit::TestFixture {
         if (!loop) {
             SE_THROW("could not allocate main loop");
         }
-        GLibNotify notify(name, boost::bind(notifyCallback, boost::ref(events), _1, _2, _3));
+        GLibNotify notify(name,
+                          [&events] (GFile *file1,
+                                     GFile *file2,
+                                     GFileMonitorEvent event) {
+                              Event tmp;
+                              tmp.m_file1.reset(file1);
+                              tmp.m_file2.reset(file2);
+                              tmp.m_event = event;
+                              events.push_back(tmp);
+                          });
         {
             events.clear();
             GLibEvent id(g_timeout_add_seconds(5, timeout, loop.get()), "timeout");
