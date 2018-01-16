@@ -22,7 +22,6 @@
 #include <stddef.h>
 #include <iostream>
 #include <memory>
-using namespace std;
 
 #include <libgen.h>
 #ifdef HAVE_GLIB
@@ -35,18 +34,22 @@ using namespace std;
 // because it defines some intrusive_ptr_release implementations
 #include <gdbus-cxx-bridge.h>
 
+#include <syncevo/declarations.h>
+
+SE_BEGIN_CXX
 struct SourceStatus {
-    string m_mode;
-    string m_status;
+    std::string m_mode;
+    std::string m_status;
     uint32_t m_error;
 };
+SE_END_CXX
 
 namespace GDBusCXX {
-template<> struct dbus_traits<SourceStatus> :
-public dbus_struct_traits<SourceStatus,
-       dbus_member<SourceStatus, string, &SourceStatus::m_mode,
-       dbus_member<SourceStatus, string, &SourceStatus::m_status,
-       dbus_member_single<SourceStatus, uint32_t, &SourceStatus::m_error> > > >
+template<> struct dbus_traits<SyncEvo::SourceStatus> :
+public dbus_struct_traits<SyncEvo::SourceStatus,
+       dbus_member<SyncEvo::SourceStatus, std::string, &SyncEvo::SourceStatus::m_mode,
+       dbus_member<SyncEvo::SourceStatus, std::string, &SyncEvo::SourceStatus::m_status,
+       dbus_member_single<SyncEvo::SourceStatus, uint32_t, &SyncEvo::SourceStatus::m_error> > > >
 {};
 }
 
@@ -65,8 +68,6 @@ using namespace GDBusCXX;
 
 #include <dlfcn.h>
 #include <signal.h>
-
-#include <syncevo/declarations.h>
 
 SE_BEGIN_CXX
 
@@ -97,7 +98,7 @@ extern "C" EContact *e_contact_new_from_vcard(const char *vcard)
 
 #ifdef DBUS_SERVICE
 class RemoteSession;
-typedef map<string, StringMap> Config_t;
+typedef std::map<std::string, StringMap> Config_t;
 
 /**
  * Act as a dbus server. All requests to dbus server
@@ -124,7 +125,7 @@ public:
      * @param runSync arguments to run a sync
      * @return true if successfully
      */
-    bool execute(const vector<string> &args, const string &config, bool runSync);
+    bool execute(const std::vector<std::string> &args, const std::string &config, bool runSync);
 
     /**
      * To implement the feature of '--monitor' option, monitor a
@@ -133,7 +134,7 @@ public:
      * @param config the config name parsed from arguments if has
      * @return true if successfully
      */ 
-    bool monitor(const string &config);
+    bool monitor(const std::string &config);
 
     /**
      * To implement the feature of '--status' without a server.
@@ -151,7 +152,7 @@ public:
     void setResult(bool result) { m_result = result; }
 
     /** call 'Server.InfoResponse' */
-    void infoResponse(const string &id, const string &state, const StringMap &resp);
+    void infoResponse(const std::string &id, const std::string &state, const StringMap &resp);
 
 private:
     /** call 'Attach' until it returns */
@@ -162,32 +163,32 @@ private:
      * also set up a watch and add watch callback when the daemon is gone,
      * then do version check before returning
      */
-    void attachCb(const boost::shared_ptr<Watch> &watch, const string &error);
+    void attachCb(const boost::shared_ptr<Watch> &watch, const std::string &error);
 
     /**
      * second half of attaching: check version and print warning
      */
-    void versionCb(const StringMap &versions, const string &error);
+    void versionCb(const StringMap &versions, const std::string &error);
 
     /** callback of 'Server.SessionChanged' */
     void sessionChangedCb(const DBusObject_t &object, bool active);
 
     /** callback of 'Server.LogOutput' */
-    void logOutputCb(const DBusObject_t &object, const string &level, const string &log, const string &procname);
+    void logOutputCb(const DBusObject_t &object, const std::string &level, const std::string &log, const std::string &procname);
 
     /** callback of 'Server.InfoRequest' */
-    void infoReqCb(const string &,
+    void infoReqCb(const std::string &,
                    const DBusObject_t &,
-                   const string &,
-                   const string &,
-                   const string &,
+                   const std::string &,
+                   const std::string &,
+                   const std::string &,
                    const StringMap &);
 
     /** callback of Server.InfoResponse */
-    void infoResponseCb(const string &error);
+    void infoResponseCb(const std::string &error);
 
     /** callback of calling 'Server.StartSession' */
-    void startSessionCb(const DBusObject_t &session, const string &error);
+    void startSessionCb(const DBusObject_t &session, const std::string &error);
 
     /**
      * receives org.freedesktop.DBus.NameOwnerChanged signals,
@@ -206,7 +207,7 @@ private:
 
 
     /** update active session vector according to 'SessionChanged' signal */
-    void updateSessions(const string &session, bool active);
+    void updateSessions(const std::string &session, bool active);
 
     /** check m_session is active */
     bool isActive();
@@ -239,13 +240,13 @@ private:
     // error flag
     bool m_result;
     // config name
-    string m_configName;
+    std::string m_configName;
     // active session object path
-    boost::shared_ptr<string> m_activeSession;
+    boost::shared_ptr<std::string> m_activeSession;
     // session created or monitored
     boost::shared_ptr<RemoteSession> m_session;
     // active sessions after listening to 'SessionChanged' signals
-    vector<string> m_activeSessions;
+    std::vector<std::string> m_activeSessions;
     // the number of total dbus calls  
     unsigned int m_replyTotal;
     // the number of returned dbus calls 
@@ -253,13 +254,13 @@ private:
     // listen to dbus server signal 'SessionChanged'
     SignalWatch<DBusObject_t, bool> m_sessionChanged;
     // listen to dbus server signal 'LogOutput'
-    SignalWatch<DBusObject_t, string, string, string> m_logOutput;
+    SignalWatch<DBusObject_t, std::string, std::string, std::string> m_logOutput;
     // listen to dbus server signal 'InfoRequest'
-    SignalWatch<string, 
+    SignalWatch<std::string,
                  DBusObject_t,
-                 string,
-                 string,
-                 string,
+                 std::string,
+                 std::string,
+                 std::string,
                  StringMap > m_infoReq; 
 
     /** watch daemon whether it is gone */
@@ -280,7 +281,7 @@ public:
      * call 'Execute' method of 'Session' in dbus server
      * without waiting for return
      */
-    void executeAsync(const vector<string> &args);
+    void executeAsync(const std::vector<std::string> &args);
 
     /**
      * call 'Suspend' or 'Abort' method of 'Session' in dbus server
@@ -292,33 +293,33 @@ public:
     void setConfigName(const Config_t &config);
 
     /** get config name of this session */
-    string configName() { return m_configName; }
+    std::string configName() { return m_configName; }
 
     /** status 'done' is sent by session */
     bool statusDone() { return boost::iequals(m_status, "done"); }
 
     /** get current status */
-    string status() { return m_status; }
+    std::string status() { return m_status; }
 
     /** set the flag to indicate the session is running sync */
     void setRunSync(bool runSync) { m_runSync = runSync; }
 
     /** pass through logoutput and print them if m_output is true */
-    void logOutput(Logger::Level level, const string &log, const string &procname);
+    void logOutput(Logger::Level level, const std::string &log, const std::string &procname);
 
     /** set whether to print output */
     void setOutput(bool output) { m_output = output; }
 
     /** process signals from daemon */
-    void infoReq(const string &id,
+    void infoReq(const std::string &id,
                  const DBusObject_t &session,
-                 const string &state,
-                 const string &handler,
-                 const string &type,
+                 const std::string &state,
+                 const std::string &handler,
+                 const std::string &type,
                  const StringMap &params);
 
     /** remove InfoReq objects from map */
-    void removeInfoReq(const string &id);
+    void removeInfoReq(const std::string &id);
 
     typedef std::map<std::string, SourceStatus> SourceStatuses_t;
 
@@ -332,9 +333,9 @@ private:
         /** the session reference */
         RemoteSession &m_session;
         /** the id of InfoRequest */
-        string m_id;
+        std::string m_id;
         /** the type of InfoRequest */
-        string m_type;
+        std::string m_type;
         /** the response map sent to the daemon*/
         StringMap m_resp;
 
@@ -348,37 +349,37 @@ private:
         /** the current state of InfoRequest */
         State m_state;
     public:
-        InfoReq(RemoteSession &session, const string &id, const string &type);
+        InfoReq(RemoteSession &session, const std::string &id, const std::string &type);
 
         /**
          * process the info request dispatched by session
          */
-        void process(const string &id,
+        void process(const std::string &id,
                      const DBusObject_t &session,
-                     const string &state,
-                     const string &handler,
-                     const string &type,
+                     const std::string &state,
+                     const std::string &handler,
+                     const std::string &type,
                      const StringMap &params);
     };
 
     /** callback of calling 'Session.Execute' */
-    void executeCb(const string &error);
+    void executeCb(const std::string &error);
 
     /** callback of 'Session.StatusChanged' */
-    void statusChangedCb(const string &status,
+    void statusChangedCb(const std::string &status,
                          uint32_t errorCode,
                          const SourceStatuses_t &sourceStatus);
 
     /** callback of 'Session.Suspend' */
-    void suspendCb(const string &);
+    void suspendCb(const std::string &);
 
     /** callback of 'Session.Abort' */
-    void abortCb(const string &);
+    void abortCb(const std::string &);
 
     /**
      * implement requirements from info req. Called by InfoReq.
      */
-    void handleInfoReq(const string &type, const StringMap &params, StringMap &resp);
+    void handleInfoReq(const std::string &type, const StringMap &params, StringMap &resp);
 
     /** dbus server */
     RemoteDBusServer &m_server;
@@ -387,10 +388,10 @@ private:
     bool m_output;
 
     /** config name of the session */
-    string m_configName;
+    std::string m_configName;
 
     /** current status */
-    string m_status;
+    std::string m_status;
     
     /** session is running sync */
     bool m_runSync;
@@ -399,7 +400,7 @@ private:
     SignalWatch<std::string, uint32_t, SourceStatuses_t> m_statusChanged;
 
     /** InfoReq map. store all infoReq belongs to this session */
-    map<string, boost::shared_ptr<InfoReq> > m_infoReqs;
+    std::map<std::string, boost::shared_ptr<InfoReq> > m_infoReqs;
 };
 
 /**
@@ -408,7 +409,7 @@ private:
  * when using dbus daemon.
  * @param vars the returned environment variables
  */
-static void getEnvVars(map<string, string> &vars);
+static void getEnvVars(std::map<std::string, std::string> &vars);
 
 #endif
 
@@ -437,7 +438,7 @@ int main( int argc, char **argv )
     }
     if (strchr(exe, '/') ) {
         char *dir = dirname(exe);
-        string path;
+        std::string path;
         char *oldpath = getenv("PATH");
         if (oldpath) {
             path += oldpath;
@@ -454,7 +455,7 @@ int main( int argc, char **argv )
         }
 
         SyncEvo::KeyringSyncCmdline cmdline(argc, argv);
-        vector<string> parsedArgs;
+        std::vector<std::string> parsedArgs;
         if(!cmdline.parse(parsedArgs)) {
             return 1;
         }
@@ -594,7 +595,7 @@ void RemoteDBusServer::attachSync()
     }
 }
 
-void RemoteDBusServer::attachCb(const boost::shared_ptr<Watch> &watch, const string &error)
+void RemoteDBusServer::attachCb(const boost::shared_ptr<Watch> &watch, const std::string &error)
 {
     if(error.empty()) {
         //if attach is successful, watch server whether it is gone
@@ -614,7 +615,7 @@ void RemoteDBusServer::attachCb(const boost::shared_ptr<Watch> &watch, const str
 }
 
 void RemoteDBusServer::versionCb(const StringMap &versions,
-                                 const string &error)
+                                 const std::string &error)
 {
     replyInc();
     if (!error.empty()) {
@@ -632,9 +633,9 @@ void RemoteDBusServer::versionCb(const StringMap &versions,
 }
 
 void RemoteDBusServer::logOutputCb(const DBusObject_t &object,
-                                   const string &level,
-                                   const string &log,
-                                   const string &procname)
+                                   const std::string &level,
+                                   const std::string &log,
+                                   const std::string &procname)
 {
     if (m_session && 
         (boost::equals(object, getPath()) ||
@@ -643,11 +644,11 @@ void RemoteDBusServer::logOutputCb(const DBusObject_t &object,
     }
 }
 
-void RemoteDBusServer::infoReqCb(const string &id,
+void RemoteDBusServer::infoReqCb(const std::string &id,
                                  const DBusObject_t &session,
-                                 const string &state,
-                                 const string &handler,
-                                 const string &type,
+                                 const std::string &state,
+                                 const std::string &handler,
+                                 const std::string &type,
                                  const StringMap &params)
 {
     // if m_session is null, just ignore
@@ -656,8 +657,8 @@ void RemoteDBusServer::infoReqCb(const string &id,
     }
 }
 
-void RemoteDBusServer::infoResponse(const string &id,
-                                    const string &state,
+void RemoteDBusServer::infoResponse(const std::string &id,
+                                    const std::string &state,
                                     const StringMap &resp)
 {
     //call Server.InfoResponse
@@ -665,7 +666,7 @@ void RemoteDBusServer::infoResponse(const string &id,
     call.start(boost::bind(&RemoteDBusServer::infoResponseCb, this, _1), id, state, resp);
 }
 
-void RemoteDBusServer::infoResponseCb(const string &error)
+void RemoteDBusServer::infoResponseCb(const std::string &error)
 {
     replyInc();
     if(!error.empty()) {
@@ -699,7 +700,7 @@ static void SuspendFlagsChanged(RemoteSession *session,
     }
 }
 
-bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, bool runSync)
+bool RemoteDBusServer::execute(const std::vector<std::string> &args, const std::string &peer, bool runSync)
 {
     //the basic workflow is:
     //1) start a session 
@@ -780,7 +781,7 @@ bool RemoteDBusServer::execute(const vector<string> &args, const string &peer, b
     return m_result;
 }
 
-void RemoteDBusServer::startSessionCb(const DBusObject_t &sessionPath, const string &error)
+void RemoteDBusServer::startSessionCb(const DBusObject_t &sessionPath, const std::string &error)
 {
     replyInc();
     if(!error.empty()) {
@@ -800,7 +801,7 @@ bool RemoteDBusServer::isActive()
 {
     /** if current session is active and then start to call 'Execute' method */
     if(m_session) {
-        for (const string &session: m_activeSessions) {
+        for (const std::string &session: m_activeSessions) {
             if(boost::equals(m_session->getPath(), session.c_str())) {
                 return true;
             }
@@ -815,7 +816,7 @@ void RemoteDBusServer::runningSessions()
     //1) get all sessions
     //2) check each session and collect running sessions
     //3) get config name of running sessions and print them
-    vector<DBusObject_t> sessions = DBusClientCall< vector<DBusObject_t> >(*this, "GetSessions")();
+    std::vector<DBusObject_t> sessions = DBusClientCall< std::vector<DBusObject_t> >(*this, "GetSessions")();
 
     if (sessions.empty()) {
         SE_LOG_SHOW(NULL, "Background sync daemon is idle.");
@@ -831,8 +832,8 @@ void RemoteDBusServer::runningSessions()
             // showing the exception string instead of showing some
             // more comprehensible error message. Unlikely, so don't
             // bother...
-            std::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
-                DBusClientCall<string, uint32_t, RemoteSession::SourceStatuses_t>(session, "GetStatus")();
+            std::tuple<std::string, uint32_t, RemoteSession::SourceStatuses_t> status =
+                DBusClientCall<std::string, uint32_t, RemoteSession::SourceStatuses_t>(session, "GetStatus")();
             std::string syncStatus = std::get<0>(status);
             if (boost::istarts_with(syncStatus, "running")) {
                 Config_t config = DBusClientCall<Config_t>(session, "GetConfig")(false);
@@ -846,14 +847,14 @@ void RemoteDBusServer::runningSessions()
     }
 }
 
-void RemoteDBusServer::updateSessions(const string &session, bool active)
+void RemoteDBusServer::updateSessions(const std::string &session, bool active)
 {
     if(active) {
         //add it into active list
         m_activeSessions.push_back(session);
     } else {
         //if inactive, remove it from active list
-        for(vector<string>::iterator it = m_activeSessions.begin();
+        for(std::vector<std::string>::iterator it = m_activeSessions.begin();
                 it != m_activeSessions.end(); ++it) {
             if(boost::equals(session, *it)) {
                 m_activeSessions.erase(it);
@@ -872,26 +873,26 @@ void RemoteDBusServer::replyInc()
     }
 }
 
-bool RemoteDBusServer::monitor(const string &peer)
+bool RemoteDBusServer::monitor(const std::string &peer)
 {
     //the basic working flow is:
     //1) get all sessions
     //2) check each session and collect running sessions or
     //3) peak one session with the given peer and monitor it
-    vector<DBusObject_t> sessions = DBusClientCall< vector<DBusObject_t> >(*this, "GetSessions")();
+    std::vector<DBusObject_t> sessions = DBusClientCall< std::vector<DBusObject_t> >(*this, "GetSessions")();
 
     if (sessions.empty()) {
         SE_LOG_SHOW(NULL, "Background sync daemon is idle, no session available to be be monitored.");
     } else {
         // cheating: client and server might normalize the peer name differently...
-        string peerNorm = SyncConfig::normalizeConfigString(peer);
+        std::string peerNorm = SyncConfig::normalizeConfigString(peer);
 
         // create local objects for sessions
         for (const DBusObject_t &path: sessions) {
             boost::shared_ptr<RemoteSession> session(new RemoteSession(*this, path));
 
-            std::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =
-                DBusClientCall<string, uint32_t, RemoteSession::SourceStatuses_t>(*session, "GetStatus")();
+            std::tuple<std::string, uint32_t, RemoteSession::SourceStatuses_t> status =
+                DBusClientCall<std::string, uint32_t, RemoteSession::SourceStatuses_t>(*session, "GetStatus")();
             std::string syncStatus = std::get<0>(status);
             if (boost::istarts_with(syncStatus, "running")) {
                 Config_t config = DBusClientCall<Config_t>(*session, "GetConfig")(false);
@@ -925,7 +926,7 @@ bool RemoteDBusServer::monitor(const string &peer)
 
 /********************** RemoteSession implementation **************************/
 RemoteSession::RemoteSession(RemoteDBusServer &server,
-                             const string &path) :
+                             const std::string &path) :
     DBusRemoteObject(server.getConnection(),
                      path,
                      "org.syncevolution.Session",
@@ -936,17 +937,17 @@ RemoteSession::RemoteSession(RemoteDBusServer &server,
     m_statusChanged.activate(boost::bind(&RemoteSession::statusChangedCb, this, _1, _2, _3));
 }
 
-void RemoteSession::executeAsync(const vector<string> &args)
+void RemoteSession::executeAsync(const std::vector<std::string> &args)
 {
     //start to print outputs
     m_output = true;
-    map<string, string> vars;
+    std::map<std::string, std::string> vars;
     getEnvVars(vars);
     DBusClientCall<> call(*this, "Execute");
     call.start(boost::bind(&RemoteSession::executeCb, this, _1), args, vars);
 }
 
-void RemoteSession::executeCb(const string &error)
+void RemoteSession::executeCb(const std::string &error)
 {
     m_server.replyInc();
     if(!error.empty()) {
@@ -958,7 +959,7 @@ void RemoteSession::executeCb(const string &error)
     }
 }
 
-void RemoteSession::statusChangedCb(const string &status,
+void RemoteSession::statusChangedCb(const std::string &status,
         uint32_t errorCode,
         const SourceStatuses_t &sourceStatus)
 {
@@ -1002,7 +1003,7 @@ void RemoteSession::interruptAsync(const char *operation)
     suspend.start(interruptCb);
 }
 
-void RemoteSession::logOutput(Logger::Level level, const string &log, const string &procname)
+void RemoteSession::logOutput(Logger::Level level, const std::string &log, const std::string &procname)
 {
     if(m_output) {
         Logger::MessageOptions options(level);
@@ -1011,18 +1012,18 @@ void RemoteSession::logOutput(Logger::Level level, const string &log, const stri
     }
 }
 
-void RemoteSession::infoReq(const string &id,
+void RemoteSession::infoReq(const std::string &id,
                             const DBusObject_t &session,
-                            const string &state,
-                            const string &handler,
-                            const string &type,
+                            const std::string &state,
+                            const std::string &handler,
+                            const std::string &type,
                             const StringMap &params)
 {
     //if command line runs a sync, then try to handle req
     if (m_runSync && boost::iequals(session, getPath())) {
         //only handle password now
         if (boost::iequals("password", type)) {
-            map<string, boost::shared_ptr<InfoReq> >::iterator it = m_infoReqs.find(id);
+            std::map<std::string, boost::shared_ptr<InfoReq> >::iterator it = m_infoReqs.find(id);
             if (it != m_infoReqs.end()) {
                 it->second->process(id, session, state, handler, type, params);
             } else {
@@ -1034,12 +1035,12 @@ void RemoteSession::infoReq(const string &id,
     }
 }
 
-void RemoteSession::handleInfoReq(const string &type, const StringMap &params, StringMap &resp)
+void RemoteSession::handleInfoReq(const std::string &type, const StringMap &params, StringMap &resp)
 {
     if (boost::iequals(type, "password")) {
         char buffer[256];
 
-        string descr;
+        std::string descr;
         StringMap::const_iterator it = params.find("description");
         if (it != params.end()) {
             descr = it->second;
@@ -1052,16 +1053,16 @@ void RemoteSession::handleInfoReq(const string &type, const StringMap &params, S
             if (len && buffer[len - 1] == '\n') {
                 buffer[len - 1] = 0;
             }
-            resp["password"] = string(buffer);
+            resp["password"] = std::string(buffer);
         } else {
             SE_LOG_ERROR(NULL, "could not read password for %s", descr.c_str());
         }
     }
 }
 
-void RemoteSession::removeInfoReq(const string &id) 
+void RemoteSession::removeInfoReq(const std::string &id) 
 {
-    map<string, boost::shared_ptr<InfoReq> >::iterator it = m_infoReqs.find(id);
+    std::map<std::string, boost::shared_ptr<InfoReq> >::iterator it = m_infoReqs.find(id);
     if (it != m_infoReqs.end()) {
         m_infoReqs.erase(it);
     }
@@ -1069,17 +1070,17 @@ void RemoteSession::removeInfoReq(const string &id)
 
 /********************** InfoReq implementation **************************/
 RemoteSession::InfoReq::InfoReq(RemoteSession &session,
-                                const string &id,
-                                const string &type)
+                                const std::string &id,
+                                const std::string &type)
     :m_session(session), m_id(id), m_type(type), m_state(INIT)
 {
 }
 
-void RemoteSession::InfoReq::process(const string &id,
+void RemoteSession::InfoReq::process(const std::string &id,
                                      const DBusObject_t &session,
-                                     const string &state,
-                                     const string &handler,
-                                     const string &type,
+                                     const std::string &state,
+                                     const std::string &handler,
+                                     const std::string &type,
                                      const StringMap &params)
 {
     //only handle info belongs to this InfoReq
@@ -1099,7 +1100,7 @@ void RemoteSession::InfoReq::process(const string &id,
     }
 }
 
-void getEnvVars(map<string, string> &vars)
+void getEnvVars(std::map<std::string, std::string> &vars)
 {
     //environment variables used to run command line
     static const char *varNames[] = {

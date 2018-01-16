@@ -50,7 +50,6 @@
 #include <stdexcept>
 #include <algorithm>
 #include <ctime>
-using namespace std;
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/join.hpp>

@@ -51,7 +51,6 @@ class ConnmanClient;
 class NetworkManagerClient;
 
 // TODO: avoid polluting namespace
-using namespace std;
 
 class ServerLogger;
 

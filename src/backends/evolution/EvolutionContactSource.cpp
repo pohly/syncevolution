@@ -22,7 +22,6 @@
 #include <map>
 #include <sstream>
 #include <list>
-using namespace std;
 
 #include "config.h"
 #include "EvolutionSyncSource.h"
