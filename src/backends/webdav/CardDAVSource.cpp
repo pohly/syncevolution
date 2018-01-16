@@ -196,7 +196,7 @@ boost::shared_ptr<CardDAVCache> CardDAVSource::readBatch(const std::string &luid
                 "<C:address-data/>\n"
                 "</D:prop>\n"
                 ;
-            BOOST_FOREACH(const std::string *luid, luids) {
+            for (const std::string *luid: luids) {
                 query << "<D:href>" << luid2path(*luid) << "</D:href>\n";
             }
             query << "</C:addressbook-multiget>";
@@ -222,7 +222,7 @@ boost::shared_ptr<CardDAVCache> CardDAVSource::readBatch(const std::string &luid
                 // Google CardDAV doesn't due that at the time of implementing the
                 // batched read. As a workaround assume that any remaining item
                 // isn't available.
-                BOOST_FOREACH(const std::string *luid, luids) {
+                for (const std::string *luid: luids) {
                     boost::shared_ptr<TransportStatusException> failure(new TransportStatusException(__FILE__,
                                                                                                      __LINE__,
                                                                                                      StringPrintf("%s: not contained in multiget response", luid->c_str()),

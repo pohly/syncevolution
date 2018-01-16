@@ -252,39 +252,31 @@ void ContextSettings::initializeFlags(const std::string &url)
         noCTag = false;
 
     Neon::URI uri = Neon::URI::parse(url);
-    typedef boost::split_iterator<string::iterator> string_split_iterator;
-    for (string_split_iterator arg =
-             boost::make_split_iterator(uri.m_query, boost::first_finder("&", boost::is_iequal()));
-         arg != string_split_iterator();
-         ++arg) {
+    for (const auto &match: make_iterator_range(boost::make_split_iterator(uri.m_query, boost::first_finder("&", boost::is_iequal())))) {
         static const std::string keyword = "SyncEvolution=";
-        if (boost::istarts_with(*arg, keyword)) {
-            std::string params(arg->begin() + keyword.size(), arg->end());
-            for (string_split_iterator flag =
-                     boost::make_split_iterator(params,
-                                                boost::first_finder(",", boost::is_iequal()));
-                 flag != string_split_iterator();
-                 ++flag) {
-                if (boost::iequals(*flag, "UpdateHack")) {
+        if (boost::istarts_with(match, keyword)) {
+            std::string params(match.begin() + keyword.size(), match.end());
+            for (const auto &flag: make_iterator_range(boost::make_split_iterator(params, boost::first_finder(",", boost::is_iequal())))) {
+                if (boost::iequals(flag, "UpdateHack")) {
                     googleUpdate = true;
-                } else if (boost::iequals(*flag, "ChildHack")) {
+                } else if (boost::iequals(flag, "ChildHack")) {
                     // Not used anymore, flag ignored.
-                } else if (boost::iequals(*flag, "AlarmHack")) {
+                } else if (boost::iequals(flag, "AlarmHack")) {
                     googleAlarm = true;
-                } else if (boost::iequals(*flag, "Google")) {
+                } else if (boost::iequals(flag, "Google")) {
                     googleUpdate =
                         googleAlarm = true;
-                } else if (boost::iequals(*flag, "NoCTag")) {
+                } else if (boost::iequals(flag, "NoCTag")) {
                     noCTag = true;
                 } else {
                     SE_THROW(StringPrintf("unknown SyncEvolution flag %s in URL %s",
-                                          std::string(flag->begin(), flag->end()).c_str(),
+                                          std::string(flag.begin(), flag.end()).c_str(),
                                           url.c_str()));
                 }
             }
-        } else if (arg->end() != arg->begin()) {
+        } else if (match.end() != match.begin()) {
             SE_THROW(StringPrintf("unknown parameter %s in URL %s",
-                                  std::string(arg->begin(), arg->end()).c_str(),
+                                  std::string(match.begin(), match.end()).c_str(),
                                   url.c_str()));
         }
     }
@@ -932,7 +924,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
     } tried;
 
     // Populate URLs to be scanned with configured URLs.
-    BOOST_FOREACH(const std::string &url, urls) {
+    for (const std::string &url: urls) {
         Neon::URI uri = Neon::URI::parse(url);
         // Avoid listing members for the initial URLs. If the user gave us
         // the root of a generic WebDAV server, a recursive listing of
@@ -1335,7 +1327,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
             if (props) {
                 homes = extractHREFs((*props)[homeSetProp()]);
             }
-            BOOST_FOREACH(const std::string &home, homes) {
+            for (const std::string &home: homes) {
                 // The home set is a collection of collections, so it
                 // cannot be the collection we look for. But it contains them,
                 // so we must list its content.
@@ -1450,7 +1442,7 @@ bool WebDAVSource::findCollections(const boost::function<bool (const std::string
                     // descendant calendar collections owned by the
                     // principal" (RFC 4791).
                     int subFlags = Candidate::LIST;
-                    BOOST_FOREACH(Props_t::value_type &entry, davProps) {
+                    for (auto &entry: davProps) {
                         const std::string &sub = entry.first;
                         const std::string &subType = entry.second["DAV::resourcetype"];
                         Candidate subCandidate(m_session->getURI(), sub, subFlags);
@@ -1695,7 +1687,7 @@ static bool storeCollection(SyncSource::Databases &result,
     std::string url = uri.toURL();
 
     // avoid duplicates
-    BOOST_FOREACH(const SyncSource::Database &entry, result) {
+    for (const auto &entry: result) {
         if (entry.m_uri == url) {
             // already found before
             return true;

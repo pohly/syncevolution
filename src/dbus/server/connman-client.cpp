@@ -63,7 +63,7 @@ void ConnmanClient::getPropCb (const std::map <std::string,
     m_available = true;
     typedef std::pair <std::string, boost::variant<std::string> > element;
     bool httpPresence = false;
-    BOOST_FOREACH (element entry, props) {
+    for (element entry: props) {
         // just check online state, we don't care how about the underlying technology
         if (entry.first == "State") {
             std::string state = boost::get<std::string>(entry.second);

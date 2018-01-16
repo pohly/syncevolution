@@ -25,7 +25,6 @@
 #include <syncevo/IniConfigNode.h>
 #include <syncevo/util.h>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
 
 #include <syncevo/declarations.h>
@@ -55,7 +54,7 @@ boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const string &filename)
     string name = m_data->getName() + " - " + normalized;
     boost::shared_ptr<DataBlob> data; 
 
-    BOOST_FOREACH(const FileContent_t::value_type &file, m_content) {
+    for (const auto &file: m_content) {
         if (file.first == normalized) {
             data.reset(new StringDataBlob(name, file.second, true));
             break;
@@ -149,15 +148,15 @@ list<string> SingleFileConfigTree::getChildren(const string &path)
     }
 
     // must check both actual files as well as unsaved nodes
-    BOOST_FOREACH(const FileContent_t::value_type &file, m_content) {
+    for (const auto &file: m_content) {
         checkChild(normalized, file.first, subdirs);
     }
-    BOOST_FOREACH(const NodeCache_t::value_type &file, m_nodes) {
+    for (const auto &file: m_nodes) {
         checkChild(normalized, file.first, subdirs);
     }
 
     list<string> result;
-    BOOST_FOREACH(const string &dir, subdirs) {
+    for (const string &dir: subdirs) {
         result.push_back(dir);
     }
     return result;

@@ -59,7 +59,7 @@ public:
     {
         //temporarily set environment variables and restore them after running
         list<boost::shared_ptr<ScopedEnvChange> > changes;
-        BOOST_FOREACH(const StringPair &var, m_envVars) {
+        for (const StringPair &var: m_envVars) {
             changes.push_back(boost::shared_ptr<ScopedEnvChange>(new ScopedEnvChange(var.first, var.second)));
         }
 

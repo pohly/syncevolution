@@ -37,7 +37,6 @@
 
 #include <memory>
 
-#include <boost/foreach.hpp>
 
 using namespace GDBusCXX;
 
@@ -165,15 +164,13 @@ static void copyProperty(const StringPair &keyvalue,
 
 static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNode::ConfigFilter &syncFilter,std::map<std::string, FilterConfigNode::ConfigFilter> &sourceFilters)
 {
-    ReadOperations::Config_t::const_iterator it;
-    for (it = config.begin(); it != config.end(); ++it) {
-        map<string, string>::const_iterator sit;
-        string name = it->first;
+    for (const auto &item: config) {
+        string name = item.first;
         if (name.empty()) {
             ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
-            for (sit = it->second.begin(); sit != it->second.end(); ++sit) {
+            for (const auto &prop: item.second) {
                 // read-only properties can (and have to be) ignored
-                static const char *init[] = {
+                static const set< std::string, Nocase<std::string> > special {
                     "configName",
                     "description",
                     "score",
@@ -182,19 +179,16 @@ static void setSyncFilters(const ReadOperations::Config_t &config,FilterConfigNo
                     "templateName",
                     "fingerprint"
                 };
-                static const set< std::string, Nocase<std::string> >
-                    special(init,
-                            init + (sizeof(init) / sizeof(*init)));
-                if (special.find(sit->first) == special.end()) {
-                    copyProperty(*sit, registry, syncFilter);
+                if (special.find(prop.first) == special.end()) {
+                    copyProperty(prop, registry, syncFilter);
                 }
             }
         } else if (boost::starts_with(name, "source/")) {
             name = name.substr(strlen("source/"));
             FilterConfigNode::ConfigFilter &sourceFilter = sourceFilters[name];
             ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-            for (sit = it->second.begin(); sit != it->second.end(); ++sit) {
-                copyProperty(*sit, registry, sourceFilter);
+            for (const auto &prop: item.second) {
+                copyProperty(prop, registry, sourceFilter);
             }
         } else {
             SE_THROW_EXCEPTION(InvalidCall, StringPrintf("invalid config entry '%s'", name.c_str()));
@@ -223,7 +217,7 @@ void Session::setNamedConfig(const std::string &configName,
     // avoid the check if effect is the same as setConfig()
     if (m_configName != configName) {
         bool found = false;
-        BOOST_FOREACH(const std::string &flag, m_flags) {
+        for (const std::string &flag: m_flags) {
             if (boost::iequals(flag, "all-configs")) {
                 found = true;
                 break;
@@ -264,8 +258,8 @@ void Session::setNamedConfig(const std::string &configName,
            temporary settings or adding to them */
         if (update) {
             m_syncFilter.insert(syncFilter.begin(), syncFilter.end());
-            BOOST_FOREACH(SourceFilters_t::value_type &source, sourceFilters) {
-                SourceFilters_t::iterator it = m_sourceFilters.find(source.first);
+            for (const auto &source: sourceFilters) {
+                auto it = m_sourceFilters.find(source.first);
                 if (it != m_sourceFilters.end()) {
                     // add to existing source filter
                     it->second.insert(source.second.begin(), source.second.end());
@@ -304,8 +298,8 @@ void Session::setNamedConfig(const std::string &configName,
             from->clearSyncProperties();
         }
         /** generate new sources in the config map */
-        for (ReadOperations::Config_t::const_iterator it = config.begin(); it != config.end(); ++it) {
-            string sourceName = it->first;
+        for (const auto &source: config) {
+            string sourceName = source.first;
             if (boost::starts_with(sourceName, "source/")) {
                 sourceName = sourceName.substr(7); ///> 7 is the length of "source/"
                 from->getSyncSourceNodes(sourceName);
@@ -313,9 +307,8 @@ void Session::setNamedConfig(const std::string &configName,
         }
         /* apply user settings */
         from->setConfigFilter(true, "", syncFilter);
-        map<string, FilterConfigNode::ConfigFilter>::iterator it;
-        for (it = sourceFilters.begin(); it != sourceFilters.end(); ++it) {
-            from->setConfigFilter(false, it->first, it->second);
+        for (const auto &source: sourceFilters) {
+            from->setConfigFilter(false, source.first, source.second);
         }
 
         // We need no interactive user interface, but we do need to handle
@@ -884,7 +877,7 @@ void Session::useHelperAsync(const SimpleResult &result, const StringMap &env)
                 m_forkExecParent->addEnvVar("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel()));
             }
 #endif
-            BOOST_FOREACH (const StringPair &entry, env) {
+            for (const StringPair &entry: env) {
                 SE_LOG_DEBUG(NULL, "running helper with env variable %s=%s",
                              entry.first.c_str(), entry.second.c_str());
                 m_forkExecParent->addEnvVar(entry.first, entry.second);
@@ -1345,7 +1338,7 @@ bool Session::setFilters(SyncConfig &config)
     /** apply temporary configs to config */
     config.setConfigFilter(true, "", m_syncFilter);
     // set all sources in the filter to config
-    BOOST_FOREACH(const SourceFilters_t::value_type &value, m_sourceFilters) {
+    for (const auto &value: m_sourceFilters) {
         config.setConfigFilter(false, value.first, value.second);
     }
     return m_tempConfig;

@@ -476,7 +476,7 @@ Properties PbapSession::supportedProperties() const
         ("CATEGORIES")
         ("CLASS");
 
-    BOOST_FOREACH (const std::string &prop, m_filterFields) {
+    for (const std::string &prop: m_filterFields) {
         // Be conservative and only ask for properties that we
         // really know how to use. obexd also lists the bit field
         // strings ("BIT01") but phones have been seen to reject
@@ -658,7 +658,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     }
 
     // validate parameters and update filter
-    BOOST_FOREACH (const std::string &prop, keywords) {
+    for (const std::string &prop: keywords) {
         if (prop.empty()) {
             continue;
         }
@@ -945,7 +945,7 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
             m_tmpFile.map();
             pcrecpp::StringPiece newMem = m_tmpFile.stringPiece();
             ssize_t delta = newMem.data() - oldMem.data();
-            BOOST_FOREACH (Content::value_type &entry, m_content) {
+            for (auto &entry: m_content) {
                 pcrecpp::StringPiece &vcard = entry.second;
                 vcard.set(vcard.data() + delta, vcard.size());
             }

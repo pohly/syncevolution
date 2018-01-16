@@ -63,6 +63,43 @@ typedef std::pair<std::string, std::string> StringPair;
 typedef std::map<std::string, std::string> StringMap;
 
 /**
+ * Similar to boost::make_iterator_range(). Reimplemented to avoid
+ * depending on boost for this rather minor helper.
+ *
+ * The end iterator is optional in make_iterator_range(),
+ * thus making it possible to do:
+ * for (const auto &match: make_iterator_range(boost::make_split_iterator(...))
+ */
+template<typename I> class iterator_range
+{
+    I m_begin, m_end;
+
+ public:
+    iterator_range(I &&begin, I &&end) :
+        m_begin(std::forward<I>(begin)),
+        m_end(std::forward<I>(end))
+    {}
+    I begin() { return m_begin; }
+    I end() { return m_end; }
+};
+template<typename I> auto make_iterator_range(I &&begin, I &&end = {})
+{
+    return iterator_range<I>(std::forward<I>(begin), std::forward<I>(end));
+}
+
+/**
+ * Iterate through a container in reverse order:
+ * for (auto entry: reverse(some_container)
+ */
+template<typename C> auto reverse(C &container)
+{
+    // Explicit namespace, to avoid ambiguity when C is from boost
+    // and thus boost::make_iterator_range() also becomes a candidate
+    // thanks to ADL.
+    return SyncEvo::make_iterator_range(container.rbegin(), container.rend());
+}
+
+/**
  * remove multiple slashes in a row and dots directly after a slash if not followed by filename,
  * remove trailing /
  */

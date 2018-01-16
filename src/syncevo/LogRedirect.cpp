@@ -36,7 +36,6 @@
 #include <boost/algorithm/string/find_iterator.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/noncopyable.hpp>
-#include <boost/foreach.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -106,12 +105,8 @@ void LogRedirect::init()
 
     const char *lines = getenv("SYNCEVOLUTION_SUPPRESS_ERRORS");
     if (lines) {
-        typedef boost::split_iterator<const char *> string_split_iterator;
-        string_split_iterator it =
-            boost::make_split_iterator(lines, boost::first_finder("\n", boost::is_iequal()));
-        while (it != string_split_iterator()) {
-            m_knownErrors.insert(std::string(it->begin(), it->end()));
-            ++it;
+        for (const auto &match: make_iterator_range(boost::make_split_iterator(lines, boost::first_finder("\n", boost::is_iequal())))) {
+            m_knownErrors.insert(std::string(match.begin(), match.end()));
         }
     }
 
@@ -562,7 +557,7 @@ void LogRedirect::addIgnoreError(const std::string &error)
 bool LogRedirect::ignoreError(const std::string &text)
 {
     RecMutex::Guard guard = Logger::lock();
-    BOOST_FOREACH(const std::string &entry, m_knownErrors) {
+    for (const std::string &entry: m_knownErrors) {
         if (text.find(entry) != text.npos) {
             return true;
         }

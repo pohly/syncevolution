@@ -67,12 +67,12 @@ namespace GeeSupport {
  * Example:
  * GeeMap *individuals = folks_individual_aggregator_get_individuals(aggregator);
  * typedef GeeCollCXX< GeeMapEntryWrapper<const gchar *, FolksIndividual *> > Coll;
- * BOOST_FOREACH (Coll::value_type &entry, Coll(individuals)) {
+ * for (auto &entry: Coll(individuals)) {
  *    const gchar *id = entry.key();
  *    FolksIndividual *individual(entry.value());
  *    GeeSet *emails = folks_email_details_get_email_addresses(FOLKS_EMAIL_DETAILS(individual));
  *    typedef GeeCollCXX<FolksEmailFieldDetails *> EmailColl;
- *    BOOST_FOREACH (FolksEmailFieldDetails *email, EmailColl(emails)) {
+ *    for (FolksEmailFieldDetails *email: EmailColl(emails)) {
  *       const gchar *value =
  *           reinterpret_cast<const gchar *>(folks_abstract_field_details_get_value(FOLKS_ABSTRACT_FIELD_DETAILS(email)));
  *    }
