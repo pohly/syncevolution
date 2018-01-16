@@ -145,9 +145,7 @@ std::string URI::normalizePath(const std::string &path, bool collection)
     // always start with one leading slash
     res = "/";
 
-    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
-    string_split_iterator it =
-        boost::make_split_iterator(path, boost::first_finder("/", boost::is_iequal()));
+    auto it = boost::make_split_iterator(path, boost::first_finder("/", boost::is_iequal()));
     while (!it.eof()) {
         if (it->begin() == it->end()) {
             // avoid adding empty path components

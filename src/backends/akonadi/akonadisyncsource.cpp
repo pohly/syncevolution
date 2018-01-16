@@ -232,7 +232,7 @@ void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisio
     if (!fetchJob->exec()) {
         throwError(SE_HERE, "listing items");
     }
-    BOOST_FOREACH (const Item &item, fetchJob->items()) {
+    for (const Item &item: fetchJob->items()) {
         // Filter out items which don't have the right type (for example, VTODO when
         // syncing events)
         if (m_mimeTypes.contains(item.mimeType())) {

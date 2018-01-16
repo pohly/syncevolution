@@ -246,7 +246,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
         accountService = AgAccountServiceCXX::steal(ag_account_service_new(account, NULL));
     } else {
         ServiceListCXX services(ag_account_list_enabled_services(account));
-        BOOST_FOREACH (AgService *service, services) {
+        for (AgService *service: services) {
             const char *name = ag_service_get_name(service);
             SE_LOG_DEBUG(NULL, "enabled service: %s", name);
             if (serviceName == name) {

@@ -128,7 +128,7 @@ class EDSRegistryLoader : private boost::noncopyable
         try {
             m_registry = ESourceRegistryCXX::steal(registry);
             m_gerror = gerror;
-            BOOST_FOREACH (const Callback_t &cb, m_pending) {
+            for (const auto &cb: m_pending) {
                 cb(m_registry, m_gerror);
             }
         } catch (...) {

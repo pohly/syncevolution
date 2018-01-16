@@ -20,7 +20,6 @@
 #include <syncevo/FilterConfigNode.h>
 #include <syncevo/Exception.h>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 
 #include <syncevo/declarations.h>
@@ -83,7 +82,7 @@ void FilterConfigNode::readProperties(ConfigProps &props) const
 {
     m_readOnlyNode->readProperties(props);
 
-    BOOST_FOREACH(const StringPair &filter, m_filter) {
+    for (const StringPair &filter: m_filter) {
         // overwrite existing values or add new ones
         props[filter.first] = filter.second;
     }

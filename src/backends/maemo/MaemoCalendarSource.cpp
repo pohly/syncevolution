@@ -170,7 +170,7 @@ MaemoCalendarSource::Databases MaemoCalendarSource::getDatabases()
     vector< CCalendar * > calendars = mc->getListCalFromMc();
     Databases result;
 
-    BOOST_FOREACH(CCalendar * c, calendars) {
+    for (CCalendar * c: calendars) {
         int id = c->getCalendarId();
         ostringstream uri;
         uri << "id:" << id;
@@ -204,7 +204,7 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
         // components of the specified type, so just ignore it for now
         if (!comps.size())
             break;
-        BOOST_FOREACH(CComponent * c, comps) {
+        for (CComponent * c: comps) {
             revisions[c->getId()] = get_revision(c);
             // Testing shows that the backend doesn't free the memory itself
             delete c;
@@ -219,7 +219,7 @@ void MaemoCalendarSource::listAllItems(RevisionMap_t &revisions)
     // desirable, given the N900's limited memory.
     int err;
     vector< string > ids = cal->getIdList(entry_type, err);
-    BOOST_FOREACH(std::string& id, ids) {
+    for (std::string& id: ids) {
         CComponent *c = cal->getEntry(id, entry_type, err);
         if (!c)
         {

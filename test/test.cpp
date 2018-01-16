@@ -31,7 +31,6 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/foreach.hpp>
 
 #include <pcrecpp.h>
 
@@ -62,7 +61,7 @@ CppUnit::Test *FilterTest(CppUnit::Test *test)
     }
 
     std::string name = test->getName();
-    BOOST_FOREACH (const std::string &re, filter) {
+    for (const std::string &re: filter) {
         if (pcrecpp::RE(re).FullMatch(name)) {
             delete test;
             return new SkipTest(name);

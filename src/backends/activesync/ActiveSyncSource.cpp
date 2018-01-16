@@ -94,7 +94,7 @@ void ActiveSyncSource::findCollections(const std::string &account, const bool fo
     }
     
     /* Save the Collections */
-    BOOST_FOREACH(EasFolder *folder, folders) {
+    for (EasFolder *folder: folders) {
 	m_collections[folder->folder_id].collectionId = folder->folder_id;
 	m_collections[folder->folder_id].name = folder->display_name;
 	m_collections[folder->folder_id].parentId = folder->parent_id;
@@ -103,7 +103,7 @@ void ActiveSyncSource::findCollections(const std::string &account, const bool fo
     }
     
     /* Save the full paths */
-    BOOST_FOREACH(std::string id, m_collections | boost::adaptors::map_keys) {
+    for (std::string id: m_collections | boost::adaptors::map_keys) {
 	m_folderPaths[m_collections[id].fullPath()] = id;
     }
 }
@@ -165,7 +165,7 @@ ActiveSyncSource::Databases ActiveSyncSource::getDatabases()
 
 	findCollections(account, true);
 
-	BOOST_FOREACH(Collection coll, m_collections | boost::adaptors::map_values) {
+	for (Collection coll: m_collections | boost::adaptors::map_values) {
 	    if (coll.getFolderType() == getEasType()) {
 		result.push_back(Database(coll.pathName, coll.collectionId, coll.collectionIsDefault()));
 	    }
@@ -315,7 +315,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
         // will ask us for older, unmodified item content which we won't have.
 
         // populate ID lists and content cache
-        BOOST_FOREACH(EasItemInfo *item, created) {
+        for (EasItemInfo *item: created) {
             if (!item->server_id) {
                 throwError(SE_HERE, "no server ID for new eas item");
             }
@@ -331,7 +331,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
             }
             m_items[luid] = item->data;
         }
-        BOOST_FOREACH(EasItemInfo *item, updated) {
+        for (EasItemInfo *item: updated) {
             if (!item->server_id) {
                 throwError(SE_HERE, "no server ID for updated eas item");
             }
@@ -347,7 +347,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
             }
             m_items[luid] = item->data;
         }
-        BOOST_FOREACH(const char *serverID, deleted) {
+        for (const char *serverID: deleted) {
             if (!serverID) {
                 throwError(SE_HERE, "no server ID for deleted eas item");
             }
@@ -379,7 +379,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
     // old items + new (added to m_ids above) - deleted (removed above)
     ConfigProps props;
     m_ids->readProperties(props);
-    BOOST_FOREACH(const StringPair &entry, props) {
+    for (const StringPair &entry: props) {
         const std::string &luid = entry.first;
         SE_LOG_DEBUG(getDisplayName(), "existing item %s", luid.c_str());
         addItem(luid, ANY);

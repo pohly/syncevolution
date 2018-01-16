@@ -158,11 +158,10 @@ void Connection::process(const Caller_t &caller,
                     // of our configs first before going back to the name itself.
                     std::string serverID = san.fServerID;
                     SyncConfig::ConfigList servers = SyncConfig::getConfigs();
-                    BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,
-                            servers) {
+                    for (const auto &server: servers) {
                         SyncConfig conf(server.first);
                         vector<string> urls = conf.getSyncURL();
-                        BOOST_FOREACH (const string &url, urls) {
+                        for (const string &url: urls) {
                             if (url == serverID) {
                                 config = server.first;
                                 break;
@@ -179,11 +178,10 @@ void Connection::process(const Caller_t &caller,
                     if (trans != m_peer.end() && id != m_peer.end()) {
                         if (trans->second == "org.openobex.obexd") {
                             m_peerBtAddr = id->second.substr(0, id->second.find("+"));
-                            BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,
-                                    servers) {
+                            for (const auto &server: servers) {
                                 SyncConfig conf(server.first);
                                 vector<string> urls = conf.getSyncURL();
-                                BOOST_FOREACH (string &url, urls){
+                                for (std::string &url: urls){
                                     url = url.substr (0, url.find("+"));
                                     SE_LOG_DEBUG(NULL, "matching against %s",url.c_str());
                                     if (url == "obex-bt://" + m_peerBtAddr) {
@@ -199,8 +197,7 @@ void Connection::process(const Caller_t &caller,
                     }
 
                     if (config.empty()) {
-                        BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,
-                                      servers) {
+                        for (const auto &server: servers) {
                             if (server.first == serverID) {
                                 config = serverID;
                                 break;
@@ -271,8 +268,7 @@ void Connection::process(const Caller_t &caller,
                     // TODO: proper exception
                     SE_THROW("could not extract LocURI=deviceID from initial message");
                 }
-                BOOST_FOREACH(const SyncConfig::ConfigList::value_type &entry,
-                              SyncConfig::getConfigs()) {
+                for (const auto &entry: SyncConfig::getConfigs()) {
                     SyncConfig peer(entry.first);
                     if (info.m_deviceID == peer.getRemoteDevID()) {
                         config = entry.first;
@@ -596,7 +592,7 @@ void Connection::ready()
             std::string serverURI = m_SANContent->m_serverURI[sync];
             //uint32_t contentType = m_SANContent->m_contentType[sync];
             bool found = false;
-            BOOST_FOREACH(const std::string &source, sources) {
+            for (const std::string &source: sources) {
                 boost::shared_ptr<const PersistentSyncSourceConfig> sourceConfig(context.getSyncSourceConfig(source));
                 // prefix match because the local
                 // configuration might contain

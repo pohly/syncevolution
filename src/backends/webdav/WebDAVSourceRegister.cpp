@@ -313,7 +313,7 @@ public:
                      name.c_str(),
                      peerName.c_str(),
                      peer->getRootPath().c_str());
-        BOOST_FOREACH(const ConfigProperty *prop, SyncSourceConfig::getRegistry()) {
+        for (const ConfigProperty *prop: SyncSourceConfig::getRegistry()) {
             if (prop->isHidden()) {
                 continue;
             }
@@ -335,7 +335,7 @@ public:
         nodes.getProperties()->setProperty("backend", InitStateString(m_type, true));
         SE_LOG_DEBUG(NULL, "   additional property backend = %s (from CLIENT_TEST_WEBDAV)",
                      m_type.c_str());
-        BOOST_FOREACH(const StringPair &propval, m_props) {
+        for (const StringPair &propval: m_props) {
             boost::shared_ptr<FilterConfigNode> node = context->getNode(propval.first);
             if (node) {
                 SE_LOG_DEBUG(NULL, "   additional property %s = %s (from CLIENT_TEST_WEBDAV)",
@@ -385,8 +385,7 @@ static class WebDAVTestSingleton : RegisterSyncSourceTest {
             std::string database = instance->getDatabaseID();
             source->setDatabase(database);
 
-            BOOST_FOREACH (const boost::shared_ptr<WebDAVTest> &other,
-                           m_sources) {
+            for (const auto &other: m_sources) {
                 if (other->getDatabase() == database) {
                     other->m_linkedSources.push_back(source->m_configName);
                     break;
@@ -419,7 +418,7 @@ public:
         std::string settings(env);
         boost::char_separator<char> sep1(";");
         boost::char_separator<char> sep2("\t ");
-        BOOST_FOREACH(const std::string &entry,
+        for (const std::string &entry:
                       boost::tokenizer< boost::char_separator<char> >(settings, boost::char_separator<char>(";"))) {
             std::string server;
             bool caldav = false,
@@ -427,7 +426,7 @@ public:
                 caldavjournal = false,
                 carddav = false;
             ConfigProps props;
-            BOOST_FOREACH(const std::string &token,
+            for (const std::string &token:
                           boost::tokenizer< boost::char_separator<char> >(entry, boost::char_separator<char>("\t "))) {
                 if (server.empty()) {
                     server = token;

@@ -26,7 +26,6 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/foreach.hpp>
 #include <list>
 #include <string>
 #include <sstream>
@@ -477,8 +476,8 @@ class StringConfigProperty : public ConfigProperty {
      */
     bool normalizeValue(std::string &res) const {
         Values values = getValues();
-        BOOST_FOREACH(const Values::value_type &value, values) {
-            BOOST_FOREACH(const std::string &alias, value) {
+        for (const auto &value: values) {
+            for (const std::string &alias: value) {
                 if (boost::iequals(res, alias)) {
                     res = *value.begin();
                     return true;
@@ -501,14 +500,14 @@ class StringConfigProperty : public ConfigProperty {
         std::ostringstream err;
         err << "not one of the valid values (";
         bool firstval = true;
-        BOOST_FOREACH(const Values::value_type &value, values) {
+        for (const auto &value: values) {
             if (!firstval) {
                 err << ", ";
             } else {
                 firstval = false;
             }
             bool firstalias = true;
-            BOOST_FOREACH(const std::string &alias, value) {
+            for (const std::string &alias: value) {
                 if (!firstalias) {
                     err << " = ";
                 } else {
@@ -870,8 +869,8 @@ class ConfigPropertyRegistry : public std::list<const ConfigProperty *> {
  public:
     /** case-insensitive search for property */
     const ConfigProperty *find(const std::string &propName) const {
-        BOOST_FOREACH(const ConfigProperty *prop, *this) {
-            BOOST_FOREACH(const std::string &name, prop->getNames()) {
+        for (const ConfigProperty *prop: *this) {
+            for (const std::string &name: prop->getNames()) {
                 if (boost::iequals(name, propName)) {
                     return prop;
                 }

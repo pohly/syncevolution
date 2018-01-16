@@ -198,7 +198,7 @@ public:
 #else
         StringEscape escape('|', "^");
         std::list<std::string> strings;
-        BOOST_FOREACH(const QString &str, content) {
+        for (const QString &str: content) {
             strings.push_back(escape.escape(string(str.toUtf8().constData())));
         }
         prop.setValue(QVariant(QString::fromUtf8(boost::join(strings, "^").c_str())));

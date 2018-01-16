@@ -24,7 +24,6 @@
 #include <syncevo/util.h>
 
 #include <boost/scoped_array.hpp>
-#include <boost/foreach.hpp>
 
 #include <syncevo/declarations.h>
 using namespace std;
@@ -78,7 +77,7 @@ IniFileConfigNode::IniFileConfigNode(const std::string &path, const std::string 
 
 
 void IniFileConfigNode::toFile(std::ostream &file) {
-    BOOST_FOREACH(const string &line, m_lines) {
+    for (const string &line: m_lines) {
         file << line << std::endl;
     }
 }
@@ -193,7 +192,7 @@ InitStateString IniFileConfigNode::readProperty(const string &property) const
 {
     string value;
 
-    BOOST_FOREACH(const string &line, m_lines) {
+    for (const string &line: m_lines) {
         bool isComment;
 
         if (getValue(line, property, value, isComment, false)) {
@@ -207,7 +206,7 @@ void IniFileConfigNode::readProperties(ConfigProps &props) const {
     map<string, string> res;
     string value, property;
 
-    BOOST_FOREACH(const string &line, m_lines) {
+    for (const string &line: m_lines) {
         bool isComment;
         if (getContent(line, property, value, isComment, false)) {
             // don't care about the result: only the first instance
@@ -248,7 +247,7 @@ void IniFileConfigNode::writeProperty(const string &property,
     }
     newstr += property + " = " + newvalue;
 
-    BOOST_FOREACH(string &line, m_lines) {
+    for (string &line: m_lines) {
         bool isComment;
 
         if (getValue(line, property, oldvalue, isComment, true)) {
@@ -268,7 +267,7 @@ void IniFileConfigNode::writeProperty(const string &property,
         if (m_lines.size()) {
             m_lines.push_back("");
         }
-        BOOST_FOREACH(const string &comment, commentLines) {
+        for (const string &comment: commentLines) {
             m_lines.push_back(string("# ") + comment);
         }
     }
@@ -311,14 +310,14 @@ void IniHashConfigNode::read()
 
 void IniHashConfigNode::toFile(std::ostream &file)
 {
-    BOOST_FOREACH(const StringPair &prop, m_props) {
+    for (const StringPair &prop: m_props) {
         file << prop.first << " = " <<  prop.second << std::endl;
     }
 }
 
 void IniHashConfigNode::readProperties(ConfigProps &props) const
 {
-    BOOST_FOREACH(const StringPair &prop, m_props) {
+    for (const StringPair &prop: m_props) {
         props.insert(ConfigProps::value_type(prop.first, InitStateString(prop.second, true)));
     }
 }
