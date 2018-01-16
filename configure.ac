@@ -563,74 +563,7 @@ if test "$enable_dbus_service" != "no"; then
         MLITE_LIBS=
     fi
     AC_DEFINE(DBUS_SERVICE, 1, [define if dbus service is enabled])
-
-    AC_ARG_ENABLE(dbus-service-pim,
-                  AS_HELP_STRING([--enable-dbus-service-pim[=<locale>]],
-                                 [Enable implementation of org._01.pim D-Bus APIs (depends on libfolks),
-                                  using src/dbus/server/pim/locale-factory-<locale>.cpp to implement sorting
-                                  and searching. The default is <locale>=boost, which uses boost::locale.]),
-                  [ enable_dbus_pim="$enableval" ],
-                  [ enable_dbus_pim="no" ])
-    case "$enable_dbus_pim" in
-         no) ;;
-         *)
-                if test "$enable_dbus_pim" = "yes"; then
-                    enable_dbus_pim=boost
-                fi
-                if ! test -r "$srcdir/src/dbus/server/pim/locale-factory-$enable_dbus_pim.cpp"; then
-                    AC_MSG_ERROR([invalid value '$enable_dbus_pim' for --enable-dbus-service-pim, $srcdir/src/dbus/server/pim/locale-factory-$enable_dbus_pim.cpp does not exist or is not readable])
-                fi
-                PKG_CHECK_MODULES(FOLKS, [folks folks-eds])
-                AC_DEFINE(ENABLE_DBUS_PIM, 1, [org._01.pim D-Bus API enabled])
-                DBUS_PIM_PLUGIN=$enable_dbus_pim
-                AC_SUBST(DBUS_PIM_PLUGIN)
-
-                case "$enable_dbus_pim" in
-                    boost)
-                        AX_BOOST_LOCALE
-                        # AX_BOOST_LOCALE incorrectly puts -L/... into LDFLAGS.
-                        # That's broken because it then overrides the search path
-                        # for *all* libraries in a link, not just for boost. Fix
-                        # this by putting the LDFLAGS before the lib and leaving
-                        # DBUS_PIM_PLUGIN_LDFLAGS empty (for now - might have to
-                        # be revised if there ever are any boost flags which need
-                        # to go to the start of the link line).
-                        DBUS_PIM_PLUGIN_LIBS='$(BOOST_LDFLAGS) $(BOOST_LOCALE_LIB)'
-                        DBUS_PIM_PLUGIN_LDFLAGS=
-                        # We need to call ICU directly for the Han->Latin transformation.
-                        PKG_CHECK_MODULES(ICU, [icu-uc icu-i18n])
-                        ;;
-                esac
-                AC_SUBST(DBUS_PIM_PLUGIN_CFLAGS)
-                AC_SUBST(DBUS_PIM_PLUGIN_LIBS)
-                AC_SUBST(DBUS_PIM_PLUGIN_LDFLAGS)
-
-                # http://code.google.com/p/libphonenumber/
-                AC_LANG(C++)
-                SAVED_CPPFLAGS=$CPPFLAGS
-                if test ! "$PHONENUMBERS_CFLAGS"; then
-                      PHONENUMBERS_CFLAGS=-DI18N_PHONENUMBERS_USE_BOOST
-                fi
-                CPPFLAGS="$CPPFLAGS ${PHONENUMBERS_CFLAGS}"
-                AC_CHECK_HEADERS([phonenumbers/phonenumberutil.h])
-                SAVED_LIBS=$LIBS
-                if test ! "$PHONENUMBERS_LIBS"; then
-                      PHONENUMBERS_LIBS=-lphonenumber
-                fi
-                LIBS="$LIBS $PHONENUMBERS_LIBS"
-                AC_LINK_IFELSE(
-                      [AC_LANG_PROGRAM([#include <phonenumbers/phonenumberutil.h>],
-                                       [i18n::phonenumbers::PhoneNumberUtil::GetInstance()])],
-                      [true],
-                      [AC_ERROR([libphonebook not found, set PHONENUMBERS_CFLAGS and PHONENUMBERS_LIBS.])])
-                AC_SUBST(PHONENUMBERS_CFLAGS)
-                AC_SUBST(PHONENUMBERS_LIBS)
-                LIBS=$SAVED_LIBS
-                CPPFLAGS=$SAVED_CPPFLAGS
-                ;;
-    esac
 fi
-AM_CONDITIONAL([COND_DBUS_PIM], [test "$enable_dbus_pim" != "no"])
 
 AC_SUBST(DBUS_CFLAGS)
 AC_SUBST(DBUS_LIBS)
