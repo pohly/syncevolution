@@ -49,11 +49,15 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
 
     // Watch status of parent and our own process and cancel
     // any pending password request if parent or we go down.
-    boost::shared_ptr<ForkExecChild> forkexec = m_helper.getForkExecChild();
+    auto forkexec = m_helper.getForkExecChild();
     if (forkexec) {
-        m_parentWatch = forkexec->m_onQuit.connect(boost::bind(&DBusSync::passwordResponse, this, true, false, ""));
+        m_parentWatch = forkexec->m_onQuit.connect([this] () { passwordResponse(true, false, ""); });
     }
-    m_suspendFlagsWatch = SuspendFlags::getSuspendFlags().m_stateChanged.connect(boost::bind(&DBusSync::suspendFlagsChanged, this, _1));
+    m_suspendFlagsWatch = SuspendFlags::getSuspendFlags().m_stateChanged.connect([this] (SuspendFlags &flags) {
+            if (flags.getState() != SuspendFlags::NORMAL) {
+                passwordResponse(true, false, "");
+            }
+        });
 
     // Apply temporary config filters. The parameters of this function
     // override the source filters, if set.
@@ -103,7 +107,7 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
     }
 
     // Forward the SourceSyncedSignal via D-Bus.
-    m_sourceSyncedSignal.connect(boost::bind(m_helper.emitSourceSynced, _1, _2));
+    m_sourceSyncedSignal.connect([this] (const std::string &name, const SyncSourceReport &source) { m_helper.emitSourceSynced(name, source); });
 }
 
 DBusSync::~DBusSync()
@@ -112,21 +116,21 @@ DBusSync::~DBusSync()
     m_suspendFlagsWatch.disconnect();
 }
 
-boost::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
+std::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
 {
     if (m_params.m_serverAlerted || m_params.m_serverMode) {
         // Use the D-Bus Connection to send and receive messages.
-        boost::shared_ptr<DBusTransportAgent> agent(new DBusTransportAgent(m_helper));
+        auto agent = std::make_shared<DBusTransportAgent>(m_helper);
 
         // Hook up agent with D-Bus in the helper. The agent may go
         // away at any time, so use instance tracking.
         m_helper.m_messageSignal.connect(SessionHelper::MessageSignal_t::slot_type(&DBusTransportAgent::storeMessage,
                                                                                    agent.get(),
                                                                                    _1,
-                                                                                   _2).track(agent));
+                                                                                   _2).track_foreign(agent));
         m_helper.m_connectionStateSignal.connect(SessionHelper::ConnectionStateSignal_t::slot_type(&DBusTransportAgent::storeState,
                                                                                                    agent.get(),
-                                                                                                   _1).track(agent));
+                                                                                                   _1).track_foreign(agent));
 
         if (m_params.m_serverAlerted) {
             // A SAN message was sent to us, need to reply.
@@ -138,11 +142,11 @@ boost::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
                                 m_params.m_initialMessageType);
         }
 
-        return agent;
+        return std::static_pointer_cast<TransportAgent>(agent);
     } else {
         // no connection, use HTTP via libsoup/GMainLoop
         GMainLoop *loop = m_helper.getLoop();
-        boost::shared_ptr<TransportAgent> agent = SyncContext::createTransportAgent(loop);
+        auto agent = SyncContext::createTransportAgent(loop);
         return agent;
     }
 }
@@ -211,10 +215,8 @@ string DBusSync::askPassword(const string &passwordName,
     std::string error;
 
     askPasswordAsync(passwordName, descr, key,
-                     boost::bind(static_cast<std::string & (std::string::*)(const std::string &)>(&std::string::assign),
-                                 &password, _1),
-                     boost::bind(static_cast<SyncMLStatus (*)(std::string &, HandleExceptionFlags)>(&Exception::handle),
-                                 boost::ref(error), HANDLE_EXCEPTION_NO_ERROR));
+                     [&password] (const std::string &passwordArg) { password = passwordArg; },
+                     [&error] () { Exception::handle(error, HANDLE_EXCEPTION_NO_ERROR); });
     // We know that askPasswordAsync() is done when it cleared the
     // callback functors.
     while (m_passwordSuccess) {
@@ -230,12 +232,12 @@ string DBusSync::askPassword(const string &passwordName,
 void DBusSync::askPasswordAsync(const std::string &passwordName,
                                 const std::string &descr,
                                 const ConfigPasswordKey &key,
-                                const boost::function<void (const std::string &)> &success,
-                                const boost::function<void ()> &failureException)
+                                const std::function<void (const std::string &)> &success,
+                                const std::function<void ()> &failureException)
 {
     // cannot handle more than one password request at a time
-    m_passwordSuccess.clear();
-    m_passwordFailure.clear();
+    m_passwordSuccess = {};
+    m_passwordFailure = {};
     m_passwordDescr = descr;
 
     InitStateString password;
@@ -266,16 +268,16 @@ void DBusSync::askPasswordAsync(const std::string &passwordName,
                                       STATUS_PASSWORD_TIMEOUT);
         }
     } catch (...) {
-        m_passwordSuccess.clear();
-        m_passwordFailure.clear();
+        m_passwordSuccess = {};
+        m_passwordFailure = {};
         failureException();
     }
 }
 
 void DBusSync::passwordResponse(bool timedOut, bool aborted, const std::string &password)
 {
-    boost::function<void (const std::string &)> success;
-    boost::function<void ()> failureException;
+    std::function<void (const std::string &)> success;
+    std::function<void ()> failureException;
 
     std::swap(success, m_passwordSuccess);
     std::swap(failureException, m_passwordFailure);
@@ -303,13 +305,6 @@ void DBusSync::passwordResponse(bool timedOut, bool aborted, const std::string &
         } catch (...) {
             failureException();
         }
-    }
-}
-
-void DBusSync::suspendFlagsChanged(SuspendFlags &flags)
-{
-    if (flags.getState() != SuspendFlags::NORMAL) {
-        passwordResponse(true, false, "");
     }
 }
 

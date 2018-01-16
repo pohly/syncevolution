@@ -88,7 +88,7 @@ class FileSyncSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("file", "file:text/vcard:3.0", true));
         source.reset(SyncSource::createTestingSource("file", "file:text/plain:1.0", true));
         source.reset(SyncSource::createTestingSource("file", "Files in one directory:text/x-vcard:2.1", true));

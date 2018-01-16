@@ -87,14 +87,14 @@ class TDEAddressBookTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE_END();
 
 protected:
-    static string addItem(boost::shared_ptr<TestingSyncSource> source,
+    static string addItem(std::shared_ptr<TestingSyncSource> source,
                           string &data) {
         SyncSourceRaw::InsertItemResult res = source->insertItemRaw("", data);
         return res.m_luid;
     }
 
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         // source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
         // source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
         source.reset(SyncSource::createTestingSource("addressbook", "tdepim-contacts", true));
@@ -106,7 +106,7 @@ protected:
     // TODO: support default databases
 
     // void testOpenDefaultAddressBook() {
-    //     boost::shared_ptr<TestingSyncSource> source;
+    //     std::shared_ptr<TestingSyncSource> source;
     //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL));
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }

@@ -45,7 +45,6 @@
 #include "gdbus-cxx-bridge.h"
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/bind.hpp>
 
 #include <synthesis/SDK_util.h>
 
@@ -226,7 +225,7 @@ class PullAll
 
     uint16_t m_numContacts; // Number of existing contacts, according to GetSize() or after downloading.
     uint16_t m_currentContact; // Numbered starting with zero according to discovery in addVCards.
-    boost::shared_ptr<PbapSession> m_session; // Only set when there is a transfer ongoing.
+    std::shared_ptr<PbapSession> m_session; // Only set when there is a transfer ongoing.
     size_t m_tmpFileOffset; // Number of bytes already parsed.
     uint16_t m_transferOffset; // First contact requested as part of current transfer.
     uint16_t m_initialOffset; // First contact request by first transfer.
@@ -269,15 +268,16 @@ PullAll::~PullAll()
 {
 }
 
-class PbapSession : private boost::noncopyable {
+class PbapSession : private boost::noncopyable, public enable_weak_from_this<PbapSession> {
 public:
-    static boost::shared_ptr<PbapSession> create(PbapSyncSource &parent);
+    // Construct via make_weak_shared.
+    friend make_weak_shared;
 
     void initSession(const std::string &address, const std::string &format);
 
     typedef std::map<std::string, pcrecpp::StringPiece> Content;
 
-    boost::shared_ptr<PullAll> startPullAll(const PullParams &pullParams);
+    std::shared_ptr<PullAll> startPullAll(const PullParams &pullParams);
     void continuePullAll(PullAll &state);
     void checkForError(); // Throws exception if transfer failed.
     Timespec transferComplete() const;
@@ -290,7 +290,6 @@ private:
     PbapSession(PbapSyncSource &parent);
 
     PbapSyncSource &m_parent;
-    boost::weak_ptr<PbapSession> m_self;
     std::unique_ptr<GDBusCXX::DBusRemoteObject> m_client;
     bool m_frozen;
     enum {
@@ -335,8 +334,6 @@ private:
 
     std::unique_ptr<GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, std::string> >
         m_errorSignal;
-    void errorCb(const GDBusCXX::Path_t &path, const std::string &error,
-                 const std::string &msg);
 
     // Bluez 5
     typedef GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, Params, std::vector<std::string> > PropChangedSignal_t;
@@ -349,7 +346,6 @@ private:
     // new obexd API
     typedef GDBusCXX::SignalWatch<GDBusCXX::Path_t> CompleteSignal_t;
     std::unique_ptr<CompleteSignal_t> m_completeSignal;
-    void completeCb(const GDBusCXX::Path_t &path);
     typedef GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, boost::variant<int64_t> > PropertyChangedSignal_t;
     std::unique_ptr<PropertyChangedSignal_t> m_propertyChangedSignal;
     void propertyChangedCb(const GDBusCXX::Path_t &path, const std::string &name, const boost::variant<int64_t> &value);
@@ -361,13 +357,6 @@ PbapSession::PbapSession(PbapSyncSource &parent) :
     m_parent(parent),
     m_frozen(false)
 {
-}
-
-boost::shared_ptr<PbapSession> PbapSession::create(PbapSyncSource &parent)
-{
-    boost::shared_ptr<PbapSession> session(new PbapSession(parent));
-    session->m_self = session;
-    return session;
 }
 
 void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
@@ -411,24 +400,6 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
             }
         }
     }
-}
-
-void PbapSession::completeCb(const GDBusCXX::Path_t &path)
-{
-    SE_LOG_DEBUG(NULL, "obexd transfer %s completed", path.c_str());
-    m_transfers[path] = Completion::now();
-}
-
-void PbapSession::errorCb(const GDBusCXX::Path_t &path,
-                          const std::string &error,
-                          const std::string &msg)
-{
-    SE_LOG_DEBUG(NULL, "obexd transfer %s failed: %s %s",
-                 path.c_str(), error.c_str(), msg.c_str());
-    Completion &completion = m_transfers[path];
-    completion.m_transferComplete = Timespec::monotonic();
-    completion.m_transferErrorCode = error;
-    completion.m_transferErrorMsg = msg;
 }
 
 void PbapSession::propertyChangedCb(const GDBusCXX::Path_t &path,
@@ -598,7 +569,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         // pointer and ignore callback when the instance is already gone.
         // Should not happen with signals (destructing the class unregisters
         // the watch), but very well may happen in asynchronous method
-        // calls. Therefore maintain m_self and show how to use it here.
+        // calls.
         if (m_obexAPI == BLUEZ5) {
             // Bluez 5
             m_propChangedSignal.reset(new PropChangedSignal_t
@@ -607,7 +578,12 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                               "org.freedesktop.DBus.Properties",
                                                               "PropertiesChanged",
                                                               GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
-            m_propChangedSignal->activate(boost::bind(&PbapSession::propChangedCb, m_self, _1, _2, _3, _4));
+            m_propChangedSignal->activate([self=weak_from_this()] (const GDBusCXX::Path_t &path, const std::string &interface, const Params &changed, const std::vector<std::string> &invalidated) {
+                    auto lock = self.lock();
+                    if (lock) {
+                        lock->propChangedCb(path, interface, changed, invalidated);
+                    }
+                });
         } else {
             // obexd >= 0.47
             m_completeSignal.reset(new CompleteSignal_t
@@ -616,7 +592,13 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                            OBC_TRANSFER_INTERFACE_NEW,
                                                            "Complete",
                                                            GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
-            m_completeSignal->activate(boost::bind(&PbapSession::completeCb, m_self, _1));
+            m_completeSignal->activate([self=weak_from_this()] (const GDBusCXX::Path_t &path) {
+                    auto lock = self.lock();
+                    SE_LOG_DEBUG(NULL, "obexd transfer %s completed", path.c_str());
+                    if (lock) {
+                        lock->m_transfers[path] = Completion::now();
+                    }
+                });
 
             // same for error
             m_errorSignal.reset(new GDBusCXX::SignalWatch<GDBusCXX::Path_t, std::string, std::string>
@@ -625,7 +607,17 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                         OBC_TRANSFER_INTERFACE_NEW,
                                                         "Error",
                                                         GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
-            m_errorSignal->activate(boost::bind(&PbapSession::errorCb, m_self, _1, _2, _3));
+            m_errorSignal->activate([self=weak_from_this()] (const GDBusCXX::Path_t &path, const std::string &error, const std::string &msg) {
+                    auto lock = self.lock();
+                    SE_LOG_DEBUG(NULL, "obexd transfer %s failed: %s %s",
+                                 path.c_str(), error.c_str(), msg.c_str());
+                    if (lock) {
+                        Completion &completion = lock->m_transfers[path];
+                        completion.m_transferComplete = Timespec::monotonic();
+                        completion.m_transferErrorCode = error;
+                        completion.m_transferErrorMsg = msg;
+                    }
+                });
 
             // and property changes
             m_propertyChangedSignal.reset(new PropertyChangedSignal_t(GDBusCXX::SignalFilter(m_client->getConnection(),
@@ -633,7 +625,12 @@ void PbapSession::initSession(const std::string &address, const std::string &for
                                                                                              OBC_TRANSFER_INTERFACE_NEW,
                                                                                              "PropertyChanged",
                                                                                              GDBusCXX::SignalFilter::SIGNAL_FILTER_PATH_PREFIX)));
-            m_propertyChangedSignal->activate(boost::bind(&PbapSession::propertyChangedCb, m_self, _1, _2, _3));
+            m_propertyChangedSignal->activate([self=weak_from_this()] (const GDBusCXX::Path_t &path, const std::string &interface , const boost::variant<int64_t> &value) {
+                    auto lock = self.lock();
+                    if (lock) {
+                        lock->propertyChangedCb(path, interface, value);
+                    }
+                });
         }
     } else {
         // obexd < 0.47
@@ -666,7 +663,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
         Properties::const_iterator entry =
             std::find_if(m_filterFields.begin(),
                          m_filterFields.end(),
-                         boost::bind(&boost::iequals<std::string,std::string>, _1, prop, std::locale()));
+                         [&prop] (const std::string &other) { return boost::iequals(other, prop, std::locale()); });
 
         if (entry == m_filterFields.end()) {
             m_parent.throwError(SE_HERE, StringPrintf("invalid property name in PBAP vCard format specification (databaseFormat): %s",
@@ -687,7 +684,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     SE_LOG_DEBUG(NULL, "PBAP session initialized");
 }
 
-boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParams)
+std::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParams)
 {
     resetTransfer();
     blockOnFreeze();
@@ -744,7 +741,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParam
         }
     }
 
-    boost::shared_ptr<PullAll> state(new PullAll);
+    auto state = std::make_shared<PullAll>();
     state->m_pullParams = pullParams;
     state->m_contentStartIndex = 0;
     state->m_currentContact = 0;
@@ -812,7 +809,7 @@ boost::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParam
         // and the Synthesis engine will ignore the ID (src/sysync/binfileimplds.cpp:
         // "Record does not exist any more in database%s -> ignore").
         state->m_tmpFileOffset = 0;
-        state->m_session = m_self.lock();
+        state->m_session = shared_from_this();
         state->m_filter = currentFilter;
     } else {
         // < 0.47
@@ -1135,10 +1132,15 @@ PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
     SyncSource(params)
 {
     SyncSourceSession::init(m_operations);
-    m_operations.m_readNextItem = boost::bind(&PbapSyncSource::readNextItem, this, _1, _2, _3);
-    m_operations.m_readItemAsKey = boost::bind(&PbapSyncSource::readItemAsKey,
-                                               this, _1, _2);
-    m_session = PbapSession::create(*this);
+    m_operations.m_readNextItem = [this] (sysync::ItemID aID,
+                                          sysync::sInt32 *aStatus,
+                                          bool aFirst) {
+        return readNextItem(aID, aStatus, aFirst);
+    };
+    m_operations.m_readItemAsKey = [this] (sysync::cItemID aID, sysync::KeyH aItemKey) {
+        return readItemAsKey(aID, aItemKey);
+    };
+    m_session = make_weak_shared::make<PbapSession>(*this);
     const char *PBAPSyncMode = getenv("SYNCEVOLUTION_PBAP_SYNC");
     m_PBAPSyncMode = !PBAPSyncMode ? PBAP_SYNC_NORMAL :
         boost::iequals(PBAPSyncMode, "incremental") ? PBAP_SYNC_INCREMENTAL :

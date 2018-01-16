@@ -84,8 +84,8 @@ class SyncContext : public SyncConfig {
 
     FullProps m_configFilters;
     
-    boost::shared_ptr<TransportAgent> m_agent;
-    boost::shared_ptr<UserInterface> m_userInterface;
+    std::shared_ptr<TransportAgent> m_agent;
+    std::shared_ptr<UserInterface> m_userInterface;
 
     /**
      * a pointer to the active SourceList instance for this context if one exists
@@ -214,7 +214,7 @@ class SyncContext : public SyncConfig {
     SyncContext(const string &client,
                 const string &server,
                 const string &rootPath,
-                const boost::shared_ptr<TransportAgent> &agent,
+                const std::shared_ptr<TransportAgent> &agent,
                 bool doLogging = false);
 
     virtual ~SyncContext();
@@ -230,11 +230,11 @@ class SyncContext : public SyncConfig {
     bool isServerAlerted() const { return m_serverAlerted; }
     void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
 
-    boost::shared_ptr<UserInterface> getUserInterface() { return m_userInterface; }
-    void setUserInterface(const boost::shared_ptr<UserInterface> &userInterface) { m_userInterface = userInterface; }
+    std::shared_ptr<UserInterface> getUserInterface() { return m_userInterface; }
+    void setUserInterface(const std::shared_ptr<UserInterface> &userInterface) { m_userInterface = userInterface; }
 
     /** use config UI owned by caller, without reference counting */
-    void setUserInterface(UserInterface *userInterface) { m_userInterface = boost::shared_ptr<UserInterface>(userInterface, NopDestructor()); }
+    void setUserInterface(UserInterface *userInterface) { m_userInterface = std::shared_ptr<UserInterface>(userInterface, NopDestructor()); }
 
     /**
      * In contrast to getUserInterface(), this call here never returns NULL.
@@ -574,8 +574,8 @@ class SyncContext : public SyncConfig {
      *                     transports will increase the reference count for the loop
      * @return transport agent
      */
-    virtual boost::shared_ptr<TransportAgent> createTransportAgent(void *gmainloop);
-    virtual boost::shared_ptr<TransportAgent> createTransportAgent() { return createTransportAgent(NULL); }
+    virtual std::shared_ptr<TransportAgent> createTransportAgent(void *gmainloop);
+    virtual std::shared_ptr<TransportAgent> createTransportAgent() { return createTransportAgent(NULL); }
 
     /**
      * display a text message from the server
@@ -669,16 +669,6 @@ class SyncContext : public SyncConfig {
      * @param config    config name of peer
      */
     void initLocalSync(const string &config);
-
-    /**
-     * called via pre-signal of m_saveAdminData
-     */
-    SyncMLStatus preSaveAdminData(SyncSource &source);
-
-    /**
-     * called via pre-signal of m_startDataRead
-     */
-    SyncMLStatus startSourceAccess(SyncSource *source);
 
     /**
      * utility function for status() and getChanges():

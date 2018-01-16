@@ -48,6 +48,8 @@ int LocalTransportMain(int argc, char **argv);
 // internal in LocalTransportAgent.cpp
 class LocalTransportChild;
 
+class LocalTransportAgent;
+
 /**
  * message send/receive with a forked process as peer
  *
@@ -61,15 +63,9 @@ class LocalTransportChild;
  * password requests also need to be passed through the server via
  * dedicated messages, because it is the one with a UI.
  */
-class LocalTransportAgent : public TransportAgent
+class LocalTransportAgent : public TransportAgent, public enable_weak_from_this<LocalTransportAgent>
 {
  private:
-    LocalTransportAgent(SyncContext *server,
-                        const std::string &clientConfig,
-                        void *loop = NULL);
-    boost::weak_ptr<LocalTransportAgent> m_self;
-
- public:
     /**
      * @param server          the server side of the sync;
      *                        must remain valid while transport exists
@@ -78,9 +74,13 @@ class LocalTransportAgent : public TransportAgent
      * @param loop            optional glib loop to use when waiting for IO;
      *                        transport will *not* increase the reference count
      */
-    static boost::shared_ptr<LocalTransportAgent> create(SyncContext *server,
-                                                         const std::string &clientConfig,
-                                                         void *loop = NULL);
+    LocalTransportAgent(SyncContext *server,
+                        const std::string &clientConfig,
+                        void *loop = NULL);
+
+ public:
+    // Construct via make_weak_shared.
+    friend make_weak_shared;
     ~LocalTransportAgent();
 
     /**
@@ -112,7 +112,7 @@ class LocalTransportAgent : public TransportAgent
     Status m_status;
     SyncReport m_clientReport;
     GMainLoopCXX m_loop;
-    boost::shared_ptr<ForkExecParent> m_forkexec;
+    std::shared_ptr<ForkExecParent> m_forkexec;
     std::string m_contentType;
     std::string m_replyContentType;
     pcrecpp::StringPiece m_replyMsg;
@@ -122,7 +122,7 @@ class LocalTransportAgent : public TransportAgent
      * - password requests
      * - store the child's sync report
      */
-    boost::shared_ptr<GDBusCXX::DBusObjectHelper> m_parent;
+    std::shared_ptr<GDBusCXX::DBusObjectHelper> m_parent;
 
     /**
      * provides access to the forked process' D-Bus API
@@ -132,16 +132,12 @@ class LocalTransportAgent : public TransportAgent
      *
      * Only non-NULL when child is running and connected.
      */
-    boost::shared_ptr<LocalTransportChild> m_child;
+    std::shared_ptr<LocalTransportChild> m_child;
 
-    void logChildOutput(const std::string &level, const std::string &prefix, const std::string &message);
-    void onChildConnect(const GDBusCXX::DBusConnectionPtr &conn);
-    void onFailure(const std::string &error);
-    void onChildQuit(int status);
     void askPassword(const std::string &passwordName,
                      const std::string &descr,
                      const ConfigPasswordKey &key,
-                     const boost::shared_ptr< GDBusCXX::Result<const std::string &> > &reply);
+                     const std::shared_ptr< GDBusCXX::Result<const std::string &> > &reply);
     void storeSyncReport(const std::string &report);
     void storeReplyMsg(const std::string &contentType,
                        size_t offset, size_t len,

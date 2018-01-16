@@ -86,7 +86,13 @@ LoadPasswordSignal &GetLoadPasswordSignal()
     static class Signal : public LoadPasswordSignal {
     public:
         Signal() {
-            connect(100, boost::bind(CheckKeyring, _1));
+            connect(100, [] (const InitStateTri &keyring,
+                             const std::string &passwordName,
+                             const std::string &descr,
+                             const ConfigPasswordKey &key,
+                             InitStateString &password) {
+                        return CheckKeyring(keyring);
+                    });
         }
     } loadPasswordSignal;
     return loadPasswordSignal;
@@ -97,8 +103,18 @@ SavePasswordSignal &GetSavePasswordSignal()
     static class Signal : public SavePasswordSignal {
     public:
         Signal() {
-            connect(100, boost::bind(CheckKeyring, _1));
-            connect(101, boost::bind(PreventPlainText, _1, _2));
+            connect(100, [] (const InitStateTri &keyring,
+                             const std::string &passwordName,
+                             const std::string &password,
+                             const ConfigPasswordKey &key) {
+                    return CheckKeyring(keyring);
+                });
+            connect(101, [] (const InitStateTri &keyring,
+                             const std::string &passwordName,
+                             const std::string &password,
+                             const ConfigPasswordKey &key) {
+                        return PreventPlainText(keyring, passwordName);
+                    });
         }
     } savePasswordSignal;
     return savePasswordSignal;
@@ -107,8 +123,8 @@ SavePasswordSignal &GetSavePasswordSignal()
 void UserInterface::askPasswordAsync(const std::string &passwordName,
                                      const std::string &descr,
                                      const ConfigPasswordKey &key,
-                                     const boost::function<void (const std::string &)> &success,
-                                     const boost::function<void ()> &failureException)
+                                     const std::function<void (const std::string &)> &success,
+                                     const std::function<void ()> &failureException)
 {
     try {
         success(askPassword(passwordName, descr, key));

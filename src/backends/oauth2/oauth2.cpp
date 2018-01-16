@@ -31,7 +31,7 @@ SE_BEGIN_CXX
 
 class RefreshTokenAuthProvider : public AuthProvider
 {
-    boost::shared_ptr<HTTPTransportAgent> m_agent;
+    std::shared_ptr<HTTPTransportAgent> m_agent;
     std::string m_tokenHost;
     std::string m_tokenPath;
     std::string m_scope;
@@ -47,6 +47,13 @@ public:
                              const char* clientID,
                              const char* clientSecret,
                              const char* refreshToken) :
+        m_agent(
+#ifdef ENABLE_LIBSOUP
+                make_weak_shared::make<SoupTransportAgent>(static_cast<GMainLoop *>(NULL))
+#elif defined(ENABLE_LIBCURL)
+                std::make_shared<CurlTransportAgent>()
+#endif
+                ),
         m_tokenHost(tokenHost),
         m_tokenPath(tokenPath),
         m_scope(scope),
@@ -54,12 +61,6 @@ public:
         m_clientSecret(clientSecret),
         m_refreshToken(refreshToken)
     {
-#ifdef ENABLE_LIBSOUP
-        m_agent = SoupTransportAgent::create(static_cast<GMainLoop *>(NULL));
-#elif defined(ENABLE_LIBCURL)
-        boost::shared_ptr<CurlTransportAgent> agent(new CurlTransportAgent());
-        m_agent = agent;
-#endif
     }
 
     virtual bool methodIsSupported(AuthMethod method) const { return method == AUTH_METHOD_OAUTH2; }
@@ -158,11 +159,11 @@ public:
     virtual std::string getUsername() const { return ""; }
 };
 
-boost::shared_ptr<AuthProvider> createOAuth2AuthProvider(const InitStateString &username,
+std::shared_ptr<AuthProvider> createOAuth2AuthProvider(const InitStateString &username,
                                                          const InitStateString &password)
 {
     // Expected content of parameter GVariant.
-    boost::shared_ptr<GVariantType> hashtype(g_variant_type_new("a{ss}"), g_variant_type_free);
+    std::shared_ptr<GVariantType> hashtype(g_variant_type_new("a{ss}"), g_variant_type_free);
 
     // 'username' is the part after oauth2: which we can parse directly.
     GErrorCXX gerror;
@@ -207,7 +208,7 @@ boost::shared_ptr<AuthProvider> createOAuth2AuthProvider(const InitStateString &
     if (password.empty()) {
         SE_THROW("need refresh token provided as password");
     }
-    boost::shared_ptr<AuthProvider> provider(new RefreshTokenAuthProvider(tokenHost, tokenPath, scope, clientID, clientSecret, password.c_str()));
+    auto provider = std::make_shared<RefreshTokenAuthProvider>(tokenHost, tokenPath, scope, clientID, clientSecret, password.c_str());
     return provider;
 }
 

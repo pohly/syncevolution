@@ -21,7 +21,6 @@
 #define SESSION_H
 
 #include <syncevo/SynthesisEngine.h>
-#include <boost/weak_ptr.hpp>
 #include <boost/utility.hpp>
 
 #include <gdbus-cxx-bridge.h>
@@ -48,7 +47,7 @@ class InfoReq;
 
 /**
  * Represents and implements the Session interface.  Use
- * boost::shared_ptr to track it and ensure that there are references
+ * std::shared_ptr to track it and ensure that there are references
  * to it as long as the connection is needed.
  *
  * The actual implementation is split into two parts:
@@ -64,6 +63,7 @@ class InfoReq;
 class Session : public GDBusCXX::DBusObjectHelper,
                 public Logger,
                 public Resource,
+                public enable_weak_from_this<Session>,
                 private ReadOperations,
                 private boost::noncopyable
 {
@@ -101,9 +101,9 @@ class Session : public GDBusCXX::DBusObjectHelper,
     std::string m_peerDeviceID;
 
     /** Starts the helper, on demand (see useHelperAsync()). */
-    boost::shared_ptr<ForkExecParent> m_forkExecParent;
+    std::shared_ptr<ForkExecParent> m_forkExecParent;
     /** The D-Bus proxy for the helper. */
-    boost::shared_ptr<SessionProxy> m_helper;
+    std::shared_ptr<SessionProxy> m_helper;
 
     /**
      * Ensures that helper is running and that its D-Bus API is
@@ -135,23 +135,15 @@ class Session : public GDBusCXX::DBusObjectHelper,
      */
     void useHelper2(const SimpleResult &result, const boost::signals2::connection &c);
 
-    /** set up m_helper */
-    void onConnect(const GDBusCXX::DBusConnectionPtr &conn) throw ();
-    /** unset m_helper but not m_forkExecParent (still processing signals) */
-    void onQuit(int result) throw ();
     /** set after abort() and suspend(), to turn "child died' into the LOCERR_USERABORT status code */
     void expectChildTerm(int result) throw ();
-    /** log failure */
-    void onFailure(SyncMLStatus status, const std::string &explanation) throw ();
-    /** log error output from helper */
-    void onOutput(const char *buffer, size_t length);
 
     bool m_serverMode;
     bool m_serverAlerted;
     SharedBuffer m_initialMessage;
     string m_initialMessageType;
 
-    boost::weak_ptr<Connection> m_connection;
+    std::weak_ptr<Connection> m_connection;
     std::string m_connectionError;
     bool m_useConnection;
 
@@ -272,7 +264,6 @@ class Session : public GDBusCXX::DBusObjectHelper,
     StringMap m_syncEnv;
 
     typedef std::map<std::string, SyncSourceReport> SyncSourceReports;
-    static void StoreSyncSourceReport(SyncSourceReports &reports, const std::string &name, const SyncSourceReport &report) { reports[name] = report; }
     /** Recorded during a sync for getSyncSourceReport. */
     SyncSourceReports m_syncSourceReports;
 
@@ -356,19 +347,8 @@ public:
      */
     void setProgressTimeout(unsigned long ms) { m_progressTimer.setTimeout(ms); }
 
-    /**
-     * Sessions must always be held in a shared pointer
-     * because some operations depend on that. This
-     * constructor function here ensures that and
-     * also adds a weak pointer to the instance itself,
-     * so that it can create more shared pointers as
-     * needed.
-     */
-    static boost::shared_ptr<Session> createSession(Server &server,
-                                                    const std::string &peerDeviceID,
-                                                    const std::string &config_name,
-                                                    const std::string &session,
-                                                    const std::vector<std::string> &flags = std::vector<std::string>());
+    // Construct via make_weak_shared.
+    friend make_weak_shared;
 
     /**
      * automatically marks the session as completed before deleting it
@@ -379,7 +359,7 @@ public:
      * explicitly mark an idle session as completed, even if it doesn't
      * get deleted yet (exceptions not expected by caller)
      */
-    void done(bool success) throw () { doneCb(success); }
+    void done(bool success) throw () { doneCb(false, success); }
 
 private:
     Session(Server &server,
@@ -387,13 +367,7 @@ private:
             const std::string &config_name,
             const std::string &session,
             const std::vector<std::string> &flags = std::vector<std::string>());
-    boost::weak_ptr<Session> m_me;
-    boost::shared_ptr<InfoReq> m_passwordRequest;
-    void passwordRequest(const std::string &descr, const ConfigPasswordKey &key);
-    void sendViaConnection(const GDBusCXX::DBusArray<uint8_t> buffer,
-                           const std::string &type,
-                           const std::string &url);
-    void shutdownConnection();
+    std::shared_ptr<InfoReq> m_passwordRequest;
     void storeMessage(const GDBusCXX::DBusArray<uint8_t> &message,
                       const std::string &type);
     void connectionState(const std::string &error);
@@ -425,8 +399,8 @@ public:
     void setServerAlerted(bool serverAlerted) { m_serverAlerted = serverAlerted; }
 
     void initServer(SharedBuffer data, const std::string &messageType);
-    void setStubConnection(const boost::shared_ptr<Connection> c) { m_connection = c; m_useConnection = static_cast<bool>(c); }
-    boost::weak_ptr<Connection> getStubConnection() { return m_connection; }
+    void setStubConnection(const std::shared_ptr<Connection> &c) { m_connection = c; m_useConnection = static_cast<bool>(c); }
+    std::weak_ptr<Connection> getStubConnection() { return m_connection; }
     bool useStubConnection() { return m_useConnection; }
 
     /**
@@ -492,13 +466,6 @@ public:
 
     bool getFreeze() const { return m_freeze; }
 
-     /**
-     * step info for engine: whether the engine is blocked by something
-     * If yes, 'waiting' will be appended as specifiers in the status string.
-     * see GetStatus documentation.
-     */
-    void setWaiting(bool isWaiting);
-
     SyncStatus getSyncStatus() const { return m_syncStatus; }
 
     /** session was just activated */
@@ -539,11 +506,7 @@ private:
     /** set m_syncFilter and m_sourceFilters to config */
     virtual bool setFilters(SyncConfig &config);
 
-    void dbusResultCb(const std::string &operation, bool success, const SyncReport &report, const std::string &error) throw();
-
-    void setFreezeDone(bool changed, const std::string &error,
-                       bool freeze,
-                       const Result<void (bool)> &result);
+    static void dbusResultCb(const std::weak_ptr<Session> &me, const std::string &operation, bool success, const SyncReport &report, const std::string &error) noexcept;
 
     /**
      * to be called inside a catch() clause: returns error for any
@@ -556,11 +519,12 @@ private:
      * get deleted yet (invoked directly or indirectly from event
      * loop and thus must not throw exceptions)
      *
+     * @param destruct   called from destructor
      * @param success    if false, then ensure that m_error is set
      *                   before finalizing the session
      * @param report     valid only in case of success
      */
-    void doneCb(bool success, const SyncReport &report = SyncReport()) throw();
+    void doneCb(bool destruct, bool success, const SyncReport &report = SyncReport()) throw();
 };
 
 SE_END_CXX

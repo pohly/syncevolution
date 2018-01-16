@@ -105,8 +105,8 @@ class UserInterface {
     virtual void askPasswordAsync(const std::string &passwordName,
                                   const std::string &descr,
                                   const ConfigPasswordKey &key,
-                                  const boost::function<void (const std::string &)> &success,
-                                  const boost::function<void ()> &failureException);
+                                  const std::function<void (const std::string &)> &success,
+                                  const std::function<void ()> &failureException);
 
     /**
      * A helper function which is used for user interface to save

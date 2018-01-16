@@ -48,8 +48,8 @@ BluezManager::BluezManager(Server &server) :
     if (getConnection()) {
         m_done = false;
         DBusClientCall<DBusObject_t> getAdapter(*this, "DefaultAdapter");
-        getAdapter.start(boost::bind(&BluezManager::defaultAdapterCb, this, _1, _2 ));
-        m_adapterChanged.activate(boost::bind(&BluezManager::defaultAdapterChanged, this, _1));
+        getAdapter.start([this] (const DBusObject_t &adapter, const string &error) { defaultAdapterCb(adapter, error); });
+        m_adapterChanged.activate([this] (const DBusObject_t &adapter) { defaultAdapterChanged(adapter); });
     } else {
         m_done = true;
     }
@@ -85,9 +85,9 @@ BluezManager::BluezAdapter::BluezAdapter(BluezManager &manager, const string &pa
     m_deviceRemoved(*this,  "DeviceRemoved"), m_deviceAdded(*this, "DeviceCreated")
 {
     DBusClientCall<std::vector<DBusObject_t> > listDevices(*this, "ListDevices");
-    listDevices.start(boost::bind(&BluezAdapter::listDevicesCb, this, _1, _2));
-    m_deviceRemoved.activate(boost::bind(&BluezAdapter::deviceRemoved, this, _1));
-    m_deviceAdded.activate(boost::bind(&BluezAdapter::deviceCreated, this, _1));
+    listDevices.start([this] (const std::vector<DBusObject_t> &devices, const string &error) { listDevicesCb(devices, error); });
+    m_deviceRemoved.activate([this] (const DBusObject_t &object) { deviceRemoved(object); });
+    m_deviceAdded.activate([this] (const DBusObject_t &object) { deviceCreated(object); });
 }
 
 void BluezManager::BluezAdapter::listDevicesCb(const std::vector<DBusObject_t> &devices, const string &error)
@@ -99,7 +99,7 @@ void BluezManager::BluezAdapter::listDevicesCb(const std::vector<DBusObject_t> &
     }
     m_devNo = devices.size();
     for (const auto &device: devices) {
-        boost::shared_ptr<BluezDevice> bluezDevice(new BluezDevice(*this, device));
+        auto bluezDevice = std::make_shared<BluezDevice>(*this, device);
         m_devices.push_back(bluezDevice);
     }
     checkDone();
@@ -108,7 +108,7 @@ void BluezManager::BluezAdapter::listDevicesCb(const std::vector<DBusObject_t> &
 void BluezManager::BluezAdapter::deviceRemoved(const DBusObject_t &object)
 {
     string address;
-    std::vector<boost::shared_ptr<BluezDevice> >::iterator devIt;
+    std::vector<std::shared_ptr<BluezDevice> >::iterator devIt;
     for(devIt = m_devices.begin(); devIt != m_devices.end(); ++devIt) {
         if(boost::equals((*devIt)->getPath(), object)) {
             address = (*devIt)->m_mac;
@@ -126,7 +126,7 @@ void BluezManager::BluezAdapter::deviceRemoved(const DBusObject_t &object)
 void BluezManager::BluezAdapter::deviceCreated(const DBusObject_t &object)
 {
     m_devNo++;
-    boost::shared_ptr<BluezDevice> bluezDevice(new BluezDevice(*this, object));
+    auto bluezDevice = std::make_shared<BluezDevice>(*this, object);
     m_devices.push_back(bluezDevice);
 }
 
@@ -136,9 +136,10 @@ BluezManager::BluezDevice::BluezDevice (BluezAdapter &adapter, const string &pat
     m_adapter(adapter), m_reply(false), m_propertyChanged(*this, "PropertyChanged")
 {
     DBusClientCall<PropDict> getProperties(*this, "GetProperties");
-    getProperties.start(boost::bind(&BluezDevice::getPropertiesCb, this, _1, _2));
+    getProperties.start([this] (const PropDict &props, const string &error) { getPropertiesCb(props, error); });
 
-    m_propertyChanged.activate(boost::bind(&BluezDevice::propertyChanged, this, _1, _2));
+    m_propertyChanged.activate([this] (const string &name,
+                                       const boost::variant<vector<string>, string> &prop) { propertyChanged(name, prop); });
 }
 
 /**
@@ -174,8 +175,8 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
                     DBusClientCall<ServiceDict> discoverServices(*this,
                                                                   "DiscoverServices");
                     static const std::string PNP_INFO_UUID("0x1200");
-                    discoverServices.start(boost::bind(&BluezDevice::discoverServicesCb,
-                                                       this, _1, _2),
+                    discoverServices.start([this] (const ServiceDict &serviceDict,
+                                                   const string &error) { discoverServicesCb(serviceDict, error); },
                                            PNP_INFO_UUID);
                 }
             }
@@ -239,9 +240,9 @@ bool BluezManager::getPnpInfoNamesFromValues(const std::string &vendorValue, std
         if (!m_watchedFile) {
             m_lookupTable.bt_key_file = g_key_file_new();
             string filePath(SyncEvolutionDataDir() + "/bluetooth_products.ini");
-            m_watchedFile = boost::shared_ptr<SyncEvo::GLibNotify>(
+            m_watchedFile = std::shared_ptr<SyncEvo::GLibNotify>(
                 new GLibNotify(filePath.c_str(),
-                               boost::bind(&BluezManager::loadBluetoothDeviceLookupTable, this)));
+                               [this] (GFile *, GFile *, GFileMonitorEvent) { loadBluetoothDeviceLookupTable(); }));
         }
         loadBluetoothDeviceLookupTable();
         // Make sure the file was actually loaded
@@ -311,7 +312,7 @@ void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDic
             SyncConfig::DeviceDescription devDesc;
             if (server.getDevice(m_mac, devDesc)) {
                 devDesc.m_pnpInformation =
-                    boost::shared_ptr<SyncConfig::PnpInformation>(
+                    std::shared_ptr<SyncConfig::PnpInformation>(
                         new SyncConfig::PnpInformation(vendorName, productName));
                 server.updateDevice(m_mac, devDesc);
             }

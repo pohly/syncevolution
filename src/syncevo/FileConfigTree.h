@@ -56,11 +56,11 @@ class FileConfigTree : public ConfigTree {
     virtual void reload();
     virtual void remove(const std::string &path);
     virtual void reset();
-    virtual boost::shared_ptr<ConfigNode> open(const std::string &path,
+    virtual std::shared_ptr<ConfigNode> open(const std::string &path,
                                                PropertyType type,
                                                const std::string &otherId = std::string(""));
-    virtual boost::shared_ptr<ConfigNode> add(const std::string &path,
-                                              const boost::shared_ptr<ConfigNode> &node);
+    virtual std::shared_ptr<ConfigNode> add(const std::string &path,
+                                              const std::shared_ptr<ConfigNode> &node);
     std::list<std::string> getChildren(const std::string &path);
 
  private:
@@ -75,7 +75,7 @@ class FileConfigTree : public ConfigTree {
     SyncConfig::Layout m_layout;
     bool m_readonly;
 
-    typedef std::map< std::string, boost::shared_ptr<ConfigNode> > NodeCache_t;
+    typedef std::map< std::string, std::shared_ptr<ConfigNode> > NodeCache_t;
     /** cache of all nodes ever accessed */
     NodeCache_t m_nodes;
 };

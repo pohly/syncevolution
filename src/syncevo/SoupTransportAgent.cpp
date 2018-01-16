@@ -28,13 +28,6 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-boost::shared_ptr<SoupTransportAgent> SoupTransportAgent::create(GMainLoop *loop)
-{
-    boost::shared_ptr<SoupTransportAgent> self(new SoupTransportAgent(loop));
-    self->m_self = self;
-    return self;
-}
-
 SoupTransportAgent::SoupTransportAgent(GMainLoop *loop) :
     m_verifySSL(false),
     m_session(soup_session_new_with_options("timeout", 0, (void *)NULL)),
@@ -142,15 +135,15 @@ void SoupTransportAgent::send(const char *data, size_t len)
     m_message = message.get();
     if (m_timeoutSeconds) {
         m_timeout.runOnce(m_timeoutSeconds,
-                          [agent = m_self] () {
-                              boost::shared_ptr<SoupTransportAgent> self(agent.lock());
+                          [agent = weak_from_this()] () {
+                              std::shared_ptr<SoupTransportAgent> self(agent.lock());
                               if (self.get()) {
                                   self->handleTimeout();
                               }
                           });
     }
     soup_session_queue_message(m_session.get(), message.release(),
-                               SessionCallback, new boost::weak_ptr<SoupTransportAgent>(m_self));
+                               SessionCallback, new std::weak_ptr<SoupTransportAgent>(weak_from_this()));
 }
 
 void SoupTransportAgent::cancel()
@@ -215,8 +208,8 @@ void SoupTransportAgent::SessionCallback(SoupSession *session,
                                          gpointer user_data)
 {
     // A copy of the weak_ptr was created for us, which we need to delete now.
-    boost::weak_ptr<SoupTransportAgent> *self = static_cast< boost::weak_ptr<SoupTransportAgent> *>(user_data);
-    boost::shared_ptr<SoupTransportAgent> agent(self->lock());
+    std::weak_ptr<SoupTransportAgent> *self = static_cast< std::weak_ptr<SoupTransportAgent> *>(user_data);
+    std::shared_ptr<SoupTransportAgent> agent(self->lock());
     delete self;
 
     if (agent.get()) {

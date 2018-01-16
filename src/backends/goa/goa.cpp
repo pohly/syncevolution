@@ -74,7 +74,7 @@ class GOAManager : private GDBusCXX::DBusRemoteObject
      * (the unique user visible string). The account must support OAuth2,
      * otherwise an error is thrown.
      */
-    boost::shared_ptr<GOAAccount> lookupAccount(const std::string &representationID);
+    std::shared_ptr<GOAAccount> lookupAccount(const std::string &representationID);
 };
 
 class GOAAccount
@@ -97,7 +97,7 @@ GOAManager::GOAManager(const GDBusCXX::DBusConnectionPtr &conn) :
 {
 }
 
-boost::shared_ptr<GOAAccount> GOAManager::lookupAccount(const std::string &username)
+std::shared_ptr<GOAAccount> GOAManager::lookupAccount(const std::string &username)
 {
     SE_LOG_DEBUG(NULL, "Looking up all accounts in GNOME Online Accounts, searching for '%s'.", username.c_str());
     ManagedObjects objects = m_getManagedObjects();
@@ -172,7 +172,7 @@ boost::shared_ptr<GOAAccount> GOAManager::lookupAccount(const std::string &usern
                               username.c_str()));
     }
 
-    boost::shared_ptr<GOAAccount> account(new GOAAccount(getConnection(), accountPath));
+    auto account = std::make_shared<GOAAccount>(getConnection(), accountPath);
     return account;
 }
 
@@ -187,10 +187,10 @@ GOAAccount::GOAAccount(const GDBusCXX::DBusConnectionPtr &conn,
 
 class GOAAuthProvider : public AuthProvider
 {
-    boost::shared_ptr<GOAAccount> m_account;
+    std::shared_ptr<GOAAccount> m_account;
 
 public:
-    GOAAuthProvider(const boost::shared_ptr<GOAAccount> &account) :
+    GOAAuthProvider(const std::shared_ptr<GOAAccount> &account) :
         m_account(account)
     {}
 
@@ -208,7 +208,7 @@ public:
     virtual std::string getUsername() const { return ""; }
 };
 
-boost::shared_ptr<AuthProvider> createGOAAuthProvider(const InitStateString &username,
+std::shared_ptr<AuthProvider> createGOAAuthProvider(const InitStateString &username,
                                                       const InitStateString &password)
 {
     // Because we share the connection, hopefully this won't be too expensive.
@@ -222,8 +222,8 @@ boost::shared_ptr<AuthProvider> createGOAAuthProvider(const InitStateString &use
     }
 
     GOAManager manager(conn);
-    boost::shared_ptr<GOAAccount> account = manager.lookupAccount(username);
-    boost::shared_ptr<AuthProvider> provider(new GOAAuthProvider(account));
+    std::shared_ptr<GOAAccount> account = manager.lookupAccount(username);
+    auto provider = std::make_shared<GOAAuthProvider>(account);
     return provider;
 }
 

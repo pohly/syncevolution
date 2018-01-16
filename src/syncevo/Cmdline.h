@@ -25,8 +25,8 @@
 #include <syncevo/util.h>
 
 #include <set>
+#include <memory>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/scoped_array.hpp>
 
 #include <syncevo/declarations.h>
@@ -178,7 +178,7 @@ protected:
      * rename file or directory by appending .old or (if that already
      * exists) .old.x for x >= 1; updates config to point to the renamed directory
      */
-    void makeObsolete(boost::shared_ptr<SyncConfig> &from);
+    void makeObsolete(std::shared_ptr<SyncConfig> &from);
 
     /**
      * Copy from one config into another, with filters
@@ -186,15 +186,15 @@ protected:
      * if selectedSources is empty, otherwise only
      * those.
      */
-    void copyConfig(const boost::shared_ptr<SyncConfig> &from,
-                    const boost::shared_ptr<SyncConfig> &to,
+    void copyConfig(const std::shared_ptr<SyncConfig> &from,
+                    const std::shared_ptr<SyncConfig> &to,
                     const std::set<std::string> &selectedSources);
 
     /**
      * flush, move .synthesis dir, set ConsumerReady, ...
      */
-    void finishCopy(const boost::shared_ptr<SyncConfig> &from,
-                    const boost::shared_ptr<SyncContext> &to);
+    void finishCopy(const std::shared_ptr<SyncConfig> &from,
+                    const std::shared_ptr<SyncContext> &to);
 
     /**
      * migrate peer config; target context must be ready
@@ -324,7 +324,7 @@ protected:
     /**
      * Invoke a callback for each local ID.
      */
-    void processLUIDs(SyncSource *source, const boost::function<void (const std::string &)> &callback);
+    void processLUIDs(SyncSource *source, const std::function<void (const std::string &)> &callback);
 
     /**
      * Add or update one item.

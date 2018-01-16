@@ -47,11 +47,10 @@ class Session;
  * this means the Session has to abort, unless reconnecting is
  * supported.
  */
-class Connection : public GDBusCXX::DBusObjectHelper, public Resource
+class Connection : public GDBusCXX::DBusObjectHelper, public Resource, public enable_weak_from_this<Connection>
 {
  private:
     Server &m_server;
-    boost::weak_ptr<Connection> m_me;
     StringMap m_peer;
     bool m_mustAuthenticate;
     SessionCommon::ConnectionState m_state;
@@ -63,7 +62,7 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
     SessionCommon::SourceModes_t m_sourceModes;
 
     const std::string m_sessionID;
-    boost::shared_ptr<Session> m_session;
+    std::shared_ptr<Session> m_session;
 
     /**
      * Defines the timeout in seconds. -1 and thus "no timeout" by default.
@@ -75,7 +74,6 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
     int m_timeoutSeconds;
     Timeout m_timeout;
     void activateTimeout();
-    void timeoutCb();
 
     /**
      * buffer for received data, waiting here for engine to ask
@@ -94,7 +92,7 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
      * The content of a parsed SAN package to be processed via
      * connection.ready
      */
-    boost::shared_ptr <SANContent> m_SANContent;
+    std::shared_ptr <SANContent> m_SANContent;
     std::string m_peerBtAddr;
 
     /**
@@ -137,13 +135,8 @@ class Connection : public GDBusCXX::DBusObjectHelper, public Resource
 
 public:
     const std::string m_description;
-
-    static boost::shared_ptr<Connection> createConnection(Server &server,
-                                                          const GDBusCXX::DBusConnectionPtr &conn,
-                                                          const std::string &session_num,
-                                                          const StringMap &peer,
-                                                          bool must_authenticate);
-
+    // Construct via make_weak_shared.
+    friend make_weak_shared;
     ~Connection();
 
     /** session requested by us is ready to run a sync */

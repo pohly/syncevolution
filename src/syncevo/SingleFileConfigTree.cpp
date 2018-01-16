@@ -30,7 +30,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-SingleFileConfigTree::SingleFileConfigTree(const boost::shared_ptr<DataBlob> &data) :
+SingleFileConfigTree::SingleFileConfigTree(const std::shared_ptr<DataBlob> &data) :
     m_data(data)
 {
     readFile();
@@ -42,16 +42,16 @@ SingleFileConfigTree::SingleFileConfigTree(const std::string &fullpath) :
     readFile();
 }
 
-boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const std::string &filename)
+std::shared_ptr<ConfigNode> SingleFileConfigTree::open(const std::string &filename)
 {
     std::string normalized = normalizePath(std::string("/") + filename);
-    boost::shared_ptr<ConfigNode> &entry = m_nodes[normalized];
+    std::shared_ptr<ConfigNode> &entry = m_nodes[normalized];
     if (entry) {
         return entry;
     }
 
     std::string name = m_data->getName() + " - " + normalized;
-    boost::shared_ptr<DataBlob> data; 
+    std::shared_ptr<DataBlob> data; 
 
     for (const auto &file: m_content) {
         if (file.first == normalized) {
@@ -64,7 +64,7 @@ boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const std::string &file
          * creating new files not supported, would need support for detecting
          * StringDataBlob::write()
          */
-        data.reset(new StringDataBlob(name, boost::shared_ptr<std::string>(), true));
+        data.reset(new StringDataBlob(name, std::shared_ptr<std::string>(), true));
     }
     entry.reset(new IniFileConfigNode(data));
     return entry;
@@ -91,7 +91,7 @@ void SingleFileConfigTree::reset()
     readFile();
 }
 
-boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const std::string &path,
+std::shared_ptr<ConfigNode> SingleFileConfigTree::open(const std::string &path,
                                                          PropertyType type,
                                                          const std::string &otherId)
 {
@@ -117,8 +117,8 @@ boost::shared_ptr<ConfigNode> SingleFileConfigTree::open(const std::string &path
     return open(fullpath);
 }
 
-boost::shared_ptr<ConfigNode> SingleFileConfigTree::add(const std::string &path,
-                                                        const boost::shared_ptr<ConfigNode> &bode)
+std::shared_ptr<ConfigNode> SingleFileConfigTree::add(const std::string &path,
+                                                        const std::shared_ptr<ConfigNode> &bode)
 {
     SE_THROW("SingleFileConfigTree::add() not supported");
 }
@@ -163,8 +163,8 @@ std::list<std::string> SingleFileConfigTree::getChildren(const std::string &path
 
 void SingleFileConfigTree::readFile()
 {
-    boost::shared_ptr<std::istream> in(m_data->read());
-    boost::shared_ptr<std::string> content;
+    std::shared_ptr<std::istream> in(m_data->read());
+    std::shared_ptr<std::string> content;
     std::string line;
 
     m_content.clear();
@@ -190,7 +190,7 @@ class SingleIniTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE_END();
 
     void simple() {
-        boost::shared_ptr<std::string> data(new std::string);
+        auto data = std::make_shared<std::string>();
         data->assign("# comment\n"
                      "# foo\n"
                      "=== foo/config.ini ===\n"
@@ -204,9 +204,9 @@ class SingleIniTest : public CppUnit::TestFixture {
                      "=== sources/addressbook/config.ini ===\n"
                      "=== sources/calendar/config.ini ===\n"
                      "evolutionsource = Personal\n");
-        boost::shared_ptr<DataBlob> blob(new StringDataBlob("test", data, true));
+        auto blob = std::make_shared<StringDataBlob>("test", data, true);
         SingleFileConfigTree tree(blob);
-        boost::shared_ptr<ConfigNode> node;
+        std::shared_ptr<ConfigNode> node;
         node = tree.open("foo/config.ini");
         CPPUNIT_ASSERT(node);
         CPPUNIT_ASSERT(node->exists());

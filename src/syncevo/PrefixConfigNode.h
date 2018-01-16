@@ -21,9 +21,9 @@
 # define INCL_EVOLUTION_PREFIX_CONFIG_NODE
 
 #include <syncevo/ConfigNode.h>
-#include <boost/shared_ptr.hpp>
 
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 #include <string>
@@ -44,11 +44,11 @@ class PrefixConfigNode : public ConfigNode {
  public:
     /** read-write access to underlying node */
     PrefixConfigNode(const std::string prefix,
-                     const boost::shared_ptr<ConfigNode> &node);
+                     const std::shared_ptr<ConfigNode> &node);
 
     /** read-only access to underlying node */
     PrefixConfigNode(const std::string prefix,
-                     const boost::shared_ptr<const ConfigNode> &node);
+                     const std::shared_ptr<const ConfigNode> &node);
 
     virtual std::string getName() const { return m_readOnlyNode->getName(); }
     virtual bool isVolatile() const { return m_readOnlyNode->isVolatile(); }
@@ -67,8 +67,8 @@ class PrefixConfigNode : public ConfigNode {
 
  private:
     std::string m_prefix;
-    boost::shared_ptr<ConfigNode> m_node;
-    boost::shared_ptr<const ConfigNode> m_readOnlyNode;
+    std::shared_ptr<ConfigNode> m_node;
+    std::shared_ptr<const ConfigNode> m_readOnlyNode;
 };
 
 

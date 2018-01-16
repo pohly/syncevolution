@@ -24,14 +24,14 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-SafeConfigNode::SafeConfigNode(const boost::shared_ptr<ConfigNode> &node) :
+SafeConfigNode::SafeConfigNode(const std::shared_ptr<ConfigNode> &node) :
     m_node(node),
     m_readOnlyNode(node),
     m_strictMode(true)
 {
 }
 
-SafeConfigNode::SafeConfigNode(const boost::shared_ptr<const ConfigNode> &node) :
+SafeConfigNode::SafeConfigNode(const std::shared_ptr<const ConfigNode> &node) :
     m_readOnlyNode(node),
     m_strictMode(true)
 {

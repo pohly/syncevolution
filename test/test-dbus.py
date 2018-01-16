@@ -4272,6 +4272,7 @@ END:VCARD''')
     def setUpInfoRequest(self, response={"password" : "123456"}):
         self.lastState = "unknown"
         def infoRequest(id, session, state, handler, type, params):
+            time.sleep(20);
             if state == "request":
                 self.assertEqual(self.lastState, "unknown")
                 self.lastState = "request"
@@ -4314,7 +4315,7 @@ END:VCARD''')
         self.checkSync()
         self.assertSyncStatus('server', 200, None)
 
-    @timeout(100)
+    @timeout(1000)
     def testPasswordRequestAbort(self):
         """TestLocalSync.testPasswordRequestAbort - let user cancel password request"""
         self.setUpConfigs(childPassword="-")

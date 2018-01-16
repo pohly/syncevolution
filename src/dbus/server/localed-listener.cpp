@@ -74,20 +74,24 @@ LocaledListener::LocaledListener():
     m_propertiesGet(*this, PROPERTIES_GET)
 {
     if (getConnection()) {
-        m_propertiesChanged.activate(boost::bind(&LocaledListener::onPropertiesChange, this, _1, _2, _3));
+        auto change = [this] (const std::string &interface,
+                              const Properties &properties,
+                              const Invalidated &invalidated) {
+            onPropertiesChange(interface, properties, invalidated);
+        };
+        m_propertiesChanged.activate(change);
     } else {
         SE_LOG_DEBUG(NULL, "localed: not activating, no connection");
     }
 };
 
 
-boost::shared_ptr<LocaledListener> LocaledListener::create()
+std::shared_ptr<LocaledListener> LocaledListener::create()
 {
-    static boost::weak_ptr<LocaledListener> singleton;
-    boost::shared_ptr<LocaledListener> self = singleton.lock();
+    static std::weak_ptr<LocaledListener> singleton;
+    std::shared_ptr<LocaledListener> self = singleton.lock();
     if (!self) {
         self.reset(new LocaledListener());
-        self->m_self = self;
         singleton = self;
     }
     return self;
@@ -98,7 +102,12 @@ void LocaledListener::onPropertiesChange(const std::string &interface,
                                          const Invalidated &invalidated)
 {
     if (interface == LOCALED_INTERFACE) {
-        boost::function<void (const LocaleEnv &env)> result(boost::bind(&LocaledListener::emitLocaleEnv, m_self, _1));
+        auto result = [self=weak_from_this()] (const LocaleEnv &env) {
+            auto lock = self.lock();
+            if (lock) {
+                lock->emitLocaleEnv(env);
+            }
+        };
         for (const auto &entry: properties) {
             if (entry.first == LOCALED_LOCALE_PROPERTY) {
                 const LocaleEnv *locale = boost::get<LocaleEnv>(&entry.second);
@@ -115,11 +124,14 @@ void LocaledListener::onPropertiesChange(const std::string &interface,
                       invalidated.end(),
                       LOCALED_LOCALE_PROPERTY) != invalidated.end()) {
             SE_LOG_DEBUG(NULL, "localed: Locale changed, need to get new value");
-            m_propertiesGet.start(boost::bind(&LocaledListener::processLocaleProperty, m_self,
-                                              _1, _2, false,
-                                              result),
-                                  std::string(LOCALED_INTERFACE),
-                                  std::string(LOCALED_LOCALE_PROPERTY));
+            m_propertiesGet.start([self=weak_from_this(), result] (const LocaleVariant &variant, const std::string &error) {
+                    auto lock = self.lock();
+                    if (lock) {
+                        lock->processLocaleProperty(variant, error, false, result);
+                    }
+                },
+                std::string(LOCALED_INTERFACE),
+                std::string(LOCALED_LOCALE_PROPERTY));
         }
         SE_LOG_DEBUG(NULL, "localed: ignoring irrelevant property change");
     }
@@ -158,13 +170,18 @@ void LocaledListener::emitLocaleEnv(const LocaleEnv &env)
     m_localeValues(env);
 }
 
-void LocaledListener::check(const boost::function<void (const LocaleEnv &env)> &result)
+void LocaledListener::check(const std::function<void (const LocaleEnv &env)> &result)
 {
     if (getConnection()) {
         SE_LOG_DEBUG(NULL, "localed: get current Locale property");
-        m_propertiesGet.start(boost::bind(&LocaledListener::processLocaleProperty, m_self, _1, _2, true, result),
-                              std::string(LOCALED_INTERFACE),
-                              std::string(LOCALED_LOCALE_PROPERTY));
+        m_propertiesGet.start([self=weak_from_this(), result] (const LocaleVariant &variant, const std::string &error) {
+                    auto lock = self.lock();
+                    if (lock) {
+                        lock->processLocaleProperty(variant, error, true, result);
+                    }
+            },
+            std::string(LOCALED_INTERFACE),
+            std::string(LOCALED_LOCALE_PROPERTY));
     } else {
         processLocaleProperty(LocaleVariant(), "no D-Bus connection", true, result);
     }
@@ -176,8 +193,8 @@ void LocaledListener::setLocale(const LocaleEnv &locale)
     for (const char *name: LOCALED_ENV_VARS) {
         const char *value = getenv(name);
         std::string assignment = StringPrintf("%s=", name);
-        LocaleEnv::const_iterator instance = std::find_if(locale.begin(), locale.end(),
-                                                          boost::bind(boost::starts_with<std::string, std::string>, _1, name));
+        auto instance = std::find_if(locale.begin(), locale.end(),
+                                     [&name] (const std::string &l) { return boost::starts_with(l, name); });
         const char *newvalue = instance != locale.end() ? instance->c_str() + assignment.size() : NULL;
         if ((value && newvalue && strcmp(value, newvalue)) ||
             (!value && newvalue)) {

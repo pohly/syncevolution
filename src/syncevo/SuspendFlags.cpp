@@ -167,13 +167,13 @@ void SuspendFlags::checkForNormal()
     }
 }
 
-boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::suspend() { return block(m_suspendBlocker); }
-boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::abort() { return block(m_abortBlocker); }
-boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(boost::weak_ptr<StateBlocker> &blocker)
+std::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::suspend() { return block(m_suspendBlocker); }
+std::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::abort() { return block(m_abortBlocker); }
+std::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(std::weak_ptr<StateBlocker> &blocker)
 {
     RecMutex::Guard guard = suspendRecMutex.lock();
     State oldState = getState();
-    boost::shared_ptr<StateBlocker> res = blocker.lock();
+    std::shared_ptr<StateBlocker> res = blocker.lock();
     if (!res) {
         res.reset(new StateBlocker);
         blocker = res;
@@ -197,7 +197,7 @@ boost::shared_ptr<SuspendFlags::StateBlocker> SuspendFlags::block(boost::weak_pt
     return res;
 }
 
-boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate(uint32_t sigmask)
+std::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate(uint32_t sigmask)
 {
     SE_LOG_DEBUG(NULL, "SuspendFlags: (re)activating, currently %s",
                  m_senderFD > 0 ? "active" : "inactive");
@@ -246,7 +246,7 @@ boost::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate(uint32_t sigmask)
         }
     }
     m_activeSignals = sigmask;
-    boost::shared_ptr<Guard> guard(new GLibGuard(m_receiverFD));
+    auto guard = std::make_shared<GLibGuard>(m_receiverFD);
     m_guard = guard;
 
     return guard;

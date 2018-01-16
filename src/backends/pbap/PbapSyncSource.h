@@ -65,8 +65,8 @@ class PbapSyncSource : virtual public SyncSource, virtual public SyncSourceSessi
     virtual void readItemRaw(const std::string &luid, std::string &item);
 
  private:
-    boost::shared_ptr<PbapSession> m_session;
-    boost::shared_ptr<PullAll> m_pullAll;
+    std::shared_ptr<PbapSession> m_session;
+    std::shared_ptr<PullAll> m_pullAll;
     enum PBAPSyncMode {
         PBAP_SYNC_NORMAL,      ///< Read contact data according to filter.
         PBAP_SYNC_TEXT,        ///< Sync without reading photo data from phone and keeping local photos instead.
