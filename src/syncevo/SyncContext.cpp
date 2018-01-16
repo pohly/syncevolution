@@ -54,7 +54,6 @@ using namespace std;
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/bind.hpp>
 #include <boost/utility.hpp>
@@ -539,7 +538,7 @@ public:
                 SeqMap_t dateTimes2Seq;
                 if (isDir(m_logdir)) {
                     ReadDir dir(m_logdir);
-                    BOOST_FOREACH(const string &entry, dir) {
+                    for (const string &entry: dir) {
                         string dirPrefix, peerName, dateTime;
                         if (parseDirName(entry, dirPrefix, peerName, dateTime)) {
                             // dateTime = -2010-01-31-12-00[-rev]
@@ -695,7 +694,7 @@ public:
                 if (status != STATUS_OK && status != STATUS_HTTP_OK) {
                     errors = true;
                 }
-                BOOST_FOREACH(SyncReport::SourceReport_t source, report) {
+                for (SyncReport::SourceReport_t source: report) {
                     string &sourcename = source.first;
                     SyncSourceReport &sourcereport = source.second;
                     list<DumpInfo> &dumplist = dumps[sourcename];
@@ -755,7 +754,7 @@ public:
                 if (index != dirs.size() - 1) {
                     bool mustkeep = false;
                     // also check whether it holds the only backup of a source
-                    BOOST_FOREACH(Dumps_t::value_type dump, dumps) {
+                    for (auto dump: dumps) {
                         if (dump.second.size() == 1 &&
                             dump.second.front().m_dirIndex == index) {
                             mustkeep = true;
@@ -849,7 +848,7 @@ public:
         ReadDir firstContent(first);
         ReadDir secondContent(second);
         set<ino_t> firstInodes;
-        BOOST_FOREACH(const string &name, firstContent) {
+        for (const string &name: firstContent) {
             struct stat buf;
             string fullpath = first + "/" + name;
             if (stat(fullpath.c_str(), &buf)) {
@@ -857,7 +856,7 @@ public:
             }
             firstInodes.insert(buf.st_ino);
         }
-        BOOST_FOREACH(const string &name, secondContent) {
+        for (const string &name: secondContent) {
             struct stat buf;
             string fullpath = second + "/" + name;
             if (stat(fullpath.c_str(), &buf)) {
@@ -916,7 +915,7 @@ private:
         SyncConfig::splitConfigString(peer, peerName, context);
 
         ReadDir dir(m_logdir);
-        BOOST_FOREACH(const string &entry, dir) {
+        for (const string &entry: dir) {
             string tmpDirPrefix, tmpPeer, tmpDateTime;
             // if directory name could not be parsed, ignore it
             if(parseDirName(entry, tmpDirPrefix, tmpPeer, tmpDateTime)) {
@@ -1161,7 +1160,7 @@ private:
             }
             // check for collisions
             bool collision = false;
-            BOOST_FOREACH(const string &other, m_client.getSyncSources()) {
+            for (const string &other: m_client.getSyncSources()) {
                 boost::shared_ptr<PersistentSyncSourceConfig> sc(m_client.getSyncSourceConfig(other));
                 int other_id = sc->getSynthesisID();
                 if (other_id == id) {
@@ -1203,7 +1202,7 @@ public:
         vector<string> dirs;
         logdir->previousLogdirs(dirs);
 
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             if ((!excludeSource.empty() && excludeSource != source->getName()) ||
                 (suffix == "after" && m_prepared.find(source->getName()) == m_prepared.end())) {
                 continue;
@@ -1218,10 +1217,7 @@ public:
                 SyncSource::Operations::ConstBackupInfo oldBackup;
                 // Now look for a backup of the current source,
                 // starting with the most recent one.
-                for (vector<string>::const_reverse_iterator it = dirs.rbegin();
-                     it != dirs.rend();
-                     ++it) {
-                    const string &sessiondir = *it;
+                for (const string &sessiondir: reverse(dirs)) {
                     string oldBackupDir;
                     SyncSource::Operations::BackupInfo::Mode mode =
                         SyncSource::Operations::BackupInfo::BACKUP_AFTER;
@@ -1340,7 +1336,7 @@ public:
             m_logdir->previousLogdirs(dirs);
         }
 
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             if ((!excludeSource.empty() && excludeSource != source->getName()) ||
                 (newSuffix == "after" && m_prepared.find(source->getName()) == m_prepared.end())) {
                 continue;
@@ -1356,10 +1352,7 @@ public:
             if (oldSession.empty()) {
                 // Now look for the latest session involving the current source,
                 // starting with the most recent one.
-                for (vector<string>::const_reverse_iterator it = dirs.rbegin();
-                     it != dirs.rend();
-                     ++it) {
-                    const string &sessiondir = *it;
+                for (const string &sessiondir: reverse(dirs)) {
                     boost::shared_ptr<LogDir> oldsession(LogDir::create(m_client));
                     oldsession->openLogdir(sessiondir);
                     SyncReport report;
@@ -1522,7 +1515,7 @@ public:
 
     /** copies information about sources into sync report */
     void updateSyncReport(SyncReport &report) {
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             report.addSyncSourceReport(source->getName(), *source);
         }
     }
@@ -1531,7 +1524,7 @@ public:
     set<string> getSources() {
         set<string> res;
 
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             res.insert(source->getName());
         }
         return res;
@@ -1539,19 +1532,19 @@ public:
    
     ~SourceList() {
         // free sync sources
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             delete source;
         }
     }
 
     /** find sync source by name (both normal and virtual sources) */
     SyncSource *operator [] (const string &name) {
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             if (name == source->getName()) {
                 return source;
             }
         }
-        BOOST_FOREACH(boost::shared_ptr<VirtualSyncSource> &source, m_virtualSources) {
+        for (boost::shared_ptr<VirtualSyncSource> &source: m_virtualSources) {
             if (name == source->getName()) {
                 return source.get();
             }
@@ -1561,12 +1554,12 @@ public:
 
     /** find by XML <dbtypeid> (the ID used by Synthesis to identify sources in progress events) */
     SyncSource *lookupBySynthesisID(int synthesisid) {
-        BOOST_FOREACH(SyncSource *source, *this) {
+        for (SyncSource *source: *this) {
             if (source->getSynthesisID() == synthesisid) {
                 return source;
             }
         }
-        BOOST_FOREACH(boost::shared_ptr<VirtualSyncSource> &source, m_virtualSources) {
+        for (boost::shared_ptr<VirtualSyncSource> &source: m_virtualSources) {
             if (source->getSynthesisID() == synthesisid) {
                 return source.get();
             }
@@ -1580,7 +1573,7 @@ public:
 std::list<std::string> SourceList::getSourceNames() const
 {
     std::list<std::string> sourceNames;
-    BOOST_FOREACH (SyncSource *source, *this) {
+    for (SyncSource *source: *this) {
         sourceNames.push_back(source->getName());
     }
     return sourceNames;
@@ -1624,7 +1617,7 @@ const std::vector<SyncSource *> *SyncContext::getSources() const
 
 string SyncContext::getUsedSyncURL() {
     vector<string> urls = getSyncURL();
-    BOOST_FOREACH (string url, urls) {
+    for (string url: urls) {
         if (boost::starts_with(url, "http://") ||
                 boost::starts_with(url, "https://")) {
 #ifdef ENABLE_LIBSOUP
@@ -2209,7 +2202,7 @@ void SyncContext::initSources(SourceList &sourceList)
     }
 
     // Phase 1, check all virtual sync soruces
-    BOOST_FOREACH(const string &name, configuredSources) {
+    for (const string &name: configuredSources) {
         boost::shared_ptr<PersistentSyncSourceConfig> sc(getSyncSourceConfig(name));
         SyncSourceNodes source = getSyncSourceNodes (name);
         std::string sync = sc->getSync();
@@ -2222,7 +2215,7 @@ void SyncContext::initSources(SourceList &sourceList)
                 SyncSourceParams params(name, source, boost::shared_ptr<SyncConfig>(this, SyncConfigNOP()), contextName);
                 boost::shared_ptr<VirtualSyncSource> vSource = boost::shared_ptr<VirtualSyncSource> (new VirtualSyncSource (params));
                 std::vector<std::string> mappedSources = vSource->getMappedSources();
-                BOOST_FOREACH (std::string source, mappedSources) {
+                for (std::string source: mappedSources) {
                     //check whether the mapped source is really available
                     boost::shared_ptr<PersistentSyncSourceConfig> source_config 
                         = getSyncSourceConfig(source);
@@ -2246,7 +2239,7 @@ void SyncContext::initSources(SourceList &sourceList)
                     // URI
                     vFilter["uri"] = string("<") + vSource->getName() + ">" + vSource->getURINonEmpty();
                 }
-                BOOST_FOREACH (std::string source, mappedSources) {
+                for (std::string source: mappedSources) {
                     setConfigFilter (false, source, vFilter);
                 }
                 sourceList.addSource(vSource);
@@ -2254,7 +2247,7 @@ void SyncContext::initSources(SourceList &sourceList)
         }
     }
 
-    BOOST_FOREACH(const string &name, configuredSources) {
+    for (const string &name: configuredSources) {
         boost::shared_ptr<PersistentSyncSourceConfig> sc(getSyncSourceConfig(name));
 
         SyncSourceNodes source = getSyncSourceNodes (name);
@@ -2415,7 +2408,7 @@ void XMLFiles::addFragments(const string &dir, Category category)
         return;
     }
     ReadDir content(dir);
-    BOOST_FOREACH(const string &file, content) {
+    for (const string &file: content) {
         if (boost::ends_with(file, ".xml")) {
             m_files[category][file] = dir + "/" + file;
         }
@@ -2426,7 +2419,7 @@ string XMLFiles::get(Category category)
 {
     string res;
 
-    BOOST_FOREACH(const StringPair &entry, m_files[category]) {
+    for (const StringPair &entry: m_files[category]) {
         string content;
         ReadFile(entry.second, content);
         res += content;
@@ -2752,7 +2745,7 @@ void SyncContext::getConfigXML(bool isSync, string &xml, string &configname)
     if (index != xml.npos) {
         stringstream datastores;
 
-        BOOST_FOREACH(SyncSource *source, *m_sourceListPtr) {
+        for (SyncSource *source: *m_sourceListPtr) {
             string fragment;
             source->getDatastoreXML(fragment, fragments);
             string name;
@@ -2829,14 +2822,14 @@ void SyncContext::getConfigXML(bool isSync, string &xml, string &configname)
         /*If there is super datastore, add it here*/
         //TODO generate specific superdatastore contents (MB #8753)
         //Now only works for synthesis built-in events+tasks
-        BOOST_FOREACH (boost::shared_ptr<VirtualSyncSource> vSource, m_sourceListPtr->getVirtualSources()) {
+        for (boost::shared_ptr<VirtualSyncSource> vSource: m_sourceListPtr->getVirtualSources()) {
             std::string superType = vSource->getSourceType().m_format;
             std::string evoSyncSource = vSource->getDatabaseID();
             std::vector<std::string> mappedSources = unescapeJoinedString (evoSyncSource, ',');
 
             // always check for a consistent config
             SourceType sourceType = vSource->getSourceType();
-            BOOST_FOREACH (std::string source, mappedSources) {
+            for (std::string source: mappedSources) {
                 //check the data type
                 SyncSource *subSource = (*m_sourceListPtr)[source];
                 SourceType subType = subSource->getSourceType();
@@ -3410,7 +3403,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             // open each source - failing now is still safe
             // in clients; in servers we wait until the source
             // is really needed
-            BOOST_FOREACH(SyncSource *source, sourceList) {
+            for (SyncSource *source: sourceList) {
                 if (m_serverMode) {
                     source->enableServerMode();
                 } else {
@@ -3445,7 +3438,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
         // When a source or the overall sync was successful,
         // but some items failed, we report a "partial failure"
         // status.
-        BOOST_FOREACH(SyncSource *source, sourceList) {
+        for (SyncSource *source: sourceList) {
             m_sourceSyncedSignal(source->getName(), *source);
             if (source->getStatus() == STATUS_OK &&
                 (source->getItemStat(SyncSource::ITEM_LOCAL,
@@ -3472,7 +3465,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
             boost::shared_ptr<LocalTransportAgent> agent = boost::static_pointer_cast<LocalTransportAgent>(m_agent);
             SyncReport childReport;
             agent->getClientSyncReport(childReport);
-            BOOST_FOREACH(SyncSource *source, sourceList) {
+            for (SyncSource *source: sourceList) {
                 const SyncSourceReport *childSourceReport = childReport.findSyncSourceReport(source->getURINonEmpty());
                 if (childSourceReport) {
                     SyncMLStatus parentSourceStatus = source->getStatus();
@@ -3535,12 +3528,12 @@ bool SyncContext::sendSAN(uint16_t version)
 
     /* For each virtual datasoruce, generate the SAN accoring to it and ignoring
      * sub datasource in the later phase*/
-    BOOST_FOREACH (boost::shared_ptr<VirtualSyncSource> vSource, m_sourceListPtr->getVirtualSources()) {
+    for (boost::shared_ptr<VirtualSyncSource> vSource: m_sourceListPtr->getVirtualSources()) {
             std::string evoSyncSource = vSource->getDatabaseID();
             std::string sync = vSource->getSync();
             SANSyncMode mode = AlertSyncMode(StringToSyncMode(sync, true), getPeerIsClient());
             std::vector<std::string> mappedSources = unescapeJoinedString (evoSyncSource, ',');
-            BOOST_FOREACH (std::string source, mappedSources) {
+            for (std::string source: mappedSources) {
                 dataSources.erase (source);
                 if (mode == SA_SLOW) {
                     // We force a source which the client is not expected to use into slow mode.
@@ -3555,7 +3548,7 @@ bool SyncContext::sendSAN(uint16_t version)
     vector<pair <string, string> > alertedSources;
 
     /* For each source to be notified do the following: */
-    BOOST_FOREACH (string name, dataSources) {
+    for (string name: dataSources) {
         boost::shared_ptr<PersistentSyncSourceConfig> sc(getSyncSourceConfig(name));
         string sync = sc->getSync();
         SANSyncMode mode = AlertSyncMode(StringToSyncMode(sync, true), getPeerIsClient());
@@ -3717,7 +3710,7 @@ bool SyncContext::setFreeze(bool freeze)
             m_agent->setFreeze(freeze);
         }
         if (m_sourceListPtr) {
-            BOOST_FOREACH (SyncSource *source, *m_sourceListPtr) {
+            for (SyncSource *source: *m_sourceListPtr) {
                 SE_LOG_DEBUG(NULL, "SyncContext::setFreeze(): datastore %s", source->getDisplayName().c_str());
                 source->setFreeze(freeze);
             }
@@ -4091,7 +4084,7 @@ SyncMLStatus SyncContext::doSync()
                 // Catch outgoing message and abort if requested by script.
                 // Report which sources are affected, based on their status code.
                 set<string> sources;
-                BOOST_FOREACH(SyncSource *source, *m_sourceListPtr) {
+                for (SyncSource *source: *m_sourceListPtr) {
                     if (source->getStatus() == STATUS_UNEXPECTED_SLOW_SYNC) {
                         string name = source->getVirtualSource();
                         if (name.empty()) {
@@ -4211,7 +4204,7 @@ SyncMLStatus SyncContext::doSync()
                         }
                     }
 
-                    BOOST_FOREACH (SyncSource *source, *m_sourceListPtr) {
+                    for (SyncSource *source: *m_sourceListPtr) {
                         source->flushItemChanges();
                         if (needResults) {
                             source->finishItemChanges();
@@ -4325,7 +4318,7 @@ SyncMLStatus SyncContext::doSync()
                     } else if (contentType == "quitsync") {
                         SE_LOG_DEBUG(NULL, "server is asking us to quit the sync session");
                         // Fake "done" events for each active source.
-                        BOOST_FOREACH(SyncSource *source, *m_sourceListPtr) {
+                        for (SyncSource *source: *m_sourceListPtr) {
                             if (source->getFinalSyncMode() != SYNC_NONE) {
                                 displaySourceProgress(*source,
                                                       SyncSourceEvent(sysync::PEV_SYNCEND, 0, 0, 0),
@@ -4512,7 +4505,7 @@ void SyncContext::status()
                                            // Don't need sync passwords.
                                            PasswordConfigProperty::CHECK_PASSWORD_ALL & ~PasswordConfigProperty::CHECK_PASSWORD_SYNC,
                                            sourceList.getSourceNames());
-    BOOST_FOREACH(SyncSource *source, sourceList) {
+    for (SyncSource *source: sourceList) {
         source->open();
     }
 
@@ -4561,7 +4554,7 @@ void SyncContext::checkStatus(SyncReport &report)
                                            // Don't need sync passwords.
                                            PasswordConfigProperty::CHECK_PASSWORD_ALL & ~PasswordConfigProperty::CHECK_PASSWORD_SYNC,
                                            sourceList.getSourceNames());
-    BOOST_FOREACH(SyncSource *source, sourceList) {
+    for (SyncSource *source: sourceList) {
         source->open();
     }
 
@@ -4584,7 +4577,7 @@ static void logRestoreReport(const SyncReport &report, bool dryrun)
 void SyncContext::checkSourceChanges(SourceList &sourceList, SyncReport &changes)
 {
     changes.setStart(time(NULL));
-    BOOST_FOREACH(SyncSource *source, sourceList) {
+    for (SyncSource *source: sourceList) {
         SyncSourceReport local;
         if (source->getOperations().m_checkStatus) {
             source->getOperations().m_checkStatus(local);
@@ -4642,7 +4635,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
                                            sourceList.getSourceNames());
     string datadump = database == DATABASE_BEFORE_SYNC ? "before" : "after";
 
-    BOOST_FOREACH(SyncSource *source, sourceList) {
+    for (SyncSource *source: sourceList) {
         // fake a source alert event
         displaySourceProgress(*source, SyncSourceEvent(sysync::PEV_ALERTED, -1, 0, 0), true);
         source->open();
@@ -4660,7 +4653,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
 
     SyncReport report;
     try {
-        BOOST_FOREACH(SyncSource *source, sourceList) {
+        for (SyncSource *source: sourceList) {
             SyncSourceReport sourcereport;
             try {
                 displaySourceProgress(*source, SyncSourceEvent(sysync::PEV_SYNCSTART, 0, 0, 0), true);
@@ -4927,7 +4920,7 @@ private:
         Sessions_t sessions;
         string logdir = getLogDir();
         ReadDir dirs(logdir);
-        BOOST_FOREACH(const string &dir, dirs) {
+        for (const string &dir: dirs) {
             sessions.push_back(RealPath(logdir + "/" + dir));
         }
         sort(sessions.begin(), sessions.end());

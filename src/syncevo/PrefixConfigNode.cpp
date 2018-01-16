@@ -20,7 +20,6 @@
 #include <syncevo/PrefixConfigNode.h>
 #include <syncevo/Exception.h>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include <syncevo/declarations.h>
@@ -60,7 +59,7 @@ void PrefixConfigNode::readProperties(ConfigProps &props) const
     ConfigProps original;
     m_readOnlyNode->readProperties(original);
 
-    BOOST_FOREACH(const StringPair &prop, original) {
+    for (const StringPair &prop: original) {
         std::string key = prop.first;
         std::string value = prop.second;
 
@@ -74,7 +73,7 @@ void PrefixConfigNode::clear()
 {
     ConfigProps original;
     m_readOnlyNode->readProperties(original);
-    BOOST_FOREACH(const StringPair &prop, original) {
+    for (const StringPair &prop: original) {
         std::string key = prop.first;
         if (boost::starts_with(key, m_prefix)) {
             m_node->removeProperty(key);

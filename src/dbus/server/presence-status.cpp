@@ -26,11 +26,11 @@ void PresenceStatus::init(){
     //initialize the configured peer list
     if (!m_initiated) {
         SyncConfig::ConfigList list = SyncConfig::getConfigs();
-        BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server, list) {
+        for (const auto &server: list) {
             SyncConfig config (server.first);
             vector<string> urls = config.getSyncURL();
             m_peers[server.first].clear();
-            BOOST_FOREACH (const string &url, urls) {
+            for (const string &url: urls) {
                 // take current status into account,
                 // PresenceStatus::checkPresence() calls init() and
                 // expects up-to-date information
@@ -69,7 +69,7 @@ void PresenceStatus::checkPresence (const string &peer, string& status, std::vec
     transport.clear();
     //only if all transports are unavailable can we declare the peer
     //status as unavailable
-    BOOST_FOREACH (PeerStatusPair &mytransport, mytransports) {
+    for (PeerStatusPair &mytransport: mytransports) {
         if (mytransport.second == MIGHTWORK) {
             transport.push_back (mytransport.first);
         }
@@ -125,11 +125,11 @@ void PresenceStatus::updatePresenceStatus (bool httpPresence, bool btPresence) {
 
 
     //iterate all configured peers and fire singals
-    BOOST_FOREACH (StatusPair &peer, m_peers) {
+    for (StatusPair &peer: m_peers) {
         //iterate all possible transports
         //TODO One peer might got more than one signals, avoid this
         std::vector<pair<string, PeerStatus> > &transports = peer.second;
-        BOOST_FOREACH (PeerStatusPair &entry, transports) {
+        for (PeerStatusPair &entry: transports) {
             string url = entry.first;
             if (boost::starts_with (url, "http") && (httpChanged || !initiated)) {
                 entry.second = m_httpPresence ? MIGHTWORK: NOTRANSPORT;

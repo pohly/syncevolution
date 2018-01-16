@@ -60,7 +60,7 @@ void BluezManager::defaultAdapterChanged(const DBusObject_t &adapter)
     m_done = false;
     //remove devices that belong to this original adapter
     if(m_adapter) {
-        BOOST_FOREACH(boost::shared_ptr<BluezDevice> &device, m_adapter->getDevices()) {
+        for (const auto &device: m_adapter->getDevices()) {
             m_server.removeDevice(device->getMac());
         }
     }
@@ -98,7 +98,7 @@ void BluezManager::BluezAdapter::listDevicesCb(const std::vector<DBusObject_t> &
         return;
     }
     m_devNo = devices.size();
-    BOOST_FOREACH(const DBusObject_t &device, devices) {
+    for (const auto &device: devices) {
         boost::shared_ptr<BluezDevice> bluezDevice(new BluezDevice(*this, device));
         m_devices.push_back(bluezDevice);
     }
@@ -162,7 +162,7 @@ void BluezManager::BluezDevice::checkSyncService(const std::vector<std::string> 
     static const char * SYNCML_CLIENT_UUID = "00000002-0000-1000-8000-0002ee000002";
     bool hasSyncService = false;
     Server &server = m_adapter.m_manager.m_server;
-    BOOST_FOREACH(const string &uuid, uuids) {
+    for (const string &uuid: uuids) {
         //if the device has sync service, add it to the device list
         if(boost::iequals(uuid, SYNCML_CLIENT_UUID)) {
             hasSyncService = true;

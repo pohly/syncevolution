@@ -43,7 +43,7 @@ void EvolutionSyncSource::getDatabasesFromRegistry(SyncSource::Databases &result
     ESourceListCXX sources(e_source_registry_list_sources(registry, extension));
     ESourceCXX def(refDef ? refDef(registry) : NULL,
                    TRANSFER_REF);
-    BOOST_FOREACH (ESource *source, sources) {
+    for (ESource *source: sources) {
         result.push_back(Database(e_source_get_display_name(source),
                                   e_source_get_uid(source),
                                   e_source_equal(def, source)));
@@ -264,10 +264,10 @@ void EvolutionSyncSource::deleteDatabase(const std::string &uri, RemoveData remo
         // This is equivalent to "rm -rf $XDG_DATA_HOME/evolution/*/<uuid>".
         std::string basedir = StringPrintf("%s/evolution", g_get_user_data_dir());
         if (isDir(basedir)) {
-            BOOST_FOREACH (const std::string &kind, ReadDir(basedir)) {
+            for (const std::string &kind: ReadDir(basedir)) {
                 std::string subdir = basedir + "/" + kind;
                 if (isDir(subdir)) {
-                    BOOST_FOREACH (const std::string &source, ReadDir(subdir)) {
+                    for (const std::string &source: ReadDir(subdir)) {
                         // We assume that the UUID of the database
                         // consists only of characters which can be
                         // used in the directory name, i.e., no
@@ -294,7 +294,7 @@ ESource *EvolutionSyncSource::findSource(const ESourceListCXX &list, const strin
         finalID = id;
     } else {
         // Nothing selected specifically, use the one marked as default.
-        BOOST_FOREACH(const Database &db, getDatabases()) {
+        for (const Database &db: getDatabases()) {
             if (db.m_isDefault) {
                 finalID = db.m_uri;
                 break;
@@ -303,7 +303,7 @@ ESource *EvolutionSyncSource::findSource(const ESourceListCXX &list, const strin
     }
 
 #ifdef USE_EDS_CLIENT
-    BOOST_FOREACH (ESource *source, list) {
+    for (ESource *source: list) {
         bool found =
             !finalID.compare(e_source_get_display_name(source)) ||
             !finalID.compare(e_source_get_uid(source));

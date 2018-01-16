@@ -75,7 +75,7 @@ boost::shared_ptr<AuthProvider> AuthProvider::create(const UserIdentity &identit
         authProvider.reset(new CredentialsProvider(identity.m_identity, password));
     } else {
         SE_LOG_DEBUG(NULL, "looking for identity provider for %s", identity.toString().c_str());
-        BOOST_FOREACH (IdentityProvider *idProvider, IdentityProvider::getRegistry()) {
+        for (IdentityProvider *idProvider: IdentityProvider::getRegistry()) {
             if (boost::iequals(idProvider->m_key, identity.m_provider)) {
                 authProvider = idProvider->create(identity.m_identity, password);
                 if (!authProvider) {

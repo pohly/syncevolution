@@ -36,9 +36,6 @@ using namespace std;
 #include "EvolutionMemoSource.h"
 #include "e-cal-check-timezones.h"
 
-
-#include <boost/foreach.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -650,7 +647,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-                BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
+                for (boost::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
@@ -710,7 +707,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             bool hasChildren = false;
             LUIDs::const_iterator it = m_allLUIDs.find(id.m_uid);
             if (it != m_allLUIDs.end()) {
-                BOOST_FOREACH(const string &rid, it->second) {
+                for (const string &rid: it->second) {
                     if (!rid.empty()) {
                         hasChildren = true;
                         break;
@@ -742,7 +739,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-                BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
+                for (boost::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
@@ -804,7 +801,7 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
 
     LUIDs::const_iterator it = m_allLUIDs.find(uid);
     if (it != m_allLUIDs.end()) {
-        BOOST_FOREACH(const string &rid, it->second) {
+        for (const string &rid: it->second) {
             ItemID id(uid, rid);
             icalcomponent *icomp = retrieveItem(id);
             if (icomp) {
@@ -862,7 +859,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 
         // recreate children
         bool first = true;
-        BOOST_FOREACH(boost::shared_ptr< eptr<icalcomponent> > &icalcomp, children) {
+        for (boost::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
             if (first) {
                 char *uid;
 

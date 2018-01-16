@@ -350,7 +350,7 @@ void LocalTransportAgent::onChildConnect(const GDBusCXX::DBusConnectionPtr &conn
 
     // now tell child what to do
     LocalTransportChild::ActiveSources_t sources;
-    BOOST_FOREACH(const string &sourceName, m_server->getSyncSources()) {
+    for (const string &sourceName: m_server->getSyncSources()) {
         SyncSourceNodes nodes = m_server->getSyncSourceNodesNoTracking(sourceName);
         SyncSourceConfig source(sourceName, nodes);
         std::string sync = source.getSync();
@@ -946,7 +946,7 @@ class LocalTransportAgentChild : public TransportAgent
 
         // apply temporary config filters
         m_client->setConfigFilter(true, "", serverConfigProps.createSyncFilter(m_client->getConfigName()));
-        BOOST_FOREACH(const string &sourceName, m_client->getSyncSources()) {
+        for (const string &sourceName: m_client->getSyncSources()) {
             m_client->setConfigFilter(false, sourceName, serverConfigProps.createSourceFilter(m_client->getConfigName(), sourceName));
         }
 
@@ -976,7 +976,7 @@ class LocalTransportAgentChild : public TransportAgent
         }
 
         // disable all sources temporarily, will be enabled by next loop
-        BOOST_FOREACH(const string &targetName, m_client->getSyncSources()) {
+        for (const string &targetName: m_client->getSyncSources()) {
             SyncSourceNodes targetNodes = m_client->getSyncSourceNodes(targetName);
             SyncSourceConfig targetSource(targetName, targetNodes);
             targetSource.setSync("disabled", true);
@@ -984,7 +984,7 @@ class LocalTransportAgentChild : public TransportAgent
 
         // activate all sources in client targeted by main config,
         // with right uri
-        BOOST_FOREACH(const LocalTransportChild::ActiveSources_t::value_type &entry, sources) {
+        for (const auto &entry: sources) {
             // mapping is from server (source) to child (target)
             const std::string &sourceName = entry.first;
             const std::string &targetName = entry.second.first;

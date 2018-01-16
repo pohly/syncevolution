@@ -311,8 +311,8 @@ void KCalExtendedSource::open()
         mKCal::Notebook::List notebookList = m_data->m_storage->notebooks();
         mKCal::Notebook::List::Iterator it;
 
-        for ( it = notebookList.begin(); it != notebookList.end(); ++it ) {
-            if ( name == (*it)->name() ) {
+        for (auto notebook: notebookList) {
+            if ( name == notebook->name() ) {
                 break;
             }
         }
@@ -388,19 +388,19 @@ KCalExtendedSource::Databases KCalExtendedSource::getDatabases()
     }
     mKCal::Notebook::List notebookList = m_data->m_storage->notebooks();
     mKCal::Notebook::List::Iterator it;
-    for ( it = notebookList.begin(); it != notebookList.end(); ++it ) {
+    for (auto notebook: notebookList) {
 #ifdef ENABLE_MAEMO
-        string name = (*it)->name().toStdString();
-        string uid = (*it)->uid().toStdString();
+        string name = notebook->name().toStdString();
+        string uid = notebook->uid().toStdString();
         // For notes, we need a different default database:
         //   Notes (uid:66666666-7777-8888-9999-000000000000)
         bool isDefault = (m_type != Journal) ?
-                         (*it)->isDefault() :
+                         notebook->isDefault() :
                          (uid == "66666666-7777-8888-9999-000000000000");
         result.push_back(Database( name, "uid:" + uid, isDefault ));
 #else
-        bool isDefault = (*it)->isDefault();
-        result.push_back(Database( (*it)->name().toStdString(), 
+        bool isDefault = notebook->isDefault();
+        result.push_back(Database( notebook->name().toStdString(), 
                                    (m_data->m_storage).staticCast<mKCal::SqliteStorage>()->databaseName().toStdString(), 
                                    isDefault));
 #endif
@@ -531,7 +531,7 @@ TestingSyncSource::InsertItemResult KCalExtendedSource::insertItem(const string 
     if (source) {
         KCalCore::ICalTimeZones *target = m_data->m_calendar->timeZones();
         if (target) {
-            BOOST_FOREACH(const KCalCore::ICalTimeZone &zone, source->zones().values()) {
+            for (const auto &zone: source->zones().values()) {
                 target->add(zone);
             }
         }
