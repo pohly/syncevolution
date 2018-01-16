@@ -36,11 +36,11 @@ public:
                          "   using an account created and managed with GNOME Control Center.")
     {}
 
-    virtual boost::shared_ptr<AuthProvider> create(const InitStateString &username,
+    virtual std::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password)
     {
         // Returning NULL if not enabled...
-        boost::shared_ptr<AuthProvider> provider;
+        std::shared_ptr<AuthProvider> provider;
 #ifdef USE_GOA
         provider = createGOAAuthProvider(username, password);
 #endif

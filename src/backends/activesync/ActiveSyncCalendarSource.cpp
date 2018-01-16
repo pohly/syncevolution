@@ -70,9 +70,9 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
                     size_t nextpos = value.find('/', pos + 1);
                     if (nextpos != value.npos) {
                         std::string uid = m_escape.unescape(value.substr(pos + 1, nextpos - pos - 1));
-                        boost::shared_ptr<Event> &eventptr = m_cache[easid];
+                        std::shared_ptr<Event> &eventptr = m_cache[easid];
                         if (!eventptr) {
-                            eventptr = boost::shared_ptr<Event>(new Event);
+                            eventptr = std::make_shared<Event>();
                         }
                         eventptr->m_easid = easid;
                         eventptr->m_uid = uid;
@@ -220,7 +220,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
     // old items + new (added to m_events above) - deleted (removed above)
     for (const auto &entry: m_cache) {
         const std::string &easid = entry.first;
-        const boost::shared_ptr<Event> &eventptr = entry.second;
+        const std::shared_ptr<Event> &eventptr = entry.second;
         for (const std::string &subid: eventptr->m_subids) {
             SE_LOG_DEBUG(getDisplayName(), "existing eas item %s = uid %s + rid %s",
                          easid.c_str(), eventptr->m_uid.c_str(), subid.c_str());
@@ -235,7 +235,7 @@ std::string ActiveSyncCalendarSource::endSync(bool success)
     if (success) {
         for (const auto &entry: m_cache) {
             const std::string &easid = entry.first;
-            const boost::shared_ptr<Event> &eventptr = entry.second;
+            const std::shared_ptr<Event> &eventptr = entry.second;
             std::stringstream buffer;
             buffer << "//"; // use same format as in MapSyncSource, just in case - was '/' << m_escape.escape(ids.m_revision) << '/';
             buffer << m_escape.escape(eventptr->m_uid) << '/';
@@ -324,12 +324,12 @@ ActiveSyncCalendarSource::Event &ActiveSyncCalendarSource::loadItem(Event &event
 
 ActiveSyncCalendarSource::Event &ActiveSyncCalendarSource::setItemData(const std::string &easid, const std::string &data)
 {
-    boost::shared_ptr<Event> &eventptr = m_cache[easid];
+    std::shared_ptr<Event> &eventptr = m_cache[easid];
     if (eventptr) {
         eventptr->m_uid.clear();
         eventptr->m_subids.clear();
     } else {
-        eventptr = boost::shared_ptr<Event>(new Event);
+        eventptr = std::make_shared<Event>();
     }
 
     Event &event = *eventptr;
@@ -408,7 +408,7 @@ SyncSourceRaw::InsertItemResult ActiveSyncCalendarSource::insertItem(const std::
     const std::string &callerSubID = ids.second;
 
     // parse new event
-    boost::shared_ptr<Event> newEvent(new Event);
+    auto newEvent = std::make_shared<Event>();
     newEvent->m_calendar.set(icalcomponent_new_from_string((char *)item.c_str()), // hack for old libical
                              "parsing iCalendar 2.0");
     icalcomponent *firstcomp = NULL;

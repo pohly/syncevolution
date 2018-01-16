@@ -28,11 +28,6 @@
 
 SE_BEGIN_CXX
 
-static void dumpString(const std::string &output)
-{
-    fputs(output.c_str(), stdout);
-}
-
 /**
  * Same logging approach as in Server class: pretend that we
  * have reference counting for the SessionHelper class and
@@ -41,11 +36,11 @@ static void dumpString(const std::string &output)
 class SessionHelperLogger : public Logger
 {
     Handle m_parentLogger;
-    boost::shared_ptr<SessionHelper> m_helper;
+    std::shared_ptr<SessionHelper> m_helper;
     Level m_dbusLogLevel;
 
 public:
-    SessionHelperLogger(const boost::shared_ptr<SessionHelper> &helper):
+    SessionHelperLogger(const std::shared_ptr<SessionHelper> &helper):
         m_parentLogger(Logger::instance()),
         m_helper(helper),
         m_dbusLogLevel(DEBUG)
@@ -87,7 +82,9 @@ public:
                             options.m_processName,
                             options.m_prefix,
                             format, argsCopy,
-                            boost::bind(dumpString, _1));
+                            [] (const std::string &output, size_t expectedTotal) {
+                                fputs(output.c_str(), stdout);
+                            });
             }
             va_end(argsCopy);
         } else if (m_parentLogger) {
@@ -126,7 +123,7 @@ public:
 
 SessionHelper::SessionHelper(GMainLoop *loop,
                              const GDBusCXX::DBusConnectionPtr &conn,
-                             const boost::shared_ptr<ForkExecChild> &forkexec) :
+                             const std::shared_ptr<ForkExecChild> &forkexec) :
     GDBusCXX::DBusObjectHelper(conn,
                                std::string(SessionCommon::HELPER_PATH) + "/" + forkexec->getInstance(),
                                SessionCommon::HELPER_IFACE,
@@ -135,7 +132,7 @@ SessionHelper::SessionHelper(GMainLoop *loop,
     m_loop(loop),
     m_conn(conn),
     m_forkexec(forkexec),
-    m_logger(new SessionHelperLogger(boost::shared_ptr<SessionHelper>(this, NopDestructor()))),
+    m_logger(new SessionHelperLogger(std::shared_ptr<SessionHelper>(this, NopDestructor()))),
     emitLogOutput(*this, "LogOutput"),
     emitSyncProgress(*this, "SyncProgress"),
     emitSourceProgress(*this, "SourceProgress"),
@@ -210,15 +207,17 @@ bool SessionHelper::connected()
     return m_forkexec && m_forkexec->getState() == ForkExecChild::CONNECTED;
 }
 
+// TODO: the common wrapper code (i.e. sync/restore/execute) could be moved into a template function...
+
 void SessionHelper::sync(const SessionCommon::SyncParams &params,
-                         const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result)
+                         const std::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result)
 {
-    m_operation = boost::bind(&SessionHelper::doSync, this, params, result);
+    m_operation = [this, params, result] () { return doSync(params, result); };
     g_main_loop_quit(m_loop);
 }
 
 bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
-                           const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result)
+                           const std::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result)
 {
     try {
         m_sync.reset(new DBusSync(params, *this));
@@ -245,15 +244,15 @@ bool SessionHelper::doSync(const SessionCommon::SyncParams &params,
 
 void SessionHelper::restore(const std::string &configName,
                             const string &dir, bool before, const std::vector<std::string> &sources,
-                            const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
+                            const std::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
-    m_operation = boost::bind(&SessionHelper::doRestore, this, configName, dir, before, sources, result);
+    m_operation = [this, configName, dir, before, sources, result] () { return doRestore(configName, dir, before, sources, result); };
     g_main_loop_quit(m_loop);
 }
 
 bool SessionHelper::doRestore(const std::string &configName,
                               const string &dir, bool before, const std::vector<std::string> &sources,
-                              const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
+                              const std::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
     try {
         SessionCommon::SyncParams params;
@@ -285,14 +284,14 @@ bool SessionHelper::doRestore(const std::string &configName,
 
 
 void SessionHelper::execute(const vector<string> &args, const map<string, string> &vars,
-                            const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
+                            const std::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
-    m_operation = boost::bind(&SessionHelper::doExecute, this, args, vars, result);
+    m_operation = [this, args, vars, result] () { return doExecute(args, vars, result); };
     g_main_loop_quit(m_loop);
 }
 
 bool SessionHelper::doExecute(const vector<string> &args, const map<string, string> &vars,
-                              const boost::shared_ptr< GDBusCXX::Result<bool> > &result)
+                              const std::shared_ptr< GDBusCXX::Result<bool> > &result)
 {
     try {
         CmdlineWrapper cmdline(*this, args, vars);

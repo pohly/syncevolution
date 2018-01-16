@@ -654,20 +654,20 @@ namespace {
 
 SyncReport::SyncReport(const std::string &dump)
 {
-    boost::shared_ptr<std::string> data(new std::string(dump));
-    boost::shared_ptr<StringDataBlob> blob(new StringDataBlob("sync report",
-                                                              data,
-                                                              true));
+    auto data = std::make_shared<std::string>(dump);
+    auto blob = std::make_shared<StringDataBlob>("sync report",
+                                                 data,
+                                                 true);
     IniHashConfigNode node(blob);
     node >> *this;
 }
 
 std::string SyncReport::toString() const
 {
-    boost::shared_ptr<std::string> data(new std::string);
-    boost::shared_ptr<StringDataBlob> blob(new StringDataBlob("sync report",
-                                                              data,
-                                                              false));
+    auto data = std::make_shared<std::string>();
+    auto blob = std::make_shared<StringDataBlob>("sync report",
+                                                 data,
+                                                 false);
     IniHashConfigNode node(blob);
     node << *this;
     node.flush();

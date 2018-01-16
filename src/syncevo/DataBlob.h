@@ -21,7 +21,7 @@
 # define INCL_EVOLUTION_DATA_BLOB
 
 #include <iostream>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -41,12 +41,12 @@ class DataBlob
      * Create stream for writing data.
      * Always overwrites old data.
      */
-    virtual boost::shared_ptr<std::ostream> write() = 0;
+    virtual std::shared_ptr<std::ostream> write() = 0;
 
     /**
      * Create stream for reading data.
      */
-    virtual boost::shared_ptr<std::istream> read() = 0;
+    virtual std::shared_ptr<std::istream> read() = 0;
 
     /** some kind of user visible name for the data */
     virtual std::string getName() const = 0;

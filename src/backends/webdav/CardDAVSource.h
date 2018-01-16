@@ -15,7 +15,7 @@
 #include <syncevo/SmartPtr.h>
 
 #include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -26,7 +26,7 @@ class CardDAVSource : public WebDAVSource,
     public SyncSourceLogging
 {
  public:
-    CardDAVSource(const SyncSourceParams &params, const boost::shared_ptr<SyncEvo::Neon::Settings> &settings);
+    CardDAVSource(const SyncSourceParams &params, const std::shared_ptr<SyncEvo::Neon::Settings> &settings);
 
     /* implementation of SyncSourceSerialize interface */
     virtual std::string getMimeType() const { return "text/vcard"; }
@@ -59,7 +59,7 @@ class CardDAVSource : public WebDAVSource,
  private:
     ReadAheadOrder m_readAheadOrder;
     ReadAheadItems m_nextLUIDs;
-    boost::shared_ptr<CardDAVCache> m_cardDAVCache;
+    std::shared_ptr<CardDAVCache> m_cardDAVCache;
     int m_cacheMisses; /**< number of times that we had to get a contact without using the cache */
     int m_contactReads; /**< number of readItem() calls */
     int m_contactsFromDB; /**< number of contacts requested from DB (including ones not found) */
@@ -68,13 +68,8 @@ class CardDAVSource : public WebDAVSource,
     typedef std::vector<const std::string *> BatchLUIDs;
 
     void logCacheStats(Logger::Level level);
-    boost::shared_ptr<CardDAVCache> readBatch(const std::string &luid);
+    std::shared_ptr<CardDAVCache> readBatch(const std::string &luid);
     void invalidateCachedItem(const std::string &luid);
-    void addItemToCache(boost::shared_ptr<CardDAVCache> &cache,
-                        BatchLUIDs &luids,
-                        const std::string &href,
-                        const std::string &etag,
-                        std::string &data);
     void readItemInternal(const std::string &luid, std::string &item, bool raw);
 };
 

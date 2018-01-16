@@ -115,19 +115,12 @@ class ForkExec : private boost::noncopyable {
 /**
  * The parent side of a fork/exec.
  */
-class ForkExecParent : public ForkExec
+class ForkExecParent : public ForkExec, public enable_weak_from_this<ForkExecParent>
 {
  public:
+    // Construct via make_weak_shared.
+    friend make_weak_shared;
     ~ForkExecParent();
-
-    /**
-     * A ForkExecParent instance must be created via this factory
-     * method and then be tracked in a shared pointer. This method
-     * will not start the helper yet: first connect your slots, then
-     * call start().
-     */
-    static boost::shared_ptr<ForkExecParent> create(const std::string &helper,
-                                                    const std::vector<std::string> &args = std::vector<std::string>());
 
     /**
      * the helper string passed to create()
@@ -204,11 +197,11 @@ class ForkExecParent : public ForkExec
     void addEnvVar(const std::string &name, const std::string &value);
 
  private:
-    ForkExecParent(const std::string &helper, const std::vector<std::string> &args);
+    ForkExecParent(const std::string &helper, const std::vector<std::string> &args = {});
 
     std::string m_helper;
     std::vector<std::string> m_args;
-    boost::shared_ptr<GDBusCXX::DBusServerCXX> m_server;
+    std::shared_ptr<GDBusCXX::DBusServerCXX> m_server;
     boost::scoped_array<char *> m_argv;
     std::list<std::string> m_argvStrings;
     boost::scoped_array<char *> m_env;
@@ -233,8 +226,6 @@ class ForkExecParent : public ForkExec
                                    gint status,
                                    gpointer data) throw();
 
-    void newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw();
-
     void setupPipe(GIOChannel *&channel, guint &sourceID, int fd);
     static gboolean outputReady(GIOChannel *source,
                                 GIOCondition condition,
@@ -250,17 +241,17 @@ class ForkExecParent : public ForkExec
  * Might be added (if needed), in which case the corresponding
  * ForkExecParent members should be moved to the common ForkExec.
  */
-class ForkExecChild : public ForkExec
+class ForkExecChild : public ForkExec, public enable_weak_from_this<ForkExecChild>
 {
  public:
     /**
-     * A ForkExecChild instance must be created via this factory
-     * method and then be tracked in a shared pointer. The process
-     * must have been started by ForkExecParent (directly or indirectly)
-     * and any environment variables set by ForkExecParent must still
-     * be set.
+     * Construct via make_weak_shared.
+     *
+     * The process must have been started by ForkExecParent (directly
+     * or indirectly) and any environment variables set by
+     * ForkExecParent must still be set.
      */
-    static boost::shared_ptr<ForkExecChild> create();
+    friend make_weak_shared;
 
     /**
      * Initiates connection to parent, connect to ForkExec::m_onConnect
@@ -296,7 +287,6 @@ class ForkExecChild : public ForkExec
     ForkExecChild();
 
     static const char *getParentDBusAddress();
-    void connectionLost();
     State m_state;
 };
 

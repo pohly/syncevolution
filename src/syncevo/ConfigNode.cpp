@@ -26,10 +26,10 @@
 
 SE_BEGIN_CXX
 
-boost::shared_ptr<ConfigNode> ConfigNode::createFileNode(const std::string &filename)
+std::shared_ptr<ConfigNode> ConfigNode::createFileNode(const std::string &filename)
 {
     std::string::size_type off = filename.rfind('/');
-    boost::shared_ptr<ConfigNode> filenode;
+    std::shared_ptr<ConfigNode> filenode;
     if (off != filename.npos) {
         filenode.reset(new IniFileConfigNode(filename.substr(0, off),
                                              filename.substr(off + 1),
@@ -37,7 +37,7 @@ boost::shared_ptr<ConfigNode> ConfigNode::createFileNode(const std::string &file
     } else {
         filenode.reset(new IniFileConfigNode(".", filename, false));
     }
-    boost::shared_ptr<SafeConfigNode> savenode(new SafeConfigNode(filenode));
+    auto savenode = std::make_shared<SafeConfigNode>(filenode);
     savenode->setMode(false);
     return savenode;
 }

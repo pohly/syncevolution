@@ -61,7 +61,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include <boost/bind.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/assign.hpp>
 
@@ -157,7 +156,7 @@ public:
 
     virtual SyncContext *createSyncClient() {
         std::unique_ptr<SyncContext> context(new SyncContext(m_server, true));
-        boost::shared_ptr<SimpleUserInterface> ui(new SimpleUserInterface(context->getKeyring()));
+        auto ui = std::make_shared<SimpleUserInterface>(context->getKeyring());
         context->setUserInterface(ui);
         return context.release();
     }
@@ -206,7 +205,7 @@ std::pair<std::string, std::string> getPeerConfig(const std::string &source)
     static const char LOCAL_SYNC[] = "local://";
     SyncConfig local(currentServer() + "_1");
     std::vector<std::string> syncURLs = local.getSyncURL();
-    boost::shared_ptr<PersistentSyncSourceConfig> sourceConfig(local.getSyncSourceConfig(source));
+    std::shared_ptr<PersistentSyncSourceConfig> sourceConfig(local.getSyncSourceConfig(source));
     std::string uri = sourceConfig->getURI();
     if (uri.empty()) {
         uri = source;
@@ -1170,7 +1169,7 @@ void LocalTests::doInsert(bool withUID)
 {
     // check requirements
     CT_ASSERT(!config.m_insertItem.empty());
-    CT_ASSERT(!config.m_createSourceA.empty());
+    CT_ASSERT(config.m_createSourceA);
 
     std::string item = config.m_insertItem;
     if (!withUID) {
@@ -4263,69 +4262,65 @@ void SyncTests::testOneWayFromLocal()
 // to and from the internal field list
 void SyncTests::testConversion() {
     bool success = false;
-    SyncOptions::Callback_t callback = boost::bind(&SyncTests::doConversionCallback, this, &success, _1, _2);
+    auto doConversionCallback = [this, &success] (SyncContext &syncClient,
+                                                  SyncOptions &options) {
+        success = false;
 
+        for (source_it it = sources.begin(); it != sources.end(); ++it) {
+            const ClientTest::Config *config = &it->second->config;
+            TestingSyncSource *source = static_cast<TestingSyncSource *>(syncClient.findSource(config->m_sourceName));
+            CT_ASSERT(source);
+
+            std::string type = source->getNativeDatatypeName();
+            if (type.empty()) {
+                continue;
+            }
+
+            std::list<std::string> items;
+            std::string testcases;
+            ClientTest::getItems(config->m_testcases, items, testcases);
+            std::string converted = getCurrentTest();
+            converted += ".converted.";
+            converted += config->m_sourceName;
+            converted += ".dat";
+            simplifyFilename(converted);
+            std::ofstream out(converted.c_str());
+            for (const string &item: items) {
+                string convertedItem = item;
+                if(!sysync::DataConversion(syncClient.getSession().get(),
+                                           type.c_str(),
+                                           type.c_str(),
+                                           convertedItem)) {
+                    SE_LOG_ERROR(NULL, "failed parsing as %s:\n%s",
+                                 type.c_str(),
+                                 item.c_str());
+                } else {
+                    out << convertedItem << "\n";
+                }
+            }
+            out.close();
+
+            // The test used peer-specific test cases, but the actual
+            // result does not depend on the peer because we haven't
+            // received the peer's DevInf at the point where we
+            // import/export the test cases (=> don't apply peer-specific
+            // synccompare workarounds).
+            //
+            // Due to the lack of DevInf, properties and parameters which
+            // need to be enabled via DevInf get lost (= filter them out).
+            ScopedEnvChange env("CLIENT_TEST_SERVER", "");
+            ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT");
+            CT_ASSERT(config->m_compare(client, testcases, converted));
+        }
+
+        // abort sync after completing the test successfully (no exception so far!)
+        success = true;
+        return true;
+    };
     doSync(__FILE__, __LINE__,
            SyncOptions(SYNC_TWO_WAY, CheckSyncReport(-1,-1,-1, -1,-1,-1, false))
-           .setStartCallback(callback));
+           .setStartCallback(doConversionCallback));
     CT_ASSERT(success);
-}
-
-bool SyncTests::doConversionCallback(bool *success,
-                                     SyncContext &syncClient,
-                                     SyncOptions &options) {
-    *success = false;
-
-    for (source_it it = sources.begin(); it != sources.end(); ++it) {
-        const ClientTest::Config *config = &it->second->config;
-        TestingSyncSource *source = static_cast<TestingSyncSource *>(syncClient.findSource(config->m_sourceName));
-        CT_ASSERT(source);
-
-        std::string type = source->getNativeDatatypeName();
-        if (type.empty()) {
-            continue;
-        }
-
-        std::list<std::string> items;
-        std::string testcases;
-        ClientTest::getItems(config->m_testcases, items, testcases);
-        std::string converted = getCurrentTest();
-        converted += ".converted.";
-        converted += config->m_sourceName;
-        converted += ".dat";
-        simplifyFilename(converted);
-        std::ofstream out(converted.c_str());
-        for (const string &item: items) {
-            string convertedItem = item;
-            if(!sysync::DataConversion(syncClient.getSession().get(),
-                                       type.c_str(),
-                                       type.c_str(),
-                                       convertedItem)) {
-                SE_LOG_ERROR(NULL, "failed parsing as %s:\n%s",
-                             type.c_str(),
-                             item.c_str());
-            } else {
-                out << convertedItem << "\n";
-            }
-        }
-        out.close();
-
-        // The test used peer-specific test cases, but the actual
-        // result does not depend on the peer because we haven't
-        // received the peer's DevInf at the point where we
-        // import/export the test cases (=> don't apply peer-specific
-        // synccompare workarounds).
-        //
-        // Due to the lack of DevInf, properties and parameters which
-        // need to be enabled via DevInf get lost (= filter them out).
-        ScopedEnvChange env("CLIENT_TEST_SERVER", "");
-        ScopedEnvChange envParams("CLIENT_TEST_STRIP_PARAMETERS", "X-EVOLUTION-UI-SLOT");
-        CT_ASSERT(config->m_compare(client, testcases, converted));
-    }
-
-    // abort sync after completing the test successfully (no exception so far!)
-    *success = true;
-    return true;
 }
 
 // imports test data, transmits it from client A to the server to
@@ -5458,7 +5453,7 @@ public:
  * message. Set to -1 to just do the uninterrupted run.
  */
 void SyncTests::doInterruptResume(int changes, 
-                  boost::shared_ptr<TransportWrapper> wrapper)
+                  std::shared_ptr<TransportWrapper> wrapper)
 {
     int interruptAtMessage = -1;
     const char *t = getenv("CLIENT_TEST_INTERRUPT_AT");
@@ -5693,222 +5688,188 @@ void SyncTests::doInterruptResume(int changes,
 
 void SyncTests::testInterruptResumeClientAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeClientRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeClientUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeServerAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeServerRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeServerUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeClientAddBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|BIG, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|BIG, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeClientUpdateBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE|BIG, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE|BIG, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeServerAddBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD|BIG, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD|BIG, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeServerUpdateBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE|BIG, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE|BIG, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testInterruptResumeFull()
 {
     CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|CLIENT_REMOVE|CLIENT_UPDATE|
-                                         SERVER_ADD|SERVER_REMOVE|SERVER_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportFaultInjector())));
+                                         SERVER_ADD|SERVER_REMOVE|SERVER_UPDATE, std::make_shared<TransportFaultInjector>()));
 }
 
 void SyncTests::testUserSuspendClientAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendClientRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendClientUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendServerAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendServerRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendServerUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendClientAddBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|BIG, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|BIG, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendClientUpdateBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE|BIG, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE|BIG, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendServerAddBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD|BIG, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD|BIG, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendServerUpdateBig()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE|BIG, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE|BIG, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testUserSuspendFull()
 {
     CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|CLIENT_REMOVE|CLIENT_UPDATE|
-                                         SERVER_ADD|SERVER_REMOVE|SERVER_UPDATE, boost::shared_ptr<TransportWrapper> (new UserSuspendInjector())));
+                                         SERVER_ADD|SERVER_REMOVE|SERVER_UPDATE, std::make_shared<UserSuspendInjector>()));
 }
 
 void SyncTests::testResendClientAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendClientRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendClientUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendServerAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendServerRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendServerUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendFull()
 {
     CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|CLIENT_REMOVE|CLIENT_UPDATE|
                                          SERVER_ADD|SERVER_REMOVE|SERVER_UPDATE, 
-                                         boost::shared_ptr<TransportWrapper> (new TransportResendInjector())));
+                                         std::make_shared<TransportResendInjector>()));
 }
 
 void SyncTests::testResendProxyClientAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD, std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testResendProxyClientRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_REMOVE, std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testResendProxyClientUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
+    CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_UPDATE, std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testResendProxyServerAdd()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_ADD, std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testResendProxyServerRemove()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_REMOVE, std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testResendProxyServerUpdate()
 {
-    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
+    CT_ASSERT_NO_THROW(doInterruptResume(SERVER_UPDATE, std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testResendProxyFull()
 {
     CT_ASSERT_NO_THROW(doInterruptResume(CLIENT_ADD|CLIENT_REMOVE|CLIENT_UPDATE|
                                          SERVER_ADD|SERVER_REMOVE|SERVER_UPDATE, 
-                                         boost::shared_ptr<TransportWrapper> (new TransportResendProxy())));
-}
-
-static bool setDeadSyncURL(SyncContext &context,
-                           SyncOptions &options,
-                           int port,
-                           bool *skipped)
-{
-    vector<string> urls = context.getSyncURL();
-    string url;
-    if (urls.size() == 1) {
-        url = urls.front();
-    }
-
-    // use IPv4 localhost address, that's what we listen on
-    string fakeURL = StringPrintf("http://127.0.0.1:%d/foobar", port);
-
-    if (boost::starts_with(url, "http")) {
-        context.setSyncURL(fakeURL, true);
-        context.setSyncUsername("foo", true);
-        context.setSyncPassword("bar", true);
-        return false;
-    } else if (boost::starts_with(url, "local://")) {
-        FullProps props = context.getConfigProps();
-        string target = url.substr(strlen("local://"));
-        props[target].m_syncProps["syncURL"] = fakeURL;
-        props[target].m_syncProps["retryDuration"] = InitStateString("10", true);
-        props[target].m_syncProps["retryInterval"] = InitStateString("10", true);
-        context.setConfigProps(props);
-        return false;
-    } else {
-        // cannot run test, tell parent
-        *skipped = true;
-        return true;
-    }
+                                         std::make_shared<TransportResendProxy>()));
 }
 
 void SyncTests::testTimeout()
@@ -5933,12 +5894,42 @@ void SyncTests::testTimeout()
     CT_ASSERT_EQUAL(0, res);
     bool skipped = false;
     SyncReport report;
+    auto setDeadSyncURL = [this, port=ntohs(servaddr.sin_port), &skipped] (SyncContext &context,
+                                                                           SyncOptions &options) {
+        vector<string> urls = context.getSyncURL();
+        string url;
+        if (urls.size() == 1) {
+            url = urls.front();
+        }
+
+        // use IPv4 localhost address, that's what we listen on
+        string fakeURL = StringPrintf("http://127.0.0.1:%d/foobar", port);
+
+        if (boost::starts_with(url, "http")) {
+            context.setSyncURL(fakeURL, true);
+            context.setSyncUsername("foo", true);
+            context.setSyncPassword("bar", true);
+            return false;
+        } else if (boost::starts_with(url, "local://")) {
+            FullProps props = context.getConfigProps();
+            string target = url.substr(strlen("local://"));
+            props[target].m_syncProps["syncURL"] = fakeURL;
+            props[target].m_syncProps["retryDuration"] = InitStateString("10", true);
+            props[target].m_syncProps["retryInterval"] = InitStateString("10", true);
+            context.setConfigProps(props);
+            return false;
+        } else {
+            // cannot run test, tell parent
+            skipped = true;
+            return true;
+        }
+    };
     doSync(__FILE__, __LINE__,
            "timeout",
            SyncOptions(SYNC_SLOW,
                        CheckSyncReport(-1, -1, -1, -1, -1, -1,
                                        false).setReport(&report))
-           .setPrepareCallback(boost::bind(setDeadSyncURL, _1, _2, ntohs(servaddr.sin_port), &skipped))
+           .setPrepareCallback(setDeadSyncURL)
            .setRetryDuration(20)
            .setRetryInterval(20));
     time_t end = time(NULL);
@@ -6616,7 +6607,7 @@ SyncTests *ClientTest::createSyncTests(const std::string &name, std::vector<int>
 int ClientTest::dump(ClientTest &client, TestingSyncSource &source, const std::string &file)
 {
     BackupReport report;
-    boost::shared_ptr<ConfigNode> node(new VolatileConfigNode);
+    auto node = std::make_shared<VolatileConfigNode>();
 
     rm_r(file);
     mkdir_p(file);
@@ -6942,81 +6933,6 @@ static string mangleICalendar20(const std::string &data, bool update, const std:
     return item;
 }
 
-static std::string additionalYearly(const std::string &single,
-                                    const std::string &many,
-                                    int start, int skip, int index, int total)
-{
-    int startYear = 2012 + start - 1;
-    std::string event;
-
-    if (start == 0) {
-        // no missing parent, nothing to add
-    } else if (start == index) {
-        // inserting a single detached recurrence
-        event = StringPrintf(single.c_str(), startYear);
-    } else {
-        // many detached recurrences
-        int endYear = startYear + index - start;
-        std::string exdates;
-        for (int year = startYear; year <= endYear; year++) {
-            // a gap?
-            if ((year - startYear) % (skip + 1)) {
-                exdates +=
-                    StringPrintf("EXDATE;TZID=Standard Timezone:%04d0101T120000\n",
-                                 year);
-            }
-        }
-        event = StringPrintf(many.c_str(), startYear, endYear, exdates.c_str());
-    }
-
-
-    SE_LOG_DEBUG(NULL, "additional yearly: start %d, skip %d, index %d/%d:\n%s",
-                 start, skip, index, total,
-                 event.c_str());
-    return event;
-}
-
-static std::string additionalMonthly(const std::string &single,
-                                     const std::string &many,
-                                     int day,
-                                     int start, int skip, int index, int total)
-{
-    int startMonth = 1 + start - 1;
-    std::string event;
-    int endMonth = startMonth + index - start;
-    int time = (endMonth >= 4 && endMonth <= 10) ? 10 : 11;
-
-    if (start == 0) {
-    } else if (start == index) {
-        event = StringPrintf(single.c_str(), startMonth, day, time);
-    } else {
-        // Monthly recurrence uses INTERVAL instead of
-        // EXDATEs, in contrast to yearly recurrence
-        // (where Exchange somehow didn't grok the
-        // INTERVAL). So EXDATEs are only necessary
-        // for the first, second, last case.
-        if (skip == -1 ) {
-            std::string exdates;
-            for (int month = startMonth; month <= endMonth; month++) {
-                int step = month - startMonth;
-                // a gap?
-                if (step > 1 && step < total - start - 1) {
-                    exdates +=
-                        StringPrintf("EXDATE;TZID=Standard Timezone:2012%02d01T120000\n",
-                                     month);
-                }
-            }
-            event = StringPrintf(many.c_str(), startMonth, day, endMonth, time, 1, exdates.c_str());
-        } else {
-            event = StringPrintf(many.c_str(), startMonth, day, endMonth, time, skip + 1, "");
-        }
-    }
-
-    SE_LOG_DEBUG(NULL, "additional monthly: start %d, skip %d, index %d/%d:\n%s",
-                 start, skip, index, total,
-                 event.c_str());
-    return event;
-}
 
 // instead of trying to determine the dates of all Sundays in 2012
 // algorithmically, hard-code them...
@@ -7082,63 +6998,6 @@ static const struct {
     { 12, 30 },
     { 0, 0 }
 };
-
-static std::string additionalWeekly(const std::string &single,
-                                    const std::string &many,
-                                    int start, int skip, int index, int total)
-{
-    int startWeek = start - 1; // numbered from zero in "sundays" array
-    if (startWeek < 0) {
-        startWeek = 0;
-    }
-    std::string event;
-    int endWeek = startWeek + index - start;
-    int time = (endWeek >= SUNDAYS_2012_WINTER_TIME_ENDS &&
-                endWeek < SUNDAYS_2012_WINTER_TIME_STARTS) ? 12 : 13;
-    int startMonth = sundays[startWeek].m_month;
-    int startDay = sundays[startWeek].m_day;
-
-    if (start == 0) {
-    } else if (start == index) {
-        event = StringPrintf(single.c_str(), startMonth, startDay, time);
-    } else {
-        int endMonth = sundays[endWeek].m_month;
-        int endDay = sundays[endWeek].m_day;
-
-        // Weekly recurrence uses INTERVAL instead of
-        // EXDATEs, in contrast to yearly recurrence
-        // (where Exchange somehow didn't grok the
-        // INTERVAL). So EXDATEs are only necessary
-        // for the first, second, last case.
-        std::string exdates;
-        if (skip == -1 ) {
-            for (int week = startWeek; week <= endWeek; week++) {
-                int step = week - startWeek;
-                // a gap?
-                if (step > 1 && step < total - start - 1) {
-                    exdates +=
-                        StringPrintf("EXDATE;TZID=Standard Timezone:2012%02d%02dT140000\n",
-                                                             sundays[week].m_month,
-                                     sundays[week].m_day);
-                }
-            }
-            event = StringPrintf(many.c_str(),
-                                 startMonth, startDay,
-                                 endMonth, endDay,
-                                 time, 1, exdates.c_str());
-        } else {
-            event = StringPrintf(many.c_str(),
-                                 startMonth, startDay,
-                                 endMonth, endDay,
-                                 time, skip + 1, "");
-        }
-    }
-
-    SE_LOG_DEBUG(NULL, "additional weekly: start %d, skip %d, index %d/%d:\n%s",
-                 start, skip, index, total,
-                 event.c_str());
-    return event;
-}
 
 static void addMonthly(size_t &index, ClientTestConfig::MultipleLinkedItems_t &subset,
                        const std::string &pre, const std::string &post,
@@ -7206,9 +7065,44 @@ static void addMonthly(size_t &index, ClientTestConfig::MultipleLinkedItems_t &s
             "END:VEVENT\n" +
             post;
 
-        items->m_testLinkedItemsSubsetAdditional = boost::bind(additionalMonthly,
-                                                               single, many, day,
-                                                               _1, _2, _3, _4);
+        auto additionalMonthly = [single, many, day] (int start, int skip, int index, int total) {
+            int startMonth = 1 + start - 1;
+            std::string event;
+            int endMonth = startMonth + index - start;
+            int time = (endMonth >= 4 && endMonth <= 10) ? 10 : 11;
+
+            if (start == 0) {
+            } else if (start == index) {
+                event = StringPrintf(single.c_str(), startMonth, day, time);
+            } else {
+                // Monthly recurrence uses INTERVAL instead of
+                // EXDATEs, in contrast to yearly recurrence
+                // (where Exchange somehow didn't grok the
+                // INTERVAL). So EXDATEs are only necessary
+                // for the first, second, last case.
+                if (skip == -1 ) {
+                    std::string exdates;
+                    for (int month = startMonth; month <= endMonth; month++) {
+                        int step = month - startMonth;
+                        // a gap?
+                        if (step > 1 && step < total - start - 1) {
+                            exdates +=
+                                StringPrintf("EXDATE;TZID=Standard Timezone:2012%02d01T120000\n",
+                                             month);
+                        }
+                    }
+                    event = StringPrintf(many.c_str(), startMonth, day, endMonth, time, 1, exdates.c_str());
+                } else {
+                    event = StringPrintf(many.c_str(), startMonth, day, endMonth, time, skip + 1, "");
+                }
+            }
+
+            SE_LOG_DEBUG(NULL, "additional monthly: start %d, skip %d, index %d/%d:\n%s",
+                         start, skip, index, total,
+                         event.c_str());
+            return event;
+        };
+        items->m_testLinkedItemsSubsetAdditional = additionalMonthly;
     }
 }
 
@@ -7877,9 +7771,37 @@ void ClientTest::getTestData(const char *type, Config &config)
                     "END:VEVENT\n" +
                     post;
 
-                items->m_testLinkedItemsSubsetAdditional = boost::bind(additionalYearly,
-                                                                       single, many,
-                                                                       _1, _2, _3, _4);
+                auto additionalYearly = [single, many] (int start, int skip, int index, int total) {
+                    int startYear = 2012 + start - 1;
+                    std::string event;
+
+                    if (start == 0) {
+                        // no missing parent, nothing to add
+                    } else if (start == index) {
+                        // inserting a single detached recurrence
+                        event = StringPrintf(single.c_str(), startYear);
+                    } else {
+                        // many detached recurrences
+                        int endYear = startYear + index - start;
+                        std::string exdates;
+                        for (int year = startYear; year <= endYear; year++) {
+                            // a gap?
+                            if ((year - startYear) % (skip + 1)) {
+                                exdates +=
+                                    StringPrintf("EXDATE;TZID=Standard Timezone:%04d0101T120000\n",
+                                                 year);
+                            }
+                        }
+                        event = StringPrintf(many.c_str(), startYear, endYear, exdates.c_str());
+                    }
+
+
+                    SE_LOG_DEBUG(NULL, "additional yearly: start %d, skip %d, index %d/%d:\n%s",
+                                 start, skip, index, total,
+                                 event.c_str());
+                    return event;
+                };
+                items->m_testLinkedItemsSubsetAdditional = additionalYearly;
             }
 
             addMonthly(index, config.m_linkedItemsSubset, pre, post, "First", 1, 12);
@@ -7944,9 +7866,61 @@ void ClientTest::getTestData(const char *type, Config &config)
                     "END:VEVENT\n" +
                     post;
 
-                items ->m_testLinkedItemsSubsetAdditional = boost::bind(additionalWeekly,
-                                                                        single, many,
-                                                                        _1, _2, _3, _4);
+                auto additionalWeekly = [single, many] (int start, int skip, int index, int total) {
+                    int startWeek = start - 1; // numbered from zero in "sundays" array
+                    if (startWeek < 0) {
+                        startWeek = 0;
+                    }
+                    std::string event;
+                    int endWeek = startWeek + index - start;
+                    int time = (endWeek >= SUNDAYS_2012_WINTER_TIME_ENDS &&
+                                endWeek < SUNDAYS_2012_WINTER_TIME_STARTS) ? 12 : 13;
+                    int startMonth = sundays[startWeek].m_month;
+                    int startDay = sundays[startWeek].m_day;
+
+                    if (start == 0) {
+                    } else if (start == index) {
+                        event = StringPrintf(single.c_str(), startMonth, startDay, time);
+                    } else {
+                        int endMonth = sundays[endWeek].m_month;
+                        int endDay = sundays[endWeek].m_day;
+
+                        // Weekly recurrence uses INTERVAL instead of
+                        // EXDATEs, in contrast to yearly recurrence
+                        // (where Exchange somehow didn't grok the
+                        // INTERVAL). So EXDATEs are only necessary
+                        // for the first, second, last case.
+                        std::string exdates;
+                        if (skip == -1 ) {
+                            for (int week = startWeek; week <= endWeek; week++) {
+                                int step = week - startWeek;
+                                // a gap?
+                                if (step > 1 && step < total - start - 1) {
+                                    exdates +=
+                                        StringPrintf("EXDATE;TZID=Standard Timezone:2012%02d%02dT140000\n",
+                                                     sundays[week].m_month,
+                                                     sundays[week].m_day);
+                                }
+                            }
+                            event = StringPrintf(many.c_str(),
+                                                 startMonth, startDay,
+                                                 endMonth, endDay,
+                                                 time, 1, exdates.c_str());
+                        } else {
+                            event = StringPrintf(many.c_str(),
+                                                 startMonth, startDay,
+                                                 endMonth, endDay,
+                                                 time, skip + 1, "");
+                        }
+                    }
+
+                    SE_LOG_DEBUG(NULL, "additional weekly: start %d, skip %d, index %d/%d:\n%s",
+                                 start, skip, index, total,
+                                 event.c_str());
+                    return event;
+                };
+
+                items ->m_testLinkedItemsSubsetAdditional = additionalWeekly;
             }
         }
 

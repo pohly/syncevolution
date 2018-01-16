@@ -48,13 +48,11 @@ class DBusSync : public SyncContext, private UserInterface
     SessionHelper &m_helper;
     SessionCommon::SyncParams m_params;
     bool m_waiting;
-    boost::function<void (const std::string &)> m_passwordSuccess;
-    boost::function<void ()> m_passwordFailure;
+    std::function<void (const std::string &)> m_passwordSuccess;
+    std::function<void ()> m_passwordFailure;
     std::string m_passwordDescr;
     boost::signals2::connection m_parentWatch;
     boost::signals2::connection m_suspendFlagsWatch;
-
-    void suspendFlagsChanged(SuspendFlags &flags);
 
 public:
     DBusSync(const SessionCommon::SyncParams &params,
@@ -65,7 +63,7 @@ public:
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
 
 protected:
-    virtual boost::shared_ptr<TransportAgent> createTransportAgent();
+    virtual std::shared_ptr<TransportAgent> createTransportAgent();
     virtual void displaySyncProgress(sysync::TProgressEventEnum type,
                                      int32_t extra1, int32_t extra2, int32_t extra3);
     virtual bool displaySourceProgress(SyncSource &source,
@@ -79,8 +77,8 @@ protected:
     virtual void askPasswordAsync(const std::string &passwordName,
                                   const std::string &descr,
                                   const ConfigPasswordKey &key,
-                                  const boost::function<void (const std::string &)> &success,
-                                  const boost::function<void ()> &failureException);
+                                  const std::function<void (const std::string &)> &success,
+                                  const std::function<void ()> &failureException);
 
     virtual bool savePassword(const std::string &passwordName,
                               const std::string &password,

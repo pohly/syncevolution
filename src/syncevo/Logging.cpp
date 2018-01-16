@@ -78,7 +78,7 @@ static std::vector<Logger::Handle> &LoggersSingleton()
     if (!loggers) {
         loggers = new std::vector<Logger::Handle>;
         // Ensure that the array is never empty.
-        boost::shared_ptr<Logger> logger(new LoggerStdout);
+        auto logger = std::make_shared<LoggerStdout>();
         loggers->push_back(logger);
     }
     return *loggers;
@@ -121,7 +121,7 @@ void Logger::formatLines(Level msglevel,
                              const std::string *prefix,
                              const char *format,
                              va_list args,
-                             boost::function<void (std::string &buffer, size_t expectedTotal)> print)
+                             std::function<void (std::string &buffer, size_t expectedTotal)> print)
 {
     std::string tag;
 

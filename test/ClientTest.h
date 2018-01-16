@@ -22,12 +22,11 @@
 #ifndef INCL_TESTSYNCCLIENT
 #define INCL_TESTSYNCCLIENT
 
+#include <functional>
+#include <list>
+#include <memory>
 #include <string>
 #include <vector>
-#include <list>
-
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
 
 #include <SyncML.h>
 #include <TransportAgent.h>
@@ -139,15 +138,15 @@ struct SyncOptions {
     int m_retryDuration;
     int m_retryInterval;
 
-    boost::shared_ptr<SuspendFlags::StateBlocker> m_isSuspended;
-    boost::shared_ptr<SuspendFlags::StateBlocker> m_isAborted;
+    std::shared_ptr<SuspendFlags::StateBlocker> m_isSuspended;
+    std::shared_ptr<SuspendFlags::StateBlocker> m_isAborted;
 
     /**
      * Callback to be invoked after setting up local sources, but
      * before running the engine. May throw exception to indicate
      * error and return true to stop sync without error.
      */
-    typedef boost::function<bool (SyncContext &,
+    typedef std::function<bool (SyncContext &,
                                   SyncOptions &)> Callback_t;
     Callback_t m_startCallback;
 
@@ -157,7 +156,7 @@ struct SyncOptions {
      */
     Callback_t m_prepareCallback;
 
-    boost::shared_ptr<TransportAgent> m_transport;
+    std::shared_ptr<TransportAgent> m_transport;
 
     SyncOptions(SyncMode syncMode = SYNC_NONE,
                 const CheckSyncReport &checkReport = CheckSyncReport(),
@@ -165,9 +164,8 @@ struct SyncOptions {
                 long maxObjSize = DEFAULT_MAX_OBJ_SIZE, // 1GB = basically unlimited...
                 bool loSupport = false,
                 bool isWBXML = defaultWBXML(),
-                Callback_t startCallback = EmptyCallback,
-                boost::shared_ptr<TransportAgent> transport =
-                boost::shared_ptr<TransportAgent>()) :
+                const Callback_t &startCallback = [] (SyncContext &, SyncOptions &) { return false; },
+                const std::shared_ptr<TransportAgent> &transport = {}) :
         m_syncMode(syncMode),
         m_checkReport(checkReport),
         m_maxMsgSize(maxMsgSize),
@@ -190,11 +188,8 @@ struct SyncOptions {
     SyncOptions &setRetryInterval(int retryInterval) { m_retryInterval = retryInterval; return *this; }
     SyncOptions &setStartCallback(const Callback_t &callback) { m_startCallback = callback; return *this; }
     SyncOptions &setPrepareCallback(const Callback_t &callback) { m_prepareCallback = callback; return *this; }
-    SyncOptions &setTransportAgent(const boost::shared_ptr<TransportAgent> transport)
+    SyncOptions &setTransportAgent(const std::shared_ptr<TransportAgent> &transport)
                                   {m_transport = transport; return *this;}
-
-    static bool EmptyCallback(SyncContext &,
-                              SyncOptions &) { return false; }
 
     /** if CLIENT_TEST_XML=1, then XML, otherwise WBXML */
     static bool defaultWBXML();
@@ -797,9 +792,6 @@ protected:
     void doOneWayFromLocal(SyncMode oneWayFromLocal);
     void testOneWayFromClient();
     void testOneWayFromLocal();
-    bool doConversionCallback(bool *success,
-                              SyncContext &client,
-                              SyncOptions &options);
     virtual void testConversion();
     virtual void testItems();
     virtual void testItemsXML();
@@ -821,7 +813,7 @@ protected:
     virtual void testLinkedItemsChildParent();
 
     virtual void doInterruptResume(int changes,
-                  boost::shared_ptr<TransportWrapper> wrapper); 
+                  std::shared_ptr<TransportWrapper> wrapper); 
 
     /**
      * CLIENT_ = change made on client B before interrupting
@@ -944,14 +936,13 @@ protected:
 class TransportWrapper : public TransportAgent {
 protected:
     int m_interruptAtMessage, m_messageCount;
-    boost::shared_ptr<TransportAgent> m_wrappedAgent;
+    std::shared_ptr<TransportAgent> m_wrappedAgent;
     Status m_status;
     SyncOptions *m_options;
 public:
     TransportWrapper() {
         m_messageCount = 0;
         m_interruptAtMessage = -1;
-        m_wrappedAgent = boost::shared_ptr<TransportAgent>();
         m_status = INACTIVE;
         m_options = NULL;
     }
@@ -969,7 +960,7 @@ public:
 
     virtual void setURL(const std::string &url) { m_wrappedAgent->setURL(url); }
     virtual void setContentType(const std::string &type) { m_wrappedAgent->setContentType(type); }
-    virtual void setAgent(boost::shared_ptr<TransportAgent> agent) {m_wrappedAgent = agent;}
+    virtual void setAgent(std::shared_ptr<TransportAgent> agent) {m_wrappedAgent = agent;}
     virtual void setSyncOptions(SyncOptions *options) {m_options = options;}
     virtual void setInterruptAtMessage (int interrupt) {m_interruptAtMessage = interrupt;}
     virtual void cancel() { m_wrappedAgent->cancel(); }

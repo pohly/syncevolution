@@ -114,7 +114,7 @@ class ActiveSyncsTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("contacts", "ActiveSync Address Book", true));
         source.reset(SyncSource::createTestingSource("events", "ActiveSync Events", true));
         source.reset(SyncSource::createTestingSource("todos", "ActiveSync Todos", true));
@@ -218,17 +218,20 @@ static void updateConfigEAS(const RegisterSyncSourceTest */* me */,
         // cannot run tests involving a second database:
         // wrap orginal source creation, set default database for
         // database #0 and refuse to return a source for database #1
-        config.m_createSourceA = boost::bind(createEASSource, config.m_createSourceA,
-                                             _1, _2, _3, _4);
-        config.m_createSourceB = boost::bind(createEASSource, config.m_createSourceB,
-                                             _1, _2, _3, _4);
-
-        config.m_dump = boost::bind(DumpItems, _1, _2, _3,
-                                    type == EAS_ITEM_CONTACT ||
-                                    // need to read from our cache for Google Calendar,
-                                    // because it does not support Fetch
-                                    strcmp(getEnv("CLIENT_TEST_SERVER", ""), "googleeas")
-                                    );
+        config.m_createSourceA = [create=config.m_createSourceA] (ClientTest &client, const std::string &clientID, int source, bool isSourceA) {
+            return createEASSource(create, client, clientID, source, isSourceA);
+        };
+        config.m_createSourceB = [create=config.m_createSourceB] (ClientTest &client, const std::string &clientID, int source, bool isSourceA) {
+            return createEASSource(create, client, clientID, source, isSourceA);
+        };
+        config.m_dump = [type] (ClientTest &client, TestingSyncSource &source, const std::string &file) {
+            return DumpItems(client, source, file,
+                             type == EAS_ITEM_CONTACT ||
+                             // need to read from our cache for Google Calendar,
+                             // because it does not support Fetch
+                             strcmp(getEnv("CLIENT_TEST_SERVER", ""), "googleeas")
+                             );
+        };
         config.m_sourceLUIDsAreVolatile = true;
         // TODO: find out how ActiveSync/Exchange handle children without parent;
         // at the moment, the child is stored as if it was a stand-alone event

@@ -24,9 +24,9 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-EDSRegistryLoader &EDSRegistryLoaderSingleton(const boost::shared_ptr<EDSRegistryLoader> &loader)
+EDSRegistryLoader &EDSRegistryLoaderSingleton(const std::shared_ptr<EDSRegistryLoader> &loader)
 {
-    static boost::shared_ptr<EDSRegistryLoader> singleton;
+    static std::shared_ptr<EDSRegistryLoader> singleton;
     if (!singleton) {
         singleton = loader;
     }

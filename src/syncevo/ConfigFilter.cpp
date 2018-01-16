@@ -164,7 +164,7 @@ void FullProps::createFilters(const std::string &context,
                               ConfigProps &syncFilter,
                               SourceProps &sourceFilters)
 {
-    boost::shared_ptr<SyncConfig> shared;
+    std::shared_ptr<SyncConfig> shared;
 
     if (!context.empty()) {
         // Read from context. If it does not exist, we simply set no properties

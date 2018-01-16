@@ -26,6 +26,8 @@
 #include "exceptions.h"
 #include "session-helper.h"
 
+#include <memory>
+
 SE_BEGIN_CXX
 
 /**
@@ -58,9 +60,9 @@ public:
     bool run()
     {
         //temporarily set environment variables and restore them after running
-        list<boost::shared_ptr<ScopedEnvChange> > changes;
+        list<std::shared_ptr<ScopedEnvChange> > changes;
         for (const StringPair &var: m_envVars) {
-            changes.push_back(boost::shared_ptr<ScopedEnvChange>(new ScopedEnvChange(var.first, var.second)));
+            changes.push_back(std::make_unique<ScopedEnvChange>(var.first, var.second));
         }
 
         bool success = Cmdline::run();

@@ -30,8 +30,6 @@
 #include <libsoup/soup.h>
 #include <glib.h>
 
-#include <boost/weak_ptr.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -50,15 +48,11 @@ class GLibUnref {
  * An asynchronous soup session is used and the main loop
  * is invoked in the wait() method to make progress.
  */
-class SoupTransportAgent : public HTTPTransportAgent
+class SoupTransportAgent : public HTTPTransportAgent, public enable_weak_from_this<SoupTransportAgent>
 {
  public:
-    /**
-     *  @param loop     the glib loop to use when waiting for IO;
-     *                  transport will increase the reference count;
-     *                  if NULL a new loop in the default context is used
-     */
-    static boost::shared_ptr<SoupTransportAgent> create(GMainLoop *loop = NULL);
+    // Construct via make_weak_shared.
+    friend make_weak_shared;
     ~SoupTransportAgent();
 
     virtual void setURL(const std::string &url);
@@ -76,7 +70,6 @@ class SoupTransportAgent : public HTTPTransportAgent
     virtual void getReply(const char *&data, size_t &len, std::string &contentType);
     virtual void setTimeout(int seconds);
  private:
-    boost::weak_ptr<SoupTransportAgent> m_self;
     std::string m_proxyUser;
     std::string m_proxyPassword;
     std::string m_cacerts;
@@ -92,6 +85,11 @@ class SoupTransportAgent : public HTTPTransportAgent
     Timeout m_timeout;
     int m_timeoutSeconds;
 
+    /**
+     *  @param loop     the glib loop to use when waiting for IO;
+     *                  transport will increase the reference count;
+     *                  if NULL a new loop in the default context is used
+     */
     SoupTransportAgent(GMainLoop *loop);
 
     /** response, copied from SoupMessage */
@@ -105,7 +103,7 @@ class SoupTransportAgent : public HTTPTransportAgent
     void HandleSessionCallback(SoupSession *session,
                                SoupMessage *msg);
     void handleTimeout();
-    static void handleTimeoutWrapper(const boost::weak_ptr<SoupTransportAgent> &agent);
+    static void handleTimeoutWrapper(const std::weak_ptr<SoupTransportAgent> &agent);
 };
 
 SE_END_CXX

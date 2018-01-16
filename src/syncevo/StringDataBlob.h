@@ -21,7 +21,7 @@
 # define INCL_EVOLUTION_STRING_DATA_BLOB
 
 #include <syncevo/DataBlob.h>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <string>
 
 #include <syncevo/declarations.h>
@@ -34,7 +34,7 @@ SE_BEGIN_CXX
 class StringDataBlob : public DataBlob
 {
     std::string m_name;
-    boost::shared_ptr<std::string> m_data;
+    std::shared_ptr<std::string> m_data;
     bool m_readonly;
 
  public:
@@ -44,14 +44,14 @@ class StringDataBlob : public DataBlob
      * @param readonly  true if write() is meant to fail
      */
     StringDataBlob(const std::string &name,
-                   const boost::shared_ptr<std::string> &data,
+                   const std::shared_ptr<std::string> &data,
                    bool readonly);
 
     /** writing ends and data is updated when the ostream pointer is destructed */
-    virtual boost::shared_ptr<std::ostream> write();
-    virtual boost::shared_ptr<std::istream> read();
+    virtual std::shared_ptr<std::ostream> write();
+    virtual std::shared_ptr<std::istream> read();
 
-    virtual boost::shared_ptr<std::string> getData() { return m_data; }
+    virtual std::shared_ptr<std::string> getData() { return m_data; }
     virtual std::string getName() const { return m_name; }
     virtual bool exists() const { return static_cast<bool>(m_data); }
     virtual bool isReadonly() const { return m_readonly; }
