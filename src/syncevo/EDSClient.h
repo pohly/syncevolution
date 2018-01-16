@@ -22,16 +22,17 @@
 
 #include <config.h>
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #if defined(HAVE_EDS) && defined(USE_EDS_CLIENT)
 
 #include <syncevo/GLibSupport.h>
 
 #include <libedataserver/libedataserver.h>
-#include <boost/function.hpp>
 #include <boost/utility.hpp>
-#include <boost/bind.hpp>
+#include <functional>
+
+#include <functional>
 #include <list>
 
 typedef SyncEvo::GListCXX<ESource, GList, SyncEvo::GObjectDestructor> ESourceListCXX;
@@ -48,7 +49,7 @@ SE_BEGIN_CXX
 // It may get used by backends which were compiled against
 // EDS >= 3.6 even when the libsyncevolution itself wasn't.
 class EDSRegistryLoader;
-EDSRegistryLoader &EDSRegistryLoaderSingleton(const boost::shared_ptr<EDSRegistryLoader> &loader);
+EDSRegistryLoader &EDSRegistryLoaderSingleton(const std::shared_ptr<EDSRegistryLoader> &loader);
 
 // The following code implements EDSRegistryLoader.
 // For the sake of simplicity, its all in the header file,
@@ -65,7 +66,7 @@ EDSRegistryLoader &EDSRegistryLoaderSingleton(const boost::shared_ptr<EDSRegistr
 class EDSRegistryLoader : private boost::noncopyable
 {
  public:
-    typedef boost::function<void (const ESourceRegistryCXX &registry,
+    typedef std::function<void (const ESourceRegistryCXX &registry,
                                   const GError *gerror)> Callback_t;
 
     /**
@@ -74,7 +75,7 @@ class EDSRegistryLoader : private boost::noncopyable
      */
     static void getESourceRegistryAsync(const Callback_t &cb)
     {
-        EDSRegistryLoaderSingleton(boost::shared_ptr<EDSRegistryLoader>(new EDSRegistryLoader)).async(cb);
+        EDSRegistryLoaderSingleton(std::make_shared<EDSRegistryLoader>()).async(cb);
     }
 
     /**
@@ -82,7 +83,7 @@ class EDSRegistryLoader : private boost::noncopyable
      */
     static ESourceRegistryCXX getESourceRegistry()
     {
-        return EDSRegistryLoaderSingleton(boost::shared_ptr<EDSRegistryLoader>(new EDSRegistryLoader)).sync();
+        return EDSRegistryLoaderSingleton(std::make_shared<EDSRegistryLoader>()).sync();
     }
 
  private:

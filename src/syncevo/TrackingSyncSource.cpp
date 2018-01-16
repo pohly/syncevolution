@@ -22,8 +22,6 @@
 #include <syncevo/SafeConfigNode.h>
 #include <syncevo/PrefixConfigNode.h>
 
-#include <boost/bind.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -31,11 +29,16 @@ TrackingSyncSource::TrackingSyncSource(const SyncSourceParams &params,
                                        int granularitySeconds) :
     TestingSyncSource(params)
 {
-    boost::shared_ptr<ConfigNode> safeNode(new SafeConfigNode(params.m_nodes.getTrackingNode()));
-    m_trackingNode.reset(new PrefixConfigNode("item-", safeNode));
+    auto safeNode = std::make_shared<SafeConfigNode>(params.m_nodes.getTrackingNode());
+    m_trackingNode.reset(new PrefixConfigNode("item-",
+                                              std::static_pointer_cast<ConfigNode>(safeNode)));
     m_metaNode = safeNode;
-    m_operations.m_checkStatus = boost::bind(&TrackingSyncSource::checkStatus, this, _1);
-    m_operations.m_isEmpty = boost::bind(&TrackingSyncSource::isEmpty, this);
+    m_operations.m_checkStatus = [this] (SyncSourceReport &local) {
+        return checkStatus(local);
+    };
+    m_operations.m_isEmpty = [this] () {
+        return isEmpty();
+    };
     SyncSourceRevisions::init(this, this, granularitySeconds, m_operations);
 }
 
@@ -138,14 +141,16 @@ std::string TrackingSyncSource::endSync(bool success)
     return "1";
 }
 
-TrackingSyncSource::InsertItemResult TrackingSyncSource::continueInsertItem(const boost::function<InsertItemResult ()> &check, const std::string &luid)
+TrackingSyncSource::InsertItemResult TrackingSyncSource::continueInsertItem(const std::function<InsertItemResult ()> &check, const std::string &luid)
 {
     resetDatabaseRevision();
     InsertItemResult res = check();
     if (res.m_state == ITEM_AGAIN) {
         // Delay updating the revision.
-        res.m_continue = InsertItemResult::Continue_t(boost::bind(&TrackingSyncSource::continueInsertItem, this,
-                                                                  res.m_continue, luid));
+        auto cont = [this, c = res.m_continue, luid] () {
+            return continueInsertItem(c, luid);
+        };
+        res.m_continue = InsertItemResult::Continue_t(cont);
     } else if (res.m_state != ITEM_NEEDS_MERGE) {
         updateRevision(*m_trackingNode, luid, res.m_luid, res.m_revision);
     }
@@ -154,10 +159,10 @@ TrackingSyncSource::InsertItemResult TrackingSyncSource::continueInsertItem(cons
 
 TrackingSyncSource::InsertItemResult TrackingSyncSource::doInsertItem(const std::string &luid, const std::string &item, bool raw)
 {
-    // insertItem() is overloaded, need to disambiguate here.
-    return continueInsertItem(boost::bind(static_cast<InsertItemResult (TrackingSyncSource::*)(const std::string &luid, const std::string &item, bool raw)>(&TrackingSyncSource::insertItem),
-                                          this, luid, item, raw),
-                              luid);
+    auto check = [this, luid, item, raw] () {
+        return insertItem(luid, item, raw);
+    };
+    return continueInsertItem(check, luid);
 }
 
 TrackingSyncSource::InsertItemResult TrackingSyncSource::insertItem(const std::string &luid, const std::string &item)

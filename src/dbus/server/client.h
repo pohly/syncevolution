@@ -40,7 +40,7 @@ class Client
 {
     Server &m_server;
 
-    typedef std::list< boost::shared_ptr<Resource> > Resources_t;
+    typedef std::list< std::shared_ptr<Resource> > Resources_t;
     Resources_t m_resources;
 
     /** counts how often a client has called Attach() without Detach() */
@@ -74,7 +74,7 @@ public:
      * multiple times, which means that detach() also has to be called
      * the same number of times to finally detach the resource.
      */
-    void attach(boost::shared_ptr<Resource> resource)
+    void attach(std::shared_ptr<Resource> resource)
     {
         m_resources.push_back(resource);
     }
@@ -87,7 +87,7 @@ public:
      */
     void detach(Resource *resource);
 
-    void detach(boost::shared_ptr<Resource> resource)
+    void detach(std::shared_ptr<Resource> resource)
     {
         detach(resource.get());
     }
@@ -106,7 +106,7 @@ public:
             }
         }
     }
-    void detachAll(boost::shared_ptr<Resource> resource)
+    void detachAll(std::shared_ptr<Resource> resource)
     {
         detachAll(resource.get());
     }
@@ -115,7 +115,7 @@ public:
      * return corresponding smart pointer for a certain resource,
      * empty pointer if not found
      */
-    boost::shared_ptr<Resource> findResource(Resource *resource)
+    std::shared_ptr<Resource> findResource(Resource *resource)
     {
         for (Resources_t::iterator it = m_resources.begin();
              it != m_resources.end();
@@ -125,7 +125,7 @@ public:
                 return *it;
             }
         }
-        return boost::shared_ptr<Resource>();
+        return std::shared_ptr<Resource>();
     }
 };
 

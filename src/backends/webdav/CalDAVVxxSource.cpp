@@ -14,7 +14,7 @@ SE_BEGIN_CXX
 
 CalDAVVxxSource::CalDAVVxxSource(const std::string &content,
                                  const SyncSourceParams &params,
-                                 const boost::shared_ptr<Neon::Settings> &settings) :
+                                 const std::shared_ptr<Neon::Settings> &settings) :
     WebDAVSource(params, settings),
     m_content(content)
 {

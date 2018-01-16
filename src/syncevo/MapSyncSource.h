@@ -250,7 +250,7 @@ class MapSyncSource :
      * @param sub      must also implement TrackingSyncSource and SyncSourceLogging interfaces!
      */
     MapSyncSource(const SyncSourceParams &params,
-                  const boost::shared_ptr<SubSyncSource> &sub);
+                  const std::shared_ptr<SubSyncSource> &sub);
     ~MapSyncSource() {}
 
     /** compose luid from mainid and subid */
@@ -288,7 +288,7 @@ class MapSyncSource :
     }
 
  private:
-    boost::shared_ptr<SubSyncSource> m_sub;
+    std::shared_ptr<SubSyncSource> m_sub;
     /** escape / in uid with %2F, so that splitMainIDValue() and splitLUID() can use / as separator */
     static StringEscape m_escape;
     std::string m_oldLUID;
@@ -302,7 +302,7 @@ class MapSyncSource :
     SubRevisionMap_t m_revisions;
 
     /** on-disk representation of m_revisions */
-    boost::shared_ptr<ConfigNode> m_trackingNode;
+    std::shared_ptr<ConfigNode> m_trackingNode;
 
     /**
      * Stores meta information besides the item list:
@@ -312,7 +312,7 @@ class MapSyncSource :
      * which uses the "item-" prefix in its keys to
      * avoid name clashes.
      */
-    boost::shared_ptr<ConfigNode> m_metaNode;
+    std::shared_ptr<ConfigNode> m_metaNode;
 
     /** mirrors SyncSourceRevisions::detectChanges() */
     void detectChanges(SyncSourceRevisions::ChangeMode mode);

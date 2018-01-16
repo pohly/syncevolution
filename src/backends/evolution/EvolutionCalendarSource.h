@@ -263,7 +263,7 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      * will destroy the smart pointer, which then calls
      * icalcomponent_free().
      */
-    typedef list< boost::shared_ptr< eptr<icalcomponent> > > ICalComps_t;
+    typedef list< std::shared_ptr< eptr<icalcomponent> > > ICalComps_t;
 
     /**
      * Utility function which extracts all icalcomponents with

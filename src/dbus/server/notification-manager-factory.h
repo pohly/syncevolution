@@ -23,7 +23,7 @@
 #include "syncevo/declarations.h"
 #include "notification-manager.h"
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 SE_BEGIN_CXX
 
@@ -36,7 +36,7 @@ class NotificationManagerFactory {
          * Note: NotificationManagerFactory does not take ownership of
          * the returned pointer: the user must delete it when done.
          */
-        static boost::shared_ptr<NotificationManagerBase> createManager();
+        static std::shared_ptr<NotificationManagerBase> createManager();
 };
 
 SE_END_CXX

@@ -74,8 +74,6 @@ private:
         NetworkManagerProperties(NetworkManagerClient& manager);
 
         void get();
-        void getCallback(const boost::variant<uint32_t, std::string> &prop,
-                         const std::string &error);
     private:
         NetworkManagerClient &m_manager;
     };

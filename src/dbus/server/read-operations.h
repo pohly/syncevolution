@@ -91,7 +91,7 @@ private:
      * - configName = @default (considered always available)
      * - mustExist = false (used when reading a templates for a context which might not exist yet)
      */
-    boost::shared_ptr<SyncConfig> getLocalConfig(const std::string &configName, bool mustExist = true);
+    std::shared_ptr<SyncConfig> getLocalConfig(const std::string &configName, bool mustExist = true);
 };
 
 SE_END_CXX

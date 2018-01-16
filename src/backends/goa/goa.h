@@ -21,13 +21,13 @@
 
 #include <syncevo/util.h>
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
 class AuthProvider;
-boost::shared_ptr<AuthProvider> createGOAAuthProvider(const InitStateString &username,
+std::shared_ptr<AuthProvider> createGOAAuthProvider(const InitStateString &username,
                                                       const InitStateString &password);
 
 SE_END_CXX

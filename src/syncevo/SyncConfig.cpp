@@ -365,9 +365,9 @@ void SyncConfig::makeEphemeral()
  */
 class ConfigCache
 {
-    typedef std::map< std::pair<std::string, SyncConfig::Layout>, boost::weak_ptr<FileConfigTree> > TreeMap;
+    typedef std::map< std::pair<std::string, SyncConfig::Layout>, std::weak_ptr<FileConfigTree> > TreeMap;
     TreeMap m_trees;
-    typedef std::map< ConfigNode *,  boost::weak_ptr<FilterConfigNode> > NodeMap;
+    typedef std::map< ConfigNode *,  std::weak_ptr<FilterConfigNode> > NodeMap;
     NodeMap m_nodes;
 
     template<class M> void purge(M &map)
@@ -387,13 +387,13 @@ class ConfigCache
     void purge();
 
 public:
-    boost::shared_ptr<FileConfigTree> createTree(const std::string &root,
+    std::shared_ptr<FileConfigTree> createTree(const std::string &root,
                                                  SyncConfig::Layout layout);
     /**
      * The filter is only installed when creating a new node. It is
      * assumed to be the same when reusing the node.
      */
-    boost::shared_ptr<FilterConfigNode> createNode(const boost::shared_ptr<ConfigNode> &node,
+    std::shared_ptr<FilterConfigNode> createNode(const std::shared_ptr<ConfigNode> &node,
                                                    const FilterConfigNode::ConfigFilter &filter = FilterConfigNode::ConfigFilter());
     static ConfigCache &singleton();
 };
@@ -410,11 +410,11 @@ void ConfigCache::purge()
     purge(m_nodes);
 }
 
-boost::shared_ptr<FileConfigTree> ConfigCache::createTree(const std::string &root,
+std::shared_ptr<FileConfigTree> ConfigCache::createTree(const std::string &root,
                                                           SyncConfig::Layout layout)
 {
     TreeMap::mapped_type &entry = m_trees[TreeMap::key_type(root, layout)];
-    boost::shared_ptr<FileConfigTree> result;
+    std::shared_ptr<FileConfigTree> result;
     result = entry.lock();
     if (!result) {
         result.reset(new FileConfigTree(root, layout));
@@ -425,11 +425,11 @@ boost::shared_ptr<FileConfigTree> ConfigCache::createTree(const std::string &roo
     return result;
 }
 
-boost::shared_ptr<FilterConfigNode> ConfigCache::createNode(const boost::shared_ptr<ConfigNode> &node,
+std::shared_ptr<FilterConfigNode> ConfigCache::createNode(const std::shared_ptr<ConfigNode> &node,
                                                             const FilterConfigNode::ConfigFilter &filter)
 {
     NodeMap::mapped_type &entry = m_nodes[node.get()];
-    boost::shared_ptr<FilterConfigNode> result;
+    std::shared_ptr<FilterConfigNode> result;
     result = entry.lock();
     if (!result) {
         result.reset(new FilterConfigNode(node, filter));
@@ -441,7 +441,7 @@ boost::shared_ptr<FilterConfigNode> ConfigCache::createNode(const boost::shared_
 }
 
 SyncConfig::SyncConfig(const string &peer,
-                       boost::shared_ptr<ConfigTree> tree,
+                       std::shared_ptr<ConfigTree> tree,
                        const string &redirectPeerRootPath) :
     m_layout(SHARED_LAYOUT),
     m_redirectPeerRootPath(redirectPeerRootPath),
@@ -496,7 +496,7 @@ SyncConfig::SyncConfig(const string &peer,
     }
 
     string path;
-    boost::shared_ptr<ConfigNode> node;
+    std::shared_ptr<ConfigNode> node;
     switch (m_layout) {
     case SYNC4J_LAYOUT:
         // all properties reside in the same node
@@ -532,7 +532,7 @@ SyncConfig::SyncConfig(const string &peer,
 
         // similar multiplexing as for SHARED_LAYOUT,
         // with two nodes underneath
-        boost::shared_ptr<MultiplexConfigNode> mnode;
+        std::shared_ptr<MultiplexConfigNode> mnode;
         mnode.reset(new MultiplexConfigNode(m_peerNode->getName(),
                                             getRegistry(),
                                             false));
@@ -595,7 +595,7 @@ SyncConfig::SyncConfig(const string &peer,
         // the wrong config.ini file for shared properties. But
         // there no shared properties which can trigger such an error
         // at the moment, so this is good enough for now (MB#8037).
-        boost::shared_ptr<MultiplexConfigNode> mnode;
+        std::shared_ptr<MultiplexConfigNode> mnode;
         mnode.reset(new MultiplexConfigNode(m_peerNode->getName(),
                                             getRegistry(),
                                             false));
@@ -869,7 +869,7 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                 int rank = templateConf.metaMatch (entry.getFingerprint(), entry.m_matchMode);
                 if (fuzzyMatch){
                     if (rank > TemplateConfig::NO_MATCH) {
-                        result.push_back (boost::shared_ptr<TemplateDescription>(
+                        result.push_back (std::shared_ptr<TemplateDescription>(
                                     new TemplateDescription(templateConf.getTemplateId(),
                                                             templateConf.getDescription(),
                                                             rank,
@@ -883,7 +883,7 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                                     ));
                     }
                 } else if (rank == TemplateConfig::BEST_MATCH){
-                    result.push_back (boost::shared_ptr<TemplateDescription>(
+                    result.push_back (std::shared_ptr<TemplateDescription>(
                                 new TemplateDescription(templateConf.getTemplateId(),
                                                         templateConf.getDescription(),
                                                         rank,
@@ -905,14 +905,14 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
 }
 
 
-boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &server)
+std::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &server)
 {
     if (server.empty()) {
         // Empty template name => no such template. This check is
         // necessary because otherwise we end up with SyncConfig(""),
         // which is a configuration where peer-specific properties
         // cannot be set, triggering an errror in config->setDevID().
-        return boost::shared_ptr<SyncConfig>();
+        return std::shared_ptr<SyncConfig>();
     }
 
     // case insensitive search for read-only file template config
@@ -934,13 +934,13 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
         }
         if (templateConfig.empty()) {
             // return "not found"
-            return boost::shared_ptr<SyncConfig>();
+            return std::shared_ptr<SyncConfig>();
         }
     }
     
-    boost::shared_ptr<ConfigTree> tree(new SingleFileConfigTree(templateConfig));
-    boost::shared_ptr<SyncConfig> config(new SyncConfig(server, tree));
-    boost::shared_ptr<PersistentSyncSourceConfig> source;
+    auto tree = std::make_shared<SingleFileConfigTree>(templateConfig);
+    auto config = std::make_shared<SyncConfig>(server, tree);
+    std::shared_ptr<PersistentSyncSourceConfig> source;
 
     config->setDefaults(false);
     config->setDevID(string("syncevolution-") + UUID());
@@ -1051,7 +1051,7 @@ void SyncConfig::preFlush(UserInterface &ui)
     /** grep each source and save their password */
     list<string> configuredSources = getSyncSources();
     for (const string &sourceName: configuredSources) {
-        //boost::shared_ptr<SyncSourceConfig> sc = getSyncSourceConfig(sourceName);
+        //std::shared_ptr<SyncSourceConfig> sc = getSyncSourceConfig(sourceName);
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         SyncSourceNodes sourceNodes = getSyncSourceNodes(sourceName);
 
@@ -1077,7 +1077,7 @@ void SyncConfig::flush()
 
 void SyncConfig::remove()
 {
-    boost::shared_ptr<ConfigTree> tree = m_tree;
+    std::shared_ptr<ConfigTree> tree = m_tree;
 
     // stop using the config nodes, they might get removed now
     makeVolatile();
@@ -1087,10 +1087,10 @@ void SyncConfig::remove()
                  m_peerPath);
 }
 
-boost::shared_ptr<PersistentSyncSourceConfig> SyncConfig::getSyncSourceConfig(const string &name)
+std::shared_ptr<PersistentSyncSourceConfig> SyncConfig::getSyncSourceConfig(const string &name)
 {
     SyncSourceNodes nodes = getSyncSourceNodes(name);
-    return boost::shared_ptr<PersistentSyncSourceConfig>(new PersistentSyncSourceConfig(name, nodes));
+    return std::make_shared<PersistentSyncSourceConfig>(name, nodes);
 }
 
 list<string> SyncConfig::getSyncSources() const
@@ -1147,11 +1147,11 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
     }
 
     /** shared source properties */
-    boost::shared_ptr<FilterConfigNode> sharedNode;
+    std::shared_ptr<FilterConfigNode> sharedNode;
     /** per-peer source properties */
-    boost::shared_ptr<FilterConfigNode> peerNode;
+    std::shared_ptr<FilterConfigNode> peerNode;
     /** per-peer internal properties and meta data */
-    boost::shared_ptr<ConfigNode> hiddenPeerNode,
+    std::shared_ptr<ConfigNode> hiddenPeerNode,
         serverNode,
         trackingNode;
     string cacheDir;
@@ -1160,7 +1160,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
     string lower = name;
     boost::to_lower(lower);
 
-    boost::shared_ptr<ConfigNode> node;
+    std::shared_ptr<ConfigNode> node;
     string sharedPath, peerPath;
     switch (m_layout) {
     case SYNC4J_LAYOUT:
@@ -1216,7 +1216,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
 
         node = m_tree->open(peerPath, ConfigTree::visible);
         if (compatMode) {
-            boost::shared_ptr<FilterConfigNode> compat(new FilterConfigNode(node));
+            auto compat = std::make_shared<FilterConfigNode>(node);
             compat->addFilter("syncFormat",
                               InitStateString(sourceType.m_format, !sourceType.m_format.empty()));
             compat->addFilter("forceSyncFormat",
@@ -1255,7 +1255,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
         if (peerPath.empty()) {
             hiddenPeerNode = peerNode;
         } else {
-            hiddenPeerNode = boost::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
+            hiddenPeerNode = std::static_pointer_cast<FilterConfigNode>(m_tree->add(path + "/.internal.ini", peerNode));
         }
     }
 
@@ -1264,7 +1264,7 @@ SyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
     } else {
         node = m_tree->open(sharedPath, ConfigTree::visible);
         if (compatMode) {
-            boost::shared_ptr<FilterConfigNode> compat(new FilterConfigNode(node));
+            auto compat = std::make_shared<FilterConfigNode>(node);
             compat->addFilter("databaseFormat",
                               InitStateString(sourceType.m_localFormat, !sourceType.m_localFormat.empty()));
             compat->addFilter("backend",
@@ -1288,7 +1288,7 @@ ConstSyncSourceNodes SyncConfig::getSyncSourceNodes(const string &name,
 SyncSourceNodes SyncConfig::getSyncSourceNodesNoTracking(const string &name)
 {
     SyncSourceNodes nodes = getSyncSourceNodes(name);
-    boost::shared_ptr<ConfigNode> dummy(new VolatileConfigNode());
+    auto dummy = std::make_shared<VolatileConfigNode>();
     return SyncSourceNodes(nodes.m_havePeerNode,
                            nodes.m_sharedNode,
                            nodes.m_peerNode,
@@ -1376,7 +1376,7 @@ public:
                                      const string &serverName,
                                      FilterConfigNode &globalConfigNode,
                                      const string &sourceName,
-                                     const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+                                     const std::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
         ConfigPasswordKey key;
 
         bool peerIsClient = syncPropPeerIsClient.getPropertyValue(globalConfigNode);
@@ -1483,7 +1483,7 @@ public:
                                              const std::string &serverName,
                                              FilterConfigNode &globalConfigNode,
                                              const std::string &sourceName,
-                                             const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+                                             const std::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
         ConfigPasswordKey key;
         key.server = syncPropProxyHost.getProperty(globalConfigNode);
         key.user = getUsername(syncPropProxyUsername, globalConfigNode);
@@ -1994,8 +1994,8 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
                                            const std::string &sourceName) const
 {
     std::string serverName = config.getConfigName();
-    boost::shared_ptr<FilterConfigNode> globalConfigNode = config.getProperties();
-    boost::shared_ptr<FilterConfigNode> sourceConfigNode;
+    std::shared_ptr<FilterConfigNode> globalConfigNode = config.getProperties();
+    std::shared_ptr<FilterConfigNode> sourceConfigNode;
     if (!sourceName.empty()) {
         sourceConfigNode = config.getSyncSourceNodes(sourceName).getNode(*this);
     }
@@ -2034,7 +2034,7 @@ void PasswordConfigProperty::checkPassword(UserInterface &ui,
                                   username.c_str(),
                                   config.getConfigName().c_str()));
         }
-        boost::shared_ptr<SyncConfig> credConfig(new SyncConfig(credConfigName));
+        auto credConfig = std::make_shared<SyncConfig>(credConfigName);
         if (!credConfig->exists()) {
             SE_THROW(StringPrintf("%s = %s: config '%s' not found, cannot look up credentials",
                                   usernameProperty.getMainName().c_str(),
@@ -2129,8 +2129,8 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
                                           const std::string &sourceName) const
 {
     std::string serverName = config.getConfigName();
-    boost::shared_ptr<FilterConfigNode> globalConfigNode = config.getProperties();
-    boost::shared_ptr<FilterConfigNode> sourceConfigNode;
+    std::shared_ptr<FilterConfigNode> globalConfigNode = config.getProperties();
+    std::shared_ptr<FilterConfigNode> sourceConfigNode;
     if (!sourceName.empty()) {
         sourceConfigNode = config.getSyncSourceNodes(sourceName).getNode(*this);
     }
@@ -2184,7 +2184,7 @@ void PasswordConfigProperty::savePassword(UserInterface &ui,
                                   username.c_str(),
                                   config.getConfigName().c_str()));
         }
-        boost::shared_ptr<SyncConfig> credConfig(new SyncConfig(credConfigName));
+        auto credConfig = std::make_shared<SyncConfig>(credConfigName);
         if (!credConfig->exists()) {
             SE_THROW(StringPrintf("%s = %s: config '%s' not found, cannot look up credentials",
                                   usernameProperty.getMainName().c_str(),
@@ -2459,37 +2459,37 @@ void SyncConfig::setConfigFilter(bool sync,
     }
 }
 
-boost::shared_ptr<FilterConfigNode>
+std::shared_ptr<FilterConfigNode>
 SyncConfig::getNode(const ConfigProperty &prop)
 {
     switch (prop.getSharing()) {
     case ConfigProperty::GLOBAL_SHARING:
         if (prop.isHidden()) {
-            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_globalHiddenNode));
+            return std::make_shared<FilterConfigNode>(m_globalHiddenNode);
         } else {
             return m_globalNode;
         }
         break;
     case ConfigProperty::SOURCE_SET_SHARING:
         if (prop.isHidden()) {
-            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_contextHiddenNode));
+            return std::make_shared<FilterConfigNode>(m_contextHiddenNode);
         } else {
             return m_contextNode;
         }
         break;
     case ConfigProperty::NO_SHARING:
         if (prop.isHidden()) {
-            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_hiddenPeerNode));
+            return std::make_shared<FilterConfigNode>(m_hiddenPeerNode);
         } else {
             return m_peerNode;
         }
         break;
     }
     // should not be reached
-    return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("unknown sharing state of property"))));
+    return std::make_shared<FilterConfigNode>(std::static_pointer_cast<ConfigNode>(std::make_shared<DevNullConfigNode>("unknown sharing state of property")));
 }
 
-boost::shared_ptr<FilterConfigNode>
+std::shared_ptr<FilterConfigNode>
 SyncConfig::getNode(const std::string &propName)
 {
     ConfigPropertyRegistry &registry = getRegistry();
@@ -2497,12 +2497,12 @@ SyncConfig::getNode(const std::string &propName)
     if (prop) {
         return getNode(*prop);
     } else {
-        return boost::shared_ptr<FilterConfigNode>();
+        return std::shared_ptr<FilterConfigNode>();
     }
 }
 
 static void setDefaultProps(const ConfigPropertyRegistry &registry,
-                            boost::shared_ptr<FilterConfigNode> node,
+                            const std::shared_ptr<FilterConfigNode> &node,
                             bool force,
                             bool unshared,
                             bool useObligatory = true)
@@ -2614,8 +2614,8 @@ void SyncConfig::copy(const SyncConfig &other,
                       const set<string> *sourceSet)
 {
     for (int i = 0; i < 2; i++ ) {
-        boost::shared_ptr<const FilterConfigNode> fromSyncProps(other.getProperties(i));
-        boost::shared_ptr<FilterConfigNode> toSyncProps(this->getProperties(i));
+        std::shared_ptr<const FilterConfigNode> fromSyncProps(other.getProperties(i));
+        std::shared_ptr<FilterConfigNode> toSyncProps(this->getProperties(i));
         copyProperties(*fromSyncProps,
                        *toSyncProps,
                        i,
@@ -2886,7 +2886,7 @@ public:
                                              const std::string &serverName,
                                              FilterConfigNode &globalConfigNode,
                                              const std::string &sourceName = std::string(),
-                                             const boost::shared_ptr<FilterConfigNode> &sourceConfigNode=boost::shared_ptr<FilterConfigNode>()) const {
+                                             const std::shared_ptr<FilterConfigNode> &sourceConfigNode=std::shared_ptr<FilterConfigNode>()) const {
         ConfigPasswordKey key;
         key.user = getUsername(sourcePropUser, *sourceConfigNode);
         std::string configName = SyncConfig::normalizeConfigString(serverName, SyncConfig::NORMALIZE_LONG_FORMAT);
@@ -2904,7 +2904,7 @@ public:
     virtual const std::string getDescr(const std::string &serverName,
                                   FilterConfigNode &globalConfigNode,
                                   const std::string &sourceName,
-                                  const boost::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
+                                  const std::shared_ptr<FilterConfigNode> &sourceConfigNode) const {
         std::string descr = sourceName;
         descr += " ";
         descr += ConfigProperty::getDescr();
@@ -2978,11 +2978,11 @@ ConfigPropertyRegistry &SyncSourceConfig::getRegistry()
 }
 
 SyncSourceNodes::SyncSourceNodes(bool havePeerNode,
-                                 const boost::shared_ptr<FilterConfigNode> &sharedNode,
-                                 const boost::shared_ptr<FilterConfigNode> &peerNode,
-                                 const boost::shared_ptr<ConfigNode> &hiddenPeerNode,
-                                 const boost::shared_ptr<ConfigNode> &trackingNode,
-                                 const boost::shared_ptr<ConfigNode> &serverNode,
+                                 const std::shared_ptr<FilterConfigNode> &sharedNode,
+                                 const std::shared_ptr<FilterConfigNode> &peerNode,
+                                 const std::shared_ptr<ConfigNode> &hiddenPeerNode,
+                                 const std::shared_ptr<ConfigNode> &trackingNode,
+                                 const std::shared_ptr<ConfigNode> &serverNode,
                                  const string &cacheDir) :
     m_havePeerNode(havePeerNode),
     m_sharedNode(sharedNode),
@@ -2992,7 +2992,7 @@ SyncSourceNodes::SyncSourceNodes(bool havePeerNode,
     m_serverNode(serverNode),
     m_cacheDir(cacheDir)
 {
-    boost::shared_ptr<MultiplexConfigNode> mnode;
+    std::shared_ptr<MultiplexConfigNode> mnode;
     mnode.reset(new MultiplexConfigNode(m_peerNode->getName(),
                                         SyncSourceConfig::getRegistry(),
                                         false));
@@ -3007,29 +3007,29 @@ SyncSourceNodes::SyncSourceNodes(bool havePeerNode,
 }
 
 
-boost::shared_ptr<FilterConfigNode>
+std::shared_ptr<FilterConfigNode>
 SyncSourceNodes::getNode(const ConfigProperty &prop) const
 {
     switch (prop.getSharing()) {
     case ConfigProperty::GLOBAL_SHARING:
-        return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no global datastore properties"))));
+        return std::make_shared<FilterConfigNode>(std::static_pointer_cast<ConfigNode>(std::make_shared<DevNullConfigNode>("no global datastore properties")));
         break;
     case ConfigProperty::SOURCE_SET_SHARING:
         if (prop.isHidden()) {
-            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(boost::shared_ptr<ConfigNode>(new DevNullConfigNode("no hidden datastore set properties"))));
+            return std::make_shared<FilterConfigNode>(std::static_pointer_cast<ConfigNode>(std::make_shared<DevNullConfigNode>("no hidden datastore set properties")));
         } else {
             return m_sharedNode;
         }
         break;
     case ConfigProperty::NO_SHARING:
         if (prop.isHidden()) {
-            return boost::shared_ptr<FilterConfigNode>(new FilterConfigNode(m_hiddenPeerNode));
+            return std::make_shared<FilterConfigNode>(m_hiddenPeerNode);
         } else {
             return m_peerNode;
         }
         break;
     }
-    return boost::shared_ptr<FilterConfigNode>();
+    return {};
 }
 
 InitStateString SyncSourceConfig::getDatabaseID() const { return sourcePropDatabaseID.getProperty(*getNode(sourcePropDatabaseID)); }
@@ -3195,7 +3195,7 @@ SyncConfig::TemplateDescription::TemplateDescription (const std::string &name, c
 /* Ranking of template description is controled by the rank field, larger the
  * better
  */
-bool SyncConfig::TemplateDescription::compare_op (boost::shared_ptr<SyncConfig::TemplateDescription> &left, boost::shared_ptr<SyncConfig::TemplateDescription> &right)
+bool SyncConfig::TemplateDescription::compare_op (std::shared_ptr<SyncConfig::TemplateDescription> &left, std::shared_ptr<SyncConfig::TemplateDescription> &right)
 {
     //first sort against the fingerprint string
     if (left->m_deviceName != right->m_deviceName) {
@@ -3212,14 +3212,14 @@ bool SyncConfig::TemplateDescription::compare_op (boost::shared_ptr<SyncConfig::
 TemplateConfig::TemplateConfig(const string &path) :
     m_template(new SingleFileConfigTree(path))
 {
-    boost::shared_ptr<ConfigNode> metaNode = m_template->open("template.ini");
+    std::shared_ptr<ConfigNode> metaNode = m_template->open("template.ini");
     metaNode->readProperties(m_metaProps);
 }
 
 bool TemplateConfig::isTemplateConfig (const string &path) 
 {
     SingleFileConfigTree templ(path);
-    boost::shared_ptr<ConfigNode> metaNode = templ.open("template.ini");
+    std::shared_ptr<ConfigNode> metaNode = templ.open("template.ini");
     if (!metaNode->exists()) {
         return false;
     }
@@ -3242,7 +3242,7 @@ int TemplateConfig::serverModeMatch (SyncConfig::MatchMode mode)
         return BEST_MATCH;
     }
 
-    boost::shared_ptr<ConfigNode> configNode = m_template->open("config.ini");
+    std::shared_ptr<ConfigNode> configNode = m_template->open("config.ini");
     std::string peerIsClient = configNode->readProperty ("peerIsClient");
     
     //not a match if serverMode does not match

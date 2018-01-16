@@ -30,7 +30,7 @@
 # define GLIB_CHECK_VERSION(major, minor, revision) 0
 #endif
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -54,10 +54,10 @@ template<class M, void (*_lock)(M *), void (*_unlock)(M *)> class MutexTemplate
      * Created when locking the mutex. When the last copy of it
      * gets destroyed, the mutex gets unlocked again.
      */
-    class Guard : private boost::shared_ptr<M>
+    class Guard : private std::shared_ptr<M>
     {
         Guard(M *mutex) throw () :
-           boost::shared_ptr<M>(mutex, _unlock)
+           std::shared_ptr<M>(mutex, _unlock)
         {}
         friend class MutexTemplate;
 
@@ -67,7 +67,7 @@ template<class M, void (*_lock)(M *), void (*_unlock)(M *)> class MutexTemplate
 
         void unlock() throw()
         {
-            boost::shared_ptr<M>::reset();
+            std::shared_ptr<M>::reset();
         }
     };
 

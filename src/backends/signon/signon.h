@@ -21,7 +21,7 @@
 
 #include <syncevo/util.h>
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -35,7 +35,7 @@ SE_BEGIN_CXX
 #endif
 
 class AuthProvider;
-boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
+std::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
                                                          const InitStateString &password);
 
 SE_END_CXX

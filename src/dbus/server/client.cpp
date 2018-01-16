@@ -45,7 +45,7 @@ void Client::detach(Resource *resource)
             if (it->unique()) {
                 // client was the last owner, and thus the session must be idle (otherwise
                 // it would also be referenced as active session)
-                boost::shared_ptr<Session> session = boost::dynamic_pointer_cast<Session>(*it);
+                std::shared_ptr<Session> session = std::dynamic_pointer_cast<Session>(*it);
                 if (session) {
                     // give clients a chance to query the session
                     m_server.delaySessionDestruction(session);

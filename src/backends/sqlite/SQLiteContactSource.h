@@ -25,8 +25,6 @@
 #include <syncevo/SafeConfigNode.h>
 #include <SQLiteUtil.h>
 
-#include <boost/bind.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -64,17 +62,17 @@ class SQLiteContactSource : public SyncSource,
     SQLiteContactSource(const SyncSourceParams &params) :
         SyncSource(params),
         m_trackingNode(new PrefixConfigNode("item-",
-                                            boost::shared_ptr<ConfigNode>(new SafeConfigNode(params.m_nodes.getTrackingNode()))))
+                                            std::static_pointer_cast<ConfigNode>(std::make_shared<SafeConfigNode>(params.m_nodes.getTrackingNode()))))
         {
             SyncSourceSession::init(m_operations);
             SyncSourceDelete::init(m_operations);
             SyncSourceRevisions::init(NULL, NULL, 1, m_operations);
             SyncSourceChanges::init(m_operations);
 
-            m_operations.m_isEmpty = boost::bind(&SQLiteContactSource::isEmpty, this);
-            m_operations.m_readItemAsKey = boost::bind(&SQLiteContactSource::readItemAsKey, this, _1, _2);
-            m_operations.m_insertItemAsKey = boost::bind(&SQLiteContactSource::insertItemAsKey, this, _1, (sysync::cItemID)NULL, _2);
-            m_operations.m_updateItemAsKey = boost::bind(&SQLiteContactSource::insertItemAsKey, this, _1, _2, _3);
+            m_operations.m_isEmpty = [this] () { return isEmpty(); };
+            m_operations.m_readItemAsKey = [this] (sysync::cItemID aID, sysync::KeyH aItemKey) { return readItemAsKey(aID, aItemKey); };
+            m_operations.m_insertItemAsKey = [this] (sysync::KeyH aItemKey, sysync::ItemID newID) { return insertItemAsKey(aItemKey, (sysync::cItemID)NULL, newID); };
+            m_operations.m_updateItemAsKey = [this] (sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID) { return insertItemAsKey(aItemKey, aID, newID); };
             SyncSourceLogging::init(InitList<std::string> ("N_FIRST")+"N_MIDDLE"+"N_LAST", ", ", m_operations);
         }
 
@@ -103,7 +101,7 @@ class SQLiteContactSource : public SyncSource,
     virtual void listAllItems(RevisionMap_t &revisions);
  private:
     /** encapsulates access to database */
-    boost::shared_ptr<ConfigNode> m_trackingNode;
+    std::shared_ptr<ConfigNode> m_trackingNode;
     SQLiteUtil m_sqlite;
 
     /** implements the m_isEmpty operation */

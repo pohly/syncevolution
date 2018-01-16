@@ -24,7 +24,7 @@
 #include <syncevo/SyncSource.h>
 #include <syncevo/ConfigNode.h>
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <string>
 #include <map>
 
@@ -251,7 +251,7 @@ class TrackingSyncSource : public TestingSyncSource,
 
   private:
     void checkStatus(SyncSourceReport &changes);
-    boost::shared_ptr<ConfigNode> m_trackingNode;
+    std::shared_ptr<ConfigNode> m_trackingNode;
 
     /**
      * Stores meta information besides the item list:
@@ -261,7 +261,7 @@ class TrackingSyncSource : public TestingSyncSource,
      * which uses the "item-" prefix in its keys to
      * avoid name clashes.
      */
-    boost::shared_ptr<ConfigNode> m_metaNode;
+    std::shared_ptr<ConfigNode> m_metaNode;
 
  protected:
     /* implementations of SyncSource callbacks */
@@ -278,7 +278,7 @@ class TrackingSyncSource : public TestingSyncSource,
 
  private:
     InsertItemResult doInsertItem(const std::string &luid, const std::string &item, bool raw);
-    InsertItemResult continueInsertItem(const boost::function<InsertItemResult ()> &check, const std::string &luid);
+    InsertItemResult continueInsertItem(const std::function<InsertItemResult ()> &check, const std::string &luid);
     void resetDatabaseRevision();
 };
 

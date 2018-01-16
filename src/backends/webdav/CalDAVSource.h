@@ -15,7 +15,7 @@
 #include <syncevo/SmartPtr.h>
 
 #include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -25,7 +25,7 @@ class CalDAVSource : public WebDAVSource,
     public SyncSourceLogging
 {
  public:
-    CalDAVSource(const SyncSourceParams &params, const boost::shared_ptr<SyncEvo::Neon::Settings> &settings);
+    CalDAVSource(const SyncSourceParams &params, const std::shared_ptr<SyncEvo::Neon::Settings> &settings);
 
     /* implementation of SyncSourceSerialize interface */
     virtual std::string getMimeType() const { return "text/calendar"; }
@@ -160,7 +160,7 @@ class CalDAVSource : public WebDAVSource,
      * again before parsing (depends on server preserving X-
      * extensions, see Event::unescapeRecurrenceID()).
      */
-    class EventCache : public std::map<std::string, boost::shared_ptr<Event> >
+    class EventCache : public std::map<std::string, std::shared_ptr<Event> >
     {
       public:
         EventCache() : m_initialized(false) {}
@@ -175,40 +175,15 @@ class CalDAVSource : public WebDAVSource,
 
     std::string getSubDescription(Event &event, const string &subid);
 
-    /** calback for multiget: same as appendItem, but also records luid of all responses */
-    int appendMultigetResult(SubRevisionMap_t &revisions,
-                             std::set<std::string> &luids,
-                             const std::string &href,
-                             const std::string &etag,
-                             std::string &data);
-
-
     /** callback for listAllSubItems: parse and add new item */
     int appendItem(SubRevisionMap_t &revisions,
                    const std::string &href,
                    const std::string &etag,
                    std::string &data);
 
-    /** callback for backupData(): dump into backup */
-    int backupItem(ItemCache &cache,
-                   const std::string &href,
-                   const std::string &etag,
-                   std::string &data);
-
-    /** callback for loadItem(): store right item from REPORT */
-    int storeItem(const std::string &wantedLuid,
-                  std::string &item,
-                  std::string &data,
-                  const std::string &href);
-
     /** add to m_cache */
     void addSubItem(const std::string &luid,
                     const SubRevisionEntry &entry);
-
-    /** store as luid + revision */
-    void addResource(StringMap &items,
-                     const std::string &href,
-                     const std::string &etag);
 };
 
 SE_END_CXX

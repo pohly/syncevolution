@@ -22,8 +22,6 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include <boost/bind.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -39,28 +37,6 @@ LoggerSyslog::LoggerSyslog(const std::string &processName) :
 LoggerSyslog::~LoggerSyslog()
 {
     closelog();
-}
-
-static void printToSyslog(int sysloglevel, std::string &chunk, size_t expectedTotal)
-{
-    if (!expectedTotal) {
-        // Might contain line breaks in the middle, split it.
-        size_t pos = 0;
-        while(true) {
-            size_t next = chunk.find('\n', pos);
-            if (next == chunk.npos) {
-                // Line break is guaranteed to be last character,
-                // so we have printed everything now.
-                return;
-            }
-            chunk[next] = 0;
-            syslog(sysloglevel, "%s", chunk.c_str() + pos);
-            pos = next + 1;
-        }
-    } else {
-        // Single line. We can print the trailing line break.
-        syslog(sysloglevel, "%s", chunk.c_str());
-    }
 }
 
 void LoggerSyslog::messagev(const MessageOptions &options,
@@ -80,11 +56,31 @@ void LoggerSyslog::messagev(const MessageOptions &options,
 
     if (options.m_level <= getLevel()) {
         const std::string none;
+        auto printToSyslog = [sysloglevel = getSyslogLevel(options.m_level)] (std::string &chunk, size_t expectedTotal) {
+            if (!expectedTotal) {
+                // Might contain line breaks in the middle, split it.
+                size_t pos = 0;
+                while(true) {
+                    size_t next = chunk.find('\n', pos);
+                    if (next == chunk.npos) {
+                        // Line break is guaranteed to be last character,
+                        // so we have printed everything now.
+                        return;
+                    }
+                    chunk[next] = 0;
+                    syslog(sysloglevel, "%s", chunk.c_str() + pos);
+                    pos = next + 1;
+                }
+            } else {
+                // Single line. We can print the trailing line break.
+                syslog(sysloglevel, "%s", chunk.c_str());
+            }
+        };
         formatLines(options.m_level, getLevel(),
                     &none, // Process name is set when opening the syslog, don't repeat it.
                     options.m_prefix,
                     format, args,
-                    boost::bind(printToSyslog, getSyslogLevel(options.m_level), _1, _2));
+                    printToSyslog);
     }
 }
 

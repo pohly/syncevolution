@@ -15,7 +15,7 @@
 #include <syncevo/SmartPtr.h>
 
 #include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -39,7 +39,7 @@ class CalDAVVxxSource : public WebDAVSource,
      */
     CalDAVVxxSource(const std::string &content,
                     const SyncSourceParams &params,
-                    const boost::shared_ptr<SyncEvo::Neon::Settings> &settings);
+                    const std::shared_ptr<SyncEvo::Neon::Settings> &settings);
 
     /* implementation of SyncSourceSerialize interface */
     virtual std::string getMimeType() const {

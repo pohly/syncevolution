@@ -41,10 +41,10 @@ public:
 			 "   'Scope', 'ClientID', 'ClientSecret'\n")
     {}
 
-    virtual boost::shared_ptr<AuthProvider> create(const InitStateString &username,
+    virtual std::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password)
     {
-        boost::shared_ptr<AuthProvider> provider;
+        std::shared_ptr<AuthProvider> provider;
         provider = createOAuth2AuthProvider(username, password);
         return provider;
     }

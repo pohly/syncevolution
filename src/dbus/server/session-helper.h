@@ -24,10 +24,10 @@
 #include "dbus-sync.h"
 
 #include <gdbus-cxx-bridge.h>
-#include <boost/function.hpp>
 #include <glib.h>
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
+#include <functional>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -48,9 +48,9 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
 {
     GMainLoop *m_loop;
     GDBusCXX::DBusConnectionPtr m_conn;
-    boost::shared_ptr<ForkExecChild> m_forkexec;
-    boost::function<bool ()> m_operation;
-    boost::shared_ptr<SessionHelperLogger> m_logger;
+    std::shared_ptr<ForkExecChild> m_forkexec;
+    std::function<bool ()> m_operation;
+    std::shared_ptr<SessionHelperLogger> m_logger;
     PushLogger<Logger> m_pushLogger;
 
     /** valid during doSync() */
@@ -58,26 +58,26 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
 
     /** called by main event loop: initiate a sync operation */
     void sync(const SessionCommon::SyncParams &params,
-              const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result);
+              const std::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result);
 
     /**
      * called by run(): do the sync operation
      * @return true if the helper is meant to terminate
      */
     bool doSync(const SessionCommon::SyncParams &params,
-                const boost::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result);
+                const std::shared_ptr< GDBusCXX::Result<bool, SyncReport> > &result);
 
     void restore(const std::string &configName,
                  const string &dir, bool before, const std::vector<std::string> &sources,
-                 const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
+                 const std::shared_ptr< GDBusCXX::Result<bool> > &result);
     bool doRestore(const std::string &configName,
                    const string &dir, bool before, const std::vector<std::string> &sources,
-                   const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
+                   const std::shared_ptr< GDBusCXX::Result<bool> > &result);
 
     void execute(const vector<string> &args, const map<string, string> &vars,
-                 const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
+                 const std::shared_ptr< GDBusCXX::Result<bool> > &result);
     bool doExecute(const vector<string> &args, const map<string, string> &vars,
-                   const boost::shared_ptr< GDBusCXX::Result<bool> > &result);
+                   const std::shared_ptr< GDBusCXX::Result<bool> > &result);
 
     /** SessionHelper.PasswordResponse */
     void passwordResponse(bool timedOut, bool aborted, const std::string &password);
@@ -88,7 +88,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
  public:
     SessionHelper(GMainLoop *loop,
                   const GDBusCXX::DBusConnectionPtr &conn,
-                  const boost::shared_ptr<ForkExecChild> &forkexec);
+                  const std::shared_ptr<ForkExecChild> &forkexec);
     ~SessionHelper();
 
     void setDBusLogLevel(Logger::Level level);
@@ -101,7 +101,7 @@ class SessionHelper : public GDBusCXX::DBusObjectHelper,
     /** Still have connection to parent. Shortcut which asks the ForkExecChild class. */
     bool connected();
 
-    boost::shared_ptr<ForkExecChild> getForkExecChild() { return m_forkexec; }
+    std::shared_ptr<ForkExecChild> getForkExecChild() { return m_forkexec; }
 
     /** Server.LogOutput for the session D-Bus object */
     GDBusCXX::EmitSignalOptional<std::string,

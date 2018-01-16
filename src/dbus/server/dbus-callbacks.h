@@ -20,16 +20,14 @@
 #ifndef INCL_DBUS_CALLBACKS
 #define INCL_DBUS_CALLBACKS
 
-#include <boost/shared_ptr.hpp>
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
-
-#include <syncevo/declarations.h>
+#include <memory>
+#include <functional>
 
 #include <stdint.h>
 
 #include <gdbus-cxx-bridge.h>
 
+#include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
 /**
@@ -62,7 +60,7 @@ SE_BEGIN_CXX
  * It is the responsibility of the caller to ensure that any objects
  * bound to the callback are still around when the callback gets
  * invoked. One simple way of doing that is via BoostHelper.h and
- * binding to a boost::weak_ptr that tracks the instance to which
+ * binding to a std::weak_ptr that tracks the instance to which
  * the callback belongs.
  *
  * The recommended naming is to use the "Async" suffix in the function
@@ -76,16 +74,16 @@ SE_BEGIN_CXX
  * relaying them to the D-Bus client. Example:
  *
  *  void runOperationAsync(RunOperation op,
- *                         const boost::shared_ptr< GDBusCXX::Result<> > &dbusResult,
+ *                         const std::shared_ptr< GDBusCXX::Result<> > &dbusResult,
  *                         const SuccessCb_t &helperReady)
  *  ...
  *     useHelperAsync(SimpleResult(helperReady,
- *                                 boost::bind(&Session::failureCb, this)));
+ *                                 [this] () { failureCb(); } ));
  *
  * Session::failureCb() in this example then does some work on its own
  * and finally calls dbusErrorCallback(dbusResult).
  */
-typedef boost::function<void ()> ErrorCb_t;
+typedef std::function<void ()> ErrorCb_t;
 
 /**
  * Because callbacks always come in pairs, the following
@@ -95,17 +93,17 @@ typedef boost::function<void ()> ErrorCb_t;
  */
 template <class P> class Result
 {
-    boost::function<P> m_onSuccess;
+    std::function<P> m_onSuccess;
     ErrorCb_t m_onError;
 
  public:
-    Result(const boost::function<P> &onSuccess,
+    Result(const std::function<P> &onSuccess,
            const ErrorCb_t &onError) :
        m_onSuccess(onSuccess),
        m_onError(onError)
        {}
 
-    boost::function<P> getOnSuccess() const { return m_onSuccess; }
+    std::function<P> getOnSuccess() const { return m_onSuccess; }
     ErrorCb_t getOnError() const { return m_onError; }
 
     void done() const { if (m_onSuccess) m_onSuccess(); }
@@ -121,7 +119,7 @@ template <class P> class Result
  * and failure callbacks. Determines type automatically based on type
  * of success callback.
  */
-template <class P> Result<P> makeCb(const boost::function<P> &onSuccess,
+template <class P> Result<P> makeCb(const std::function<P> &onSuccess,
                                     const ErrorCb_t &onFailure)
 {
     return Result<P>(onSuccess, onFailure);
@@ -134,51 +132,25 @@ template <class P> Result<P> makeCb(const boost::function<P> &onSuccess,
  * @param result    failed() is called here 
  * @return status code (see SyncML.h)
  */
-uint32_t dbusErrorCallback(const boost::shared_ptr<GDBusCXX::ResultBase> &result);
+uint32_t dbusErrorCallback(const std::shared_ptr<GDBusCXX::ResultBase> &result);
 
 /**
  * Creates an error callback which can be used to return a pending
  * exception as a D-Bus error. Template call which is parameterized
  * with the GDBusCXX::Result* class that takes the error.
  */
-ErrorCb_t createDBusErrorCb(const boost::shared_ptr<GDBusCXX::ResultBase> &result);
-
-/**
- * Creates a result object which passes back results and turns
- * exceptions into dbus_error instances with the given interface
- * name.
- * TODO: interface name
- */
-template<class R1> Result<void (const R1 &)> createDBusCb(const boost::shared_ptr< GDBusCXX::Result<R1> > &result)
-{
-    return Result<void (const R1 &)>(boost::bind(&GDBusCXX::Result<R1>::done,
-                                                 result,
-                                                 _1),
-                                     createDBusErrorCb(result));
-}
-
-/**
- * Creates a result object which passes back zero results and turns
- * exceptions into dbus_error instances with the given interface name.
- * TODO: interface name
- */
-static inline Result<void ()> createDBusCb(const boost::shared_ptr< GDBusCXX::Result<> > &result)
-{
-    return Result<void ()>(boost::bind(&GDBusCXX::Result<>::done,
-                                       result),
-                           createDBusErrorCb(result));
-}
+ErrorCb_t createDBusErrorCb(const std::shared_ptr<GDBusCXX::ResultBase> &result);
 
 /**
  * a generic "operation successful" callback with no parameters
  */
-typedef boost::function<void ()> SuccessCb_t;
+typedef std::function<void ()> SuccessCb_t;
 
 /**
  * A generic "operation completed/failed" result pair (no parameters
  * for completion). Same as Result<void ()>, but because it doesn't
  * have overloaded done() template methods the done method can be used
- * in boost::bind().
+ * in std::bind().
  */
 class SimpleResult {
  public:

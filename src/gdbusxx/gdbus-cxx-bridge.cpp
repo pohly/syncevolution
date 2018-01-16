@@ -42,7 +42,7 @@ namespace GDBusCXX {
 using namespace SyncEvo;
 
 MethodHandler::MethodMap MethodHandler::m_methodMap;
-boost::function<void (void)> MethodHandler::m_callback;
+std::function<void (void)> MethodHandler::m_callback;
 
 void appendArgInfo(GPtrArray *pa, const std::string &type)
 {
@@ -69,7 +69,7 @@ struct OwnNameAsyncData
     };
 
     OwnNameAsyncData(const std::string &name,
-                     const boost::function<void (bool)> &obtainedCB) :
+                     const std::function<void (bool)> &obtainedCB) :
         m_name(name),
         m_obtainedCB(obtainedCB),
         m_state(OWN_NAME_WAITING)
@@ -79,7 +79,7 @@ struct OwnNameAsyncData
                                 const gchar *name,
                                 gpointer userData) throw ()
     {
-        boost::shared_ptr<OwnNameAsyncData> *data = static_cast< boost::shared_ptr<OwnNameAsyncData> *>(userData);
+        std::shared_ptr<OwnNameAsyncData> *data = static_cast< std::shared_ptr<OwnNameAsyncData> *>(userData);
         (*data)->m_state = OWN_NAME_OBTAINED;
         try {
             g_debug("got D-Bus name %s", name);
@@ -95,7 +95,7 @@ struct OwnNameAsyncData
                             const gchar *name,
                             gpointer userData) throw ()
     {
-        boost::shared_ptr<OwnNameAsyncData> *data = static_cast< boost::shared_ptr<OwnNameAsyncData> *>(userData);
+        std::shared_ptr<OwnNameAsyncData> *data = static_cast< std::shared_ptr<OwnNameAsyncData> *>(userData);
         (*data)->m_state = OWN_NAME_LOST;
         try {
             g_debug("lost %s %s",
@@ -109,26 +109,26 @@ struct OwnNameAsyncData
         }
     }
 
-    static boost::shared_ptr<OwnNameAsyncData> ownName(GDBusConnection *conn,
+    static std::shared_ptr<OwnNameAsyncData> ownName(GDBusConnection *conn,
                                                        const std::string &name,
-                                                       boost::function<void (bool)> obtainedCB =
-                                                       boost::function<void (bool)>()) {
-        boost::shared_ptr<OwnNameAsyncData> data(new OwnNameAsyncData(name, obtainedCB));
+                                                       std::function<void (bool)> obtainedCB =
+                                                       std::function<void (bool)>()) {
+        auto data = std::make_shared<OwnNameAsyncData>(name, obtainedCB);
         auto free_data = [] (gpointer userData) noexcept {
-            delete static_cast< boost::shared_ptr<OwnNameAsyncData> *>(userData);
+            delete static_cast< std::shared_ptr<OwnNameAsyncData> *>(userData);
         };
         g_bus_own_name_on_connection(conn,
                                      data->m_name.c_str(),
                                      G_BUS_NAME_OWNER_FLAGS_NONE,
                                      OwnNameAsyncData::busNameAcquired,
                                      OwnNameAsyncData::busNameLost,
-                                     new boost::shared_ptr<OwnNameAsyncData>(data),
+                                     new std::shared_ptr<OwnNameAsyncData>(data),
                                      free_data);
         return data;
     }
 
     const std::string m_name;
-    const boost::function<void (bool)> m_obtainedCB;
+    const std::function<void (bool)> m_obtainedCB;
     State m_state;
 };
 
@@ -136,7 +136,7 @@ void DBusConnectionPtr::undelay() const
 {
     if (!m_name.empty()) {
         g_debug("starting to acquire D-Bus name %s", m_name.c_str());
-        boost::shared_ptr<OwnNameAsyncData> data = OwnNameAsyncData::ownName(get(),
+        std::shared_ptr<OwnNameAsyncData> data = OwnNameAsyncData::ownName(get(),
                                                                              m_name);
         while (data->m_state == OwnNameAsyncData::OWN_NAME_WAITING) {
             g_main_context_iteration(NULL, true);
@@ -150,7 +150,7 @@ void DBusConnectionPtr::undelay() const
 }
 
 void DBusConnectionPtr::ownNameAsync(const std::string &name,
-                                     const boost::function<void (bool)> &obtainedCB) const
+                                     const std::function<void (bool)> &obtainedCB) const
 {
     OwnNameAsyncData::ownName(get(), name, obtainedCB);
 }
@@ -274,7 +274,7 @@ void DBusConnectionPtr::setDisconnect(const Disconnect_t &func)
                              true);
 }
 
-boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &newConnection, DBusErrorCXX *)
+std::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &newConnection, DBusErrorCXX *)
 {
     // Create two fds connected via a two-way stream. The parent
     // keeps fd[0] which gets closed automatically when the child
@@ -317,7 +317,8 @@ boost::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &ne
 
     // A fake DBusServerCXX which does nothing more than return the address, aka
     // our FD number, and store data for the idle callback.
-    boost::shared_ptr<DBusServerCXX> res(new DBusServerCXX(address));
+    // Private constructor, can't use make_shared() here.
+    std::shared_ptr<DBusServerCXX> res(new DBusServerCXX(address));
     res->m_newConnection = newConnection;
     res->m_connection = connection;
     // Will be freed in the idle callback. Caller must have forked by then.
@@ -399,7 +400,7 @@ void Watch::disconnected()
 }
 
 Watch::Watch(const DBusConnectionPtr &conn,
-                     const boost::function<void (void)> &callback) :
+                     const std::function<void (void)> &callback) :
     m_conn(conn),
     m_callback(callback),
     m_called(false),
@@ -407,7 +408,7 @@ Watch::Watch(const DBusConnectionPtr &conn,
 {
 }
 
-void Watch::setCallback(const boost::function<void (void)> &callback)
+void Watch::setCallback(const std::function<void (void)> &callback)
 {
     m_callback = callback;
     if (m_called && m_callback) {
@@ -480,7 +481,7 @@ Watch::~Watch()
 }
 
 void getWatch(ExtractArgs &context,
-              boost::shared_ptr<Watch> &value)
+              std::shared_ptr<Watch> &value)
 {
     std::unique_ptr<Watch> watch(new Watch(context.m_conn));
     watch->activate((context.m_msg && *context.m_msg) ?

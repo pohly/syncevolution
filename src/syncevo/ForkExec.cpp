@@ -74,13 +74,13 @@ public:
     bool hasWatches() const { return !m_watches.empty(); }
 
 private:
-    void watch(const boost::shared_ptr< GDBusCXX::Result<> > &result)
+    void watch(const std::shared_ptr< GDBusCXX::Result<> > &result)
     {
         SE_LOG_DEBUG(NULL, "ForkExecParentDBusAPI %s: received 'Watch' method call from child",
                      getPath());
         m_watches.push_back(result);
     }
-    std::list< boost::shared_ptr< GDBusCXX::Result<> > > m_watches;
+    std::list< std::shared_ptr< GDBusCXX::Result<> > > m_watches;
 };
 #endif // GDBUS_CXX_HAVE_DISCONNECT
 
@@ -110,13 +110,6 @@ ForkExecParent::ForkExecParent(const std::string &helper, const std::vector<std:
     Mutex::Guard guard = ForkExecMutex.lock();
     ForkExecCount++;
     m_instance = StringPrintf("forkexec%u", ForkExecCount);
-}
-
-boost::shared_ptr<ForkExecParent> ForkExecParent::create(const std::string &helper,
-                                                         const std::vector<std::string> &args)
-{
-    boost::shared_ptr<ForkExecParent> forkexec(new ForkExecParent(helper, args));
-    return forkexec;
 }
 
 ForkExecParent::~ForkExecParent()
@@ -158,11 +151,33 @@ void ForkExecParent::start()
         SE_THROW("child already started");
     }
 
-    // boost::shared_ptr<ForkExecParent> me = ...;
+    // std::shared_ptr<ForkExecParent> me = ...;
     GDBusCXX::DBusErrorCXX dbusError;
 
     SE_LOG_DEBUG(NULL, "ForkExecParent: preparing for child process %s", m_helper.c_str());
-    m_server = GDBusCXX::DBusServerCXX::listen(boost::bind(&ForkExecParent::newClientConnection, this, _2), &dbusError);
+
+    auto newClientConnection = [this] (GDBusCXX::DBusServerCXX &, GDBusCXX::DBusConnectionPtr &conn) noexcept {
+        try {
+            SE_LOG_DEBUG(NULL, "ForkExecParent: child %s %ld has connected",
+                         m_helper.c_str(),
+                         (long)m_childPid);
+            m_hasConnected = true;
+#ifndef GDBUS_CXX_HAVE_DISCONNECT
+            m_api.reset(new ForkExecParentDBusAPI(conn, getInstance()));
+#endif
+            m_onConnect(conn);
+            dbus_bus_connection_undelay(conn);
+        } catch (...) {
+            std::string explanation;
+            SyncMLStatus status = Exception::handle(explanation);
+            try {
+                m_onFailure(status, explanation);
+            } catch (...) {
+                Exception::handle();
+            }
+        }
+    };
+    m_server = GDBusCXX::DBusServerCXX::listen(newClientConnection, &dbusError);
     if (!m_server) {
         dbusError.throwFailure("starting server");
     }
@@ -432,29 +447,6 @@ void ForkExecParent::checkCompletion() throw ()
     }
 }
 
-void ForkExecParent::newClientConnection(GDBusCXX::DBusConnectionPtr &conn) throw()
-{
-    try {
-        SE_LOG_DEBUG(NULL, "ForkExecParent: child %s %ld has connected",
-                     m_helper.c_str(),
-                     (long)m_childPid);
-        m_hasConnected = true;
-#ifndef GDBUS_CXX_HAVE_DISCONNECT
-        m_api.reset(new ForkExecParentDBusAPI(conn, getInstance()));
-#endif
-        m_onConnect(conn);
-        dbus_bus_connection_undelay(conn);
-    } catch (...) {
-        std::string explanation;
-        SyncMLStatus status = Exception::handle(explanation);
-        try {
-            m_onFailure(status, explanation);
-        } catch (...) {
-            Exception::handle();
-        }
-    }
-}
-
 void ForkExecParent::addEnvVar(const std::string &name, const std::string &value)
 {
     if(!name.empty()) {
@@ -519,12 +511,6 @@ ForkExecChild::ForkExecChild() :
     m_instance = getEnv(ForkExecInstanceEnvVar.substr(0, ForkExecInstanceEnvVar.size() - 1).c_str(), "");
 }
 
-boost::shared_ptr<ForkExecChild> ForkExecChild::create()
-{
-    boost::shared_ptr<ForkExecChild> forkexec(new ForkExecChild);
-    return forkexec;
-}
-
 void ForkExecChild::connect()
 {
     // set error state, clear it later
@@ -548,9 +534,19 @@ void ForkExecChild::connect()
 
     // start watching connection
 #ifdef GDBUS_CXX_HAVE_DISCONNECT
-    conn.setDisconnect(boost::bind(&ForkExecChild::connectionLost, this));
+    auto connectionLost = [this] () {
+        SE_LOG_DEBUG(NULL, "lost connection to parent");
+        m_state = DISCONNECTED;
+        m_onQuit();
+    };
+    conn.setDisconnect(connectionLost);
 #else
     // emulate disconnect with a pending method call
+    auto connectionLost = [this] (const std::string &error) {
+        SE_LOG_DEBUG(NULL, "lost connection to parent");
+        m_state = DISCONNECTED;
+        m_onQuit();
+    };
     class Parent : public GDBusCXX::DBusRemoteObject
     {
     public:
@@ -564,18 +560,11 @@ void ForkExecChild::connect()
 
         GDBusCXX::DBusClientCall<> m_watch;
     } parent(conn, getInstance());
-    parent.m_watch.start(boost::bind(&ForkExecChild::connectionLost, this));
+    parent.m_watch.start(connectionLost);
 #endif
 
     m_onConnect(conn);
     dbus_bus_connection_undelay(conn);
-}
-
-void ForkExecChild::connectionLost()
-{
-    SE_LOG_DEBUG(NULL, "lost connection to parent");
-    m_state = DISCONNECTED;
-    m_onQuit();
 }
 
 bool ForkExecChild::wasForked()
@@ -618,27 +607,20 @@ private:
     bool m_statusValid;
     int m_status;
 
-    void hasQuit(int status)
+    std::shared_ptr<ForkExecParent> create(const std::string &helper)
     {
-        m_status = status;
-        m_statusValid = true;
-    }
-
-    static void append(const char *buffer, size_t length, std::string &all)
-    {
-        all.append(buffer, length);
-    }
-
-    boost::shared_ptr<ForkExecParent> create(const std::string &helper)
-    {
-        boost::shared_ptr<ForkExecParent> parent(ForkExecParent::create(helper));
-        parent->m_onQuit.connect(boost::bind(&ForkExecTest::hasQuit, this, _1));
+        auto parent = make_weak_shared::make<ForkExecParent>(helper);
+        auto hasQuit = [this] (int status) {
+            m_status = status;
+            m_statusValid = true;
+        };
+        parent->m_onQuit.connect(hasQuit);
         return parent;
     }
 
     void testTrue()
     {
-        boost::shared_ptr<ForkExecParent> parent(create("/bin/true"));
+        std::shared_ptr<ForkExecParent> parent(create("/bin/true"));
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -649,7 +631,7 @@ private:
 
     void testFalse()
     {
-        boost::shared_ptr<ForkExecParent> parent(create("/bin/false"));
+        std::shared_ptr<ForkExecParent> parent(create("/bin/false"));
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -660,7 +642,7 @@ private:
 
     void testPath()
     {
-        boost::shared_ptr<ForkExecParent> parent(create("true"));
+        std::shared_ptr<ForkExecParent> parent(create("true"));
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -671,11 +653,17 @@ private:
 
     void testNotFound()
     {
-        boost::shared_ptr<ForkExecParent> parent(create("no-such-binary"));
+        std::shared_ptr<ForkExecParent> parent(create("no-such-binary"));
         std::string out;
         std::string err;
-        parent->m_onStdout.connect(boost::bind(append, _1, _2, boost::ref(out)));
-        parent->m_onStderr.connect(boost::bind(append, _1, _2, boost::ref(err)));
+        auto appendOut = [&out] (const char *buffer, size_t length) {
+            out.append(buffer, length);
+        };
+        auto appendErr = [&err] (const char *buffer, size_t length) {
+            err.append(buffer, length);
+        };
+        parent->m_onStdout.connect(appendOut);
+        parent->m_onStderr.connect(appendErr);
         try {
             parent->start();
         } catch (const SyncEvo::Exception &ex) {
@@ -698,10 +686,13 @@ private:
 
     void testEnv1()
     {
-        boost::shared_ptr<ForkExecParent> parent(create("env"));
+        std::shared_ptr<ForkExecParent> parent(create("env"));
         parent->addEnvVar("FORK_EXEC_TEST_ENV", "foobar");
         std::string out;
-        parent->m_onStdout.connect(boost::bind(append, _1, _2, boost::ref(out)));
+        auto appendOut = [&out] (const char *buffer, size_t length) {
+            out.append(buffer, length);
+        };
+        parent->m_onStdout.connect(appendOut);
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -713,11 +704,14 @@ private:
 
     void testEnv2()
     {
-        boost::shared_ptr<ForkExecParent> parent(create("env"));
+        std::shared_ptr<ForkExecParent> parent(create("env"));
         parent->addEnvVar("FORK_EXEC_TEST_ENV1", "foo");
         parent->addEnvVar("FORK_EXEC_TEST_ENV2", "bar");
         std::string out;
-        parent->m_onStdout.connect(boost::bind(append, _1, _2, boost::ref(out)));
+        auto appendOut = [&out] (const char *buffer, size_t length) {
+            out.append(buffer, length);
+        };
+        parent->m_onStdout.connect(appendOut);
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -732,14 +726,20 @@ private:
     {
         // This tests uses a trick to get output via stdout (normal
         // env output) and stderr (from ld.so).
-        boost::shared_ptr<ForkExecParent> parent(create("env"));
+        std::shared_ptr<ForkExecParent> parent(create("env"));
         parent->addEnvVar("FORK_EXEC_TEST_ENV", "foobar");
         parent->addEnvVar("LD_DEBUG", "files");
 
         std::string out;
         std::string err;
-        parent->m_onStdout.connect(boost::bind(append, _1, _2, boost::ref(out)));
-        parent->m_onStderr.connect(boost::bind(append, _1, _2, boost::ref(err)));
+        auto appendOut = [&out] (const char *buffer, size_t length) {
+            out.append(buffer, length);
+        };
+        auto appendErr = [&err] (const char *buffer, size_t length) {
+            err.append(buffer, length);
+        };
+        parent->m_onStdout.connect(appendOut);
+        parent->m_onStderr.connect(appendErr);
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -754,12 +754,15 @@ private:
     {
         // This tests uses a trick to get output via stdout (normal
         // env output) and stderr (from ld.so).
-        boost::shared_ptr<ForkExecParent> parent(create("env"));
+        std::shared_ptr<ForkExecParent> parent(create("env"));
         parent->addEnvVar("FORK_EXEC_TEST_ENV", "foobar");
         parent->addEnvVar("LD_DEBUG", "files");
 
-        std::string output;
-        parent->m_onOutput.connect(boost::bind(append, _1, _2, boost::ref(output)));
+        std::string out;
+        auto appendOut = [&out] (const char *buffer, size_t length) {
+            out.append(buffer, length);
+        };
+        parent->m_onOutput.connect(appendOut);
         parent->start();
         while (!m_statusValid) {
             g_main_context_iteration(NULL, true);
@@ -767,8 +770,8 @@ private:
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
         // output from ld.so directly followed by env output
-        CPPUNIT_ASSERT_MESSAGE(output,
-                               pcrecpp::RE("transferring control:.*\\n(\\s+\\d+:.*\\n)*[A-Za-z0-9_]+=.*\\n").PartialMatch(output));
+        CPPUNIT_ASSERT_MESSAGE(out,
+                               pcrecpp::RE("transferring control:.*\\n(\\s+\\d+:.*\\n)*[A-Za-z0-9_]+=.*\\n").PartialMatch(out));
     }
 };
 SYNCEVOLUTION_TEST_SUITE_REGISTRATION(ForkExecTest);

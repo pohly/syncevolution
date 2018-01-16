@@ -20,10 +20,6 @@
 #ifndef SYNCEVO_DBUS_SERVER_H
 #define SYNCEVO_DBUS_SERVER_H
 
-#include <set>
-
-#include <boost/shared_ptr.hpp>
-#include <boost/weak_ptr.hpp>
 #include <boost/signals2.hpp>
 
 #include <syncevo/SyncConfig.h>
@@ -33,6 +29,9 @@
 #include "auto-term.h"
 #include "dbus-callbacks.h"
 #include "read-operations.h"
+
+#include <set>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -66,11 +65,11 @@ class Server : public GDBusCXX::DBusObjectHelper
     guint m_suspendFlagsSource;
     bool m_shutdownRequested;
     Timespec m_lastFileMod;
-    boost::shared_ptr<SyncEvo::Restart> &m_restart;
+    std::shared_ptr<SyncEvo::Restart> &m_restart;
     GDBusCXX::DBusConnectionPtr m_conn;
 
     uint32_t m_lastSession;
-    typedef std::list< std::pair< boost::shared_ptr<GDBusCXX::Watch>, boost::shared_ptr<Client> > > Clients_t;
+    typedef std::list< std::pair< std::shared_ptr<GDBusCXX::Watch>, std::shared_ptr<Client> > > Clients_t;
     Clients_t m_clients;
 
     /**
@@ -79,7 +78,7 @@ class Server : public GDBusCXX::DBusObjectHelper
      * server terminates, thus unrefing anything encapsulated inside
      * it.
      */
-    std::list< boost::function<void ()> > m_delayDeletion;
+    std::list< std::function<void ()> > m_delayDeletion;
 
     /**
      * Watch all files mapped into our address space. When
@@ -93,7 +92,7 @@ class Server : public GDBusCXX::DBusObjectHelper
      * down or restarts.  The latter is necessary if the daemon has
      * automatic syncing enabled in a config.
      */
-    list< boost::shared_ptr<GLibNotify> > m_files;
+    list< std::shared_ptr<GLibNotify> > m_files;
     void fileModified(const std::string &file);
     bool shutdown();
 
@@ -121,7 +120,7 @@ class Server : public GDBusCXX::DBusObjectHelper
     /**
      * The weak pointer that corresponds to m_activeSession.
      */
-    boost::weak_ptr<Session> m_activeSessionRef;
+    std::weak_ptr<Session> m_activeSessionRef;
 
     /**
      * The running sync session. Having a separate reference to it
@@ -132,9 +131,9 @@ class Server : public GDBusCXX::DBusObjectHelper
      * addSyncSession() and remove itself with removeSyncSession() when
      * done.
      */
-    boost::shared_ptr<Session> m_syncSession;
+    std::shared_ptr<Session> m_syncSession;
 
-    typedef std::list< boost::weak_ptr<Session> > WorkQueue_t;
+    typedef std::list< std::weak_ptr<Session> > WorkQueue_t;
     /**
      * A queue of pending, idle Sessions. Sorted by priority, most
      * important one first. Currently this is used to give client
@@ -150,7 +149,7 @@ class Server : public GDBusCXX::DBusObjectHelper
     /**
      * a hash of pending InfoRequest
      */
-    typedef std::map<string, boost::weak_ptr<InfoReq> > InfoReqMap;
+    typedef std::map<string, std::weak_ptr<InfoReq> > InfoReqMap;
 
     // hash map of pending info requests
     InfoReqMap m_infoReqMap;
@@ -160,11 +159,11 @@ class Server : public GDBusCXX::DBusObjectHelper
 
     // a hash to represent matched templates for devices, the key is
     // the peer name
-    typedef std::map<string, boost::shared_ptr<SyncConfig::TemplateDescription> > MatchedTemplates;
+    typedef std::map<string, std::shared_ptr<SyncConfig::TemplateDescription> > MatchedTemplates;
 
     MatchedTemplates m_matchedTempls;
 
-    boost::shared_ptr<BluezManager> m_bluezManager;
+    std::shared_ptr<BluezManager> m_bluezManager;
 
     /** devices which have sync services */
     SyncConfig::DeviceList m_syncDevices;
@@ -186,7 +185,7 @@ class Server : public GDBusCXX::DBusObjectHelper
 
     /** Server.Attach() */
     void attachClient(const GDBusCXX::Caller_t &caller,
-                      const boost::shared_ptr<GDBusCXX::Watch> &watch);
+                      const std::shared_ptr<GDBusCXX::Watch> &watch);
 
     /** Server.Detach() */
     void detachClient(const GDBusCXX::Caller_t &caller);
@@ -228,7 +227,7 @@ class Server : public GDBusCXX::DBusObjectHelper
 
     /** Server.Connect() */
     void connect(const GDBusCXX::Caller_t &caller,
-                 const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                 const std::shared_ptr<GDBusCXX::Watch> &watch,
                  const StringMap &peer,
                  bool must_authenticate,
                  const std::string &session,
@@ -236,7 +235,7 @@ class Server : public GDBusCXX::DBusObjectHelper
 
     /** Server.StartSession() */
     void startSession(const GDBusCXX::Caller_t &caller,
-                      const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                      const std::shared_ptr<GDBusCXX::Watch> &watch,
                       const std::string &server,
                       GDBusCXX::DBusObject_t &object) {
         startSessionWithFlags(caller, watch, server, std::vector<std::string>(), object);
@@ -244,7 +243,7 @@ class Server : public GDBusCXX::DBusObjectHelper
 
     /** Server.StartSessionWithFlags() */
     void startSessionWithFlags(const GDBusCXX::Caller_t &caller,
-                               const boost::shared_ptr<GDBusCXX::Watch> &watch,
+                               const std::shared_ptr<GDBusCXX::Watch> &watch,
                                const std::string &server,
                                const std::vector<std::string> &flags,
                                GDBusCXX::DBusObject_t &object);
@@ -263,9 +262,9 @@ class Server : public GDBusCXX::DBusObjectHelper
      * that reference, the session gets deleted and the callback
      * will not be called.
      */
-    boost::shared_ptr<Session> startInternalSession(const std::string &server,
+    std::shared_ptr<Session> startInternalSession(const std::string &server,
                                                     SessionFlags flags,
-                                                    const boost::function<void (const boost::weak_ptr<Session> &session)> &callback);
+                                                    const std::function<void (const std::weak_ptr<Session> &session)> &callback);
 
     /** Server.GetConfig() */
     void getConfig(const std::string &config_name,
@@ -384,7 +383,7 @@ class Server : public GDBusCXX::DBusObjectHelper
     boost::scoped_ptr<NetworkManagerClient> m_networkManager;
 
     /** Manager to automatic sync */
-    boost::shared_ptr<AutoSyncManager> m_autoSync;
+    std::shared_ptr<AutoSyncManager> m_autoSync;
 
     //automatic termination
     AutoTerm m_autoTerm;
@@ -394,7 +393,7 @@ class Server : public GDBusCXX::DBusObjectHelper
 
     // Created in constructor and captures parent logger there,
     // then pushed as default logger in activate().
-    boost::shared_ptr<ServerLogger> m_logger;
+    std::shared_ptr<ServerLogger> m_logger;
     PushLogger<ServerLogger> m_pushLogger;
 
     /**
@@ -402,28 +401,11 @@ class Server : public GDBusCXX::DBusObjectHelper
      * Each timeout which requests to be not called
      * again will be removed from this list.
      */
-    list< boost::shared_ptr<Timeout> > m_timeouts;
-
-    /**
-     * called each time a timeout triggers,
-     * removes those which are done
-     */
-    bool callTimeout(const boost::shared_ptr<Timeout> &timeout, const boost::function<void ()> &callback);
-
-    /** called 1 minute after last client detached from a session */
-    static void sessionExpired(const boost::shared_ptr<Session> &session);
-
-    /** hooked into m_idleSignal, controls auto-termination */
-    void onIdleChange(bool idle);
-
-    /** hooked up to SuspendFlags fd via g_io_add_watch */
-    static gboolean onSuspendFlagsChange(GIOChannel *source,
-                                         GIOCondition condition,
-                                         gpointer data) throw ();
+    list< std::shared_ptr<Timeout> > m_timeouts;
 
 public:
     Server(GMainLoop *loop,
-           boost::shared_ptr<Restart> &restart,
+           std::shared_ptr<Restart> &restart,
            const GDBusCXX::DBusConnectionPtr &conn,
            int duration);
     void activate();
@@ -436,7 +418,7 @@ public:
     void run();
 
     /** currently running operation */
-    boost::shared_ptr<Session> getSyncSession() const { return m_syncSession; }
+    std::shared_ptr<Session> getSyncSession() const { return m_syncSession; }
 
     /** true iff no work is pending */
     bool isIdle() const { return !m_activeSession && m_workQueue.empty(); }
@@ -456,19 +438,19 @@ public:
     /**
      * Called when a session starts its real work (= calls addSyncSession()).
      */
-    typedef boost::signals2::signal<void (const boost::shared_ptr<Session> &)> NewSyncSessionSignal_t;
+    typedef boost::signals2::signal<void (const std::shared_ptr<Session> &)> NewSyncSessionSignal_t;
     NewSyncSessionSignal_t m_newSyncSessionSignal;
 
     /**
      * look up client by its ID
      */
-    boost::shared_ptr<Client> findClient(const GDBusCXX::Caller_t &ID);
+    std::shared_ptr<Client> findClient(const GDBusCXX::Caller_t &ID);
 
     /**
      * find client by its ID or create one anew
      */
-    boost::shared_ptr<Client> addClient(const GDBusCXX::Caller_t &ID,
-                                        const boost::shared_ptr<GDBusCXX::Watch> &watch);
+    std::shared_ptr<Client> addClient(const GDBusCXX::Caller_t &ID,
+                                        const std::shared_ptr<GDBusCXX::Watch> &watch);
 
     /** detach this resource from all clients which own it */
     void detach(Resource *resource);
@@ -479,7 +461,7 @@ public:
      * by the creator of the session, *after* the session is
      * ready to run.
      */
-    void enqueue(const boost::shared_ptr<Session> &session);
+    void enqueue(const std::shared_ptr<Session> &session);
 
     /**
      * Remove all sessions with this device ID from the
@@ -535,21 +517,21 @@ public:
      * session. Once the timeout fires, it is called and then removed,
      * which removes the reference.
      */
-    void delaySessionDestruction(const boost::shared_ptr<Session> &session);
+    void delaySessionDestruction(const std::shared_ptr<Session> &session);
 
     /**
      * Works for any kind of object: keep shared pointer until the
      * event loop is idle, then unref it inside. Useful for instances
      * which need to delete themselves.
      */
-    template <class T> void delayDeletion(const boost::shared_ptr<T> &t) {
+    template <class T> void delayDeletion(const std::shared_ptr<T> &t) {
         // The functor will never be called, important here is only
         // that it contains a copy of the shared pointer.
-        m_delayDeletion.push_back(boost::bind(delayDeletionDummy<T>, t));
+        m_delayDeletion.push_back([t] () {});
         g_idle_add(&Server::delayDeletionCb, this);
     }
 
-    template <class T> static void delayDeletionDummy(const boost::shared_ptr<T> &t) throw () {}
+    template <class T> static void delayDeletionDummy(const std::shared_ptr<T> &t) throw () {}
     static gboolean delayDeletionCb(gpointer userData) throw () {
         Server *me = static_cast<Server *>(userData);
 
@@ -571,13 +553,13 @@ public:
      * caller must do that or the request will automatically be
      * deleted.
      */
-    boost::shared_ptr<InfoReq> passwordRequest(const std::string &descr,
+    std::shared_ptr<InfoReq> passwordRequest(const std::string &descr,
                                                const ConfigPasswordKey &key,
-                                               const boost::weak_ptr<Session> &session);
+                                               const std::weak_ptr<Session> &session);
 
     /** got response for earlier request, need to extract password and tell session */
     void passwordResponse(const StringMap &response,
-                          const boost::weak_ptr<Session> &session);
+                          const std::weak_ptr<Session> &session);
 
     /**
      * Invokes the given callback once in the given amount of seconds.
@@ -585,7 +567,7 @@ public:
      * before that time, then the callback will be deleted without
      * being called.
      */
-    void addTimeout(const boost::function<void ()> &callback,
+    void addTimeout(const std::function<void ()> &callback,
                     int seconds);
 
     /**
@@ -594,7 +576,7 @@ public:
      * calling removeInfoReq() when the request becomes obsolete
      * sooner than that.
      */
-    boost::shared_ptr<InfoReq> createInfoReq(const string &type,
+    std::shared_ptr<InfoReq> createInfoReq(const string &type,
                                              const std::map<string, string> &parameters,
                                              const Session &session);
     void autoTermRef(int counts = 1) { m_autoTerm.ref(counts); }
@@ -610,9 +592,9 @@ public:
     PresenceStatus& getPresenceStatus();
 
     void clearPeerTempls() { m_matchedTempls.clear(); }
-    void addPeerTempl(const string &templName, const boost::shared_ptr<SyncConfig::TemplateDescription> peerTempl);
+    void addPeerTempl(const string &templName, const std::shared_ptr<SyncConfig::TemplateDescription> &peerTempl);
 
-    boost::shared_ptr<SyncConfig::TemplateDescription> getPeerTempl(const string &peer);
+    std::shared_ptr<SyncConfig::TemplateDescription> getPeerTempl(const string &peer);
 
     /**
      * methods to operate device list. See DeviceList definition.
@@ -671,7 +653,7 @@ public:
 
 // extensions to the D-Bus server, created dynamically by main()
 #ifdef ENABLE_DBUS_PIM
-boost::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const boost::shared_ptr<Server> &server, bool start);
+std::shared_ptr<GDBusCXX::DBusObjectHelper> CreateContactManager(const std::shared_ptr<Server> &server, bool start);
 #endif
 
 SE_END_CXX

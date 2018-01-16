@@ -77,7 +77,7 @@ class EvolutionContactTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
         source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
         source.reset(SyncSource::createTestingSource("addressbook", "evolution-contacts", true));
@@ -94,8 +94,8 @@ protected:
     void testImport() {
         // this only tests that we can instantiate something under the type "addressbook";
         // it might not be an EvolutionContactSource
-        boost::shared_ptr<EvolutionContactSource> source21(dynamic_cast<EvolutionContactSource *>(SyncSource::createTestingSource("evolutioncontactsource21", "evolution-contacts:text/x-vcard", true)));
-        boost::shared_ptr<EvolutionContactSource> source30(dynamic_cast<EvolutionContactSource *>(SyncSource::createTestingSource("evolutioncontactsource30", "Evolution Address Book:text/vcard", true)));
+        std::shared_ptr<EvolutionContactSource> source21(dynamic_cast<EvolutionContactSource *>(SyncSource::createTestingSource("evolutioncontactsource21", "evolution-contacts:text/x-vcard", true)));
+        std::shared_ptr<EvolutionContactSource> source30(dynamic_cast<EvolutionContactSource *>(SyncSource::createTestingSource("evolutioncontactsource30", "Evolution Address Book:text/vcard", true)));
         string parsed;
 
 #if 0

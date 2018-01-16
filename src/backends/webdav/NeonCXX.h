@@ -16,12 +16,11 @@
 #include <ne_props.h>
 #include <ne_request.h>
 
+#include <memory>
+
+#include <functional>
 #include <string>
 #include <list>
-
-#include <boost/shared_ptr.hpp>
-#include <boost/function.hpp>
-
 
 #include <syncevo/util.h>
 #include <syncevo/declarations.h>
@@ -88,7 +87,7 @@ class Settings {
      * Grant access to AuthProvider. In addition to plain username/password
      * in getCredentials, this one here might also be used for OAuth2.
      */
-    virtual boost::shared_ptr<AuthProvider> getAuthProvider() = 0;
+    virtual std::shared_ptr<AuthProvider> getAuthProvider() = 0;
 
     /**
      * Updates password to new one returned during OAuth2 authorization.
@@ -307,11 +306,11 @@ class Session {
     /**
      * @param settings    must provide information about settings on demand
      */
-    Session(const boost::shared_ptr<Settings> &settings);
-    static boost::shared_ptr<Session> m_cachedSession;
+    Session(const std::shared_ptr<Settings> &settings);
+    static std::shared_ptr<Session> m_cachedSession;
 
     ForceAuthorization m_forceAuthorizationOnce;
-    boost::shared_ptr<AuthProvider> m_authProvider;
+    std::shared_ptr<AuthProvider> m_authProvider;
 
     /**
      * Count how often a request was sent with credentials.
@@ -347,7 +346,7 @@ class Session {
      * to reuse proxy information (libproxy has a considerably delay during
      * initialization) and HTTP connection/authentication.
      */
-    static boost::shared_ptr<Session> create(const boost::shared_ptr<Settings> &settings);
+    static std::shared_ptr<Session> create(const std::shared_ptr<Settings> &settings);
     ~Session();
 
 #ifdef HAVE_LIBNEON_OPTIONS
@@ -358,13 +357,13 @@ class Session {
     /**
      * called with URI and complete result set; exceptions are logged, but ignored
      */
-    typedef boost::function<void (const URI &, const ne_prop_result_set *)> PropfindURICallback_t;
+    typedef std::function<void (const URI &, const ne_prop_result_set *)> PropfindURICallback_t;
 
     /**
      * called with URI and specific property, value string may be NULL (error case);
      * exceptions are logged and abort iterating over properties (but not URIs)
      */
-    typedef boost::function<void (const URI &, const ne_propname *, const char *, const ne_status *)> PropfindPropCallback_t;
+    typedef std::function<void (const URI &, const ne_propname *, const char *, const ne_status *)> PropfindPropCallback_t;
 
     /** ne_simple_propfind(): invoke callback for each URI */
     void propfindURI(const std::string &path, int depth,
@@ -413,7 +412,7 @@ class Session {
      * @return result of Session::checkError()
      */
     bool run(Request &request, const std::set<int> *expectedCodes,
-             const boost::function<bool ()> &aborted = boost::function<bool ()>());
+             const std::function<bool ()> &aborted = {});
 
     /**
      * to be called after each operation which might have produced debugging output by neon;
@@ -428,10 +427,10 @@ class Session {
      * (when username/password are provided by AuthProvider) or all
      * requests to use OAuth2 authentication.
      */
-    void forceAuthorization(ForceAuthorization forceAuthorization, const boost::shared_ptr<AuthProvider> &authProvider);
+    void forceAuthorization(ForceAuthorization forceAuthorization, const std::shared_ptr<AuthProvider> &authProvider);
 
  private:
-    boost::shared_ptr<Settings> m_settings;
+    std::shared_ptr<Settings> m_settings;
     bool m_debugging;
     ne_session *m_session;
     URI m_uri;
@@ -489,7 +488,7 @@ class XMLParser
      * arguments are parent state, namespace, name, attributes (NULL terminated)
      * @return < 0 abort, 0 decline, > 0 accept
      */
-    typedef boost::function<int (int, const char *, const char *, const char **)> StartCB_t;
+    typedef std::function<int (int, const char *, const char *, const char **)> StartCB_t;
 
     /**
      * See ne_xml_cdata_cb:
@@ -497,7 +496,7 @@ class XMLParser
      * May be NULL.
      * @return != 0 to abort
      */
-    typedef boost::function<int (int, const char *, size_t)> DataCB_t;
+    typedef std::function<int (int, const char *, size_t)> DataCB_t;
 
     /**
      * See ne_xml_endelm_cb:
@@ -505,7 +504,7 @@ class XMLParser
      * May be NULL.
      * @return != 0 to abort
      */
-    typedef boost::function<int (int, const char *, const char *)> EndCB_t;
+    typedef std::function<int (int, const char *, const char *)> EndCB_t;
 
     /**
      * add new handler, see ne_xml_push_handler()
@@ -517,22 +516,13 @@ class XMLParser
     /**
      * StartCB_t: accepts a new element if namespace and name match
      */
-    static int accept(const std::string &nspaceExpected,
-                      const std::string &nameExpected,
-                      const char *nspace,
-                      const char *name);
+    static StartCB_t accept(const std::string &nspaceExpected,
+                            const std::string &nameExpected);
 
     /**
      * DataCB_t: append to std::string
      */
-    static int append(std::string &buffer,
-                      const char *data,
-                      size_t len);
-
-    /**
-     * EndCB_t: clear std::string
-     */
-    static int reset(std::string &buffer);
+    static DataCB_t append(std::string &buffer);
 
     /**
      * Called each time a response is completely parsed.
@@ -542,8 +532,8 @@ class XMLParser
      * @param status   it's status line, empty if not requested or unavailable
      * @return non-zero for aborting the parsing
      */
-    typedef boost::function<int (const std::string &, const std::string &, const std::string &)> ResponseEndCB_t;
-    typedef boost::function<void (const std::string &, const std::string &, const std::string &)> VoidResponseEndCB_t;
+    typedef std::function<int (const std::string &, const std::string &, const std::string &)> ResponseEndCB_t;
+    typedef std::function<void (const std::string &, const std::string &, const std::string &)> VoidResponseEndCB_t;
 
     /**
      * Setup parser for handling REPORT result.
@@ -561,8 +551,8 @@ class XMLParser
      *                      when expecting only one response, the callback
      *                      is not needed
      */
-    void initReportParser(const VoidResponseEndCB_t &responseEnd = VoidResponseEndCB_t());
-    void initAbortingReportParser(const ResponseEndCB_t &responseEnd);
+    void initReportParser(const VoidResponseEndCB_t &responseEnd = {});
+    void initAbortingReportParser(const ResponseEndCB_t &responseEnd = {});
 
  private:
     ne_xml_parser *m_parser;
@@ -582,18 +572,6 @@ class XMLParser
 
     /** buffers for initReportParser() */
     std::string m_href, m_etag, m_status;
-
-    int doResponseEnd(const ResponseEndCB_t &responseEnd) {
-        int abort = 0;
-        if (responseEnd) {
-            abort = responseEnd(m_href, m_etag, m_status);
-        }
-        // clean up for next response
-        m_href.clear();
-        m_etag.clear();
-        m_status.clear();
-        return abort;
-    }
 
     static int startCB(void *userdata, int parent,
                        const char *nspace, const char *name,
@@ -652,9 +630,6 @@ class Request
     XMLParser *getParser() const { return m_parser; }
     std::string getPath() const { return m_path; }
 
-    /** ne_block_reader implementation */
-    static int addResultData(void *userdata, const char *buf, size_t len);
-
  private:
     // buffers for string (copied by ne_request_create(),
     // but due to a bug in neon, our method string is still used
@@ -669,6 +644,8 @@ class Request
     ne_request *m_req;
     std::string *m_result;
     XMLParser *m_parser;
+
+    friend Session;
 };
 
 /** thrown for 301 HTTP status */

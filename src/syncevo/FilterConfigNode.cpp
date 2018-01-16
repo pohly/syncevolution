@@ -25,7 +25,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-FilterConfigNode::FilterConfigNode(const boost::shared_ptr<ConfigNode> &node,
+FilterConfigNode::FilterConfigNode(const std::shared_ptr<ConfigNode> &node,
                                    const ConfigFilter &filter) :
     m_filter(filter),
     m_node(node),
@@ -33,7 +33,7 @@ FilterConfigNode::FilterConfigNode(const boost::shared_ptr<ConfigNode> &node,
 {
 }
 
-FilterConfigNode::FilterConfigNode(const boost::shared_ptr<const ConfigNode> &node,
+FilterConfigNode::FilterConfigNode(const std::shared_ptr<const ConfigNode> &node,
                                    const ConfigFilter &filter) :
     m_filter(filter),
     m_readOnlyNode(node)

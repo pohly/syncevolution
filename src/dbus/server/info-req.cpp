@@ -39,7 +39,7 @@ InfoReq::InfoReq(Server &server,
     m_param(parameters)
 {
     m_server.emitInfoReq(*this);
-    m_timeout.runOnce(m_timeoutSeconds, boost::bind(boost::ref(m_timeoutSignal)));
+    m_timeout.runOnce(m_timeoutSeconds, [this] () { m_timeoutSignal(); });
     m_param.clear();
 }
 
@@ -88,7 +88,7 @@ void InfoReq::setResponse(const Caller_t &caller, const string &state, const Inf
         m_infoState = IN_WAIT;
         m_server.emitInfoReq(*this);
         //reset the timer, used to check timeout
-        m_timeout.runOnce(m_timeoutSeconds, boost::bind(boost::ref(m_timeoutSignal)));
+        m_timeout.runOnce(m_timeoutSeconds, [this] () { m_timeoutSignal(); });
     } else if ((m_infoState == IN_WAIT || m_infoState == IN_REQ) && state == "response") {
         m_response = response;
         m_handler = caller;

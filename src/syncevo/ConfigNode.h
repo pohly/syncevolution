@@ -24,8 +24,8 @@
 #include <utility>
 #include <string>
 #include <sstream>
+#include <memory>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include <syncevo/declarations.h>
@@ -47,7 +47,7 @@ class ConfigNode {
     virtual ~ConfigNode() {}
 
     /** creates a file-backed config node which accepts arbitrary key/value pairs */
-    static boost::shared_ptr<ConfigNode> createFileNode(const std::string &filename);
+    static std::shared_ptr<ConfigNode> createFileNode(const std::string &filename);
 
     /** a name for the node that the user can understand */
     virtual std::string getName() const = 0;
