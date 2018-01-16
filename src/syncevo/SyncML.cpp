@@ -36,7 +36,6 @@
 #include <synthesis/syerror.h>
 
 #include <syncevo/declarations.h>
-using namespace std;
 SE_BEGIN_CXX
 
 SimpleSyncMode SimplifySyncMode(SyncMode mode, bool peerIsClient)
@@ -251,7 +250,7 @@ std::string GetLegacyMIMEType (const std::string &type, bool force) {
 
 std::string Status2String(SyncMLStatus status)
 {
-    string error;
+    std::string error;
     bool local;
     int code = status;
 
@@ -514,10 +513,9 @@ std::string Status2String(SyncMLStatus status)
         break;
     }
 
-    string statusstr = StringPrintf("%s, status %d",
-                                    local ? "local" : "remote",
-                                    status);
-    string description;
+    std::string statusstr = StringPrintf("%s, status %d",
+                                         local ? "local" : "remote", status);
+    std::string description;
     if (error.empty()) {
         description = statusstr;
     } else {
@@ -603,37 +601,37 @@ std::ostream &operator << (std::ostream &out, const SyncReport &report)
 }
 
 namespace {
-    string fill(char sep, size_t width) {
-        string res;
+    std::string fill(char sep, size_t width) {
+        std::string res;
         res.resize(width - 1, sep);
         return res;
     }
-    string center(char sep, const string &str, size_t width) {
+    std::string center(char sep, const std::string &str, size_t width) {
         if (str.size() + 1 >= width) {
             return str;
         } else {
-            string res;
+            std::string res;
             res.resize(width - 1, sep);
             res.replace((width - 1 - str.size()) / 2, str.size(), str);
             return res;
         }
     }
-    string right(char sep, const string &str, size_t width) {
+    std::string right(char sep, const std::string &str, size_t width) {
         if (str.size() + 1 >= width) {
             return str;
         } else {
-            string res;
+            std::string res;
             res.resize(width - 1, sep);
             res.replace(width - 2 - str.size(), str.size(), str);
             return res;
         }
     }
 #if 0
-    string left(char sep, const string &str, size_t width) {
+    std::string left(char sep, const std::string &str, size_t width) {
         if (str.size() + 1 >= width) {
             return str;
         } else {
-            string res;
+            std::string res;
             res.resize(width - 1, sep);
             res.replace(1, str.size(), str);
             return res;
@@ -642,11 +640,11 @@ namespace {
 #endif
 
     // insert string at column if it fits, otherwise flush right
-    string align(char sep, const string &str, size_t width, size_t column) {
+    std::string align(char sep, const std::string &str, size_t width, size_t column) {
         if (column + str.size() + 1 >= width) {
             return right(sep, str, width);
         } else {
-            string res;
+            std::string res;
             res.resize(width - 1, sep);
             res.replace(column, str.size(), str);
             return res;
@@ -779,7 +777,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
     }
     out << "|\n";
 
-    stringstream sepstream;
+    std::stringstream sepstream;
     sepstream << '+' << fill('-', name_width);
     if (!(flags & WITHOUT_CLIENT)) {
         sepstream << '+' << fill('-', count_width);
@@ -807,7 +805,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
         sepstream << '+' << fill('-', conflict_width);
     }
     sepstream << "+\n";
-    string sep = sepstream.str();
+    std::string sep = sepstream.str();
     out << sep;
 
     for (const auto &entry: *this) {
@@ -825,19 +823,19 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
             for (SyncSourceReport::ItemState state = SyncSourceReport::ITEM_ADDED;
                  state <= SyncSourceReport::ITEM_REMOVED;
                  state = SyncSourceReport::ItemState(int(state) + 1)) {
-                stringstream count;
+                std::stringstream count;
                 count << source.getItemStat(location, state, SyncSourceReport::ITEM_TOTAL);
                 out << '|' << center(' ', count.str(), count_width);
             }
             if (!(flags & WITHOUT_REJECTS)) {
-                stringstream count;
+                std::stringstream count;
                 count << source.getItemStat(location,
                                             SyncSourceReport::ITEM_ANY,
                                             SyncSourceReport::ITEM_REJECT);
                 out << '|' << center(' ', count.str(), count_width);
             }
             if (flags & WITH_TOTAL) {
-                stringstream count;
+                std::stringstream count;
                 count << source.getItemStat(location,
                                             SyncSourceReport::ITEM_ANY,
                                             SyncSourceReport::ITEM_TOTAL);
@@ -857,7 +855,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
                 source.getItemStat(SyncSourceReport::ITEM_REMOTE,
                                    SyncSourceReport::ITEM_ANY,
                                    SyncSourceReport::ITEM_CONFLICT_DUPLICATED);
-            stringstream conflicts;
+            std::stringstream conflicts;
             conflicts << total_conflicts;
             out << '|' << center(' ', conflicts.str(), conflict_width);
         }
@@ -912,7 +910,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
                                                SyncSourceReport::ITEM_ANY,
                                                SyncSourceReport::ITEM_MATCH);
         if (total_matched) {
-            stringstream line;
+            std::stringstream line;
             line << total_matched << " item(s) matched";
             out << '|' << align(' ', line.str(), text_width, name_column)
                 << "|\n";
@@ -957,7 +955,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
         out << sep;
     }
     if (!getError().empty()) {
-        out << "First ERROR encountered: " << getError() << endl;
+        out << "First ERROR encountered: " << getError() << std::endl;
     }
 }
 
@@ -996,7 +994,7 @@ std::string SyncReport::slowSyncExplanation(const std::string &peer,
         return "";
     }
 
-    string sourceparam = boost::join(sources, " ");
+    std::string sourceparam = boost::join(sources, " ");
     std::string explanation =
         StringPrintf("Doing a slow synchronization may lead to duplicated items or\n"
                      "lost data when the server merges items incorrectly. Choosing\n"
@@ -1020,7 +1018,7 @@ std::string SyncReport::slowSyncExplanation(const std::string &peer) const
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
         if (source.getStatus() == STATUS_UNEXPECTED_SLOW_SYNC) {
-            string virtualsource = source.getVirtualSource();
+            std::string virtualsource = source.getVirtualSource();
             sources.insert(virtualsource.empty() ?
                            name :
                            virtualsource);
@@ -1034,7 +1032,7 @@ ConfigNode &operator << (ConfigNode &node, const SyncReport &report)
     node.setProperty("start", static_cast<long>(report.getStart()));
     node.setProperty("end", static_cast<long>(report.getEnd()));
     node.setProperty("status", static_cast<int>(report.getStatus()));
-    string error = report.getError();
+    std::string error = report.getError();
     if (!error.empty()) {
         node.setProperty("error", error);
     } else {
@@ -1045,12 +1043,12 @@ ConfigNode &operator << (ConfigNode &node, const SyncReport &report)
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
 
-        string prefix = name;
+        std::string prefix = name;
         boost::replace_all(prefix, "_", "__");
         boost::replace_all(prefix, "-", "_+");
         prefix = "source-" + prefix;
 
-        string key;
+        std::string key;
         key = prefix + "-mode";
         node.setProperty(key, PrettyPrintSyncMode(source.getFinalSyncMode()));
         if (source.getRestarts()) {
@@ -1063,7 +1061,7 @@ ConfigNode &operator << (ConfigNode &node, const SyncReport &report)
         node.setProperty(key, source.isResumeSync());
         key = prefix + "-status";
         node.setProperty(key, static_cast<long>(source.getStatus()));
-        string virtualsource = source.getVirtualSource();
+        std::string virtualsource = source.getVirtualSource();
         if (!virtualsource.empty()) {
             key = prefix + "-virtualsource";
             node.setProperty(key, virtualsource);
@@ -1113,7 +1111,7 @@ ConfigNode &operator >> (ConfigNode &node, SyncReport &report)
     if (node.getProperty("status", status)) {
         report.setStatus(static_cast<SyncMLStatus>(status));
     }
-    string error;
+    std::string error;
     if (node.getProperty("error", error)) {
         report.setError(error);
     }
@@ -1121,12 +1119,12 @@ ConfigNode &operator >> (ConfigNode &node, SyncReport &report)
     ConfigNode::PropsType props;
     node.readProperties(props);
     for (const auto &prop: props) {
-        string key = prop.first;
+        std::string key = prop.first;
         if (boost::starts_with(key, "source-")) {
             key.erase(0, strlen("source-"));
             size_t off = key.find('-');
             if (off != key.npos) {
-                string sourcename = key.substr(0, off);
+                std::string sourcename = key.substr(0, off);
                 boost::replace_all(sourcename, "_+", "-");
                 boost::replace_all(sourcename, "__", "_");
                 SyncSourceReport &source = report.getSyncSourceReport(sourcename);
@@ -1137,7 +1135,7 @@ ConfigNode &operator >> (ConfigNode &node, SyncReport &report)
                     SyncSourceReport::ItemState state;
                     SyncSourceReport::ItemResult result;
                     SyncSourceReport::StringToStatTuple(key, location, state, result);
-                    stringstream in(prop.second);
+                    std::stringstream in(prop.second);
                     int intval;
                     in >> intval;
                     source.setItemStat(location, state, result, intval);

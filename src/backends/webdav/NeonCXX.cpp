@@ -505,7 +505,7 @@ void Session::propfindProp(const std::string &path, int depth,
     propfindURI(path, depth, props, propIterate, deadline);
 }
 
-void Session::startOperation(const string &operation, const Timespec &deadline)
+void Session::startOperation(const std::string &operation, const Timespec &deadline)
 {
     SE_LOG_DEBUG(NULL, "starting %s, credentials %s, %s",
                  operation.c_str(),
@@ -547,11 +547,11 @@ bool Session::checkError(int error, int code, const ne_status *status,
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
 
     // unset operation, set it again only if the same operation is going to be retried
-    string operation = m_operation;
+    std::string operation = m_operation;
     m_operation = "";
 
     // determine error description, may be made more specific below
-    string descr;
+    std::string descr;
     if (code) {
         descr = StringPrintf("%s: Neon error code %d, HTTP status %d: %s",
                              operation.c_str(),

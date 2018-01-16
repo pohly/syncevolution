@@ -31,7 +31,6 @@
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
-using namespace std;
 
 class SQLiteUnref {
  public:
@@ -68,8 +67,8 @@ class SQLiteUtil
      * @param mapping     array with database mapping, terminated by NULL colname
      * @param schema      database schema to use when creating new databases, may be NULL
      */
-    void open(const string &name,
-              const string &fileid,
+    void open(const std::string &name,
+              const std::string &fileid,
               const Mapping *mapping,
               const char *schema);
 
@@ -79,7 +78,7 @@ class SQLiteUtil
      * throw error for a specific sqlite3 operation on m_db
      * @param operation   a description of the operation which failed
      */
-    void throwError(const SourceLocation &where, const string &operation);
+    void throwError(const SourceLocation &where, const std::string &operation);
 
     /**
      * wrapper around sqlite3_prepare() which operates on the current
@@ -109,30 +108,30 @@ class SQLiteUtil
 
     /** type used for row keys */
     typedef long long key_t;
-    string toString(key_t key) { char buffer[32]; sprintf(buffer, "%lld", key); return buffer; }
+    std::string toString(key_t key) { char buffer[32]; sprintf(buffer, "%lld", key); return buffer; }
 #define SQLITE3_COLUMN_KEY sqlite3_column_int64
 
     /** return row ID for a certain row */
     key_t findKey(const char *database, const char *keyname, const char *key);
 
     /** return a specific column for a row identified by a certain key column as text, returns default text if not found */
-    string findColumn(const char *database, const char *keyname, const char *key, const char *column, const char *def);
+    std::string findColumn(const char *database, const char *keyname, const char *key, const char *column, const char *def);
 
     /** a wrapper for sqlite3_column_test() which will check for NULL and returns default text instead */
-    string getTextColumn(sqlite3_stmt *stmt, int col, const char *def = "");
+    std::string getTextColumn(sqlite3_stmt *stmt, int col, const char *def = "");
 
     typedef unsigned long syncml_time_t;
     /** transform column to same time base as used by SyncML libary (typically time()) */
     syncml_time_t getTimeColumn(sqlite3_stmt *stmt, int col);
 
     /** convert time to string */
-    static string time2str(syncml_time_t t);
+    static std::string time2str(syncml_time_t t);
 
  private:
     /* copy of open() parameters */
     arrayptr<Mapping> m_mapping;
-    string m_name;
-    string m_fileid;
+    std::string m_name;
+    std::string m_fileid;
 
     /** current database */
     eptr<sqlite3, sqlite3, SQLiteUnref> m_db;

@@ -23,13 +23,12 @@
 
 #include <syncevo/declarations.h>
 
-using namespace std;
 
 SE_BEGIN_CXX
 
-boost::shared_ptr<ConfigNode> ConfigNode::createFileNode(const string &filename)
+boost::shared_ptr<ConfigNode> ConfigNode::createFileNode(const std::string &filename)
 {
-    string::size_type off = filename.rfind('/');
+    std::string::size_type off = filename.rfind('/');
     boost::shared_ptr<ConfigNode> filenode;
     if (off != filename.npos) {
         filenode.reset(new IniFileConfigNode(filename.substr(0, off),
