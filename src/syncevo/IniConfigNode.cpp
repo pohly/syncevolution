@@ -26,7 +26,6 @@
 #include <boost/scoped_array.hpp>
 
 #include <syncevo/declarations.h>
-using namespace std;
 SE_BEGIN_CXX
 
 IniBaseConfigNode::IniBaseConfigNode(const boost::shared_ptr<DataBlob> &data) :
@@ -77,7 +76,7 @@ IniFileConfigNode::IniFileConfigNode(const std::string &path, const std::string 
 
 
 void IniFileConfigNode::toFile(std::ostream &file) {
-    for (const string &line: m_lines) {
+    for (const std::string &line: m_lines) {
         file << line << std::endl;
     }
 }
@@ -96,9 +95,9 @@ void IniFileConfigNode::read()
 /**
  * get property and value from line, if any present
  */
-static bool getContent(const string &line,
-                       string &property,
-                       string &value,
+static bool getContent(const std::string &line,
+                       std::string &property,
+                       std::string &value,
                        bool &isComment,
                        bool fuzzyComments)
 {
@@ -176,23 +175,23 @@ static bool getContent(const string &line,
 /**
  * check whether the line contains the property and if so, extract its value
  */
-static bool getValue(const string &line,
-                     const string &property,
-                     string &value,
+static bool getValue(const std::string &line,
+                     const std::string &property,
+                     std::string &value,
                      bool &isComment,
                      bool fuzzyComments)
 
 {
-    string curProp;
+    std::string curProp;
     return getContent(line, curProp, value, isComment, fuzzyComments) &&
         !strcasecmp(curProp.c_str(), property.c_str());
 }
 
-InitStateString IniFileConfigNode::readProperty(const string &property) const
+InitStateString IniFileConfigNode::readProperty(const std::string &property) const
 {
-    string value;
+    std::string value;
 
-    for (const string &line: m_lines) {
+    for (const std::string &line: m_lines) {
         bool isComment;
 
         if (getValue(line, property, value, isComment, false)) {
@@ -203,10 +202,10 @@ InitStateString IniFileConfigNode::readProperty(const string &property) const
 }
 
 void IniFileConfigNode::readProperties(ConfigProps &props) const {
-    map<string, string> res;
-    string value, property;
+    std::map<std::string, std::string> res;
+    std::string value, property;
 
-    for (const string &line: m_lines) {
+    for (const std::string &line: m_lines) {
         bool isComment;
         if (getContent(line, property, value, isComment, false)) {
             // don't care about the result: only the first instance
@@ -217,13 +216,13 @@ void IniFileConfigNode::readProperties(ConfigProps &props) const {
     }
 }
 
-void IniFileConfigNode::removeProperty(const string &property)
+void IniFileConfigNode::removeProperty(const std::string &property)
 {
-    string value;
+    std::string value;
 
-    list<string>::iterator it = m_lines.begin();
+    std::list<std::string>::iterator it = m_lines.begin();
     while (it != m_lines.end()) {
-        const string &line = *it;
+        const std::string &line = *it;
         bool isComment;
         if (getValue(line, property, value, isComment, false)) {
             it = m_lines.erase(it);
@@ -234,11 +233,11 @@ void IniFileConfigNode::removeProperty(const string &property)
     }
 }
 
-void IniFileConfigNode::writeProperty(const string &property,
+void IniFileConfigNode::writeProperty(const std::string &property,
                                       const InitStateString &newvalue,
-                                      const string &comment) {
-    string newstr;
-    string oldvalue;
+                                      const std::string &comment) {
+    std::string newstr;
+    std::string oldvalue;
     bool isDefault = false;
 
     if (!newvalue.wasSet()) {
@@ -247,7 +246,7 @@ void IniFileConfigNode::writeProperty(const string &property,
     }
     newstr += property + " = " + newvalue;
 
-    for (string &line: m_lines) {
+    for (std::string &line: m_lines) {
         bool isComment;
 
         if (getValue(line, property, oldvalue, isComment, true)) {
@@ -262,13 +261,13 @@ void IniFileConfigNode::writeProperty(const string &property,
 
     // add each line of the comment as separate line in .ini file
     if (comment.size()) {
-        list<string> commentLines;
+        std::list<std::string> commentLines;
         ConfigProperty::splitComment(comment, commentLines);
         if (m_lines.size()) {
             m_lines.push_back("");
         }
-        for (const string &comment: commentLines) {
-            m_lines.push_back(string("# ") + comment);
+        for (const std::string &comment: commentLines) {
+            m_lines.push_back(std::string("# ") + comment);
         }
     }
 
@@ -288,7 +287,7 @@ IniHashConfigNode::IniHashConfigNode(const boost::shared_ptr<DataBlob> &data) :
     read();
 }
 
-IniHashConfigNode::IniHashConfigNode(const string &path, const string &fileName, bool readonly) :
+IniHashConfigNode::IniHashConfigNode(const std::string &path, const std::string &fileName, bool readonly) :
     IniBaseConfigNode(boost::shared_ptr<DataBlob>(new FileDataBlob(path, fileName, readonly)))
 {
     read();
@@ -299,7 +298,7 @@ void IniHashConfigNode::read()
     boost::shared_ptr<std::istream> file(m_data->read());
     std::string line;
     while (std::getline(*file, line)) {
-        string property, value;
+        std::string property, value;
         bool isComment;
         if (getContent(line, property, value, isComment, false)) {
             m_props.insert(StringPair(property, value));
@@ -331,9 +330,9 @@ void IniHashConfigNode::writeProperties(const ConfigProps &props)
 }
 
 
-InitStateString IniHashConfigNode::readProperty(const string &property) const
+InitStateString IniHashConfigNode::readProperty(const std::string &property) const
 {
-    std::map<std::string, std::string>::const_iterator it = m_props.find(property);
+    auto it = m_props.find(property);
     if (it != m_props.end()) {
         return InitStateString(it->second, true);
     } else {
@@ -341,8 +340,8 @@ InitStateString IniHashConfigNode::readProperty(const string &property) const
     }
 }
 
-void IniHashConfigNode::removeProperty(const string &property) {
-    map<string, string>::iterator it = m_props.find(property);
+void IniHashConfigNode::removeProperty(const std::string &property) {
+    auto it = m_props.find(property);
     if(it != m_props.end()) {
         m_props.erase(it);
         m_modified = true;
@@ -357,16 +356,16 @@ void IniHashConfigNode::clear()
     }
 }
 
-void IniHashConfigNode::writeProperty(const string &property,
+void IniHashConfigNode::writeProperty(const std::string &property,
                                       const InitStateString &newvalue,
-                                      const string &comment)
+                                      const std::string &comment)
 {
     // we only store explicitly set properties
     if (!newvalue.wasSet()) {
         removeProperty(property);
         return;
     }
-    map<string, string>::iterator it = m_props.find(property);
+    auto it = m_props.find(property);
     if(it != m_props.end()) {
         if (it->second != newvalue) {
             it->second = newvalue;
