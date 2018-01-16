@@ -31,7 +31,6 @@
 #include <glib.h>
 #include <glib/gi18n.h>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/foreach.hpp>
 
 SE_BEGIN_CXX
 
@@ -67,7 +66,7 @@ bool NotificationBackendLibnotify::init()
     m_initialized = notify_init("SyncEvolution");
     if(m_initialized) {
         GStringListFreeCXX list(notify_get_server_caps());
-        BOOST_FOREACH (const char *cap, list) {
+        for (const char *cap: list) {
             if(boost::iequals(cap, "actions")) {
                 m_acceptsActions = true;
             }

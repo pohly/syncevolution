@@ -83,7 +83,7 @@ void AutoSyncManager::init()
 
     m_peerMap.clear();
     SyncConfig::ConfigList list = SyncConfig::getConfigs();
-    BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server, list) {
+    for (const auto &server: list) {
         initConfig(server.first);
     }
 }
@@ -97,15 +97,15 @@ void AutoSyncManager::initConfig(const std::string &configName)
         // about (might have been removed) and all existing configs
         // (might have been modified).
         std::set<std::string> configs;
-        BOOST_FOREACH (const PeerMap::value_type &entry, m_peerMap) {
+        for (const auto &entry: m_peerMap) {
             const std::string &configName = entry.first;
             configs.insert(configName);
         }
-        BOOST_FOREACH (const StringPair &entry, SyncConfig::getConfigs()) {
+        for (const auto &entry: SyncConfig::getConfigs()) {
             const std::string &configName = entry.first;
             configs.insert(configName);
         }
-        BOOST_FOREACH (const std::string &configName, configs) {
+        for (const std::string &configName: configs) {
             if (!configName.empty()) {
                 initConfig(configName);
             }
@@ -153,9 +153,8 @@ void AutoSyncManager::initConfig(const std::string &configName)
             bt = true;
             any = true;
         } else {
-            BOOST_FOREACH(std::string op,
-                          boost::tokenizer< boost::char_separator<char> >(autoSync,
-                                                                          boost::char_separator<char>(","))) {
+            for (std::string op: boost::tokenizer< boost::char_separator<char> >(autoSync,
+                                                                                 boost::char_separator<char>(","))) {
                 if(boost::iequals(op, "http")) {
                     http = true;
                 } else if(boost::iequals(op, "obex-bt")) {
@@ -186,7 +185,7 @@ void AutoSyncManager::initConfig(const std::string &configName)
                      task->m_interval, task->m_delay);
 
         task->m_urls.clear();
-        BOOST_FOREACH(std::string url, urls) {
+        for (const std::string &url: urls) {
             AutoSyncTask::Transport transport = AutoSyncTask::NEEDS_OTHER; // fallback for unknown sync URL
             if (boost::istarts_with(url, "http")) {
                 transport = AutoSyncTask::NEEDS_HTTP;
@@ -249,7 +248,7 @@ void AutoSyncManager::schedule(const std::string &reason)
 
     // Now look for a suitable task that is ready to run.
     Timespec now = Timespec::monotonic();
-    BOOST_FOREACH (const PeerMap::value_type &entry, m_peerMap) {
+    for (const auto &entry: m_peerMap) {
         const std::string &configName = entry.first;
         const boost::shared_ptr<AutoSyncTask> &task = entry.second;
 
@@ -277,7 +276,7 @@ void AutoSyncManager::schedule(const std::string &reason)
         }
 
         std::string readyURL;
-        BOOST_FOREACH (const AutoSyncTask::URLInfo_t::value_type &urlinfo, task->m_urls) {
+        for (const auto &urlinfo: task->m_urls) {
             // check m_delay against presence of transport
             Timespec *starttime = NULL;
             PresenceStatus::PresenceSignal_t *signal = NULL;
@@ -430,7 +429,7 @@ void AutoSyncManager::sessionStarted(const boost::shared_ptr<Session> &session)
 
 bool AutoSyncManager::preventTerm()
 {
-    BOOST_FOREACH (const PeerMap::value_type &entry, m_peerMap) {
+    for (const auto &entry: m_peerMap) {
         const boost::shared_ptr<AutoSyncTask> &task = entry.second;
         if (task->m_interval > 0 &&
             !task->m_permanentFailure &&

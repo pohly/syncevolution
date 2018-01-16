@@ -26,7 +26,6 @@
 #include <gdbus-cxx-bridge.h>
 
 #include <boost/algorithm/string/join.hpp>
-#include <boost/foreach.hpp>
 
 #include <algorithm>
 
@@ -107,12 +106,12 @@ boost::shared_ptr<GOAAccount> GOAManager::lookupAccount(const std::string &usern
     bool unique = true;
     bool hasOAuth2 = false;
     std::vector<std::string> accounts;
-    BOOST_FOREACH (const ManagedObjects::value_type &object, objects) {
+    for (const auto &object: objects) {
         const GDBusCXX::DBusObject_t &path = object.first;
         const Interfaces &interfaces = object.second;
         // boost::adaptors::keys() would be nicer, but is not available on Ubuntu Lucid.
         std::list<std::string> interfaceKeys;
-        BOOST_FOREACH (const Interfaces::value_type &entry, interfaces) {
+        for (const auto &entry: interfaces) {
             interfaceKeys.push_back(entry.first);
         }
         SE_LOG_DEBUG(NULL, "GOA object %s implements %s", path.c_str(),

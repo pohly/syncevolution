@@ -49,7 +49,6 @@ using namespace std;
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/tokenizer.hpp>
-#include <boost/foreach.hpp>
 #include <boost/range.hpp>
 #include <boost/assign/list_of.hpp>
 #include <fstream>
@@ -504,7 +503,7 @@ void Cmdline::copyConfig(const boost::shared_ptr<SyncConfig> &from,
     } else {
         // need an explicit list of all sources which will be copied,
         // for the createFilters() call below
-        BOOST_FOREACH(const std::string &source, from->getSyncSources()) {
+        for (const std::string &source: from->getSyncSources()) {
             allSources.insert(source);
         }
         sources = &allSources;
@@ -520,7 +519,7 @@ void Cmdline::copyConfig(const boost::shared_ptr<SyncConfig> &from,
     SourceProps sourceFilters;
     m_props.createFilters(to->getContextName(), to->getConfigName(), sources, syncFilter, sourceFilters);
     from->setConfigFilter(true, "", syncFilter);
-    BOOST_FOREACH(const SourceProps::value_type &entry, sourceFilters) {
+    for (const auto &entry: sourceFilters) {
         from->setConfigFilter(false, entry.first, entry.second);
     }
 
@@ -825,8 +824,8 @@ bool Cmdline::run() {
             }
         } else {
             // list for all backends
-            BOOST_FOREACH(const RegisterSyncSource *source, registry) {
-                BOOST_FOREACH(const Values::value_type &alias, source->m_typeValues) {
+            for (const auto &source: registry) {
+                for (const auto &alias: source->m_typeValues) {
                     if (!alias.empty() && source->m_enabled) {
                         SourceType type(*alias.begin());
                         nodes->getProperties()->setProperty("backend", type.m_backend);
@@ -906,7 +905,7 @@ bool Cmdline::run() {
 
         list<string> sources = config->getSyncSources();
         sources.sort();
-        BOOST_FOREACH(const string &name, sources) {
+        for (const string &name: sources) {
             if (m_sources.empty() ||
                 m_sources.find(name) != m_sources.end()) {
                 SE_LOG_SHOW(NULL, "[%s]", name.c_str());
@@ -1062,7 +1061,7 @@ bool Cmdline::run() {
                     // for both the "is complete" check and the error message below
                     ConfigProps syncProps = m_props.createSyncFilter(to->getContextName());
                     bool complete = true;
-                    BOOST_FOREACH(const ConfigProperty *prop, SyncConfig::getRegistry()) {
+                    for (const ConfigProperty *prop: SyncConfig::getRegistry()) {
                         if (prop->isObligatory() &&
                             syncProps.find(prop->getMainName()) == syncProps.end()) {
                             missing.push_back(prop->getMainName());
@@ -1127,7 +1126,7 @@ bool Cmdline::run() {
         // Creating from scratch with other sources is a possible typo
         // and will trigger an error below.
         if (fromScratch) {
-            BOOST_FOREACH(const string &source, m_sources) {
+            for (const string &source: m_sources) {
                 if (m_template == "none" ||
                     !m_props.createSourceFilter(to->getContextName(), source).empty()) {
                     sources.insert(source);
@@ -1152,8 +1151,8 @@ bool Cmdline::run() {
             list<string> peers = from->getPeers();
             peers.sort(); // make code below deterministic
 
-            BOOST_FOREACH(const std::string source, from->getSyncSources()) {
-                BOOST_FOREACH(const string &peer, peers) {
+            for (const std::string source: from->getSyncSources()) {
+                for (const string &peer: peers) {
                     IniFileConfigNode node(from->getRootPath() + "/peers/" + peer + "/sources/" + source,
                                            "config.ini",
                                            true);
@@ -1212,7 +1211,7 @@ bool Cmdline::run() {
             set<string> sources = m_sources;
             SuspendFlags &s = SuspendFlags::getSuspendFlags();
 
-            BOOST_FOREACH(const string &source, configuredSources) {
+            for (const string &source: configuredSources) {
                 boost::shared_ptr<PersistentSyncSourceConfig> sourceConfig(to->getSyncSourceConfig(source));
                 string disable = "";
                 set<string>::iterator entry = sources.find(source);
@@ -1324,7 +1323,7 @@ bool Cmdline::run() {
 
         // Now also migrate all peers inside context?
         if (configureContext && m_migrate) {
-            BOOST_FOREACH(const string &peer, from->getPeers()) {
+            for (const string &peer: from->getPeers()) {
                 migratePeer(peer + from->getContextName(), peer + to->getContextName());
             }
             if (!origPeer.empty()) {
@@ -1445,7 +1444,7 @@ bool Cmdline::run() {
                 err = ops.m_startDataWrite();
                 CHECK_ERROR("writing items");
             }
-            BOOST_FOREACH(const string &luid, luids) {
+            for (const string &luid: luids) {
                 sysync::ItemIDType id;
                 id.item = (char *)luid.c_str();
                 err = ops.m_deleteItem(&id);
@@ -1495,17 +1494,14 @@ bool Cmdline::run() {
                         SE_LOG_SHOW(NULL, "#0: %s",
                                     insertItem(raw, luid, content).getEncoded().c_str());
                     } else {
-                        typedef boost::split_iterator<string::iterator> string_split_iterator;
                         int count = 0;
                         FindDelimiter finder(m_delimiter);
 
                         // when updating, check number of luids in advance
                         if (m_update) {
                             unsigned long total = 0;
-                            for (string_split_iterator it =
-                                     boost::make_split_iterator(content, finder);
-                                 it != string_split_iterator();
-                                 ++it) {
+                            auto range = make_iterator_range(boost::make_split_iterator(content, finder));
+                            for (auto it = range.begin(); it != range.end(); ++it) {
                                 total++;
                             }
                             if (total != m_luids.size()) {
@@ -1514,10 +1510,7 @@ bool Cmdline::run() {
                             }
                         }
                         list<string>::const_iterator luidit = m_luids.begin();
-                        for (string_split_iterator it =
-                                 boost::make_split_iterator(content, finder);
-                             it != string_split_iterator();
-                             ++it) {
+                        for (const auto &match: make_iterator_range(boost::make_split_iterator(content, finder))) {
                             string luid;
                             if (m_update) {
                                 if (luidit == m_luids.end()) {
@@ -1531,14 +1524,14 @@ bool Cmdline::run() {
                                         count,
                                         insertItem(raw,
                                                    luid,
-                                                   string(it->begin(), it->end())).getEncoded().c_str());
+                                                   std::string(match.begin(), match.end())).getEncoded().c_str());
                             count++;
                         }
                     }
                 } else {
                     ReadDir dir(m_itemPath);
                     int count = 0;
-                    BOOST_FOREACH(const string &entry, dir) {
+                    for (const string &entry: dir) {
                         string content;
                         string path = m_itemPath + "/" + entry;
                         if (!ReadFile(path, content)) {
@@ -1592,7 +1585,7 @@ bool Cmdline::run() {
                     luids.reserve(m_luids.size());
                     luids.insert(luids.begin(), m_luids.begin(), m_luids.end());
                     raw->setReadAheadOrder(SyncSourceBase::READ_SELECTED_ITEMS, luids);
-                    BOOST_FOREACH(const string &luid, m_luids) {
+                    for (const string &luid: m_luids) {
                         ExportLUID(raw, out, m_delimiter, m_itemPath, haveItem, haveNewline, luid);
                     }
                 }
@@ -1625,8 +1618,7 @@ bool Cmdline::run() {
             // unchanged. This way we don't activate sync sources
             // accidentally when the sync mode is modified
             // temporarily.
-            BOOST_FOREACH(const std::string &source,
-                          context->getSyncSources()) {
+            for (const std::string &source: context->getSyncSources()) {
                 boost::shared_ptr<PersistentSyncSourceConfig> source_config =
                     context->getSyncSourceConfig(source);
                 if (!source_config->isDisabled()) {
@@ -1635,8 +1627,7 @@ bool Cmdline::run() {
             }
         } else {
             // apply (possibly empty) source filter to selected sources
-            BOOST_FOREACH(const std::string &source,
-                          m_sources) {
+            for (const std::string &source: m_sources) {
                 boost::shared_ptr<PersistentSyncSourceConfig> source_config =
                         context->getSyncSourceConfig(source);
                 ConfigProps filter = m_props.createSourceFilter(m_server, source);
@@ -1679,7 +1670,7 @@ bool Cmdline::run() {
             vector<string> dirs;
             context->getSessions(dirs);
             bool first = true;
-            BOOST_FOREACH(const string &dir, dirs) {
+            for (const string &dir: dirs) {
                 if (first) {
                     first = false;
                 } else if(!m_quiet) {
@@ -1978,7 +1969,7 @@ bool Cmdline::listPropValues(const ConfigPropertyRegistry &validProps,
         if (comment != "") {
             list<string> commentLines;
             ConfigProperty::splitComment(comment, commentLines);
-            BOOST_FOREACH(const string &line, commentLines) {
+            for (const string &line: commentLines) {
                 out << "   " << line << endl;
             }
         } else {
@@ -1998,7 +1989,7 @@ bool Cmdline::listProperties(const ConfigPropertyRegistry &validProps,
     string comment;
     bool needComma = false;
     ostringstream out;
-    BOOST_FOREACH(const ConfigProperty *prop, validProps) {
+    for (const ConfigProperty *prop: validProps) {
         if (!prop->isHidden()) {
             string newComment = prop->getComment();
 
@@ -2037,7 +2028,7 @@ static void findPeerProps(FilterConfigNode::ConfigFilter &filter,
                           ConfigPropertyRegistry &registry,
                           set<string> &peerProps)
 {
-    BOOST_FOREACH(StringPair entry, filter) {
+    for (const StringPair &entry: filter) {
         const ConfigProperty *prop = registry.find(entry.first);
         if (prop &&
             prop->getSharing() == ConfigProperty::NO_SHARING) {
@@ -2050,11 +2041,11 @@ void Cmdline::checkForPeerProps()
 {
     set<string> peerProps;
 
-    BOOST_FOREACH(FullProps::value_type &entry, m_props) {
+    for (auto &entry: m_props) {
         ContextProps &props = entry.second;
 
         findPeerProps(props.m_syncProps, SyncConfig::getRegistry(), peerProps);
-        BOOST_FOREACH(SourceProps::value_type &entry, props.m_sourceProps) {
+        for (auto &entry: props.m_sourceProps) {
             findPeerProps(entry.second, SyncSourceConfig::getRegistry(), peerProps);
         }
     }
@@ -2087,7 +2078,7 @@ void Cmdline::listDatabases(SyncSource *source, const string &header)
     } else {
         SyncSource::Databases databases = source->getDatabases();
 
-        BOOST_FOREACH(const SyncSource::Database &database, databases) {
+        for (const SyncSource::Database &database: databases) {
             out << "   " << database.m_name << " (" << database.m_uri << ")";
             if (database.m_isDefault) {
                 out << " <default>";
@@ -2153,7 +2144,7 @@ void Cmdline::dumpConfigs(const string &preamble,
 {
     ostringstream out;
     out << preamble << endl;
-    BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server,servers) {
+    for (const auto &server:servers) {
         out << "   "  << server.first << " = " << server.second <<endl;
     }
     if (!servers.size()) {
@@ -2175,7 +2166,7 @@ void Cmdline::dumpConfigTemplates(const string &preamble,
     }
     out << endl;
 
-    BOOST_FOREACH(const SyncConfig::TemplateList::value_type server,templates) {
+    for (const auto &server: templates) {
         out << "   "  << server->m_templateId << " = " << server->m_description;
         if (printRank){
             out << "    " << server->m_rank *20 << "%";
@@ -2195,7 +2186,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
     list<string> perPeer, perContext, global;
     ostringstream out;
 
-    BOOST_FOREACH(const ConfigProperty *prop, allProps) {
+    for (const ConfigProperty *prop: allProps) {
         if (prop->isHidden() ||
             ((flags & HIDE_PER_PEER) &&
              prop->getSharing() == ConfigProperty::NO_SHARING)) {
@@ -2257,7 +2248,7 @@ void Cmdline::dumpComment(ostream &stream,
 {
     list<string> commentLines;
     ConfigProperty::splitComment(comment, commentLines);
-    BOOST_FOREACH(const string &line, commentLines) {
+    for (const string &line: commentLines) {
         stream << prefix << line << endl;
     }
 }
@@ -2375,12 +2366,8 @@ static string filterConfig(const string &buffer)
 {
     ostringstream res;
 
-    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
-    for (string_split_iterator it =
-             boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal()));
-         it != string_split_iterator();
-         ++it) {
-        string line = boost::copy_range<string>(*it);
+    for (const auto &match: make_iterator_range(boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal())))) {
+        std::string line(match.begin(), match.end());
         if (!line.empty() &&
             line.find("defaultPeer =") == line.npos &&
             line.find("keyring =") == line.npos &&
@@ -2397,12 +2384,7 @@ static string removeComments(const string &buffer)
 {
     ostringstream res;
 
-    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
-    for (string_split_iterator it =
-             boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal()));
-         it != string_split_iterator();
-         ++it) {
-        string line = boost::copy_range<string>(*it);
+    for (const auto &line: make_iterator_range(boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal())))) {
         if (!line.empty() &&
             !boost::starts_with(line, "#")) {
             res << line << endl;
@@ -2436,18 +2418,14 @@ static string filterIndented(const string &buffer)
     ostringstream res;
     bool first = true;
 
-    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
-    for (string_split_iterator it =
-             boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal()));
-         it != string_split_iterator();
-         ++it) {
-        if (!boost::starts_with(*it, " ")) {
+    for (const auto &line: make_iterator_range(boost::make_split_iterator(buffer, boost::first_finder("\n", boost::is_iequal())))) {
+        if (!boost::starts_with(line, " ")) {
             if (!first) {
                 res << endl;
             } else {
                 first = false;
             }
-            res << *it;
+            res << line;
         }
     }
 
@@ -2460,13 +2438,9 @@ static void sortConfig(string &config)
     // file name, line number, property
     typedef pair<string, pair<int, string> > line_t;
     vector<line_t> lines;
-    typedef boost::split_iterator<string::iterator> string_split_iterator;
     int linenr = 0;
-    for (string_split_iterator it =
-             boost::make_split_iterator(config, boost::first_finder("\n", boost::is_iequal()));
-         it != string_split_iterator();
-         ++it, ++linenr) {
-        string line(it->begin(), it->end());
+    for (const auto &match: make_iterator_range(boost::make_split_iterator(config, boost::first_finder("\n", boost::is_iequal())))) {
+        std::string line(match.begin(), match.end());
         if (line.empty()) {
             continue;
         }
@@ -2474,6 +2448,7 @@ static void sortConfig(string &config)
         size_t colon = line.find(':');
         string prefix = line.substr(0, colon);
         lines.push_back(make_pair(prefix, make_pair(linenr, line.substr(colon))));
+        ++linenr;
     }
 
     // stable sort because of line number
@@ -2482,7 +2457,7 @@ static void sortConfig(string &config)
     size_t len = config.size();
     config.resize(0);
     config.reserve(len);
-    BOOST_FOREACH(const line_t &line, lines) {
+    for (const line_t &line: lines) {
         config += line.first;
         config += line.second.second;
         config += "\n";
@@ -2495,12 +2470,8 @@ static string internalToIni(const string &config)
     ostringstream res;
 
     string section;
-    typedef boost::split_iterator<string::const_iterator> string_split_iterator;
-    for (string_split_iterator it =
-             boost::make_split_iterator(config, boost::first_finder("\n", boost::is_iequal()));
-         it != string_split_iterator();
-         ++it) {
-        string line(it->begin(), it->end());
+    for (const auto &match: make_iterator_range(boost::make_split_iterator(config, boost::first_finder("\n", boost::is_iequal())))) {
+        std::string line(match.begin(), match.end());
         if (line.empty()) {
             continue;
         }
@@ -3957,7 +3928,7 @@ protected:
             "peerCurVersion" +
             "lastNonce" +
             "last";
-        BOOST_FOREACH(string &prop, props) {
+        for (string &prop: props) {
             boost::replace_all(oldConfig,
                                prop + " = ",
                                prop + " = internal value");
@@ -4955,7 +4926,7 @@ private:
         ReadDir readDir(newroot);
         sort(readDir.begin(), readDir.end());
 
-        BOOST_FOREACH(const string &entry, readDir) {
+        for (const string &entry: readDir) {
             if (isDir(newroot + "/" + entry)) {
                 if (boost::ends_with(newroot, "/peers") &&
                     !peer.empty() &&

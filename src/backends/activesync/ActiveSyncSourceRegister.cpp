@@ -151,7 +151,7 @@ static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::s
     // each server ID might appear multiple times, once for each
     // recurrence associated with it
     std::set<std::string> easids;
-    BOOST_FOREACH (const std::string &luid, eassource.getAllItems()) {
+    for (const std::string &luid: eassource.getAllItems()) {
         // slight hack: we know that luids in ActiveSyncSource base
         // class pass through this method unmodified, so no need to
         // avoid it
@@ -159,7 +159,7 @@ static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::s
         easids.insert(ids.first);
     }
 
-    BOOST_FOREACH(const std::string &easid, easids) {
+    for (const std::string &easid: easids) {
         std::string item;
         if (forceBaseReadItem) {
             // This bypasses the more specialized

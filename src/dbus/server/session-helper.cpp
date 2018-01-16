@@ -26,8 +26,6 @@
 #include <syncevo/SuspendFlags.h>
 #include <syncevo/ForkExec.h>
 
-#include <boost/foreach.hpp>
-
 SE_BEGIN_CXX
 
 static void dumpString(const std::string &output)
@@ -262,7 +260,7 @@ bool SessionHelper::doRestore(const std::string &configName,
         params.m_config = configName;
         DBusSync sync(params, *this);
         if (!sources.empty()) {
-            BOOST_FOREACH(const std::string &source, sources) {
+            for (const std::string &source: sources) {
                 FilterConfigNode::ConfigFilter filter;
                 filter["sync"] = InitStateString("two-way", true);
                 sync.setConfigFilter(false, source, filter);

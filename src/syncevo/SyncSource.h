@@ -606,7 +606,7 @@ class TestRegistry : public vector<const RegisterSyncSourceTest *>
  public:
     // TODO: using const RegisterSyncSourceTest * operator [] (int);
     const RegisterSyncSourceTest * operator [] (const string &configName) const {
-        BOOST_FOREACH(const RegisterSyncSourceTest *test, *this) {
+        for (const RegisterSyncSourceTest *test: *this) {
             if (test->m_configName == configName) {
                 return test;
             }
@@ -648,11 +648,11 @@ struct XMLConfigFragments {
         string join() {
             string res;
             size_t len = 0;
-            BOOST_FOREACH(const value_type &entry, *this) {
+            for (const value_type &entry: *this) {
                 len += entry.second.size() + 1;
             }
             res.reserve(len);
-            BOOST_FOREACH(const value_type &entry, *this) {
+            for (const value_type &entry: *this) {
                 res += entry.second;
                 res += "\n";
             }

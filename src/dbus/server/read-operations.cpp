@@ -46,7 +46,7 @@ void ReadOperations::getConfigs(bool getTemplates, std::vector<std::string> &con
 
         SyncConfig::TemplateList list = SyncConfig::getPeerTemplates(devices);
         std::map<std::string, int> numbers;
-        BOOST_FOREACH(const boost::shared_ptr<SyncConfig::TemplateDescription> peer, list) {
+        for (const auto &peer: list) {
             //if it is not a template for device
             if(peer->m_deviceName.empty()) {
                 configNames.push_back(peer->m_templateId);
@@ -70,7 +70,7 @@ void ReadOperations::getConfigs(bool getTemplates, std::vector<std::string> &con
         }
     } else {
         SyncConfig::ConfigList list = SyncConfig::getConfigs();
-        BOOST_FOREACH(const SyncConfig::ConfigList::value_type &server, list) {
+        for (const auto &server: list) {
             configNames.push_back(server.first);
         }
     }
@@ -162,7 +162,7 @@ void ReadOperations::getNamedConfig(const std::string &configName,
         ConfigProps props;
         shared->getProperties()->readProperties(props);
         dbusConfig->setConfigFilter(true, "", props);
-        BOOST_FOREACH(std::string source, shared->getSyncSources()) {
+        for (const std::string &source: shared->getSyncSources()) {
             SyncSourceNodes nodes = shared->getSyncSourceNodes(source, "");
             props.clear();
             nodes.getProperties()->readProperties(props);
@@ -187,7 +187,7 @@ void ReadOperations::getNamedConfig(const std::string &configName,
 
     /** get sync properties and their values */
     ConfigPropertyRegistry &syncRegistry = SyncConfig::getRegistry();
-    BOOST_FOREACH(const ConfigProperty *prop, syncRegistry) {
+    for (const ConfigProperty *prop: syncRegistry) {
         InitStateString value = prop->getProperty(*syncConfig->getProperties());
         if (boost::iequals(prop->getMainName(), "syncURL") && !syncURL.empty() ) {
             localConfigs.insert(pair<string, string>(prop->getMainName(), syncURL));
@@ -219,11 +219,11 @@ void ReadOperations::getNamedConfig(const std::string &configName,
 
     /* get configurations from sources */
     list<string> sources = syncConfig->getSyncSources();
-    BOOST_FOREACH(const string &name, sources) {
+    for (const string &name: sources) {
         localConfigs.clear();
         SyncSourceNodes sourceNodes = syncConfig->getSyncSourceNodes(name);
         ConfigPropertyRegistry &sourceRegistry = SyncSourceConfig::getRegistry();
-        BOOST_FOREACH(const ConfigProperty *prop, sourceRegistry) {
+        for (const ConfigProperty *prop: sourceRegistry) {
             InitStateString value = prop->getProperty(*sourceNodes.getProperties());
             if (value.wasSet()) {
                 localConfigs.insert(pair<string, string>(prop->getMainName(), value));
@@ -265,7 +265,7 @@ void ReadOperations::getReports(uint32_t start, uint32_t count,
             ConfigProps props;
             node.readProperties(props);
 
-            BOOST_FOREACH(const ConfigProps::value_type &entry, props) {
+            for (const auto &entry: props) {
                 aReport.insert(entry);
             }
             // a new key-value pair <"peer", [peer name]> is transferred
@@ -317,7 +317,7 @@ void ReadOperations::getDatabases(const string &sourceName, SourceDatabases_t &d
 
     SyncSourceParams params(sourceName, config->getSyncSourceNodes(sourceName), config);
     const SourceRegistry &registry(SyncSource::getSourceRegistry());
-    BOOST_FOREACH(const RegisterSyncSource *sourceInfo, registry) {
+    for (const RegisterSyncSource *sourceInfo: registry) {
         unique_ptr<SyncSource> source(sourceInfo->m_create(params));
         if (!source.get()) {
             continue;

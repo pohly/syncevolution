@@ -142,7 +142,7 @@ public:
         size_t count = 0;
         while (count != m_configs.size()) {
             count = m_configs.size();
-            BOOST_FOREACH (const RegisterSyncSourceTest *test,
+            for (const RegisterSyncSourceTest *test:
                            TestRegistry(m_configs)) {
                 test->init();
             }
@@ -178,14 +178,14 @@ public:
         if (sourcelist && sourcelist[0]) {
             boost::split(sources, sourcelist, boost::is_any_of(","));
         } else {
-            BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
+            for (const RegisterSyncSourceTest *test: m_configs) {
                 if (!test->m_configName.empty()) {
                     sources.insert(test->m_configName);
                 }
             }
         }
 
-        BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
+        for (const RegisterSyncSourceTest *test: m_configs) {
             if (sources.find(test->m_configName) != sources.end() &&
                 !test->m_configName.empty()) {
                 m_syncSource2Config.push_back(test->m_configName);
@@ -195,12 +195,12 @@ public:
         /* Local Test SyncSource : remove all virtual datastores, inserting the
          * sub datastores*/
         ClientTest::Config conf;
-        BOOST_FOREACH (string source, sources) {
+        for (string source: sources) {
             getSourceConfig (source, conf);
             if (!conf.m_subConfigs.empty()) {
                 vector<string> subs;
                 boost::split (subs, conf.m_subConfigs, boost::is_any_of(","));
-                BOOST_FOREACH (string sub, subs) {
+                for (string sub: subs) {
                     pushLocalSource2Config(sub);
                 }
             } else {
@@ -225,7 +225,7 @@ public:
             }
             config->setDevID(m_clientID == "1" ? "sc-api-nat" : "sc-pim-ppc");
         }
-        BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
+        for (const RegisterSyncSourceTest *test: m_configs) {
             if (test->m_configName.empty()) {
                 continue;
             }
@@ -501,7 +501,7 @@ private:
                      name.c_str(),
                      peerName.c_str(),
                      peer->getRootPath().c_str());
-        BOOST_FOREACH(const ConfigProperty *prop, SyncSourceConfig::getRegistry()) {
+        for (const ConfigProperty *prop: SyncSourceConfig::getRegistry()) {
             if (prop->isHidden()) {
                 continue;
             }
@@ -551,7 +551,7 @@ private:
     // push source into localsource2config if it doesn't exist in the vector
     void pushLocalSource2Config(const string &source) {
         bool finded = false;
-        BOOST_FOREACH(string element, m_localSource2Config) {
+        for (string element: m_localSource2Config) {
             if (boost::iequals(element, source)) {
                 finded = true;
                 break;

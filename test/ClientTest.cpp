@@ -88,7 +88,7 @@ struct ItemCount
 static std::ostream &operator << (ostream &out, const ItemCount &count)
 {
     out << count.size() << " ( ";
-    BOOST_FOREACH(const std::string &id, count.m_items) {
+    for (const std::string &id: count.m_items) {
         out << id << " ";
     }
     out << ")";
@@ -227,7 +227,7 @@ std::pair<std::string, std::string> getPeerConfig(const std::string &source)
     if (peerConfig.empty()) {
         // Check for local HTTP server.
         std::string deviceId = local.getDevID();
-        BOOST_FOREACH (const StringPair &peer, SyncConfig::getConfigs()) {
+        for (const StringPair &peer: SyncConfig::getConfigs()) {
             SyncConfig remote(peer.first);
             if (remote.getRemoteDevID() == deviceId) {
                 peerConfig = peer.first;
@@ -476,7 +476,7 @@ std::list<std::string> listItemsOfType(TestingSyncSource *source, int state)
 {
     std::list<std::string> res;
 
-    BOOST_FOREACH(const string &luid, source->getItems(SyncSourceChanges::State(state))) {
+    for (const string &luid: source->getItems(SyncSourceChanges::State(state))) {
         res.push_back(luid);
     }
     return res;
@@ -629,7 +629,7 @@ void LocalTests::addTests() {
             // Create a sub-suite for each set of linked items.
             // items.size() can be fairly large for these tests,
             // so avoid testing all possible combinations.
-            BOOST_FOREACH(const ClientTestConfig::LinkedItems_t &items,
+            for (const ClientTestConfig::LinkedItems_t &items:
                           config.m_linkedItemsSubset) {
                 CppUnit::TestSuite *linked = new CppUnit::TestSuite(getName() + "::LinkedItems" + items.m_name);
                 int stride = (items.size() + 4) / 5;
@@ -894,7 +894,7 @@ void LocalTests::compareDatabasesRef(TestingSyncSource &copy,
     std::string sourceFile = getCurrentTest() + ".ref.test.dat";
     simplifyFilename(sourceFile);
     ofstream out(sourceFile.c_str());
-    BOOST_FOREACH(const std::string &item, items) {
+    for (const std::string &item: items) {
         out << item;
     }
     out.close();
@@ -911,7 +911,7 @@ std::string LocalTests::createItem(int item, const std::string &revision, int si
     // avoid adding white space (not sure whether it is valid for UID)
     prefix << std::setfill('0') << std::setw(3) << item << "-";
 
-    BOOST_FOREACH (std::string curProp,
+    for (std::string curProp:
                    boost::tokenizer< boost::char_separator<char> >(config.m_uniqueProperties,
                                                                    boost::char_separator<char>(":"))) {
         std::string property;
@@ -1089,7 +1089,7 @@ void LocalTests::updateData(const CreateSource &createSource) {
 
     TestingSyncSourcePtr source;
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSource()));
-    BOOST_FOREACH(const string &luid, source->getAllItems()) {
+    for (const string &luid: source->getAllItems()) {
         string item;
         CT_ASSERT_NO_THROW(source->readItemRaw(luid, item));
         CT_ASSERT_NO_THROW(config.m_update(item));
@@ -1462,11 +1462,11 @@ void LocalTests::testLinkedSources()
 {
     // make changes in each of the sources (doesn't have t be
     // the current one)
-    BOOST_FOREACH (LocalTests *main, m_linkedSources) {
+    for (LocalTests *main: m_linkedSources) {
         CLIENT_TEST_LOG("making changes in %s", main->getSourceName().c_str());
 
         // first delete via *all* sources
-        BOOST_FOREACH (LocalTests *test, m_linkedSources) {
+        for (LocalTests *test: m_linkedSources) {
             CLIENT_TEST_LOG("clean via source A of %s", test->getSourceName().c_str());
             CT_ASSERT_NO_THROW(test->deleteAll(test->createSourceA));
             // reset change tracking in source B
@@ -1475,7 +1475,7 @@ void LocalTests::testLinkedSources()
         }
 
         std::map<std::string, TestingSyncSourcePtr> sourcesA;
-        BOOST_FOREACH (LocalTests *test, m_linkedSources) {
+        for (LocalTests *test: m_linkedSources) {
             if (test == main) {
                 continue;
             }
@@ -1488,7 +1488,7 @@ void LocalTests::testLinkedSources()
         // insert one item
         CLIENT_TEST_LOG("inserting into %s", main->getSourceName().c_str());
         CT_ASSERT_NO_THROW(main->doInsert());
-        BOOST_FOREACH (LocalTests *test, m_linkedSources) {
+        for (LocalTests *test: m_linkedSources) {
             if (test == main) {
                 continue;
             }
@@ -1514,7 +1514,7 @@ void LocalTests::testLinkedSources()
         // update one item
         CLIENT_TEST_LOG("updating in %s", main->getSourceName().c_str());
         CT_ASSERT_NO_THROW(main->update(main->createSourceA, main->config.m_updateItem));
-        BOOST_FOREACH (LocalTests *test, m_linkedSources) {
+        for (LocalTests *test: m_linkedSources) {
             if (test == main) {
                 continue;
             }
@@ -1540,7 +1540,7 @@ void LocalTests::testLinkedSources()
         // delete one item
         CLIENT_TEST_LOG("deleting in %s", main->getSourceName().c_str());
         CT_ASSERT_NO_THROW(main->deleteAll(main->createSourceA));
-        BOOST_FOREACH (LocalTests *test, m_linkedSources) {
+        for (LocalTests *test: m_linkedSources) {
             if (test == main) {
                 continue;
             }
@@ -1653,7 +1653,7 @@ void LocalTests::testRemoveProperties() {
     simplifyFilename(updated);
     ofstream out(updated.c_str());
 
-    BOOST_FOREACH (std::string &item, items) {
+    for (std::string &item: items) {
         std::string kind;
         pcrecpp::StringPiece body;
         CT_ASSERT(bodyre.PartialMatch(item, &kind, &body));
@@ -2777,12 +2777,12 @@ ClientTestConfig::LinkedItems_t LocalTests::getParentChildData()
     size_t end = test.find(':', off);
     CT_ASSERT(end != test.npos);
     std::string name = test.substr(off, end - off);
-    BOOST_FOREACH(const ClientTestConfig::LinkedItems_t &items, config.m_linkedItems) {
+    for (const ClientTestConfig::LinkedItems_t &items: config.m_linkedItems) {
         if (items.m_name == name) {
             return items;
         }
     }
-    BOOST_FOREACH(const ClientTestConfig::LinkedItems_t &items, config.m_linkedItemsSubset) {
+    for (const ClientTestConfig::LinkedItems_t &items: config.m_linkedItemsSubset) {
         if (items.m_name == name) {
             return items;
         }
@@ -2809,7 +2809,7 @@ SyncTests::SyncTests(const std::string &name, ClientTest &cl, std::vector<int> s
                 boost::split (subs, config.m_subConfigs, boost::is_any_of(","));
                 offset++;
                 ClientTest::Config subConfig;
-                BOOST_FOREACH (string sub, subs) {
+                for (string sub: subs) {
                 client.getSourceConfig (sub, subConfig);
                 sources.push_back(std::pair<int,LocalTests *>(*it, cl.createLocalTests(sub, client.getLocalSourcePosition(sub), subConfig)));
                 offset--;
@@ -3338,7 +3338,7 @@ bool connectSourceSignal(SyncContext &context,
                          M getSignal,
                          const S &slot)
 {
-    BOOST_FOREACH(const SyncSource *source, *context.getSources())  {
+    for (const SyncSource *source: *context.getSources())  {
         ((source->getOperations().*operation).*getSignal)().connect(slot);
     }
     return false;
@@ -3424,9 +3424,9 @@ void SyncTests::doRestartSync(SyncMode mode)
     CT_ASSERT_EQUAL((size_t)(canRestart ? 2 : 1), results.size());
 
     // nothing transfered before first or second cycle
-    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+    for (const auto &cycle: results) {
         CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
-        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+        for (const auto &entry: cycle.second) {
             CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
                                                0,0,0)
                                .setRestarts(cycle.first)
@@ -3436,7 +3436,7 @@ void SyncTests::doRestartSync(SyncMode mode)
 
     // one item exists now, in all cases
     // (but see remark about refresh-from-remote!)
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
         CT_ASSERT_EQUAL(1, countItems(source.get()));
@@ -3488,10 +3488,10 @@ void SyncTests::doRestartSync(SyncMode mode)
     CT_ASSERT_EQUAL((size_t)2, results.size());
 
     // nothing transfered before first or second cycle
-    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+    for (const auto &cycle: results) {
         CLIENT_TEST_LOG("checking cycle #%d", cycle.first);
         CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
-        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+        for (const auto &entry: cycle.second) {
             CT_ASSERT_NO_THROW(CheckSyncReport(0,0,0,
 
                                                // refresh-from-local and slow sync transfer existing item
@@ -3507,7 +3507,7 @@ void SyncTests::doRestartSync(SyncMode mode)
 
     // one item exists now, in all cases
     // (but see remark about refresh-from-remote!)
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
         CT_ASSERT_EQUAL(1, countItems(source.get()));
@@ -3547,9 +3547,9 @@ void SyncTests::doRestartSync(SyncMode mode)
     CT_ASSERT_EQUAL((size_t)2, results.size());
 
     // nothing transfered before first or second cycle
-    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+    for (const auto &cycle: results) {
         CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
-        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+        for (const auto &entry: cycle.second) {
             CT_ASSERT_NO_THROW(CheckSyncReport(0,0, 0,
                                                // refresh-from-local and slow sync transfer existing item
                                                // in first cycle anew
@@ -3563,7 +3563,7 @@ void SyncTests::doRestartSync(SyncMode mode)
     }
 
     // no item exists now, in all cases
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
         CT_ASSERT_EQUAL(0, countItems(source.get()));
@@ -3715,9 +3715,9 @@ void SyncTests::testManyRestarts()
         { 15, 15,  7 },
         { 15, 15, 15 }
     };
-    BOOST_FOREACH(const Cycles_t::value_type &cycle, results) {
+    for (const auto &cycle: results) {
         CT_ASSERT_EQUAL(sources.size(), cycle.second.size());
-        BOOST_FOREACH(const Reports_t::value_type &entry, cycle.second) {
+        for (const auto &entry: cycle.second) {
             const int *c = changes[cycle.first];
             CLIENT_TEST_LOG("Checking stats before cycle #%d, source %s: expected remote %d/%d/%d",
                             cycle.first, entry.first.c_str(),
@@ -3730,7 +3730,7 @@ void SyncTests::testManyRestarts()
     }
 
     // no item exists now
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         TestingSyncSourcePtr source;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(source_pair.second->createSourceA()));
         CT_ASSERT_EQUAL(0, countItems(source.get()));
@@ -4295,7 +4295,7 @@ bool SyncTests::doConversionCallback(bool *success,
         converted += ".dat";
         simplifyFilename(converted);
         std::ofstream out(converted.c_str());
-        BOOST_FOREACH(const string &item, items) {
+        for (const string &item: items) {
             string convertedItem = item;
             if(!sysync::DataConversion(syncClient.getSession().get(),
                                        type.c_str(),
@@ -4384,7 +4384,7 @@ void SyncTests::testExtensions() {
         TestingSyncSourcePtr source;
         int counter = 0;
         SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(it->second->createSourceB()));
-        BOOST_FOREACH(const string &luid, source->getAllItems()) {
+        for (const string &luid: source->getAllItems()) {
             string item;
             source->readItemRaw(luid, item);
             CT_ASSERT_NO_THROW(it->second->config.m_update(item));
@@ -5617,7 +5617,7 @@ void SyncTests::doInterruptResume(int changes,
                     interruptAtMessage != 0 &&
                     interruptAtMessage + 1 != maxMsgNum &&
                     report.size() == 1) {
-                    BOOST_FOREACH(const SyncReport::SourceReport_t &sourceReport, report) {
+                    for (const SyncReport::SourceReport_t &sourceReport: report) {
                         CT_ASSERT(sourceReport.second.isResumeSync());
                     }
                 }
@@ -6263,7 +6263,7 @@ void SyncTests::doUpdateConflict(const std::string &testname, bool localWins)
             // Copy all unmodified items before the comparison.
             ReadDir dir(remoteModified);
             std::set<std::string> modified(dir.begin(), dir.end());
-            BOOST_FOREACH(const std::string &luid, ReadDir(actualRemoteData)) {
+            for (const std::string &luid: ReadDir(actualRemoteData)) {
                 if (modified.find(luid) == modified.end()) {
                     std::string content;
                     CT_ASSERT(ReadFile(actualRemoteData + "/" + luid, content));
@@ -6397,14 +6397,14 @@ void SyncTests::postSync(int res, const std::string &logname)
 
 void SyncTests::allSourcesInsert(bool withUID)
 {
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         CT_ASSERT_NO_THROW(source_pair.second->doInsert(withUID));
     }
 }
 
 void SyncTests::allSourcesUpdate()
 {
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         CT_ASSERT_NO_THROW(source_pair.second->update(source_pair.second->createSourceA,
                                                       source_pair.second->config.m_updateItem));
     }
@@ -6412,7 +6412,7 @@ void SyncTests::allSourcesUpdate()
 
 void SyncTests::allSourcesDeleteAll()
 {
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         CT_ASSERT_NO_THROW(source_pair.second->deleteAll(source_pair.second->createSourceA));
     }
 }
@@ -6420,7 +6420,7 @@ void SyncTests::allSourcesDeleteAll()
 void SyncTests::allSourcesInsertMany(int startIndex, int numItems,
                                      std::map<int, std::list<std::string> > &luids)
 {
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         std::list<std::string> l;
         CT_ASSERT_NO_THROW(l = source_pair.second->insertManyItems(source_pair.second->createSourceA,
                                                                    startIndex,
@@ -6438,7 +6438,7 @@ void SyncTests::allSourcesUpdateMany(int startIndex, int numItems,
                                      std::map<int, std::list<std::string> > &luids,
                                      int offset)
 {
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         CT_ASSERT_NO_THROW(source_pair.second->updateManyItems(source_pair.second->createSourceA,
                                                                startIndex,
                                                                numItems,
@@ -6453,7 +6453,7 @@ void SyncTests::allSourcesRemoveMany(int numItems,
                                      std::map<int, std::list<std::string> > &luids,
                                      int offset)
 {
-    BOOST_FOREACH(source_array_t::value_type &source_pair, sources)  {
+    for (auto &source_pair: sources)  {
         CT_ASSERT_NO_THROW(source_pair.second->removeManyItems(source_pair.second->createSourceA,
                                                                numItems,
                                                                luids[source_pair.first],
@@ -6489,12 +6489,12 @@ public:
             }
         }
         // link configs of sources which share the same database
-        BOOST_FOREACH (const ConfigMap::value_type &entry, configs) {
+        for (const auto &entry: configs) {
             LocalTests *sourcetests = entry.second;
             const ClientTest::Config &config = sourcetests->config;
             if (!config.m_linkedSources.empty()) {
                 sourcetests->m_linkedSources.push_back(sourcetests);
-                BOOST_FOREACH (const std::string &source, config.m_linkedSources) {
+                for (const std::string &source: config.m_linkedSources) {
                     sourcetests->m_linkedSources.push_back(configs[source]);
                 }
             }
@@ -6598,7 +6598,7 @@ void ClientTest::registerCleanup(Cleanup_t cleanup)
 
 void ClientTest::shutdown()
 {
-    BOOST_FOREACH(Cleanup_t cleanup, cleanupSet) {
+    for (Cleanup_t cleanup: cleanupSet) {
         cleanup();
     }
 }
@@ -6689,7 +6689,7 @@ std::string ClientTest::import(ClientTest &client, TestingSyncSource &source, co
     if (!doImport) {
         it = luids->begin();
     }
-    BOOST_FOREACH(string &data, items) {
+    for (string &data: items) {
         std::string luid;
         try {
             if (doImport) {
@@ -7662,14 +7662,14 @@ void ClientTest::getTestData(const char *type, Config &config)
                                      &config.m_updateItem,
                                      &config.m_mergeItem1,
                                      &config.m_mergeItem2 };
-            BOOST_FOREACH(std::string *item, items) {
+            for (std::string *item: items) {
                 static const pcrecpp::RE times("^(DTSTART|DTEND)(.*)Z$",
                                                pcrecpp::RE_Options().set_multiline(true));
                 times.GlobalReplace("\\1\\2", item);
             }
         } else if (server == "exchange") {
             config.m_linkedItems[0].m_name = "StandardTZ";
-            BOOST_FOREACH(std::string &item, config.m_linkedItems[0]) {
+            for (std::string &item: config.m_linkedItems[0]) {
                 // time zone name changes on server to "Standard Timezone",
                 // with some information stripped
                 boost::replace_all(item,
@@ -8209,7 +8209,7 @@ void CheckSyncReport::check(SyncMLStatus status, SyncReport &report) const
         CT_ASSERT_EQUAL(STATUS_OK, status);
     }
 
-    BOOST_FOREACH(SyncReport::value_type &entry, report) {
+    for (auto &entry: report) {
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
 

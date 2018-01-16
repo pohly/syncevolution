@@ -321,7 +321,7 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
 
     // now bind parameter values in the same order as the columns specification above
     int param = 1;
-    BOOST_FOREACH (string &value, insValues) {
+    for (string &value: insValues) {
         m_sqlite.checkSQL(sqlite3_bind_text(insert, param++, value.c_str(), -1, SQLITE_TRANSIENT));
     }
     if (uid.size()) {

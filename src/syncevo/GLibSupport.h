@@ -378,7 +378,7 @@ template<typename T> char **AllocStringArray(const T &strings,
     try {
         memset(array, 0, sizeof(*array) * arraySize);
         size_t i = 0;
-        BOOST_FOREACH(const std::string &str, strings) {
+        for(const auto &str: strings) {
             array[i] = copyString ? copyString(str.c_str()) : str.c_str();
             if (!array[i]) {
                 throw std::bad_alloc();
@@ -446,17 +446,9 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
 
     /** clear error if any is set */
     void clear() {
-#if 1
-        BOOST_FOREACH(T *entry, *this) {
+        for(T *entry: *this) {
             D(entry);
         }
-#else
-        for (iterator it = begin();
-             it != end();
-             ++it) {
-            D(*it);
-        }
-#endif
         listFree(m_list);
         m_list = NULL;
     }

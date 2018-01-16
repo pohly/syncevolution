@@ -800,7 +800,7 @@ bool RemoteDBusServer::isActive()
 {
     /** if current session is active and then start to call 'Execute' method */
     if(m_session) {
-        BOOST_FOREACH(const string &session, m_activeSessions) {
+        for (const string &session: m_activeSessions) {
             if(boost::equals(m_session->getPath(), session.c_str())) {
                 return true;
             }
@@ -823,7 +823,7 @@ void RemoteDBusServer::runningSessions()
         SE_LOG_SHOW(NULL, "Running session(s): ");
 
         // create local objects for sessions
-        BOOST_FOREACH(const DBusObject_t &path, sessions) {
+        for (const DBusObject_t &path: sessions) {
             RemoteSession session(*this, path);
 
             // Get status. Slight race condition here, session might
@@ -887,7 +887,7 @@ bool RemoteDBusServer::monitor(const string &peer)
         string peerNorm = SyncConfig::normalizeConfigString(peer);
 
         // create local objects for sessions
-        BOOST_FOREACH(const DBusObject_t &path, sessions) {
+        for (const DBusObject_t &path: sessions) {
             boost::shared_ptr<RemoteSession> session(new RemoteSession(*this, path));
 
             std::tuple<string, uint32_t, RemoteSession::SourceStatuses_t> status =

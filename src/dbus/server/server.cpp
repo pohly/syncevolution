@@ -336,7 +336,7 @@ void Server::getSessions(std::vector<DBusObject_t> &sessions)
     if (m_activeSession) {
         sessions.push_back(m_activeSession->getPath());
     }
-    BOOST_FOREACH(boost::weak_ptr<Session> &session, m_workQueue) {
+    for (boost::weak_ptr<Session> &session: m_workQueue) {
         boost::shared_ptr<Session> s = session.lock();
         if (s) {
             sessions.push_back(s->getPath());
@@ -529,7 +529,7 @@ void Server::run()
     // plugins.
     StringMap map = getVersions();
     SE_LOG_DEBUG(NULL, "D-Bus server ready to run, versions:");
-    BOOST_FOREACH(const StringPair &entry, map) {
+    for (const StringPair &entry: map) {
         SE_LOG_DEBUG(NULL, "%s: %s", entry.first.c_str(), entry.second.c_str());
     }
 
@@ -546,7 +546,7 @@ void Server::run()
         }
     }
     in.close();
-    BOOST_FOREACH(const string &file, files) {
+    for (const string &file: files) {
         try {
             SE_LOG_DEBUG(NULL, "watching: %s", file.c_str());
             boost::shared_ptr<SyncEvo::GLibNotify> notify(new GLibNotify(file.c_str(), boost::bind(&Server::fileModified, this, file)));
@@ -606,8 +606,7 @@ boost::shared_ptr<Client> Server::addClient(const Caller_t &ID,
 
 void Server::detach(Resource *resource)
 {
-    BOOST_FOREACH(const Clients_t::value_type &client_entry,
-                  m_clients) {
+    for (const auto &client_entry: m_clients) {
         client_entry.second->detachAll(resource);
     }
 }

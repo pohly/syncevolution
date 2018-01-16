@@ -29,7 +29,7 @@ SE_BEGIN_CXX
 
 void ConfigProps::add(const ConfigProps &other)
 {
-    BOOST_FOREACH(const ConfigProps::value_type &entry, other) {
+    for (const auto &entry: other) {
         std::pair<iterator, bool> res = insert(entry);
         if (!res.second) {
             res.first->second = entry.second;
@@ -50,7 +50,7 @@ InitStateString ConfigProps::get(const string &key, const string &def) const
 ConfigProps::operator string () const
 {
     vector<string> res;
-    BOOST_FOREACH(const StringPair &filter, *this) {
+    for (const StringPair &filter: *this) {
         res.push_back(filter.first + " = " + filter.second);
     }
     sort(res.begin(), res.end());
@@ -134,14 +134,14 @@ ConfigProps FullProps::createSourceFilter(const std::string &config,
 
 bool FullProps::hasProperties(PropCheckMode mode) const
 {
-    BOOST_FOREACH(const value_type &context, *this) {
+    for (const value_type &context: *this) {
         if (mode == CHECK_ALL &&
             !context.second.m_syncProps.empty()) {
             return true;
         }
         if (mode == IGNORE_GLOBAL_PROPS) {
             const ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
-            BOOST_FOREACH(const StringPair &entry, context.second.m_syncProps) {
+            for (const StringPair &entry: context.second.m_syncProps) {
                 const ConfigProperty *prop = registry.find(entry.first);
                 if (!prop ||
                     prop->getSharing() != ConfigProperty::GLOBAL_SHARING) {
@@ -149,7 +149,7 @@ bool FullProps::hasProperties(PropCheckMode mode) const
                 }
             }
         }
-        BOOST_FOREACH(const SourceProps::value_type &source, context.second.m_sourceProps) {
+        for (const auto &source: context.second.m_sourceProps) {
             if (!source.second.empty()) {
                 return true;
             }
@@ -201,7 +201,7 @@ void FullProps::createFilters(const string &context,
     }
 
     // explicit filter for all known sources
-    BOOST_FOREACH(std::string source, allSources) {
+    for (std::string source: allSources) {
         ConfigProps &props = sourceFilters[source];
         if (shared) {
             // combine existing properties from context and command line
