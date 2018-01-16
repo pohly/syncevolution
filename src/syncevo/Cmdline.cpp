@@ -42,7 +42,6 @@
 #include <set>
 #include <list>
 #include <algorithm>
-using namespace std;
 
 #include <boost/shared_ptr.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -54,7 +53,6 @@ using namespace std;
 #include <fstream>
 
 #include <syncevo/declarations.h>
-using namespace std;
 SE_BEGIN_CXX
 
 // synopsis and options char strings

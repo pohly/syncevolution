@@ -19,9 +19,6 @@
 #include <string>
 #include <list>
 
-// TODO: remove this again
-using namespace std;
-
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 
@@ -335,7 +332,7 @@ class Session {
     /**
      * current operation; used for debugging output
      */
-    string m_operation;
+    std::string m_operation;
 
     /**
      * current deadline for operation
@@ -405,7 +402,7 @@ class Session {
      * @param deadline     time at which the operation must be completed, otherwise it'll be considered failed;
      *                     empty if the operation is only meant to be attempted once
      */
-    void startOperation(const string &operation, const Timespec &deadline);
+    void startOperation(const std::string &operation, const Timespec &deadline);
 
     /**
      * Run one attempt to execute the request. May be called multiple times.
@@ -462,7 +459,7 @@ class Session {
      *         errors reported via exceptions
      */
     bool checkError(int error, int code = 0, const ne_status *status = NULL,
-                    const string &newLocation = "",
+                    const std::string &newLocation = "",
                     const std::string &oldLocation = "",
                     const std::set<int> *expectedCodes = NULL);
 

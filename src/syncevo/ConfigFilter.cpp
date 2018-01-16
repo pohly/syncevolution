@@ -23,7 +23,6 @@
 #include <syncevo/ConfigFilter.h>
 #include <syncevo/SyncConfig.h>
 
-using namespace std;
 
 SE_BEGIN_CXX
 
@@ -37,7 +36,7 @@ void ConfigProps::add(const ConfigProps &other)
     }
 }
 
-InitStateString ConfigProps::get(const string &key, const string &def) const
+InitStateString ConfigProps::get(const std::string &key, const std::string &def) const
 {
     const_iterator it = find(key);
     if (it == end()) {
@@ -47,9 +46,9 @@ InitStateString ConfigProps::get(const string &key, const string &def) const
     }
 }
 
-ConfigProps::operator string () const
+ConfigProps::operator std::string () const
 {
-    vector<string> res;
+    std::vector<std::string> res;
     for (const StringPair &filter: *this) {
         res.push_back(filter.first + " = " + filter.second);
     }
@@ -159,9 +158,9 @@ bool FullProps::hasProperties(PropCheckMode mode) const
     return false;
 }
 
-void FullProps::createFilters(const string &context,
-                              const string &config,
-                              const set<string> *sources,
+void FullProps::createFilters(const std::string &context,
+                              const std::string &config,
+                              const std::set<std::string> *sources,
                               ConfigProps &syncFilter,
                               SourceProps &sourceFilters)
 {
@@ -187,7 +186,7 @@ void FullProps::createFilters(const string &context,
     }
 
     // build full set of all sources
-    set<string> allSources;
+    std::set<std::string> allSources;
     if (sources) {
         allSources = *sources;
     }

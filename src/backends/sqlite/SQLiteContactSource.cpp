@@ -159,7 +159,7 @@ void SQLiteContactSource::open()
         "FileAs TEXT);"
         "COMMIT;";
 
-    string id = getDatabaseID();
+    std::string id = getDatabaseID();
     m_sqlite.open(getName(),
                   id.c_str(),
                   mapping,
@@ -174,7 +174,7 @@ void SQLiteContactSource::close()
 void SQLiteContactSource::getSynthesisInfo(SynthesisInfo &info, XMLConfigFragments &fragment)
 {
     SourceType sourceType = getSourceType();
-    string type;
+    std::string type;
     if (!sourceType.m_format.empty()) {
         type = sourceType.m_format;
     }
@@ -199,7 +199,7 @@ void SQLiteContactSource::getSynthesisInfo(SynthesisInfo &info, XMLConfigFragmen
                 "        <use datatype='vCard21' mode='rw'/>\n";
         }
     } else {
-        throwError(SE_HERE, string("configured MIME type not supported: ") + type);
+        throwError(SE_HERE, std::string("configured MIME type not supported: ") + type);
     }
  
 }
@@ -229,26 +229,26 @@ void SQLiteContactSource::listAllItems(RevisionMap_t &revisions)
 {
     sqliteptr all(m_sqlite.prepareSQL("SELECT ROWID, CreationDate, ModificationDate FROM ABPerson;"));
     while (m_sqlite.checkSQL(sqlite3_step(all)) == SQLITE_ROW) {
-        string uid = m_sqlite.toString(SQLITE3_COLUMN_KEY(all, 0));
-        string modTime = m_sqlite.time2str(m_sqlite.getTimeColumn(all, 2));
+        std::string uid = m_sqlite.toString(SQLITE3_COLUMN_KEY(all, 0));
+        std::string modTime = m_sqlite.time2str(m_sqlite.getTimeColumn(all, 2));
         revisions.insert(RevisionMap_t::value_type(uid, modTime));
     }
 }
 
 sysync::TSyError SQLiteContactSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH aItemKey)
 {
-    string uid = aID->item;
+    std::string uid = aID->item;
 
     sqliteptr contact(m_sqlite.prepareSQL("SELECT * FROM ABPerson WHERE ROWID = '%s';", uid.c_str()));
     if (m_sqlite.checkSQL(sqlite3_step(contact)) != SQLITE_ROW) {
-        throwError(SE_HERE, STATUS_NOT_FOUND, string("contact not found: ") + uid);
+        throwError(SE_HERE, STATUS_NOT_FOUND, std::string("contact not found: ") + uid);
     }
 
     for (int i = 0; i<LAST_COL; i++) {
         SQLiteUtil::Mapping map = m_sqlite.getMapping(i);
-        string field = map.fieldname;
+        std::string field = map.fieldname;
         if(!field.empty()) {
-            string value = m_sqlite.getTextColumn(contact, map.colindex);
+            std::string value = m_sqlite.getTextColumn(contact, map.colindex);
             sysync::TSyError res = getSynthesisAPI()->setValue(aItemKey, field, value.c_str(), value.size());
             if (res != sysync::LOCERR_OK) {
                 SE_LOG_WARNING(getDisplayName(), "SQLite backend: set field %s value %s failed", field.c_str(), value.c_str());
@@ -260,23 +260,23 @@ sysync::TSyError SQLiteContactSource::readItemAsKey(sysync::cItemID aID, sysync:
 
 sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID)
 {
-    string uid = aID ? aID->item :"";
-    string newuid = uid;
-    string creationTime;
-    string first, last;
+    std::string uid = aID ? aID->item :"";
+    std::string newuid = uid;
+    std::string creationTime;
+    std::string first, last;
 
-    stringstream cols;
-    stringstream values;
+    std::stringstream cols;
+    std::stringstream values;
 
     // scan-build: value stored to 'numparams' is never read.
 
-    std::list<string> insValues;
+    std::list<std::string> insValues;
     for (int i = 0; i<LAST_COL; i++) {
         SQLiteUtil::Mapping map = m_sqlite.getMapping(i);
-        string field = map.fieldname;
+        std::string field = map.fieldname;
         SharedBuffer data;
         if (!field.empty() && !getSynthesisAPI()->getValue (aItemKey, field, data)) {
-            insValues.push_back (string (data.get()));
+            insValues.push_back (std::string (data.get()));
             cols << m_sqlite.getMapping(i).colname << ", ";
             values <<"?, ";
             if (field == "N_FIRST") {
@@ -288,9 +288,9 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
     }
 
     // synthesize sort keys: upper case with specific order of first/last name
-    string firstsort = first + " " + last;
+    std::string firstsort = first + " " + last;
     boost::to_upper(firstsort);
-    string lastsort = last + " " + first;
+    std::string lastsort = last + " " + first;
     boost::to_upper(lastsort);
 
     cols << "FirstSort, LastSort";
@@ -314,14 +314,14 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
         m_sqlite.checkSQL(sqlite3_step(remove));
     }
 
-    string cols_str = cols.str();
-    string values_str = values.str();
+    std::string cols_str = cols.str();
+    std::string values_str = values.str();
 
     sqliteptr insert(m_sqlite.prepareSQL("INSERT INTO ABPerson( %s ) VALUES( %s );", cols.str().c_str(), values.str().c_str()));
 
     // now bind parameter values in the same order as the columns specification above
     int param = 1;
-    for (string &value: insValues) {
+    for (std::string &value: insValues) {
         m_sqlite.checkSQL(sqlite3_bind_text(insert, param++, value.c_str(), -1, SQLITE_TRANSIENT));
     }
     if (uid.size()) {
@@ -346,7 +346,7 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
 }
 
 
-void SQLiteContactSource::deleteItem(const string& uid)
+void SQLiteContactSource::deleteItem(const std::string& uid)
 {
     sqliteptr del;
 

@@ -46,7 +46,6 @@
 
 
 #include <syncevo/declarations.h>
-using namespace std;
 SE_BEGIN_CXX
 
 LogRedirect *LogRedirect::m_redirect;
@@ -753,7 +752,7 @@ public:
         // process() keeps unfinished STDOUT lines buffered
         buffer.m_redirect->process();
         CPPUNIT_ASSERT_EQUAL(std::string(errorMessage), buffer.m_streams[Logger::DEV].str());
-        CPPUNIT_ASSERT_EQUAL(string(""), buffer.m_streams[Logger::SHOW].str());
+        CPPUNIT_ASSERT_EQUAL(std::string(""), buffer.m_streams[Logger::SHOW].str());
 
         // flush() makes them available
         buffer.m_redirect->flush();
@@ -822,11 +821,11 @@ public:
             std::string info = buffer.m_streams[Logger::INFO].str();
             std::string dev = buffer.m_streams[Logger::DEV].str();
             std::string debug = buffer.m_streams[Logger::DEBUG].str();
-            CPPUNIT_ASSERT_EQUAL(string(""), error);
-            CPPUNIT_ASSERT_EQUAL(string(""), warning);
-            CPPUNIT_ASSERT_EQUAL(string(""), show);
-            CPPUNIT_ASSERT_EQUAL(string(""), info);
-            CPPUNIT_ASSERT_EQUAL(string(""), error);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), error);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), warning);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), show);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), info);
+            CPPUNIT_ASSERT_EQUAL(std::string(""), error);
             CPPUNIT_ASSERT(dev.find("normal message stderr") != dev.npos);
             CPPUNIT_ASSERT(debug.find("test warning") != debug.npos);
         } catch(...) {
