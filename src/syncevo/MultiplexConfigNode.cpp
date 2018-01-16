@@ -26,9 +26,9 @@ FilterConfigNode *
 MultiplexConfigNode::getNode(const std::string &property,
                              const ConfigProperty **found) const
 {
-    BOOST_FOREACH(const ConfigProperty *prop, m_registry) {
+    for (const ConfigProperty *prop: m_registry) {
         bool match = false;
-        BOOST_FOREACH(const std::string &name, prop->getNames()) {
+        for (const std::string &name: prop->getNames()) {
             if (name == property) {
                 match = true;
                 break;

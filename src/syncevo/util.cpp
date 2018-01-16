@@ -31,7 +31,6 @@
 #include <synthesis/syerror.h>
 
 #include <boost/scoped_array.hpp>
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <fstream>
 #include <iostream>
@@ -191,7 +190,7 @@ void rm_r(const string &path, boost::function<bool (const string &,
     }
 
     ReadDir dir(path);
-    BOOST_FOREACH(const string &entry, dir) {
+    for (const string &entry: dir) {
         rm_r(path + "/" + entry, filter);
     }
     if (filter(path, true) &&
@@ -205,7 +204,7 @@ void cp_r(const string &from, const string &to)
     if (isDir(from)) {
         mkdir_p(to);
         ReadDir dir(from);
-        BOOST_FOREACH(const string &entry, dir) {
+        for (const string &entry: dir) {
             cp_r(from + "/" + entry, to + "/" + entry);
         }
     } else {
@@ -408,7 +407,7 @@ ReadDir::ReadDir(const string &path, bool throwError) : m_path(path)
 
 std::string ReadDir::find(const string &entry, bool caseSensitive)
 {
-    BOOST_FOREACH(const string &e, *this) {
+    for (const string &e: *this) {
         if (caseSensitive ? e == entry : boost::iequals(e, entry)) {
             return m_path + "/" + e;
         }
@@ -452,7 +451,7 @@ unsigned long Hash(const std::string &str)
 {
     unsigned long hashval = 5381;
 
-    BOOST_FOREACH(int c, str) {
+    for (int c: str) {
         hashval = ((hashval << 5) + hashval) + c;
     }
 
@@ -485,7 +484,7 @@ std::string SHA_256(const std::string &data)
         SE_THROW("NSS HASH_HashBuf() failed");
     }
     res.reserve(SHA256_LENGTH * 2);
-    BOOST_FOREACH(unsigned char value, hash) {
+    for (unsigned char value: hash) {
         res += StringPrintf("%02x", value);
     }
     return res;
@@ -514,7 +513,7 @@ string StringEscape::escape(const string &str) const
     char buffer[4];
 
     res.reserve(str.size() * 3);
-    BOOST_FOREACH(char c, str) {
+    for (char c: str) {
         if(c != m_escapeChar &&
            m_forbidden.find(c) == m_forbidden.end()) {
             res += c;
@@ -535,7 +534,7 @@ string StringEscape::escape(const string &str, char escapeChar, Mode mode)
     bool isLeadingSpace = true;
     res.reserve(str.size() * 3);
 
-    BOOST_FOREACH(char c, str) {
+    for (char c: str) {
         if(c != escapeChar &&
            (mode == STRICT ?
             (isalnum(c) ||
@@ -566,7 +565,7 @@ string StringEscape::escape(const string &str, char escapeChar, Mode mode)
             numspaces++;
         }
         res.resize(res.size() - numspaces);
-        BOOST_FOREACH(char c, str.substr(str.size() - numspaces)) {
+        for (char c: str.substr(str.size() - numspaces)) {
             sprintf(buffer, "%c%02x",
                     escapeChar,
                     (unsigned int)(unsigned char)c);

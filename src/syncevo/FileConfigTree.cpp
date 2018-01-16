@@ -24,7 +24,6 @@
 #include <syncevo/IniConfigNode.h>
 #include <syncevo/util.h>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include <unistd.h>
@@ -47,14 +46,14 @@ FileConfigTree::FileConfigTree(const string &root,
 
 void FileConfigTree::flush()
 {
-    BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
+    for (const auto &node: m_nodes) {
         node.second->flush();
     }
 }
 
 void FileConfigTree::reload()
 {
-    BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
+    for (const auto &node: m_nodes) {
         node.second->reload();
     }
 }
@@ -205,7 +204,7 @@ list<string> FileConfigTree::getChildren(const string &path)
     // first look at existing files
     if (!access(fullpath.c_str(), F_OK)) {
         ReadDir dir(fullpath);
-        BOOST_FOREACH(const string entry, dir) {
+        for (const string entry: dir) {
             if (isNode(fullpath, entry)) {
                 res.push_back(entry);
             }
@@ -216,7 +215,7 @@ list<string> FileConfigTree::getChildren(const string &path)
     // but not saved yet. The full path must be
     // <path>/<childname>/<filename>.
     fullpath += "/";
-    BOOST_FOREACH(const NodeCache_t::value_type &node, m_nodes) {
+    for (const auto &node: m_nodes) {
         string currpath = node.first;
         if (currpath.size() > fullpath.size() &&
             currpath.substr(0, fullpath.size()) == fullpath) {

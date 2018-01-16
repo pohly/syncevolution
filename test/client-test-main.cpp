@@ -177,7 +177,7 @@ public:
             formatter.printFailureReport();
             failure = output.str();
             bool failed = true;
-            BOOST_FOREACH (const std::string &re, m_allowedFailures) {
+            for (const std::string &re: m_allowedFailures) {
                 if (pcrecpp::RE(re).FullMatch(m_currentTest)) {
                     result = "*** failure ignored ***";
                     failed = false;
@@ -398,7 +398,7 @@ int main(int argc, char* argv[])
           // recursively for each test. This way we keep running
           // even if one test crashes hard, valgrind can check
           // each test individually and uses less memory.
-          BOOST_FOREACH (const std::string &name, tests) {
+          for (const std::string &name: tests) {
 #ifdef USE_SYSTEM
               if (system(StringPrintf("%s %s", argv[0], name.c_str()).c_str())) {
                   failed = true;

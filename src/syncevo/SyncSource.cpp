@@ -349,7 +349,7 @@ public:
         // scan directories for matching module names
         do {
             debug<<"Scanning backend libraries in " <<dirpath <<endl;
-            BOOST_FOREACH (const string &entry, *dir) {
+            for (const string &entry: *dir) {
                 if (isDir (dirpath + '/' + entry)) {
                     /* This is a 2-level dir, this corresponds to loading
                      * backends from current building directory. The library
@@ -384,7 +384,7 @@ public:
         // library dependencies) first, then skip syncebook if loading
         // of syncebook-2 succeeded. If loading of syncebook-2 fails
         // due to missing libraries, we proceed to use syncebook.
-        BOOST_REVERSE_FOREACH (const StringPair &entry, candidates) {
+        for (const StringPair &entry: reverse(candidates)) {
             const std::string &basename = entry.first;
             const std::string &fullpath = entry.second;
             std::string replacement;
@@ -395,7 +395,7 @@ public:
             } else {
                 modname = basename;
             }
-            BOOST_FOREACH (const std::string &l, m_available) {
+            for (const std::string &l: m_available) {
                 if (boost::starts_with(l, modname)) {
                     replacement = l;
                     break;
@@ -465,7 +465,7 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
 
     const SourceRegistry &registry(getSourceRegistry());
     unique_ptr<SyncSource> source;
-    BOOST_FOREACH(const RegisterSyncSource *sourceInfos, registry) {
+    for (const RegisterSyncSource *sourceInfos: registry) {
         unique_ptr<SyncSource> nextSource(sourceInfos->m_create(params));
         if (nextSource.get()) {
             if (source.get()) {
@@ -525,7 +525,7 @@ VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig 
 {
     if (config) {
         std::string evoSyncSource = getDatabaseID();
-        BOOST_FOREACH(std::string name, getMappedSources()) {
+        for (std::string name: getMappedSources()) {
             if (name.empty()) {
                 throwError(SE_HERE, StringPrintf("configuration of underlying datastores contains empty datastore name: database = '%s'",
                                                  evoSyncSource.c_str()));
@@ -547,7 +547,7 @@ VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig 
 void VirtualSyncSource::open()
 {
     getDataTypeSupport();
-    BOOST_FOREACH(boost::shared_ptr<SyncSource> &source, m_sources) {
+    for (boost::shared_ptr<SyncSource> &source: m_sources) {
         source->open();
     }
 }
@@ -557,7 +557,7 @@ bool VirtualSyncSource::isEmpty()
     bool empty = true;
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
 
-    BOOST_FOREACH(boost::shared_ptr<SyncSource> &source, m_sources) {
+    for (boost::shared_ptr<SyncSource> &source: m_sources) {
         // Operation might not be implemented, in which case we have to
         // assume "not empty".
         if (!source->getOperations().m_isEmpty ||
@@ -575,7 +575,7 @@ bool VirtualSyncSource::isEmpty()
 
 void VirtualSyncSource::close()
 {
-    BOOST_FOREACH(boost::shared_ptr<SyncSource> &source, m_sources) {
+    for (boost::shared_ptr<SyncSource> &source: m_sources) {
         source->close();
     }
 }
@@ -600,7 +600,7 @@ std::string VirtualSyncSource::getDataTypeSupport()
 SyncSource::Databases VirtualSyncSource::getDatabases()
 {
     SyncSource::Databases dbs;
-    BOOST_FOREACH (boost::shared_ptr<SyncSource> &source, m_sources) {
+    for (boost::shared_ptr<SyncSource> &source: m_sources) {
         SyncSource::Databases sub = source->getDatabases();
         if (sub.empty()) {
             return dbs;
@@ -1147,7 +1147,7 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
     // Ensure that source knows what we are going to read.
     std::vector<std::string> uids;
     uids.reserve(revisions->size());
-    BOOST_FOREACH(const StringPair &mapping, *revisions) {
+    for (const StringPair &mapping: *revisions) {
         uids.push_back(mapping.first);
     }
 
@@ -1163,7 +1163,7 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
 
     string item;
     errno = 0;
-    BOOST_FOREACH(const StringPair &mapping, *revisions) {
+    for (const StringPair &mapping: *revisions) {
         const string &uid = mapping.first;
         const string &rev = mapping.second;
         m_raw->readItemRaw(uid, item);
@@ -1252,7 +1252,7 @@ void SyncSourceRevisions::restoreData(const SyncSource::Operations::ConstBackupI
     }
 
     // now remove items that were not in the backup
-    BOOST_FOREACH(const StringPair &mapping, revisions) {
+    for (const StringPair &mapping: revisions) {
         try {
             report.incrementItemStat(report.ITEM_LOCAL,
                                      report.ITEM_REMOVED,
@@ -1290,7 +1290,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         trackingNode.readProperties(props);
 
         RevisionMap_t revisions;
-        BOOST_FOREACH(const StringPair &mapping, props) {
+        for (const StringPair &mapping: props) {
             const string &uid = mapping.first;
             const string &revision = mapping.second;
             addItem(uid);
@@ -1359,7 +1359,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         trackingNode.clear();
     }
 
-    BOOST_FOREACH(const StringPair &mapping, m_revisions) {
+    for (const StringPair &mapping: m_revisions) {
         const string &uid = mapping.first;
         const string &revision = mapping.second;
 
@@ -1389,7 +1389,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         ConfigProps props;
         trackingNode.readProperties(props);
 
-        BOOST_FOREACH(const StringPair &mapping, props) {
+        for (const StringPair &mapping: props) {
             const string &uid(mapping.first);
             if (getAllItems().find(uid) == getAllItems().end()) {
                 addItem(uid, DELETED);
@@ -1398,7 +1398,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         }
 
         // now update tracking node
-        BOOST_FOREACH(const StringPair &update, revUpdates) {
+        for (const StringPair &update: revUpdates) {
             trackingNode.setProperty(update.first, update.second);
         }
     }
@@ -1479,7 +1479,7 @@ std::string SyncSourceLogging::getDescription(sysync::KeyH aItemKey)
     try {
         std::list<std::string> values;
 
-        BOOST_FOREACH(const std::string &field, m_fields) {
+        for (const std::string &field: m_fields) {
             SharedBuffer value;
             if (!getSynthesisAPI()->getValue(aItemKey, field, value) &&
                 value.size()) {
@@ -1753,10 +1753,8 @@ void TestingSyncSource::removeAllItems()
     // remove children from a merged event first,
     // which is better supported by certain servers
     Items_t items = getAllItems();
-    for (Items_t::reverse_iterator it = items.rbegin();
-         it != items.rend();
-         ++it) {
-        deleteItem(*it);
+    for (const auto &item: reverse(items)) {
+        deleteItem(item);
     }
 }
 

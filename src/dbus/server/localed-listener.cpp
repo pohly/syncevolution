@@ -22,7 +22,6 @@
 #include <syncevo/Logging.h>
 #include <syncevo/util.h>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <algorithm>
@@ -100,7 +99,7 @@ void LocaledListener::onPropertiesChange(const std::string &interface,
 {
     if (interface == LOCALED_INTERFACE) {
         boost::function<void (const LocaleEnv &env)> result(boost::bind(&LocaledListener::emitLocaleEnv, m_self, _1));
-        BOOST_FOREACH (const Properties::value_type &entry, properties) {
+        for (const auto &entry: properties) {
             if (entry.first == LOCALED_LOCALE_PROPERTY) {
                 const LocaleEnv *locale = boost::get<LocaleEnv>(&entry.second);
                 if (locale) {
@@ -139,7 +138,7 @@ void LocaledListener::processLocaleProperty(const LocaleVariant &variant,
     LocaleEnv current;
     if (!locale && mustCall) {
         SE_LOG_DEBUG(NULL, "localed: using current environment as fallback");
-        BOOST_FOREACH (const char *name, LOCALED_ENV_VARS) {
+        for (const char *name: LOCALED_ENV_VARS) {
             const char *value = getenv(name);
             if (value) {
                 current.push_back(StringPrintf("%s=%s", name, value));
@@ -174,7 +173,7 @@ void LocaledListener::check(const boost::function<void (const LocaleEnv &env)> &
 void LocaledListener::setLocale(const LocaleEnv &locale)
 {
     bool modified = false;
-    BOOST_FOREACH (const char *name, LOCALED_ENV_VARS) {
+    for (const char *name: LOCALED_ENV_VARS) {
         const char *value = getenv(name);
         std::string assignment = StringPrintf("%s=", name);
         LocaleEnv::const_iterator instance = std::find_if(locale.begin(), locale.end(),

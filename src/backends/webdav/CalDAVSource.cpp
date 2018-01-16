@@ -183,7 +183,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
     m_cache.clear();
     m_cache.m_initialized = false;
     std::list<std::string> mustRead;
-    BOOST_FOREACH(const StringPair &item, items) {
+    for (const StringPair &item: items) {
         SubRevisionMap_t::iterator it = revisions.find(item.first);
         if (it == revisions.end() ||
             it->second.m_revision != item.second) {
@@ -240,7 +240,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
             "   <D:getetag/>\n"
             "   <C:calendar-data/>\n"
             "</D:prop>\n";
-        BOOST_FOREACH(const std::string &luid, mustRead) {
+        for (const std::string &luid: mustRead) {
             buffer << "<D:href>" << luid2path(luid) << "</D:href>\n";
         }
         buffer << "</C:calendar-multiget>";
@@ -266,7 +266,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
         }
         // Workaround for Radicale 0.6.4: it simply returns nothing (no error, no data).
         // Fall back to GET of items with no response.
-        BOOST_FOREACH(const std::string &luid, mustRead) {
+        for (const std::string &luid: mustRead) {
             if (results.find(luid) == results.end()) {
                 getSession()->startOperation(StringPrintf("GET item %s not returned by 'multiget new/updated items'", luid.c_str()),
                                              deadline);
@@ -392,8 +392,7 @@ void CalDAVSource::setAllSubItems(const SubRevisionMap_t &revisions)
     if (!m_cache.m_initialized) {
         // populate our cache (without data) from the information cached
         // for us
-        BOOST_FOREACH(const SubRevisionMap_t::value_type &subentry,
-                      revisions) {
+        for (const auto &subentry: revisions) {
             addSubItem(subentry.first,
                        subentry.second);
         }
@@ -977,10 +976,8 @@ void CalDAVSource::removeMergedItem(const std::string &davLUID)
             //
             // Workaround: use the workarounds from removeSubItem()
             std::set<std::string> subids = event.m_subids;
-            for (std::set<std::string>::reverse_iterator it = subids.rbegin();
-                 it != subids.rend();
-                 ++it) {
-                removeSubItem(davLUID, *it);
+            for (const auto &luid: reverse(subids)) {
+                removeSubItem(davLUID, luid);
             }
         } else {
             throw;

@@ -41,7 +41,6 @@ using namespace std;
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/foreach.hpp>
 
 #include <syncevo/declarations.h>
 
@@ -786,7 +785,7 @@ boost::shared_ptr<ContactCache> EvolutionContactSource::startReading(const std::
         cache->m_running = true;
         cache->m_name = StringPrintf("%s-%s (%d)", uids[0]->c_str(), uids[size - 1]->c_str(), size);
         cache->m_lastLUID = *uids[size - 1];
-        BOOST_FOREACH (const std::string *uid, std::make_pair(uids.begin(), uids.begin() + size)) {
+        for (const std::string *uid: boost::make_iterator_range(uids.begin(), uids.begin() + size)) {
             (*cache)[*uid] = EContactCXX();
         }
         m_contactsFromDB += size;
@@ -818,7 +817,7 @@ void EvolutionContactSource::completedRead(const boost::weak_ptr<ContactCache> &
                      cache->m_name.c_str(),
                      gerror ? gerror->message : "<<successful>>");
         if (success) {
-            BOOST_FOREACH (EContact *contact, contacts) {
+            for (EContact *contact: contacts) {
                 const char *uid = (const char *)e_contact_get_const(contact, E_CONTACT_UID);
                 SE_LOG_DEBUG(getDisplayName(), "reading: contact read %s got %s", cache->m_name.c_str(), uid);
                 (*cache)[uid] = EContactCXX(contact, ADD_REF);
@@ -976,7 +975,7 @@ void EvolutionContactSource::flushItemChanges()
         m_numRunningOperations++;
         GListCXX<EContact, GSList> contacts;
         // Iterate backwards, push to front (cheaper for single-linked list) -> same order in the end.
-        BOOST_REVERSE_FOREACH (const boost::shared_ptr<Pending> &pending, m_batchedAdd) {
+        for (const auto &pending: reverse(m_batchedAdd)) {
             contacts.push_front(pending->m_contact.get());
         }
         // Transfer content without copying and then copy only the shared pointer.
@@ -993,7 +992,7 @@ void EvolutionContactSource::flushItemChanges()
         SE_LOG_DEBUG(getDisplayName(), "batch update of %d contacts starting", (int)m_batchedUpdate.size());
         m_numRunningOperations++;
         GListCXX<EContact, GSList> contacts;
-        BOOST_REVERSE_FOREACH (const boost::shared_ptr<Pending> &pending, m_batchedUpdate) {
+        for (const auto &pending: reverse(m_batchedUpdate)) {
             contacts.push_front(pending->m_contact.get());
         }
         boost::shared_ptr<PendingContainer_t> batched(new PendingContainer_t);

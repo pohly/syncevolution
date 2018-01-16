@@ -37,7 +37,6 @@
 #include <test.h>
 #include <synthesis/timeutil.h>
 
-#include <boost/foreach.hpp>
 #include <iterator>
 #include <algorithm>
 #include <functional>
@@ -174,7 +173,7 @@ string ConfigProperty::getName(const ConfigNode &node) const
         return m_names.front();
     }
     // pick the name already used in the node
-    BOOST_FOREACH(const std::string &name, m_names) {
+    for (const std::string &name: m_names) {
         string value;
         if (node.getProperty(name, value)) {
             return name;
@@ -226,7 +225,7 @@ string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags fl
 {
     string normal = config;
     boost::to_lower(normal);
-    BOOST_FOREACH(char &character, normal) {
+    for (char &character: normal) {
         if (!isprint(character) ||
             character == '/' ||
             character == '\\' ||
@@ -248,7 +247,7 @@ string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags fl
             // when ignoring their context. Peer list is sorted by name,
             // therefore shorter config names (= without context) are
             // found first, as intended.
-            BOOST_FOREACH(const StringPair &entry, getConfigs()) {
+            for (const StringPair &entry: getConfigs()) {
                 string entry_peer, entry_context;
                 splitConfigString(entry.first, entry_peer, entry_context);
                 if (normal == entry_peer) {
@@ -762,7 +761,7 @@ void SyncConfig::addPeers(const string &root,
                           SyncConfig::ConfigList &res) {
     FileConfigTree tree(root, SyncConfig::HTTP_SERVER_LAYOUT);
     list<string> servers = tree.getChildren("");
-    BOOST_FOREACH(const string &server, servers) {
+    for (const string &server: servers) {
         // sanity check: only list server directories which actually
         // contain a configuration. To distinguish between a context
         // (~/.config/syncevolution/default) and an HTTP server config
@@ -776,7 +775,7 @@ void SyncConfig::addPeers(const string &root,
         string peerPath = server + "/peers";
         if (!access((root + "/" + peerPath).c_str(), F_OK)) {
             // not a real HTTP server, search for peers
-            BOOST_FOREACH(const string &peer, tree.getChildren(peerPath)) {
+            for (const string &peer: tree.getChildren(peerPath)) {
                 res.push_back(pair<string, string> (normalizeConfigString(peer + "@" + server),
                                                   root + "/" + peerPath + "/" + peer));
             }
@@ -848,7 +847,7 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
         if (isDir(sDir)) {
             // check all sub directories
             ReadDir dir(sDir);
-            BOOST_FOREACH(const string &entry, dir) {
+            for (const string &entry: dir) {
                 // ignore hidden files, . and ..
                 if (!boost::starts_with(entry, ".")) {
                     directories.push(sDir + "/" + entry);
@@ -862,7 +861,7 @@ SyncConfig::TemplateList SyncConfig::matchPeerTemplates(const DeviceList &peers,
                 // not contain a valid template
                 continue;
             }
-            BOOST_FOREACH (const DeviceList::value_type &entry, peers){
+            for (const auto &entry: peers){
                 std::string fingerprint(entry.getFingerprint());
                 // peerName should be empty if no reliable device info is on hand.
                 std::string peerName = entry.m_pnpInformation ? fingerprint : "";
@@ -964,7 +963,7 @@ boost::shared_ptr<SyncConfig> SyncConfig::createPeerTemplate(const string &serve
         }
         filename += "-icon";
 
-        BOOST_FOREACH(const string &entry, dir) {
+        for (const string &entry: dir) {
             if (boost::istarts_with(entry, filename)) {
                 config->setIconURI("file://" + dirname + "/" + entry);
                 break;
@@ -1045,18 +1044,18 @@ void SyncConfig::preFlush(UserInterface &ui)
 
     /* save password in the global config node */
     ConfigPropertyRegistry& registry = getRegistry();
-    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+    for (const ConfigProperty *prop: registry) {
         prop->savePassword(ui, *this);
     }
 
     /** grep each source and save their password */
     list<string> configuredSources = getSyncSources();
-    BOOST_FOREACH(const string &sourceName, configuredSources) {
+    for (const string &sourceName: configuredSources) {
         //boost::shared_ptr<SyncSourceConfig> sc = getSyncSourceConfig(sourceName);
         ConfigPropertyRegistry& registry = SyncSourceConfig::getRegistry();
         SyncSourceNodes sourceNodes = getSyncSourceNodes(sourceName);
 
-        BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        for (const ConfigProperty *prop: registry) {
             prop->savePassword(ui, *this, sourceName);
         }
     }
@@ -1126,7 +1125,7 @@ list<string> SyncConfig::getSyncSources() const
         sources.insert(sourceList.begin(), sourceList.end());
     }
     // get sources from filter and union them into returned sources
-    BOOST_FOREACH(const SourceProps::value_type &value, m_sourceFilters) {
+    for (const auto &value: m_sourceFilters) {
         if (value.first.empty()) {
             // ignore filter for all sources
             continue;
@@ -1930,7 +1929,7 @@ public:
         registry.push_back(&syncPropPeerCurVersion);
 #endif
 
-        BOOST_FOREACH (const ConfigProperty *prop, tmp) {
+        for (const ConfigProperty *prop: tmp) {
             registry.push_back(prop);
         }
 
@@ -2102,14 +2101,14 @@ void PasswordConfigProperty::checkPasswords(UserInterface &ui,
 {
     if (flags & CHECK_PASSWORD_SYNC) {
         ConfigPropertyRegistry& registry = SyncConfig::getRegistry();
-        BOOST_FOREACH(const ConfigProperty *prop, registry) {
+        for (const ConfigProperty *prop: registry) {
             prop->checkPassword(ui, config, flags);
         }
     }
     if (flags & CHECK_PASSWORD_SOURCE) {
-        BOOST_FOREACH (const std::string &sourceName, sourceNames) {
+        for (const std::string &sourceName: sourceNames) {
             ConfigPropertyRegistry &registry = SyncSourceConfig::getRegistry();
-            BOOST_FOREACH(const ConfigProperty *prop, registry) {
+            for (const ConfigProperty *prop: registry) {
                 prop->checkPassword(ui, config, flags, sourceName);
             }
         }
@@ -2277,7 +2276,7 @@ InitState< vector<string> > SyncConfig::getSyncURL() const {
 void SyncConfig::setSyncURL(const string &value, bool temporarily) { syncPropSyncURL.setProperty(*getNode(syncPropSyncURL), value, temporarily); }
 void SyncConfig::setSyncURL(const vector<string> &value, bool temporarily) { 
     stringstream urls;
-    BOOST_FOREACH (string url, value) {
+    for (string url: value) {
         urls<<url<<" ";
     }
     return setSyncURL (urls.str(), temporarily);
@@ -2337,7 +2336,7 @@ void SyncConfig::setPeerIsClient(bool value, bool temporarily) { syncPropPeerIsC
 InitStateString SyncConfig::getSyncMLVersion() const {
     InitState< std::set<std::string> > flags = getSyncMLFlags();
     static const char * const versions[] = { "1.2", "1.1", "1.0" };
-    BOOST_FOREACH (const char *version, versions) {
+    for (const char *version: versions) {
         if (flags.find(version) != flags.end()) {
             return InitStateString(version, flags.wasSet());
         }
@@ -2347,7 +2346,7 @@ InitStateString SyncConfig::getSyncMLVersion() const {
 InitState<unsigned int> SyncConfig::getRequestMaxTime() const {
     InitState<unsigned int> requestmaxtime;
     InitState< std::set<std::string> > flags = getSyncMLFlags();
-    BOOST_FOREACH(const std::string &flag, flags) {
+    for (const std::string &flag: flags) {
         size_t offset = flag.find('=');
         if (offset != flag.npos) {
             std::string key = flag.substr(0, offset);
@@ -2372,7 +2371,7 @@ InitState< std::set<std::string> > SyncConfig::getSyncMLFlags() const {
     static const std::string delim(" ,");
     boost::split(keywords, value, boost::is_any_of(delim));
     std::set<std::string> flags;
-    BOOST_FOREACH (std::string &keyword, keywords) {
+    for (std::string &keyword: keywords) {
         boost::to_lower(keyword);
         flags.insert(keyword);
     }
@@ -2433,7 +2432,7 @@ std::string SyncConfig::findSSLServerCertificate()
     std::string paths = getSSLServerCertificates();
     std::vector< std::string > files;
     boost::split(files, paths, boost::is_any_of(":"));
-    BOOST_FOREACH(std::string file, files) {
+    for (std::string file: files) {
         if (!file.empty() && !access(file.c_str(), R_OK)) {
             return file;
         }
@@ -2508,7 +2507,7 @@ static void setDefaultProps(const ConfigPropertyRegistry &registry,
                             bool unshared,
                             bool useObligatory = true)
 {
-    BOOST_FOREACH(const ConfigProperty *prop, registry) {
+    for (const ConfigProperty *prop: registry) {
         InitStateString value = prop->getProperty(*node);
         if (!prop->isHidden() &&
             (unshared || prop->getSharing() != ConfigProperty::NO_SHARING) &&
@@ -2550,8 +2549,7 @@ void SyncConfig::removeSyncSource(const string &name)
             pathName = m_contextPath + "/sources/" + lower;
             m_tree->remove(pathName);
             // ... and the peer-specific ones of *all* peers
-            BOOST_FOREACH(const std::string peer,
-                          m_tree->getChildren(m_contextPath + "/peers")) {
+            for (const std::string peer: m_tree->getChildren(m_contextPath + "/peers")) {
                 m_tree->remove(m_contextPath + "/peers/" + peer + "/sources/" + lower);
             }
         } else {
@@ -2591,7 +2589,7 @@ static void copyProperties(const ConfigNode &fromProps,
                            bool unshared,
                            const ConfigPropertyRegistry &allProps)
 {
-    BOOST_FOREACH(const ConfigProperty *prop, allProps) {
+    for (const ConfigProperty *prop: allProps) {
         if (prop->isHidden() == hidden &&
             (unshared ||
              prop->getSharing() != ConfigProperty::NO_SHARING)) {
@@ -2629,11 +2627,11 @@ void SyncConfig::copy(const SyncConfig &other,
     if (!sourceSet) {
         sources = other.getSyncSources();
     } else {
-        BOOST_FOREACH(const string &sourceName, *sourceSet) {
+        for (const string &sourceName: *sourceSet) {
             sources.push_back(sourceName);
         }
     }
-    BOOST_FOREACH(const string &sourceName, sources) {
+    for (const string &sourceName: sources) {
         ConstSyncSourceNodes fromNodes = other.getSyncSourceNodes(sourceName);
         SyncSourceNodes toNodes = this->getSyncSourceNodes(sourceName);
 
@@ -2765,7 +2763,7 @@ public:
         stringstream res;
 
         SourceRegistry &registry(SyncSource::getSourceRegistry());
-        BOOST_FOREACH(const RegisterSyncSource *sourceInfos, registry) {
+        for (const RegisterSyncSource *sourceInfos: registry) {
             static const std::string whitespace(" \t\n");
             string comment = boost::trim_right_copy_if(sourceInfos->m_typeDescr,
                                                        boost::is_any_of(whitespace));
@@ -2789,7 +2787,7 @@ public:
         Values res(StringConfigProperty::getValues());
 
         const SourceRegistry &registry(SyncSource::getSourceRegistry());
-        BOOST_FOREACH(const RegisterSyncSource *sourceInfos, registry) {
+        for (const RegisterSyncSource *sourceInfos: registry) {
             copy(sourceInfos->m_typeValues.begin(),
                  sourceInfos->m_typeValues.end(),
                  back_inserter(res));
@@ -2947,7 +2945,7 @@ public:
         registry.push_back(&sourcePropAdminData);
         registry.push_back(&sourcePropSynthesisID);
 
-        BOOST_FOREACH (const ConfigProperty *prop, tmp) {
+        for (const ConfigProperty *prop: tmp) {
             registry.push_back(prop);
         }
 
@@ -3276,7 +3274,7 @@ int TemplateConfig::fingerprintMatch (const string &fingerprint)
     boost::replace_all(input, "-", "_");
     //return the largest match value
     int max = NO_MATCH;
-    BOOST_FOREACH (std::string sub, subfingerprints){
+    for (std::string sub: subfingerprints){
         std::vector< LCS::Entry <char> > result;
         std::string match = sub;
         boost::to_lower(match);
@@ -3366,7 +3364,7 @@ bool SecondsConfigProperty::parseDuration(const string &value, string &error, un
 
     unsigned int current = 0;
     bool haveDigit = false;
-    BOOST_FOREACH(char c, value) {
+    for (char c: value) {
         if (isdigit(c)) {
             current = current * 10 + (c - '0');
             haveDigit = true;

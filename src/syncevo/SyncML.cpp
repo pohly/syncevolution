@@ -27,7 +27,6 @@
 #include <iomanip>
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -693,7 +692,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
 
     // name column is sized dynamically based on column header and actual names
     size_t name_width = strlen("Source");
-    BOOST_FOREACH(const SyncReport::value_type &entry, *this) {
+    for (const auto &entry: *this) {
         const std::string &name = entry.first;
         if (name_width < name.size()) {
             name_width = name.size();
@@ -811,7 +810,7 @@ void SyncReport::prettyPrint(std::ostream &out, int flags) const
     string sep = sepstream.str();
     out << sep;
 
-    BOOST_FOREACH(const SyncReport::value_type &entry, *this) {
+    for (const auto &entry: *this) {
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
         out << '|' << right(' ', name, name_width);
@@ -1017,7 +1016,7 @@ std::string SyncReport::slowSyncExplanation(const std::string &peer,
 std::string SyncReport::slowSyncExplanation(const std::string &peer) const
 {
     std::set<std::string> sources;
-    BOOST_FOREACH(const SyncReport::value_type &entry, *this) {
+    for (const auto &entry: *this) {
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
         if (source.getStatus() == STATUS_UNEXPECTED_SLOW_SYNC) {
@@ -1042,7 +1041,7 @@ ConfigNode &operator << (ConfigNode &node, const SyncReport &report)
         node.removeProperty("error");
     }
 
-    BOOST_FOREACH(const SyncReport::value_type &entry, report) {
+    for (const auto &entry: report) {
         const std::string &name = entry.first;
         const SyncSourceReport &source = entry.second;
 
@@ -1121,7 +1120,7 @@ ConfigNode &operator >> (ConfigNode &node, SyncReport &report)
 
     ConfigNode::PropsType props;
     node.readProperties(props);
-    BOOST_FOREACH(const ConfigNode::PropsType::value_type &prop, props) {
+    for (const auto &prop: props) {
         string key = prop.first;
         if (boost::starts_with(key, "source-")) {
             key.erase(0, strlen("source-"));
