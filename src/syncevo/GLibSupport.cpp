@@ -35,7 +35,6 @@
 #include <glib.h>
 #endif
 
-using namespace std;
 
 SE_BEGIN_CXX
 
@@ -155,14 +154,14 @@ GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *ti
     return instance.run();
 }
 
-void GErrorCXX::throwError(const SourceLocation &where, const string &action)
+void GErrorCXX::throwError(const SourceLocation &where, const std::string &action)
 {
     throwError(where, action, m_gerror);
 }
 
-void GErrorCXX::throwError(const SourceLocation &where, const string &action, const GError *err)
+void GErrorCXX::throwError(const SourceLocation &where, const std::string &action, const GError *err)
 {
-    string gerrorstr = action;
+    std::string gerrorstr = action;
     if (!gerrorstr.empty()) {
         gerrorstr += ": ";
     }
@@ -337,7 +336,7 @@ class GLibTest : public CppUnit::TestFixture {
         GFileMonitorEvent m_event;
     };
 
-    static void notifyCallback(list<Event> &events,
+    static void notifyCallback(std::list<Event> &events,
                                GFile *file1,
                                GFile *file2,
                                GFileMonitorEvent event)
@@ -357,7 +356,7 @@ class GLibTest : public CppUnit::TestFixture {
 
     void notify()
     {
-        list<Event> events;
+        std::list<Event> events;
         static const char *name = "GLibTest.out";
         unlink(name);
         GMainLoopCXX loop(g_main_loop_new(NULL, FALSE), TRANSFER_REF);
@@ -368,7 +367,7 @@ class GLibTest : public CppUnit::TestFixture {
         {
             events.clear();
             GLibEvent id(g_timeout_add_seconds(5, timeout, loop.get()), "timeout");
-            ofstream out(name);
+            std::ofstream out(name);
             out << "hello";
             out.close();
             g_main_loop_run(loop.get());
@@ -377,7 +376,7 @@ class GLibTest : public CppUnit::TestFixture {
 
         {
             events.clear();
-            ofstream out(name);
+            std::ofstream out(name);
             out.close();
             GLibEvent id(g_timeout_add_seconds(5, timeout, loop.get()), "timeout");
             g_main_loop_run(loop.get());

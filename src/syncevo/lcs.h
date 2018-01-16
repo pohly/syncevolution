@@ -71,7 +71,7 @@ template <class T> std::ostream &operator<<(std::ostream &out, const Entry<T> &e
 }
 
 /**
- * accessor which reads from std::vector< std:pair< entry, cost > >
+ * accessor which reads from std::vector< std::pair< entry, cost > >
  */
 template <class T> class accessor {
 public:
