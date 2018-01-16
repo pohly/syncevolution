@@ -35,9 +35,10 @@
 #include <syncevo/Timespec.h>
 #include <syncevo/ThreadSupport.h>
 
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/noncopyable.hpp>
+
+#include <functional>
+#include <memory>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -244,13 +245,13 @@ class Logger
      */
     class Handle
     {
-        boost::shared_ptr<Logger> m_logger;
+        std::shared_ptr<Logger> m_logger;
 
     public:
         Handle() throw ();
         Handle(Logger *logger) throw ();
-        template<class L> Handle(const boost::shared_ptr<L> &logger) throw () : m_logger(logger) {}
-        template<class L> Handle(const boost::weak_ptr<L> &logger) throw () : m_logger(logger.lock()) {}
+        template<class L> Handle(const std::shared_ptr<L> &logger) throw () : m_logger(logger) {}
+        template<class L> Handle(const std::weak_ptr<L> &logger) throw () : m_logger(logger.lock()) {}
         Handle(const Handle &other) throw ();
         Handle &operator = (const Handle &other) throw ();
         ~Handle() throw ();
@@ -349,7 +350,7 @@ class Logger
                      const std::string *prefix,
                      const char *format,
                      va_list args,
-                     boost::function<void (std::string &chunk, size_t expectedTotal)> print);
+                     std::function<void (std::string &chunk, size_t expectedTotal)> print);
 
  private:
     Level m_level;

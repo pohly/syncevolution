@@ -180,14 +180,7 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
     return result;
 }
 
-#ifdef USE_EDS_CLIENT
-static EClient *newECalClient(ESource *source,
-                              ECalClientSourceType ecalSourceType,
-                              GError **gerror)
-{
-    return E_CLIENT(e_cal_client_new(source, ecalSourceType, gerror));
-}
-#else
+#ifndef USE_EDS_CLIENT
 char *EvolutionCalendarSource::authenticate(const char *prompt,
                                             const char *key)
 {
@@ -214,15 +207,15 @@ void EvolutionCalendarSource::open()
     // be others with similar problems and for local storage it is
     // a reasonably cheap operation (so no harm there).
     for (int retries = 0; retries < 2; retries++) {
+        auto create = [type=sourceType()] (ESource *source, GError **gerror) {
+            return E_CLIENT(e_cal_client_new(source, type, gerror));
+        };
         m_calendar.reset(E_CAL_CLIENT(openESource(sourceExtension(),
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? e_source_registry_ref_builtin_calendar :
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? e_source_registry_ref_builtin_task_list :
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? e_source_registry_ref_builtin_memo_list :
                                                   NULL,
-                                                  boost::bind(newECalClient,
-                                                              _1,
-                                                              sourceType(),
-                                                              _2)).get()));
+                                                  create).get()));
     }
 #else
     GErrorCXX gerror;
@@ -303,7 +296,7 @@ bool EvolutionCalendarSource::isEmpty()
 #ifdef USE_EDS_CLIENT
 class ECalClientViewSyncHandler {
   public:
-    typedef boost::function<void(const GSList *list)> Process_t;
+    typedef std::function<void(const GSList *list)> Process_t;
 
     ECalClientViewSyncHandler(ECalClientViewCXX &view,
                               const Process_t &process) :
@@ -316,10 +309,10 @@ class ECalClientViewSyncHandler {
         // Listen for view signals
         m_view.connectSignal<ECalClientView *,
                              const GSList *>()("objects-added",
-                                               boost::bind(m_process, _2));
-        m_view.connectSignal<EBookClientView *,
+                                               [this] (ECalClientView *, const GSList *list) { m_process(list); });
+        m_view.connectSignal<ECalClientView *,
                              const GError *>()("complete",
-                                               boost::bind(&ECalClientViewSyncHandler::completed, this, _2));
+                                               [this] (ECalClientView *, const GError *gerror) { completed(gerror); });
 
         // Start the view
         e_cal_client_view_start (m_view, m_error);
@@ -360,21 +353,7 @@ class ECalClientViewSyncHandler {
       // Possible error while watching the view
       GErrorCXX m_error;
 };
-
-static void list_revisions(const GSList *objects, EvolutionCalendarSource::RevisionMap_t *revisions)
-{
-    const GSList *l;
-
-    for (l = objects; l; l = l->next) {
-        icalcomponent *icomp = (icalcomponent*)l->data;
-        EvolutionCalendarSource::ItemID id = EvolutionCalendarSource::getItemID(icomp);
-        string luid = id.getLUID();
-        string modTime = EvolutionCalendarSource::getItemModTime(icomp);
-
-        (*revisions)[luid] = modTime;
-    }
-}
-#endif
+#endif // USE_EDS_CLIENT
 
 void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 {
@@ -389,7 +368,18 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 
     // TODO: Optimization: use set fields_of_interest (UID / REV / LAST-MODIFIED)
 
-    ECalClientViewSyncHandler handler(viewPtr, boost::bind(list_revisions, _1, &revisions));
+    auto process = [&revisions] (const GSList *objects) {
+        const GSList *l;
+
+        for (l = objects; l; l = l->next) {
+            icalcomponent *icomp = (icalcomponent*)l->data;
+            EvolutionCalendarSource::ItemID id = EvolutionCalendarSource::getItemID(icomp);
+            string luid = id.getLUID();
+            string modTime = EvolutionCalendarSource::getItemModTime(icomp);
+            revisions[luid] = modTime;
+        }
+    };
+    ECalClientViewSyncHandler handler(viewPtr, process);
     if (!handler.processSync(gerror)) {
         throwError(SE_HERE, "watching view", gerror);
     }
@@ -646,7 +636,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-                for (boost::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
+                for (std::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
@@ -738,7 +728,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-                for (boost::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
+                for (std::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
@@ -858,7 +848,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 
         // recreate children
         bool first = true;
-        for (boost::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
+        for (std::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
             if (first) {
                 char *uid;
 

@@ -31,8 +31,6 @@
 #include <syncevo/SmartPtr.h>
 #include <syncevo/GLibSupport.h>
 
-#include <boost/bind.hpp>
-
 #include <string>
 #include <map>
 
@@ -135,7 +133,7 @@ class ActiveSyncSource :
         // that we use a common prefix, so that we can use the key/value store
         // also for other keys if the need ever arises).
         m_itemNode(new PrefixConfigNode("item-",
-                                        boost::shared_ptr<ConfigNode>(new SafeConfigNode(params.m_nodes.getTrackingNode())))),
+                                        std::static_pointer_cast<ConfigNode>(std::make_shared<SafeConfigNode>(params.m_nodes.getTrackingNode())))),
         m_context(params.m_context)
         {
             if (!m_context) {
@@ -183,11 +181,11 @@ class ActiveSyncSource :
     void findCollections(const std::string &account, bool force_update);
     std::string lookupFolder(const std::string &folder);
 
-    boost::shared_ptr<ConfigNode> m_itemNode;
+    std::shared_ptr<ConfigNode> m_itemNode;
 
  private:
     /** "target-config@<context>" instance which holds our username == ActiveSync account ID */
-    boost::shared_ptr<SyncConfig> m_context;
+    std::shared_ptr<SyncConfig> m_context;
 
     /** account ID for libeas, must be set in "username" config property */
     std::string m_account;
@@ -208,7 +206,7 @@ class ActiveSyncSource :
      * server-side IDs of all items, updated as changes are reported and/or are made;
      * NULL if not using change tracking
      */
-    boost::shared_ptr<ConfigNode> m_ids;
+    std::shared_ptr<ConfigNode> m_ids;
 
     /**
      * cache of all items, filled at begin of session and updated as

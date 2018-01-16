@@ -33,8 +33,6 @@
 #include <syncevo/util.h>
 #include <syncevo/VolatileConfigNode.h>
 
-#include <boost/bind.hpp>
-
 #include <syncevo/declarations.h>
 
 SE_BEGIN_CXX
@@ -68,7 +66,7 @@ public:
  * around for each of eds_event and eds_contact/30, if they ever were used
  * during testing.
  */
-static map<string, boost::shared_ptr<TestingSyncSource> > lockEvolution;
+static map<string, std::shared_ptr<TestingSyncSource> > lockEvolution;
 static void CleanupSources()
 {
     lockEvolution.clear();
@@ -210,8 +208,8 @@ public:
         // get configuration and set obligatory fields
         Logger::instance().setLevel(Logger::DEBUG);
         std::string root = std::string("evolution/") + server + "_" + m_clientID;
-        boost::shared_ptr<SyncConfig> config(new SyncConfig(string(server) + "_" + m_clientID));
-        boost::shared_ptr<SyncConfig> from = boost::shared_ptr<SyncConfig> ();
+        auto config = std::make_shared<SyncConfig>(string(server) + "_" + m_clientID);
+        std::shared_ptr<SyncConfig> from = std::shared_ptr<SyncConfig> ();
 
         if (!config->exists()) {
             // no configuration yet, create in different contexts because
@@ -234,7 +232,7 @@ public:
             getSourceConfig(test, testconfig);
             CPPUNIT_ASSERT(!testconfig.m_type.empty());
 
-            boost::shared_ptr<SyncSourceConfig> sc = config->getSyncSourceConfig(testconfig.m_sourceName);
+            std::shared_ptr<SyncSourceConfig> sc = config->getSyncSourceConfig(testconfig.m_sourceName);
             if (!sc || !sc->exists()) {
                 // no configuration yet
                 config->setSourceDefaults(testconfig.m_sourceName);
@@ -242,7 +240,7 @@ public:
                 CPPUNIT_ASSERT(sc);
                 sc->setURI(testconfig.m_uri);
                 if(from && !testconfig.m_sourceNameServerTemplate.empty()) {
-                    boost::shared_ptr<SyncSourceConfig> scServerTemplate = from->getSyncSourceConfig(testconfig.m_sourceNameServerTemplate);
+                    std::shared_ptr<SyncSourceConfig> scServerTemplate = from->getSyncSourceConfig(testconfig.m_sourceNameServerTemplate);
                     sc->setURI(scServerTemplate->getURI());
                 }
             }
@@ -397,10 +395,10 @@ public:
                 }
             }
 
-            virtual boost::shared_ptr<TransportAgent> createTransportAgent()
+            virtual std::shared_ptr<TransportAgent> createTransportAgent()
             {
-                boost::shared_ptr<TransportAgent>wrapper = m_options.m_transport;
-                boost::shared_ptr<TransportAgent>agent =SyncContext::createTransportAgent();
+                std::shared_ptr<TransportAgent>wrapper = m_options.m_transport;
+                std::shared_ptr<TransportAgent>agent =SyncContext::createTransportAgent();
                 if (!wrapper.get())
                     return agent;
                 dynamic_cast<TransportWrapper*>(wrapper.get())->setAgent(agent);
@@ -487,7 +485,7 @@ private:
                      name.c_str(),
                      config.c_str(),
                      tracking.c_str());
-        boost::shared_ptr<SyncConfig> context(new SyncConfig(config));
+        auto context = std::make_shared<SyncConfig>(config);
         SyncSourceNodes nodes = context->getSyncSourceNodes(name, tracking);
 
         // The user of client-test must have configured the source
@@ -495,7 +493,7 @@ private:
         // Client::Sync testing.  Our testing source must use the same
         // properties, but different change tracking.
         std::string peerName = server ? (std::string(server) + "_" + m_clientID) : "@default";
-        boost::shared_ptr<SyncConfig> peer(new SyncConfig(peerName));
+        auto peer = std::make_shared<SyncConfig>(peerName);
         SyncSourceNodes peerNodes = peer->getSyncSourceNodes(name);
         SE_LOG_DEBUG(NULL, "overriding testing source %s properties with the ones from config %s = %s",
                      name.c_str(),
@@ -505,7 +503,7 @@ private:
             if (prop->isHidden()) {
                 continue;
             }
-            boost::shared_ptr<FilterConfigNode> node = peerNodes.getNode(*prop);
+            std::shared_ptr<FilterConfigNode> node = peerNodes.getNode(*prop);
             InitStateString value = prop->getProperty(*node);
             SE_LOG_DEBUG(NULL, "   %s = %s (%s)",
                          prop->getMainName().c_str(),
@@ -518,7 +516,7 @@ private:
 
         // Same as in init() above: set values if still empty, but don't
         // overwrite anything.
-        boost::shared_ptr<FilterConfigNode> props = nodes.getProperties();
+        std::shared_ptr<FilterConfigNode> props = nodes.getProperties();
         std::string value;
         if (!props->getProperty("database", value)) {
             props->setProperty("database", database);

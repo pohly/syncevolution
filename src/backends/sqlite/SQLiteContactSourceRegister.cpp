@@ -71,7 +71,7 @@ class EvolutionSQLiteContactsTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("contacts", "contacts", true));
         source.reset(SyncSource::createTestingSource("contacts", "addressbook", true));
         source.reset(SyncSource::createTestingSource("contacts", "sqlite-contacts", true));

@@ -34,14 +34,14 @@ SE_BEGIN_CXX
  */
 class IniBaseConfigNode: public ConfigNode {
   protected:
-    boost::shared_ptr<DataBlob> m_data;
+    std::shared_ptr<DataBlob> m_data;
     bool m_modified;
     
     /**
      * Open or create a new blob. The blob will be read (if it exists)
      * but not created or written to unless flush() is called explicitly.
      */
-    IniBaseConfigNode(const boost::shared_ptr<DataBlob> &data);
+    IniBaseConfigNode(const std::shared_ptr<DataBlob> &data);
 
     /** 
      * a virtual method to serial data structure to the file
@@ -81,7 +81,7 @@ class IniFileConfigNode : public IniBaseConfigNode {
     virtual void toFile(std::ostream &file);
 
  public:
-    IniFileConfigNode(const boost::shared_ptr<DataBlob> &data);
+    IniFileConfigNode(const std::shared_ptr<DataBlob> &data);
     IniFileConfigNode(const std::string &path, const std::string &fileName, bool readonly);
 
     /* keep underlying methods visible; our own setProperty() would hide them */
@@ -115,7 +115,7 @@ class IniHashConfigNode: public IniBaseConfigNode {
     virtual void toFile(std::ostream & file);
 
  public:
-    IniHashConfigNode(const boost::shared_ptr<DataBlob> &data);
+    IniHashConfigNode(const std::shared_ptr<DataBlob> &data);
     IniHashConfigNode(const std::string &path, const std::string &fileName, bool readonly);
     virtual InitStateString readProperty(const std::string &property) const;
     virtual void writeProperty(const std::string &property,

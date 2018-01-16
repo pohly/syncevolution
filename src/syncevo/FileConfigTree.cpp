@@ -131,7 +131,7 @@ void FileConfigTree::clearNodes(const std::string &fullpath)
     }
 }
 
-boost::shared_ptr<ConfigNode> FileConfigTree::open(const std::string &path,
+std::shared_ptr<ConfigNode> FileConfigTree::open(const std::string &path,
                                                    ConfigTree::PropertyType type,
                                                    const std::string &otherId)
 {
@@ -167,16 +167,16 @@ boost::shared_ptr<ConfigNode> FileConfigTree::open(const std::string &path,
     if (found != m_nodes.end()) {
         return found->second;
     } else if(type != other && type != server) {
-        boost::shared_ptr<ConfigNode> node(new IniFileConfigNode(fullpath, filename, m_readonly));
+        auto node = std::make_shared<IniFileConfigNode>(fullpath, filename, m_readonly);
         return m_nodes[fullname] = node;
     } else {
-        boost::shared_ptr<ConfigNode> node(new IniHashConfigNode(fullpath, filename, m_readonly));
+        auto node = std::make_shared<IniHashConfigNode>(fullpath, filename, m_readonly);
         return m_nodes[fullname] = node;
     }
 }
 
-boost::shared_ptr<ConfigNode> FileConfigTree::add(const std::string &path,
-                                                  const boost::shared_ptr<ConfigNode> &node)
+std::shared_ptr<ConfigNode> FileConfigTree::add(const std::string &path,
+                                                  const std::shared_ptr<ConfigNode> &node)
 {
     NodeCache_t::iterator found = m_nodes.find(path);
     if (found != m_nodes.end()) {

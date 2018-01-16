@@ -39,7 +39,7 @@ FileDataBlob::FileDataBlob(const std::string &fullpath, bool readonly) :
     splitPath(fullpath, m_path, m_fileName);
 }
 
-boost::shared_ptr<std::ostream> FileDataBlob::write()
+std::shared_ptr<std::ostream> FileDataBlob::write()
 {
     if (m_readonly) {
         SE_THROW(getName() + ": internal error: attempt to write read-only FileDataBlob");
@@ -47,13 +47,13 @@ boost::shared_ptr<std::ostream> FileDataBlob::write()
 
     mkdir_p(m_path);
 
-    boost::shared_ptr<std::ostream> file(new SafeOstream(getName()));
+    auto file = std::make_shared<SafeOstream>(getName());
     return file;
 }
 
-boost::shared_ptr<std::istream> FileDataBlob::read()
+std::shared_ptr<std::istream> FileDataBlob::read()
 {
-    boost::shared_ptr<std::istream> file(new std::ifstream(getName().c_str()));
+    auto file = std::make_shared<std::ifstream>(getName().c_str());
     return file;
 }
 

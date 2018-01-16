@@ -20,7 +20,7 @@
 #ifndef INCL_EVOLUTION_CONFIG_TREE
 # define INCL_EVOLUTION_CONFIG_TREE
 
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <map>
 #include <list>
 #include <string>
@@ -104,7 +104,7 @@ class ConfigTree {
      *                  node's name (allows having multiple different such
      *                  nodes); an empty string is allowed
      */
-    virtual boost::shared_ptr<ConfigNode> open(const std::string &path,
+    virtual std::shared_ptr<ConfigNode> open(const std::string &path,
                                                PropertyType type,
                                                const std::string &otherId = std::string("")) = 0;
 
@@ -121,8 +121,8 @@ class ConfigTree {
      * @param node       default instance if not opened before, discarded if a
      *                   node was registered or opened under the given path before
      */
-    virtual boost::shared_ptr<ConfigNode> add(const std::string &path,
-                                              const boost::shared_ptr<ConfigNode> &node) = 0;
+    virtual std::shared_ptr<ConfigNode> add(const std::string &path,
+                                              const std::shared_ptr<ConfigNode> &node) = 0;
 
     /**
      * returns names of all existing nodes beneath the given path

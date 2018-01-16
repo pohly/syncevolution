@@ -30,9 +30,9 @@ SE_BEGIN_CXX
 
 #define SYNC_UI_PATH "/usr/bin/sync-ui"
 
-boost::shared_ptr<NotificationManagerBase> NotificationManagerFactory::createManager()
+std::shared_ptr<NotificationManagerBase> NotificationManagerFactory::createManager()
 {
-    boost::shared_ptr<NotificationManagerBase> mgr;
+    std::shared_ptr<NotificationManagerBase> mgr;
 
     /* Detect what kind of manager we need: if /usr/bin/sync-ui
      * doesn't exists, we shall use the MLite backend; otherwise, if

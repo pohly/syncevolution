@@ -168,7 +168,7 @@ void mkdir_p(const string &path)
     }
 }
 
-void rm_r(const string &path, boost::function<bool (const string &,
+void rm_r(const string &path, std::function<bool (const string &,
                                                     bool)> filter)
 {
     struct stat buffer;

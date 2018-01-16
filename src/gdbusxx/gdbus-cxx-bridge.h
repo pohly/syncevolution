@@ -62,15 +62,15 @@
 #include <gio/gio.h>
 #include <glib-object.h>
 
-#include <map>
-#include <list>
-#include <vector>
 #include <deque>
+#include <functional>
+#include <list>
+#include <map>
+#include <memory>
 #include <utility>
+#include <vector>
 
-#include <boost/bind.hpp>
 #include <boost/intrusive_ptr.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/variant.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -229,7 +229,7 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
      */
     void flush();
 
-    typedef boost::function<void ()> Disconnect_t;
+    typedef std::function<void ()> Disconnect_t;
     void setDisconnect(const Disconnect_t &func);
     // #define GDBUS_CXX_HAVE_DISCONNECT 1
 
@@ -258,7 +258,7 @@ class DBusConnectionPtr : public boost::intrusive_ptr<GDBusConnection>
      * The callback is allowed to be empty.
      */
     void ownNameAsync(const std::string &name,
-                      const boost::function<void (bool)> &obtainedCB) const;
+                      const std::function<void (bool)> &obtainedCB) const;
 };
 
 class DBusMessagePtr : public boost::intrusive_ptr<GDBusMessage>
@@ -361,7 +361,7 @@ class DBusServerCXX : private boost::noncopyable
      * connection, so the callback can set up objects and then must undelay
      * the connection.
      */
-    typedef boost::function<void (DBusServerCXX &, DBusConnectionPtr &)> NewConnection_t;
+    typedef std::function<void (DBusServerCXX &, DBusConnectionPtr &)> NewConnection_t;
 
     /**
      * Start listening for new connections. Mimics the libdbus DBusServer API, but
@@ -372,7 +372,7 @@ class DBusServerCXX : private boost::noncopyable
      *
      * All errors are reported via exceptions, not "err".
      */
-    static boost::shared_ptr<DBusServerCXX> listen(const NewConnection_t &newConnection, DBusErrorCXX *err);
+    static std::shared_ptr<DBusServerCXX> listen(const NewConnection_t &newConnection, DBusErrorCXX *err);
 
     /**
      * address used by the server
@@ -411,7 +411,7 @@ struct dbus_traits_base
 {
     /**
      * A C++ method or function can handle a call asynchronously by
-     * asking to be passed a "boost::shared_ptr<Result*>" parameter.
+     * asking to be passed a "std::shared_ptr<Result*>" parameter.
      * The dbus_traits for those parameters have "asynchronous" set to
      * true, which skips all processing after calling the method.
      */
@@ -850,23 +850,23 @@ struct FunctionWrapperBase {
 
 template<typename M>
 struct FunctionWrapper : public FunctionWrapperBase {
-    FunctionWrapper(boost::function<M>* func_ptr)
+    FunctionWrapper(std::function<M>* func_ptr)
     : FunctionWrapperBase(reinterpret_cast<void*>(func_ptr))
     {}
 
     virtual ~FunctionWrapper() {
-        delete reinterpret_cast<boost::function<M>*>(m_func_ptr);
+        delete reinterpret_cast<std::function<M>*>(m_func_ptr);
     }
 };
 
 struct MethodHandler
 {
     typedef GDBusMessage *(*MethodFunction)(GDBusConnection *conn, GDBusMessage *msg, void *data);
-    typedef boost::shared_ptr<FunctionWrapperBase> FuncWrapper;
+    typedef std::shared_ptr<FunctionWrapperBase> FuncWrapper;
     typedef std::pair<MethodFunction, FuncWrapper > CallbackPair;
     typedef std::map<const std::string, CallbackPair > MethodMap;
     static MethodMap m_methodMap;
-    static boost::function<void (void)> m_callback;
+    static std::function<void (void)> m_callback;
 
     static std::string make_prefix(const char *object_path) {
         return std::string(object_path) + "~";
@@ -989,7 +989,7 @@ class DBusObjectHelper : public DBusObject
 
 
  public:
-    typedef boost::function<void (void)> Callback_t;
+    typedef std::function<void (void)> Callback_t;
 
     DBusObjectHelper(const DBusConnectionPtr &conn,
                      const std::string &path,
@@ -1047,10 +1047,10 @@ class DBusObjectHelper : public DBusObject
             throw std::logic_error("You can't add new methods after registration!");
         }
 
-        typedef MakeMethodEntry< boost::function<M> > entry_type;
+        typedef MakeMethodEntry< std::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
 
-        boost::function<M> *func = new boost::function<M>(entry_type::boostptr(method, instance));
+        std::function<M> *func = new std::function<M>(entry_type::boostptr(method, instance));
         MethodHandler::FuncWrapper wrapper(new FunctionWrapper<M>(func));
         MethodHandler::CallbackPair methodAndData = std::make_pair(entry_type::methodFunction, wrapper);
         const std::string key(MethodHandler::make_method_key(getPath(), name));
@@ -1068,10 +1068,10 @@ class DBusObjectHelper : public DBusObject
             throw std::logic_error("You can't add new functions after registration!");
         }
 
-        typedef MakeMethodEntry< boost::function<M> > entry_type;
+        typedef MakeMethodEntry< std::function<M> > entry_type;
         g_ptr_array_add(m_methods, entry_type::make(name));
 
-        boost::function<M> *func = new boost::function<M>(function);
+        std::function<M> *func = new std::function<M>(function);
         MethodHandler::FuncWrapper wrapper(new FunctionWrapper<M>(func));
         MethodHandler::CallbackPair methodAndData = std::make_pair(entry_type::methodFunction,
                                                                    wrapper);
@@ -2209,7 +2209,7 @@ static inline GDBusMessage *handleException(GDBusMessage *&callerMsg)
 class Watch : private boost::noncopyable
 {
     DBusConnectionPtr m_conn;
-    boost::function<void (void)> m_callback;
+    std::function<void (void)> m_callback;
     bool m_called;
     guint m_watchID;
     std::string m_peer;
@@ -2226,14 +2226,14 @@ class Watch : private boost::noncopyable
 
  public:
     Watch(const DBusConnectionPtr &conn,
-          const boost::function<void (void)> &callback = boost::function<void (void)>());
+          const std::function<void (void)> &callback = {});
     ~Watch();
 
     /**
      * Changes the callback triggered by this Watch.  If the watch has
      * already fired, the callback is invoked immediately.
      */
-    void setCallback(const boost::function<void (void)> &callback);
+    void setCallback(const std::function<void (void)> &callback);
 
     /**
      * Starts watching for disconnect of that peer
@@ -2243,24 +2243,24 @@ class Watch : private boost::noncopyable
     void activate(const char *peer);
 };
 
-void getWatch(ExtractArgs &context, boost::shared_ptr<Watch> &value);
+void getWatch(ExtractArgs &context, std::shared_ptr<Watch> &value);
 
 /**
  * pseudo-parameter: not part of D-Bus signature,
  * but rather extracted from message attributes
  */
-template <> struct dbus_traits< boost::shared_ptr<Watch> >  : public dbus_traits_base
+template <> struct dbus_traits< std::shared_ptr<Watch> >  : public dbus_traits_base
 {
     static std::string getType() { return ""; }
     static std::string getSignature() { return ""; }
     static std::string getReply() { return ""; }
 
     static void get(ExtractArgs &context,
-                    GVariantIter &iter, boost::shared_ptr<Watch> &value) { getWatch(context, value); }
-    static void append(GVariantBuilder &builder, const boost::shared_ptr<Watch> &value) {}
+                    GVariantIter &iter, std::shared_ptr<Watch> &value) { getWatch(context, value); }
+    static void append(GVariantBuilder &builder, const std::shared_ptr<Watch> &value) {}
 
-    typedef boost::shared_ptr<Watch> host_type;
-    typedef const boost::shared_ptr<Watch> &arg_type;
+    typedef std::shared_ptr<Watch> host_type;
+    typedef const std::shared_ptr<Watch> &arg_type;
 };
 
 /**
@@ -2320,7 +2320,7 @@ template<typename ...A> class DBusResult : virtual public Result<A...>
         sendMsg(errMsg);
     }
 
-    virtual Watch *createWatch(const boost::function<void (void)> &callback)
+    virtual Watch *createWatch(const std::function<void (void)> &callback)
     {
         std::unique_ptr<Watch> watch(new Watch(m_conn, callback));
         watch->activate(g_dbus_message_get_sender(m_msg.get()));
@@ -2348,14 +2348,14 @@ template<typename ...A> class DBusResult : virtual public Result<A...>
  * destructs and transfers the responsibility for sending a reply to
  * the DBusResult instance.
  */
-template <class DBusR> class DBusResultGuard : public boost::shared_ptr<DBusR>
+template <class DBusR> class DBusResultGuard : public std::shared_ptr<DBusR>
 {
     GDBusMessage **m_msg;
  public:
      DBusResultGuard() : m_msg(NULL) {}
     ~DBusResultGuard() throw ()
     {
-        DBusR *result = boost::shared_ptr<DBusR>::get();
+        DBusR *result = std::shared_ptr<DBusR>::get();
         // Our caller has not cleared its "msg" instance,
         // which means that from now on it will be our
         // responsibility to provide a response.
@@ -2367,19 +2367,19 @@ template <class DBusR> class DBusResultGuard : public boost::shared_ptr<DBusR>
     void initDBusResult(ExtractArgs &context)
     {
         m_msg = context.m_msg;
-        boost::shared_ptr<DBusR>::reset(new DBusR(context.m_conn, context.m_msg ? *context.m_msg : NULL));
+        std::shared_ptr<DBusR>::reset(new DBusR(context.m_conn, context.m_msg ? *context.m_msg : NULL));
     }
 };
 
 template <typename ...A>
-struct dbus_traits< boost::shared_ptr<Result<A...> > >
+struct dbus_traits< std::shared_ptr<Result<A...> > >
 {
     static std::string getType() { return DBusResult<A...>::getSignature(); }
     static std::string getSignature() { return ""; }
     static std::string getReply() { return getType(); }
 
     typedef DBusResultGuard< DBusResult<A...> > host_type;
-    typedef boost::shared_ptr< Result<A...> > &arg_type;
+    typedef std::shared_ptr< Result<A...> > &arg_type;
     static const bool asynchronous = true;
 
     static void get(ExtractArgs &context,
@@ -2421,10 +2421,10 @@ namespace {
 
 /** return value */
 template <typename R, typename ...A>
-struct MakeMethodEntry< boost::function<R (A...)> >
+struct MakeMethodEntry< std::function<R (A...)> >
 {
     typedef R (Mptr)(A...);
-    typedef boost::function<Mptr> M;
+    typedef std::function<Mptr> M;
 
     template <class I, class C> static auto boostptr(Mptr C::*method, I instance) {
         return [method, instance] (A... a) {
@@ -2491,10 +2491,10 @@ struct MakeMethodEntry< boost::function<R (A...)> >
 
 /** no return value */
 template <typename ...A>
-struct MakeMethodEntry< boost::function<void (A...)> >
+struct MakeMethodEntry< std::function<void (A...)> >
 {
     typedef void (Mptr)(A...);
-    typedef boost::function<Mptr> M;
+    typedef std::function<Mptr> M;
 
     template <class I, class C> static auto boostptr(Mptr C::*method, I instance) {
         return [method, instance] (A... a) {
@@ -2588,7 +2588,7 @@ template<typename R1, typename R2, typename R3, typename ...R> struct DBusClient
 
 template<typename ...R> class DBusClientCall
 {
-    typedef boost::function<void (R..., const std::string &)> Callback_t;
+    typedef std::function<void (R..., const std::string &)> Callback_t;
     typedef typename DBusClientCallReturnType<R...>::Return_t Return_t;
     typedef typename DBusClientCallReturnType<R...>::Buffer_t Buffer_t;
 
@@ -2877,7 +2877,7 @@ template <typename ...A> class SignalWatch : public SignalFilter
         }
     }
 
-    typedef boost::function<void (A...)> Callback_t;
+    typedef std::function<void (A...)> Callback_t;
     const Callback_t &getCallback() const { return m_callback; }
 
     void activate(const Callback_t &callback)

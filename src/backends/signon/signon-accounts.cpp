@@ -40,8 +40,6 @@
 #include <syncevo/GVariantSupport.h>
 #include <pcrecpp.h>
 
-#include <boost/lambda/core.hpp>
-
 SE_GOBJECT_TYPE(SignonAuthService)
 SE_GOBJECT_TYPE(SignonAuthSession)
 SE_GOBJECT_TYPE(SignonIdentity)
@@ -210,10 +208,10 @@ static void StoreIdentityCB(SignonIdentity *self,
     data->m_gerror = error;
 }
 
-boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
+std::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
                                                          const InitStateString &password)
 {
-    boost::shared_ptr<AuthProvider> provider;
+    std::shared_ptr<AuthProvider> provider;
 
     // Split username into <account ID> and <service name>.
     // Be flexible and allow leading/trailing white space.

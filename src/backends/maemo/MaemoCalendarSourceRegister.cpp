@@ -115,7 +115,7 @@ class MaemoCalendarSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        boost::shared_ptr<SyncSource> source;
+        std::shared_ptr<SyncSource> source;
         source.reset(SyncSource::createTestingSource("calendar", "calendar", true));
         source.reset(SyncSource::createTestingSource("calendar", "maemo-events", true));
         source.reset(SyncSource::createTestingSource("calendar", "Maemo Calendar:text/calendar", true));

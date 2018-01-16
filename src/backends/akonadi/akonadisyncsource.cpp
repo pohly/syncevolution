@@ -39,10 +39,6 @@
 
 #include <syncevo/util.h>
 
-#include <boost/lambda/lambda.hpp>
-#include <boost/lambda/bind.hpp>
-#include <boost/bind.hpp>
-
 #include <QtCore/QDebug>
 
 SE_BEGIN_CXX
@@ -75,7 +71,7 @@ bool AkonadiSyncSource::isEmpty()
 {
     if (!GRunIsMain()) {
         bool result;
-        GRunInMain(boost::lambda::var(result) = boost::lambda::bind(&AkonadiSyncSource::isEmpty, this));
+        GRunInMain([this, &result] () { result = isEmpty(); });
         return result;
     }
 
@@ -90,7 +86,7 @@ bool AkonadiSyncSource::isEmpty()
 void AkonadiSyncSource::start()
 {
     if (!GRunIsMain()) {
-        GRunInMain(boost::bind(&AkonadiSyncSource::start, this));
+        GRunInMain([this]() { start(); });
         return;
     }
 
@@ -117,7 +113,7 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
 {
     if (!GRunIsMain()) {
         Databases result;
-        GRunInMain(boost::lambda::var(result) = boost::lambda::bind(&AkonadiSyncSource::getDatabases, this));
+        GRunInMain([this, &result] () { result = getDatabases(); });
         return result;
     }
 
@@ -155,7 +151,7 @@ SyncSource::Databases AkonadiSyncSource::getDatabases()
 void AkonadiSyncSource::open()
 {
     if (!GRunIsMain()) {
-        GRunInMain(boost::bind(&AkonadiSyncSource::open, this));
+        GRunInMain([this] () { open(); });
         return;
     }
 
@@ -223,7 +219,7 @@ void AkonadiSyncSource::open()
 void AkonadiSyncSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revisions)
 {
     if (!GRunIsMain()) {
-        GRunInMain(boost::bind(&AkonadiSyncSource::listAllItems, this, boost::ref(revisions)));
+        GRunInMain([this, &revisions] () { listAllItems(revisions); });
         return;
     }
 
@@ -251,7 +247,7 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
 {
     if (!GRunIsMain()) {
         InsertItemResult result;
-        GRunInMain(boost::lambda::var(result) = boost::lambda::bind(&AkonadiSyncSource::insertItem, this, boost::cref(luid), boost::cref(data), raw));
+        GRunInMain([this, &result, &luid, &data, raw] () { return insertItem(luid, data, raw); });
         return result;
     }
 
@@ -296,7 +292,7 @@ TrackingSyncSource::InsertItemResult AkonadiSyncSource::insertItem(const std::st
 void AkonadiSyncSource::removeItem(const string &luid)
 {
     if (!GRunIsMain()) {
-        GRunInMain(boost::bind(&AkonadiSyncSource::removeItem, this, boost::cref(luid)));
+        GRunInMain([this, &luid] () { removeItem(luid); });
         return;
     }
 
@@ -313,7 +309,7 @@ void AkonadiSyncSource::removeItem(const string &luid)
 void AkonadiSyncSource::readItem(const std::string &luid, std::string &data, bool raw)
 {
     if (!GRunIsMain()) {
-        GRunInMain(boost::bind(&AkonadiSyncSource::readItem, this, boost::cref(luid), boost::ref(data), raw));
+        GRunInMain([this, &luid, &data, raw] () { readItem(luid, data, raw); });
         return;
     }
 

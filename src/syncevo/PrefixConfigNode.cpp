@@ -26,7 +26,7 @@
 SE_BEGIN_CXX
 
 PrefixConfigNode::PrefixConfigNode(const std::string prefix,
-                                   const boost::shared_ptr<ConfigNode> &node) :
+                                   const std::shared_ptr<ConfigNode> &node) :
     m_prefix(prefix),
     m_node(node),
     m_readOnlyNode(node)
@@ -34,7 +34,7 @@ PrefixConfigNode::PrefixConfigNode(const std::string prefix,
 }
 
 PrefixConfigNode::PrefixConfigNode(const std::string prefix,
-                                   const boost::shared_ptr<const ConfigNode> &node) :
+                                   const std::shared_ptr<const ConfigNode> &node) :
     m_prefix(prefix),
     m_readOnlyNode(node)
 {

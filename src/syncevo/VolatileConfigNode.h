@@ -35,7 +35,7 @@ SE_BEGIN_CXX
 class VolatileConfigNode : public FilterConfigNode {
  public:
  VolatileConfigNode() :
-    FilterConfigNode(boost::shared_ptr<ConfigNode>(new IniHashConfigNode("/dev/null", "dummy.ini", true)))
+    FilterConfigNode(std::static_pointer_cast<ConfigNode>(std::make_shared<IniHashConfigNode>("/dev/null", "dummy.ini", true)))
         {}
 
     virtual std::string getName() const { return "intermediate configuration"; }

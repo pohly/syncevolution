@@ -33,12 +33,13 @@ SDKInterface *SubSyncSource::getSynthesisAPI() const
 
 
 MapSyncSource::MapSyncSource(const SyncSourceParams &params,
-                             const boost::shared_ptr<SubSyncSource> &sub) :
+                             const std::shared_ptr<SubSyncSource> &sub) :
     TestingSyncSource(params),
     m_sub(sub)
 {
-    boost::shared_ptr<ConfigNode> safeNode(new SafeConfigNode(params.m_nodes.getTrackingNode()));
-    m_trackingNode.reset(new PrefixConfigNode("item-", safeNode));
+    auto safeNode = std::make_shared<SafeConfigNode>(params.m_nodes.getTrackingNode());
+    m_trackingNode.reset(new PrefixConfigNode("item-",
+                                              std::static_pointer_cast<ConfigNode>(safeNode)));
     m_metaNode = safeNode;
 
     // parameters don't matter because actual implementation is in sub source

@@ -34,7 +34,7 @@ SE_BEGIN_CXX
 class MultiplexConfigNode : public FilterConfigNode
 {
     const std::string m_name;
-    boost::shared_ptr<FilterConfigNode> m_nodes[2][3];
+    std::shared_ptr<FilterConfigNode> m_nodes[2][3];
     const ConfigPropertyRegistry &m_registry;
     bool m_havePeerNodes;
 
@@ -45,7 +45,7 @@ class MultiplexConfigNode : public FilterConfigNode
     /** join both hidden and user-visible properties */
     MultiplexConfigNode(const std::string &name,
                         const ConfigPropertyRegistry &registry) :
-        FilterConfigNode(boost::shared_ptr<ConfigNode>()),
+        FilterConfigNode(std::shared_ptr<ConfigNode>()),
         m_name(name),
         m_registry(registry),
         m_havePeerNodes(true)
@@ -55,7 +55,7 @@ class MultiplexConfigNode : public FilterConfigNode
     MultiplexConfigNode(const std::string &name,
                         const ConfigPropertyRegistry &registry,
                         bool hidden) :
-        FilterConfigNode(boost::shared_ptr<ConfigNode>()),
+        FilterConfigNode(std::shared_ptr<ConfigNode>()),
         m_name(name),
         m_registry(registry),
         m_havePeerNodes(true)
@@ -67,11 +67,11 @@ class MultiplexConfigNode : public FilterConfigNode
 
     /** configure the nodes to use */
     void setNode(bool hidden, ConfigProperty::Sharing sharing,
-                 const boost::shared_ptr<FilterConfigNode> &node) {
+                 const std::shared_ptr<FilterConfigNode> &node) {
         m_nodes[hidden][sharing] = node;
     }
     void setNode(bool hidden, ConfigProperty::Sharing sharing,
-                 const boost::shared_ptr<ConfigNode> &node) {
+                 const std::shared_ptr<ConfigNode> &node) {
         m_nodes[hidden][sharing].reset(new FilterConfigNode(node));
     }
 

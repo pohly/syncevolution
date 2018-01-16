@@ -33,33 +33,6 @@
 using namespace SyncEvo;
 using namespace GDBusCXX;
 
-namespace {
-    GMainLoop *loop = NULL;
-    int logLevelDBus = Logger::INFO;
-
-    // that one is actually never called. probably a bug in ForkExec - it should
-    // call m_onFailure instead of throwing an exception
-    void onFailure(const std::string &error, bool &failed) throw ()
-    {
-        SE_LOG_DEBUG(NULL, "failure, quitting now: %s",  error.c_str());
-        failed = true;
-    }
-
-    void onConnect(const DBusConnectionPtr &conn,
-                   const boost::shared_ptr<ForkExecChild> &forkexec,
-                   boost::shared_ptr<SessionHelper> &helper)
-    {
-        helper.reset(new SessionHelper(loop, conn, forkexec));
-        helper->activate();
-        helper->setDBusLogLevel(Logger::Level(logLevelDBus));
-    }
-
-    void onAbort()
-    {
-        g_main_loop_quit(loop);
-    }
-} // anonymous namespace
-
 /**
  * This program is a helper of syncevo-dbus-server which provides the
  * Connection and Session DBus interfaces and runs individual sync
@@ -87,7 +60,7 @@ int main(int argc, char **argv, char **envp)
 
     SyncContext::initMain("syncevo-dbus-helper");
 
-    loop = g_main_loop_new(NULL, FALSE);
+    GMainLoopCXX loop(g_main_loop_new(NULL, FALSE), TRANSFER_REF);
 
     // Suspend and abort are signaled via SIGINT/SIGTERM
     // respectively. SuspendFlags handle that for us.
@@ -95,16 +68,17 @@ int main(int argc, char **argv, char **envp)
     // can quite.
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     s.setLevel(Logger::DEV);
-    boost::shared_ptr<SuspendFlags::Guard> guard = s.activate((1<<SIGINT)|(1<<SIGTERM)|(1<<SIGURG));
+    std::shared_ptr<SuspendFlags::Guard> guard = s.activate((1<<SIGINT)|(1<<SIGTERM)|(1<<SIGURG));
 
     bool debug = getenv("SYNCEVOLUTION_DEBUG");
+    int logLevelDBus = Logger::INFO;
 
     // Redirect both stdout and stderr. The only code
     // writing to it should be third-party libraries
     // which are unaware of the SyncEvolution logging system.
     // Redirecting is useful to get such output into our
     // sync logfile, once we have one.
-    boost::shared_ptr<LogRedirect> redirect;
+    std::shared_ptr<LogRedirect> redirect;
     PushLogger<LogRedirect> pushRedirect;
     if (!debug) {
         redirect.reset(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));
@@ -122,7 +96,7 @@ int main(int argc, char **argv, char **envp)
     setvbuf(stdout, NULL, _IONBF, 0);
 
     try {
-        static GOptionEntry entries[] = {
+        GOptionEntry entries[] = {
             { "dbus-verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevelDBus,
               "Choose amount of output via D-Bus signals with Logger::Level; default is INFO = 3.",
               "level" },
@@ -147,19 +121,34 @@ int main(int argc, char **argv, char **envp)
         // the brackets, like the other processes do.
         // Logger::setProcessName("syncevo-dbus-helper");
 
-        boost::shared_ptr<ForkExecChild> forkexec = ForkExecChild::create();
+        auto forkexec = make_weak_shared::make<ForkExecChild>();
 
-        boost::shared_ptr<SessionHelper> helper;
+        std::shared_ptr<SessionHelper> helper;
         bool failed = false;
-        forkexec->m_onConnect.connect(boost::bind(onConnect, _1,
-                                                  boost::cref(forkexec),
-                                                  boost::ref(helper)));
-        forkexec->m_onFailure.connect(boost::bind(onFailure, _2, boost::ref(failed)));
+
+        // that one is actually never called. probably a bug in ForkExec - it should
+        // call m_onFailure instead of throwing an exception
+        auto onFailure = [&failed] (SyncMLStatus, const std::string &error) noexcept {
+            SE_LOG_DEBUG(NULL, "failure, quitting now: %s",  error.c_str());
+            failed = true;
+        };
+
+        auto onConnect = [&helper, &forkexec, loop, logLevelDBus] (const DBusConnectionPtr &conn) {
+            helper.reset(new SessionHelper(loop, conn, forkexec));
+            helper->activate();
+            helper->setDBusLogLevel(Logger::Level(logLevelDBus));
+        };
+
+        auto onAbort = [loop] (SuspendFlags &) {
+            g_main_loop_quit(loop);
+        };
+
+        forkexec->m_onConnect.connect(onConnect);
+        forkexec->m_onFailure.connect(onFailure);
         forkexec->connect();
 
         // Run until we are connected, failed or get interrupted.
-        boost::signals2::connection c =
-            s.m_stateChanged.connect(boost::bind(&onAbort));
+        boost::signals2::connection c = s.m_stateChanged.connect(onAbort);
         SE_LOG_DEBUG(NULL, "helper (pid %d) finished setup, waiting for parent connection", getpid());
         while (true) {
             if (s.getState() != SuspendFlags::NORMAL) {

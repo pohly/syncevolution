@@ -23,8 +23,9 @@
 #include <signal.h>
 #include <stdint.h>
 #include <boost/smart_ptr.hpp>
-#include <boost/function.hpp>
 #include <boost/signals2.hpp>
+
+#include <functional>
 
 #include <syncevo/Logging.h>
 
@@ -145,7 +146,7 @@ class SuspendFlags
      * guard.  In particular they cannot add or remove handled
      * signals.
      */
-    boost::shared_ptr<Guard> activate(uint32_t sigmask = (1<<SIGINT)|(1<<SIGTERM));
+    std::shared_ptr<Guard> activate(uint32_t sigmask = (1<<SIGINT)|(1<<SIGTERM));
 
     /**
      * Retrieve state changes pushed into pipe by signal
@@ -184,12 +185,12 @@ class SuspendFlags
      * A state change will be pushed into the pipe if it really
      * changed as part of taking the suspend lock.
      */
-    boost::shared_ptr<StateBlocker> suspend();
+    std::shared_ptr<StateBlocker> suspend();
 
     /**
      * Same as suspend(), except that it asks for an abort.
      */
-    boost::shared_ptr<StateBlocker> abort();
+    std::shared_ptr<StateBlocker> abort();
 
     /** log level of the "aborting" messages */
     Logger::Level getLevel() const;
@@ -218,9 +219,9 @@ class SuspendFlags
     uint32_t m_activeSignals;
     struct sigaction m_oldSignalHandlers[32];
 
-    boost::weak_ptr<Guard> m_guard;
-    boost::weak_ptr<StateBlocker> m_suspendBlocker, m_abortBlocker;
-    boost::shared_ptr<StateBlocker> block(boost::weak_ptr<StateBlocker> &blocker);
+    std::weak_ptr<Guard> m_guard;
+    std::weak_ptr<StateBlocker> m_suspendBlocker, m_abortBlocker;
+    std::shared_ptr<StateBlocker> block(std::weak_ptr<StateBlocker> &blocker);
 };
 
 

@@ -79,7 +79,7 @@ private:
             }
         }
 
-        std::vector<boost::shared_ptr<BluezDevice> >& getDevices() { return m_devices; }
+        std::vector<std::shared_ptr<BluezDevice> >& getDevices() { return m_devices; }
 
      private:
         /** callback of 'ListDevices' signal. Used to get all available devices of the adapter */
@@ -98,7 +98,7 @@ private:
         int m_devReplies;
 
         /** all available devices */
-        std::vector<boost::shared_ptr<BluezDevice> > m_devices;
+        std::vector<std::shared_ptr<BluezDevice> > m_devices;
 
         /** represents 'DeviceRemoved' signal of org.bluez.Adapter*/
         GDBusCXX::SignalWatch<GDBusCXX::DBusObject_t> m_deviceRemoved;
@@ -167,7 +167,7 @@ private:
 
     Server &m_server;
     GDBusCXX::DBusConnectionPtr m_bluezConn;
-    boost::shared_ptr<BluezAdapter> m_adapter;
+    std::shared_ptr<BluezAdapter> m_adapter;
 
     // Holds the bluetooth lookup table and whether it was successfully loaded.
     class lookupTable : private boost::noncopyable {
@@ -179,7 +179,7 @@ private:
         bool isLoaded;
     } m_lookupTable;
 
-    boost::shared_ptr<GLibNotify> m_watchedFile;
+    std::shared_ptr<GLibNotify> m_watchedFile;
     void loadBluetoothDeviceLookupTable();
     bool getPnpInfoNamesFromValues(const std::string &vendorValue,  std::string &vendorName,
                                    const std::string &productValue, std::string &productName);

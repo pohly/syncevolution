@@ -33,17 +33,18 @@
 // checks that type is completely defined.
 #include <synthesis/enginemodulebase.h>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/scoped_array.hpp>
+
+#include <memory>
 #include <stdexcept>
 
 #include <syncevo/declarations.h>
 #include <syncevo/util.h>
 SE_BEGIN_CXX
 
-typedef boost::shared_ptr<sysync::SessionType> SharedSession;
-typedef boost::shared_ptr<sysync::KeyType> SharedKey;
+typedef std::shared_ptr<sysync::SessionType> SharedSession;
+typedef std::shared_ptr<sysync::KeyType> SharedKey;
 class SharedBuffer : public boost::shared_array<char>
 {
     size_t m_size;
@@ -81,7 +82,7 @@ class SharedBuffer : public boost::shared_array<char>
  * resources/report errors.
  */
 class SharedEngine {
-    boost::shared_ptr<sysync::TEngineModuleBase> m_engine;
+    std::shared_ptr<sysync::TEngineModuleBase> m_engine;
 
  public:
     SharedEngine(sysync::TEngineModuleBase *engine = NULL): m_engine(engine) {}

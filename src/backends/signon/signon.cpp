@@ -34,8 +34,6 @@
 #include <syncevo/GVariantSupport.h>
 #include <pcrecpp.h>
 
-#include <boost/lambda/core.hpp>
-
 SE_GOBJECT_TYPE(SignonAuthService)
 SE_GOBJECT_TYPE(SignonAuthSession)
 SE_GOBJECT_TYPE(SignonIdentity)
@@ -124,11 +122,11 @@ public:
     virtual std::string getUsername() const { return ""; }
 };
 
-boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
+std::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &username,
                                                          const InitStateString &password)
 {
     // Expected content of parameter GVariant.
-    boost::shared_ptr<GVariantType> hashtype(g_variant_type_new("a{sv}"), g_variant_type_free);
+    std::shared_ptr<GVariantType> hashtype(g_variant_type_new("a{sv}"), g_variant_type_free);
 
     // 'username' is the part after signon: which we can parse directly.
     GErrorCXX gerror;
@@ -179,7 +177,7 @@ boost::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &
     SE_LOG_DEBUG(NULL, "using signond identity %d", signonID);
     SignonAuthSessionCXX authSession(signon_identity_create_session(identity, method, gerror), TRANSFER_REF);
 
-    boost::shared_ptr<AuthProvider> provider(new SignonAuthProvider(authSession, sessionData, mechanism));
+    auto provider = std::make_shared<SignonAuthProvider>(authSession, sessionData, mechanism);
     return provider;
 }
 

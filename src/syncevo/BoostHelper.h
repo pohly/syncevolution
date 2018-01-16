@@ -19,7 +19,7 @@
 
 /**
  * Including this header file allows to use boost::bind() with
- * a class member as first parameter and a boost::weak_ptr
+ * a class member as first parameter and a std::weak_ptr
  * as second parameter.
  *
  * When the functor is invoked, it will lock the instance
@@ -44,7 +44,6 @@
 #ifndef INCL_SYNCEVOLUTION_BOOST_HELPER
 # define INCL_SYNCEVOLUTION_BOOST_HELPER
 
-#include <boost/bind.hpp>
 #include <boost/smart_ptr.hpp>
 
 #include <syncevo/declarations.h>
@@ -146,26 +145,26 @@ class WeakPtrInvoker
 template <typename T> class WeakPtrAdapter
 {
 public:
-    WeakPtrAdapter(const boost::shared_ptr<T> &ptr) :
+    WeakPtrAdapter(const std::shared_ptr<T> &ptr) :
         m_ptr(ptr)
     {}
 
     template <typename M>
-    WeakPtrInvoker<boost::shared_ptr<T>, M> operator->*(M member) const
+    WeakPtrInvoker<std::shared_ptr<T>, M> operator->*(M member) const
     {
-        return WeakPtrInvoker<boost::shared_ptr<T>, M>(m_ptr, member);
+        return WeakPtrInvoker<std::shared_ptr<T>, M>(m_ptr, member);
     }
 
 private:
-    boost::shared_ptr<T> m_ptr;
+    std::shared_ptr<T> m_ptr;
 };
 
 SE_END_CXX
 
-namespace boost
+namespace std
 {
     template<class T>
-    SyncEvo::WeakPtrAdapter<T> get_pointer(const boost::weak_ptr<T> &ptr)
+    SyncEvo::WeakPtrAdapter<T> get_pointer(const std::weak_ptr<T> &ptr)
     {
         return SyncEvo::WeakPtrAdapter<T>(ptr.lock());
     }

@@ -42,9 +42,7 @@ NetworkManagerClient::NetworkManagerClient(Server &server) :
 {
     if (getConnection()) {
         m_properties.get();
-        m_stateChanged.activate(boost::bind(
-                                    &NetworkManagerClient::stateChanged,
-                                    this, _1));
+        m_stateChanged.activate([this] (uint32_t uiState) { stateChanged(uiState); });
     } else {
         SE_LOG_DEBUG(NULL,
                      "DBus connection setup for NetworkManager failed");
@@ -86,21 +84,17 @@ NetworkManagerClient::NetworkManagerProperties::NetworkManagerProperties(
 void NetworkManagerClient::NetworkManagerProperties::get()
 {
     GDBusCXX::DBusClientCall<boost::variant<uint32_t, std::string> > get(*this, "Get");
-    get.start(boost::bind(&NetworkManagerProperties::getCallback, this, _1, _2),
-              std::string(m_manager.getInterface()), std::string("State"));
-}
-
-void NetworkManagerClient::NetworkManagerProperties::getCallback(
-    const boost::variant<uint32_t, std::string> &prop,
-    const std::string &error)
-{
-    if(!error.empty()) {
-        SE_LOG_DEBUG(NULL, "Error in calling Get of Interface org.freedesktop.DBus.Properties : %s", error.c_str());
-    } else {
-        // Now, and only now, do we know that NetworkManager is running.
-        m_manager.m_available = true;
-        m_manager.stateChanged(boost::get<uint32_t>(prop));
-    }
+    auto callback = [this] (const boost::variant<uint32_t, std::string> &prop,
+                            const std::string &error) {
+        if (!error.empty()) {
+            SE_LOG_DEBUG(NULL, "Error in calling Get of Interface org.freedesktop.DBus.Properties : %s", error.c_str());
+        } else {
+            // Now, and only now, do we know that NetworkManager is running.
+            m_manager.m_available = true;
+            m_manager.stateChanged(boost::get<uint32_t>(prop));
+        }
+    };
+    get.start(callback, std::string(m_manager.getInterface()), std::string("State"));
 }
 
 SE_END_CXX

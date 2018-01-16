@@ -36,7 +36,6 @@
 #include <memory>
 
 #include <boost/scoped_array.hpp>
-#include <boost/shared_ptr.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX

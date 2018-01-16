@@ -59,7 +59,7 @@ class AuthProvider
      * Creates an AuthProvider matching the identity.m_provider value
      * or throws an exception if that fails. Never returns NULL.
      */
-    static boost::shared_ptr<AuthProvider> create(const UserIdentity &identity,
+    static std::shared_ptr<AuthProvider> create(const UserIdentity &identity,
                                                   const InitStateString &password);
 
     enum AuthMethod {
@@ -104,7 +104,7 @@ class AuthProvider
      *
      * @return a base64 encoded token, ready to be used in "Authorization: Bearer %s"
      */
-    typedef boost::function<void (const std::string &newPassword)> PasswordUpdateCallback;
+    typedef std::function<void (const std::string &newPassword)> PasswordUpdateCallback;
     virtual std::string getOAuth2Bearer(const PasswordUpdateCallback &passwordUpdateCallback) = 0;
 
     /**
@@ -132,7 +132,7 @@ class IdentityProvider
 {
  public:
     /** returns NULL if disabled, valid AuthProvider if possible, and throws error if something goes wrong */
-    virtual boost::shared_ptr<AuthProvider> create(const InitStateString &username,
+    virtual std::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password) = 0;
 
     /**
