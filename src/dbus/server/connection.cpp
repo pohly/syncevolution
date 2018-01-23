@@ -186,7 +186,7 @@ void Connection::process(const Caller_t &caller,
                                 BOOST_FOREACH (string &url, urls){
                                     url = url.substr (0, url.find("+"));
                                     SE_LOG_DEBUG(NULL, "matching against %s",url.c_str());
-                                    if (url.find ("obex-bt://") ==0 && url.substr(strlen("obex-bt://"), url.npos) == m_peerBtAddr) {
+                                    if (url == "obex-bt://" + m_peerBtAddr) {
                                         config = server.first;
                                         break;
                                     }
