@@ -20,6 +20,8 @@
 #ifndef TIMEOUT_H
 #define TIMEOUT_H
 
+#include <glib.h>
+
 #include <syncevo/SmartPtr.h>
 #include <syncevo/util.h>
 
