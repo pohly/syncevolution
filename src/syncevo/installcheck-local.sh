@@ -44,8 +44,8 @@ int main(int argc, char **argv)
     return 0;
 }
 EOF
-    # header must be usable stand-alone
-    $CXX "-I$2" $TMPFILE_CXX -c -o $TMPFILE_O
+    # header must be usable stand-alone, only glib is allowed
+    $CXX "-I$2" $TMPFILE_CXX -c -o $TMPFILE_O `pkg-config --cflags glib-2.0` -DHAVE_GLIB
 done
 
 # link once to check that the libs are found;
