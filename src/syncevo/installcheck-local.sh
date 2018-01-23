@@ -17,17 +17,20 @@ trap rmtmp EXIT
 # check that c++ works, whatever it is
 cat >$TMPFILE_CXX <<EOF
 #include <iostream>
+#include <memory>
 
 int main(int argc, char **argv)
 {
     std::cout << "hello world\n";
+    std::shared_ptr<char> ptr;
     return 0;
 }
 EOF
 
-for CXX in "c++ -Wall -Werror" "g++ -Wall -Werror" "c++" "g++" ""; do
+# C++11 is needed for std::unique_ptr.
+for CXX in "c++ -Wall -Werror -std=c++11" "g++ -Wall -Werror -std=c++11" "c++ -std=c++11" "g++ -std=c++11" ""; do
     if [ ! "$CXX" ]; then
-        echo "no usable compiler, skipping tests"
+        echo "no usable C++11 compiler, skipping tests"
         exit 0
     fi
     if $CXX $TMPFILE_CXX -o $TMPFILE; then
