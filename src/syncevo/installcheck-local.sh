@@ -17,17 +17,21 @@ trap rmtmp EXIT
 # check that c++ works, whatever it is
 cat >$TMPFILE_CXX <<EOF
 #include <iostream>
+#include <memory>
 
 int main(int argc, char **argv)
 {
     std::cout << "hello world\n";
+    std::shared_ptr<char> ptr;
     return 0;
 }
 EOF
 
-for CXX in "c++ -Wall -Werror" "g++ -Wall -Werror" "c++" "g++" ""; do
+# TODO: decide about C++11 vs. C++14. A few features from C++14 are already used (like return type deduction
+# for make_iterator_range in util.h).
+for CXX in "c++ -Wall -Werror -std=c++14" "g++ -Wall -Werror -std=c++14" "c++ -std=c++14" "g++ -std=c++14" ""; do
     if [ ! "$CXX" ]; then
-        echo "no usable compiler, skipping tests"
+        echo "no usable C++14 compiler, skipping tests"
         exit 0
     fi
     if $CXX $TMPFILE_CXX -o $TMPFILE; then
