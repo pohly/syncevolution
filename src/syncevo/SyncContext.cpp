@@ -146,6 +146,7 @@ void SyncContext::init()
     m_doLogging = false;
     m_quiet = false;
     m_dryrun = false;
+    m_keepPhotoData = false;
     m_localSync = false;
     m_serverMode = false;
     m_serverAlerted = false;
@@ -2694,28 +2695,6 @@ void SyncContext::getConfigXML(bool isSync, string &xml, string &configname)
             "    <singlegloballog>yes</singlegloballog>\n";
 #ifdef USE_DLT
         if (useDLT) {
-            const char *contexts[] = {
-                "PROT",
-                "SESS",
-                "ADMN",
-                "DATA",
-                "REMI",
-                "PARS",
-                "GEN",
-                "TRNS",
-                "SMLT",
-                "SYS"
-            };
-            BOOST_FOREACH (const char *context, contexts) {
-                // Help libsynthesis debuglogger.cpp set default log levels,
-                // based on our own one.
-                SE_LOG_DEBUG(NULL, "default libsynthesis DLT logging of %s = %s",
-                             context, useDLT);
-                setenv((std::string("LIBSYNTHESIS_") + context).c_str(),
-                       useDLT,
-                       false);
-            }
-
             debug <<
                 // We have to enable all logging inside libsynthesis.
                 // The actual filtering then takes place inside DLT.

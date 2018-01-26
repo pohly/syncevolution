@@ -146,6 +146,51 @@ int main(int argc, char **argv, char **envp)
             setenv("G_DBUS_DEBUG", gdbus, 1);
         }
 
+#ifdef USE_DLT
+        PushLogger<LoggerDLT> loggerdlt;
+        // set/getenv() are not thread-safe. We set them early to avoid
+        // conflicts with threads started by glib, because those tend
+        // to call getenv() randomly.
+        if (dltEnabled) {
+            // DLT logging with default log level DLT_LOG_WARN.  This
+            // default was chosen because DLT's own default,
+            // DLT_LOG_INFO, leads to too much output given that a lot
+            // of the standard messages in SyncEvolution and
+            // libsynthesis are labelled informational.
+            //
+            // SYNCEVOLUTION_USE_DLT and LIBSYNTHESIS_x for x standing for
+            // one of the libsynthesis context IDs (list see below) can
+            // also be set before invoking SyncEvolution, so here we only
+            // set them if unset.
+            std::string dlt_value = StringPrintf("%d", DLT_LOG_WARN);
+            setenv("SYNCEVOLUTION_USE_DLT", dlt_value.c_str(), false);
+            const char *contexts[] = {
+                "PROT",
+                "SESS",
+                "ADMN",
+                "DATA",
+                "REMI",
+                "PARS",
+                "GEN",
+                "TRNS",
+                "SMLT",
+                "SYS"
+            };
+            BOOST_FOREACH (const char *context, contexts) {
+                // Help libsynthesis debuglogger.cpp set default log levels,
+                // based on our own one.
+                SE_LOG_DEBUG(NULL, "default libsynthesis DLT logging of %s = %s",
+                             context, dltEnabled);
+                setenv((std::string("LIBSYNTHESIS_") + context).c_str(),
+                       dlt_value.c_str(),
+                       false);
+            }
+            loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_DBUS_SERVER_ID, "SyncEvolution D-Bus server"));
+        } else {
+            unsetenv("SYNCEVOLUTION_USE_DLT");
+        }
+#endif
+
         SyncContext::initMain(execName);
 
         loop = g_main_loop_new (NULL, FALSE);
@@ -156,20 +201,6 @@ int main(int argc, char **argv, char **envp)
         // Redirect output and optionally log to syslog.
         PushLogger<LogRedirect> redirect(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));
         redirect->setLevel(stdoutEnabled ? level : Logger::NONE);
-#ifdef USE_DLT
-        PushLogger<LoggerDLT> loggerdlt;
-        if (dltEnabled) {
-            // DLT logging with default log level DLT_LOG_WARN.  This
-            // default was chosen because DLT's own default,
-            // DLT_LOG_INFO, leads to too much output given that a lot
-            // of the standard messages in SyncEvolution and
-            // libsynthesis are labelled informational.
-            setenv("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", DLT_LOG_WARN).c_str(), true);
-            loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_DBUS_SERVER_ID, "SyncEvolution D-Bus server"));
-        } else {
-            unsetenv("SYNCEVOLUTION_USE_DLT");
-        }
-#endif
         PushLogger<LoggerSyslog> syslogger;
         if (syslogEnabled && level > Logger::NONE) {
             syslogger.reset(new LoggerSyslog(execName));
