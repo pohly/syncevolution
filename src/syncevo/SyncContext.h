@@ -64,6 +64,7 @@ class SyncContext : public SyncConfig {
     bool m_doLogging;
     bool m_quiet;
     bool m_dryrun;
+    bool m_keepPhotoData;
 
     enum SyncFreeze {
         SYNC_FREEZE_NONE,
@@ -224,6 +225,9 @@ class SyncContext : public SyncConfig {
 
     bool getDryRun() { return m_dryrun; }
     void setDryRun(bool dryrun) { m_dryrun = dryrun; }
+
+    bool getKeepPhotoData() const { return m_keepPhotoData; }
+    void setKeepPhotoData(bool keepPhotoData) { m_keepPhotoData = keepPhotoData; }
 
     bool isLocalSync() const { return m_localSync; }
 

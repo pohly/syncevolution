@@ -67,13 +67,7 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
             // "pbap" may only be used by caller when it knows that
             // the mode is safe to use.
             makeEphemeral();
-            const char *sync = getenv("SYNCEVOLUTION_PBAP_SYNC");
-            if (!sync) {
-                SE_LOG_DEBUG(NULL, "enabling default SYNCEVOLUTION_PBAP_SYNC=incremental");
-                setenv("SYNCEVOLUTION_PBAP_SYNC", "incremental", true);
-            } else {
-                SE_LOG_DEBUG(NULL, "using SYNCEVOLUTION_PBAP_SYNC=%s from environment", sync);
-            }
+            setKeepPhotoData(true);
         } else {
             filter["sync"] = params.m_mode;
         }
