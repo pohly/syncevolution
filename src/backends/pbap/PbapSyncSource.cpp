@@ -1140,7 +1140,7 @@ PbapSyncSource::PbapSyncSource(const SyncSourceParams &params) :
                                                this, _1, _2);
     m_session = PbapSession::create(*this);
     const char *PBAPSyncMode = getenv("SYNCEVOLUTION_PBAP_SYNC");
-    m_PBAPSyncMode = !PBAPSyncMode ? PBAP_SYNC_NORMAL :
+    m_PBAPSyncMode = !PBAPSyncMode ? PBAP_SYNC_INCREMENTAL :
         boost::iequals(PBAPSyncMode, "incremental") ? PBAP_SYNC_INCREMENTAL :
         boost::iequals(PBAPSyncMode, "text") ? PBAP_SYNC_TEXT :
         boost::iequals(PBAPSyncMode, "all") ? PBAP_SYNC_NORMAL :
