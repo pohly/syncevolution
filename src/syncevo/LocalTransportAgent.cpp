@@ -77,9 +77,16 @@ public:
         m_messageBufferSize = msgSize * 2;
         prepareBuffer(m_localBuffer, m_messageBufferSize);
         prepareBuffer(m_remoteBuffer, m_messageBufferSize);
-        setenv("SYNCEVOLUTION_LOCAL_SYNC_PARENT_FD", StringPrintf("%d", m_localBuffer.getFD()).c_str(), true);
-        setenv("SYNCEVOLUTION_LOCAL_SYNC_CHILD_FD", StringPrintf("%d", m_remoteBuffer.getFD()).c_str(), true);
         m_remoteBuffer.map(NULL, NULL);
+    }
+
+    std::list<StringPair> getEnvForChild()
+    {
+        std::list<StringPair> env;
+
+        env.push_back(StringPair("SYNCEVOLUTION_LOCAL_SYNC_PARENT_FD", StringPrintf("%d", m_localBuffer.getFD())));
+        env.push_back(StringPair("SYNCEVOLUTION_LOCAL_SYNC_CHILD_FD", StringPrintf("%d", m_remoteBuffer.getFD())));
+        return env;
     }
 
     void initChild(size_t msgSize)
@@ -215,9 +222,29 @@ void LocalTransportAgent::start()
     m_forkexec = ForkExecParent::create("syncevo-local-sync");
 #ifdef USE_DLT
     if (getenv("SYNCEVOLUTION_USE_DLT")) {
-        m_forkexec->addEnvVar("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel()));
+        std::string dlt_value = StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel());
+        m_forkexec->addEnvVar("SYNCEVOLUTION_USE_DLT", dlt_value);
+        const char *contexts[] = {
+            "PROT",
+            "SESS",
+            "ADMN",
+            "DATA",
+            "REMI",
+            "PARS",
+            "GEN",
+            "TRNS",
+            "SMLT",
+            "SYS"
+        };
+        BOOST_FOREACH (const char *context, contexts) {
+            m_forkexec->addEnvVar(std::string("LIBSYNTHESIS_") + context,
+                                  dlt_value);
+        }
     }
 #endif
+    BOOST_FOREACH(const StringPair &entry, SMLTKSharedMemory::singleton().getEnvForChild()) {
+        m_forkexec->addEnvVar(entry.first, entry.second);
+    }
     m_forkexec->m_onConnect.connect(boost::bind(&LocalTransportAgent::onChildConnect, this, _1));
     // fatal problems, including quitting child with non-zero status
     m_forkexec->m_onFailure.connect(boost::bind(&LocalTransportAgent::onFailure, this, _2));
