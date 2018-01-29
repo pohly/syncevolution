@@ -27,7 +27,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe;
@@ -43,9 +43,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
             sourceType.m_format == "text/x-vcalendar") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionCalendarSource(EVOLUTION_CAL_SOURCE_TYPE_TASKS, params) :
+                enabled ? std::make_unique<EvolutionCalendarSource>(EVOLUTION_CAL_SOURCE_TYPE_TASKS, params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         }
     }
 
@@ -54,15 +54,15 @@ static SyncSource *createSource(const SyncSourceParams &params)
         if (sourceType.m_format == "" || sourceType.m_format == "text/plain") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionMemoSource(params) :
+                enabled ? std::make_unique<EvolutionMemoSource>(params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         } else if (sourceType.m_format == "text/calendar") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionCalendarSource(EVOLUTION_CAL_SOURCE_TYPE_MEMOS, params) :
+                enabled ? std::make_unique<EvolutionCalendarSource>(EVOLUTION_CAL_SOURCE_TYPE_MEMOS, params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         } else {
             return NULL;
         }
@@ -76,7 +76,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
             sourceType.m_format == "text/x-vcalendar") {
             return
 #ifdef ENABLE_ECAL
-                enabled ? new EvolutionCalendarSource(EVOLUTION_CAL_SOURCE_TYPE_EVENTS, params) :
+                enabled ? std::make_unique<EvolutionCalendarSource>(EVOLUTION_CAL_SOURCE_TYPE_EVENTS, params) :
 #endif
                 isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
         } else {
@@ -124,44 +124,44 @@ class EvolutionCalendarTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE_END();
 
 protected:
-    static string addItem(std::shared_ptr<TestingSyncSource> source,
+    static string addItem(TestingSyncSource &source,
                           string &data) {
-        SyncSourceRaw::InsertItemResult res = source->insertItemRaw("", data);
+        SyncSourceRaw::InsertItemResult res = source.insertItemRaw("", data);
         return res.m_luid;
     }
 
     void testInstantiate() {
-        std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "calendar", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-calendar", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "Evolution Calendar:text/calendar", true));
+        std::unique_ptr<TestingSyncSource> source;
+        source = SyncSource::createTestingSource("calendar", "calendar", true);
+        source = SyncSource::createTestingSource("calendar", "evolution-calendar", true);
+        source = SyncSource::createTestingSource("calendar", "Evolution Calendar:text/calendar", true);
 
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "tasks", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-tasks", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "Evolution Tasks", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "Evolution Task List:text/calendar", true));
+        source = SyncSource::createTestingSource("calendar", "tasks", true);
+        source = SyncSource::createTestingSource("calendar", "evolution-tasks", true);
+        source = SyncSource::createTestingSource("calendar", "Evolution Tasks", true);
+        source = SyncSource::createTestingSource("calendar", "Evolution Task List:text/calendar", true);
 
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "memos", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-memos", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "Evolution Memos:text/plain", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "Evolution Memos:text/calendar", true));
+        source = SyncSource::createTestingSource("calendar", "memos", true);
+        source = SyncSource::createTestingSource("calendar", "evolution-memos", true);
+        source = SyncSource::createTestingSource("calendar", "Evolution Memos:text/plain", true);
+        source = SyncSource::createTestingSource("calendar", "Evolution Memos:text/calendar", true);
     }
 
     void testOpenDefaultCalendar() {
-        std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-calendar", true, NULL));
+        std::unique_ptr<TestingSyncSource> source;
+        source = SyncSource::createTestingSource("calendar", "evolution-calendar", true, NULL);
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
     void testOpenDefaultTodo() {
-        std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-tasks", true, NULL));
+        std::unique_ptr<TestingSyncSource> source;
+        source = SyncSource::createTestingSource("calendar", "evolution-tasks", true, NULL);
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
     void testOpenDefaultMemo() {
-        std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "evolution-memos", true, NULL));
+        std::unique_ptr<TestingSyncSource> source;
+        source = SyncSource::createTestingSource("calendar", "evolution-memos", true, NULL);
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
@@ -171,8 +171,8 @@ protected:
             prefix = "SyncEvolution_Test_";
         }
 
-        std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "evolution-calendar", true, prefix));
+        std::unique_ptr<TestingSyncSource> source;
+        source = SyncSource::createTestingSource("eds_event", "evolution-calendar", true, prefix);
         CPPUNIT_ASSERT_NO_THROW(source->open());
 
         string newyork = 
@@ -212,7 +212,7 @@ protected:
             "END:VCALENDAR\n";
 
         string luid;
-        CPPUNIT_ASSERT_NO_THROW(luid = addItem(source, newyork));
+        CPPUNIT_ASSERT_NO_THROW(luid = addItem(*source, newyork));
 
         string newyork_suffix = newyork;
         boost::replace_first(newyork_suffix,
@@ -221,7 +221,7 @@ protected:
         boost::replace_all(newyork_suffix,
                            "TZID:America/New_York",
                            "TZID://FOOBAR/America/New_York-SUFFIX");
-        CPPUNIT_ASSERT_NO_THROW(luid = addItem(source, newyork_suffix));
+        CPPUNIT_ASSERT_NO_THROW(luid = addItem(*source, newyork_suffix));
 
         
         string notimezone = 
@@ -242,7 +242,7 @@ protected:
             "LAST-MODIFIED:20060416T205301Z\n"
             "END:VEVENT\n"
             "END:VCALENDAR\n";
-        CPPUNIT_ASSERT_NO_THROW(luid = addItem(source, notimezone));
+        CPPUNIT_ASSERT_NO_THROW(luid = addItem(*source, notimezone));
 
         // fake VTIMEZONE where daylight saving starts on first Sunday in March
         string fake_march = 
@@ -279,7 +279,7 @@ protected:
             "LAST-MODIFIED:20060416T205301Z\n"
             "END:VEVENT\n"
             "END:VCALENDAR\n";
-        CPPUNIT_ASSERT_NO_THROW(luid = addItem(source, fake_march));
+        CPPUNIT_ASSERT_NO_THROW(luid = addItem(*source, fake_march));
 
         string fake_may = fake_march;
         boost::replace_first(fake_may,
@@ -294,10 +294,10 @@ protected:
         boost::replace_first(fake_may,
                              "TZNAME:EST MARCH",
                              "TZNAME:EST MAY");
-        CPPUNIT_ASSERT_NO_THROW(luid = addItem(source, fake_may));
+        CPPUNIT_ASSERT_NO_THROW(luid = addItem(*source, fake_may));
 
         // insert again, shouldn't re-add timezone
-        CPPUNIT_ASSERT_NO_THROW(luid = addItem(source, fake_may));
+        CPPUNIT_ASSERT_NO_THROW(luid = addItem(*source, fake_may));
     }
 };
 

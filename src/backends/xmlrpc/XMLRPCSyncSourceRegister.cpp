@@ -25,7 +25,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     // The string returned by getSourceType() is always the one
@@ -46,7 +46,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
         // parameter in sourceType.m_format.
         if (/* sourceType.m_format == "" || sourceType.m_format == "text/x-vcard" */
             sourceType.m_format.size()) {
-            return new XMLRPCSyncSource(params, sourceType.m_format);
+            return std::make_unique<XMLRPCSyncSource>(params, sourceType.m_format);
         } else {
             return NULL;
         }
@@ -77,10 +77,10 @@ class XMLRPCSyncSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        source.reset(SyncSource::createTestingSource("xmlrpc", "xmlrpc:text/vcard:3.0", true));
-        source.reset(SyncSource::createTestingSource("xmlrpc", "xmlrpc:text/plain:1.0", true));
-        source.reset(SyncSource::createTestingSource("xmlrpc", "XMLRPC interface:text/x-vcard:2.1", true));
+        std::unique_ptr<SyncSource> source;
+        source = SyncSource::createTestingSource("xmlrpc", "xmlrpc:text/vcard:3.0", true);
+        source = SyncSource::createTestingSource("xmlrpc", "xmlrpc:text/plain:1.0", true);
+        source = SyncSource::createTestingSource("xmlrpc", "XMLRPC interface:text/x-vcard:2.1", true);
     }
 };
 

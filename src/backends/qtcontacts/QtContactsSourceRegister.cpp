@@ -30,7 +30,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe = sourceType.m_backend == "QtContacts";
@@ -76,9 +76,9 @@ class QtContactsSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        source.reset(SyncSource::createTestingSource("qtcontacts", "qtcontacts:text/vcard:3.0", true));
-        source.reset(SyncSource::createTestingSource("qtcontacts", "QtContacts", true));
+        std::unique_ptr<SyncSource> source;
+        source = SyncSource::createTestingSource("qtcontacts", "qtcontacts:text/vcard:3.0", true);
+        source = SyncSource::createTestingSource("qtcontacts", "QtContacts", true);
     }
 
     void testHandler() {

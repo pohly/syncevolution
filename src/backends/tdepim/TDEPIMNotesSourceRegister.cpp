@@ -32,7 +32,7 @@
 
 SE_BEGIN_CXX
 
-static SyncSource *createSource ( const SyncSourceParams &params )
+static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params )
 {
 
 	SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
@@ -47,7 +47,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 	if (isMe) {
 // 		SE_LOG_DEBUG("createSource() c3", "Calendar Source format %s", sourceType.m_format.c_str());
 		if ( sourceType.m_format == "" || sourceType.m_format == "text/plain" ) 
-			return new TDEPIMNotesSource ( params );
+			return std::make_unique<TDEPIMNotesSource>( params );
 		else  return NULL;
 	}
 #endif
@@ -109,18 +109,18 @@ protected:
     }
 
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
+        std::unique_ptr<SyncSource> source;
 
-        // source.reset(SyncSource::createTestingSource("memos", "memos", true));
-        source.reset(SyncSource::createTestingSource("memos", "tdepim-notes", true));
-        source.reset(SyncSource::createTestingSource("memos", "TDE PIM Notes:text/plain", true));
+        // source = SyncSource::createTestingSource("memos", "memos", true);
+        source = SyncSource::createTestingSource("memos", "tdepim-notes", true);
+        source = SyncSource::createTestingSource("memos", "TDE PIM Notes:text/plain", true);
     }
 
     // TODO: support default databases
 
     // void testOpenDefaultMemo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
@@ -131,7 +131,7 @@ protected:
         }
 
         std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "tdepim-notes", true, prefix));
+        source = (TestingSyncSource *)SyncSource::createTestingSource("eds_event", "tdepim-notes", true, prefix);
         CPPUNIT_ASSERT_NO_THROW(source->open());
 
         string newyork = 

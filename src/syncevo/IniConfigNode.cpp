@@ -23,8 +23,6 @@
 #include <syncevo/SyncConfig.h>
 #include <syncevo/util.h>
 
-#include <boost/scoped_array.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 

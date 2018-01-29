@@ -35,7 +35,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe;
@@ -44,7 +44,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
     if (isMe) {
         return
 #ifdef ENABLE_ACTIVESYNC
-            new ActiveSyncContactSource(params)
+            std::make_unique<ActiveSyncContactSource>(params)
 #else
             RegisterSyncSource::InactiveSource(params)
 #endif
@@ -55,7 +55,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
     if (isMe) {
         return
 #ifdef ENABLE_ACTIVESYNC
-            new ActiveSyncCalendarSource(params, EAS_ITEM_CALENDAR)
+            std::make_unique<ActiveSyncCalendarSource>(params, EAS_ITEM_CALENDAR)
 #else
             RegisterSyncSource::InactiveSource(params)
 #endif
@@ -66,7 +66,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
     if (isMe) {
         return
 #ifdef ENABLE_ACTIVESYNC
-            new ActiveSyncCalFormatSource(params, EAS_ITEM_TODO)
+            std::make_unique<ActiveSyncCalFormatSource>(params, EAS_ITEM_TODO)
 #else
             RegisterSyncSource::InactiveSource(params)
 #endif
@@ -77,7 +77,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
     if (isMe) {
         return
 #ifdef ENABLE_ACTIVESYNC
-            new ActiveSyncCalFormatSource(params, EAS_ITEM_JOURNAL)
+            std::make_unique<ActiveSyncCalFormatSource>(params, EAS_ITEM_JOURNAL)
 #else
             RegisterSyncSource::InactiveSource(params)
 #endif
@@ -114,11 +114,11 @@ class ActiveSyncsTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        source.reset(SyncSource::createTestingSource("contacts", "ActiveSync Address Book", true));
-        source.reset(SyncSource::createTestingSource("events", "ActiveSync Events", true));
-        source.reset(SyncSource::createTestingSource("todos", "ActiveSync Todos", true));
-        source.reset(SyncSource::createTestingSource("memos", "ActiveSync Memos", true));
+        std::unique_ptr<SyncSource> source;
+        source = SyncSource::createTestingSource("contacts", "ActiveSync Address Book", true);
+        source = SyncSource::createTestingSource("events", "ActiveSync Events", true);
+        source = SyncSource::createTestingSource("todos", "ActiveSync Todos", true);
+        source = SyncSource::createTestingSource("memos", "ActiveSync Memos", true);
     }
 };
 
@@ -183,10 +183,10 @@ static int DumpItems(ClientTest &client, TestingSyncSource &source, const std::s
     return 0;
 }
 
-static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t &create,
-                                          ClientTest &client,
-                                          const std::string &clientID,
-                                          int source, bool isSourceA)
+static std::unique_ptr<TestingSyncSource> createEASSource(const ClientTestConfig::createsource_t &create,
+                                                          ClientTest &client,
+                                                          const std::string &clientID,
+                                                          int source, bool isSourceA)
 {
     std::unique_ptr<TestingSyncSource> res(create(client, clientID, source, isSourceA));
 
@@ -201,7 +201,7 @@ static TestingSyncSource *createEASSource(const ClientTestConfig::createsource_t
     }
 
     if (res->getDatabaseID().empty()) {
-        return res.release();
+        return res;
     } else {
         // sorry, no database
         SE_LOG_ERROR(NULL, "cannot create EAS datastore for database %s, check config",

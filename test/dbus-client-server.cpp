@@ -6,13 +6,12 @@
 #include <iostream>
 #include <signal.h>
 
-#include <boost/scoped_ptr.hpp>
 #include <boost/tuple/tuple_io.hpp>
 
 SyncEvo::GMainLoopCXX loop;
 
 // closes child connection
-boost::scoped_ptr<GDBusCXX::DBusObject> guard;
+std::unique_ptr<GDBusCXX::DBusObject> guard;
 
 class Test
 {

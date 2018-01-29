@@ -33,7 +33,7 @@
 
 SE_BEGIN_CXX
 
-static SyncSource *createSource ( const SyncSourceParams &params )
+static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params )
 {
 /*
 * NOTE: The libkcal vCal (v.1.0) does not work pretty well I had to leave
@@ -54,7 +54,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 			sourceType.m_format == "text/calendar" /*||
 			sourceType.m_format == "text/x-calendar" || 
 			sourceType.m_format == "text/x-vcalendar"*/ )
-				return new TDEPIMCalendarSource ( TDEPIM_TASKS, params );
+				return std::make_unique<TDEPIMCalendarSource>( TDEPIM_TASKS, params );
 		else  return NULL;
 	}
 #endif
@@ -68,7 +68,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 			sourceType.m_format == "text/calendar" /*|| 
 			sourceType.m_format == "text/x-calendar" ||
 			sourceType.m_format == "text/x-vcalendar"*/)
-				return new TDEPIMCalendarSource ( TDEPIM_TODO, params );
+				return std::make_unique<TDEPIMCalendarSource>( TDEPIM_TODO, params );
 		else  return NULL;
 	}
 #endif
@@ -82,7 +82,7 @@ static SyncSource *createSource ( const SyncSourceParams &params )
 			sourceType.m_format == "text/calendar" /*||
 			sourceType.m_format == "text/x-calendar" || 
 			sourceType.m_format == "text/x-vcalendar"*/)
-				return new TDEPIMCalendarSource ( TDEPIM_JOURNAL, params );
+				return std::make_unique<TDEPIMCalendarSource>( TDEPIM_JOURNAL, params );
 		else  return NULL;
 	}
 #endif
@@ -154,46 +154,46 @@ protected:
     }
 
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        // source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
-        // source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "tdepim-contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "TDE Contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "TDE Address Book:text/x-vcard", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "TDE Address Book:text/vcard", true));
+        std::unique_ptr<SyncSource> source;
+        // source = SyncSource::createTestingSource("addressbook", "addressbook", true);
+        // source = SyncSource::createTestingSource("addressbook", "contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "tdepim-contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "TDE Contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "TDE Address Book:text/x-vcard", true);
+        source = SyncSource::createTestingSource("addressbook", "TDE Address Book:text/vcard", true);
 
 
-        // source.reset(SyncSource::createTestingSource("calendar", "calendar", true));
-        source.reset(SyncSource::createTestingSource("calendar", "tdepim-calendar", true));
-        source.reset(SyncSource::createTestingSource("calendar", "TDE Calendar:text/calendar", true));
+        // source = SyncSource::createTestingSource("calendar", "calendar", true);
+        source = SyncSource::createTestingSource("calendar", "tdepim-calendar", true);
+        source = SyncSource::createTestingSource("calendar", "TDE Calendar:text/calendar", true);
 
-        // source.reset(SyncSource::createTestingSource("tasks", "tasks", true));
-        source.reset(SyncSource::createTestingSource("tasks", "tdepim-tasks", true));
-        source.reset(SyncSource::createTestingSource("tasks", "TDE Tasks", true));
-        source.reset(SyncSource::createTestingSource("tasks", "TDE Task List:text/calendar", true));
+        // source = SyncSource::createTestingSource("tasks", "tasks", true);
+        source = SyncSource::createTestingSource("tasks", "tdepim-tasks", true);
+        source = SyncSource::createTestingSource("tasks", "TDE Tasks", true);
+        source = SyncSource::createTestingSource("tasks", "TDE Task List:text/calendar", true);
 
-        // source.reset(SyncSource::createTestingSource("memos", "memos", true));
-        source.reset(SyncSource::createTestingSource("memos", "tdepim-memos", true));
-        source.reset(SyncSource::createTestingSource("memos", "TDE Memos:text/plain", true));
+        // source = SyncSource::createTestingSource("memos", "memos", true);
+        source = SyncSource::createTestingSource("memos", "tdepim-memos", true);
+        source = SyncSource::createTestingSource("memos", "TDE Memos:text/plain", true);
     }
 
     // TODO: support default databases
 
     // void testOpenDefaultCalendar() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "tdepim-calendar", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("calendar", "tdepim-calendar", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultTodo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("tasks", "tdepim-tasks", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("tasks", "tdepim-tasks", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultMemo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
@@ -204,7 +204,7 @@ protected:
         }
 
         std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "tdepim-calendar", true, prefix));
+        source = (TestingSyncSource *)SyncSource::createTestingSource("eds_event", "tdepim-calendar", true, prefix);
         CPPUNIT_ASSERT_NO_THROW(source->open());
 
         string newyork = 
