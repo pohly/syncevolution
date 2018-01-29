@@ -309,9 +309,9 @@ public:
     virtual void open() { throwError(SE_HERE, "inactive"); }
 };
 
-SyncSource *RegisterSyncSource::InactiveSource(const SyncSourceParams &params)
+std::unique_ptr<SyncSource> RegisterSyncSource::InactiveSource(const SyncSourceParams &params)
 {
-    return new InactiveSyncSource(params);
+    return std::make_unique<InactiveSyncSource>(params);
 }
 
 TestRegistry &SyncSource::getTestRegistry()
@@ -448,21 +448,20 @@ void SyncSource::requestAnotherSync()
 }
 
 
-SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error, SyncConfig *config)
+std::unique_ptr<SyncSource> SyncSource::createSource(const SyncSourceParams &params, bool error, SyncConfig *config)
 {
     SourceType sourceType = getSourceType(params.m_nodes);
 
     if (sourceType.m_backend == "virtual") {
-        SyncSource *source = NULL;
-        source = new VirtualSyncSource(params, config);
+        auto source = std::make_unique<VirtualSyncSource>(params, config);
         if (error && !source) {
             Exception::throwError(SE_HERE, params.getDisplayName() + ": virtual datastore cannot be instantiated");
         }
-        return source;
+        return std::move(source);
     }
 
     const SourceRegistry &registry(getSourceRegistry());
-    unique_ptr<SyncSource> source;
+    std::unique_ptr<SyncSource> source;
     for (const RegisterSyncSource *sourceInfos: registry) {
         unique_ptr<SyncSource> nextSource(sourceInfos->m_create(params));
         if (nextSource.get()) {
@@ -473,8 +472,8 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
             source = std::move(nextSource);
         }
     }
-    if (source.get()) {
-        return source.release();
+    if (source) {
+        return source;
     }
 
     if (error) {
@@ -495,11 +494,11 @@ SyncSource *SyncSource::createSource(const SyncSourceParams &params, bool error,
         Exception::throwError(SE_HERE, SyncMLStatus(sysync::LOCERR_CFGPARSE), problem);
     }
 
-    return NULL;
+    return {};
 }
 
-SyncSource *SyncSource::createTestingSource(const string &name, const string &type, bool error,
-                                            const char *prefix)
+std::unique_ptr<TestingSyncSource> SyncSource::createTestingSource(const string &name, const string &type, bool error,
+                                                                   const char *prefix)
 {
     std::string config = "target-config@client-test";
     const char *server = getenv("CLIENT_TEST_SERVER");
@@ -515,7 +514,8 @@ SyncSource *SyncSource::createTestingSource(const string &name, const string &ty
     if (prefix) {
         sourceconfig.setDatabaseID(string(prefix) + name + "_1");
     }
-    return createSource(params, error);
+    auto source = createSource(params, error);
+    return std::unique_ptr<TestingSyncSource>(static_cast<TestingSyncSource *>(source.release()));
 }
 
 VirtualSyncSource::VirtualSyncSource(const SyncSourceParams &params, SyncConfig *config) :

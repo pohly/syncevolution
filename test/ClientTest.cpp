@@ -147,11 +147,11 @@ public:
         }
         va_end(argList);
         m_argc = m_args.size();
-        m_argvArray.reset(new const char *[m_args.size()]);
-        for (int i = 0; i < m_argc; i++) {
-            m_argvArray[i] = m_args[i].c_str();
+        m_argvArray.reserve(m_args.size());
+        for (auto &arg: m_args) {
+            m_argvArray.push_back(arg.c_str());
         }
-        m_argv = m_argvArray.get();
+        m_argv = m_argvArray.data();
     }
 
     virtual SyncContext *createSyncClient() {
@@ -393,17 +393,13 @@ public:
         INCREMENTAL     /**< allow source to do incremental data read */
     };
 
-    void reset(TestingSyncSource *source = NULL, Flags flags = INCREMENTAL)
+    void reset(std::unique_ptr<TestingSyncSource> source = {}, Flags flags = INCREMENTAL)
     {
         if (get() && m_active) {
             stopAccess();
         }
-        // avoid deleting the instance that we are setting
-        // (shouldn't happen)
-        if (get() != source) {
-            base_t::reset(source);
-        }
-        if (source) {
+        base_t::reset(source.release());
+        if (get()) {
             startAccess(flags);
         }
     }
@@ -1107,7 +1103,7 @@ void LocalTests::testOpen() {
     // call open directly. That way it is a bit more clear
     // what happens and where it fails, if it fails.
     std::unique_ptr<TestingSyncSource> source;
-    CT_ASSERT_NO_THROW(source.reset(createSourceA()));
+    CT_ASSERT_NO_THROW(source = createSourceA());
     // got a sync source?
     CT_ASSERT(source.get() != 0);
     // can it be opened?

@@ -445,7 +445,7 @@ public:
         source(sourceParam),
         isSourceA(isSourceAParam) {}
 
-    TestingSyncSource *operator() () const {
+    std::unique_ptr<TestingSyncSource> operator() () const {
         CPPUNIT_ASSERT(createSource);
         return createSource(client, client.getClientID(), source, isSourceA);
     }

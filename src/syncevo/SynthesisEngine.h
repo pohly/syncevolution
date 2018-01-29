@@ -34,7 +34,6 @@
 #include <synthesis/enginemodulebase.h>
 
 #include <boost/shared_array.hpp>
-#include <boost/scoped_array.hpp>
 
 #include <memory>
 #include <stdexcept>

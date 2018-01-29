@@ -22,12 +22,12 @@
 
 #include <vector>
 #include <string>
+#include <memory>
 
 #include <errno.h>
 
-#include <boost/scoped_array.hpp>
-
 #include <syncevo/LogRedirect.h>
+#include <syncevo/GLibSupport.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -49,17 +49,6 @@ class Restart
         }
     }
 
-    const char **createArray(const std::vector<std::string> &array)
-    {
-        const char **res = new const char *[(array.size() + 1)];
-        size_t i;
-        for (i = 0; i < array.size(); i++) {
-            res[i] = array[i].c_str();
-        }
-        res[i] = NULL;
-        return res;
-    }
-
 public:
     Restart(char **argv, char **env)
     {
@@ -69,10 +58,10 @@ public:
 
     void restart()
     {
-        boost::scoped_array<const char *> argv(createArray(m_argv));
-        boost::scoped_array<const char *> env(createArray(m_env));
+        auto argv = AllocStringArray(m_argv);
+        auto env = AllocStringArray(m_env);
         LogRedirect::reset();
-        if (execve(argv[0], (char *const *)argv.get(), (char *const *)env.get())) {
+        if (execve(argv[0], argv.get(), env.get())) {
             SE_THROW(StringPrintf("restarting syncevo-dbus-server failed: %s", strerror(errno)));
         }
     }
