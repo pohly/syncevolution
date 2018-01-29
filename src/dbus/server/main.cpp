@@ -192,8 +192,7 @@ int main(int argc, char **argv, char **envp)
             err.throwFailure("dbus_get_bus_connection()", " failed - server already running?");
         }
         // make this object the main owner of the connection
-        boost::scoped_ptr<DBusObject> obj(new DBusObject(conn, "foo", "bar", true));
-
+        auto obj = std::make_unique<DBusObject>(conn, "foo", "bar", true);
         auto server = std::make_shared<SyncEvo::Server>(loop, restart, conn, duration);
         server->setDBusLogLevel(levelDBus);
         server->activate();

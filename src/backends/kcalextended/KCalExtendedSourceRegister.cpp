@@ -24,7 +24,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe = sourceType.m_backend == "mkcal-events";
@@ -126,8 +126,8 @@ class KCalExtendedSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        source.reset(SyncSource::createTestingSource("KCalExtended", "KCalExtended:text/calendar:2.0", true));
+        std::unique_ptr<SyncSource> source;
+        source = SyncSource::createTestingSource("KCalExtended", "KCalExtended:text/calendar:2.0", true);
     }
 };
 

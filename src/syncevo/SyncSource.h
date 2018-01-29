@@ -116,10 +116,10 @@ class RegisterSyncSource
      * return NULL for "addressbook" but InactiveSource for
      * "evolution-contacts".
      */
-    typedef SyncSource *(*Create_t)(const SyncSourceParams &params);
+    typedef std::unique_ptr<SyncSource>(*Create_t)(const SyncSourceParams &params);
 
     /** create special result of Create_t: a source which just throws errors when used */
-    static SyncSource *InactiveSource(const SyncSourceParams &params);
+    static std::unique_ptr<SyncSource> InactiveSource(const SyncSourceParams &params);
 
     /**
      * @param shortDescr     a few words identifying the data to be synchronized,
@@ -210,7 +210,7 @@ struct ClientTestConfig {
      * @param isSourceA true if the requested SyncSource is the first one accessing that
      *                  data, otherwise the second
      */
-    typedef std::function<TestingSyncSource *(ClientTest &, const std::string &, int, bool)> createsource_t;
+    typedef std::function<std::unique_ptr<TestingSyncSource>(ClientTest &, const std::string &, int, bool)> createsource_t;
 
     /**
      * Creates a sync source which references the primary database;
@@ -1752,9 +1752,9 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * @param config   optional, needed for intantiating virtual sources
      * @return valid instance, NULL if no source can handle the given type (only when error==false)
      */
-    static SyncSource *createSource(const SyncSourceParams &params,
-                                    bool error = true,
-                                    SyncConfig *config = NULL);
+    static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params,
+                                                    bool error = true,
+                                                    SyncConfig *config = NULL);
 
     /**
      * Factory function for a SyncSource with the given name
@@ -1771,8 +1771,8 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * @param error    throw a runtime error describing what the problem is if no matching source is found
      * @return NULL if no source can handle the given type
      */
-    static SyncSource *createTestingSource(const string &name, const string &type, bool error,
-                                           const char *prefix = getenv("CLIENT_TEST_EVOLUTION_PREFIX"));
+    static std::unique_ptr<TestingSyncSource> createTestingSource(const string &name, const string &type, bool error,
+                                                                  const char *prefix = getenv("CLIENT_TEST_EVOLUTION_PREFIX"));
 
     /**
      * Initialize and/or load backends. No longer

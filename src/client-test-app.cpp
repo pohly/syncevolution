@@ -459,7 +459,7 @@ private:
     }
 
     /** called by test frame work */
-    static TestingSyncSource *createSource(ClientTest &client, const std::string &clientID, int source, bool isSourceA) {
+    static std::unique_ptr<TestingSyncSource> createSource(ClientTest &client, const std::string &clientID, int source, bool isSourceA) {
         TestEvolution &evClient((TestEvolution &)client);
         string name = evClient.m_localSource2Config[source];
 
@@ -470,7 +470,7 @@ private:
     }
 
     /** called internally in this class */
-    TestingSyncSource *createNamedSource(const string &name, bool isSourceA) {
+    std::unique_ptr<TestingSyncSource> createNamedSource(const string &name, bool isSourceA) {
         string database = getDatabaseName(name);
         std::string config = "target-config@client-test";
         const char *server = getenv("CLIENT_TEST_SERVER");
@@ -542,8 +542,8 @@ private:
 
         // downcasting here: anyone who registers his sources for testing
         // must ensure that they are indeed TestingSyncSource instances
-        SyncSource *ss = SyncSource::createSource(params);
-        return static_cast<TestingSyncSource *>(ss);
+        auto ss = SyncSource::createSource(params);
+        return std::unique_ptr<TestingSyncSource>(static_cast<TestingSyncSource *>(ss.release()));
     }
 
     // push source into localsource2config if it doesn't exist in the vector
@@ -576,7 +576,7 @@ private:
 
         if (!basename.empty() &&
             lockEvolution.find(basename) == lockEvolution.end()) {
-            lockEvolution[basename].reset(createNamedSource(name, true));
+            lockEvolution[basename] = createNamedSource(name, true);
             lockEvolution[basename]->open();
             ClientTest::registerCleanup(CleanupSources);
         }

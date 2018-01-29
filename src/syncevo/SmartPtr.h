@@ -35,8 +35,6 @@
 #include <string>
 #include <memory>
 
-#include <boost/scoped_array.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -49,7 +47,7 @@ class Unref {
  public:
     /**
      * C character string - beware, Funambol C++ client library strings must
-     * be returned with delete [], use boost::scoped_array
+     * be returned with delete [], use std::unique_ptr<T []>
      */
     static void unref(char *pointer) { free(pointer); }
 

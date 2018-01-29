@@ -22,7 +22,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe;
@@ -62,9 +62,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
                 std::shared_ptr<Neon::Settings> settings;
                 if (sourceType.m_backend == "CalDAV") {
                     auto sub = std::make_shared<CalDAVSource>(params, settings);
-                    return new MapSyncSource(params, sub);
+                    return std::make_unique<MapSyncSource>(params, sub);
                 } else {
-                    return new CalDAVVxxSource(sourceType.m_backend == "CalDAVTodo" ? "VTODO" : "VJOURNAL",
+                    return std::make_unique<CalDAVVxxSource>(sourceType.m_backend == "CalDAVTodo" ? "VTODO" : "VJOURNAL",
                                                params, settings);
                 }
             }
@@ -81,7 +81,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
 #ifdef ENABLE_DAV
             if (enabled) {
                 std::shared_ptr<Neon::Settings> settings;
-                return new CardDAVSource(params, settings);
+                return std::make_unique<CardDAVSource>(params, settings);
             }
 #endif
             return RegisterSyncSource::InactiveSource(params);
@@ -137,13 +137,13 @@ class WebDAVTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("CalDAV", "CalDAV", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("CalDAV", "CalDAV:text/calendar", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("CalDAV", "CalDAV:text/x-vcalendar", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("CardDAV", "CardDAV", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("CardDAV", "CardDAV:text/vcard", true));
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("CardDAV", "CardDAV:text/x-vcard", true));
+        std::unique_ptr<TestingSyncSource> source;
+        source = SyncSource::createTestingSource("CalDAV", "CalDAV", true);
+        source = SyncSource::createTestingSource("CalDAV", "CalDAV:text/calendar", true);
+        source = SyncSource::createTestingSource("CalDAV", "CalDAV:text/x-vcalendar", true);
+        source = SyncSource::createTestingSource("CardDAV", "CardDAV", true);
+        source = SyncSource::createTestingSource("CardDAV", "CardDAV:text/vcard", true);
+        source = SyncSource::createTestingSource("CardDAV", "CardDAV:text/x-vcard", true);
     }
 
     std::string decode(const char *item) {
@@ -278,7 +278,7 @@ public:
     }
 
     // This is very similar to client-test-app.cpp. TODO: refactor?!
-    TestingSyncSource *createSource(const std::string &clientID, bool isSourceA) const
+    std::unique_ptr<TestingSyncSource> createSource(const std::string &clientID, bool isSourceA) const
     {
         std::string name = m_server + "_" + m_type;
         const char *server = getenv("CLIENT_TEST_SERVER");
@@ -355,10 +355,10 @@ public:
         SyncSourceParams params(m_type,
                                 nodes,
                                 context);
-        SyncSource *ss = SyncSource::createSource(params);
+        auto ss = SyncSource::createSource(params);
         ss->setDisplayName(ss->getDisplayName() +
                            (isSourceA ? " #A" : " #B"));
-        return static_cast<TestingSyncSource *>(ss);
+        return std::unique_ptr<TestingSyncSource>(static_cast<TestingSyncSource *>(ss.release()));
     }
 };
 
@@ -383,7 +383,7 @@ static class WebDAVTestSingleton : RegisterSyncSourceTest {
     public:
         void push_back(const std::shared_ptr<WebDAVTest> &source)
         {
-            boost::scoped_ptr<TestingSyncSource> instance(source->createSource("1", true));
+            auto instance = source->createSource("1", true);
             std::string database = instance->getDatabaseID();
             source->setDatabase(database);
 
