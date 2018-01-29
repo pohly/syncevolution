@@ -761,7 +761,7 @@ std::shared_ptr<ContactCache> EvolutionContactSource::startReading(const std::st
     std::shared_ptr<ContactCache> cache;
     if (size) {
         // Prepare parameter for EDS C call. Ownership of query instances is in uidQueries array.
-        boost::scoped_array<EBookQuery *> queries(new EBookQuery *[size]);
+        auto queries = std::make_unique<EBookQuery *[]>(size);
         for (int i = 0; i < size; i++) {
             // This shouldn't compile because we don't specify how ownership is handled.
             // The reset() method always bumps the ref count, which is not what we want here!

@@ -202,9 +202,9 @@ class ForkExecParent : public ForkExec, public enable_weak_from_this<ForkExecPar
     std::string m_helper;
     std::vector<std::string> m_args;
     std::shared_ptr<GDBusCXX::DBusServerCXX> m_server;
-    boost::scoped_array<char *> m_argv;
+    std::unique_ptr<char * []> m_argv;
     std::list<std::string> m_argvStrings;
-    boost::scoped_array<char *> m_env;
+    std::unique_ptr<char * []> m_env;
     std::list<std::string> m_envStrings;
     GPid m_childPid;
     bool m_hasConnected;

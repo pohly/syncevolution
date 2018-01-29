@@ -30,7 +30,6 @@
 
 #include <synthesis/syerror.h>
 
-#include <boost/scoped_array.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <fstream>
 #include <iostream>
