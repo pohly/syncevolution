@@ -27,7 +27,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe;    
@@ -40,7 +40,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
                 || sourceType.m_format == "text/x-vcard") { 
             return
 #ifdef ENABLE_AKONADI
-                new AkonadiContactSource(params)
+                std::make_unique<AkonadiContactSource>(params)
 #else
                 isMe ? RegisterSyncSource::InactiveSource(params) : NULL
 #endif
@@ -56,7 +56,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
                 || sourceType.m_format == "text/x-vcalendar") { 
             return
 #ifdef ENABLE_AKONADI
-                new AkonadiTaskSource(params)
+                std::make_unique<AkonadiTaskSource>(params)
 #else
                 isMe ? RegisterSyncSource::InactiveSource(params) : NULL
 #endif
@@ -71,7 +71,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
         if (sourceType.m_format == "" || sourceType.m_format == "text/plain") {
             return
 #ifdef ENABLE_AKONADI
-                new AkonadiMemoSource(params)
+                std::make_unique<AkonadiMemoSource>(params)
 #else
                 isMe ? RegisterSyncSource::InactiveSource(params) : NULL
 #endif
@@ -87,7 +87,7 @@ static SyncSource *createSource(const SyncSourceParams &params)
             sourceType.m_format == "text/x-vcalendar" /* this is for backwards compatibility with broken configs */ ) {
             return
 #ifdef ENABLE_AKONADI
-                new AkonadiCalendarSource(params)
+                std::make_unique<AkonadiCalendarSource>(params)
 #else
                 isMe ? RegisterSyncSource::InactiveSource(params) : NULL
 #endif
@@ -154,52 +154,52 @@ protected:
     }
 
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        // source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
-        // source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "kde-contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "KDE Contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "KDE Address Book:text/x-vcard", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "KDE Address Book:text/vcard", true));
+        std::unique_ptr<SyncSource> source;
+        // source = SyncSource::createTestingSource("addressbook", "addressbook", true);
+        // source = SyncSource::createTestingSource("addressbook", "contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "kde-contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "KDE Contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "KDE Address Book:text/x-vcard", true);
+        source = SyncSource::createTestingSource("addressbook", "KDE Address Book:text/vcard", true);
 
 
-        // source.reset(SyncSource::createTestingSource("calendar", "calendar", true));
-        source.reset(SyncSource::createTestingSource("calendar", "kde-calendar", true));
-        source.reset(SyncSource::createTestingSource("calendar", "KDE Calendar:text/calendar", true));
+        // source = SyncSource::createTestingSource("calendar", "calendar", true);
+        source = SyncSource::createTestingSource("calendar", "kde-calendar", true);
+        source = SyncSource::createTestingSource("calendar", "KDE Calendar:text/calendar", true);
 
-        // source.reset(SyncSource::createTestingSource("tasks", "tasks", true));
-        source.reset(SyncSource::createTestingSource("tasks", "kde-tasks", true));
-        source.reset(SyncSource::createTestingSource("tasks", "KDE Tasks", true));
-        source.reset(SyncSource::createTestingSource("tasks", "KDE Task List:text/calendar", true));
+        // source = SyncSource::createTestingSource("tasks", "tasks", true);
+        source = SyncSource::createTestingSource("tasks", "kde-tasks", true);
+        source = SyncSource::createTestingSource("tasks", "KDE Tasks", true);
+        source = SyncSource::createTestingSource("tasks", "KDE Task List:text/calendar", true);
 
-        // source.reset(SyncSource::createTestingSource("memos", "memos", true));
-        source.reset(SyncSource::createTestingSource("memos", "kde-memos", true));
-        source.reset(SyncSource::createTestingSource("memos", "KDE Memos:text/plain", true));
+        // source = SyncSource::createTestingSource("memos", "memos", true);
+        source = SyncSource::createTestingSource("memos", "kde-memos", true);
+        source = SyncSource::createTestingSource("memos", "KDE Memos:text/plain", true);
     }
 
     // TODO: support default databases
 
     // void testOpenDefaultAddressBook() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultCalendar() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("calendar", "kde-calendar", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("calendar", "kde-calendar", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultTodo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("tasks", "kde-tasks", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("tasks", "kde-tasks", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultMemo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("memos", "kde-memos", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "kde-memos", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
@@ -210,7 +210,7 @@ protected:
         }
 
         std::shared_ptr<TestingSyncSource> source;
-        source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "kde-calendar", true, prefix));
+        source.reset((TestingSyncSource *)SyncSource::createTestingSource("eds_event", "kde-calendar", true, prefix).release());
         CPPUNIT_ASSERT_NO_THROW(source->open());
 
         string newyork = 

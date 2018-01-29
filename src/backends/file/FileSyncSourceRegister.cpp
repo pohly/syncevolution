@@ -24,7 +24,7 @@
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     // The string returned by getSourceType() is always the one
@@ -43,9 +43,9 @@ static SyncSource *createSource(const SyncSourceParams &params)
     if (isMe || maybeMe) {
         // The FileSyncSource always needs the database format.
         if (!sourceType.m_localFormat.empty()) {
-            return new FileSyncSource(params, sourceType.m_localFormat);
+            return std::make_unique<FileSyncSource>(params, sourceType.m_localFormat);
         } else {
-            return NULL;
+            return nullptr;
         }
     }
     return NULL;
@@ -88,10 +88,10 @@ class FileSyncSourceUnitTest : public CppUnit::TestFixture {
 
 protected:
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        source.reset(SyncSource::createTestingSource("file", "file:text/vcard:3.0", true));
-        source.reset(SyncSource::createTestingSource("file", "file:text/plain:1.0", true));
-        source.reset(SyncSource::createTestingSource("file", "Files in one directory:text/x-vcard:2.1", true));
+        std::unique_ptr<SyncSource> source;
+        source = SyncSource::createTestingSource("file", "file:text/vcard:3.0", true);
+        source = SyncSource::createTestingSource("file", "file:text/plain:1.0", true);
+        source = SyncSource::createTestingSource("file", "Files in one directory:text/x-vcard:2.1", true);
     }
 };
 

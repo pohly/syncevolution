@@ -348,53 +348,29 @@ template<class T> void GObjectDestructor(T *ptr) { g_object_unref(ptr); }
 template<class T> void GFreeDestructor(T *ptr) { g_free(static_cast<void *>(ptr)); }
 
 /**
- * Copies strings from a collection into a newly allocated, NULL
- * terminated array. Copying the strings is optional. Suggested
- * usage is:
+ * Copies string pointers from a collection into a newly allocated, NULL
+ * terminated array. Strings are shared with the original collection.
  *
  * C collection;
  * collection.push_back(...);
- * boost::scoped_array<char *> array(AllocStringArray(collection));
+ * auto array = AllocStringArray(collection);
  *
  */
-template<typename T> char **AllocStringArray(const T &strings,
-                                             const char **(*allocArray)(size_t) = NULL,
-                                             void (*freeArray)(const char **) = NULL,
-                                             const char *(*copyString)(const char *) = NULL,
-                                             const void (*freeString)(char *) = NULL)
+template<typename T> std::unique_ptr<char * []> AllocStringArray(const T &strings)
 {
     size_t arraySize = strings.size() + 1;
-    const char **array = NULL;
-    array = allocArray ? allocArray(arraySize) : new const char *[arraySize];
-    if (!array) {
-        throw std::bad_alloc();
+    auto array = std::make_unique<char * []>(arraySize);
+    size_t i = 0;
+    for(const auto &str: strings) {
+        array[i] = const_cast<char *>(str.c_str());
+        if (!array[i]) {
+            throw std::bad_alloc();
+        }
+        i++;
     }
-    try {
-        memset(array, 0, sizeof(*array) * arraySize);
-        size_t i = 0;
-        for(const auto &str: strings) {
-            array[i] = copyString ? copyString(str.c_str()) : str.c_str();
-            if (!array[i]) {
-                throw std::bad_alloc();
-            }
-            i++;
-        }
-    } catch (...) {
-        if (freeString) {
-            for (const char **ptr = array;
-                 *ptr;
-                 ptr++) {
-                freeString(const_cast<char *>(*ptr));
-            }
-        }
-        if (freeArray) {
-            freeArray(array);
-        }
-        throw;
-    }
-    return const_cast<char **>(array);
+    array[i] = nullptr;
+    return array;
 }
-
 
 /**
  * Wraps a G[S]List of pointers to a specific type.

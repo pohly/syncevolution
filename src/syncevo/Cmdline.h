@@ -27,8 +27,6 @@
 #include <set>
 #include <memory>
 
-#include <boost/scoped_array.hpp>
-
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
@@ -127,7 +125,7 @@ protected:
     const char * const * m_argv;
 
     //array to store pointers of arguments
-    boost::scoped_array<const char *> m_argvArray;
+    std::vector<const char *> m_argvArray;
 
     /** result of sync, if one was executed */
     SyncReport m_report;

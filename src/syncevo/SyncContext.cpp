@@ -1111,8 +1111,8 @@ public:
     using inherited::rend;
     using inherited::size;
 
-    /** transfers ownership (historic reasons for storing plain pointer...) */
-    void addSource(cxxptr<SyncSource> &source) { checkSource(source); push_back(source.release()); }
+    /** transfers ownership */
+    void addSource(std::unique_ptr<SyncSource> source) { checkSource(source.get()); push_back(source.release()); }
 
 private:
     VirtualSyncSources_t m_virtualSources; /**< all configured virtual data sources (aka Synthesis <superdatastore>) */
@@ -2206,7 +2206,7 @@ void SyncContext::initSources(SourceList &sourceList)
                 //This is a virtual sync source, check and enable the referenced
                 //sub syncsources here
                 SyncSourceParams params(name, source, std::shared_ptr<SyncConfig>(this, SyncConfigNOP()), contextName);
-                std::shared_ptr<VirtualSyncSource> vSource = std::shared_ptr<VirtualSyncSource> (new VirtualSyncSource (params));
+                std::shared_ptr<VirtualSyncSource> vSource = std::shared_ptr<VirtualSyncSource>(new VirtualSyncSource (params));
                 std::vector<std::string> mappedSources = vSource->getMappedSources();
                 for (std::string source: mappedSources) {
                     //check whether the mapped source is really available
@@ -2251,14 +2251,14 @@ void SyncContext::initSources(SourceList &sourceList)
                                         source,
                                         std::shared_ptr<SyncConfig>(this, SyncConfigNOP()),
                                         contextName);
-                cxxptr<SyncSource> syncSource(SyncSource::createSource(params));
+                auto syncSource = SyncSource::createSource(params);
                 if (!syncSource) {
                     Exception::throwError(SE_HERE, name + ": type unknown" );
                 }
                 if (subSources.find(name) != subSources.end()) {
                     syncSource->recordVirtualSource(subSources[name]);
                 }
-                sourceList.addSource(syncSource);
+                sourceList.addSource(std::move(syncSource));
             }
         } else {
             // the Synthesis engine is never going to see this source,
@@ -4859,8 +4859,8 @@ private:
             }
             CPPUNIT_ASSERT(type);
             string datadir = getLogData() + "/";
-            cxxptr<SyncSource> source(SyncSource::createTestingSource(sourcename, type, true,
-                                                                      (string("file://") + datadir).c_str()));
+            auto source = SyncSource::createTestingSource(sourcename, type, true,
+                                                          (string("file://") + datadir).c_str());
             datadir += sourcename;
             datadir += "_1";
             source->open();
@@ -4871,7 +4871,7 @@ private:
                                     SyncSourceReport::ITEM_TOTAL,
                                     1);
             }
-            list.addSource(source);
+            list.addSource(std::move(source));
             const char *before = va_arg(ap, const char *);
             const char *after = va_arg(ap, const char *);
             if (before) {

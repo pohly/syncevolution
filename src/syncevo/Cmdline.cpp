@@ -70,11 +70,11 @@ Cmdline::Cmdline(const vector<string> &args) :
     m_validSourceProps(SyncSourceConfig::getRegistry())
 {
     m_argc = args.size();
-    m_argvArray.reset(new const char *[args.size()]);
-    for(int i = 0; i < m_argc; i++) {
-        m_argvArray[i] = m_args[i].c_str();
+    m_argvArray.reserve(args.size());
+    for (auto &arg: m_args) {
+        m_argvArray.push_back(arg.c_str());
     }
-    m_argv = m_argvArray.get();
+    m_argv = m_argvArray.data();
 }
 
 Cmdline::Cmdline(const char *arg, ...) :
@@ -90,11 +90,11 @@ Cmdline::Cmdline(const char *arg, ...) :
     }
     va_end(argList);
     m_argc = m_args.size();
-    m_argvArray.reset(new const char *[m_args.size()]);
-    for (int i = 0; i < m_argc; i++) {
-        m_argvArray[i] = m_args[i].c_str();
+    m_argvArray.reserve(m_args.size());
+    for (auto &arg: m_args) {
+        m_argvArray.push_back(arg.c_str());
     }
-    m_argv = m_argvArray.get();
+    m_argv = m_argvArray.data();
 }
 
 bool Cmdline::parse()
@@ -1356,10 +1356,10 @@ bool Cmdline::run() {
 
         SyncSourceNodes sourceNodes = context->getSyncSourceNodesNoTracking(sourceName);
         SyncSourceParams params(sourceName, sourceNodes, context);
-        cxxptr<SyncSource> source;
+        std::unique_ptr<SyncSource> source;
 
         try {
-            source.set(SyncSource::createSource(params, true));
+            source = SyncSource::createSource(params, true);
         } catch (const StatusException &ex) {
             // Creating the source failed. Detect some common reasons for this
             // and log those instead. None of these situations are fatal by themselves,
@@ -1417,7 +1417,7 @@ bool Cmdline::run() {
                             description.empty() ? "" : ": ",
                             description.c_str());
             };
-            processLUIDs(source, showLUID);
+            processLUIDs(source.get(), showLUID);
         } else if (m_deleteItems) {
             if (!ops.m_deleteItem) {
                 source->throwError(SE_HERE, "deleting items not supported");
@@ -1427,7 +1427,7 @@ bool Cmdline::run() {
             err = ops.m_startDataRead("", "");
             CHECK_ERROR("reading items");
             if (deleteAll) {
-                readLUIDs(source, luids);
+                readLUIDs(source.get(), luids);
             } else {
                 luids = m_luids;
             }
@@ -1570,7 +1570,7 @@ bool Cmdline::run() {
                     auto exportOne = [this, raw, out, &haveItem, &haveNewline] (const std::string &luid) {
                         ExportLUID(raw, out, m_delimiter, m_itemPath, haveItem, haveNewline, luid);
                     };
-                    processLUIDs(source, exportOne);
+                    processLUIDs(source.get(), exportOne);
                 } else {
                     SyncSourceBase::ReadAheadItems luids;
                     luids.reserve(m_luids.size());

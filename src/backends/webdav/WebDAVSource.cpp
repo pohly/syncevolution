@@ -8,7 +8,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/find.hpp>
-#include <boost/scoped_ptr.hpp>
 
 #include <syncevo/LogRedirect.h>
 #include <syncevo/IdentityProvider.h>
@@ -2414,10 +2413,10 @@ void WebDAVSource::removeItem(const string &uid)
     Timespec deadline = createDeadline();
     m_session->startOperation("DELETE", deadline);
     std::string item, result;
-    boost::scoped_ptr<Neon::Request> req;
+    std::unique_ptr<Neon::Request> req;
     while (true) {
-        req.reset(new Neon::Request(*m_session, "DELETE", luid2path(uid),
-                                    item, result));
+        req = std::make_unique<Neon::Request>(*m_session, "DELETE", luid2path(uid),
+                                              item, result);
         // TODO: match exactly the expected revision, aka ETag,
         // or implement locking.
         // req.addHeader("If-Match", etag);

@@ -211,7 +211,7 @@ void ForkExecParent::start()
     m_argvStrings.insert(m_argvStrings.end(),
                          m_args.begin(),
                          m_args.end());
-    m_argv.reset(AllocStringArray(m_argvStrings));
+    m_argv = AllocStringArray(m_argvStrings);
     for (char **env = environ;
          *env;
          env++) {
@@ -224,7 +224,7 @@ void ForkExecParent::start()
     // pass D-Bus address via env variable
     m_envStrings.push_back(ForkExecEnvVar + m_server->getAddress());
     m_envStrings.push_back(ForkExecInstanceEnvVar + getInstance());
-    m_env.reset(AllocStringArray(m_envStrings));
+    m_env = AllocStringArray(m_envStrings);
 
     SE_LOG_DEBUG(NULL, "ForkExecParent: running %s with D-Bus address %s",
                  helper.c_str(), m_server->getAddress().c_str());

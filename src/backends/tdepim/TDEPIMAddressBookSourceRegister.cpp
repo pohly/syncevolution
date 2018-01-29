@@ -27,7 +27,7 @@
 
 SE_BEGIN_CXX
 
-static SyncSource *createSource(const SyncSourceParams &params)
+static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
 	SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
 	
@@ -38,10 +38,10 @@ static SyncSource *createSource(const SyncSourceParams &params)
 #else
 	if (isMe || sourceType.m_backend == "addressbook" ) {
 		if (sourceType.m_format == "" || sourceType.m_format == "text/vcard") {
-			return new TDEPIMAddressBookSource(TDEPIM_CONTACT_V30, params);
+			return std::make_unique<TDEPIMAddressBookSource>(TDEPIM_CONTACT_V30, params);
 			}
 		else if (sourceType.m_format == "text/x-vcard") {
-			return new TDEPIMAddressBookSource(TDEPIM_CONTACT_V21, params);
+			return std::make_unique<TDEPIMAddressBookSource>(TDEPIM_CONTACT_V21, params);
 			}
 		else return NULL;
 	}
@@ -94,20 +94,20 @@ protected:
     }
 
     void testInstantiate() {
-        std::shared_ptr<SyncSource> source;
-        // source.reset(SyncSource::createTestingSource("addressbook", "addressbook", true));
-        // source.reset(SyncSource::createTestingSource("addressbook", "contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "tdepim-contacts", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "TDE Contacts", true));
- //       source.reset(SyncSource::createTestingSource("addressbook", "TDE Address Book:text/x-vcard", true));
-        source.reset(SyncSource::createTestingSource("addressbook", "TDE Address Book:text/vcard", true));
+        std::unique_ptr<SyncSource> source;
+        // source = SyncSource::createTestingSource("addressbook", "addressbook", true);
+        // source = SyncSource::createTestingSource("addressbook", "contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "tdepim-contacts", true);
+        source = SyncSource::createTestingSource("addressbook", "TDE Contacts", true);
+ //       source = SyncSource::createTestingSource("addressbook", "TDE Address Book:text/x-vcard", true);
+        source = SyncSource::createTestingSource("addressbook", "TDE Address Book:text/vcard", true);
     }
 
     // TODO: support default databases
 
     // void testOpenDefaultAddressBook() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source.reset((TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL));
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 };
