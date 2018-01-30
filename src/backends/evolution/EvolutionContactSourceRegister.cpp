@@ -48,7 +48,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
                 isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("Evolution Address Book",

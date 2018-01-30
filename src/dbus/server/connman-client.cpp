@@ -25,11 +25,11 @@ SE_BEGIN_CXX
 
 ConnmanClient::ConnmanClient(Server &server):
     DBusRemoteObject(!strcmp(getEnv("DBUS_TEST_CONNMAN", ""), "none") ?
-                     NULL : /* simulate missing ConnMan */
+                     nullptr : /* simulate missing ConnMan */
                      GDBusCXX::dbus_get_bus_connection(!strcmp(getEnv("DBUS_TEST_CONNMAN", ""), "session") ?
                                                        "SESSION" : /* use our own ConnMan stub */
                                                        "SYSTEM" /* use real ConnMan */,
-                                                       NULL, true, NULL),
+                                                       nullptr, true, nullptr),
                      "/", "net.connman.Manager", "net.connman", true),
     m_available(false),
     m_server(server),

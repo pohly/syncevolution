@@ -106,14 +106,14 @@ class RegisterSyncSource
      *
      * The function will be called to check whether the backend was
      * meant by the user. It should return a new instance which will
-     * be freed by the caller or NULL if it does not support the
+     * be freed by the caller or nullptr if it does not support the
      * selected type.
      * 
      * Inactive sources should return the special InactiveSource
      * instance (created with InactiveSource() below) if they
      * recognize without a doubt that the user wanted to instantiate
      * them: for example, an inactive EvolutionContactSource will
-     * return NULL for "addressbook" but InactiveSource for
+     * return nullptr for "addressbook" but InactiveSource for
      * "evolution-contacts".
      */
     typedef std::unique_ptr<SyncSource>(*Create_t)(const SyncSourceParams &params);
@@ -613,7 +613,7 @@ class TestRegistry : public vector<const RegisterSyncSourceTest *>
             }
         }
         throw out_of_range(string("test config registry: ") + configName);
-        return NULL;
+        return nullptr;
     }
 };
 
@@ -1750,11 +1750,11 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      *
      * @param error    throw a runtime error describing what the problem is if no matching source is found
      * @param config   optional, needed for intantiating virtual sources
-     * @return valid instance, NULL if no source can handle the given type (only when error==false)
+     * @return valid instance, nullptr if no source can handle the given type (only when error==false)
      */
     static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params,
                                                     bool error = true,
-                                                    SyncConfig *config = NULL);
+                                                    SyncConfig *config = nullptr);
 
     /**
      * Factory function for a SyncSource with the given name
@@ -1769,7 +1769,7 @@ class SyncSource : virtual public SyncSourceBase, public SyncSourceConfig, publi
      * database is used.
      *
      * @param error    throw a runtime error describing what the problem is if no matching source is found
-     * @return NULL if no source can handle the given type
+     * @return nullptr if no source can handle the given type
      */
     static std::unique_ptr<TestingSyncSource> createTestingSource(const string &name, const string &type, bool error,
                                                                   const char *prefix = getenv("CLIENT_TEST_EVOLUTION_PREFIX"));
@@ -1897,7 +1897,7 @@ public:
      * @param config   optional: when given, the constructor will instantiate the
      *                 referenced underlying sources and check them in open()
      */
-    VirtualSyncSource(const SyncSourceParams &params, SyncConfig *config = NULL);
+    VirtualSyncSource(const SyncSourceParams &params, SyncConfig *config = nullptr);
 
     /** opens underlying sources and checks config by calling getDataTypeSupport() */
     virtual void open();
@@ -2506,8 +2506,8 @@ class SyncSourceRevisions : virtual public SyncSourceChanges, virtual public Syn
 
     /**
      * set Synthesis DB Interface and backup/restore operations
-     * @param raw           needed for backups; if NULL, no backups are made
-     * @param del           needed for restores; if NULL, only backups are possible
+     * @param raw           needed for backups; if nullptr, no backups are made
+     * @param del           needed for restores; if nullptr, only backups are possible
      * @param granularity   time that has to pass between making a modification
      *                      and checking for changes; this class ensures that
      *                      at least this amount of time has passed before letting

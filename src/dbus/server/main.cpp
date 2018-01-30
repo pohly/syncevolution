@@ -44,12 +44,12 @@ using namespace SyncEvo;
 using namespace GDBusCXX;
 
 namespace {
-    GMainLoop *loop = NULL;
+    GMainLoop *loop = nullptr;
     const char * const execName = "syncevo-dbus-server";
 
 bool parseDuration(int &duration, const char* value)
 {
-    if(value == NULL) {
+    if(value == nullptr) {
         return false;
     } else if (boost::iequals(value, "unlimited")) {
         duration = -1;
@@ -90,7 +90,7 @@ int main(int argc, char **argv, char **envp)
     textdomain(GETTEXT_PACKAGE);
 
     try {
-        gchar *durationString = NULL;
+        gchar *durationString = nullptr;
         int duration = 600;
         int logLevel = 1;
         int logLevelDBus = 2;
@@ -112,17 +112,17 @@ int main(int argc, char **argv, char **envp)
               "level" },
             { "stdout", 'o', 0, G_OPTION_ARG_NONE, &stdoutEnabled,
               "Enable printing to stdout (result of operations) and stderr (errors/info/debug).",
-              NULL },
-            { "no-syslog", 's', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &syslogEnabled, "Disable printing to syslog.", NULL },
+              nullptr },
+            { "no-syslog", 's', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &syslogEnabled, "Disable printing to syslog.", nullptr },
 #ifdef USE_DLT
-            { "dlt", 0, 0, G_OPTION_ARG_NONE, &dltEnabled, "Enable logging via GENIVI Diagnostic Log and Trace.", NULL },
+            { "dlt", 0, 0, G_OPTION_ARG_NONE, &dltEnabled, "Enable logging via GENIVI Diagnostic Log and Trace.", nullptr },
 #endif
 #ifdef ENABLE_DBUS_PIM
             { "start-pim", 'p', 0, G_OPTION_ARG_NONE, &startPIM,
               "Activate the PIM Manager (= unified address book) immediately.",
-              NULL },
+              nullptr },
 #endif
-            { NULL }
+            { nullptr }
         };
         GErrorCXX gerror;
         static GOptionContext *context = g_option_context_new("- SyncEvolution D-Bus Server");
@@ -148,10 +148,10 @@ int main(int argc, char **argv, char **envp)
 
         SyncContext::initMain(execName);
 
-        loop = g_main_loop_new (NULL, FALSE);
+        loop = g_main_loop_new (nullptr, FALSE);
 
-        setvbuf(stderr, NULL, _IONBF, 0);
-        setvbuf(stdout, NULL, _IONBF, 0);
+        setvbuf(stderr, nullptr, _IONBF, 0);
+        setvbuf(stdout, nullptr, _IONBF, 0);
 
         // Redirect output and optionally log to syslog.
         PushLogger<LogRedirect> redirect(new LogRedirect(LogRedirect::STDERR_AND_STDOUT));

@@ -87,7 +87,7 @@ static const char *LogfileBasename = "syncevolution-log";
 static std::string RealPath(const std::string &path)
 {
     std::string buffer;
-    char *newPath = realpath(path.c_str(), NULL);
+    char *newPath = realpath(path.c_str(), nullptr);
     if (newPath) {
         buffer = newPath;
         free(newPath);
@@ -149,7 +149,7 @@ void SyncContext::init()
     m_firstSourceAccess = true;
     m_quitSync = false;
     m_remoteInitiated = false;
-    m_sourceListPtr = NULL;
+    m_sourceListPtr = nullptr;
     m_syncFreeze = SYNC_FREEZE_NONE;
 }
 
@@ -337,7 +337,7 @@ class LogDir : private boost::noncopyable, private LogDirNames, public enable_we
 
     PushLogger<LogDirLogger> m_logger; /**< active logger */
 
-    LogDir(SyncContext &client) : m_client(client), m_info(NULL), m_readonly(false), m_report(NULL)
+    LogDir(SyncContext &client) : m_client(client), m_info(nullptr), m_readonly(false), m_report(nullptr)
     {
         // Set default log directory. This will be overwritten with a user-specified
         // location later on, if one was selected by the user. SyncEvolution >= 0.9 alpha
@@ -376,7 +376,7 @@ public:
     /**
      * Finds previous log directory. Returns empty string if anything went wrong.
      *
-     * @param path        path to configured backup directy, NULL if defaulting to /tmp, "none" if not creating log file
+     * @param path        path to configured backup directy, nullptr if defaulting to /tmp, "none" if not creating log file
      * @return full path of previous log directory, empty string if not found
      */
     string previousLogdir() throw() {
@@ -408,7 +408,7 @@ public:
         }
 
         // Resolve symbolic links in path now, in case that they change later
-        // while the session runs. Relies on being allowed to pass NULL. If that's
+        // while the session runs. Relies on being allowed to pass nullptr. If that's
         // not allowed, we ignore the error and continue to use the known path.
         errno = 0;
         m_logdir = RealPath(m_logdir);
@@ -493,7 +493,7 @@ public:
     // @param mode        determines how path is interpreted and which session is accessed
     // @param maxlogdirs  number of backup dirs to preserve in path, 0 if unlimited
     // @param logLevel    0 = default, 1 = ERROR, 2 = INFO, 3 = DEBUG
-    // @param report      record information about session here (may be NULL)
+    // @param report      record information about session here (may be nullptr)
     void startSession(const string &path, SessionMode mode, int maxlogdirs, int logLevel, SyncReport *report) {
         m_maxlogdirs = maxlogdirs;
         m_report = report;
@@ -505,7 +505,7 @@ public:
             SE_LOG_DEBUG(NULL, "checking log dir %s", m_logdir.c_str());
             if (mode == SESSION_CREATE) {
                 // create unique directory name in the given directory
-                time_t ts = time(NULL);
+                time_t ts = time(nullptr);
                 struct tm tmbuffer;
                 struct tm *tm = localtime_r(&ts, &tmbuffer);
                 if (!tm) {
@@ -605,7 +605,7 @@ public:
         logger->setLevel(level);
         m_logger.reset(logger);
 
-        time_t start = time(NULL);
+        time_t start = time(nullptr);
         if (m_report) {
             m_report->setStart(start);
         }
@@ -765,7 +765,7 @@ public:
     // finalize session
     void endSession()
     {
-        time_t end = time(NULL);
+        time_t end = time(nullptr);
         if (m_report) {
             m_report->setEnd(end);
         }
@@ -958,7 +958,7 @@ LogDirLogger::LogDirLogger(const std::weak_ptr<LogDir> &logdir) :
     m_parentLogger(Logger::instance()),
     m_logdir(logdir)
 #ifdef USE_DLT
-    , m_useDLT(getenv("SYNCEVOLUTION_USE_DLT") != NULL)
+    , m_useDLT(getenv("SYNCEVOLUTION_USE_DLT") != nullptr)
 #endif
 {
 }
@@ -1033,7 +1033,7 @@ void LogDirLogger::messagev(const MessageOptions &options,
                 prefix += *options.m_prefix;
             }
             logdir->m_client.getEngine().doDebug(options.m_level,
-                                                 prefix.empty() ? NULL : prefix.c_str(),
+                                                 prefix.empty() ? nullptr : prefix.c_str(),
                                                  options.m_file,
                                                  options.m_line,
                                                  options.m_function,
@@ -1287,7 +1287,7 @@ public:
     void accessSession(const string &logDirPath) {
         m_logdir->setLogdir(logDirPath);
         m_previousLogdir = m_logdir->previousLogdir();
-        m_logdir->startSession(logDirPath, LogDir::SESSION_READ_ONLY, 0, 0, NULL);
+        m_logdir->startSession(logDirPath, LogDir::SESSION_READ_ONLY, 0, 0, nullptr);
     }
 
 
@@ -1540,7 +1540,7 @@ public:
                 return source.get();
             }
         }
-        return NULL;
+        return nullptr;
     }
 
     /** find by XML <dbtypeid> (the ID used by Synthesis to identify sources in progress events) */
@@ -1555,7 +1555,7 @@ public:
                 return source.get();
             }
         }
-        return NULL;
+        return nullptr;
     }
 
     std::list<std::string> getSourceNames() const;
@@ -1603,7 +1603,7 @@ const std::vector<SyncSource *> *SyncContext::getSources() const
 {
     return m_sourceListPtr ?
         m_sourceListPtr->getSourceSet() :
-        NULL;
+        nullptr;
 }
 
 string SyncContext::getUsedSyncURL() {
@@ -2137,14 +2137,14 @@ static void *mainLoopThread(void *)
     sigset_t blocked;
     sigemptyset(&blocked);
     sigaddset(&blocked, SIGALRM);
-    pthread_sigmask(SIG_BLOCK, &blocked, NULL);
+    pthread_sigmask(SIG_BLOCK, &blocked, nullptr);
 
-    GMainLoop *mainloop = g_main_loop_new(NULL, TRUE);
+    GMainLoop *mainloop = g_main_loop_new(nullptr, TRUE);
     if (mainloop) {
         g_main_loop_run(mainloop);
         g_main_loop_unref(mainloop);
     }
-    return NULL;
+    return nullptr;
 }
 #endif
 
@@ -2156,7 +2156,7 @@ void SyncContext::startLoopThread()
     static pthread_t loopthread;
     static bool loopthreadrunning;
     if (!loopthreadrunning) {
-        loopthreadrunning = !pthread_create(&loopthread, NULL, mainLoopThread, NULL);
+        loopthreadrunning = !pthread_create(&loopthread, nullptr, mainLoopThread, nullptr);
     }
 #endif
 }
@@ -2164,7 +2164,7 @@ void SyncContext::startLoopThread()
 SyncSource *SyncContext::findSource(const std::string &name)
 {
     if (!m_activeContext || !m_activeContext->m_sourceListPtr) {
-        return NULL;
+        return nullptr;
     }
     const char *realname = strrchr(name.c_str(), m_findSourceSeparator);
     if (realname) {
@@ -2633,7 +2633,7 @@ void SyncContext::getConfigXML(bool isSync, string &xml, string &configname)
 #ifdef USE_DLT
         const char *useDLT = getenv("SYNCEVOLUTION_USE_DLT");
 #else
-        static const char *useDLT = NULL;
+        static const char *useDLT = nullptr;
 #endif
 
         debug <<
@@ -3129,7 +3129,7 @@ static int CondTimedWaitGLib(pthread_cond_t * /* cond */, pthread_mutex_t *mutex
         // We don't need to react to thread shutdown immediately (only
         // called once per sync), so a relatively long check interval of
         // one second is okay.
-        GLibEvent id(g_timeout_add_seconds(1, timeout, NULL), "timeout");
+        GLibEvent id(g_timeout_add_seconds(1, timeout, nullptr), "timeout");
 
         auto condTimedWaitContinue = [mutex, &terminated, milliSecondsToWait, &deadline, &flags, &result] () {
             // Thread has terminated?
@@ -3181,7 +3181,7 @@ void SyncContext::initMain(const char *appname)
     g_type_init();
 #endif
 #if !GLIB_CHECK_VERSION(2,32,0)
-    g_thread_init(NULL);
+    g_thread_init(nullptr);
 #endif
     g_set_prgname(appname);
 
@@ -3189,14 +3189,14 @@ void SyncContext::initMain(const char *appname)
     SuspendFlags::getSuspendFlags();
 
     // redirect glib logging into our own logging
-    g_log_set_default_handler(Logger::glogFunc, NULL);
+    g_log_set_default_handler(Logger::glogFunc, nullptr);
 
     // Only the main thread may use the default GMainContext.
     // Anything else is unsafe, see https://mail.gnome.org/archives/gtk-list/2013-April/msg00040.html
     // util.cpp:Sleep() checks this and uses the default context
     // when called by the main thread, otherwise falls back to
     // select(). GRunWhile() is always safe to use.
-    g_main_context_acquire(NULL);
+    g_main_context_acquire(nullptr);
 
     SySync_CondTimedWait = CondTimedWaitGLib;
 #endif
@@ -3217,7 +3217,7 @@ void SyncContext::initMain(const char *appname)
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = SIG_IGN;
-    sigaction(SIGPIPE, &sa, NULL);
+    sigaction(SIGPIPE, &sa, nullptr);
 
     // Initializing a potential use of EDS early is necessary for
     // libsynthesis when compiled with
@@ -3488,7 +3488,7 @@ SyncMLStatus SyncContext::sync(SyncReport *report)
     }
 
     m_agent.reset();
-    m_sourceListPtr = NULL;
+    m_sourceListPtr = nullptr;
     return status;
 }
 
@@ -3725,7 +3725,7 @@ SyncMLStatus SyncContext::doSync()
 {
     std::shared_ptr<SuspendFlags::Guard> signalGuard;
     // install signal handlers unless this was explicitly disabled
-    bool catchSignals = getenv("SYNCEVOLUTION_NO_SYNC_SIGNALS") == NULL;
+    bool catchSignals = getenv("SYNCEVOLUTION_NO_SYNC_SIGNALS") == nullptr;
     if (catchSignals) {
         SE_LOG_DEBUG(NULL, "sync is starting, catch signals");
         signalGuard = SuspendFlags::getSuspendFlags().activate();
@@ -4240,7 +4240,7 @@ SyncMLStatus SyncContext::doSync()
                     // last reply message and instead tell the client
                     // to quit.
                     m_agent->setContentType("quitsync");
-                    m_agent->send(NULL, 0);
+                    m_agent->send(nullptr, 0);
                 } else {
                     m_agent->send(sendBuffer.get(), sendBuffer.size());
                 }
@@ -4529,7 +4529,7 @@ void SyncContext::status()
         if (!m_quiet && getPrintChanges()) {
             try {
                 sourceList.setPath(prevLogdir);
-                sourceList.dumpDatabases("current", NULL);
+                sourceList.dumpDatabases("current", nullptr);
                 sourceList.dumpLocalChanges("", "after", "current", "");
             } catch(...) {
                 Exception::handle();
@@ -4575,7 +4575,7 @@ static void logRestoreReport(const SyncReport &report, bool dryrun)
 
 void SyncContext::checkSourceChanges(SourceList &sourceList, SyncReport &changes)
 {
-    changes.setStart(time(NULL));
+    changes.setStart(time(nullptr));
     for (SyncSource *source: sourceList) {
         SyncSourceReport local;
         if (source->getOperations().m_checkStatus) {
@@ -4601,7 +4601,7 @@ void SyncContext::checkSourceChanges(SourceList &sourceList, SyncReport &changes
         }
         changes.addSyncSourceReport(source->getName(), local);
     }
-    changes.setEnd(time(NULL));
+    changes.setEnd(time(nullptr));
 }
 
 bool SyncContext::checkForScriptAbort(SharedSession session)
@@ -4641,7 +4641,7 @@ void SyncContext::restore(const string &dirname, RestoreDatabase database)
     }
 
     if (!m_quiet && getPrintChanges()) {
-        sourceList.dumpDatabases("current", NULL);
+        sourceList.dumpDatabases("current", nullptr);
         sourceList.dumpLocalChanges(dirname, "current", datadump, "",
                                     "Data changes to be applied locally during restore:\n",
                                     "CLIENT_TEST_LEFT_NAME='current data' "
@@ -4854,8 +4854,8 @@ private:
      * @param changeServer   pretend that peer got changed
      * @param status         result of session
      * @param varargs        sourcename ("file_event"),
-     *                       statebefore (NULL for no dump, or suffix like "_one"),
-     *                       stateafter (NULL for same as before), ..., NULL
+     *                       statebefore (nullptr for no dump, or suffix like "_one"),
+     *                       stateafter (nullptr for same as before), ..., nullptr
      * @return logdir created for the session
      */
     string session(bool changeServer, SyncMLStatus status, ...) {
@@ -4871,7 +4871,7 @@ private:
             if (!sourcename) {
                 break;
             }
-            const char *type = NULL;
+            const char *type = nullptr;
             if (!strcmp(sourcename, "file_event")) {
                 type = "file:text/calendar:2.0";
             } else if (!strcmp(sourcename, "file_contact")) {

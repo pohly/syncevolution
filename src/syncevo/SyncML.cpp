@@ -528,15 +528,15 @@ std::string Status2String(SyncMLStatus status)
 }
 
 namespace {
-    const char * const locNames[] = { "local", "remote", NULL };
-    const char * const stateNames[] = { "added", "updated", "removed", "any", NULL };
+    const char * const locNames[] = { "local", "remote", nullptr };
+    const char * const stateNames[] = { "added", "updated", "removed", "any", nullptr };
     const char * const resultNames[] = { "total", "reject", "match",
                                          "conflict_server_won",
                                          "conflict_client_won",
                                          "conflict_duplicated",
                                          "sent",
                                          "received",
-                                         NULL };
+                                         nullptr };
 
     int toIndex(const char * const names[],
                 const std::string &name) {

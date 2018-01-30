@@ -39,7 +39,7 @@ class MultiplexConfigNode : public FilterConfigNode
     bool m_havePeerNodes;
 
     FilterConfigNode *getNode(const std::string &property,
-                              const ConfigProperty **prop = NULL) const;
+                              const ConfigProperty **prop = nullptr) const;
 
  public:
     /** join both hidden and user-visible properties */

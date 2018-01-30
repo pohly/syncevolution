@@ -68,9 +68,9 @@ public:
 
 SharedSession SharedEngine::OpenSession(const string &aSessionID)
 {
-    sysync::SessionH sessionH = NULL;
+    sysync::SessionH sessionH = nullptr;
     sysync::TSyError err = m_engine->OpenSession(sessionH, 0,
-                                                 aSessionID.empty() ? NULL : aSessionID.c_str());
+                                                 aSessionID.empty() ? nullptr : aSessionID.c_str());
     if (err) {
         SE_THROW_EXCEPTION_STATUS(BadSynthesisResult, "opening session failed", static_cast<sysync::TSyErrorEnum>(err));
     }
@@ -146,7 +146,7 @@ SharedKey SharedEngine::OpenKeyByPath(const SharedKey &aParentKeyH,
                                       const string &aPath,
                                       bool noThrow)
 {
-    sysync::KeyH key = NULL;
+    sysync::KeyH key = nullptr;
     sysync::TSyError err = m_engine->OpenKeyByPath(key, aParentKeyH.get(), aPath.c_str(), 0);
     if (err && noThrow) {
         return SharedKey();
@@ -167,7 +167,7 @@ SharedKey SharedEngine::OpenSubkey(const SharedKey &aParentKeyH,
                                    sysync::sInt32 aID,
                                    bool noThrow)
 {
-    sysync::KeyH key = NULL;
+    sysync::KeyH key = nullptr;
     sysync::TSyError err = m_engine->OpenSubkey(key, aParentKeyH.get(), aID, 0);
     if (err && noThrow) {
         return SharedKey();
@@ -259,7 +259,7 @@ sysync::TSyError SDKInterface::getValue(sysync::KeyH aItemKey,
                           aItemKey,
                           field.c_str(),
                           sysync::VALTYPE_TEXT,
-                          NULL, 0,
+                          nullptr, 0,
                           &len);
     if (!res) {
         data = SharedBuffer(new char[len + 1], len);

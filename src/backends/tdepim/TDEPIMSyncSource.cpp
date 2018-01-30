@@ -48,8 +48,8 @@ TDEPIMSyncSource::TDEPIMSyncSource(TQString name) :
 	// Don't allow TDEApplication to mess with SIGINT/SIGTERM.
 	// Restore current behavior after construction.
 	struct sigaction oldsigint, oldsigterm;
-	sigaction(SIGINT, NULL, &oldsigint);
-	sigaction(SIGTERM, NULL, &oldsigterm);
+	sigaction(SIGINT, nullptr, &oldsigint);
+	sigaction(SIGTERM, nullptr, &oldsigterm);
 	if ( kapp ) {
 		tdeappPtr = kapp;
 	} else {
@@ -57,8 +57,8 @@ TDEPIMSyncSource::TDEPIMSyncSource(TQString name) :
 		newApp=true;
 	}
 	// restore
-	sigaction(SIGINT, &oldsigint, NULL);
-	sigaction(SIGTERM, &oldsigterm, NULL);
+	sigaction(SIGINT, &oldsigint, nullptr);
+	sigaction(SIGTERM, &oldsigterm, nullptr);
 
 // 	SE_LOG_DEBUG(NULL, "TDE base created OK");
 }

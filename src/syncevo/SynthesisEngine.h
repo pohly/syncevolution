@@ -84,7 +84,7 @@ class SharedEngine {
     std::shared_ptr<sysync::TEngineModuleBase> m_engine;
 
  public:
-    SharedEngine(sysync::TEngineModuleBase *engine = NULL): m_engine(engine) {}
+    SharedEngine(sysync::TEngineModuleBase *engine = nullptr): m_engine(engine) {}
 
     sysync::TEngineModuleBase *get() { return m_engine.get(); }
 
@@ -99,7 +99,7 @@ class SharedEngine {
 
     void SessionStep(const SharedSession &aSessionH,
                      sysync::uInt16 &aStepCmd,
-                     sysync::TEngineProgressInfo *aInfoP = NULL);
+                     sysync::TEngineProgressInfo *aInfoP = nullptr);
     SharedBuffer GetSyncMLBuffer(const SharedSession &aSessionH, bool aForSend);
     void WriteSyncMLBuffer(const SharedSession &aSessionH, const char *data, size_t len);
     SharedKey OpenKeyByPath(const SharedKey &aParentKeyH,

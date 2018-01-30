@@ -49,7 +49,7 @@ public:
                              const char* refreshToken) :
         m_agent(
 #ifdef ENABLE_LIBSOUP
-                make_weak_shared::make<SoupTransportAgent>(static_cast<GMainLoop *>(NULL))
+                make_weak_shared::make<SoupTransportAgent>(static_cast<GMainLoop *>(nullptr))
 #elif defined(ENABLE_LIBCURL)
                 std::make_shared<CurlTransportAgent>()
 #endif
@@ -167,7 +167,7 @@ std::shared_ptr<AuthProvider> createOAuth2AuthProvider(const InitStateString &us
 
     // 'username' is the part after oauth2: which we can parse directly.
     GErrorCXX gerror;
-    GVariantStealCXX parametersVar(g_variant_parse(hashtype.get(), username.c_str(), NULL, NULL, gerror));
+    GVariantStealCXX parametersVar(g_variant_parse(hashtype.get(), username.c_str(), nullptr, nullptr, gerror));
     if (!parametersVar) {
         gerror.throwError(SE_HERE, "parsing 'oauth2:' username");
     }

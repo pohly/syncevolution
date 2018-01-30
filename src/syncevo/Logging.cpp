@@ -157,7 +157,7 @@ void Logger::formatLines(Level msglevel,
                 if (!m_startTime) {
                     // first message, start counting time
                     m_startTime = now;
-                    time_t nowt = time(NULL);
+                    time_t nowt = time(nullptr);
                     struct tm tm_gm, tm_local;
                     char buffer[2][80];
                     gmtime_r(&nowt, &tm_gm);
@@ -193,7 +193,7 @@ void Logger::formatLines(Level msglevel,
             print(firstLine, 1);
         }
         if (prefix && prefix->empty()) {
-            prefix = NULL;
+            prefix = nullptr;
         }
         tag = StringPrintf("[%s%s%s] %s%s",
                            levelToStr(msglevel),
@@ -246,11 +246,11 @@ void Logger::formatLines(Level msglevel,
 
 Logger::MessageOptions::MessageOptions(Level level) :
     m_level(level),
-    m_prefix(NULL),
-    m_file(NULL),
+    m_prefix(nullptr),
+    m_file(nullptr),
     m_line(0),
-    m_function(NULL),
-    m_processName(NULL),
+    m_function(nullptr),
+    m_processName(nullptr),
     m_flags(0)
 {
 }
@@ -262,11 +262,11 @@ Logger::MessageOptions::MessageOptions(Level level,
                                        const char *function,
                                        int flags) :
     m_level(level),
-    m_prefix((!prefix || prefix->empty()) ? NULL : prefix),
+    m_prefix((!prefix || prefix->empty()) ? nullptr : prefix),
     m_file(file),
     m_line(line),
     m_function(function),
-    m_processName(NULL),
+    m_processName(nullptr),
     m_flags(flags)
 {
 }
@@ -392,10 +392,10 @@ void Logger::glogFunc(const gchar *logDomain,
     }
 
     Logger::instance().message(level,
-                               NULL,
-                               NULL,
+                               nullptr,
+                               nullptr,
                                0,
-                               NULL,
+                               nullptr,
                                "%s%s%s",
                                logDomain ? logDomain : "",
                                logDomain ? ": " : "",
@@ -417,7 +417,7 @@ int Logger::sysyncPrintf(FILE *stream,
         // in a better way (= to each line) via the prefix parameter.
         format += prefix.size() + 1;
     }
-    Logger::instance().messagev(MessageOptions(DEBUG, &prefix, NULL, 0, NULL), format, args);
+    Logger::instance().messagev(MessageOptions(DEBUG, &prefix, nullptr, 0, nullptr), format, args);
     va_end(args);
 
     return 0;

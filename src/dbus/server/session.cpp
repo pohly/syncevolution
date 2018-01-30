@@ -312,7 +312,7 @@ void Session::setNamedConfig(const std::string &configName,
         // storing passwords in a keyring here.
         auto syncConfig = std::make_shared<SyncContext>(configName);
         syncConfig->prepareConfigForWrite();
-        syncConfig->copy(*from, NULL);
+        syncConfig->copy(*from, nullptr);
 
         class KeyringUI : public UserInterface {
             InitStateString m_keyring;

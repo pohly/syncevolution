@@ -64,7 +64,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #endif
                 isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -78,13 +78,13 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_ECAL
                 enabled ? std::make_unique<EvolutionCalendarSource>(EVOLUTION_CAL_SOURCE_TYPE_EVENTS, params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("Evolution Calendar/Task List/Memos",
@@ -149,19 +149,19 @@ protected:
 
     void testOpenDefaultCalendar() {
         std::unique_ptr<TestingSyncSource> source;
-        source = SyncSource::createTestingSource("calendar", "evolution-calendar", true, NULL);
+        source = SyncSource::createTestingSource("calendar", "evolution-calendar", true, nullptr);
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
     void testOpenDefaultTodo() {
         std::unique_ptr<TestingSyncSource> source;
-        source = SyncSource::createTestingSource("calendar", "evolution-tasks", true, NULL);
+        source = SyncSource::createTestingSource("calendar", "evolution-tasks", true, nullptr);
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 
     void testOpenDefaultMemo() {
         std::unique_ptr<TestingSyncSource> source;
-        source = SyncSource::createTestingSource("calendar", "evolution-memos", true, NULL);
+        source = SyncSource::createTestingSource("calendar", "evolution-memos", true, nullptr);
         CPPUNIT_ASSERT_NO_THROW(source->open());
     }
 

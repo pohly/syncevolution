@@ -118,8 +118,8 @@ EvolutionSyncSource::Databases EvolutionContactSource::getDatabases()
                              E_SOURCE_EXTENSION_ADDRESS_BOOK,
                              e_source_registry_ref_default_address_book);
 #else
-    ESourceList *sources = NULL;
-    if (!e_book_get_addressbooks(&sources, NULL)) {
+    ESourceList *sources = nullptr;
+    if (!e_book_get_addressbooks(&sources, nullptr)) {
         Exception::throwError(SE_HERE, "unable to access address books");
     }
 
@@ -313,7 +313,7 @@ class EBookClientViewSyncHandler {
 
             // Async -> Sync
             m_loop.run();
-            e_book_client_view_stop (m_view, NULL); 
+            e_book_client_view_stop (m_view, nullptr); 
 
             if (m_error) {
                 std::swap(gerror, m_error);
@@ -357,7 +357,7 @@ void EvolutionContactSource::listAllItems(RevisionMap_t &revisions)
         sexp = buffer;
     }
 
-    if (!e_book_client_get_view_sync(m_addressbook, sexp, &view, NULL, gerror)) {
+    if (!e_book_client_get_view_sync(m_addressbook, sexp, &view, nullptr, gerror)) {
         throwError(SE_HERE, "getting the view" , gerror);
     }
     EBookClientViewCXX viewPtr = EBookClientViewCXX::steal(view);
@@ -447,7 +447,7 @@ string EvolutionContactSource::getRevision(const string &luid)
         !e_book_client_get_contact_sync(m_addressbook,
                                         luid.c_str(),
                                         &contact,
-                                        NULL,
+                                        nullptr,
                                         gerror)
 #else
         !e_book_get_contact(m_addressbook,
@@ -582,7 +582,7 @@ bool EvolutionContactSource::getContact(const string &luid, EContact **contact, 
         return e_book_client_get_contact_sync(m_addressbook,
                                               luid.c_str(),
                                               contact,
-                                              NULL,
+                                              nullptr,
                                               gerror);
     } else {
         return getContactFromCache(luid, contact, gerror);
@@ -591,7 +591,7 @@ bool EvolutionContactSource::getContact(const string &luid, EContact **contact, 
 
 bool EvolutionContactSource::getContactFromCache(const string &luid, EContact **contact, GErrorCXX &gerror)
 {
-    *contact = NULL;
+    *contact = nullptr;
 
     // Use ContactCache.
     if (m_contactCache) {
@@ -811,7 +811,7 @@ std::shared_ptr<ContactCache> EvolutionContactSource::startReading(const std::st
             }
         };
         SYNCEVO_GLIB_CALL_ASYNC(e_book_client_get_contacts, process,
-                                m_addressbook, sexp, NULL);
+                                m_addressbook, sexp, nullptr);
         SE_LOG_DEBUG(getDisplayName(), "reading: started contact read %s", cache->m_name.c_str());
     }
     return cache;
@@ -857,7 +857,7 @@ void EvolutionContactSource::readItem(const string &luid, std::string &item, boo
     // Inline PHOTO data if exporting, leave VALUE=uri references unchanged
     // when processing inside engine (will be inlined by engine as needed).
     // The function for doing the inlining was added in EDS 3.4.
-    // In compatibility mode, we must check the function pointer for non-NULL.
+    // In compatibility mode, we must check the function pointer for non-nullptr.
     // In direct call mode, the existence check is done by configure.
     if (raw) {
 #if defined(HAVE_E_CONTACT_INLINE_LOCAL_PHOTOS)
@@ -942,7 +942,7 @@ void EvolutionContactSource::flushItemChanges()
             }
         };
         SYNCEVO_GLIB_CALL_ASYNC(e_book_client_add_contacts, process,
-                                m_addressbook, contacts, NULL);
+                                m_addressbook, contacts, nullptr);
     }
     if (!m_batchedUpdate.empty()) {
         SE_LOG_DEBUG(getDisplayName(), "batch update of %d contacts starting", (int)m_batchedUpdate.size());
@@ -976,7 +976,7 @@ void EvolutionContactSource::flushItemChanges()
             }
         };
         SYNCEVO_GLIB_CALL_ASYNC(e_book_client_modify_contacts, process,
-                                m_addressbook, contacts, NULL);
+                                m_addressbook, contacts, nullptr);
     }
 }
 
@@ -985,7 +985,7 @@ void EvolutionContactSource::finishItemChanges()
     if (m_numRunningOperations) {
         SE_LOG_DEBUG(getDisplayName(), "waiting for %d pending operations to complete", m_numRunningOperations.get());
         while (m_numRunningOperations) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         SE_LOG_DEBUG(getDisplayName(), "pending operations completed");
     }
@@ -1000,7 +1000,7 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
     if (contact) {
         e_contact_set(contact, E_CONTACT_UID,
                       uid.empty() ?
-                      NULL :
+                      nullptr :
                       const_cast<char *>(uid.c_str()));
         GErrorCXX gerror;
 #ifdef USE_EDS_CLIENT
@@ -1009,14 +1009,14 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
         case SYNCHRONOUS:
             if (uid.empty()) {
                 gchar* newuid;
-                if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid, NULL, gerror)) {
+                if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid, nullptr, gerror)) {
                     throwError(SE_HERE, "add new contact", gerror);
                 }
                 PlainGStr newuidPtr(newuid);
                 string newrev = getRevision(newuid);
                 return InsertItemResult(newuid, newrev, ITEM_OKAY);
             } else {
-                if (!e_book_client_modify_contact_sync(m_addressbook, contact, NULL, gerror)) {
+                if (!e_book_client_modify_contact_sync(m_addressbook, contact, nullptr, gerror)) {
                     throwError(SE_HERE, "updating contact "+ uid, gerror);
                 }
                 string newrev = getRevision(uid);
@@ -1074,7 +1074,7 @@ void EvolutionContactSource::removeItem(const string &uid)
     if (
 #ifdef USE_EDS_CLIENT
         (invalidateCachedContact(uid),
-         !e_book_client_remove_contact_by_uid_sync(m_addressbook, uid.c_str(), NULL, gerror))
+         !e_book_client_remove_contact_by_uid_sync(m_addressbook, uid.c_str(), nullptr, gerror))
 #else
         !e_book_remove_contact(m_addressbook, uid.c_str(), gerror)
 #endif

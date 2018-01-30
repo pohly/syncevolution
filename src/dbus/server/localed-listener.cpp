@@ -62,11 +62,11 @@ static const char PROPERTIES_GET[] = "Get";
 
 LocaledListener::LocaledListener():
     GDBusCXX::DBusRemoteObject(!strcmp(getEnv("SYNCEVOLUTION_LOCALED", ""), "none") ?
-                               NULL : /* simulate missing localed */
+                               nullptr : /* simulate missing localed */
                                GDBusCXX::dbus_get_bus_connection(!strcmp(getEnv("SYNCEVOLUTION_LOCALED", ""), "session") ?
                                                                  "SESSION" : /* use our own localed stub */
                                                                  "SYSTEM" /* use real localed */,
-                                                                 NULL, false, NULL),
+                                                                 nullptr, false, nullptr),
                                LOCALED_PATH,
                                PROPERTIES_INTERFACE,
                                LOCALED_DESTINATION),
@@ -146,7 +146,7 @@ void LocaledListener::processLocaleProperty(const LocaleVariant &variant,
     const LocaleEnv *locale =
         error.empty() ?
         boost::get<LocaleEnv>(&variant) :
-        NULL;
+        nullptr;
     LocaleEnv current;
     if (!locale && mustCall) {
         SE_LOG_DEBUG(NULL, "localed: using current environment as fallback");
@@ -195,7 +195,7 @@ void LocaledListener::setLocale(const LocaleEnv &locale)
         std::string assignment = StringPrintf("%s=", name);
         auto instance = std::find_if(locale.begin(), locale.end(),
                                      [&name] (const std::string &l) { return boost::starts_with(l, name); });
-        const char *newvalue = instance != locale.end() ? instance->c_str() + assignment.size() : NULL;
+        const char *newvalue = instance != locale.end() ? instance->c_str() + assignment.size() : nullptr;
         if ((value && newvalue && strcmp(value, newvalue)) ||
             (!value && newvalue)) {
             modified = true;

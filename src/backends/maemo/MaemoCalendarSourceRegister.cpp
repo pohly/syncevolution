@@ -39,7 +39,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
         } else if (sourceType.m_format == "text/x-vcalendar") {
             return std::make_unique<MaemoCalendarSource>(EVENT, VCAL_TYPE, params);
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 #endif
@@ -56,7 +56,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
         } else if (sourceType.m_format == "text/x-vcalendar") {
             return std::make_unique<MaemoCalendarSource>(TODO, VCAL_TYPE, params);
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 #endif
@@ -75,12 +75,12 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
         } else if (sourceType.m_format == "text/plain") {
             return std::make_unique<MaemoCalendarSource>(JOURNAL, -1, params);
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 #endif
 
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("Maemo Calendar/Tasks/Notes",

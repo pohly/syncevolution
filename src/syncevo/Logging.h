@@ -125,7 +125,7 @@ class Logger
     } Level;
     static const char *levelToStr(Level level);
 
-    /** always returns a valid level, also for NULL, by falling back to DEBUG */
+    /** always returns a valid level, also for nullptr, by falling back to DEBUG */
     static Level strToLevel(const char *str);
 
     /**
@@ -190,13 +190,13 @@ class Logger
     public:
         /** level for current message */
         Level m_level;
-        /** inserted at beginning of each line, if non-NULL */
+        /** inserted at beginning of each line, if non-nullptr */
         const std::string *m_prefix;
-        /** source file where message comes from, if non-NULL */
+        /** source file where message comes from, if non-nullptr */
         const char *m_file;
-        /** source line number, if file is non-NULL */
+        /** source line number, if file is non-nullptr */
         int m_line;
-        /** surrounding function name, if non-NULL */
+        /** surrounding function name, if non-nullptr */
         const char *m_function;
         /** name of the process which originally created the message, if different from current one */
         const std::string *m_processName;
@@ -341,7 +341,7 @@ class Logger
      * particular after the last line when it contains the entire
      * output). It may be modified by the callback.
      *
-     * @param processName  NULL means use the current process' name,
+     * @param processName  nullptr means use the current process' name,
      *                     empty means use none
      */
     void formatLines(Level msglevel,
@@ -439,7 +439,7 @@ template<class L> class PushLogger : boost::noncopyable
  * and adds file and line where the message comes from.
  *
  * This macro reverses _prefix and _level to avoid the situation where
- * the compiler mistakes a NULL _prefix with the _format parameter
+ * the compiler mistakes a nullptr _prefix with the _format parameter
  * (happened once while doing code refactoring).
  *
  * @TODO make source and line info optional for release
@@ -450,7 +450,7 @@ template<class L> class PushLogger : boost::noncopyable
                                         _prefix, \
                                         __FILE__, \
                                         __LINE__, \
-                                        NULL, \
+                                        nullptr, \
                                         _format, \
                                         ##_args);
 

@@ -71,12 +71,12 @@ _gsignond_pipe_stream_finalize (GObject *gobject)
      */
     if (stream->priv->input_stream) {
         g_object_unref (stream->priv->input_stream);
-        stream->priv->input_stream = NULL;
+        stream->priv->input_stream = nullptr;
     }
 
     if (stream->priv->output_stream) {
         g_object_unref (stream->priv->output_stream);
-        stream->priv->output_stream = NULL;
+        stream->priv->output_stream = nullptr;
     }
 
     G_OBJECT_CLASS (gsignond_pipe_stream_parent_class)->finalize (gobject);
@@ -102,8 +102,8 @@ static void
 gsignond_pipe_stream_init (GSignondPipeStream *self)
 {
     self->priv = GSIGNOND_PIPE_STREAM_GET_PRIVATE (self);
-    self->priv->input_stream = NULL;
-    self->priv->output_stream = NULL;
+    self->priv->input_stream = nullptr;
+    self->priv->output_stream = nullptr;
 }
 
 GSignondPipeStream *
@@ -113,7 +113,7 @@ gsignond_pipe_stream_new (
         gboolean close_fds)
 {
     GSignondPipeStream *stream = GSIGNOND_PIPE_STREAM (g_object_new (
-            GSIGNOND_TYPE_PIPE_STREAM, NULL));
+            GSIGNOND_TYPE_PIPE_STREAM, nullptr));
     if (stream) {
         stream->priv->input_stream = G_INPUT_STREAM (
                 g_unix_input_stream_new (in_fd, close_fds));

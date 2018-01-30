@@ -194,7 +194,7 @@ GLibNotify::GLibNotify(const char *file,
 {
     GFileCXX filecxx(g_file_new_for_path(file), TRANSFER_REF);
     GErrorCXX gerror;
-    GFileMonitorCXX monitor(g_file_monitor_file(filecxx.get(), G_FILE_MONITOR_NONE, NULL, gerror), TRANSFER_REF);
+    GFileMonitorCXX monitor(g_file_monitor_file(filecxx.get(), G_FILE_MONITOR_NONE, nullptr, gerror), TRANSFER_REF);
     m_monitor.swap(monitor);
     if (!m_monitor) {
         gerror.throwError(SE_HERE, std::string("monitoring ") + file);
@@ -287,7 +287,7 @@ void GRunWhile(const std::function<bool ()> &check, bool checkFirst)
         checks.runChecks();
         // Drive event loop.
         while (check()) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
             checks.runChecks();
         }
     } else {
@@ -347,7 +347,7 @@ class GLibTest : public CppUnit::TestFixture {
         std::list<Event> events;
         static const char *name = "GLibTest.out";
         unlink(name);
-        GMainLoopCXX loop(g_main_loop_new(NULL, FALSE), TRANSFER_REF);
+        GMainLoopCXX loop(g_main_loop_new(nullptr, FALSE), TRANSFER_REF);
         if (!loop) {
             SE_THROW("could not allocate main loop");
         }

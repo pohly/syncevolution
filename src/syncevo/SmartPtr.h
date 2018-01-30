@@ -90,7 +90,7 @@ class UnrefGString {
 /**
  * a smart pointer implementation for objects for which
  * a unref() function exists inside R;
- * trying to store a NULL object raises an exception,
+ * trying to store a nullptr object raises an exception,
  * unreferencing valid objects is done automatically
  */
 template<class T, class base = T, class R = Unref>
@@ -102,9 +102,9 @@ class SmartPtr
   public:
     /**
      * create a smart pointer that owns the given object;
-     * passing a NULL pointer and a name for the object raises an error
+     * passing a nullptr pointer and a name for the object raises an error
      */
-    SmartPtr(T pointer = 0, const char *objectName = NULL) :
+    SmartPtr(T pointer = 0, const char *objectName = nullptr) :
         m_pointer( pointer )
     {
         if (!pointer && objectName ) {
@@ -132,9 +132,9 @@ class SmartPtr
     /**
      * store another object in this pointer, replacing any which was
      * referenced there before;
-     * passing a NULL pointer and a name for the object raises an error
+     * passing a nullptr pointer and a name for the object raises an error
      */
-    void set( T pointer, const char *objectName = NULL )
+    void set( T pointer, const char *objectName = nullptr )
     {
         if (m_pointer) {
             R::unref((base)m_pointer);
@@ -145,13 +145,13 @@ class SmartPtr
         m_pointer = pointer;
     }
 
-    void reset( T pointer = NULL ) {
-        set(pointer, NULL);
+    void reset( T pointer = nullptr ) {
+        set(pointer, nullptr);
     }
 
     /**
      * transfer ownership over the pointer to caller and stop tracking it:
-     * pointer tracked by smart pointer is set to NULL and the original
+     * pointer tracked by smart pointer is set to nullptr and the original
      * pointer is returned
      */
     T release() { T res = m_pointer; m_pointer = 0; return res; }
@@ -170,7 +170,7 @@ template<class T, class base = T, class R = Unref > class eptr :
 {
     typedef SmartPtr<T *, base *, R> base_t;
  public:
-    eptr(T *pointer = NULL, const char *objectName = NULL) :
+    eptr(T *pointer = nullptr, const char *objectName = nullptr) :
         base_t(pointer, objectName)
     {
     }
@@ -180,7 +180,7 @@ template<class T, class base = T, class R = Unref > class eptr :
         return *this;
     }
 
-    void reset(T *pointer = NULL) {
+    void reset(T *pointer = nullptr) {
         base_t::set(pointer);
     }
 };
@@ -193,7 +193,7 @@ template <class T> class CxxUnref {
 /** eptr for normal C++ objects */
 template <class T> class cxxptr : public eptr<T, T, CxxUnref<T> > {
  public:
-    cxxptr(T *pointer = NULL, const char *objectName = NULL) :
+    cxxptr(T *pointer = nullptr, const char *objectName = nullptr) :
         eptr<T, T, CxxUnref<T> > (pointer, objectName)
     {
     };
@@ -208,7 +208,7 @@ template <class T> class ArrayUnref {
 /** eptr for array of objects or types */
 template <class T> class arrayptr : public eptr<T, T, ArrayUnref<T> > {
  public:
-    arrayptr(T *pointer = NULL, const char *objectName = NULL) :
+    arrayptr(T *pointer = nullptr, const char *objectName = nullptr) :
         eptr<T, T, ArrayUnref<T> > (pointer, objectName)
     {
     };

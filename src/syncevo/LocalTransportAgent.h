@@ -77,7 +77,7 @@ class LocalTransportAgent : public TransportAgent, public enable_weak_from_this<
      */
     LocalTransportAgent(SyncContext *server,
                         const std::string &clientConfig,
-                        void *loop = NULL);
+                        void *loop = nullptr);
 
  public:
     // Construct via make_weak_shared.
@@ -131,7 +131,7 @@ class LocalTransportAgent : public TransportAgent, public enable_weak_from_this<
      * - send server reply (returns child's next message or empty when done)
      * - emits output via signal
      *
-     * Only non-NULL when child is running and connected.
+     * Only non-nullptr when child is running and connected.
      */
     std::shared_ptr<LocalTransportChild> m_child;
 

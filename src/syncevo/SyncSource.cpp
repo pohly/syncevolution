@@ -235,7 +235,7 @@ SyncSource::SyncSource(const SyncSourceParams &params) :
 SDKInterface *SyncSource::getSynthesisAPI() const
 {
     return m_synthesisAPI.empty() ?
-        NULL :
+        nullptr :
         static_cast<SDKInterface *>(m_synthesisAPI[m_synthesisAPI.size() - 1]);
 }
 
@@ -676,8 +676,8 @@ sysync::TSyError SyncSourceChanges::iterate(sysync::ItemID aID,
                                             sysync::sInt32 *aStatus,
                                             bool aFirst)
 {
-    aID->item = NULL;
-    aID->parent = NULL;
+    aID->item = nullptr;
+    aID->parent = nullptr;
 
     if (m_first || aFirst) {
         m_it = m_items[ANY].begin();
@@ -1676,7 +1676,7 @@ void SyncSourceAdmin::entry2mapid(const string &key, const string &value, sysync
     size_t found = key.rfind('-');
     mID->localID = StrAlloc(StringEscape::unescape(key.substr(0,found), '!').c_str());
     if (found != key.npos) {
-        mID->ident =  strtol(key.substr(found+1).c_str(), NULL, 16);
+        mID->ident =  strtol(key.substr(found+1).c_str(), nullptr, 16);
     } else {
         mID->ident = 0;
     }
@@ -1685,11 +1685,11 @@ void SyncSourceAdmin::entry2mapid(const string &key, const string &value, sysync
     if (tokens.size() >= 2) {
         // if branch from mapid2entry above
         mID->remoteID = StrAlloc(StringEscape::unescape(tokens[0], '!').c_str());
-        mID->flags = strtol(tokens[1].c_str(), NULL, 16);
+        mID->flags = strtol(tokens[1].c_str(), nullptr, 16);
     } else {
         // else branch from above
-        mID->remoteID = NULL;
-        mID->flags = strtol(tokens[0].c_str(), NULL, 16);
+        mID->remoteID = nullptr;
+        mID->flags = strtol(tokens[0].c_str(), nullptr, 16);
     }
 }
 

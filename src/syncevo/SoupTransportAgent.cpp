@@ -30,13 +30,13 @@ SE_BEGIN_CXX
 
 SoupTransportAgent::SoupTransportAgent(GMainLoop *loop) :
     m_verifySSL(false),
-    m_session(soup_session_new_with_options("timeout", 0, (void *)NULL)),
+    m_session(soup_session_new_with_options("timeout", 0, nullptr)),
     m_loop(loop ?
            g_main_loop_ref(loop) :
-           g_main_loop_new(NULL, TRUE),
+           g_main_loop_new(nullptr, TRUE),
            "Soup main loop"),
     m_status(INACTIVE),
-    m_message(NULL),
+    m_message(nullptr),
     m_timeoutSeconds(0),
     m_response(0)
 {
@@ -63,11 +63,11 @@ void SoupTransportAgent::setProxy(const std::string &proxy)
         eptr<SoupURI, SoupURI, GLibUnref> uri(soup_uri_new(proxy.c_str()), "Proxy URI");
         g_object_set(m_session.get(),
                      SOUP_SESSION_PROXY_URI, uri.get(),
-                     NULL);
+                     nullptr);
     } else {
         g_object_set(m_session.get(),
-                     SOUP_SESSION_PROXY_URI, NULL,
-                     NULL);
+                     SOUP_SESSION_PROXY_URI, nullptr,
+                     nullptr);
     }
 }
 
@@ -104,7 +104,7 @@ void SoupTransportAgent::setUserAgent(const std::string &agent)
 {
     g_object_set(m_session.get(),
                  SOUP_SESSION_USER_AGENT, agent.c_str(),
-                 NULL);
+                 nullptr);
 }
 
 void SoupTransportAgent::setTimeout(int seconds)
@@ -124,7 +124,7 @@ void SoupTransportAgent::send(const char *data, size_t len)
     // otherwise let soup use system default certificates
     if (m_verifySSL) {
         if (!m_cacerts.empty()) {
-            g_object_set(m_session.get(), SOUP_SESSION_SSL_CA_FILE, m_cacerts.c_str(), NULL);
+            g_object_set(m_session.get(), SOUP_SESSION_SSL_CA_FILE, m_cacerts.c_str(), nullptr);
         }
     }
 
@@ -198,7 +198,7 @@ void SoupTransportAgent::getReply(const char *&data, size_t &len, std::string &c
         len = m_response->length;
         contentType = m_responseContentType;
     } else {
-        data = NULL;
+        data = nullptr;
         len = 0;
     }
 }
@@ -221,7 +221,7 @@ void SoupTransportAgent::HandleSessionCallback(SoupSession *session,
                                                SoupMessage *msg)
 {
     // Message is no longer pending, so timeout no longer needed either.
-    m_message = NULL;
+    m_message = nullptr;
     m_timeout.deactivate();
 
     // keep a reference to the data 
@@ -234,7 +234,7 @@ void SoupTransportAgent::HandleSessionCallback(SoupSession *session,
             m_responseContentType = soupContentType;
         }
     } else {
-        m_response = NULL;
+        m_response = nullptr;
     }
     if (msg->status_code != 200) {
         m_failure = m_URL;

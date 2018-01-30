@@ -115,7 +115,7 @@ template<class Entry> class GeeCollCXX
 
     public:
         /**
-         * Takes ownership of iterator, which may be NULL for the end Iterator.
+         * Takes ownership of iterator, which may be nullptr for the end Iterator.
          */
         Iterator(GeeIterator *iterator) :
             m_it(iterator, TRANSFER_REF),
@@ -129,14 +129,14 @@ template<class Entry> class GeeCollCXX
                 m_wrapper = typename Traits_t::Wrapper_t(static_cast<typename Traits_t::Cast_t>((gee_iterator_get(m_it))));
                 m_entry = Traits_t::get(m_wrapper);
             } else {
-                m_wrapper = typename Traits_t::Wrapper_t(NULL);
-                m_entry = NULL;
+                m_wrapper = typename Traits_t::Wrapper_t(nullptr);
+                m_entry = nullptr;
             }
             return *this;
         }
 
         bool operator == (const Iterator &other) {
-            if (other.m_it.get() == NULL) {
+            if (other.m_it.get() == nullptr) {
                 // Comparison against end Iterator.
                 return !m_valid;
             } else {
@@ -169,7 +169,7 @@ template<class Entry> class GeeCollCXX
     }
 
     Iterator end() const {
-        return Iterator(NULL);
+        return Iterator(nullptr);
     }
 
     typedef Iterator const_iterator;
@@ -188,7 +188,7 @@ template<class Key, class Value> class GeeMapEntryWrapper  {
     typedef GeeMapEntry *Cast_t;
 
     /** take ownership of entry instance */
-    GeeMapEntryWrapper(GeeMapEntry *entry = NULL) :
+    GeeMapEntryWrapper(GeeMapEntry *entry = nullptr) :
         m_entry(entry, TRANSFER_REF)
     {}
     GeeMapEntryWrapper(const GeeMapEntryWrapper &other):

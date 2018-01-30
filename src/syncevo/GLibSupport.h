@@ -60,10 +60,10 @@ enum GLibSelectResult {
  * Waits for one particular file descriptor to become ready for reading
  * and/or writing. Keeps the given loop running while waiting.
  *
- * @param  loop       loop to keep running; must not be NULL
+ * @param  loop       loop to keep running; must not be nullptr
  * @param  fd         file descriptor to watch, -1 for none
  * @param  direction  read, write, both, or none (then fd is ignored)
- * @param  timeout    timeout in seconds + nanoseconds from now, NULL for no timeout, empty value for immediate return
+ * @param  timeout    timeout in seconds + nanoseconds from now, nullptr for no timeout, empty value for immediate return
  * @return see GLibSelectResult
  */
 GLibSelectResult GLibSelect(GMainLoop *loop, int fd, int direction, Timespec *timeout);
@@ -121,7 +121,7 @@ template<class C> class TrackGObject : public boost::intrusive_ptr<C> {
     TrackGObject() {}
     TrackGObject(const TrackGObject &other) : Base_t(other) {}
     operator C * () const { return Base_t::get(); }
-    operator bool () const { return Base_t::get() != NULL; }
+    operator bool () const { return Base_t::get() != nullptr; }
     C * ref() const { return static_cast<C *>(g_object_ref(Base_t::get())); }
 
     static  TrackGObject steal(C *ptr) { return TrackGObject(ptr, TRANSFER_REF); }
@@ -150,7 +150,7 @@ template<class C> class TrackGLib : public boost::intrusive_ptr<C> {
     TrackGLib() {}
     TrackGLib(const TrackGLib &other) : Base_t(other) {}
     operator C * () const { return Base_t::get(); }
-    operator bool () const { return Base_t::get() != NULL; }
+    operator bool () const { return Base_t::get() != nullptr; }
     C * ref() const { return static_cast<C *>(intrusive_ptr_add_ref(Base_t::get())); }
 
     static  TrackGLib steal(C *ptr) { return TrackGLib(ptr, TRANSFER_REF); }
@@ -262,8 +262,8 @@ class SourceLocation; // Exception.h
 struct GErrorCXX {
     GError *m_gerror;
 
-    /** empty error, NULL pointer */
-    GErrorCXX() : m_gerror(NULL) {}
+    /** empty error, nullptr pointer */
+    GErrorCXX() : m_gerror(nullptr) {}
 
     /** copies error content */
     GErrorCXX(const GErrorCXX &other) : m_gerror(g_error_copy(other.m_gerror)) {}
@@ -319,7 +319,7 @@ struct GErrorCXX {
     void clear() { g_clear_error(&m_gerror); }
 
     /** transfer ownership of error back to caller */
-    GError *release() { GError *gerror = m_gerror; m_gerror = NULL; return gerror; }
+    GError *release() { GError *gerror = m_gerror; m_gerror = nullptr; return gerror; }
 
     /** checks whether the current error is the one passed as parameters */
     bool matches(GQuark domain, gint code) const { return g_error_matches(m_gerror, domain, code); }
@@ -333,7 +333,7 @@ struct GErrorCXX {
     operator GError ** () { return &m_gerror; }
 
     /** true if error set */
-    operator bool () { return m_gerror != NULL; }
+    operator bool () { return m_gerror != nullptr; }
 
     /**
      * always throws an exception, including information from GError if available:
@@ -348,7 +348,7 @@ template<class T> void GObjectDestructor(T *ptr) { g_object_unref(ptr); }
 template<class T> void GFreeDestructor(T *ptr) { g_free(static_cast<void *>(ptr)); }
 
 /**
- * Copies string pointers from a collection into a newly allocated, NULL
+ * Copies string pointers from a collection into a newly allocated, nullptr
  * terminated array. Strings are shared with the original collection.
  *
  * C collection;
@@ -399,20 +399,20 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
  public:
     typedef T * value_type;
 
-    /** by default initialize an empty list; if parameter is not NULL,
+    /** by default initialize an empty list; if parameter is not nullptr,
         owership is transferred to the new instance of GListCXX */
-    GListCXX(L *list = NULL) : m_list(list) {}
+    GListCXX(L *list = nullptr) : m_list(list) {}
 
     /** free list */
     ~GListCXX() { clear(); }
 
     /** free old content, take owership of new one */
-    void reset(L *list = NULL) {
+    void reset(L *list = nullptr) {
         clear();
         m_list = list;
     }
 
-    bool empty() { return m_list == NULL; }
+    bool empty() { return m_list == nullptr; }
 
     /** clear error if any is set */
     void clear() {
@@ -420,7 +420,7 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
             D(entry);
         }
         listFree(m_list);
-        m_list = NULL;
+        m_list = nullptr;
     }
 
     /**
@@ -467,7 +467,7 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
         T** getEntryPtr() const { return (T **)&m_entry->data; }
     };
     iterator begin() { return iterator(m_list); }
-    iterator end() { return iterator(NULL); }
+    iterator end() { return iterator(nullptr); }
 
     class const_iterator : public std::iterator<std::forward_iterator_tag, T *> {
         L *m_entry;
@@ -488,7 +488,7 @@ template< class T, class L, void (*D)(T*) = NoopDestructor<T> > struct GListCXX 
     };
 
     const_iterator begin() const { return const_iterator(m_list); }
-    const_iterator end() const { return const_iterator(NULL); }
+    const_iterator end() const { return const_iterator(nullptr); }
 
     void push_back(T *entry) { m_list = listAppend(m_list, entry); }
     void push_front(T *entry) { m_list = listPrepend(m_list, entry); }
@@ -834,7 +834,7 @@ template<class F, F *finish> struct GAsyncReady2<void, F, finish, GAsyncResult *
  * - return value of the _finish call, if non-void
  * - all return parameters of the _finish call, in the order
  *   in which they appear there
- * - a GError is passed as "const GError *", with NULL if the
+ * - a GError is passed as "const GError *", with nullptr if the
  *   _finish function did not set an error; it does not have to
  *   be freed.
  *
@@ -865,7 +865,7 @@ template<class F, F *finish> struct GAsyncReady2<void, F, finish, GAsyncResult *
  *  // Don't continue unless finished, because the callback will write
  *  // into "done" and possibly "failed".
  *  while (!done) {
- *      g_main_context_iteration(NULL, true);
+ *      g_main_context_iteration(nullptr, true);
  *  }
  *
  * @param _prepare     name of the function which starts the operation
@@ -908,7 +908,7 @@ template<> class GAsyncReadyDoneCXX<void>
  * Like SYNCEVO_GLIB_CALL_ASYNC, but blocks until the operation
  * has finished.
  *
- * @param _res         an instance which will hold the result when done, NULL when result is void
+ * @param _res         an instance which will hold the result when done, nullptr when result is void
  * @param _gerror      a GErrorCXX instance which will hold an error
  *                     pointer afterwards in case of a failure
  */

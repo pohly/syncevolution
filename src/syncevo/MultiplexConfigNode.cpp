@@ -46,7 +46,7 @@ MultiplexConfigNode::getNode(const std::string &property,
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 void MultiplexConfigNode::addFilter(const std::string &property,

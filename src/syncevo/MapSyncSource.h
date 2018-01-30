@@ -99,7 +99,7 @@ class SubSyncSource : virtual public SyncSourceBase
         InsertItemResultState m_state;
     };
 
-    SubSyncSource() : m_parent(NULL) {}
+    SubSyncSource() : m_parent(nullptr) {}
 
     /**
      * tells SubSyncSource about MapSyncSource which wraps it,

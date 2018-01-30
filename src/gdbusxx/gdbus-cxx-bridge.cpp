@@ -139,7 +139,7 @@ void DBusConnectionPtr::undelay() const
         std::shared_ptr<OwnNameAsyncData> data = OwnNameAsyncData::ownName(get(),
                                                                              m_name);
         while (data->m_state == OwnNameAsyncData::OWN_NAME_WAITING) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         g_debug("done with acquisition of %s", m_name.c_str());
         if (data->m_state == OwnNameAsyncData::OWN_NAME_LOST) {
@@ -161,7 +161,7 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
                                           DBusErrorCXX *err)
 {
     DBusConnectionPtr conn;
-    GError* error = NULL;
+    GError* error = nullptr;
     GBusType type =
         boost::iequals(busType, "SESSION") ?
         G_BUS_TYPE_SESSION :
@@ -169,42 +169,42 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
 
     if (unshared) {
         char *address = g_dbus_address_get_for_bus_sync(type,
-                                                        NULL, &error);
-        if(address == NULL) {
+                                                        nullptr, &error);
+        if(address == nullptr) {
             if (err) {
                 err->set(error);
             }
-            return NULL;
+            return nullptr;
         }
         // Here we set up a private client connection using the chosen bus' address.
         conn = DBusConnectionPtr(g_dbus_connection_new_for_address_sync(address,
                                                                         (GDBusConnectionFlags)
                                                                         (G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
                                                                          G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
-                                                                        NULL, NULL, &error),
+                                                                        nullptr, nullptr, &error),
                                  false);
         g_free(address);
 
-        if(conn == NULL) {
+        if(conn == nullptr) {
             if (err) {
                 err->set(error);
             } else {
                 g_clear_error(&error);
             }
-            return NULL;
+            return nullptr;
         }
     } else {
         // This returns a singleton, shared connection object.
         conn = DBusConnectionPtr(g_bus_get_sync(type,
-                                                NULL, &error),
+                                                nullptr, &error),
                                  false);
-        if(conn == NULL) {
+        if(conn == nullptr) {
             if (err) {
                 err->set(error);
             } else {
                 g_clear_error(&error);
             }
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -231,10 +231,10 @@ DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
     GErrorCXX gerror;
     GDBusCXX::DBusConnectionPtr
         conn(g_dbus_connection_new_sync(G_IO_STREAM(stream.get()),
-                                        NULL,
+                                        nullptr,
                                         G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
-                                        NULL,
-                                        NULL,
+                                        nullptr,
+                                        nullptr,
                                         gerror));
     if (!conn && err) {
         err->set(gerror.release());
@@ -261,7 +261,7 @@ static void DestroyDisconnect(gpointer data,
 void DBusConnectionPtr::flush()
 {
     // ignore errors
-    g_dbus_connection_flush_sync(get(), NULL, NULL);
+    g_dbus_connection_flush_sync(get(), nullptr, nullptr);
 }
 
 void DBusConnectionPtr::setDisconnect(const Disconnect_t &func)
@@ -305,10 +305,10 @@ std::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &newC
     GErrorCXX gerror;
     GDBusCXX::DBusConnectionPtr
         connection(g_dbus_connection_new_sync(G_IO_STREAM(stream.get()),
-                                              NULL,
+                                              nullptr,
                                               G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
-                                              NULL,
-                                              NULL,
+                                              nullptr,
+                                              nullptr,
                                               gerror),
                    false);
     if (!connection) {
@@ -376,7 +376,7 @@ void Watch::nameOwnerChanged(GDBusConnection *connection,
 {
     Watch *watch = static_cast<Watch *>(user_data);
     if (!watch->m_called) {
-        gchar *name = NULL, *oldOwner = NULL, *newOwner = NULL;
+        gchar *name = nullptr, *oldOwner = nullptr, *newOwner = nullptr;
         g_variant_get(parameters, "(sss)", &name, &oldOwner, &newOwner);
         bool matches = name && watch->m_peer == name &&
             newOwner && !*newOwner;
@@ -425,15 +425,15 @@ void Watch::activate(const char *peer)
 
     // Install watch first ...
     m_watchID = g_dbus_connection_signal_subscribe(m_conn.get(),
-                                                   NULL, // TODO org.freedesktop.DBus?
+                                                   nullptr, // TODO org.freedesktop.DBus?
                                                    "org.freedesktop.DBus",
                                                    "NameOwnerChanged",
                                                    "/org/freedesktop/DBus",
-                                                   NULL,
+                                                   nullptr,
                                                    G_DBUS_SIGNAL_FLAGS_NONE,
                                                    nameOwnerChanged,
                                                    this,
-                                                   NULL);
+                                                   nullptr);
     if (!m_watchID) {
         throw std::runtime_error("g_dbus_connection_signal_subscribe(): NameLost failed");
     }
@@ -443,7 +443,7 @@ void Watch::activate(const char *peer)
     // If it disconnects while we are doing this,
     // then disconnect() will be called twice,
     // but it handles that.
-    GError *error = NULL;
+    GError *error = nullptr;
 
     GVariant *result = g_dbus_connection_call_sync(m_conn.get(),
                                                    "org.freedesktop.DBus",
@@ -454,10 +454,10 @@ void Watch::activate(const char *peer)
                                                    G_VARIANT_TYPE("(b)"),
                                                    G_DBUS_CALL_FLAGS_NONE,
                                                    -1, // default timeout
-                                                   NULL,
+                                                   nullptr,
                                                    &error);
 
-    if (result != NULL) {
+    if (result != nullptr) {
         bool actual_result = false;
 
         g_variant_get(result, "(b)", &actual_result);
@@ -504,7 +504,7 @@ void ExtractArgs::init(GDBusConnection *conn,
     m_path = path;
     m_interface = interface;
     m_signal = signal;
-    if (msgBody != NULL) {
+    if (msgBody != nullptr) {
         g_variant_iter_init(&m_iter, msgBody);
     }
 }
@@ -512,7 +512,7 @@ void ExtractArgs::init(GDBusConnection *conn,
 
 ExtractArgs::ExtractArgs(GDBusConnection *conn, GDBusMessage *&msg)
 {
-    init(conn, &msg, g_dbus_message_get_body(msg), NULL, NULL, NULL, NULL);
+    init(conn, &msg, g_dbus_message_get_body(msg), nullptr, nullptr, nullptr, nullptr);
 }
 
 ExtractArgs::ExtractArgs(GDBusConnection *conn,
@@ -522,13 +522,13 @@ ExtractArgs::ExtractArgs(GDBusConnection *conn,
                          const char *signal,
                          GVariant *params)
 {
-    init(conn, NULL, params, sender, path, interface, signal);
+    init(conn, nullptr, params, sender, path, interface, signal);
 }
 
 ExtractResponse::ExtractResponse(GDBusConnection *conn, GDBusMessage *msg)
 {
-    init(conn, NULL, g_dbus_message_get_body(msg),
-         g_dbus_message_get_sender(msg), NULL, NULL, NULL);
+    init(conn, nullptr, g_dbus_message_get_body(msg),
+         g_dbus_message_get_sender(msg), nullptr, nullptr, nullptr);
 }
 
 } // namespace GDBusCXX

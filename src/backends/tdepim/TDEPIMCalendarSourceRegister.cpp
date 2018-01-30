@@ -55,7 +55,7 @@ static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params
 			sourceType.m_format == "text/x-calendar" || 
 			sourceType.m_format == "text/x-vcalendar"*/ )
 				return std::make_unique<TDEPIMCalendarSource>( TDEPIM_TASKS, params );
-		else  return NULL;
+		else  return nullptr;
 	}
 #endif
 	
@@ -69,7 +69,7 @@ static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params
 			sourceType.m_format == "text/x-calendar" ||
 			sourceType.m_format == "text/x-vcalendar"*/)
 				return std::make_unique<TDEPIMCalendarSource>( TDEPIM_TODO, params );
-		else  return NULL;
+		else  return nullptr;
 	}
 #endif
 	
@@ -83,11 +83,11 @@ static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params
 			sourceType.m_format == "text/x-calendar" || 
 			sourceType.m_format == "text/x-vcalendar"*/)
 				return std::make_unique<TDEPIMCalendarSource>( TDEPIM_JOURNAL, params );
-		else  return NULL;
+		else  return nullptr;
 	}
 #endif
 // 	SE_LOG_DEBUG("createSource() c6", "Calendar Source matching the format %s not found", sourceType.m_format.c_str() );
-	return NULL;
+	return nullptr;
 }
 
 static class RegisterTDEPIMCalSyncSource : public RegisterSyncSource
@@ -181,19 +181,19 @@ protected:
 
     // void testOpenDefaultCalendar() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("calendar", "tdepim-calendar", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("calendar", "tdepim-calendar", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultTodo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("tasks", "tdepim-tasks", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("tasks", "tdepim-tasks", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultMemo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 

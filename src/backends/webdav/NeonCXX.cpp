@@ -121,7 +121,7 @@ std::string URI::toURL() const
 std::string URI::escape(const std::string &text)
 {
     SmartPtr<char *> tmp(ne_path_escape(text.c_str()));
-    // Fail gracefully. I have observed ne_path_escape returning NULL
+    // Fail gracefully. I have observed ne_path_escape returning nullptr
     // a couple of times, with input "%u". It makes sense, if the
     // escaping fails, to just return the same string, because, well,
     // it couldn't be escaped.
@@ -175,7 +175,7 @@ std::string URI::normalizePath(const std::string &path, bool collection)
 std::string Status2String(const ne_status *status)
 {
     if (!status) {
-        return "<NULL status>";
+        return "<nullptr status>";
     }
     return StringPrintf("<status %d.%d, code %d, class %d, %s>",
                         status->major_version,
@@ -190,7 +190,7 @@ Session::Session(const std::shared_ptr<Settings> &settings) :
     m_credentialsSent(false),
     m_settings(settings),
     m_debugging(false),
-    m_session(NULL),
+    m_session(nullptr),
     m_attempt(0)
 {
     int logLevel = m_settings->logLevel();
@@ -203,7 +203,7 @@ Session::Session(const std::shared_ptr<Settings> &settings) :
                       (logLevel >= 11 ? (NE_DBG_HTTPPLAIN) : 0));
         m_debugging = true;
     } else {
-        ne_debug_init(NULL, 0);
+        ne_debug_init(nullptr, 0);
     }
 
     ne_sock_init();
@@ -349,7 +349,7 @@ void Session::preSend(ne_request *req, ne_buffer *header)
     bool haveUserAgentHeader = boost::starts_with(header->data, "User-Agent:") ||
         strstr(header->data, "\nUser-Agent:");
     if (!haveUserAgentHeader) {
-        ne_buffer_concat(header, "User-Agent: SyncEvolution\r\n", (const char *)NULL);
+        ne_buffer_concat(header, "User-Agent: SyncEvolution\r\n", nullptr);
     }
 
     // Only do this once when using normal username/password.
@@ -369,14 +369,14 @@ void Session::preSend(ne_request *req, ne_buffer *header)
             SE_LOG_DEBUG(NULL, "using OAuth2 token '%s' to authenticate", m_oauth2Bearer.c_str());
             m_credentialsSent = true;
             // SmartPtr<char *> blob(ne_base64((const unsigned char *)m_oauth2Bearer.c_str(), m_oauth2Bearer.size()));
-            ne_buffer_concat(header, "Authorization: Bearer ", m_oauth2Bearer.c_str() /* blob.get() */, "\r\n", (const char *)NULL);
+            ne_buffer_concat(header, "Authorization: Bearer ", m_oauth2Bearer.c_str() /* blob.get() */, "\r\n", nullptr);
         } else if (forceAlways || m_uri.m_scheme == "https") {
             // append "Authorization: Basic" header if not present already
             if (!haveAuthorizationHeader) {
                 Credentials creds = m_authProvider->getCredentials();
                 std::string credentials = creds.m_username + ":" + creds.m_password;
                 SmartPtr<char *> blob(ne_base64((const unsigned char *)credentials.c_str(), credentials.size()));
-                ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", (const char *)NULL);
+                ne_buffer_concat(header, "Authorization: Basic ", blob.get(), "\r\n", nullptr);
             }
 
             // check for acceptance of credentials later
@@ -396,7 +396,7 @@ int Session::sslVerify(int failures, const ne_ssl_certificate *cert) noexcept
             { NE_SSL_EXPIRED, "certificate has expired" },
             { NE_SSL_IDMISMATCH, "hostname mismatch" },
             { NE_SSL_UNTRUSTED, "untrusted certificate" },
-            { 0, NULL }
+            { 0, nullptr }
         };
 
         SE_LOG_DEBUG(NULL,
@@ -458,7 +458,7 @@ void Session::propfindURI(const std::string &path, int depth,
         }
     };
     void *userdata = const_cast<void *>(static_cast<const void *>(&callback));
-    if (props != NULL) {
+    if (props != nullptr) {
 	error = ne_propfind_named(handler.get(), props, propsResult, userdata);
     } else {
 	error = ne_propfind_allprop(handler.get(), propsResult, userdata);
@@ -924,7 +924,7 @@ Request::Request(Session &session,
     m_path(path),
     m_session(session),
     m_result(&result),
-    m_parser(NULL)
+    m_parser(nullptr)
 {
     m_req = ne_request_create(session.getSession(), m_method.c_str(), path.c_str());
     ne_set_request_body_buffer(m_req, body.c_str(), body.size());
@@ -938,7 +938,7 @@ Request::Request(Session &session,
     m_method(method),
     m_path(path),
     m_session(session),
-    m_result(NULL),
+    m_result(nullptr),
     m_parser(&parser)
 {
     m_req = ne_request_create(session.getSession(), m_method.c_str(), path.c_str());

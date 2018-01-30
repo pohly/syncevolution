@@ -102,11 +102,11 @@ ForkExecParent::ForkExecParent(const std::string &helper, const std::vector<std:
     m_sigIntSent(false),
     m_sigTermSent(false),
     m_mergedStdoutStderr(false),
-    m_out(NULL),
-    m_err(NULL),
+    m_out(nullptr),
+    m_err(nullptr),
     m_outID(0),
     m_errID(0),
-    m_watchChild(NULL)
+    m_watchChild(nullptr)
 {
     Mutex::Guard guard = ForkExecMutex.lock();
     ForkExecCount++;
@@ -261,15 +261,15 @@ void ForkExecParent::start()
         }
     };
 
-    if (!g_spawn_async_with_pipes(NULL, // working directory
+    if (!g_spawn_async_with_pipes(nullptr, // working directory
                                   static_cast<gchar **>(m_argv.get()),
                                   static_cast<gchar **>(m_env.get()),
                                   (GSpawnFlags)(flags | G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
                                   forked, this,
                                   &m_childPid,
-                                  NULL, // set stdin to /dev/null
-                                  (m_mergedStdoutStderr || m_onStdout.empty()) ? NULL : &out,
-                                  (m_mergedStdoutStderr || !m_onStderr.empty()) ? &err : NULL,
+                                  nullptr, // set stdin to /dev/null
+                                  (m_mergedStdoutStderr || m_onStdout.empty()) ? nullptr : &out,
+                                  (m_mergedStdoutStderr || !m_onStderr.empty()) ? &err : nullptr,
                                   gerror)) {
         m_childPid = 0;
         gerror.throwError(SE_HERE, "spawning child");
@@ -283,8 +283,8 @@ void ForkExecParent::start()
 
     // TODO: introduce C++ wrapper around GSource
     m_watchChild = g_child_watch_source_new(m_childPid);
-    g_source_set_callback(m_watchChild, (GSourceFunc)watchChildCallback, this, NULL);
-    g_source_attach(m_watchChild, NULL);
+    g_source_set_callback(m_watchChild, (GSourceFunc)watchChildCallback, this, nullptr);
+    g_source_attach(m_watchChild, nullptr);
 }
 
 void ForkExecParent::setupPipe(GIOChannel *&channel, guint &sourceID, int fd)
@@ -301,7 +301,7 @@ void ForkExecParent::setupPipe(GIOChannel *&channel, guint &sourceID, int fd)
     channel = g_io_channel_unix_new(fd);
     if (!channel) {
         // failure
-        SE_LOG_DEBUG(NULL, "g_io_channel_unix_new() returned NULL");
+        SE_LOG_DEBUG(NULL, "g_io_channel_unix_new() returned nullptr");
         close(fd);
         return;
     }
@@ -314,7 +314,7 @@ void ForkExecParent::setupPipe(GIOChannel *&channel, guint &sourceID, int fd)
     // and thus avoid any kind of conversion. Necessary to avoid
     // buffering.
     error.clear();
-    g_io_channel_set_encoding(channel, NULL, error);
+    g_io_channel_set_encoding(channel, nullptr, error);
     g_io_channel_set_buffered(channel, true);
     sourceID = g_io_add_watch(channel, (GIOCondition)(G_IO_IN|G_IO_ERR|G_IO_HUP), outputReady, this);
 }
@@ -327,7 +327,7 @@ gboolean ForkExecParent::outputReady(GIOChannel *source,
 
     try {
         ForkExecParent *me = static_cast<ForkExecParent *>(data);
-        gchar *buffer = NULL;
+        gchar *buffer = nullptr;
         gsize length = 0;
         GErrorCXX error;
         // Try reading, even if the condition wasn't G_IO_IN.
@@ -357,10 +357,10 @@ gboolean ForkExecParent::outputReady(GIOChannel *source,
             // Free channel and forget source tag (source will be freed
             // by caller when we return false).
             if (source == me->m_out) {
-                me->m_out = NULL;
+                me->m_out = nullptr;
                 me->m_outID = 0;
             } else {
-                me->m_err = NULL;
+                me->m_err = nullptr;
                 me->m_errID = 0;
             }
             g_io_channel_unref(source);
@@ -570,7 +570,7 @@ void ForkExecChild::connect()
 
 bool ForkExecChild::wasForked()
 {
-    return getParentDBusAddress() != NULL;
+    return getParentDBusAddress() != nullptr;
 }
 
 const char *ForkExecChild::getParentDBusAddress()
@@ -624,7 +624,7 @@ private:
         std::shared_ptr<ForkExecParent> parent(create("/bin/true"));
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
@@ -635,7 +635,7 @@ private:
         std::shared_ptr<ForkExecParent> parent(create("/bin/false"));
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(1, WEXITSTATUS(m_status));
@@ -646,7 +646,7 @@ private:
         std::shared_ptr<ForkExecParent> parent(create("true"));
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
@@ -677,7 +677,7 @@ private:
             throw;
         }
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(1, WEXITSTATUS(m_status));
@@ -696,7 +696,7 @@ private:
         parent->m_onStdout.connect(appendOut);
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
@@ -715,7 +715,7 @@ private:
         parent->m_onStdout.connect(appendOut);
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
@@ -743,7 +743,7 @@ private:
         parent->m_onStderr.connect(appendErr);
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
@@ -766,7 +766,7 @@ private:
         parent->m_onOutput.connect(appendOut);
         parent->start();
         while (!m_statusValid) {
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         CPPUNIT_ASSERT(WIFEXITED(m_status));
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));

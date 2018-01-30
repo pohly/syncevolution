@@ -141,7 +141,7 @@ class ActiveSyncSource :
             }
         }
 
-    /** sync config used by this instance, never NULL */
+    /** sync config used by this instance, never nullptr */
     SyncConfig &getSyncConfig() { return *m_context; }
 
     /* partial implementation of SyncSource */
@@ -204,7 +204,7 @@ class ActiveSyncSource :
 
     /**
      * server-side IDs of all items, updated as changes are reported and/or are made;
-     * NULL if not using change tracking
+     * nullptr if not using change tracking
      */
     std::shared_ptr<ConfigNode> m_ids;
 
@@ -229,7 +229,7 @@ class ActiveSyncSource :
         Collection() :
             type(0),
             pathFound(false),
-            source(NULL)
+            source(nullptr)
         {}
 
 	int getFolderType();
