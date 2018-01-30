@@ -104,7 +104,7 @@ void ActiveSyncCalendarSource::beginSync(const std::string &lastToken, const std
     for (bool firstIteration = true;
          moreAvailable;
          firstIteration = false) {
-        gchar *buffer = NULL;
+        gchar *buffer = nullptr;
         GErrorCXX gerror;
         EASItemsCXX created, updated;
         EASIdsCXX deleted;
@@ -411,7 +411,7 @@ SyncSourceRaw::InsertItemResult ActiveSyncCalendarSource::insertItem(const std::
     auto newEvent = std::make_shared<Event>();
     newEvent->m_calendar.set(icalcomponent_new_from_string((char *)item.c_str()), // hack for old libical
                              "parsing iCalendar 2.0");
-    icalcomponent *firstcomp = NULL;
+    icalcomponent *firstcomp = nullptr;
     for (icalcomponent *comp = firstcomp = icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -499,7 +499,7 @@ SyncSourceRaw::InsertItemResult ActiveSyncCalendarSource::insertItem(const std::
             // the parent event or (if not found) the current event
             eptr<icalproperty> rid(icalproperty_new_recurrenceid(icaltime_from_string(knownSubID.c_str())),
                                    "new rid");
-            icalproperty *dtstart = NULL;
+            icalproperty *dtstart = nullptr;
             icalcomponent *comp;
             // look for parent first
             for (comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
@@ -541,7 +541,7 @@ SyncSourceRaw::InsertItemResult ActiveSyncCalendarSource::insertItem(const std::
             loadItem(event);
 
             // update cache: find old VEVENT and remove it before adding new one
-            icalcomponent *removeme = NULL;
+            icalcomponent *removeme = nullptr;
             for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
                  comp;
                  comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -653,7 +653,7 @@ void ActiveSyncCalendarSource::deleteItem(const string &luid)
             throwError(SE_HERE, STATUS_NOT_FOUND, "sub event not found: " + subid + " in " + easid);
         } else {
             event.m_subids.clear();
-            event.m_calendar = NULL;
+            event.m_calendar = nullptr;
             ActiveSyncSource::deleteItem(ids.first);
         }
         m_cache.erase(easid);

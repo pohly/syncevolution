@@ -90,7 +90,7 @@ class EvolutionSyncSource : public TrackingSyncSource
      *
      * @param list      a list previously obtained from Gnome
      * @param id        a string identifying the data source: either its name or uri
-     * @return   pointer to source (caller owns reference) or NULL if not found
+     * @return   pointer to source (caller owns reference) or nullptr if not found
      */
     ESource *findSource(const ESourceListCXX &list,
                         const string &id);
@@ -124,7 +124,7 @@ class EvolutionAsync {
     public:
     EvolutionAsync()
     {
-        m_loop = GMainLoopStealCXX(g_main_loop_new(NULL, TRUE));
+        m_loop = GMainLoopStealCXX(g_main_loop_new(nullptr, TRUE));
     }
      
     /** start processing events */

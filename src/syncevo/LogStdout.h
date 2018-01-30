@@ -42,7 +42,7 @@ class LoggerStdout : public Logger
     /**
      * write to stdout by default
      *
-     * @param file    override default file; NULL disables printing
+     * @param file    override default file; nullptr disables printing
      */
     LoggerStdout(FILE *file = stdout);
 

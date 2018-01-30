@@ -117,7 +117,7 @@ void SQLiteContactSource::open()
         { "BlogURL", "ABPerson", "BLOGURL" },
         { "VideoURL", "ABPerson", "VIDEOURL" },
 
-        { NULL }
+        { nullptr }
     };
     static const char *schema = 
         "BEGIN TRANSACTION;"
@@ -328,9 +328,9 @@ sysync::TSyError SQLiteContactSource::insertItemAsKey(sysync::KeyH aItemKey, sys
         m_sqlite.checkSQL(sqlite3_bind_text(insert, param++, uid.c_str(), -1, SQLITE_TRANSIENT));
         m_sqlite.checkSQL(sqlite3_bind_text(insert, param++, creationTime.c_str(), -1, SQLITE_TRANSIENT));
     } else {
-        m_sqlite.checkSQL(sqlite3_bind_int64(insert, param++, (long long)time(NULL)));
+        m_sqlite.checkSQL(sqlite3_bind_int64(insert, param++, (long long)time(nullptr)));
     }
-    SQLiteUtil::syncml_time_t modificationTime = time(NULL);
+    SQLiteUtil::syncml_time_t modificationTime = time(nullptr);
     m_sqlite.checkSQL(sqlite3_bind_int64(insert, param++, modificationTime));
                       
     m_sqlite.checkSQL(sqlite3_step(insert));

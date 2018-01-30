@@ -100,7 +100,7 @@ class EDSRegistryLoader : private boost::noncopyable
             m_pending.push_back(cb);
 	    ESourceRegistry *registry;
 	    GErrorCXX gerror;
-	    registry = e_source_registry_new_sync(NULL, gerror);
+	    registry = e_source_registry_new_sync(nullptr, gerror);
 	    created(registry, gerror);
         }
     }
@@ -110,7 +110,7 @@ class EDSRegistryLoader : private boost::noncopyable
         if (!m_registry) {
             ESourceRegistry *registry;
             GErrorCXX gerror;
-            registry = e_source_registry_new_sync(NULL, gerror);
+            registry = e_source_registry_new_sync(nullptr, gerror);
             created(registry, gerror);
         }
 

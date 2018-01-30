@@ -110,8 +110,8 @@ public:
             SE_THROW("Username or password missing");
         }
         Credentials credentials;
-        credentials.m_username = g_variant_get_string(usernameVar, NULL);
-        credentials.m_password = g_variant_get_string(passwordVar, NULL);
+        credentials.m_username = g_variant_get_string(usernameVar, nullptr);
+        credentials.m_password = g_variant_get_string(passwordVar, nullptr);
         if (credentials.m_password.empty()) {
             SE_THROW("Got an empty password");
         } else if (m_invalidateCache &&
@@ -144,7 +144,7 @@ public:
         if (!tokenVar) {
             SE_THROW("no AccessToken in OAuth2 response");
         }
-        std::string newToken = g_variant_get_string(tokenVar, NULL);
+        std::string newToken = g_variant_get_string(tokenVar, nullptr);
         if (newToken.empty()) {
             SE_THROW("AccessToken did not contain a string value");
         } else if (m_invalidateCache && newToken == m_accessToken) {
@@ -174,8 +174,8 @@ private:
 
 #define signon_auth_session_process_async_finish signon_auth_session_process_finish
         SYNCEVO_GLIB_CALL_SYNC(resultData, gerror, signon_auth_session_process_async,
-                               m_authSession, sessionData, mechanism, NULL);
-        buffer.reset(resultData ? g_variant_print(resultData, true) : NULL);
+                               m_authSession, sessionData, mechanism, nullptr);
+        buffer.reset(resultData ? g_variant_print(resultData, true) : nullptr);
         SE_LOG_DEBUG(NULL, "authentication result: %s, %s",
                      buffer.get() ? buffer.get() : "<<null>>",
                      gerror ? gerror->message : "???");
@@ -243,7 +243,7 @@ std::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &us
     }
     AgAccountServiceCXX accountService;
     if (serviceName.empty()) {
-        accountService = AgAccountServiceCXX::steal(ag_account_service_new(account, NULL));
+        accountService = AgAccountServiceCXX::steal(ag_account_service_new(account, nullptr));
     } else {
         ServiceListCXX services(ag_account_list_enabled_services(account));
         for (AgService *service: services) {

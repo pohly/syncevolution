@@ -64,8 +64,8 @@ class SQLiteUtil
      * @param name        a name for the data source, used for error messages
      * @param fileid      a descriptor which identifies the file to be opened:
      *                    currently valid syntax is file:// followed by path
-     * @param mapping     array with database mapping, terminated by NULL colname
-     * @param schema      database schema to use when creating new databases, may be NULL
+     * @param mapping     array with database mapping, terminated by nullptr colname
+     * @param schema      database schema to use when creating new databases, may be nullptr
      */
     void open(const std::string &name,
               const std::string &fileid,
@@ -95,7 +95,7 @@ class SQLiteUtil
      * @param sql       preformatted SQL statement(s)
      * @param nextsql   pointer to next statement in sql
      */
-    sqlite3_stmt *prepareSQLWrapper(const char *sql, const char **nextsql = NULL);
+    sqlite3_stmt *prepareSQLWrapper(const char *sql, const char **nextsql = nullptr);
 
 
     /** checks the result of an sqlite3 call, throws an error if faulty, otherwise returns the result */
@@ -117,7 +117,7 @@ class SQLiteUtil
     /** return a specific column for a row identified by a certain key column as text, returns default text if not found */
     std::string findColumn(const char *database, const char *keyname, const char *key, const char *column, const char *def);
 
-    /** a wrapper for sqlite3_column_test() which will check for NULL and returns default text instead */
+    /** a wrapper for sqlite3_column_test() which will check for nullptr and returns default text instead */
     std::string getTextColumn(sqlite3_stmt *stmt, int col, const char *def = "");
 
     typedef unsigned long syncml_time_t;

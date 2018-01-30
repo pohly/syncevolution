@@ -32,10 +32,10 @@ SE_BEGIN_CXX
 
 CurlTransportAgent::CurlTransportAgent() :
     m_easyHandle(easyInit()),
-    m_slist(NULL),
+    m_slist(nullptr),
     m_status(INACTIVE),
     m_timeoutSeconds(0),
-    m_reply(NULL),
+    m_reply(nullptr),
     m_replyLen(0),
     m_replySize(0)
 {
@@ -181,7 +181,7 @@ void CurlTransportAgent::send(const char *data, size_t len)
     m_messageLen = len;
 
     curl_slist_free_all(m_slist);
-    m_slist = NULL;
+    m_slist = nullptr;
     
     // Setting Expect explicitly prevents problems with certain
     // proxies: if curl is allowed to depend on Expect, then it will

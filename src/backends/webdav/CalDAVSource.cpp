@@ -408,7 +408,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
     // does.
     icalcomponent *event;
     if (settings().googleAlarmHack() &&
-        (event = icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) != NULL &&
+        (event = icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) != nullptr &&
         !icalcomponent_get_first_component(event, ICAL_VALARM_COMPONENT)) {
         static eptr<icalcomponent> alarm(icalcomponent_new_from_string("BEGIN:VALARM\r\n"
                                                                        "ACTION:NONE\r\n"
@@ -420,7 +420,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
     }
 
     struct icaltimetype lastmodtime = icaltime_null_time();
-    icalcomponent *firstcomp = NULL;
+    icalcomponent *firstcomp = nullptr;
     for (icalcomponent *comp = firstcomp = icalcomponent_get_first_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(newEvent->m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -561,7 +561,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
             // the parent event or (if not found) the current event
             eptr<icalproperty> rid(icalproperty_new_recurrenceid(icaltime_from_string(knownSubID.c_str())),
                                    "new rid");
-            icalproperty *dtstart = NULL;
+            icalproperty *dtstart = nullptr;
             icalcomponent *comp;
             // look for parent first
             for (comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
@@ -613,7 +613,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
 
         // update cache: find old VEVENT and remove it before adding new one,
         // update last modified time of all other components
-        icalcomponent *removeme = NULL;
+        icalcomponent *removeme = nullptr;
         for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -771,7 +771,7 @@ void CalDAVSource::readSubItem(const std::string &davLUID, const std::string &su
             icalcomponent_add_component(calendar, clone.release());
         }
         bool found = false;
-        icalcomponent *parent = NULL;
+        icalcomponent *parent = nullptr;
         for (icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
              comp;
              comp = icalcomponent_get_next_component(event.m_calendar, ICAL_VEVENT_COMPONENT)) {
@@ -869,12 +869,12 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
                     icalcomponent *comp = icalcomponent_get_first_component(event.m_calendar, ICAL_VEVENT_COMPONENT);
                     if (comp) {
                         icalproperty *prop;
-                        while ((prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) != NULL) {
+                        while ((prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY)) != nullptr) {
                             icalcomponent_remove_property(comp, prop);
                             icalproperty_free(prop);
                             updated = true;
                         }
-                        while ((prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) != NULL) {
+                        while ((prop = icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) != nullptr) {
                             icalcomponent_remove_property(comp, prop);
                             icalproperty_free(prop);
                             updated = true;
@@ -984,7 +984,7 @@ void CalDAVSource::flushItem(const string &davLUID)
     // TODO: currently we always flush immediately, so no need to send data here
     EventCache::iterator it = m_cache.find(davLUID);
     if (it != m_cache.end()) {
-        it->second->m_calendar.set(NULL);
+        it->second->m_calendar.set(nullptr);
     }
 }
 
@@ -1189,7 +1189,7 @@ void CalDAVSource::Event::fixIncomingCalendar(icalcomponent *calendar)
     // in the first loop iteration. Then below transform the RECURRENCE-ID
     // time.
     bool ridInUTC = false;
-    const icaltimezone *zone = NULL;
+    const icaltimezone *zone = nullptr;
 
     for (icalcomponent *comp = icalcomponent_get_first_component(calendar, ICAL_VEVENT_COMPONENT);
          comp;

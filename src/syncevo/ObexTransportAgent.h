@@ -81,7 +81,7 @@ class ObexTransportAgent : public TransportAgent
         /**
          * @param loop     the glib loop to use when waiting for IO;
          *                 transport will increase the reference count;
-         *                 if NULL a new loop in the default context is used
+         *                 if nullptr a new loop in the default context is used
          */
         ObexTransportAgent(OBEX_TRANS_TYPE type, GMainLoop *loop);
         ~ObexTransportAgent();

@@ -86,14 +86,14 @@ class Exception : public std::runtime_error
      * Returns updated status code.
      *
      * @param logPrefix      passed to SE_LOG* messages
-     * @retval explanation   set to explanation for problem, if non-NULL
+     * @retval explanation   set to explanation for problem, if non-nullptr
      * @param level     level to be used for logging
      */
-    static SyncMLStatus handle(SyncMLStatus *status = NULL, const std::string *logPrefix = NULL, std::string *explanation = NULL, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
-    static SyncMLStatus handle(const std::string &logPrefix, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, &logPrefix, NULL, Logger::ERROR, flags); }
-    static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(NULL, NULL, &explanation, Logger::ERROR, flags); }
-    static void handle(HandleExceptionFlags flags) { handle(NULL, NULL, NULL, Logger::ERROR, flags); }
-    static void log() { handle(NULL, NULL, NULL, Logger::DEBUG); }
+    static SyncMLStatus handle(SyncMLStatus *status = nullptr, const std::string *logPrefix = nullptr, std::string *explanation = nullptr, Logger::Level = Logger::ERROR, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE);
+    static SyncMLStatus handle(const std::string &logPrefix, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(nullptr, &logPrefix, nullptr, Logger::ERROR, flags); }
+    static SyncMLStatus handle(std::string &explanation, HandleExceptionFlags flags = HANDLE_EXCEPTION_FLAGS_NONE) { return handle(nullptr, nullptr, &explanation, Logger::ERROR, flags); }
+    static void handle(HandleExceptionFlags flags) { handle(nullptr, nullptr, nullptr, Logger::ERROR, flags); }
+    static void log() { handle(nullptr, nullptr, nullptr, Logger::DEBUG); }
 
     /**
      * Tries to identify exception class based on explanation string created by

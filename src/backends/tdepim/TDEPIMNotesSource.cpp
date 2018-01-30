@@ -78,7 +78,7 @@ TDEPIMNotesSource::~TDEPIMNotesSource() {
 	if ( ! knotesWasRunning )
 		system("dcop knotes MainApplication-Interface quit");
 	delete kn_iface;
-	kn_iface = NULL;
+	kn_iface = nullptr;
 	SE_LOG_DEBUG(getDisplayName(), "kNotes exit OK");
 }
 
@@ -98,7 +98,7 @@ TQString TDEPIMNotesSource::lastModifiedNormalized(TQDateTime &d) const
 
 TQString TDEPIMNotesSource::stripHtml(TQString input)
 {
-	TQString output = NULL;
+	TQString output = nullptr;
 	unsigned int i = 0;
 	int inbraces = 0;
 	for (i = 0; i < input.length(); i++) {

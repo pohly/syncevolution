@@ -60,7 +60,7 @@ int main(int argc, char **argv, char **envp)
 
     SyncContext::initMain("syncevo-dbus-helper");
 
-    GMainLoopCXX loop(g_main_loop_new(NULL, FALSE), TRANSFER_REF);
+    GMainLoopCXX loop(g_main_loop_new(nullptr, FALSE), TRANSFER_REF);
 
     // Suspend and abort are signaled via SIGINT/SIGTERM
     // respectively. SuspendFlags handle that for us.
@@ -86,21 +86,21 @@ int main(int argc, char **argv, char **envp)
     }
 #ifdef USE_DLT
     // Set by syncevo-dbus-server for us.
-    bool useDLT = getenv("SYNCEVOLUTION_USE_DLT") != NULL;
+    bool useDLT = getenv("SYNCEVOLUTION_USE_DLT") != nullptr;
     PushLogger<LoggerDLT> loggerdlt;
     if (useDLT) {
         loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_DBUS_HELPER_ID, "SyncEvolution local sync helper"));
     }
 #endif
-    setvbuf(stderr, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, nullptr, _IONBF, 0);
+    setvbuf(stdout, nullptr, _IONBF, 0);
 
     try {
         GOptionEntry entries[] = {
             { "dbus-verbosity", 'v', 0, G_OPTION_ARG_INT, &logLevelDBus,
               "Choose amount of output via D-Bus signals with Logger::Level; default is INFO = 3.",
               "level" },
-            { NULL }
+            { nullptr }
         };
         GErrorCXX gerror;
         static GOptionContext *context = g_option_context_new("- SyncEvolution D-Bus Helper");
@@ -199,7 +199,7 @@ int main(int argc, char **argv, char **envp)
                 SE_LOG_DEBUG(NULL, "parent has quit, terminating");
                 return 0;
             }
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
     } catch ( const std::exception &ex ) {
         SE_LOG_ERROR(NULL, "helper quitting with exception: %s", ex.what());

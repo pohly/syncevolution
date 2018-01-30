@@ -44,10 +44,10 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_QTCONTACTS
                 true ? new QtContactsSource(params) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("QtContacts",

@@ -77,7 +77,7 @@ public:
         m_messageBufferSize = msgSize * 2;
         prepareBuffer(m_localBuffer, m_messageBufferSize);
         prepareBuffer(m_remoteBuffer, m_messageBufferSize);
-        m_remoteBuffer.map(NULL, NULL);
+        m_remoteBuffer.map(nullptr, nullptr);
     }
 
     std::list<StringPair> getEnvForChild()
@@ -94,7 +94,7 @@ public:
         m_messageBufferSize = msgSize * 2;
         m_remoteBuffer.create(atoi(getEnv("SYNCEVOLUTION_LOCAL_SYNC_PARENT_FD", "-1")));
         m_localBuffer.create(atoi(getEnv("SYNCEVOLUTION_LOCAL_SYNC_CHILD_FD", "-1")));
-        m_remoteBuffer.map(NULL, NULL);
+        m_remoteBuffer.map(nullptr, nullptr);
         StringPiece remote = m_remoteBuffer.stringPiece();
         if ((size_t)remote.size() != m_messageBufferSize) {
             SE_THROW(StringPrintf("local and remote side do not agree on shared buffer size: %ld != %ld",
@@ -135,11 +135,11 @@ private:
     {
         if (size == m_messageBufferSize) {
             try {
-                m_localBuffer.map(&m_messageBuffer, NULL);
+                m_localBuffer.map(&m_messageBuffer, nullptr);
                 return m_messageBuffer;
             } catch (...) {
                 Exception::handle();
-                return NULL;
+                return nullptr;
             }
         } else {
             return malloc(size);
@@ -150,7 +150,7 @@ private:
     void shfree(void *ptr)
     {
         if (ptr == m_messageBuffer) {
-            m_messageBuffer = NULL;
+            m_messageBuffer = nullptr;
         } else {
             free(ptr);
         }
@@ -253,7 +253,7 @@ LocalTransportAgent::LocalTransportAgent(SyncContext *server,
     m_status(INACTIVE),
     m_loop(loop ?
            GMainLoopCXX(static_cast<GMainLoop *>(loop), ADD_REF) :
-           GMainLoopCXX(g_main_loop_new(NULL, false), TRANSFER_REF))
+           GMainLoopCXX(g_main_loop_new(nullptr, false), TRANSFER_REF))
 {
     SMLTKSharedMemory::singleton().initParent(server->getMaxMsgSize());
 }
@@ -656,7 +656,7 @@ public:
                                                        passwordName.c_str()),
                                           SyncMLStatus(sysync::LOCERR_USERABORT));
             }
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         if (!error.empty()) {
             Exception::tryRethrowDBus(error);
@@ -826,7 +826,7 @@ class LocalTransportAgentChild : public TransportAgent
             m_forkexec->getState() == ForkExecChild::DISCONNECTED) {
             SE_THROW("local transport child no longer has a parent, terminating");
         }
-        g_main_context_iteration(NULL, true);
+        g_main_context_iteration(nullptr, true);
         if (m_ret) {
             SE_THROW("local transport child encountered a problem, terminating");
         }
@@ -1105,7 +1105,7 @@ public:
             memset(&new_action, 0, sizeof(new_action));
             new_action.sa_handler = SIG_IGN;
             sigemptyset(&new_action.sa_mask);
-            sigaction(SIGINT, &new_action, NULL);
+            sigaction(SIGINT, &new_action, nullptr);
 
             // SIGTERM would be caught by SuspendFlags and set the "abort"
             // state. But a lot of code running in this process cannot
@@ -1113,7 +1113,7 @@ public:
             // libneon, activesync client libraries, ...). Therefore
             // it is better to abort inside the signal handler.
             new_action.sa_handler = abortLocalSync;
-            sigaction(SIGTERM, &new_action, NULL);
+            sigaction(SIGTERM, &new_action, nullptr);
 
             SE_LOG_DEBUG(NULL, "LocalTransportChild: ignore SIGINT, die in SIGTERM");
             SE_LOG_INFO(NULL, "target side of local sync ready");
@@ -1135,7 +1135,7 @@ public:
                 // do not wait too long
                 if (m_parent) {
                     SE_LOG_DEBUG(NULL, "waiting for parent's ACK for sync report");
-                    g_main_context_iteration(NULL, true);
+                    g_main_context_iteration(nullptr, true);
                 }
             }
             throw;
@@ -1293,8 +1293,8 @@ int LocalTransportMain(int argc, char **argv)
     // send all logging output to the local sync parent via D-Bus, to
     // be forwarded to the user as part of the normal message stream
     // of the sync session.
-    setvbuf(stderr, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, nullptr, _IONBF, 0);
+    setvbuf(stdout, nullptr, _IONBF, 0);
 
     // SIGPIPE must be ignored, some system libs (glib GIO?) trigger
     // it. SIGINT/TERM will be handled via SuspendFlags once the sync
@@ -1302,7 +1302,7 @@ int LocalTransportMain(int argc, char **argv)
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = SIG_IGN;
-    sigaction(SIGPIPE, &sa, NULL);
+    sigaction(SIGPIPE, &sa, nullptr);
 
     try {
         if (getenv("SYNCEVOLUTION_DEBUG")) {
@@ -1322,7 +1322,7 @@ int LocalTransportMain(int argc, char **argv)
 
 #ifdef USE_DLT
         // Set by syncevo-dbus-server for us.
-        bool useDLT = getenv("SYNCEVOLUTION_USE_DLT") != NULL;
+        bool useDLT = getenv("SYNCEVOLUTION_USE_DLT") != nullptr;
         PushLogger<LoggerDLT> loggerdlt;
         if (useDLT) {
             loggerdlt.reset(new LoggerDLT(DLT_SYNCEVO_LOCAL_HELPER_ID, "SyncEvolution local sync helper"));

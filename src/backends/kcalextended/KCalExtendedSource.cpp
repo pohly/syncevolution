@@ -216,7 +216,7 @@ KCalExtendedSource::KCalExtendedSource(const SyncSourceParams &params, Type type
         break;
     }
 
-    m_data = NULL;
+    m_data = nullptr;
     m_type = type;
     m_delete_run = 0;
     m_insert_run = 0;
@@ -447,7 +447,7 @@ std::string KCalExtendedSource::endSync(bool success)
         if (!m_data->m_storage->save()) {
             throwError(SE_HERE, "could not save calendar");
         }
-        time_t modtime = time(NULL);
+        time_t modtime = time(nullptr);
         // Saving set the modified time stamps of all items needed
         // saving, so ensure that we sleep for one second starting now.
         // Must sleep before taking the time stamp for the anchor,
@@ -456,7 +456,7 @@ std::string KCalExtendedSource::endSync(bool success)
         time_t current = modtime;
         do {
             sleep(1 - (current - modtime));
-            current = time(NULL);
+            current = time(nullptr);
         } while (current - modtime < 1);
         m_delete_run = 0;
         m_insert_run = 0;

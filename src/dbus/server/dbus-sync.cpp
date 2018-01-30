@@ -214,7 +214,7 @@ string DBusSync::askPassword(const string &passwordName,
     // We know that askPasswordAsync() is done when it cleared the
     // callback functors.
     while (m_passwordSuccess) {
-        g_main_context_iteration(NULL, true);
+        g_main_context_iteration(nullptr, true);
     }
     if (!error.empty()) {
         Exception::tryRethrow(error);

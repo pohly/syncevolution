@@ -380,7 +380,7 @@ public:
         // exception, but then forwards it, and thus does not
         // prevent the exception from escaping.
         if (!std::uncaught_exception()) {
-            CT_ASSERT_NO_THROW(reset(NULL));
+            CT_ASSERT_NO_THROW(reset(nullptr));
         }
     }
 
@@ -697,7 +697,7 @@ std::string LocalTests::insert(const CreateSource &createSource, const std::stri
 }
 
 /** deletes specific item locally via sync source */
-static std::string updateItem(const CreateSource &createSource, const ClientTestConfig &config, const std::string &uid, const std::string &data, std::string *updated = NULL) {
+static std::string updateItem(const CreateSource &createSource, const ClientTestConfig &config, const std::string &uid, const std::string &data, std::string *updated = nullptr) {
     std::string newuid;
 
     CT_ASSERT(createSource.createSource);
@@ -826,7 +826,7 @@ static void deleteItem(const CreateSource &createSource, const std::string &uid)
  * takes two databases, exports them,
  * then compares them using synccompare
  *
- * @param refFile      existing file with source reference items, NULL uses a dump of sync source A instead
+ * @param refFile      existing file with source reference items, nullptr uses a dump of sync source A instead
  * @param copy         a sync source which contains the copied items, begin/endSync will be called
  * @param raiseAssert  raise assertion if comparison yields differences (defaults to true)
  */
@@ -863,7 +863,7 @@ bool LocalTests::compareDatabases(const std::string &refFile, const std::string 
 }
 
 /**
- * compare data in source with vararg list of std::string pointers, NULL terminated
+ * compare data in source with vararg list of std::string pointers, nullptr terminated
  */
 void LocalTests::compareDatabases(TestingSyncSource *copy,
                                   ...)
@@ -874,7 +874,7 @@ void LocalTests::compareDatabases(TestingSyncSource *copy,
     va_list ap;
     va_start(ap, copy);
     std::string *item;
-    while ((item = va_arg(ap, std::string *)) != NULL) {
+    while ((item = va_arg(ap, std::string *)) != nullptr) {
         out << *item;
     }
     va_end(ap);
@@ -1344,7 +1344,7 @@ void LocalTests::doChanges(bool restart) {
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
 
     CLIENT_TEST_LOG("insert another item via source A");
-    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-C"));
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, nullptr, "-C"));
     CLIENT_TEST_LOG("check for new item via source B");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
@@ -1392,7 +1392,7 @@ void LocalTests::doChanges(bool restart) {
     CLIENT_TEST_LOG("create and update an item in source A");
     // Must use a UID different than the one used before despite that data being gone,
     // to keep Google CalDAV server happy.
-    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-D"));
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, nullptr, "-D"));
     CT_ASSERT_NO_THROW(update(createSourceA, config.m_updateItem, "-D"));
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, but not both");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
@@ -1406,9 +1406,9 @@ void LocalTests::doChanges(bool restart) {
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
     CT_ASSERT_NO_THROW(restart ? source.stopAccess() : source.reset());
     CLIENT_TEST_LOG("create, delete and recreate an item in source A");
-    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-E"));
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, nullptr, "-E"));
     CT_ASSERT_NO_THROW(deleteAll(createSourceA));
-    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, NULL, "-F"));
+    CT_ASSERT_NO_THROW(insert(createSourceA, config.m_insertItem, false, nullptr, "-F"));
     CLIENT_TEST_LOG("should only be listed as new or updated in source B, even if\n "
                     "(as for calendar with UID) the same LUID gets reused");
     SOURCE_ASSERT_NO_FAILURE(source.get(), restart ? source.startAccess() : source.reset(createSourceB()));
@@ -1575,7 +1575,7 @@ void LocalTests::doImport(const std::string &testcases) {
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
     restoreStorage(config, client);
     std::string actualData;
-    std::string importFailures = config.m_import(client, *source.get(), config, testcases, actualData, NULL);
+    std::string importFailures = config.m_import(client, *source.get(), config, testcases, actualData, nullptr);
     backupStorage(config, client);
     CT_ASSERT_NO_THROW(source.reset());
 
@@ -1759,7 +1759,7 @@ void LocalTests::testLinkedItemsParent() {
 
     // check that exactly the parent is listed as new
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -1806,7 +1806,7 @@ void LocalTests::testLinkedItemsChild() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -1852,7 +1852,7 @@ void LocalTests::testLinkedItemsParentChild() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -1936,7 +1936,7 @@ void LocalTests::testLinkedItemsChildParent() {
     CT_ASSERT_NO_THROW(parent = insert(createSourceA, items[0], true, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -1983,7 +1983,7 @@ void LocalTests::testLinkedItemsChildChangesParent() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -1996,7 +1996,7 @@ void LocalTests::testLinkedItemsChildChangesParent() {
     CT_ASSERT_NO_THROW(parent = insert(createSourceA, items[0], true, &parentData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     if (!config.m_sourceLUIDsAreVolatile) {
@@ -2049,7 +2049,7 @@ void LocalTests::testLinkedItemsRemoveParentFirst() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2063,7 +2063,7 @@ void LocalTests::testLinkedItemsRemoveParentFirst() {
     CT_ASSERT_NO_THROW(deleteItem(createSourceA, parent));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     // deleting the parent may or may not modify the child
@@ -2111,7 +2111,7 @@ void LocalTests::testLinkedItemsRemoveNormal() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2152,7 +2152,7 @@ void LocalTests::testLinkedItemsRemoveNormal() {
             }
         }
 
-        CT_ASSERT_NO_THROW(compareDatabases(source.get(), &parentData, (void *)NULL));
+        CT_ASSERT_NO_THROW(compareDatabases(source.get(), &parentData, nullptr));
         SOURCE_ASSERT_EQUAL(source.get(), 1, countItems(source.get()));
         SOURCE_ASSERT_EQUAL(source.get(), 0, countNewItems(source.get()));
         SOURCE_ASSERT_EQUAL(source.get(), 0, countUpdatedItems(source.get()));
@@ -2209,7 +2209,7 @@ void LocalTests::testLinkedItemsInsertParentTwice() {
     CT_ASSERT_NO_THROW(parent = insert(createSourceA, items[0], false, &parentData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2222,7 +2222,7 @@ void LocalTests::testLinkedItemsInsertParentTwice() {
     CT_ASSERT_NO_THROW(parent = insert(createSourceA, items[0], false, &parentData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countUpdatedItems(copy.get()));
@@ -2267,7 +2267,7 @@ void LocalTests::testLinkedItemsInsertChildTwice() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2280,7 +2280,7 @@ void LocalTests::testLinkedItemsInsertChildTwice() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1]));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countUpdatedItems(copy.get()));
@@ -2325,7 +2325,7 @@ void LocalTests::testLinkedItemsParentUpdate() {
     CT_ASSERT_NO_THROW(parent = insert(createSourceA, items[0], false, &parentData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2338,7 +2338,7 @@ void LocalTests::testLinkedItemsParentUpdate() {
     CT_ASSERT_NO_THROW(parent = updateItem(createSourceA, config, parent, items[0], &parentData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countUpdatedItems(copy.get()));
@@ -2384,7 +2384,7 @@ void LocalTests::testLinkedItemsUpdateChild() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2397,7 +2397,7 @@ void LocalTests::testLinkedItemsUpdateChild() {
     CT_ASSERT_NO_THROW(child = updateItem(createSourceA, config, child, items[1], &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 1, countUpdatedItems(copy.get()));
@@ -2443,7 +2443,7 @@ void LocalTests::testLinkedItemsInsertBothUpdateChild() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2458,7 +2458,7 @@ void LocalTests::testLinkedItemsInsertBothUpdateChild() {
 
     // child has to be listed as modified, parent may be
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     SOURCE_ASSERT(copy.get(), 1 <= countUpdatedItems(copy.get()));
@@ -2508,7 +2508,7 @@ void LocalTests::testLinkedItemsInsertBothUpdateParent() {
     CT_ASSERT_NO_THROW(child = insert(createSourceA, items[1], false, &childData));
 
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countNewItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countUpdatedItems(copy.get()));
@@ -2523,7 +2523,7 @@ void LocalTests::testLinkedItemsInsertBothUpdateParent() {
 
     // parent has to be listed as modified, child may be
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceB()));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
     SOURCE_ASSERT_EQUAL(copy.get(), 2, countItems(copy.get()));
     SOURCE_ASSERT_EQUAL(copy.get(), 0, countNewItems(copy.get()));
     SOURCE_ASSERT(copy.get(), 1 <= countUpdatedItems(copy.get()));
@@ -2578,7 +2578,7 @@ void LocalTests::testLinkedItemsInsertBothUpdateChildNoIDs() {
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceA()));
     CT_ASSERT_NO_THROW(insertProperty(childData, uid, "END:VEVENT"));
     CT_ASSERT_NO_THROW(insertProperty(childData, rid, "END:VEVENT"));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &parentData, &childData, nullptr));
 }
 
 // - insert child
@@ -2606,7 +2606,7 @@ void LocalTests::testLinkedItemsUpdateChildNoIDs() {
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(createSourceA()));
     CT_ASSERT_NO_THROW(insertProperty(childData, uid, "END:VEVENT"));
     CT_ASSERT_NO_THROW(insertProperty(childData, rid, "END:VEVENT"));
-    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, (void *)NULL));
+    CT_ASSERT_NO_THROW(compareDatabases(copy.get(), &childData, nullptr));
 }
 
 // insert parent, try to delete or retrieve non-existent child:
@@ -3069,7 +3069,7 @@ bool SyncTests::compareDatabases(const char *refFileBase, bool raiseAssert) {
                 equal = false;
             }
         } else {
-            if (!it1->second->compareDatabases(NULL, *copy.get(), raiseAssert)) {
+            if (!it1->second->compareDatabases(nullptr, *copy.get(), raiseAssert)) {
                 equal = false;
             }
         }
@@ -3124,7 +3124,7 @@ void SyncTests::doCopy() {
     CT_ASSERT_NO_THROW(deleteAll());
     accessClientB->deleteAll();
 
-    bool allowLocalUpdate = getenv("CLIENT_TEST_MAY_COPY_BACK") != NULL;
+    bool allowLocalUpdate = getenv("CLIENT_TEST_MAY_COPY_BACK") != nullptr;
 
     // insert into first database, copy to server
     CT_ASSERT_NO_THROW(allSourcesInsert());
@@ -3393,7 +3393,7 @@ void SyncTests::doRestartSync(SyncMode mode)
         return false;
     };
 
-    bool canRestart = getenv("CLIENT_TEST_PEER_CAN_RESTART") != NULL &&
+    bool canRestart = getenv("CLIENT_TEST_PEER_CAN_RESTART") != nullptr &&
         !isServerMode();
 
     CT_ASSERT_NO_THROW(doSync(__FILE__, __LINE__,
@@ -4771,7 +4771,7 @@ bool addBothSidesAddStatsBroken = false;
 // if true, then the peer is a SyncML server which does not
 // support UID/RECURRENCE-ID and thus doesn't detect
 // duplicates itself; the client needs to do that
-bool addBothSidesServerIsDumb = getenv("CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB") != NULL;
+bool addBothSidesServerIsDumb = getenv("CLIENT_TEST_ADD_BOTH_SIDES_SERVER_IS_DUMB") != nullptr;
 
 static void testAddBothSidesFixUpdateItem(std::string &updateItem)
 {
@@ -4875,7 +4875,7 @@ void SyncTests::testAddBothSides()
     // now compare client A against reference data
     TestingSyncSourcePtr copy;
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(sources[0].second->createSourceB()));
-    sources[0].second->compareDatabases(copy.get(), &data, (void *)NULL);
+    sources[0].second->compareDatabases(copy.get(), &data, nullptr);
     CT_ASSERT_NO_THROW(copy.reset());
 }
 
@@ -4972,7 +4972,7 @@ void SyncTests::testAddBothSidesRefresh()
     // now compare client A against reference data
     TestingSyncSourcePtr copy;
     SOURCE_ASSERT_NO_FAILURE(copy.get(), copy.reset(sources[0].second->createSourceB()));
-    sources[0].second->compareDatabases(copy.get(), &data, (void *)NULL);
+    sources[0].second->compareDatabases(copy.get(), &data, nullptr);
     CT_ASSERT_NO_THROW(copy.reset());
 }
 
@@ -5463,8 +5463,8 @@ void SyncTests::doInterruptResume(int changes,
     std::string refFileBase = getCurrentTest() + ".ref.";
     bool equal = true;
     bool resend = wrapper->getResendFailureThreshold() != -1;
-    bool suspend = dynamic_cast <UserSuspendInjector *> (wrapper.get()) != NULL;
-    bool interrupt = dynamic_cast <TransportFaultInjector *> (wrapper.get()) != NULL;
+    bool suspend = dynamic_cast <UserSuspendInjector *> (wrapper.get()) != nullptr;
+    bool interrupt = dynamic_cast <TransportFaultInjector *> (wrapper.get()) != nullptr;
 
     // better be large enough for complete DevInf, 20000 is already a
     // bit small when running with many stores
@@ -5629,7 +5629,7 @@ void SyncTests::doInterruptResume(int changes,
                 interruptAtMessage << std::endl;
             std::cerr.flush();
         }
-        if (!compareDatabases(NULL, false)) {
+        if (!compareDatabases(nullptr, false)) {
             equal = false;
             std::cerr << "====> comparison of client A and B failed after interrupting at message #" <<
                 interruptAtMessage << std::endl;
@@ -5877,7 +5877,7 @@ void SyncTests::testTimeout()
     // which points towards localhost at that port. Do this with no
     // message resending and a very short overall timeout. The
     // expectation is that the transmission timeout strikes.
-    time_t start = time(NULL);
+    time_t start = time(nullptr);
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     CT_ASSERT(fd != -1);
     struct sockaddr_in servaddr;
@@ -5931,7 +5931,7 @@ void SyncTests::testTimeout()
            .setPrepareCallback(setDeadSyncURL)
            .setRetryDuration(20)
            .setRetryInterval(20));
-    time_t end = time(NULL);
+    time_t end = time(nullptr);
     close(fd);
     if (!skipped) {
         CT_ASSERT_EQUAL(STATUS_TRANSPORT_FAILURE, report.getStatus());
@@ -5960,7 +5960,7 @@ static void UpdateLocal(const std::string &config, const std::string &source,
                                   actualLocalData.c_str(),
                                   config.c_str(),
                                   source.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE("export " + currentServer() + "_1 " +  source, cmdline->run());
 
@@ -5974,7 +5974,7 @@ static void UpdateLocal(const std::string &config, const std::string &source,
                                   localModified.c_str(),
                                   config.c_str(),
                                   source.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE("update " + config + " " +  source, cmdline->run());
 }
@@ -6021,7 +6021,7 @@ void SyncTests::testUpload()
                                   actualData.c_str(),
                                   peer.c_str(),
                                   peerSource.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE(peer + " " + peerSource, cmdline->run());
 
@@ -6046,7 +6046,7 @@ void SyncTests::testUpload()
                                   remoteModified.c_str(),
                                   peer.c_str(),
                                   peerSource.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE("update " + peer + " " + peerSource, cmdline->run());
 
@@ -6094,7 +6094,7 @@ void SyncTests::testDownload()
                                   peer.c_str(),
                                   peerSource.c_str(),
                                   "*",
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE(peer + " " + peerSource, cmdline->run());
     cmdline.reset(new TestCmdline("--daemon=no",
@@ -6102,7 +6102,7 @@ void SyncTests::testDownload()
                                   remoteTestdata.c_str(),
                                   peer.c_str(),
                                   peerSource.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE(peer + " " + peerSource, cmdline->run());
 
@@ -6145,7 +6145,7 @@ void SyncTests::testDownload()
                                   syncedRemoteData.c_str(),
                                   peer.c_str(),
                                   peerSource.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE("export " + peer + " " + peerSource, cmdline->run());
 
@@ -6200,7 +6200,7 @@ void SyncTests::doUpdateConflict(const std::string &testname, bool localWins)
                                   actualRemoteData.c_str(),
                                   peer.c_str(),
                                   peerSource.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE("export " + peer + " " + peerSource, cmdline->run());
 
@@ -6232,7 +6232,7 @@ void SyncTests::doUpdateConflict(const std::string &testname, bool localWins)
                                           remoteModified.c_str(),
                                           peer.c_str(),
                                           peerSource.c_str(),
-                                          (const char *)NULL));
+                                          nullptr));
             CT_ASSERT(cmdline->parse());
             CT_ASSERT_MESSAGE("update " + peer + " " + peerSource, cmdline->run());
 
@@ -6246,7 +6246,7 @@ void SyncTests::doUpdateConflict(const std::string &testname, bool localWins)
                                           remoteActualModified.c_str(),
                                           peer.c_str(),
                                           peerSource.c_str(),
-                                          (const char *)NULL));
+                                          nullptr));
             CT_ASSERT(cmdline->parse());
             CT_ASSERT_MESSAGE("export " + peer + " " + peerSource, cmdline->run());
 
@@ -6300,7 +6300,7 @@ void SyncTests::doUpdateConflict(const std::string &testname, bool localWins)
                                   syncedRemoteData.c_str(),
                                   peer.c_str(),
                                   peerSource.c_str(),
-                                  (const char *)NULL));
+                                  nullptr));
     CT_ASSERT(cmdline->parse());
     CT_ASSERT_MESSAGE("export " + peer + " " + peerSource, cmdline->run());
 
@@ -6563,7 +6563,7 @@ void ClientTest::registerTests()
 ClientTest::ClientTest(int serverSleepSec, const std::string &serverLog) :
     serverSleepSeconds(serverSleepSec),
     serverLogFileName(serverLog),
-    factory(NULL)
+    factory(nullptr)
 {
 }
 
@@ -6572,7 +6572,7 @@ void ClientTest::freeFactory()
     if(factory) {
         CppUnit::TestFactoryRegistry::getRegistry().unregisterFactory((CppUnit::TestFactory *)factory);
         delete (CppUnit::TestFactory *)factory;
-        factory = NULL;
+        factory = nullptr;
     }
 }
 
@@ -6746,7 +6746,7 @@ bool ClientTest::compare(ClientTest &client, const std::string &fileA, const std
             break;
         case 0:
             // child
-            execl("synccompare", "synccompare", fileA.c_str(), fileB.c_str(), (char *)NULL);
+            execl("synccompare", "synccompare", fileA.c_str(), fileB.c_str(), nullptr);
             perror("synccompare");
             exit(1);
             break;
@@ -6777,7 +6777,7 @@ void ClientTest::update(std::string &item)
     const static char *props[] = {
         "\nSUMMARY",
         "\nNOTE",
-        NULL
+        nullptr
     };
 
     for (const char **prop = props; *prop; prop++) {
@@ -6884,7 +6884,7 @@ static string mangleICalendar20(const std::string &data, bool update, const std:
         static time_t start;
         static std::string test;
         if (test != getCurrentTest()) {
-            start = time(NULL);
+            start = time(nullptr);
             test = getCurrentTest();
         }
         std::string unique = StringPrintf("UID:UNIQUE-UID-%llu-", (long long unsigned)start);
@@ -6906,7 +6906,7 @@ static string mangleICalendar20(const std::string &data, bool update, const std:
         // Special semantic for iCalendar 2.0: LAST-MODIFIED should be
         // incremented in updated items. Emulate that by inserting the
         // current time.
-        time_t now = time(NULL);
+        time_t now = time(nullptr);
         struct tm tm;
         gmtime_r(&now, &tm);
         std::string mod = StringPrintf("\nLAST-MODIFIED:%04d%02d%02dT%02d%02d%02dZ",

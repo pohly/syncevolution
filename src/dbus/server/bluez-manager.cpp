@@ -33,11 +33,11 @@ SE_BEGIN_CXX
 
 BluezManager::BluezManager(Server &server) :
     DBusRemoteObject(!strcmp(getEnv("DBUS_TEST_BLUETOOTH", ""), "none") ?
-                     NULL : /* simulate missing Bluez */
+                     nullptr : /* simulate missing Bluez */
                      GDBusCXX::dbus_get_bus_connection(!strcmp(getEnv("DBUS_TEST_BLUETOOTH", ""), "session") ?
                                                        "SESSION" : /* use our own Bluez stub */
                                                        "SYSTEM" /* use real Bluez */,
-                                                       NULL, true, NULL),
+                                                       nullptr, true, nullptr),
                      "/", "org.bluez.Manager", "org.bluez",
                      true),
     m_server(server),
@@ -211,7 +211,7 @@ bool extractValuefromServiceRecord(const std::string &serviceRecord,
 
 void BluezManager::loadBluetoothDeviceLookupTable()
 {
-    GError *err = NULL;
+    GError *err = nullptr;
     string filePath(SyncEvolutionDataDir() + "/bluetooth_products.ini");
     if(!g_key_file_load_from_file(m_lookupTable.bt_key_file, filePath.c_str(),
                                   G_KEY_FILE_NONE, &err)) {
@@ -253,7 +253,7 @@ bool BluezManager::getPnpInfoNamesFromValues(const std::string &vendorValue, std
     const char *PRODUCT_GROUP = "Products";
 
     GStringPtr vendor(g_key_file_get_string(m_lookupTable.bt_key_file, VENDOR_GROUP,
-                                            vendorValue.c_str(), NULL));
+                                            vendorValue.c_str(), nullptr));
     if(vendor) {
         vendorName = vendor.get();
     } else {
@@ -262,7 +262,7 @@ bool BluezManager::getPnpInfoNamesFromValues(const std::string &vendorValue, std
     }
 
     GStringPtr product(g_key_file_get_string(m_lookupTable.bt_key_file, PRODUCT_GROUP,
-                                             productValue.c_str(), NULL));
+                                             productValue.c_str(), nullptr));
     if(product)  {
         productName = product.get();
     } else {

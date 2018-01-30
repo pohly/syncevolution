@@ -61,14 +61,14 @@ TmpFile::~TmpFile()
 
 void TmpFile::create(Type type)
 {
-    gchar *filename = NULL;
-    GError *error = NULL;
+    gchar *filename = nullptr;
+    GError *error = nullptr;
 
     if (m_fd >= 0 || m_mapptr || m_mapsize) {
         throw TmpFileException("TmpFile::create(): busy");
     }
-    m_fd = g_file_open_tmp(NULL, &filename, &error);
-    if (error != NULL) {
+    m_fd = g_file_open_tmp(nullptr, &filename, &error);
+    if (error != nullptr) {
         throw TmpFileException(
             std::string("TmpFile::create(): g_file_open_tmp(): ") +
             std::string(error->message));
@@ -133,7 +133,7 @@ void TmpFile::map(void **mapptr, size_t *mapsize)
     // (and thus MAP_SHARED vs. MAP_PRIVATE doesn't matter, and
     // PROT_WRITE doesn't hurt), or writes for some other process
     // to read the data (hence needing MAP_SHARED).
-    m_mapptr = mmap(NULL, sb.st_size, PROT_READ|PROT_WRITE, MAP_SHARED,
+    m_mapptr = mmap(nullptr, sb.st_size, PROT_READ|PROT_WRITE, MAP_SHARED,
                     m_fd, 0);
     if (m_mapptr == MAP_FAILED) {
         m_mapptr = 0;
@@ -141,10 +141,10 @@ void TmpFile::map(void **mapptr, size_t *mapsize)
     }
     m_mapsize = sb.st_size;
 
-    if (mapptr != NULL) {
+    if (mapptr != nullptr) {
         *mapptr = m_mapptr;
     }
-    if (mapsize != NULL) {
+    if (mapsize != nullptr) {
         *mapsize = m_mapsize;
     }
 }

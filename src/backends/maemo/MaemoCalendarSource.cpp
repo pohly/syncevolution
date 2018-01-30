@@ -67,8 +67,8 @@ MaemoCalendarSource::MaemoCalendarSource(int EntryType, int EntryFormat,
         break;
     }
     mc = CMulticalendar::MCInstance();
-    cal = NULL;
-    conv = NULL;
+    cal = nullptr;
+    conv = nullptr;
     if (!mc) {
         throwError(SE_HERE, "Could not connect to Maemo Calendar backend");
     }
@@ -89,7 +89,7 @@ std::string MaemoCalendarSource::getMimeType() const
                            "text/calendar+plain" :
                            "text/calendar";
     case VCAL_TYPE: return "text/x-calendar";
-    default: return NULL;
+    default: return nullptr;
     }
 }
 
@@ -99,7 +99,7 @@ std::string MaemoCalendarSource::getMimeVersion() const
     case -1: return "1.0";
     case ICAL_TYPE: return "2.0";
     case VCAL_TYPE: return "1.0";
-    default: return NULL;
+    default: return nullptr;
     }
 }
 
@@ -155,9 +155,9 @@ bool MaemoCalendarSource::isEmpty()
 void MaemoCalendarSource::close()
 {
     delete conv;
-    conv = NULL;
+    conv = nullptr;
     delete cal;
-    cal = NULL;
+    cal = nullptr;
 }
 
 MaemoCalendarSource::Databases MaemoCalendarSource::getDatabases()
