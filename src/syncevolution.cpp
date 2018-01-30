@@ -57,8 +57,6 @@ using namespace GDBusCXX;
 
 #endif
 
-#include <boost/typeof/typeof.hpp>
-
 #include <syncevo/Cmdline.h>
 #include <syncevo/SyncContext.h>
 #include <syncevo/SuspendFlags.h>
@@ -77,10 +75,10 @@ SE_BEGIN_CXX
 #undef e_contact_new_from_vcard
 extern "C" EContact *e_contact_new_from_vcard(const char *vcard)
 {
-    static BOOST_TYPEOF(e_contact_new_from_vcard) *impl;
+    static decltype(e_contact_new_from_vcard) *impl;
 
     if (!impl) {
-        impl = (BOOST_TYPEOF(impl))dlsym(RTLD_NEXT, "e_contact_new_from_vcard");
+        impl = (decltype(impl))dlsym(RTLD_NEXT, "e_contact_new_from_vcard");
     }
 
     // Old versions of EDS-DBus parse_changes_array() call
