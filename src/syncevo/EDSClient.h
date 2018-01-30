@@ -29,7 +29,7 @@
 #include <syncevo/GLibSupport.h>
 
 #include <libedataserver/libedataserver.h>
-#include <boost/utility.hpp>
+#include <boost/noncopyable.hpp>
 #include <functional>
 
 #include <functional>

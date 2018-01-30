@@ -35,8 +35,6 @@
 #include "network-manager-client.h"
 #include "presence-status.h"
 
-#include <boost/pointer_cast.hpp>
-
 using namespace GDBusCXX;
 
 SE_BEGIN_CXX
