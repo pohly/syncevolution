@@ -33,8 +33,8 @@
 #include <unistd.h>
 #include <stdint.h>
 
-#include <pcrecpp.h>
 #include <algorithm>
+#include <regex>
 
 #include <syncevo/GLibSupport.h> // PBAP backend does not compile without GLib.
 #include <syncevo/util.h>
@@ -63,7 +63,7 @@ SE_BEGIN_CXX
 #define OBC_TRANSFER_INTERFACE_NEW "org.bluez.obex.Transfer"
 #define OBC_TRANSFER_INTERFACE_NEW5 "org.bluez.obex.Transfer1"
 
-typedef std::map<int, pcrecpp::StringPiece> Content;
+typedef std::map<int, StringPiece> Content;
 typedef std::list<std::string> ContactQueue;
 typedef std::list<std::string> Properties;
 typedef boost::variant< std::string, Properties, uint16_t > Bluez5Values;
@@ -246,8 +246,8 @@ public:
     ~PullAll();
 
     std::string getNextID();
-    bool getContact(const char *id, pcrecpp::StringPiece &vcard);
-    const char *addVCards(int startIndex, const pcrecpp::StringPiece &content);
+    bool getContact(const char *id, StringPiece &vcard);
+    const char *addVCards(int startIndex, const StringPiece &content, bool eof);
 };
 
 PullAll::PullAll() :
@@ -275,7 +275,7 @@ public:
 
     void initSession(const std::string &address, const std::string &format);
 
-    typedef std::map<std::string, pcrecpp::StringPiece> Content;
+    typedef std::map<std::string, StringPiece> Content;
 
     std::shared_ptr<PullAll> startPullAll(const PullParams &pullParams);
     void continuePullAll(PullAll &state);
@@ -471,14 +471,15 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     // 3.0:^PHOTO = download in vCard 3.0 format, excluding PHOTO
     // 2.1:PHOTO = download in vCard 2.1 format, only the PHOTO
 
-    std::string version;
-    std::string tmp;
-    std::string properties;
-    const pcrecpp::RE re("(?:(2\\.1|3\\.0):?)?(\\^?)([-a-zA-Z,]*)");
-    if (!re.FullMatch(format, &version, &tmp, &properties)) {
+    const static std::regex re(R"del((?:(2\.1|3\.0):?)?(\^?)([-a-zA-Z,]*))del");
+    std::smatch match;
+    if (!std::regex_match(format, match, re)) {
         m_parent.throwError(SE_HERE, StringPrintf("invalid specification of PBAP vCard format (databaseFormat): %s",
                                          format.c_str()));
     }
+    std::string version = match[1];
+    std::string tmp = match[2];
+    std::string properties = match[3];
     char negated = tmp.c_str()[0];
     if (version.empty()) {
         // same default as in obexd
@@ -822,26 +823,64 @@ std::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParams)
         // it?  Catch the error and add a better exlanation?
         GDBusCXX::DBusClientCall<std::string> pullall(*m_session, "PullAll");
         state->m_buffer = pullall();
-        state->addVCards(0, state->m_buffer);
+        state->addVCards(0, state->m_buffer, true);
         state->m_numContacts = state->m_content.size();
     }
     return state;
 }
 
-const char *PullAll::addVCards(int startIndex, const pcrecpp::StringPiece &vcards)
+const char *findLine(const StringPiece &hay, const StringPiece &needle, bool eof)
 {
-    pcrecpp::StringPiece vcarddata;
-    pcrecpp::StringPiece tmp = vcards;
-    int count = startIndex;
-    pcrecpp::RE re("[\\r\\n]*(^BEGIN:VCARD.*?^END:VCARD)",
-                   pcrecpp::RE_Options().set_dotall(true).set_multiline(true));
-    while (re.Consume(&tmp, &vcarddata)) {
-        m_content[count] = vcarddata;
-        ++count;
+    const char *current = hay.begin();
+    const char *end = hay.end();
+    size_t size = needle.size();
+    while (current < end) {
+        // Skip line break(s).
+        while (current < end && (*current == '\n' || *current == '\r')) {
+            current++;
+        }
+        const char *next = current + size;
+        if (next <= end &&
+            !memcmp(current, needle.begin(), size) &&
+            ((eof && next == end) ||
+             (next + 1 < end && (*next == '\n' || *next == '\r')))) {
+            // Found a matching line.
+            return current;
+        }
+        // Skip line.
+        while (current < end && *current != '\n' && *current != '\r') {
+            current++;
+        }
     }
+    return nullptr;
+}
 
+const char *PullAll::addVCards(int startIndex, const StringPiece &vcards, bool eof)
+{
+    const char *current = vcards.begin();
+    const char *end = vcards.end();
+    const static StringPiece BEGIN_VCARD("BEGIN:VCARD");
+    const static StringPiece END_VCARD("END:VCARD");
+    int count = startIndex;
+    while (true) {
+        StringPiece remaining(current, end - current);
+        const char *begin_vcard = findLine(remaining, BEGIN_VCARD, eof);
+        if (begin_vcard) {
+            const char *end_vcard = findLine(StringPiece(remaining), END_VCARD, eof);
+            if (end_vcard) {
+                const char *next = end_vcard + END_VCARD.size();
+                StringPiece vcarddata(begin_vcard, next - begin_vcard);
+                m_content[count] = vcarddata;
+                ++count;
+                current = next;
+                continue;
+            }
+        }
+        // No further vcard found, try again when we have more data.
+        break;
+    }
     SE_LOG_DEBUG(NULL, "PBAP content parsed: %d contacts starting at ID %d", count - startIndex, startIndex);
-    return tmp.data();
+    return current;
 }
 
 void PbapSession::continuePullAll(PullAll &state)
@@ -903,7 +942,7 @@ std::string PullAll::getNextID()
     return id;
 }
 
-bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
+bool PullAll::getContact(const char *id, StringPiece &vcard)
 {
     int contactNumber = atoi(id);
     SE_LOG_DEBUG(NULL, "get PBAP contact ID %s", id);
@@ -937,13 +976,13 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
         if (m_tmpFile.moreData()) {
             // Remap. This shifts all addresses already stored in
             // m_content, so beware and update those.
-            pcrecpp::StringPiece oldMem = m_tmpFile.stringPiece();
+            StringPiece oldMem = m_tmpFile.stringPiece();
             m_tmpFile.unmap();
             m_tmpFile.map();
-            pcrecpp::StringPiece newMem = m_tmpFile.stringPiece();
+            StringPiece newMem = m_tmpFile.stringPiece();
             ssize_t delta = newMem.data() - oldMem.data();
             for (auto &entry: m_content) {
-                pcrecpp::StringPiece &vcard = entry.second;
+                StringPiece &vcard = entry.second;
                 vcard.set(vcard.data() + delta, vcard.size());
             }
 
@@ -952,15 +991,15 @@ bool PullAll::getContact(const char *id, pcrecpp::StringPiece &vcard)
             m_tmpFile.remove();
 
             // Continue parsing where we stopped before.
-            pcrecpp::StringPiece next(newMem.data() + m_tmpFileOffset,
-                                      newMem.size() - m_tmpFileOffset);
-            const char *end = addVCards(m_contentStartIndex + m_content.size(), next);
+            StringPiece next(newMem.data() + m_tmpFileOffset,
+                             newMem.size() - m_tmpFileOffset);
+            const char *end = addVCards(m_contentStartIndex + m_content.size(), next, completed);
             size_t newTmpFileOffset = end - newMem.data();
-            SE_LOG_DEBUG(NULL, "PBAP content parsed: %ld out of %d (total), %d out of %d (last update)",
+            SE_LOG_DEBUG(NULL, "PBAP content parsed: %ld out of %ld (total), %d out of %ld (last update)",
                          (long)newTmpFileOffset,
-                         newMem.size(),
+                         (long)newMem.size(),
                          (int)(end - next.data()),
-                         next.size());
+                         (long)next.size());
             m_tmpFileOffset = newTmpFileOffset;
 
             if (completed) {
@@ -1332,7 +1371,7 @@ sysync::TSyError PbapSyncSource::readItemAsKey(sysync::cItemID aID, sysync::KeyH
     if (!m_pullAll) {
         throwError(SE_HERE, "logic error: readItemAsKey() without preceeding readNextItem()");
     }
-    pcrecpp::StringPiece vcard;
+    StringPiece vcard;
     if (m_pullAll->getContact(aID->item, vcard)) {
         return getSynthesisAPI()->setValue(aItemKey, "itemdata", vcard.data(), vcard.size());
     } else {
@@ -1351,7 +1390,7 @@ void PbapSyncSource::readItemRaw(const std::string &luid, std::string &item)
     if (!m_pullAll) {
         throwError(SE_HERE, "logic error: readItemRaw() without preceeding readNextItem()");
     }
-    pcrecpp::StringPiece vcard;
+    StringPiece vcard;
     if (m_pullAll->getContact(luid.c_str(), vcard)) {
         item.assign(vcard.data(), vcard.size());
     } else {

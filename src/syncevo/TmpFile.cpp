@@ -31,6 +31,7 @@
 #include "TmpFile.h"
 #include "util.h"
 
+SE_BEGIN_CXX
 
 TmpFile::TmpFile() :
     m_type(FILE),
@@ -193,14 +194,12 @@ void TmpFile::close()
 }
 
 
-pcrecpp::StringPiece TmpFile::stringPiece()
+StringPiece TmpFile::stringPiece()
 {
-    pcrecpp::StringPiece sp;
-
     if (!(m_mapptr && m_mapsize)) {
         map();
     }
-    sp.set(m_mapptr, static_cast<int> (m_mapsize));
-    return sp;
+    return StringPiece(static_cast<const char *>(m_mapptr), m_mapsize);
 }
 
+SE_END_CXX

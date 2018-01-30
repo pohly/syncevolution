@@ -55,8 +55,6 @@
 
 #include <boost/algorithm/string/split.hpp>
 
-#include <pcrecpp.h>
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -71,6 +69,7 @@
 
 #include <string>
 #include <stdexcept>
+#include <regex>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -177,7 +176,7 @@ public:
             failure = output.str();
             bool failed = true;
             for (const std::string &re: m_allowedFailures) {
-                if (pcrecpp::RE(re).FullMatch(m_currentTest)) {
+                if (std::regex_match(m_currentTest, std::regex(re))) {
                     result = "*** failure ignored ***";
                     failed = false;
                     break;

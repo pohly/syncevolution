@@ -64,7 +64,7 @@
 #include <boost/tokenizer.hpp>
 #include <boost/assign.hpp>
 
-#include <pcrecpp.h>
+#include <regex>
 
 #include <syncevo/declarations.h>
 
@@ -1639,8 +1639,6 @@ void LocalTests::testRemoveProperties() {
     std::list<std::string> items;
     std::string dummy;
     CT_ASSERT_NO_THROW(ClientTest::getItems(testcases, items, dummy));
-    static const pcrecpp::RE bodyre("^BEGIN:(VCARD|VEVENT|VTODO|VJOURNAL)\\r?\\n(.*)^(END:\\g1)",
-                                    pcrecpp::RE_Options().set_multiline(true).set_dotall(true));
     std::string updated = getCurrentTest();
     updated += ".updated.";
     updated += config.m_sourceName;
@@ -1649,22 +1647,25 @@ void LocalTests::testRemoveProperties() {
     ofstream out(updated.c_str());
 
     for (std::string &item: items) {
-        std::string kind;
-        pcrecpp::StringPiece body;
-        CT_ASSERT(bodyre.PartialMatch(item, &kind, &body));
-        static const pcrecpp::RE propre("^((\\S[^;:]*).*\\n(?:\\s.*\\n)*)",
-                                        pcrecpp::RE_Options().set_multiline(true));
-        pcrecpp::StringPiece input(body);
-        pcrecpp::StringPiece prop;
-        std::string propname;
+        std::smatch match;
+        static const std::regex bodyre(R"del(\bBEGIN:(VCARD|VEVENT|VTODO|VJOURNAL)\r?\n([\s\S]*)\b(END:\1))del");
+        CT_ASSERT(std::regex_search(item, match, bodyre));
+        auto body = match[2];
+
+        static const std::regex propre(R"del(((\S[^;:]*).*\r?\n(?:\s.*\r?\n)*))del");
         std::list<std::string> result;
-        while (propre.Consume(&input, &prop, &propname)) {
+        for (auto it = std::sregex_iterator(body.first, body.second, propre);
+             it != std::sregex_iterator();
+             ++it) {
+            auto match = *it;
+            auto prop = match[1];
+            auto propname = match[2];
             if (config.m_essentialProperties.find(propname) != config.m_essentialProperties.end()) {
-                result.push_back(prop.as_string());
+                result.push_back(prop);
             }
         }
 
-        item.replace(body.data() - item.c_str(), body.size(),
+        item.replace(std::distance(item.cbegin(), body.first), body.length(),
                      boost::join(result, ""));
         out << item << "\n";
     }
@@ -2696,18 +2697,21 @@ void LocalTests::testLinkedItemsMany404() {
 void LocalTests::testSubset()
 {
     ClientTestConfig::LinkedItems_t items = getParentChildData();
-    int start, skip;
     std::string test = getCurrentTest();
-    pcrecpp::RE re("testSubsetStart(\\d+)(?:Skip(\\d+)|(Exdate))");
-    std::string exdate, optSkip;
-    CT_ASSERT(re.PartialMatch(test, &start, &optSkip, &exdate));
-    if (exdate.empty()) {
+    static const std::regex re(R"del(testSubsetStart(\d+)(?:Skip(\d+)|(Exdate)))del");
+    std::smatch match;
+    CT_ASSERT(std::regex_search(test, match, re));
+    int start = atoi(match[1].str().c_str());
+    int skip;
+    auto optSkip = match[2];
+    auto exdate = match[3];
+    if (!exdate.matched) {
         // skip case
-        CT_ASSERT(!optSkip.empty());
-        skip = atoi(optSkip.c_str());
+        CT_ASSERT(optSkip.length());
+        skip = atoi(optSkip.str().c_str());
     } else {
         // EXDATE case
-        CT_ASSERT_EQUAL(std::string("Exdate"), exdate);
+        CT_ASSERT_EQUAL(std::string("Exdate"), exdate.str());
         skip = -1;
     }
     CT_ASSERT(items.size() > (size_t)start);
@@ -6847,12 +6851,13 @@ static string mangleGeneric(const std::string &data, bool update, const std::str
 static string mangleICalendar20(const std::string &data, bool update, const std::string &uniqueUIDSuffix)
 {
     std::string item = data;
-    std::string type;
-    static const pcrecpp::RE re("BEGIN:(VEVENT|VJOURNAL|VTODO)\n");
-    re.PartialMatch(data, &type);
 
     if (update) {
-        if (type == "VJOURNAL") {
+        static const std::regex re("BEGIN:(VEVENT|VJOURNAL|VTODO)\n");
+        std::smatch match;
+        std::regex_search(data, match, re);
+        auto type = match[1];
+        if (type.str() == "VJOURNAL") {
             // Need to modify first line of description and summary
             // consistently for a note because in plain text
             // representation, these lines are expected to be
@@ -7544,14 +7549,13 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "END:VCALENDAR\n";
 
             // also affects normal test items
-            std::string *items[] = { &config.m_insertItem,
-                                     &config.m_updateItem,
-                                     &config.m_mergeItem1,
-                                     &config.m_mergeItem2 };
-            for (std::string *item: items) {
-                static const pcrecpp::RE times("^(DTSTART|DTEND)(.*)Z$",
-                                               pcrecpp::RE_Options().set_multiline(true));
-                times.GlobalReplace("\\1\\2", item);
+            for (auto item: {
+                    &config.m_insertItem,
+                    &config.m_updateItem,
+                    &config.m_mergeItem1,
+                    &config.m_mergeItem2 }) {
+                static const std::regex times(R"del(\b(DTSTART|DTEND)(.*)Z\b)del");
+                *item = std::regex_replace(*item, times, "$1$2");
             }
         } else if (server == "exchange") {
             config.m_linkedItems[0].m_name = "StandardTZ";

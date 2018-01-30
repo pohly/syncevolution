@@ -25,7 +25,7 @@
 #include <syncevo/eds_abi_wrapper.h>
 #include <syncevo/icalstrdup.h>
 #include <syncevo/SmartPtr.h>
-#include <pcrecpp.h>
+#include <regex>
 
 SE_BEGIN_CXX
 
@@ -43,8 +43,8 @@ protected:
      */
     void patchDTSTART(std::string &vtimezone)
     {
-        static const pcrecpp::RE re("(DTSTART:1970..)..");
-        re.GlobalReplace("\\1XX", &vtimezone);
+        static const std::regex re("(DTSTART:1970..)..");
+        vtimezone = std::regex_replace(vtimezone, re, "$1XX");
     }
 
     /**

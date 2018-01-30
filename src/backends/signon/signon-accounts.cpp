@@ -38,7 +38,8 @@
 
 #include <syncevo/GLibSupport.h>
 #include <syncevo/GVariantSupport.h>
-#include <pcrecpp.h>
+
+#include <regex>
 
 SE_GOBJECT_TYPE(SignonAuthService)
 SE_GOBJECT_TYPE(SignonAuthSession)
@@ -216,13 +217,14 @@ std::shared_ptr<AuthProvider> createSignonAuthProvider(const InitStateString &us
     // Split username into <account ID> and <service name>.
     // Be flexible and allow leading/trailing white space.
     // Comma is optional.
-    static const pcrecpp::RE re("^\\s*(\\d+)\\s*,?\\s*(.*)\\s*$");
-    AgAccountId accountID;
-    std::string serviceName;
-    if (!re.FullMatch(username, &accountID, &serviceName)) {
+    static const std::regex re(R"del(\s*(\d+)\s*,?\s*(.*)\s*)del");
+    std::smatch match;
+    if (!std::regex_match(username, match, re)) {
         SE_THROW(StringPrintf("username must have the format " SE_SIGNON_PROVIDER_ID ":<account ID>,<service name>: %s",
                               username.c_str()));
     }
+    AgAccountId accountID = std::stol(match[1].str());
+    std::string serviceName = match[2].str();
     SE_LOG_DEBUG(NULL, "looking up account ID %d and service '%s'",
                  accountID,
                  serviceName.c_str());
