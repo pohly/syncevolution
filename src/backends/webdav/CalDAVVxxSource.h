@@ -14,7 +14,6 @@
 #include <syncevo/eds_abi_wrapper.h>
 #include <syncevo/SmartPtr.h>
 
-#include <boost/utility.hpp>
 #include <memory>
 
 #include <syncevo/declarations.h>

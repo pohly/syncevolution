@@ -21,7 +21,9 @@
 #define SESSION_H
 
 #include <syncevo/SynthesisEngine.h>
-#include <boost/utility.hpp>
+
+#include <boost/signals2.hpp>
+#include <boost/noncopyable.hpp>
 
 #include <gdbus-cxx-bridge.h>
 
