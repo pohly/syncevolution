@@ -462,7 +462,7 @@ SyncConfig::SyncConfig(const string &peer,
         m_contextPath = 
         m_peer;
 
-    if (tree.get() != NULL) {
+    if (tree.get() != nullptr) {
         // existing tree points into simple configuration
         m_tree = tree;
         m_layout = HTTP_SERVER_LAYOUT;
@@ -736,7 +736,7 @@ void SyncConfig::migrate(const std::string &config)
         Cmdline migrate(m_peer.c_str(),
                         "--migrate",
                         config.c_str(),
-                        NULL);
+                        nullptr);
         bool res = migrate.parse() && migrate.run();
         if (!res) {
             SE_THROW(StringPrintf("migration of config '%s' failed", config.c_str()));
@@ -2397,7 +2397,7 @@ InitStateString SyncConfig::getConfigDate() const { return syncPropConfigDate.ge
 void SyncConfig::setConfigDate() { 
     /* Set current timestamp as configdate */
     char buffer[17]; 
-    time_t ts = time(NULL);
+    time_t ts = time(nullptr);
     strftime(buffer, sizeof(buffer), "%Y%m%dT%H%M%SZ", gmtime(&ts));
     const std::string date(buffer);
     syncPropConfigDate.setProperty(*getNode(syncPropConfigDate), date);

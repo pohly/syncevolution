@@ -78,7 +78,7 @@ class CheckSyncReport {
         restarts(0),
         mustSucceed(mstSucceed),
         syncMode(mode),
-        m_report(NULL)
+        m_report(nullptr)
         {}
 
     int clientAdded, clientUpdated, clientDeleted,
@@ -372,7 +372,7 @@ class ClientTest : private boost::noncopyable {
     virtual int getLocalSourcePosition (const string &configName) =0;
 
     /**
-     * The instance to use as second client. Returning NULL disables
+     * The instance to use as second client. Returning nullptr disables
      * all checks which require a second client. The returned pointer
      * must remain valid throughout the life time of the tests.
      *
@@ -516,7 +516,7 @@ public:
      * @param uniqueUIDSuffix    gets added to UID of the inserted item if unique UIDs are necessary
      * @return the LUID of the inserted item
      */
-    virtual std::string insert(const CreateSource &createSource, const std::string &data, bool relaxed = false, std::string *inserted = NULL, const std::string &uniqueUIDSuffix = "");
+    virtual std::string insert(const CreateSource &createSource, const std::string &data, bool relaxed = false, std::string *inserted = nullptr, const std::string &uniqueUIDSuffix = "");
 
     /**
      * assumes that exactly one element is currently inserted and updates it with the given item
@@ -540,7 +540,7 @@ public:
      * takes two databases, exports them,
      * then compares them using synccompare
      *
-     * @param refFile      existing file with source reference items, NULL uses a dump of sync source A instead
+     * @param refFile      existing file with source reference items, nullptr uses a dump of sync source A instead
      * @param copy         a sync source which contains the copied items, begin/endSync will be called
      * @param raiseAssert  raise assertion if comparison yields differences (defaults to true)
      * @return true if the two databases are equal
@@ -564,7 +564,7 @@ public:
                              const std::list<std::string> &items);
 
     /**
-     * compare data in source with vararg list of std::string pointers, NULL terminated
+     * compare data in source with vararg list of std::string pointers, nullptr terminated
      */
     void compareDatabases(TestingSyncSource *copy, ...);
 
@@ -738,7 +738,7 @@ protected:
      * or first client.  The reference file(s) must follow the naming
      * scheme <reFileBase><source name>.dat
      */
-    virtual bool compareDatabases(const char *refFileBase = NULL,
+    virtual bool compareDatabases(const char *refFileBase = nullptr,
                                   bool raiseAssert = true);
 
     /** deletes all items locally and on server */
@@ -944,7 +944,7 @@ public:
         m_messageCount = 0;
         m_interruptAtMessage = -1;
         m_status = INACTIVE;
-        m_options = NULL;
+        m_options = nullptr;
     }
     ~TransportWrapper() {
     }
@@ -970,7 +970,7 @@ public:
         m_messageCount = 0;
         m_interruptAtMessage = -1;
         m_status = INACTIVE;
-        m_options = NULL;
+        m_options = nullptr;
         m_wrappedAgent.reset();
     }
     virtual Status wait(bool noReply = false) { return m_status; }

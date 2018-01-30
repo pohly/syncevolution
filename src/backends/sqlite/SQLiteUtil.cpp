@@ -48,7 +48,7 @@ void SQLiteUtil::throwError(const SourceLocation &here, const std::string &opera
 
 sqlite3_stmt *SQLiteUtil::prepareSQLWrapper(const char *sql, const char **nextsql)
 {
-    sqlite3_stmt *stmt = NULL;
+    sqlite3_stmt *stmt = nullptr;
 
     checkSQL(sqlite3_prepare(m_db, sql, -1, &stmt, nextsql), sql);
     return stmt;
@@ -192,7 +192,7 @@ void SQLiteUtil::open(const std::string &name,
 
 void SQLiteUtil::close()
 {
-    m_db = NULL;
+    m_db = nullptr;
 }
 
 

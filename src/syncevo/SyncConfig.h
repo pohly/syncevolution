@@ -877,7 +877,7 @@ class ConfigPropertyRegistry : public std::list<const ConfigProperty *> {
                 }
             }
         }
-        return NULL;
+        return nullptr;
     }
 };
 
@@ -942,7 +942,7 @@ class SyncConfig {
      *               "scheduleworld@default", but not the same as
      *               "scheduleworld@other_context"
      *
-     * @param tree   if non-NULL, then this is used
+     * @param tree   if non-nullptr, then this is used
      *               as configuration tree instead of
      *               searching for it; always uses the
      *               current layout in that tree
@@ -1160,7 +1160,7 @@ class SyncConfig {
      * @param peer   a configuration name, *without* a context (scheduleworld, not scheduleworld@default),
      * or a configuration path in the system directory which can avoid another fuzzy match process.
      * "none" returns an empty template (default sync properties and dev ID set).
-     * @return NULL if no such template
+     * @return nullptr if no such template
      */
     static std::shared_ptr<SyncConfig> createPeerTemplate(const std::string &peer);
 
@@ -1305,7 +1305,7 @@ class SyncConfig {
 
     /**
      * Returns the right config node for a certain registered property,
-     * looked up by name. NULL if not found.
+     * looked up by name. nullptr if not found.
      */
     std::shared_ptr<FilterConfigNode> getNode(const std::string &propName);
     std::shared_ptr<const FilterConfigNode> getNode(const std::string &propName) const
@@ -1415,7 +1415,7 @@ class SyncConfig {
      * The current config still needs to be flushed to make the
      * changes permanent.
      *
-     * @param sources   if NULL, then copy all sources; if not NULL,
+     * @param sources   if nullptr, then copy all sources; if not nullptr,
      *                  then copy exactly the sources listed here
      *                  (regardless whether they exist or not)
      */

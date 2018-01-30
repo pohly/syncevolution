@@ -123,7 +123,7 @@ public:
         memset(&action, 0, sizeof(action));
         action.sa_handler = alarmTriggered;
         action.sa_flags = SA_NOMASK;
-        sigaction(SIGALRM, &action, NULL);
+        sigaction(SIGALRM, &action, nullptr);
 #endif
     }
 
@@ -325,7 +325,7 @@ static void handler(int sig)
     struct sigaction act;
     memset(&act, 0, sizeof(act));
     act.sa_handler = SIG_DFL;
-    sigaction(SIGABRT, &act, NULL);
+    sigaction(SIGABRT, &act, nullptr);
     abort();
 }
 
@@ -338,9 +338,9 @@ int main(int argc, char* argv[])
 
   memset(&act, 0, sizeof(act));
   act.sa_handler = handler;
-  sigaction(SIGABRT, &act, NULL);
-  sigaction(SIGSEGV, &act, NULL);
-  sigaction(SIGILL, &act, NULL);
+  sigaction(SIGABRT, &act, nullptr);
+  sigaction(SIGSEGV, &act, nullptr);
+  sigaction(SIGILL, &act, nullptr);
 
   // Get the top level suite from the registry
   CppUnit::Test *suite = CppUnit::TestFactoryRegistry::getRegistry().makeTest();
@@ -380,7 +380,7 @@ int main(int argc, char* argv[])
       std::list<std::string> tests;
       if (argc <= 1) {
           // All tests.
-          addEnabledTests(suite, true, NULL, NULL, tests);
+          addEnabledTests(suite, true, nullptr, nullptr, tests);
       } else {
           // Some selected tests.
           addEnabledTests(suite, false, argv + 1, argv + argc, tests);
@@ -431,7 +431,7 @@ int main(int argc, char* argv[])
                   perror("fork");
               } else {
                   // Use the test name also as name of the process.
-                  execlp(argv[0], name.c_str(), name.c_str(), (char *)NULL);
+                  execlp(argv[0], name.c_str(), name.c_str(), nullptr);
                   perror("execlp");
                   _exit(1);
               }

@@ -27,7 +27,7 @@ SDKInterface *SubSyncSource::getSynthesisAPI() const
 {
     return m_parent ?
         m_parent->getSynthesisAPI() :
-        NULL;
+        nullptr;
 }
 
 

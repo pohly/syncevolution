@@ -35,7 +35,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifndef ENABLE_XMLRPC
     // tell SyncEvolution if the user wanted to use a disabled sync source,
     // otherwise let it continue searching
-    return isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+    return isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
 #else
     // Also recognize one of the standard types?
     // Not in the FileSyncSource!
@@ -48,10 +48,10 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
             sourceType.m_format.size()) {
             return std::make_unique<XMLRPCSyncSource>(params, sourceType.m_format);
         } else {
-            return NULL;
+            return nullptr;
         }
     }
-    return NULL;
+    return nullptr;
 #endif
 }
 

@@ -40,7 +40,7 @@ class StringDataBlob : public DataBlob
  public:
     /**
      * @param name      name for the data blob
-     * @param data      reference to string holding data, NULL pointer if it doesn't exist
+     * @param data      reference to string holding data, nullptr pointer if it doesn't exist
      * @param readonly  true if write() is meant to fail
      */
     StringDataBlob(const std::string &name,

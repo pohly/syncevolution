@@ -90,7 +90,7 @@ extern "C" EContact *e_contact_new_from_vcard(const char *vcard)
         vcard++;
     }
 
-    return impl ? impl(vcard) : NULL;
+    return impl ? impl(vcard) : nullptr;
 }
 #endif
 
@@ -358,8 +358,8 @@ int main( int argc, char **argv )
     // leaving main() does one final processing of pending
     // output.
     PushLogger<LogRedirect> redirect(new LogRedirect(LogRedirect::STDERR));
-    setvbuf(stderr, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, nullptr, _IONBF, 0);
+    setvbuf(stdout, nullptr, _IONBF, 0);
 
     SyncContext::initMain("syncevolution");
 
@@ -482,7 +482,7 @@ int main( int argc, char **argv )
 #ifdef DBUS_SERVICE
 /********************** RemoteDBusServer implementation **************************/
 RemoteDBusServer::RemoteDBusServer() :
-    DBusRemoteObject(dbus_get_bus_connection("SESSION", NULL, true, NULL),
+    DBusRemoteObject(dbus_get_bus_connection("SESSION", nullptr, true, nullptr),
                      "/org/syncevolution/Server",
                      "org.syncevolution.Server",
                      "org.syncevolution",
@@ -493,7 +493,7 @@ RemoteDBusServer::RemoteDBusServer() :
     m_logOutput(*this, "LogOutput"),
     m_infoReq(*this, "InfoRequest")
 {
-    m_loop = g_main_loop_new (NULL, FALSE);
+    m_loop = g_main_loop_new (nullptr, FALSE);
 
     if (getConnection()) {
         //check whether we can attach to the daemon
@@ -1021,7 +1021,7 @@ void getEnvVars(std::map<std::string, std::string> &vars)
     for (unsigned int i = 0; i < sizeof(varNames) / sizeof(const char*); i++) {
         const char *value;
         //get values of environment variables if they are set
-        if ((value = getenv(varNames[i])) != NULL) {
+        if ((value = getenv(varNames[i])) != nullptr) {
             vars.insert(make_pair(varNames[i], value));
         }
     }

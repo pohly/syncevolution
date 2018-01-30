@@ -137,7 +137,7 @@ void FileSyncSource::open()
 
 bool FileSyncSource::isEmpty()
 {
-    DIR *dir = NULL;
+    DIR *dir = nullptr;
     bool empty = true;
 
     try {

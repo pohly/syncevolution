@@ -42,11 +42,11 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_AKONADI
                 std::make_unique<AkonadiContactSource>(params)
 #else
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr
 #endif
                 ;
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -58,11 +58,11 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_AKONADI
                 std::make_unique<AkonadiTaskSource>(params)
 #else
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr
 #endif
                 ;
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -73,11 +73,11 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_AKONADI
                 std::make_unique<AkonadiMemoSource>(params)
 #else
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr
 #endif
                 ;
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -89,15 +89,15 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_AKONADI
                 std::make_unique<AkonadiCalendarSource>(params)
 #else
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr
 #endif
                 ;
         } else {
-            return NULL;
+            return nullptr;
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("KDE Contact/Calendar/Task List/Memos",
@@ -181,25 +181,25 @@ protected:
 
     // void testOpenDefaultAddressBook() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultCalendar() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("calendar", "kde-calendar", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("calendar", "kde-calendar", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultTodo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("tasks", "kde-tasks", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("tasks", "kde-tasks", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 
     // void testOpenDefaultMemo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "kde-memos", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "kde-memos", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 

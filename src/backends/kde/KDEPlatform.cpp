@@ -70,7 +70,7 @@ void KDEInitMainSlot(const char *appname)
 
     //QCoreApplication *app;
     int argc = 1;
-    static char *argv[] = { const_cast<char *>(appname), NULL };
+    static char *argv[] = { const_cast<char *>(appname), nullptr };
     KAboutData aboutData(// The program name used internally.
                          "syncevolution",
                          // The message catalog name
@@ -99,8 +99,8 @@ void KDEInitMainSlot(const char *appname)
         // Don't allow KApplication to mess with SIGINT/SIGTERM.
         // Restore current behavior after construction.
         struct sigaction oldsigint, oldsigterm;
-        sigaction(SIGINT, NULL, &oldsigint);
-        sigaction(SIGTERM, NULL, &oldsigterm);
+        sigaction(SIGINT, nullptr, &oldsigint);
+        sigaction(SIGTERM, nullptr, &oldsigterm);
 
         // Explicitly disable GUI mode in the KApplication.  Otherwise
         // the whole binary will fail to run when there is no X11
@@ -109,8 +109,8 @@ void KDEInitMainSlot(const char *appname)
         //To stop KApplication from spawning it's own DBus Service ... Will have to patch KApplication about this
         QDBusConnection::sessionBus().unregisterService("org.syncevolution.syncevolution-"+QString::number(getpid()));
 
-        sigaction(SIGINT, &oldsigint, NULL);
-        sigaction(SIGTERM, &oldsigterm, NULL);
+        sigaction(SIGINT, &oldsigint, nullptr);
+        sigaction(SIGTERM, &oldsigterm, nullptr);
     }
 }
 

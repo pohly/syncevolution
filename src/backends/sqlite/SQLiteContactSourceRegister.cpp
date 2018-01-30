@@ -34,7 +34,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
     bool isMe = sourceType.m_backend == "SQLite Address Book";
 
 #ifndef ENABLE_SQLITE
-    return isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+    return isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
 #else
     bool maybeMe = sourceType.m_backend == "addressbook";
     
@@ -42,10 +42,10 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
         if (sourceType.m_format == "" || sourceType.m_format == "text/x-vcard") {
             return std::make_unique<SQLiteContactSource>(params);
         } else {
-            return NULL;
+            return nullptr;
         }
     }
-    return NULL;
+    return nullptr;
 #endif
 }
 

@@ -84,7 +84,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
             ;
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("ActiveSync",
@@ -206,7 +206,7 @@ static std::unique_ptr<TestingSyncSource> createEASSource(const ClientTestConfig
         // sorry, no database
         SE_LOG_ERROR(NULL, "cannot create EAS datastore for database %s, check config",
                      res->getDatabaseID().c_str());
-        return NULL;
+        return nullptr;
     }
 }
 

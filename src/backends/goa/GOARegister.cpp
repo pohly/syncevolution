@@ -39,7 +39,7 @@ public:
     virtual std::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password)
     {
-        // Returning NULL if not enabled...
+        // Returning nullptr if not enabled...
         std::shared_ptr<AuthProvider> provider;
 #ifdef USE_GOA
         provider = createGOAAuthProvider(username, password);

@@ -109,7 +109,7 @@ class CurlTransportAgent : public HTTPTransportAgent
     /**
      * initialize curl if necessary, return new handle
      *
-     * Never returns NULL, instead throws exceptions.
+     * Never returns nullptr, instead throws exceptions.
      */
     static CURL *easyInit();
 };

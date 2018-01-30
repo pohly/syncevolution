@@ -172,7 +172,7 @@ private:
     // Holds the bluetooth lookup table and whether it was successfully loaded.
     class lookupTable : private boost::noncopyable {
     public:
-        lookupTable() : bt_key_file(NULL), isLoaded(false) {}
+        lookupTable() : bt_key_file(nullptr), isLoaded(false) {}
         ~lookupTable() { if (bt_key_file) g_key_file_free(bt_key_file); }
 
         GKeyFile *bt_key_file;
