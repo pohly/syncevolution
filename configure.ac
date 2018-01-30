@@ -655,14 +655,6 @@ AC_SUBST(GUI_LIBS)
 AC_SUBST(GUI_PROGRAMS)
 AC_SUBST(GUI_DESKTOP_FILES)
 
-# C++ regular expression support is required often enough to make it
-# mandatory.
-PKG_CHECK_MODULES(PCRECPP, libpcrecpp,,
-AC_CHECK_LIB(pcrecpp,main,
-AC_SUBST(PCRECPP_LIBS,-lpcrecpp),
-AC_MSG_ERROR([pcrecpp not found])
-))
-
 # need rst2man for man pages
 AC_ARG_WITH(rst2man,
             AS_HELP_STRING([--with-rst2man=<path to reStructuredText to man converter>],

@@ -19,7 +19,8 @@
 
 #include "gdbus-cxx-bridge.h"
 
-#include <pcrecpp.h>
+#include <regex>
+
 #include <errno.h>
 
 SE_BEGIN_CXX
@@ -95,21 +96,23 @@ SyncMLStatus Exception::handle(SyncMLStatus *status,
 
 void Exception::tryRethrow(const std::string &explanation, bool mustThrow)
 {
-    static const std::string statusre = ".* \\((?:local|remote), status (\\d+)\\)";
-    int status;
+    static const std::regex re(".* \\((?:local|remote), status (\\d+)\\)(?:: ([\\s\\S]*))");
 
     if (boost::starts_with(explanation, TRANSPORT_PROBLEM)) {
         SE_THROW_EXCEPTION(TransportException, explanation.substr(strlen(TRANSPORT_PROBLEM)));
     } else if (boost::starts_with(explanation, SYNTHESIS_PROBLEM)) {
-        static const pcrecpp::RE re(statusre);
-        if (re.FullMatch(explanation.substr(strlen(SYNTHESIS_PROBLEM)), &status)) {
+        std::smatch match;
+        std::string s = explanation.substr(strlen(SYNTHESIS_PROBLEM));
+        if (std::regex_match(s, match, re)) {
+            int status = atoi(match[1].str().c_str());
             SE_THROW_EXCEPTION_1(BadSynthesisResult, "Synthesis engine failure", (sysync::TSyErrorEnum)status);
         }
     } else if (boost::starts_with(explanation, SYNCEVOLUTION_PROBLEM)) {
-        static const pcrecpp::RE re(statusre + ": (.*)",
-                                    pcrecpp::RE_Options().set_dotall(true));
-        std::string details;
-        if (re.FullMatch(explanation.substr(strlen(SYNCEVOLUTION_PROBLEM)), &status, &details)) {
+        std::smatch match;
+        std::string s = explanation.substr(strlen(SYNCEVOLUTION_PROBLEM));
+        if (std::regex_match(s, match, re)) {
+            int status = atoi(match[1].str().c_str());
+            std::string details = match[2].str();
             SE_THROW_EXCEPTION_STATUS(StatusException, details, (SyncMLStatus)status);
         }
     }
@@ -121,10 +124,12 @@ void Exception::tryRethrow(const std::string &explanation, bool mustThrow)
 
 void Exception::tryRethrowDBus(const std::string &error)
 {
-    static const pcrecpp::RE re("(org\\.syncevolution(?:\\.\\w+)+): (.*)",
-                                pcrecpp::RE_Options().set_dotall(true));
-    std::string exName, explanation;
-    if (re.FullMatch(error, &exName, &explanation)) {
+    static const std::regex re("(org\\.syncevolution(?:\\.\\w+)+): ([\\s\\S]*)");
+    std::smatch match;
+
+    if (std::regex_match(error, match, re)) {
+        std::string exName = match[1];
+        std::string explanation = match[2];
         // found SyncEvolution exception explanation, parse it
         tryRethrow(explanation);
         // explanation not parsed, fall back to D-Bus exception

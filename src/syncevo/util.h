@@ -89,6 +89,52 @@ template<typename I> auto make_iterator_range(I &&begin, I &&end = {})
 }
 
 /**
+ * A string piece refers to a chunk of memory stored elsewhere.
+ * Memory is read-only. Replaces StringPiece.
+ */
+class StringPiece
+{
+    const char *m_ptr;
+    size_t m_length;
+
+ public:
+    StringPiece() { clear(); }
+    StringPiece(const char *str) { set(str); }
+    StringPiece(const char *ptr, size_t len) { set(ptr, len); }
+
+    // Anything that has begin/end that converts to a char ptr,
+    // like std::sub_match or std::string.
+    template<class C> StringPiece(const C &c) {
+        set(c);
+    }
+
+    const char *data() const { return m_ptr; }
+    size_t size() const { return m_length; }
+    bool empty() const { return m_length == 0; }
+
+    // Can be used in a range-based for loop.
+    const char *begin() const { return m_ptr; }
+    const char *end() const { return m_ptr + m_length; }
+
+    void clear() { m_ptr = nullptr; m_length = 0; }
+    void set(const char *str) { m_ptr = str; m_length = strlen(str); }
+    void set(const char *ptr, size_t len) { m_ptr = ptr; m_length = len; }
+    void set(const StringPiece &other) {
+        set(other.data(), static_cast<size_t>(other.size()));
+    }
+    template<class C> void set(const C &c) {
+        m_ptr = &*std::begin(c);
+        m_length = std::distance(std::begin(c), std::end(c));
+    }
+
+    template<typename C> StringPiece & operator = (const C &other) {
+        set(other);
+        return *this;
+    }
+};
+
+
+/**
  * Iterate through a container in reverse order:
  * for (auto entry: reverse(some_container)
  */
