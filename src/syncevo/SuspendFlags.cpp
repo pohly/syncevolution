@@ -91,7 +91,7 @@ public:
     {
         // glib watch which calls printSignals()
         m_channel = g_io_channel_unix_new(fd);
-        m_channelReady = g_io_add_watch(m_channel, G_IO_IN, SignalChannelReadyCB, NULL);
+        m_channelReady = g_io_add_watch(m_channel, G_IO_IN, SignalChannelReadyCB, nullptr);
     }
 
     ~GLibGuard()
@@ -102,7 +102,7 @@ public:
         }
         if (m_channel) {
             g_io_channel_unref(m_channel);
-            m_channel = NULL;
+            m_channel = nullptr;
         }
     }
 };
@@ -218,7 +218,7 @@ std::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate(uint32_t sigmask)
                  m_senderFD, m_receiverFD);
     for (int sig = 0; sig < 32; sig++) {
         if (sigmask & (1<<sig)) {
-            sigaction(sig, NULL, m_oldSignalHandlers + sig);
+            sigaction(sig, nullptr, m_oldSignalHandlers + sig);
         }
     }
 
@@ -240,7 +240,7 @@ std::shared_ptr<SuspendFlags::Guard> SuspendFlags::activate(uint32_t sigmask)
     for (int sig = 0; sig < 32; sig++) {
         if (sigmask & (1<<sig)) {
             if (m_oldSignalHandlers[sig].sa_handler == SIG_DFL) {
-                sigaction(sig, &new_action, NULL);
+                sigaction(sig, &new_action, nullptr);
                 SE_LOG_DEBUG(NULL, "SuspendFlags: catch signal %d", sig);
             }
         }
@@ -259,7 +259,7 @@ void SuspendFlags::deactivate()
     if (m_receiverFD >= 0) {
         for (int sig = 0; sig < 32; sig++) {
             if (m_activeSignals & (1<<sig)) {
-                sigaction(sig, m_oldSignalHandlers + sig, NULL);
+                sigaction(sig, m_oldSignalHandlers + sig, nullptr);
             }
         }
         m_activeSignals = 0;
@@ -352,7 +352,7 @@ void SuspendFlags::printSignals()
         while (read(m_receiverFD, &msg, 1) == 1) {
             SE_LOG_DEBUG(NULL, "SuspendFlags: read %d from fd %d",
                          msg, m_receiverFD);
-            const char *str = NULL;
+            const char *str = nullptr;
             switch (msg) {
             case SUSPEND:
                 str = "Asking to suspend...\nPress CTRL-C again quickly (within 2s) to stop immediately (can cause problems in the future!)";
@@ -373,7 +373,7 @@ void SuspendFlags::printSignals()
             }
             }
             if (str) {
-                SE_LOG(NULL, m_level, "%s", str);
+                SE_LOG(nullptr, m_level, "%s", str);
             }
             m_stateChanged(*this);
         }

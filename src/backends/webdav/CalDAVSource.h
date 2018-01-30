@@ -116,7 +116,7 @@ class CalDAVSource : public WebDAVSource,
         /**
          * parsed VCALENDAR component representing the current
          * state of the item as it exists on the WebDAV server,
-         * must be kept up-to-date as we make changes, may be NULL
+         * must be kept up-to-date as we make changes, may be nullptr
          */
         eptr<icalcomponent> m_calendar;
 

@@ -85,7 +85,7 @@ public:
     }
 
     /**
-     * @param server    may be NULL, in which case logging only goes to parent
+     * @param server    may be nullptr, in which case logging only goes to parent
      */
     void message2DBus(Server *server,
                       const MessageOptions &options,
@@ -343,8 +343,8 @@ Server::Server(GMainLoop *loop,
     m_shutdownRequested(false),
     m_restart(restart),
     m_conn(conn),
-    m_lastSession(time(NULL)),
-    m_activeSession(NULL),
+    m_lastSession(time(nullptr)),
+    m_activeSession(nullptr),
     m_lastInfoReq(0),
     m_bluezManager(new BluezManager(*this)),
     sessionChanged(*this, "SessionChanged"),
@@ -362,7 +362,7 @@ Server::Server(GMainLoop *loop,
     m_logger(new ServerLogger(std::shared_ptr<Server>(this, NopDestructor())))
 {
     struct timeval tv;
-    gettimeofday(&tv, NULL);
+    gettimeofday(&tv, nullptr);
     srand(tv.tv_usec);
     add(this, &Server::getCapabilities, "GetCapabilities");
     add(this, &Server::getVersions, "GetVersions");
@@ -687,7 +687,7 @@ void Server::dequeue(Session *session)
         // The session is releasing the lock, so someone else might
         // run now.
         sessionChanged(session->getPath(), false);
-        m_activeSession = NULL;
+        m_activeSession = nullptr;
         m_activeSessionRef.reset();
         if (m_lastFileMod && !m_shutdownTimer) {
             // File modification was detected while a session was active.

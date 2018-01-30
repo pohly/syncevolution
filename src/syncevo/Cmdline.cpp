@@ -141,9 +141,9 @@ bool Cmdline::parse(vector<string> &parsed)
             if (strchr(m_argv[opt], '=')) {
                 // property assignment
                 if (!parseProp(UNKNOWN_PROPERTY_TYPE,
-                               NULL,
+                               nullptr,
                                m_argv[opt],
-                               NULL)) {
+                               nullptr)) {
                     return false;
                 } else {
                     opt++;
@@ -154,7 +154,7 @@ bool Cmdline::parse(vector<string> &parsed)
             }
         }
         if (IsKeyword(m_argv[opt], "--sync", "-s")) {
-            if (!parseAssignment(opt, parsed, SOURCE_PROPERTY_TYPE, "sync", NULL)) {
+            if (!parseAssignment(opt, parsed, SOURCE_PROPERTY_TYPE, "sync", nullptr)) {
                 return false;
             }
 
@@ -169,7 +169,7 @@ bool Cmdline::parse(vector<string> &parsed)
                   boost::iequals(m_argv[opt], "-y")) {
                 opt++;
                 if (!parseProp(SYNC_PROPERTY_TYPE,
-                               m_argv[opt - 1], opt == m_argc ? NULL : m_argv[opt])) {
+                               m_argv[opt - 1], opt == m_argc ? nullptr : m_argv[opt])) {
                     return false;
                 }
                 parsed.push_back(m_argv[opt]);
@@ -178,7 +178,7 @@ bool Cmdline::parse(vector<string> &parsed)
                   boost::iequals(m_argv[opt], "-z")) {
             opt++;
             if (!parseProp(SOURCE_PROPERTY_TYPE,
-                           m_argv[opt - 1], opt == m_argc ? NULL : m_argv[opt])) {
+                           m_argv[opt - 1], opt == m_argc ? nullptr : m_argv[opt])) {
                 return false;
             }
             parsed.push_back(m_argv[opt]);
@@ -307,7 +307,7 @@ bool Cmdline::parse(vector<string> &parsed)
         } else if(boost::iequals(m_argv[opt], "--version")) {
             operations.push_back(m_argv[opt]);
             m_version = true;
-        } else if (parseBool(opt, "--daemon", NULL, true, m_useDaemon, ok)) {
+        } else if (parseBool(opt, "--daemon", nullptr, true, m_useDaemon, ok)) {
             if (!ok) {
                 return false;
             }
@@ -491,7 +491,7 @@ void Cmdline::copyConfig(const std::shared_ptr<SyncConfig> &from,
                          const std::shared_ptr<SyncConfig> &to,
                          const set<string> &selectedSources)
 {
-    const set<string> *sources = NULL;
+    const set<string> *sources = nullptr;
     set<string> allSources;
     if (!selectedSources.empty()) {
         // use explicitly selected sources
@@ -793,8 +793,8 @@ bool Cmdline::run() {
         if (!m_server.empty() || backend != sourceFilter.end()) {
             // list for specific backend
             params.m_name = sourceName;
-            unique_ptr<SyncSource> source(SyncSource::createSource(params, false, NULL));
-            if (source.get() != NULL) {
+            unique_ptr<SyncSource> source(SyncSource::createSource(params, false, nullptr));
+            if (source.get() != nullptr) {
                 if (!m_server.empty() && nodes) {
                     // ensure that we have passwords for this config
                     PasswordConfigProperty::checkPasswords(context->getUserInterfaceNonNull(),
@@ -848,7 +848,7 @@ bool Cmdline::run() {
             // No need to include a context or additional sources,
             // because reading the m_server config already includes
             // the right information.
-            m_props.createFilters("", m_server, NULL, syncFilter, sourceFilters);
+            m_props.createFilters("", m_server, nullptr, syncFilter, sourceFilters);
         } else {
             string peer, context;
             SyncConfig::splitConfigString(SyncConfig::normalizeConfigString(m_template,
@@ -1234,7 +1234,7 @@ bool Cmdline::run() {
                                                                { source });
                         SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
                         unique_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
-                        if (syncSource.get() == NULL) {
+                        if (syncSource.get() == nullptr) {
                             disable = "no backend available";
                         } else {
                             try {
@@ -1542,7 +1542,7 @@ bool Cmdline::run() {
                         count++;
                     }
                 }
-                char *token = NULL;
+                char *token = nullptr;
                 err = ops.m_endDataWrite(true, &token);
                 if (token) {
                     free(token);
@@ -1552,7 +1552,7 @@ bool Cmdline::run() {
                 err = ops.m_startDataRead("", "");
                 CHECK_ERROR("reading items");
 
-                ostream *out = NULL;
+                ostream *out = nullptr;
                 cxxptr<ofstream> outFile;
                 if (m_itemPath == "-") {
                     // not actually used, falls back to SE_LOG_SHOW()
@@ -1799,7 +1799,7 @@ bool Cmdline::parseProp(PropertyType propertyType,
     PropertySpecifier spec = PropertySpecifier::StringToPropSpec(propstr);
 
     // determine property type and registry
-    const ConfigPropertyRegistry *validProps = NULL;
+    const ConfigPropertyRegistry *validProps = nullptr;
     switch (propertyType) {
     case SYNC_PROPERTY_TYPE:
         validProps = &m_validSyncProps;
@@ -1810,8 +1810,8 @@ bool Cmdline::parseProp(PropertyType propertyType,
     case UNKNOWN_PROPERTY_TYPE:
         // must guess based on both registries
         if (!propstr.empty()) {
-            bool isSyncProp = m_validSyncProps.find(spec.m_property) != NULL;
-            bool isSourceProp = m_validSourceProps.find(spec.m_property) != NULL;
+            bool isSyncProp = m_validSyncProps.find(spec.m_property) != nullptr;
+            bool isSourceProp = m_validSourceProps.find(spec.m_property) != nullptr;
 
             if (isSyncProp) {
                 if (isSourceProp) {
@@ -1934,7 +1934,7 @@ bool Cmdline::parseAssignment(int &opt, vector<string> &parsed,
 
     return parseProp(propertyType,
                      cmdopt.c_str(),
-                     haveParam ? param.c_str() : NULL,
+                     haveParam ? param.c_str() : nullptr,
                      propname);
 }
 
@@ -2059,7 +2059,7 @@ void Cmdline::listDatabases(SyncSource *source, const string &header)
 {
     if (!source) {
         // silently skip backends like the "file" backend which do not support
-        // listing databases and return NULL unless configured properly
+        // listing databases and return nullptr unless configured properly
         return;
     }
 
@@ -2169,7 +2169,7 @@ void Cmdline::dumpConfigTemplates(const string &preamble,
     if (!templates.size()) {
         out << "   none" << endl;
     }
-    SE_LOG(NULL, level, "%s", out.str().c_str());
+    SE_LOG(nullptr, level, "%s", out.str().c_str());
 }
 
 void Cmdline::dumpProperties(const ConfigNode &configuredProps,
@@ -2198,7 +2198,7 @@ void Cmdline::dumpProperties(const ConfigNode &configuredProps,
         }
         out << prop->getMainName() << " = " << value.get() << endl;
 
-        list<string> *type = NULL;
+        list<string> *type = nullptr;
         switch (prop->getSharing()) {
         case ConfigProperty::GLOBAL_SHARING:
             type = &global;
@@ -2670,7 +2670,7 @@ protected:
                                 "--sync-property", "proxyHost = proxy",
                                 "scheduleworld",
                                 "addressbook",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             string res = scanFiles(root);
             removeRandomUUID(res);
@@ -2693,7 +2693,7 @@ protected:
             TestCmdline cmdline("--configure",
                                 "--sync-property", "deviceID = fixed-devid",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             string res = scanFiles(root);
             string expected = ScheduleWorldConfig();
@@ -2798,7 +2798,7 @@ protected:
             config.prepareConfigForWrite();
         }
         {
-            TestCmdline cmdline("--print-servers", NULL);
+            TestCmdline cmdline("--print-servers", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
                                       "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
@@ -2819,7 +2819,7 @@ protected:
         CPPUNIT_ASSERT_EQUAL(0, rename((m_testDir + "/syncevolution/default/peers/scheduleworld.old").c_str(),
                                        (m_testDir + "/syncevolution/default/peers/scheduleworld").c_str()));
         {
-            TestCmdline cmdline("--migrate", "scheduleworld", NULL);
+            TestCmdline cmdline("--migrate", "scheduleworld", nullptr);
             cmdline.doit();
         }
         {
@@ -2827,7 +2827,7 @@ protected:
             config.prepareConfigForWrite();
         }        
         {
-            TestCmdline cmdline("--print-servers", NULL);
+            TestCmdline cmdline("--print-servers", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
                                       "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
@@ -2857,7 +2857,7 @@ protected:
             config.prepareConfigForWrite();
         }
         {
-            TestCmdline cmdline("--print-servers", NULL);
+            TestCmdline cmdline("--print-servers", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
                                       "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
@@ -2880,7 +2880,7 @@ protected:
         CPPUNIT_ASSERT_EQUAL(0, rename((m_testDir + "/syncevolution/default.old").c_str(),
                                        (m_testDir + "/syncevolution/default").c_str()));
         {
-            TestCmdline cmdline("--migrate", "@default", NULL);
+            TestCmdline cmdline("--migrate", "@default", nullptr);
             cmdline.doit();
         }
         {
@@ -2888,7 +2888,7 @@ protected:
             config.prepareConfigForWrite();
         }        
         {
-            TestCmdline cmdline("--print-servers", NULL);
+            TestCmdline cmdline("--print-servers", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
                                       "   scheduleworld = CmdlineTest/syncevolution/default/peers/scheduleworld\n"
@@ -2910,7 +2910,7 @@ protected:
                             "--template", "default",
                             "--sync-property", "deviceID = fixed-devid",
                             "some-other-server",
-                            NULL);
+                            nullptr);
         cmdline.doit();
         string res = scanFiles(root, "some-other-server");
         string expected = DefaultConfig();
@@ -2931,7 +2931,7 @@ protected:
                             "--template", "scheduleworld",
                             "--sync-property", "deviceID = fixed-devid",
                             "scheduleworld2",
-                            NULL);
+                            nullptr);
         cmdline.doit();
         string res = scanFiles(root, "scheduleworld2");
         string expected = ScheduleWorldConfig();
@@ -2962,11 +2962,11 @@ protected:
                 "--sync-property", "deviceID = fixed-devid",
                 // templates are case-insensitive
                 "FunamBOL",
-                NULL
+                nullptr
         }, * const argv_shared[] = {
             "--configure",
             "FunamBOL",
-            NULL
+            nullptr
         };
         TestCmdline cmdline(shared ? argv_shared : argv_fixed);
         cmdline.doit();
@@ -2996,11 +2996,11 @@ protected:
                 "--configure",
                 "--sync-property", "deviceID = fixed-devid",
                 "synthesis",
-                NULL
+                nullptr
         }, * const argv_shared[] = {
             "--configure",
             "synthesis",
-            NULL
+            nullptr
         };
         TestCmdline cmdline(shared ? argv_shared : argv_fixed);
         cmdline.doit();
@@ -3015,12 +3015,12 @@ protected:
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        TestCmdline failure("--template", NULL);
+        TestCmdline failure("--template", nullptr);
 
         CPPUNIT_ASSERT(!failure.m_cmdline->parse());
         CPPUNIT_ASSERT_NO_THROW(failure.expectUsageError("[ERROR] missing parameter for '--template'\n"));
 
-        TestCmdline help("--template", "? ", NULL);
+        TestCmdline help("--template", "? ", nullptr);
         help.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (servers):\n"
                                   "   template name = template description\n"
@@ -3045,7 +3045,7 @@ protected:
         ScopedEnvChange templates("SYNCEVOLUTION_TEMPLATE_DIR", "testcases/templates");
         ScopedEnvChange xdg("XDG_CONFIG_HOME", "/dev/null");
 
-        TestCmdline help1("--template", "?nokia 7210c", NULL);
+        TestCmdline help1("--template", "?nokia 7210c", nullptr);
         help1.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (clients):\n"
                 "   template name = template description    matching score in percent (100% = exact match)\n"
@@ -3053,7 +3053,7 @@ protected:
                 "   SyncEvolution_Client = SyncEvolution server side template    40%\n",
                 help1.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("", help1.m_err.str());
-        TestCmdline help2("--template", "?nokia", NULL);
+        TestCmdline help2("--template", "?nokia", nullptr);
         help2.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (clients):\n"
                 "   template name = template description    matching score in percent (100% = exact match)\n"
@@ -3061,7 +3061,7 @@ protected:
                 "   SyncEvolution_Client = SyncEvolution server side template    40%\n",
                 help2.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("", help2.m_err.str());
-        TestCmdline help3("--template", "?7210c", NULL);
+        TestCmdline help3("--template", "?7210c", nullptr);
         help3.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (clients):\n"
                 "   template name = template description    matching score in percent (100% = exact match)\n"
@@ -3069,7 +3069,7 @@ protected:
                 "   SyncEvolution_Client = SyncEvolution server side template    20%\n",
                 help3.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("", help3.m_err.str());
-        TestCmdline help4("--template", "?syncevolution client", NULL);
+        TestCmdline help4("--template", "?syncevolution client", nullptr);
         help4.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("Available configuration templates (clients):\n"
                 "   template name = template description    matching score in percent (100% = exact match)\n"
@@ -3088,7 +3088,7 @@ protected:
         doSetupSynthesis(true);
         doSetupFunambol(true);
 
-        TestCmdline cmdline("--print-servers", NULL);
+        TestCmdline cmdline("--print-servers", nullptr);
         cmdline.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("Configured servers:\n"
                                   "   funambol = CmdlineTest/syncevolution/default/peers/funambol\n"
@@ -3123,14 +3123,14 @@ protected:
         // note that "backend" will be take from the @default context if one
         // exists, so run this before setting up Funambol below
         {
-            TestCmdline cmdline("--print-config", "--template", "google", NULL);
+            TestCmdline cmdline("--print-config", "--template", "google", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF(google,
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
         }
 
         {
-            TestCmdline cmdline("--print-config", "--template", "yahoo", NULL);
+            TestCmdline cmdline("--print-config", "--template", "yahoo", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF(yahoo,
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
@@ -3139,7 +3139,7 @@ protected:
         testSetupFunambol();
 
         {
-            TestCmdline cmdline("--print-config", "--template", "scheduleworld", NULL);
+            TestCmdline cmdline("--print-config", "--template", "scheduleworld", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             string actual = cmdline.m_out.str();
@@ -3153,7 +3153,7 @@ protected:
         }
 
         {
-            TestCmdline cmdline("--print-config", "funambol", NULL);
+            TestCmdline cmdline("--print-config", "funambol", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF(filterConfig(internalToIni(FunambolConfig())),
@@ -3178,7 +3178,7 @@ protected:
                                 "--datastore-property", "uri = dummy",
                                 "scheduleworld",
                                 "xyz",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             string res = scanFiles(root);
             string expected = ScheduleWorldConfig();
@@ -3200,21 +3200,21 @@ protected:
     }
 
     void testSync() {
-        TestCmdline failure("--sync", NULL);
+        TestCmdline failure("--sync", nullptr);
         CPPUNIT_ASSERT(!failure.m_cmdline->parse());
         CPPUNIT_ASSERT_NO_THROW(failure.expectUsageError("[ERROR] missing parameter for '--sync'\n"));
 
-        TestCmdline failure2("--sync", "foo", NULL);
+        TestCmdline failure2("--sync", "foo", nullptr);
         CPPUNIT_ASSERT(!failure2.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure2.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, local-cache-slow, local-cache-incremental = local-cache, disabled = none)\n", failure2.m_err.str());
 
-        TestCmdline failure3("--sync=foo", NULL);
+        TestCmdline failure3("--sync=foo", nullptr);
         CPPUNIT_ASSERT(!failure3.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL_DIFF("", failure3.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("[ERROR] '--sync=foo': not one of the valid values (two-way, slow, refresh-from-local, refresh-from-remote = refresh, one-way-from-local, one-way-from-remote = one-way, refresh-from-client = refresh-client, refresh-from-server = refresh-server, one-way-from-client = one-way-client, one-way-from-server = one-way-server, local-cache-slow, local-cache-incremental = local-cache, disabled = none)\n", failure3.m_err.str());
 
-        TestCmdline help("--sync", " ?", NULL);
+        TestCmdline help("--sync", " ?", nullptr);
         help.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("--sync\n"
                                   "   Requests a certain synchronization mode when initiating a sync:\n"
@@ -3255,7 +3255,7 @@ protected:
                                   help.m_out.str());
         CPPUNIT_ASSERT_EQUAL_DIFF("", help.m_err.str());
 
-        TestCmdline filter("--sync", "refresh-from-server", NULL);
+        TestCmdline filter("--sync", "refresh-from-server", nullptr);
         CPPUNIT_ASSERT(filter.m_cmdline->parse());
         CPPUNIT_ASSERT(!filter.m_cmdline->run());
         CPPUNIT_ASSERT_NO_THROW(filter.expectUsageError("[ERROR] No configuration name specified.\n"));
@@ -3263,7 +3263,7 @@ protected:
                                   string(filter.m_cmdline->m_props[""].m_sourceProps[""]));
         CPPUNIT_ASSERT_EQUAL_DIFF("",                                  string(filter.m_cmdline->m_props[""].m_syncProps));
 
-        TestCmdline filter2("--datastore-property", "sync=refresh", NULL);
+        TestCmdline filter2("--datastore-property", "sync=refresh", nullptr);
         CPPUNIT_ASSERT(filter2.m_cmdline->parse());
         CPPUNIT_ASSERT(!filter2.m_cmdline->run());
         CPPUNIT_ASSERT_NO_THROW(filter2.expectUsageError("[ERROR] No configuration name specified.\n"));
@@ -3272,16 +3272,16 @@ protected:
         CPPUNIT_ASSERT_EQUAL_DIFF("",
                                   string(filter2.m_cmdline->m_props[""].m_syncProps));
 
-        TestCmdline filter3("--datastore-property", "xyz=1", NULL);
+        TestCmdline filter3("--datastore-property", "xyz=1", nullptr);
         CPPUNIT_ASSERT(!filter3.m_cmdline->parse());
         CPPUNIT_ASSERT_EQUAL(string(""), filter3.m_out.str());
         CPPUNIT_ASSERT_EQUAL(string("[ERROR] '--datastore-property xyz=1': no such property\n"), filter3.m_err.str());
 
-        TestCmdline filter4("xyz=1", NULL);
+        TestCmdline filter4("xyz=1", nullptr);
         CPPUNIT_ASSERT(!filter4.m_cmdline->parse());
         CPPUNIT_ASSERT_NO_THROW(filter4.expectUsageError("[ERROR] unrecognized property in 'xyz=1'\n"));
 
-        TestCmdline filter5("=1", NULL);
+        TestCmdline filter5("=1", nullptr);
         CPPUNIT_ASSERT(!filter5.m_cmdline->parse());
         CPPUNIT_ASSERT_NO_THROW(filter5.expectUsageError("[ERROR] a property name must be given in '=1'\n"));
     }
@@ -3292,7 +3292,7 @@ protected:
 
         rm_r(m_testDir);
         {
-            TestCmdline cmdline(NULL, NULL);
+            TestCmdline cmdline(nullptr, nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3300,7 +3300,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring", NULL);
+            TestCmdline cmdline("--keyring", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3308,7 +3308,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--sync-property", "keyring=True", NULL);
+            TestCmdline cmdline("--sync-property", "keyring=True", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3316,7 +3316,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("keyring=True", NULL);
+            TestCmdline cmdline("keyring=True", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3324,7 +3324,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=true", NULL);
+            TestCmdline cmdline("--keyring=true", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3332,7 +3332,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=1", NULL);
+            TestCmdline cmdline("--keyring=1", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3340,7 +3340,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=Yes", NULL);
+            TestCmdline cmdline("--keyring=Yes", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3348,7 +3348,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=false", NULL);
+            TestCmdline cmdline("--keyring=false", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3356,7 +3356,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_FALSE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=0", NULL);
+            TestCmdline cmdline("--keyring=0", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3364,7 +3364,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_FALSE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=NO", NULL);
+            TestCmdline cmdline("--keyring=NO", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3372,7 +3372,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_FALSE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=GNOME", NULL);
+            TestCmdline cmdline("--keyring=GNOME", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3383,13 +3383,13 @@ protected:
 
         // Broken command line: treated like a sync, but config doesn't exist.
         {
-            TestCmdline cmdline("keyring=KDE", "@foobar", NULL);
+            TestCmdline cmdline("keyring=KDE", "@foobar", nullptr);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
             CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"@foobar\" does not refer to a sync peer.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
         }
         {
-            TestCmdline cmdline("keyring=KDE", "nosuchpeer@foobar", NULL);
+            TestCmdline cmdline("keyring=KDE", "nosuchpeer@foobar", nullptr);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
             CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"nosuchpeer@foobar\" does not exist.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
@@ -3397,26 +3397,26 @@ protected:
 
         // empty config prop
         {
-            TestCmdline cmdline("--configure", "@default", NULL);
+            TestCmdline cmdline("--configure", "@default", nullptr);
             cmdline.doit();
         }
 
         // Try broken command line again.
         {
-            TestCmdline cmdline("keyring=KDE", "@foobar", NULL);
+            TestCmdline cmdline("keyring=KDE", "@foobar", nullptr);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
             CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"@foobar\" does not refer to a sync peer.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
         }
         {
-            TestCmdline cmdline("keyring=KDE", "nosuchpeer@foobar", NULL);
+            TestCmdline cmdline("keyring=KDE", "nosuchpeer@foobar", nullptr);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
             CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"nosuchpeer@foobar\" does not exist.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
         }
 
         {
-            TestCmdline cmdline("@foobar", NULL);
+            TestCmdline cmdline("@foobar", nullptr);
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
             InitStateTri keyring = context->getKeyring();
@@ -3426,7 +3426,7 @@ protected:
 
         // now set the value permanently
         {
-            TestCmdline cmdline("--keyring", "--configure", "@default", NULL);
+            TestCmdline cmdline("--keyring", "--configure", "@default", nullptr);
             cmdline.doit();
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
@@ -3435,7 +3435,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_TRUE, keyring.getValue());
         }
         {
-            TestCmdline cmdline("--keyring=KDE", "--configure", "@default", NULL);
+            TestCmdline cmdline("--keyring=KDE", "--configure", "@default", nullptr);
             cmdline.doit();
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
@@ -3449,7 +3449,7 @@ protected:
         // @default not strictly needed
         rm_r(m_testDir);
         {
-            TestCmdline cmdline("keyring=KDE", "--configure", "@default", NULL);
+            TestCmdline cmdline("keyring=KDE", "--configure", "@default", nullptr);
             cmdline.doit();
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
@@ -3458,7 +3458,7 @@ protected:
             CPPUNIT_ASSERT_EQUAL(InitStateTri::VALUE_STRING, keyring.getValue());
         }
         {
-            TestCmdline cmdline("keyring=yes", "--configure", "@default", NULL);
+            TestCmdline cmdline("keyring=yes", "--configure", "@default", nullptr);
             cmdline.doit();
             std::shared_ptr<SyncContext> context = cmdline.parse();
             CPPUNIT_ASSERT(context);
@@ -3469,7 +3469,7 @@ protected:
 
         // allow sync operation although --keyring was set
         {
-            TestCmdline cmdline("keyring=GNOME", "foobar@default", NULL);
+            TestCmdline cmdline("keyring=GNOME", "foobar@default", nullptr);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
             CPPUNIT_ASSERT_EQUAL(std::string("[INFO] Configuration \"foobar@default\" does not exist.\n[ERROR] Cannot proceed with sync without a configuration."), cmdline.m_err.str());
@@ -3482,7 +3482,7 @@ protected:
                                 "password=bar",
                                 "syncURL=http://no.such.server",
                                 "keyring=no-such-keyring",
-                                "foobar@default", NULL);
+                                "foobar@default", nullptr);
             cmdline.doit(false);
             CPPUNIT_ASSERT_EQUAL(std::string(""), cmdline.m_out.str());
             CPPUNIT_ASSERT_EQUAL(std::string("[INFO] addressbook: inactive\n"
@@ -3505,11 +3505,11 @@ protected:
             TestCmdline cmdline("--configure",
                                 "--template", "yahoo",
                                 "target-config@my-yahoo",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         {
-            TestCmdline cmdline("--print-config", "target-config@my-yahoo", NULL);
+            TestCmdline cmdline("--print-config", "target-config@my-yahoo", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF(yahoo,
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
@@ -3519,11 +3519,11 @@ protected:
         {
             TestCmdline cmdline("--configure",
                                 "target-config@google",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         {
-            TestCmdline cmdline("--print-config", "target-config@google", NULL);
+            TestCmdline cmdline("--print-config", "target-config@google", nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF(google,
                                       removeComments(filterRandomUUID(filterConfig(cmdline.m_out.str()))));
@@ -3534,7 +3534,7 @@ protected:
             TestCmdline cmdline("--configure",
                                 "--template", "yahooxyz",
                                 "target-config@my-yahoo-xyz",
-                                NULL);
+                                nullptr);
             CPPUNIT_ASSERT(cmdline.m_cmdline->parse());
             CPPUNIT_ASSERT(!cmdline.m_cmdline->run());
             static const char error[] = "[ERROR] No configuration template for 'yahooxyz' available.\n"
@@ -3552,7 +3552,7 @@ protected:
         {
             TestCmdline cmdline("--configure",
                                 "target-config@foobar",
-                                NULL);
+                                nullptr);
             CPPUNIT_ASSERT(cmdline.m_cmdline->parse());
             CPPUNIT_ASSERT(!cmdline.m_cmdline->run());
             static const char error[] = "[ERROR] No configuration template for 'foobar' available.\n"
@@ -3585,7 +3585,7 @@ protected:
             TestCmdline cmdline("--configure",
                                 "--datastore-property", "addressbook/type=file:text/vcard:3.0",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -3607,7 +3607,7 @@ protected:
             TestCmdline cmdline("--configure",
                                 "--datastore-property", "type=file:text/x-vcard:2.1",
                                 "@default", "addressbook",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -3715,7 +3715,7 @@ protected:
 
         {
             TestCmdline cmdline("--sync-property", "?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF(syncProperties,
@@ -3724,7 +3724,7 @@ protected:
 
         {
             TestCmdline cmdline("--datastore-property", "?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF(sourceProperties,
@@ -3734,7 +3734,7 @@ protected:
         {
             TestCmdline cmdline("--datastore-property", "?",
                                 "--sync-property", "?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF(sourceProperties + syncProperties,
@@ -3744,7 +3744,7 @@ protected:
         {
             TestCmdline cmdline("--sync-property", "?",
                                 "--datastore-property", "?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF(syncProperties + sourceProperties,
@@ -3753,7 +3753,7 @@ protected:
 
         {
             TestCmdline cmdline("--datastore-property", "sync=?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("'--datastore-property sync=?'\n",
@@ -3762,7 +3762,7 @@ protected:
 
         {
             TestCmdline cmdline("sync=?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("'sync=?'\n",
@@ -3771,7 +3771,7 @@ protected:
 
         {
             TestCmdline cmdline("syncURL=?",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("'syncURL=?'\n",
@@ -3791,7 +3791,7 @@ protected:
                                 "--datastore-property", "type = file:text/x-vcard",
                                 "@foobar",
                                 "addressbook",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         string root = m_testDir;
@@ -3821,7 +3821,7 @@ protected:
                                 "--datastore-property", "backend = file",
                                 "@foobar",
                                 "calendar",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         res = scanFiles(root);
@@ -3838,7 +3838,7 @@ protected:
         {
             TestCmdline cmdline("--configure",
                                 "scheduleworld@foobar",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         res = scanFiles(root);
@@ -3871,7 +3871,7 @@ protected:
                                 "--datastore-property", "addressbook/sync=two-way",
                                 "--datastore-property", "sync=none",
                                 "scheduleworld@foobar",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         res = scanFiles(root);
@@ -3887,7 +3887,7 @@ protected:
                                 "--datastore-property", "addressbook/type=file:text/vcard:3.0",
                                 "--datastore-property", "calendar/type=file:text/calendar:2.0",
                                 "syncevo@syncevo",
-                                NULL);
+                                nullptr);
             cmdline.doit();
         }
         string syncevoroot = m_testDir + "/syncevolution/syncevo";
@@ -3936,7 +3936,7 @@ protected:
 
         // Migrate explicitly.
         {
-            TestCmdline cmdline("--migrate", "scheduleworld", NULL);
+            TestCmdline cmdline("--migrate", "scheduleworld", nullptr);
             cmdline.doit();
         }
 
@@ -3959,7 +3959,7 @@ protected:
             TestCmdline cmdline("--configure",
                                 "--datastore-property", "sync = disabled",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -3976,7 +3976,7 @@ protected:
                                 "--datastore-property", "sync = one-way-from-server",
                                 "scheduleworld",
                                 "addressbook",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4002,7 +4002,7 @@ protected:
                                 "--sync-property", "maxlogdirs=5",
                                 "-y", "LOGDIR@default=logdir",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4047,7 +4047,7 @@ protected:
             string createdConfig = scanFiles(oldRoot);
             TestCmdline cmdline("--migrate",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4084,7 +4084,7 @@ protected:
 
             TestCmdline cmdline("--migrate",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4116,7 +4116,7 @@ protected:
             rm_r(newRoot);
             TestCmdline cmdline("--migrate",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4154,7 +4154,7 @@ protected:
             {
                 TestCmdline cmdline("--migrate",
                                     "scheduleworld@other",
-                                    NULL);
+                                    nullptr);
                 cmdline.doit();
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4182,7 +4182,7 @@ protected:
             {
                 TestCmdline cmdline("--migrate",
                                     "scheduleworld@other",
-                                    NULL);
+                                    nullptr);
                 cmdline.doit();
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4206,7 +4206,7 @@ protected:
             {
                 TestCmdline cmdline("--migrate",
                                     "scheduleworld",
-                                    NULL);
+                                    nullptr);
                 cmdline.doit();
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4226,7 +4226,7 @@ protected:
                 TestCmdline cmdline("--configure",
                                     "--sync-property", "ConsumerReady=0",
                                     "scheduleworld",
-                                    NULL);
+                                    nullptr);
                 cmdline.doit();
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4236,7 +4236,7 @@ protected:
             {
                 TestCmdline cmdline("--migrate",
                                     "scheduleworld",
-                                    NULL);
+                                    nullptr);
                 cmdline.doit();
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
                 CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4298,7 +4298,7 @@ protected:
             TestCmdline cmdline("--migrate",
                                 "memo/backend=file", // override memo "backend" during migration
                                 "@default",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4343,7 +4343,7 @@ protected:
             string createdConfig = scanFiles(oldRoot);
             TestCmdline cmdline("--migrate",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4375,7 +4375,7 @@ protected:
 
             TestCmdline cmdline("--migrate",
                                 "scheduleworld",
-                                NULL);
+                                nullptr);
             cmdline.doit();
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
             CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_out.str());
@@ -4405,7 +4405,7 @@ protected:
 private:
 
     /**
-     * vararg constructor with NULL termination,
+     * vararg constructor with nullptr termination,
      * out and error stream into stringstream members
      */
     class TestCmdline : public Logger {
@@ -4957,7 +4957,7 @@ private:
         ScopedEnvChange xdg("XDG_CONFIG_HOME", m_testDir);
         ScopedEnvChange home("HOME", m_testDir);
 
-        TestCmdline cmdline("--print-config", server.c_str(), NULL);
+        TestCmdline cmdline("--print-config", server.c_str(), nullptr);
         cmdline.doit();
         CPPUNIT_ASSERT_EQUAL_DIFF("", cmdline.m_err.str());
         return cmdline.m_out.str();

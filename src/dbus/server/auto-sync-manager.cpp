@@ -275,9 +275,9 @@ void AutoSyncManager::schedule(const std::string &reason)
         std::string readyURL;
         for (const auto &urlinfo: task->m_urls) {
             // check m_delay against presence of transport
-            Timespec *starttime = NULL;
-            PresenceStatus::PresenceSignal_t *signal = NULL;
-            Timeout *timeout = NULL;
+            Timespec *starttime = nullptr;
+            PresenceStatus::PresenceSignal_t *signal = nullptr;
+            Timeout *timeout = nullptr;
             switch (urlinfo.first) {
             case AutoSyncTask::NEEDS_HTTP:
                 SE_LOG_DEBUG(NULL, "auto sync: %s: %s uses HTTP",

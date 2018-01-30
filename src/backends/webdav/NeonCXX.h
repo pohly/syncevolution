@@ -239,7 +239,7 @@ struct URI {
     }
 };
 
-/** produce debug string for status, which may be NULL */
+/** produce debug string for status, which may be nullptr */
 std::string Status2String(const ne_status *status);
 
 /**
@@ -360,7 +360,7 @@ class Session {
     typedef std::function<void (const URI &, const ne_prop_result_set *)> PropfindURICallback_t;
 
     /**
-     * called with URI and specific property, value string may be NULL (error case);
+     * called with URI and specific property, value string may be nullptr (error case);
      * exceptions are logged and abort iterating over properties (but not URIs)
      */
     typedef std::function<void (const URI &, const ne_propname *, const char *, const ne_status *)> PropfindPropCallback_t;
@@ -448,7 +448,7 @@ class Session {
      *
      * @param error      return code from Neon API call
      * @param code       HTTP status code
-     * @param status     optional ne_status pointer, non-NULL for all requests
+     * @param status     optional ne_status pointer, non-nullptr for all requests
      * @param location   optional "Location" header value
      * @param expectedCodes   set of codes which are normal and must not result
      *                        in retrying or an exception (returns true, as if the
@@ -457,10 +457,10 @@ class Session {
      * @return true for success, false if retry needed (only if deadline not empty);
      *         errors reported via exceptions
      */
-    bool checkError(int error, int code = 0, const ne_status *status = NULL,
+    bool checkError(int error, int code = 0, const ne_status *status = nullptr,
                     const std::string &newLocation = "",
                     const std::string &oldLocation = "",
-                    const std::set<int> *expectedCodes = NULL);
+                    const std::set<int> *expectedCodes = nullptr);
 
     /** ne_set_server_auth() callback */
     int getCredentials(const char *realm, int attempt, char *username, char *password) noexcept;
@@ -485,7 +485,7 @@ class XMLParser
 
     /**
      * See ne_xml_startelm_cb:
-     * arguments are parent state, namespace, name, attributes (NULL terminated)
+     * arguments are parent state, namespace, name, attributes (nullptr terminated)
      * @return < 0 abort, 0 decline, > 0 accept
      */
     typedef std::function<int (int, const char *, const char *, const char **)> StartCB_t;
@@ -493,7 +493,7 @@ class XMLParser
     /**
      * See ne_xml_cdata_cb:
      * arguments are state of element, data and data len
-     * May be NULL.
+     * May be nullptr.
      * @return != 0 to abort
      */
     typedef std::function<int (int, const char *, size_t)> DataCB_t;
@@ -501,7 +501,7 @@ class XMLParser
     /**
      * See ne_xml_endelm_cb:
      * arguments are state of element, namespace, name
-     * May be NULL.
+     * May be nullptr.
      * @return != 0 to abort
      */
     typedef std::function<int (int, const char *, const char *)> EndCB_t;
@@ -616,7 +616,7 @@ class Request
     /**
      * Execute the request. See Session::run().
      */
-    bool run(const std::set<int> *expectedCodes = NULL) { return m_session.run(*this, expectedCodes); }
+    bool run(const std::set<int> *expectedCodes = nullptr) { return m_session.run(*this, expectedCodes); }
 
     std::string getResponseHeader(const std::string &name) {
         const char *value = ne_get_response_header(m_req, name.c_str());

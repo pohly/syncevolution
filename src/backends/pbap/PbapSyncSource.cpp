@@ -144,7 +144,7 @@ struct PullParams
  *
  * Note that GetSize() is specified as returning the number of entries in
  * the selected phonebook object that are actually used (i.e. indexes that
- * correspond to non-NULL entries). This is relevant if contacts get
+ * correspond to non-nullptr entries). This is relevant if contacts get
  * deleted after starting the session. In that case, the algorithm above
  * will not necessarily read all contacts. Here's an example:
  *         offsets #0 till #99, with contacts #10 till #19 deleted
@@ -497,7 +497,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
     params["Target"] = std::string("PBAP");
 
     std::string session;
-    GDBusCXX::DBusConnectionPtr conn = GDBusCXX::dbus_get_bus_connection("SESSION", NULL, true, NULL);
+    GDBusCXX::DBusConnectionPtr conn = GDBusCXX::dbus_get_bus_connection("SESSION", nullptr, true, nullptr);
 
     // We must attempt to use the new interface(s), otherwise we won't know whether
     // the daemon exists or can be started.
@@ -968,7 +968,7 @@ bool PullAll::getContact(const char *id, StringPiece &vcard)
         // now).
         while (!m_session->transferComplete() && m_tmpFile.moreData() < 128 * 1024) {
             s.checkForNormal();
-            g_main_context_iteration(NULL, true);
+            g_main_context_iteration(nullptr, true);
         }
         m_session->checkForError();
 
@@ -1163,7 +1163,7 @@ void PbapSession::blockOnFreeze()
     SuspendFlags &s = SuspendFlags::getSuspendFlags();
     while (m_frozen) {
         s.checkForNormal();
-        g_main_context_iteration(NULL, true);
+        g_main_context_iteration(nullptr, true);
     }
 }
 
@@ -1314,13 +1314,13 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
             PULL_AS_CONFIGURED;
 
         const char *env;
-        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME")) != NULL) {
+        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_TRANSFER_TIME")) != nullptr) {
             params.m_timePerChunk = atof(env);
         } else {
             params.m_timePerChunk = 30;
         }
         static const double LAMBDA_DEF = 0.1;
-        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_TIME_LAMBDA")) != NULL) {
+        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_TIME_LAMBDA")) != nullptr) {
             params.m_timeLambda = atof(env);
         } else {
             params.m_timeLambda = LAMBDA_DEF;
@@ -1329,13 +1329,13 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
             params.m_timeLambda > 1) {
             params.m_timeLambda = LAMBDA_DEF;
         }
-        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_PHOTO")) != NULL) {
+        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_PHOTO")) != nullptr) {
             params.m_startMaxCount[true] = atoi(env);
         }
-        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_NO_PHOTO")) != NULL) {
+        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_MAX_COUNT_NO_PHOTO")) != nullptr) {
             params.m_startMaxCount[false] = atoi(env);
         }
-        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_OFFSET")) != NULL) {
+        if ((env = getenv("SYNCEVOLUTION_PBAP_CHUNK_OFFSET")) != nullptr) {
             params.m_startOffset = atoi(env);
         } else {
             unsigned int seed = (unsigned int)Timespec::system().seconds();
@@ -1360,7 +1360,7 @@ sysync::TSyError PbapSyncSource::readNextItem(sysync::ItemID aID,
     } else {
         *aStatus = sysync::ReadNextItem_Unchanged;
         aID->item = StrAlloc(id.c_str());
-        aID->parent = NULL;
+        aID->parent = nullptr;
         m_hadContacts = true;
     }
     return sysync::LOCERR_OK;

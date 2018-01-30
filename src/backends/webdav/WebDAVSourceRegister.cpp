@@ -87,7 +87,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static class RegisterWebDAVSyncSource : public RegisterSyncSource

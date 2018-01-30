@@ -168,7 +168,7 @@ enum SyncMLStatus {
     /** more explicit ok status in cases where 0 might mean "unknown" (SyncReport) */
     STATUS_HTTP_OK = 200,
 
-    /** no content / end of file / end of iteration / empty/NULL value */
+    /** no content / end of file / end of iteration / empty/nullptr value */
     STATUS_NO_CONTENT = 204,
     /** external data has been merged */
     STATUS_DATA_MERGED = 207,
@@ -495,7 +495,7 @@ class SyncReport : public std::map<std::string, SyncSourceReport> {
     }
     const SyncSourceReport *findSyncSourceReport(const std::string &name) const {
         const_iterator it = find(name);
-        return it == end() ? NULL : &it->second;
+        return it == end() ? nullptr : &it->second;
     }
 
     /** start time of sync, 0 if unknown */

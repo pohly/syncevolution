@@ -154,7 +154,7 @@ class LogRedirect : public LoggerStdout
      * Does not add or remove the logger from the logger stack.
      * That must be done by the caller.
      */
-    LogRedirect(Mode mode, const char *filename = NULL);
+    LogRedirect(Mode mode, const char *filename = nullptr);
     ~LogRedirect() throw();
 
     virtual void remove() throw();

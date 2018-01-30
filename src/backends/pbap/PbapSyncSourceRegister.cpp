@@ -35,7 +35,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifndef ENABLE_PBAP
     // tell SyncEvolution if the user wanted to use a disabled sync source,
     // otherwise let it continue searching
-    return isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+    return isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
 #else
     // Also recognize one of the standard types?
     // Not in the PbapSyncSource!
@@ -44,7 +44,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
     if (isMe || maybeMe) {
         return std::make_unique<PbapSyncSource>(params);
     }
-    return NULL;
+    return nullptr;
 #endif
 }
 

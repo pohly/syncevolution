@@ -220,8 +220,8 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
      * @return UID value without line breaks and folding characters removed
      */
     static std::string extractUID(const std::string &item,
-                                  size_t *startp = NULL,
-                                  size_t *endp = NULL);
+                                  size_t *startp = nullptr,
+                                  size_t *endp = nullptr);
 
     /**
      * .vcf for VCARD and .ics for everything else.
@@ -229,9 +229,9 @@ class WebDAVSource : public TrackingSyncSource, private boost::noncopyable
     virtual std::string getSuffix() const;
 
  private:
-    /** settings to be used, never NULL, may be the same as m_contextSettings */
+    /** settings to be used, never nullptr, may be the same as m_contextSettings */
     std::shared_ptr<Neon::Settings> m_settings;
-    /** settings constructed by us instead of caller, may be NULL */
+    /** settings constructed by us instead of caller, may be nullptr */
     std::shared_ptr<ContextSettings> m_contextSettings;
     std::shared_ptr<Neon::Session> m_session;
 
