@@ -32,7 +32,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
-#include <pcrecpp.h>
+#include <regex>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -62,7 +62,7 @@ CppUnit::Test *FilterTest(CppUnit::Test *test)
 
     std::string name = test->getName();
     for (const std::string &re: filter) {
-        if (pcrecpp::RE(re).FullMatch(name)) {
+        if (std::regex_match(name, std::regex(re))) {
             delete test;
             return new SkipTest(name);
         }

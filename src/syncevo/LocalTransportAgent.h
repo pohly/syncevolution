@@ -27,12 +27,13 @@
 #include <syncevo/GLibSupport.h>
 #include <syncevo/SyncConfig.h>
 #include <syncevo/ForkExec.h>
+#include <syncevo/util.h>
+
 // This needs to be defined before including gdbus-cxx-bridge.h!
 #define DBUS_CXX_EXCEPTION_HANDLER SyncEvo::SyncEvoHandleException
 #include "gdbus-cxx-bridge.h"
 #include <string>
 #include <stdint.h>
-#include <pcrecpp.h>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -115,7 +116,7 @@ class LocalTransportAgent : public TransportAgent, public enable_weak_from_this<
     std::shared_ptr<ForkExecParent> m_forkexec;
     std::string m_contentType;
     std::string m_replyContentType;
-    pcrecpp::StringPiece m_replyMsg;
+    StringPiece m_replyMsg;
 
     /**
      * provides the D-Bus API expected by the forked process:

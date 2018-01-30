@@ -28,8 +28,6 @@
 #include <memory>
 #include <boost/noncopyable.hpp>
 
-#include <pcrecpp.h>
-
 #include <syncevo/declarations.h>
 #include <syncevo/TmpFile.h>
 SE_BEGIN_CXX
