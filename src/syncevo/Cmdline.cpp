@@ -48,7 +48,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/range.hpp>
-#include <boost/assign/list_of.hpp>
 #include <fstream>
 
 #include <syncevo/declarations.h>
@@ -801,7 +800,7 @@ bool Cmdline::run() {
                     PasswordConfigProperty::checkPasswords(context->getUserInterfaceNonNull(),
                                                            *context,
                                                            PasswordConfigProperty::CHECK_PASSWORD_ALL,
-                                                           boost::assign::list_of(sourceName));
+                                                           { sourceName });
                 }
                 (this->*operation)(source.get(), header);
             } else {
@@ -1232,7 +1231,7 @@ bool Cmdline::run() {
                                                                PasswordConfigProperty::CHECK_PASSWORD_SOURCE|
                                                                PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_PASSWORD|
                                                                PasswordConfigProperty::CHECK_PASSWORD_RESOLVE_USERNAME,
-                                                               boost::assign::list_of(source));
+                                                               { source });
                         SyncSourceParams params(source, to->getSyncSourceNodes(source), to);
                         unique_ptr<SyncSource> syncSource(SyncSource::createSource(params, false, to.get()));
                         if (syncSource.get() == NULL) {
@@ -1393,7 +1392,7 @@ bool Cmdline::run() {
         PasswordConfigProperty::checkPasswords(context->getUserInterfaceNonNull(),
                                                *context,
                                                PasswordConfigProperty::CHECK_PASSWORD_ALL,
-                                               boost::assign::list_of(source->getName()));
+                                               { source->getName() });
         source->setNeedChanges(false);
         source->open();
         const SyncSource::Operations &ops = source->getOperations();

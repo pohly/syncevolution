@@ -62,7 +62,6 @@
 #include <sys/wait.h>
 
 #include <boost/tokenizer.hpp>
-#include <boost/assign.hpp>
 
 #include <regex>
 
@@ -7137,10 +7136,8 @@ void ClientTest::getTestData(const char *type, Config &config)
     // True for most item kinds, exceptions set below.
     config.m_uniqueID = true;
 
-    static std::set<std::string> vCardEssential =
-        boost::assign::list_of("FN")("N")("UID")("VERSION"),
-        iCalEssential =
-        boost::assign::list_of("DTSTART")("DTEND")("DTSTAMP")("SUMMARY")("UID")("RRULE")("RECURRENCE-ID")("VERSION");
+    static std::set<std::string> vCardEssential = { "FN", "N", "UID", "VERSION" },
+        iCalEssential = { "DTSTART", "DTEND", "DTSTAMP", "SUMMARY", "UID", "RRULE", "RECURRENCE-ID", "VERSION" };
     // RRULE is not essential for a valid item, but removing it has implications
     // for other properties (EXDATE) and other items (detached recurrences) and
     // thus cannot be tested in testRemoveProperties (because it doesn't know about
@@ -7734,12 +7731,11 @@ void ClientTest::getTestData(const char *type, Config &config)
                 "TRANSP:TRANSPARENT\n"
                 "END:VEVENT\n" +
                 post;
-            boost::assign::push_back(config.m_linkedItemsSubset[index])
-                (StringPrintf(parent.c_str(), 2012))
-                (StringPrintf(child.c_str(), 2012))
-                (StringPrintf(child.c_str(), 2013))
-                (StringPrintf(child.c_str(), 2014))
-                ;
+            auto &vector = config.m_linkedItemsSubset[index];
+            vector.emplace_back(StringPrintf(parent.c_str(), 2012));
+            vector.emplace_back(StringPrintf(child.c_str(), 2012));
+            vector.emplace_back(StringPrintf(child.c_str(), 2013));
+            vector.emplace_back(StringPrintf(child.c_str(), 2014));
             if (server == "exchange") {
                 /* only year of event varies */
                 std::string single =

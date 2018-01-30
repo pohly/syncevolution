@@ -24,7 +24,7 @@
 
 #include "gdbus-cxx-bridge.h"
 
-#include <boost/utility.hpp>
+#include <boost/noncopyable.hpp>
 
 #include <syncevo/declarations.h>
 

@@ -69,15 +69,14 @@
 #include <memory>
 #include <utility>
 #include <vector>
+#include <type_traits>
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/variant.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/tuple/tuple.hpp>
 #include <boost/utility.hpp>
-#include <boost/type_traits/is_signed.hpp>
 
 /* The SyncEvolution exception handler must integrate into the D-Bus
  * C++ wrapper. In contrast to the rest of the code, that handler uses
@@ -1272,7 +1271,7 @@ template<typename I> struct dbus_traits_integer_switch<I, false, 8> :
     static std::string getReply() { return ""; }
 };
 
-template<typename I> struct dbus_traits_integer : public dbus_traits_integer_switch<I, boost::is_signed<I>::value, sizeof(I)> {};
+template<typename I> struct dbus_traits_integer : public dbus_traits_integer_switch<I, std::is_signed<I>::value, sizeof(I)> {};
 
 // Some of these types may have the same underlying representation, but they are
 // still considered different types by the compiler and thus we must have dbus_traits
@@ -1586,9 +1585,9 @@ template<class A, class B> struct dbus_traits< std::pair<A,B> > : public dbus_tr
 };
 
 /**
- * a boost::tuple - maps to D-Bus struct
+ * a std::tuple - maps to D-Bus struct
  */
-template<typename ...A> struct dbus_traits< boost::tuple<A...> > : public dbus_traits_base
+template<typename ...A> struct dbus_traits< std::tuple<A...> > : public dbus_traits_base
 {
     static std::string getContainedType()
     {
@@ -1600,8 +1599,8 @@ template<typename ...A> struct dbus_traits< boost::tuple<A...> > : public dbus_t
     }
     static std::string getSignature() {return getType(); }
     static std::string getReply() { return ""; }
-    typedef boost::tuple<A...> host_type;
-    typedef const boost::tuple<A...> &arg_type;
+    typedef std::tuple<A...> host_type;
+    typedef const std::tuple<A...> &arg_type;
 
     static void get(ExtractArgs &context,
                     GVariantIter &iter, host_type &t)
@@ -1628,21 +1627,21 @@ template<typename ...A> struct dbus_traits< boost::tuple<A...> > : public dbus_t
 
     template<std::size_t i = 0, typename... Tp>
         static typename std::enable_if<i == sizeof...(Tp), void>::type
-        get_all(ExtractArgs &context, GVariantIter &tupIter, boost::tuple<Tp...> &t) {}
+        get_all(ExtractArgs &context, GVariantIter &tupIter, std::tuple<Tp...> &t) {}
     template<std::size_t i = 0, typename... Tp>
         static typename std::enable_if<i < sizeof...(Tp), void>::type
-        get_all(ExtractArgs &context, GVariantIter &tupIter, boost::tuple<Tp...> &t) {
-        dbus_traits<decltype(boost::tuples::get<i>(t))>::get(context, tupIter, boost::tuples::get<i>(t));
+        get_all(ExtractArgs &context, GVariantIter &tupIter, std::tuple<Tp...> &t) {
+        dbus_traits<decltype(std::get<i>(t))>::get(context, tupIter, std::get<i>(t));
         get_all<i + 1, Tp...>(t);
     }
 
     template<std::size_t i = 0, typename... Tp>
         static typename std::enable_if<i == sizeof...(Tp), void>::type
-        append_all(GVariantBuilder &builder, const boost::tuple<Tp...>& t) {}
+        append_all(GVariantBuilder &builder, const std::tuple<Tp...>& t) {}
     template<std::size_t i = 0, typename... Tp>
         static typename std::enable_if<i < sizeof...(Tp), void>::type
-        append_all(GVariantBuilder &builder, const boost::tuple<Tp...>& t) {
-        dbus_traits<decltype(boost::tuples::get<i>(t))>::append(builder, boost::tuples::get<i>(t));
+        append_all(GVariantBuilder &builder, const std::tuple<Tp...>& t) {
+        dbus_traits<decltype(std::get<i>(t))>::append(builder, std::get<i>(t));
         append_all<i + 1, Tp...>(t);
     }
 };

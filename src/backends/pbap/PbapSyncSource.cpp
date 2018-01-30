@@ -25,7 +25,6 @@
 
 #include "PbapSyncSource.h"
 
-#include <boost/assign/list_of.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/tokenizer.hpp>
 
@@ -419,33 +418,34 @@ void PbapSession::propertyChangedCb(const GDBusCXX::Path_t &path,
 Properties PbapSession::supportedProperties() const
 {
     Properties props;
-    static const std::set<std::string> supported =
-        boost::assign::list_of("VERSION")
-        ("FN")
-        ("N")
-        ("PHOTO")
-        ("BDAY")
-        ("ADR")
-        ("LABEL")
-        ("TEL")
-        ("EMAIL")
-        ("MAILER")
-        ("TZ")
-        ("GEO")
-        ("TITLE")
-        ("ROLE")
-        ("LOGO")
-        ("AGENT")
-        ("ORG")
-        ("NOTE")
-        ("REV")
-        ("SOUND")
-        ("URL")
-        ("UID")
-        ("KEY")
-        ("NICKNAME")
-        ("CATEGORIES")
-        ("CLASS");
+    static const std::set<std::string> supported = {
+        "VERSION",
+        "FN",
+        "N",
+        "PHOTO",
+        "BDAY",
+        "ADR",
+        "LABEL",
+        "TEL",
+        "EMAIL",
+        "MAILER",
+        "TZ",
+        "GEO",
+        "TITLE",
+        "ROLE",
+        "LOGO",
+        "AGENT",
+        "ORG",
+        "NOTE",
+        "REV",
+        "SOUND",
+        "URL",
+        "UID",
+        "KEY",
+        "NICKNAME",
+        "CATEGORIES",
+        "CLASS"
+    };
 
     for (const std::string &prop: m_filterFields) {
         // Be conservative and only ask for properties that we

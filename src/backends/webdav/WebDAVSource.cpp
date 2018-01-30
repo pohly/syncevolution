@@ -12,8 +12,6 @@
 #include <syncevo/LogRedirect.h>
 #include <syncevo/IdentityProvider.h>
 
-#include <boost/assign.hpp>
-
 #include <stdio.h>
 #include <errno.h>
 
@@ -2177,7 +2175,7 @@ TrackingSyncSource::InsertItemResult WebDAVSource::insertItem(const string &uid,
             req.addHeader("If-None-Match", "*");
         }
         req.addHeader("Content-Type", contentType().c_str());
-        static const std::set<int> expected = boost::assign::list_of(412)(403);
+        static const std::set<int> expected = { 412, 403 };
         if (!req.run(&expected)) {
             goto retry;
         }
@@ -2420,7 +2418,7 @@ void WebDAVSource::removeItem(const string &uid)
         // TODO: match exactly the expected revision, aka ETag,
         // or implement locking.
         // req.addHeader("If-Match", etag);
-        static const std::set<int> expected = boost::assign::list_of(412);
+        static const std::set<int> expected = { 412 };
         if (req->run(&expected)) {
             break;
         }
