@@ -6,8 +6,6 @@
 #include <iostream>
 #include <signal.h>
 
-#include <boost/tuple/tuple_io.hpp>
-
 SyncEvo::GMainLoopCXX loop;
 
 // closes child connection
