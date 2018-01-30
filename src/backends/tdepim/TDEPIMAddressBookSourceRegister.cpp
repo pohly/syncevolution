@@ -43,10 +43,10 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 		else if (sourceType.m_format == "text/x-vcard") {
 			return std::make_unique<TDEPIMAddressBookSource>(TDEPIM_CONTACT_V21, params);
 			}
-		else return NULL;
+		else return nullptr;
 	}
 #endif
-	return NULL;
+	return nullptr;
 }
 
 static class RegisterTDEPIMAddressBokSyncSource : public RegisterSyncSource
@@ -107,7 +107,7 @@ protected:
 
     // void testOpenDefaultAddressBook() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("contacts", "kde-contacts", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 };

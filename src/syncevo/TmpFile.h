@@ -76,8 +76,8 @@ class TmpFile
          *
          * File should already have a correct size.
          *
-         * @param mapptr Pointer to variable for mapped pointer. (can be NULL)
-         * @param mapsize Pointer to variable for mapped size. (can be NULL)
+         * @param mapptr Pointer to variable for mapped pointer. (can be nullptr)
+         * @param mapsize Pointer to variable for mapped size. (can be nullptr)
          */
         void map(void **mapptr = 0, size_t *mapsize = 0);
 

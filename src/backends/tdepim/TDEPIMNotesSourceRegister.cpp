@@ -48,12 +48,12 @@ static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params
 // 		SE_LOG_DEBUG("createSource() c3", "Calendar Source format %s", sourceType.m_format.c_str());
 		if ( sourceType.m_format == "" || sourceType.m_format == "text/plain" ) 
 			return std::make_unique<TDEPIMNotesSource>( params );
-		else  return NULL;
+		else  return nullptr;
 	}
 #endif
 
 // 	SE_LOG_DEBUG("createSource() c6", "Calendar Source matching the format %s not found", sourceType.m_format.c_str() );
-	return NULL;
+	return nullptr;
 }
 
 static class RegisterTDEPIMNotesSyncSource : public RegisterSyncSource
@@ -120,7 +120,7 @@ protected:
 
     // void testOpenDefaultMemo() {
     //     std::shared_ptr<TestingSyncSource> source;
-    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, NULL);
+    //     source = (TestingSyncSource *)SyncSource::createTestingSource("memos", "tdepim-memos", true, nullptr);
     //     CPPUNIT_ASSERT_NO_THROW(source->open());
     // }
 

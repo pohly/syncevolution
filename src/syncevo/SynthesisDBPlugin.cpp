@@ -64,7 +64,7 @@ TSyError SyncEvolution_Module_CreateContext( CContext *mContext, cAppCharP   mod
 {
     TSyError err = LOCERR_WRONGUSAGE;
     if (!mContextName[0]) {
-        *mContext = NULL;
+        *mContext = nullptr;
         err = LOCERR_OK;
     } else {
         SyncSource *source = SyncContext::findSource(mContextName);
@@ -481,8 +481,8 @@ bool SyncEvolution_ReadNextMapItem( CContext aContext, MapID mID, bool aFirst )
     try {
         // always reset mID, just in case that caller expects it or
         // operation doesn't do it correctly
-        mID->localID = NULL;
-        mID->remoteID = NULL;
+        mID->localID = nullptr;
+        mID->remoteID = nullptr;
         mID->ident = 0;
         mID->flags = 0;
         if (source->getOperations().m_readNextMapItem) {
@@ -676,8 +676,8 @@ sysync::TSyError SyncEvolution_ReadBlob(CContext aContext, cItemID  aID,  cAppCh
                 totsize = aTotSize ? static_cast<size_t>(*aTotSize) : 0;
 	    /* Another conversion between memSize and size_t to make s390 happy */
             res = source->getOperations().m_readBlob(aID, aBlobID, (void **)aBlkPtr,
-						     aBlkSize ? &blksize : NULL,
-						     aTotSize ? &totsize : NULL,
+						     aBlkSize ? &blksize : nullptr,
+						     aTotSize ? &totsize : nullptr,
 						     aFirst, aLast);
 	    if (aBlkSize) {
 	        *aBlkSize = blksize;

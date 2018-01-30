@@ -39,8 +39,8 @@ public:
         // not implemented either
         // b_dbus_set_disconnect_function(m_server.getConnection(),
         // staticDisconnected,
-        // NULL,
-        // NULL);
+        // nullptr,
+        // nullptr);
     }
 
     std::string hello(const std::string &in)
@@ -241,28 +241,28 @@ int main(int argc, char **argv)
         SyncEvo::GErrorCXX gerror;
         GDBusCXX::DBusErrorCXX dbusError;
         GOptionEntry opt_entries[] = {
-            { "server", 's', 0, G_OPTION_ARG_NONE, &opt_server, "Start a server instead of a client", NULL },
-            { "forkexec", 'e', 0, G_OPTION_ARG_NONE, &opt_fork_exec, "Use fork+exec to start the client (implies --server)", NULL },
-            { "forkfailure", 'f', 0, G_OPTION_ARG_NONE, &opt_fork_exec_failure, "Fork /bin/false to simulate a failure in the child (implies )", NULL },
-            { "forkkill", 'a', 0, G_OPTION_ARG_STRING, &opt_kill, "'child/parent' call peer which kills itself before replying (implies --forkexec)", NULL },
-            { "address", 'a', 0, G_OPTION_ARG_STRING, &opt_address, "D-Bus address to use when connecting to server", NULL },
-            // { "allow-anonymous", 'n', 0, G_OPTION_ARG_NONE, &opt_allow_anonymous, "Allow anonymous authentication", NULL },
-            { NULL}
+            { "server", 's', 0, G_OPTION_ARG_NONE, &opt_server, "Start a server instead of a client", nullptr },
+            { "forkexec", 'e', 0, G_OPTION_ARG_NONE, &opt_fork_exec, "Use fork+exec to start the client (implies --server)", nullptr },
+            { "forkfailure", 'f', 0, G_OPTION_ARG_NONE, &opt_fork_exec_failure, "Fork /bin/false to simulate a failure in the child (implies )", nullptr },
+            { "forkkill", 'a', 0, G_OPTION_ARG_STRING, &opt_kill, "'child/parent' call peer which kills itself before replying (implies --forkexec)", nullptr },
+            { "address", 'a', 0, G_OPTION_ARG_STRING, &opt_address, "D-Bus address to use when connecting to server", nullptr },
+            // { "allow-anonymous", 'n', 0, G_OPTION_ARG_NONE, &opt_allow_anonymous, "Allow anonymous authentication", nullptr },
+            { nullptr}
         };
 
 #if !GLIB_CHECK_VERSION(2,36,0)
         g_type_init();
 #endif
 
-        opt_address = NULL;
-        opt_kill = NULL;
+        opt_address = nullptr;
+        opt_kill = nullptr;
         opt_server = FALSE;
         opt_fork_exec = FALSE;
         opt_fork_exec_failure = FALSE;
         // opt_allow_anonymous = FALSE;
 
         opt_context = g_option_context_new("peer-to-peer example");
-        g_option_context_add_main_entries(opt_context, opt_entries, NULL);
+        g_option_context_add_main_entries(opt_context, opt_entries, nullptr);
         bool success = g_option_context_parse(opt_context, &argc, &argv, gerror);
         g_option_context_free(opt_context);
         if (!success) {
@@ -272,7 +272,7 @@ int main(int argc, char **argv)
         // throw stdruntime_error("The --allow-anonymous option only makes sense when used with --server.");
         // }
 
-        loop = SyncEvo::GMainLoopStealCXX(g_main_loop_new (NULL, FALSE));
+        loop = SyncEvo::GMainLoopStealCXX(g_main_loop_new (nullptr, FALSE));
         if (!loop) {
             throw std::runtime_error("could not allocate main loop");
         }

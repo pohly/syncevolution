@@ -57,7 +57,7 @@ class AuthProvider
  public:
     /**
      * Creates an AuthProvider matching the identity.m_provider value
-     * or throws an exception if that fails. Never returns NULL.
+     * or throws an exception if that fails. Never returns nullptr.
      */
     static std::shared_ptr<AuthProvider> create(const UserIdentity &identity,
                                                   const InitStateString &password);
@@ -131,7 +131,7 @@ class AuthProvider
 class IdentityProvider
 {
  public:
-    /** returns NULL if disabled, valid AuthProvider if possible, and throws error if something goes wrong */
+    /** returns nullptr if disabled, valid AuthProvider if possible, and throws error if something goes wrong */
     virtual std::shared_ptr<AuthProvider> create(const InitStateString &username,
                                                    const InitStateString &password) = 0;
 

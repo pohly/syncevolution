@@ -57,7 +57,7 @@ extern "C" {
  * Dataserver, the function becomes a NOP macro, unless compatibility
  * mode is on (in which case the current binary might later run with
  * an older Evolution release!). If not a NOP macro, then the function
- * duplicates the string; it handles NULL by passing it through.
+ * duplicates the string; it handles nullptr by passing it through.
  *
  * When compiled against an old Evolution Dataserver, then a runtime
  * check can be enabled to to determine whether the string needs to be
@@ -83,7 +83,7 @@ extern "C" {
  * - e_cal_component_get_recurid_as_string
  *
  * @param x    result of one of the functions above
- * @return string which has to be freed by caller, may be NULL if x was NULL
+ * @return string which has to be freed by caller, may be nullptr if x was nullptr
  */
 extern char *ical_strdup(const char *x);
 #else

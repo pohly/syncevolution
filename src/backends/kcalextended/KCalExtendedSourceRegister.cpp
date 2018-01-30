@@ -39,7 +39,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_KCALEXTENDED
                 true ? new KCalExtendedSource(params, KCalExtendedSource::Event) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         }
     }
 
@@ -55,7 +55,7 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_KCALEXTENDED
                 true ? new KCalExtendedSource(params, KCalExtendedSource::Todo) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         }
     }
 
@@ -71,11 +71,11 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 #ifdef ENABLE_KCALEXTENDED
                 true ? new KCalExtendedSource(params, KCalExtendedSource::Journal) :
 #endif
-                isMe ? RegisterSyncSource::InactiveSource(params) : NULL;
+                isMe ? RegisterSyncSource::InactiveSource(params) : nullptr;
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static RegisterSyncSource registerMe("KCalExtended",

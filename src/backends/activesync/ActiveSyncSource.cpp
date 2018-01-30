@@ -88,7 +88,7 @@ void ActiveSyncSource::findCollections(const std::string &account, const bool fo
     if (!eas_sync_handler_get_folder_list (handler,
 					   force_update,
 					   folders,
-					   NULL,
+					   nullptr,
 					   gerror)) {
 	gerror.throwError(SE_HERE, "fetching folder list");
     }
@@ -242,7 +242,7 @@ void ActiveSyncSource::open()
 void ActiveSyncSource::close()
 {
     // free handler if not done already
-    m_handler.set(NULL);
+    m_handler.set(nullptr);
 }
 
 void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string &resumeToken)
@@ -278,7 +278,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
     for (bool firstIteration = true;
          moreAvailable;
          firstIteration = false) {
-        gchar *buffer = NULL;
+        gchar *buffer = nullptr;
         GErrorCXX gerror;
         EASItemsCXX created, updated;
         EASIdsCXX deleted;

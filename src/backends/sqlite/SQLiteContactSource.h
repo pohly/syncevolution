@@ -66,12 +66,12 @@ class SQLiteContactSource : public SyncSource,
         {
             SyncSourceSession::init(m_operations);
             SyncSourceDelete::init(m_operations);
-            SyncSourceRevisions::init(NULL, NULL, 1, m_operations);
+            SyncSourceRevisions::init(nullptr, nullptr, 1, m_operations);
             SyncSourceChanges::init(m_operations);
 
             m_operations.m_isEmpty = [this] () { return isEmpty(); };
             m_operations.m_readItemAsKey = [this] (sysync::cItemID aID, sysync::KeyH aItemKey) { return readItemAsKey(aID, aItemKey); };
-            m_operations.m_insertItemAsKey = [this] (sysync::KeyH aItemKey, sysync::ItemID newID) { return insertItemAsKey(aItemKey, (sysync::cItemID)NULL, newID); };
+            m_operations.m_insertItemAsKey = [this] (sysync::KeyH aItemKey, sysync::ItemID newID) { return insertItemAsKey(aItemKey, nullptr, newID); };
             m_operations.m_updateItemAsKey = [this] (sysync::KeyH aItemKey, sysync::cItemID aID, sysync::ItemID newID) { return insertItemAsKey(aItemKey, aID, newID); };
             SyncSourceLogging::init(InitList<std::string> ("N_FIRST")+"N_MIDDLE"+"N_LAST", ", ", m_operations);
         }

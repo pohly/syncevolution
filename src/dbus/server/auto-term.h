@@ -50,7 +50,7 @@ class AutoTerm {
         AutoTerm *at = static_cast<AutoTerm*>(data);
         if (!at->m_refs) {
             // currently idle, but also long enough?
-            time_t now = time(NULL);
+            time_t now = time(nullptr);
             if (at->m_lastUsed + at->m_interval <= now) {
                 // yes, shut down event loop and daemon
                 SE_LOG_DEBUG(NULL, "terminating because not in use and idle for more than %ld seconds", (long)at->m_interval);
@@ -138,7 +138,7 @@ public:
             // An already active timeout will trigger at the chosen time,
             // then notice that the server has been used in the meantime and
             // reset the timer. Therefore we don't have to remove it.
-            m_lastUsed = time(NULL);
+            m_lastUsed = time(nullptr);
             if (!m_checkSource) {
                 SE_LOG_DEBUG(NULL, "activating idle termination in %ld seconds because idle", m_interval);
                 m_checkSource = g_timeout_add_seconds(m_interval,

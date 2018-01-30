@@ -376,7 +376,7 @@ public:
 QtContactsSource::QtContactsSource(const SyncSourceParams &params) :
     TrackingSyncSource(params)
 {
-    m_data = NULL;
+    m_data = nullptr;
     SyncSourceLogging::init(InitList<std::string>("N_FIRST") + "N_MIDDLE" + "N_LAST",
                             " ",
                             m_operations);

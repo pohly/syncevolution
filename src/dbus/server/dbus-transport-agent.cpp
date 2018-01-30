@@ -121,7 +121,7 @@ void DBusTransportAgent::doWait()
         // Block for one iteration. Both D-Bus calls and signals (thanks
         // to the SuspendFlags guard in the running sync session) will
         // wake us up.
-        g_main_context_iteration(NULL, true);
+        g_main_context_iteration(nullptr, true);
     }
     SE_LOG_DEBUG(NULL, "D-Bus transport: wait - new state: %s, %s",
                  SessionCommon::ConnectionStateToString(m_state).c_str(),

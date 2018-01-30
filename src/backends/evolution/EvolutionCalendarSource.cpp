@@ -120,7 +120,7 @@ EvolutionCalendarSource::EvolutionCalendarSource(EvolutionCalendarSourceType typ
         // This is not available in older Evolution versions.
         // A configure check could detect that, but as this isn't
         // important the functionality is simply disabled.
-        m_newSystem = NULL /* e_cal_new_system_memos */;
+        m_newSystem = nullptr /* e_cal_new_system_memos */;
 #endif
         break;
      default:
@@ -140,21 +140,21 @@ SyncSource::Databases EvolutionCalendarSource::getDatabases()
                              m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? e_source_registry_ref_default_calendar :
                              m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? e_source_registry_ref_default_task_list :
                              m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? e_source_registry_ref_default_memo_list :
-                             NULL);
+                             nullptr);
 #else
-    ESourceList *tmp = NULL;
+    ESourceList *tmp = nullptr;
     if (!e_cal_get_sources(&tmp, sourceType(), gerror)) {
         // ignore unspecific errors (like on Maemo with no support for memos)
         // and continue with empty list (perhaps defaults work)
         if (!gerror) {
-            tmp = NULL;
+            tmp = nullptr;
         } else {
             throwError(SE_HERE, "unable to access backend databases", gerror);
         }
     }
     ESourceListCXX sources(tmp, TRANSFER_REF);
     bool first = true;
-    for (GSList *g = sources ? e_source_list_peek_groups (sources) : NULL;
+    for (GSList *g = sources ? e_source_list_peek_groups (sources) : nullptr;
          g;
          g = g->next) {
         ESourceGroup *group = E_SOURCE_GROUP (g->data);
@@ -189,7 +189,7 @@ char *EvolutionCalendarSource::authenticate(const char *prompt,
     SE_LOG_DEBUG(getDisplayName(), "authentication requested, prompt \"%s\", key \"%s\" => %s",
                  prompt, key,
                  !passwd.empty() ? "returning configured password" : "no password configured");
-    return !passwd.empty() ? strdup(passwd.c_str()) : NULL;
+    return !passwd.empty() ? strdup(passwd.c_str()) : nullptr;
 }
 #endif
 
@@ -214,7 +214,7 @@ void EvolutionCalendarSource::open()
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? e_source_registry_ref_builtin_calendar :
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_TASKS ? e_source_registry_ref_builtin_task_list :
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? e_source_registry_ref_builtin_memo_list :
-                                                  NULL,
+                                                  nullptr,
                                                   create).get()));
     }
 #else
@@ -323,7 +323,7 @@ class ECalClientViewSyncHandler {
 
         // Async -> Sync
         m_loop.run();
-        e_cal_client_view_stop (m_view, NULL);
+        e_cal_client_view_stop (m_view, nullptr);
 
         if (m_error) {
             std::swap(gerror, m_error);
@@ -361,7 +361,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
 #ifdef USE_EDS_CLIENT
     ECalClientView *view;
 
-    if (!e_cal_client_get_view_sync (m_calendar, "#t", &view, NULL, gerror)) {
+    if (!e_cal_client_get_view_sync (m_calendar, "#t", &view, nullptr, gerror)) {
         throwError(SE_HERE, "getting the view" , gerror);
     }
     ECalClientViewCXX viewPtr = ECalClientViewCXX::steal(view);
@@ -432,8 +432,8 @@ my_tzlookup(const gchar *tzid,
             GCancellable *cancellable,
             GError **error)
 {
-    icaltimezone *zone = NULL;
-    GError *local_error = NULL;
+    icaltimezone *zone = nullptr;
+    GError *local_error = nullptr;
 
     if (e_cal_client_get_timezone_sync((ECalClient *)ecalclient, tzid, &zone, cancellable, &local_error)) {
         return zone;
@@ -447,7 +447,7 @@ my_tzlookup(const gchar *tzid,
         g_propagate_error (error, local_error);
     }
 
-    return NULL;
+    return nullptr;
 }
 #endif
 
@@ -502,14 +502,14 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
     if (
 #ifdef USE_EDS_CLIENT
         !e_cal_client_check_timezones(icomp,
-                                      NULL,
+                                      nullptr,
                                       my_tzlookup,
                                       (const void *)m_calendar.get(),
-                                      NULL,
+                                      nullptr,
                                       gerror)
 #else
         !e_cal_check_timezones(icomp,
-                               NULL,
+                               nullptr,
                                e_cal_tzlookup_ecal,
                                (const void *)m_calendar.get(),
                                gerror)
@@ -535,7 +535,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         } else {
             gboolean success =
 #ifdef USE_EDS_CLIENT
-                e_cal_client_add_timezone_sync(m_calendar, zone, NULL, gerror)
+                e_cal_client_add_timezone_sync(m_calendar, zone, nullptr, gerror)
 #else
                 e_cal_add_timezone(m_calendar, zone, gerror)
 #endif
@@ -560,15 +560,15 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
     // properly update this property if it is already present in the
     // incoming data.
     icalproperty *modprop;
-    while ((modprop = icalcomponent_get_first_property(subcomp, ICAL_LASTMODIFIED_PROPERTY)) != NULL) {
+    while ((modprop = icalcomponent_get_first_property(subcomp, ICAL_LASTMODIFIED_PROPERTY)) != nullptr) {
         icalcomponent_remove_property(subcomp, modprop);
         icalproperty_free(modprop);
-        modprop = NULL;
+        modprop = nullptr;
     }
 
     if (!update) {
         ItemID id = getItemID(subcomp);
-        const char *uid = NULL;
+        const char *uid = nullptr;
 
         // Trying to add a normal event which already exists leads to a
         // gerror->domain == E_CALENDAR_ERROR
@@ -615,7 +615,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 if (
 #ifdef USE_EDS_CLIENT
                     e_cal_client_create_object_sync(m_calendar, subcomp, (gchar **)&uid, 
-                                                    NULL, gerror)
+                                                    nullptr, gerror)
 #else
                     e_cal_create_object(m_calendar, subcomp, (gchar **)&uid, gerror)
 #endif
@@ -640,7 +640,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                         CALOBJ_MOD_THIS, NULL,
+                                                         CALOBJ_MOD_THIS, nullptr,
                                                          gerror)
 #else
                         !e_cal_modify_object(m_calendar, *icalcomp,
@@ -711,11 +711,11 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 ICalComps_t children = removeEvents(id.m_uid, true);
 
                 // Parent is gone, too, and needs to be recreated.
-                const char *uid = NULL;
+                const char *uid = nullptr;
                 if (
 #ifdef USE_EDS_CLIENT
                     !e_cal_client_create_object_sync(m_calendar, subcomp, (char **)&uid, 
-                                                     NULL, gerror)
+                                                     nullptr, gerror)
 #else
                     !e_cal_create_object(m_calendar, subcomp, (char **)&uid, gerror)
 #endif
@@ -732,7 +732,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                         CALOBJ_MOD_THIS, NULL,
+                                                         CALOBJ_MOD_THIS, nullptr,
                                                          gerror)
 #else
                         !e_cal_modify_object(m_calendar, *icalcomp,
@@ -748,7 +748,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
                 if (
 #ifdef USE_EDS_CLIENT
                     !e_cal_client_modify_object_sync(m_calendar, subcomp,
-                                                     CALOBJ_MOD_ALL, NULL,
+                                                     CALOBJ_MOD_ALL, nullptr,
                                                      gerror)
 #else
                     !e_cal_modify_object(m_calendar, subcomp,
@@ -764,7 +764,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             if (
 #ifdef USE_EDS_CLIENT
                 !e_cal_client_modify_object_sync(m_calendar, subcomp,
-                                                 CALOBJ_MOD_THIS, NULL,
+                                                 CALOBJ_MOD_THIS, nullptr,
                                                  gerror)
 #else
                 !e_cal_modify_object(m_calendar, subcomp,
@@ -808,8 +808,8 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
     if (!uid.empty() && // e_cal_client_remove_object_sync() in EDS 3.8 aborts the process for empty UID, other versions cannot succeed, so skip the call.
 #ifdef USE_EDS_CLIENT
         !e_cal_client_remove_object_sync(m_calendar,
-                                         uid.c_str(), NULL, CALOBJ_MOD_ALL,
-                                         NULL, gerror)
+                                         uid.c_str(), nullptr, CALOBJ_MOD_ALL,
+                                         nullptr, gerror)
 
 #else
         !e_cal_remove_object(m_calendar,
@@ -855,7 +855,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                 if (
 #ifdef USE_EDS_CLIENT
                     !e_cal_client_create_object_sync(m_calendar, *icalcomp, &uid, 
-                                                     NULL, gerror)
+                                                     nullptr, gerror)
 #else
                     !e_cal_create_object(m_calendar, *icalcomp, &uid, gerror)
 #endif
@@ -870,7 +870,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                 if (
 #ifdef USE_EDS_CLIENT
                     !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
-                                                     CALOBJ_MOD_THIS, NULL,
+                                                     CALOBJ_MOD_THIS, nullptr,
                                                      gerror)
 #else
                     !e_cal_modify_object(m_calendar, *icalcomp,
@@ -894,7 +894,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
                                             id.m_uid.c_str(),
                                             id.m_rid.c_str(),
                                             CALOBJ_MOD_ONLY_THIS,
-                                            NULL,
+                                            nullptr,
                                             gerror)
 #else
             e_cal_remove_object_with_mod(m_calendar,
@@ -940,20 +940,20 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
 {
     GErrorCXX gerror;
-    icalcomponent *comp = NULL;
+    icalcomponent *comp = nullptr;
 
     if (
 #ifdef USE_EDS_CLIENT
         !e_cal_client_get_object_sync(m_calendar,
                                       id.m_uid.c_str(),
-                                      !id.m_rid.empty() ? id.m_rid.c_str() : NULL,
+                                      !id.m_rid.empty() ? id.m_rid.c_str() : nullptr,
                                       &comp,
-                                      NULL,
+                                      nullptr,
                                       gerror)
 #else
         !e_cal_get_object(m_calendar,
                           id.m_uid.c_str(),
-                          !id.m_rid.empty() ? id.m_rid.c_str() : NULL,
+                          !id.m_rid.empty() ? id.m_rid.c_str() : nullptr,
                           &comp,
                           gerror)
 #endif

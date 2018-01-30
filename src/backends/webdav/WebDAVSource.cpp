@@ -27,7 +27,7 @@ BoolConfigProperty &WebDAVCredentialsOkay()
 
 /**
  * Retrieve settings from SyncConfig.
- * NULL pointer for config is allowed.
+ * nullptr pointer for config is allowed.
  */
 class ContextSettings : public Neon::Settings {
 public:
@@ -534,7 +534,7 @@ void WebDAVSource::replaceHTMLEntities(std::string &item)
                         { "apos", '\'' },
                         { "lt", '<' },
                         { "gt", '>' },
-                        { NULL, 0 }
+                        { nullptr, 0 }
                     };
                     int i = 0;
                     while (true) {
@@ -655,7 +655,7 @@ void WebDAVSource::contactServer()
                 { NE_CAP_BASELINE, "DeltaV baseline" },
                 { NE_CAP_ACTIVITY, "DeltaV activity" },
                 { NE_CAP_VC_COLLECTION, "DeltaV version-controlled-collection" },
-                { 0, NULL }
+                { 0, nullptr }
             };
             SE_LOG_DEBUG(NULL, "%s WebDAV capabilities: %s",
                          m_session->getURL().c_str(),
@@ -729,7 +729,7 @@ std::string WebDAVSource::lookupDNSSRV(const std::string &domain)
     int timeoutSeconds = m_settings->timeoutSeconds();
     int retrySeconds = m_settings->retrySeconds();
 
-    FILE *in = NULL;
+    FILE *in = nullptr;
     try {
         Timespec startTime = Timespec::monotonic();
 
@@ -751,7 +751,7 @@ std::string WebDAVSource::lookupDNSSRV(const std::string &domain)
         buffer[read] = 0;
         url = buffer;
         int res = pclose(in);
-        in = NULL;
+        in = nullptr;
         if (res != -1 && WIFEXITED(res)) {
             res = WEXITSTATUS(res);
         } else {
@@ -1053,7 +1053,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
                     if (authProvider->methodIsSupported(AuthProvider::AUTH_METHOD_OAUTH2)) {
                         m_session->forceAuthorization(Neon::Session::AUTH_HTTPS, authProvider);
                     }
-                    m_session->propfindProp(candidate.m_uri.m_path, 0, NULL, openPropCallback(davProps), Timespec());
+                    m_session->propfindProp(candidate.m_uri.m_path, 0, nullptr, openPropCallback(davProps), Timespec());
                 } catch (const Neon::FatalException &ex) {
                     throw;
                 } catch (...) {
@@ -1118,7 +1118,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
                 { "urn:ietf:params:xml:ns:caldav", "max-attendees-per-instance" },
                 // ACL, http://www.ietf.org/rfc/rfc3744.txt
                 { "DAV:", "current-user-privilege-set" },
-                { NULL, NULL }
+                { nullptr, nullptr }
             };
             static const ne_propname carddav[] = {
                 // WebDAV ACL
@@ -1137,7 +1137,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
                 { "urn:ietf:params:xml:ns:carddav", "max-resource-size" },
                 // ACL, http://www.ietf.org/rfc/rfc3744.txt
                 { "DAV:", "current-user-privilege-set" },
-                { NULL, NULL }
+                { nullptr, nullptr }
             };
             SE_LOG_DEBUG(NULL, "read relevant properties of %s", candidate.m_uri.toURL().c_str());
             m_session->propfindProp(candidate.m_uri.m_path, 0,
@@ -1252,7 +1252,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
                     candidate.m_uri.m_path = newpath;
                 }
             }
-            StringMap *props = pathProps == davProps.end() ? NULL : &pathProps->second;
+            StringMap *props = pathProps == davProps.end() ? nullptr : &pathProps->second;
             bool isResult = false;
             std::string type;
             if (props) {
@@ -1414,7 +1414,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
                         { "urn:ietf:params:xml:ns:caldav", "calendar-description" },
                         { "urn:ietf:params:xml:ns:caldav", "calendar-timezone" },
                         { "urn:ietf:params:xml:ns:caldav", "supported-calendar-component-set" },
-                        { NULL, NULL }
+                        { nullptr, nullptr }
                     };
                     static const ne_propname carddav[] = {
                         { "DAV:", "displayname" },
@@ -1422,7 +1422,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
                         { "urn:ietf:params:xml:ns:carddav", "addressbook-home-set" },
                         { "urn:ietf:params:xml:ns:carddav", "addressbook-description" },
                         { "urn:ietf:params:xml:ns:carddav", "supported-address-data" },
-                        { NULL, NULL }
+                        { nullptr, nullptr }
                     };
                     davProps.clear();
                     m_session->propfindProp(candidate.m_uri.m_path, 1,
@@ -1567,7 +1567,7 @@ Neon::Session::PropfindPropCallback_t WebDAVSource::openPropCallback(Props_t &da
 static const ne_propname getetag[] = {
     { "DAV:", "getetag" },
     { "DAV:", "resourcetype" },
-    { NULL, NULL }
+    { nullptr, nullptr }
 };
 
 bool WebDAVSource::isEmpty()
@@ -1633,7 +1633,7 @@ bool WebDAVSource::isEmpty()
             Neon::Request report(*getSession(), "REPORT", getCalendar().m_path, query, parser);
             report.addHeader("Depth", "1");
             report.addHeader("Content-Type", "application/xml; charset=\"utf-8\"");
-            if (getSession()->run(report, NULL, [&isEmpty] () { return !isEmpty; })) {
+            if (getSession()->run(report, nullptr, [&isEmpty] () { return !isEmpty; })) {
                 break;
             }
         }
@@ -1819,7 +1819,7 @@ void WebDAVSource::checkPostSupport()
 
     static const ne_propname getaddmember[] = {
         { "DAV:", "add-member" },
-        { NULL, NULL }
+        { nullptr, nullptr }
     };
     Timespec deadline = createDeadline();
     Props_t davProps;
@@ -1839,7 +1839,7 @@ void WebDAVSource::checkPostSupport()
  */
 static const ne_propname getctag[] = {
     { "http://calendarserver.org/ns/", "getctag" },
-    { NULL, NULL }
+    { nullptr, nullptr }
 };
 
 std::string WebDAVSource::databaseRevision()

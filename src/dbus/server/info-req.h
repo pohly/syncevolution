@@ -101,7 +101,7 @@ private:
 
     Server &m_server;
 
-    /** caller's session, might be NULL */
+    /** caller's session, might be nullptr */
     const std::string m_sessionPath;
 
     /** unique id of this info request */
