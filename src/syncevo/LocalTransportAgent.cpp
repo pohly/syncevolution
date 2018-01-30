@@ -38,9 +38,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <pcrecpp.h>
 
 #include <algorithm>
+#include <regex>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -95,15 +95,15 @@ public:
         m_remoteBuffer.create(atoi(getEnv("SYNCEVOLUTION_LOCAL_SYNC_PARENT_FD", "-1")));
         m_localBuffer.create(atoi(getEnv("SYNCEVOLUTION_LOCAL_SYNC_CHILD_FD", "-1")));
         m_remoteBuffer.map(NULL, NULL);
-        pcrecpp::StringPiece remote = m_remoteBuffer.stringPiece();
+        StringPiece remote = m_remoteBuffer.stringPiece();
         if ((size_t)remote.size() != m_messageBufferSize) {
             SE_THROW(StringPrintf("local and remote side do not agree on shared buffer size: %ld != %ld",
                                   (long)m_messageBufferSize, (long)remote.size()));
         }
     }
 
-    pcrecpp::StringPiece getLocalBuffer() { return m_localBuffer.stringPiece(); }
-    pcrecpp::StringPiece getRemoteBuffer() { return m_remoteBuffer.stringPiece(); }
+    StringPiece getLocalBuffer() { return m_localBuffer.stringPiece(); }
+    StringPiece getRemoteBuffer() { return m_remoteBuffer.stringPiece(); }
 
     size_t toLocalOffset(const char *data, size_t len)
     {
@@ -111,7 +111,7 @@ public:
             return 0;
         }
 
-        pcrecpp::StringPiece localBuffer = getLocalBuffer();
+        StringPiece localBuffer = getLocalBuffer();
         if (data < localBuffer.data() ||
             data + len > localBuffer.data() + localBuffer.size()) {
             SE_THROW("unexpected send buffer");
@@ -511,7 +511,7 @@ void LocalTransportAgent::storeReplyMsg(const std::string &contentType,
                                         size_t offset, size_t len,
                                         const std::string &error)
 {
-    pcrecpp::StringPiece remoteBuffer = SMLTKSharedMemory::singleton().getRemoteBuffer();
+    StringPiece remoteBuffer = SMLTKSharedMemory::singleton().getRemoteBuffer();
     m_replyMsg.set(remoteBuffer.data() + offset, len);
     m_replyContentType = contentType;
     if (error.empty()) {
@@ -558,14 +558,18 @@ TransportAgent::Status LocalTransportAgent::wait(bool noReply)
                         }
                         std::string explanation = StringPrintf("failure on target side %s of local sync",
                                                                m_clientConfig.c_str());
-                        static const pcrecpp::RE re("\\((?:local|remote), status (\\d+)\\): (.*)");
-                        int clientStatus;
+                        static const std::regex re(R"del(\((?:local|remote), status (\d+)\): (.*))del");
                         std::string clientExplanation;
-                        if (re.PartialMatch(m_clientReport.getError(), &clientStatus, &clientExplanation) &&
-                            (status == clientStatus ||
-                             status == clientStatus - sysync::LOCAL_STATUS_CODE)) {
-                            explanation += ": ";
-                            explanation += clientExplanation;
+                        std::smatch match;
+                        auto error = m_clientReport.getError();
+                        if (std::regex_search(error, match, re)) {
+                            int clientStatus = atoi(match[1].str().c_str());
+                            if (status == clientStatus ||
+                                status == clientStatus - sysync::LOCAL_STATUS_CODE) {
+                                auto clientExplanation = match[2];
+                                explanation += ": ";
+                                explanation += clientExplanation;
+                            }
                         }
                         SE_THROW_EXCEPTION_STATUS(StatusException,
                                                   explanation,
@@ -792,7 +796,7 @@ class LocalTransportAgentChild : public TransportAgent
     /**
      * message from parent in the shared memory buffer
      */
-    pcrecpp::StringPiece m_message;
+    StringPiece m_message;
 
     /**
      * content type of message from parent
@@ -992,7 +996,7 @@ class LocalTransportAgentChild : public TransportAgent
         setMsgToParent(LocalTransportChild::ReplyPtr(), "sendMsg() was called");
         if (m_status == ACTIVE) {
             m_msgToParent = reply;
-            pcrecpp::StringPiece remoteBuffer = SMLTKSharedMemory::singleton().getRemoteBuffer();
+            StringPiece remoteBuffer = SMLTKSharedMemory::singleton().getRemoteBuffer();
             m_message.set(remoteBuffer.data() + offset, len);
             m_messageType = contentType;
             m_status = GOT_REPLY;

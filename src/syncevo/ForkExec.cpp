@@ -25,10 +25,11 @@
 
 #include <unistd.h>
 #include <fcntl.h>
-
-#include <pcrecpp.h>
 #include <ctype.h>
+
 #include "test.h"
+
+#include <regex>
 
 SE_BEGIN_CXX
 
@@ -771,7 +772,7 @@ private:
         CPPUNIT_ASSERT_EQUAL(0, WEXITSTATUS(m_status));
         // output from ld.so directly followed by env output
         CPPUNIT_ASSERT_MESSAGE(out,
-                               pcrecpp::RE("transferring control:.*\\n(\\s+\\d+:.*\\n)*[A-Za-z0-9_]+=.*\\n").PartialMatch(out));
+                               std::regex_search(out, std::regex(R"del(transferring control:.*\n(\s+\d+:.*\n)*[A-Za-z0-9_]+=.*\n)del")));
     }
 };
 SYNCEVOLUTION_TEST_SUITE_REGISTRATION(ForkExecTest);

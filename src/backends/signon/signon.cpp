@@ -32,7 +32,6 @@
 
 #include <syncevo/GLibSupport.h>
 #include <syncevo/GVariantSupport.h>
-#include <pcrecpp.h>
 
 SE_GOBJECT_TYPE(SignonAuthService)
 SE_GOBJECT_TYPE(SignonAuthSession)
