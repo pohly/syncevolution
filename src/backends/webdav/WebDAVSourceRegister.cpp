@@ -17,7 +17,6 @@
 #endif
 
 #include <boost/tokenizer.hpp>
-#include <boost/assign.hpp>
 
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
@@ -309,7 +308,7 @@ public:
         PasswordConfigProperty::checkPasswords(ui,
                                                *peer,
                                                PasswordConfigProperty::CHECK_PASSWORD_ALL,
-                                               boost::assign::list_of(name));
+                                               { name });
         SyncSourceNodes peerNodes = peer->getSyncSourceNodes(name);
         SE_LOG_DEBUG(NULL, "overriding testing source %s properties with the ones from config %s = %s",
                      name.c_str(),

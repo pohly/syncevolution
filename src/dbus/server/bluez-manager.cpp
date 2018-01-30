@@ -26,8 +26,6 @@
 
 #include <algorithm>
 
-#include <boost/assign/list_of.hpp>
-
 using namespace GDBusCXX;
 
 

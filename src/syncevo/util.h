@@ -26,8 +26,6 @@
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/utility/value_init.hpp>
-#include <boost/type_traits/is_class.hpp>
 
 #include <stdarg.h>
 
@@ -39,6 +37,7 @@
 #include <utility>
 #include <exception>
 #include <list>
+#include <type_traits>
 
 #include <syncevo/Timespec.h>    // definitions used to be included in util.h,
                                  // include it to avoid changing code using the time things
@@ -489,7 +488,7 @@ double Sleep(double seconds);
 template<class T> class Init {
  public:
     Init(const T &val) : m_value(val) {}
-    Init() : m_value(boost::value_initialized<T>()) {}
+ Init() : m_value{} {}
     Init(const Init &other) : m_value(other.m_value) {}
     Init & operator = (const T &val) { m_value = val; return *this; }
     Init & operator = (const Init &other) { m_value = other.m_value; return *this; }
@@ -510,7 +509,7 @@ template<class T, bool isClass> class InitStateBase {
     T m_value;
 
  protected:
-    InitStateBase() : m_value(boost::value_initialized<T>()) {}
+    InitStateBase() : m_value{} {}
     InitStateBase(const InitStateBase &other) : m_value(other.m_value) {}
     template<class V> InitStateBase(const V &val) : m_value(val) {}
 
@@ -533,8 +532,8 @@ template<class T> class InitStateBase<T, true> : public T {
     T & get() { return *this; }
 };
 
-template<class T> class InitState : public InitStateBase<T, boost::is_class<T>::value> {
-    typedef InitStateBase<T, boost::is_class<T>::value> parent_type;
+template<class T> class InitState : public InitStateBase<T, std::is_class<T>::value> {
+    typedef InitStateBase<T, std::is_class<T>::value> parent_type;
     bool m_wasSet;
 
  public:
@@ -562,7 +561,7 @@ template<class T> class InitState : public InitStateBase<T, boost::is_class<T>::
 template<class C> InitState<typename C::mapped_type>
 GetWithDef(const C &map,
            const typename C::key_type &key,
-           const typename C::mapped_type &def = boost::value_initialized<typename C::mapped_type>())
+           const typename C::mapped_type &def = {})
 {
     typename C::const_iterator it = map.find(key);
     if (it != map.end()) {
