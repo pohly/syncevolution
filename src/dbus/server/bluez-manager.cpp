@@ -277,7 +277,7 @@ bool BluezManager::getPnpInfoNamesFromValues(const std::string &vendorValue, std
 void BluezManager::BluezDevice::discoverServicesCb(const ServiceDict &serviceDict,
                                                    const string &error)
 {
-    ServiceDict::const_iterator iter = serviceDict.begin();
+    auto iter = serviceDict.begin();
 
     if(iter != serviceDict.end()) {
         std::string serviceRecord = (*iter).second;
@@ -325,7 +325,7 @@ void BluezManager::BluezDevice::getPropertiesCb(const PropDict &props, const str
     if(!error.empty()) {
         SE_LOG_DEBUG(NULL, "Error in calling GetProperties of Interface org.bluez.Device: %s", error.c_str());
     } else {
-        PropDict::const_iterator it = props.find("Name");
+        auto it = props.find("Name");
         if(it != props.end()) {
             m_name = boost::get<string>(it->second);
         }
@@ -334,7 +334,7 @@ void BluezManager::BluezDevice::getPropertiesCb(const PropDict &props, const str
             m_mac = boost::get<string>(it->second);
         }
 
-        PropDict::const_iterator uuids = props.find("UUIDs");
+        auto uuids = props.find("UUIDs");
         if(uuids != props.end()) {
             const std::vector<std::string> uuidVec = boost::get<std::vector<std::string> >(uuids->second);
             checkSyncService(uuidVec);

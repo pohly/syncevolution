@@ -895,7 +895,7 @@ template<typename C, typename A1, typename ...A> class OperationWrapperSwitch<bo
         OperationExecution exec;
 
         // Marking m_pending "volatile" didn't work, find() not defined for that.
-        typename Pending::iterator it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
+        auto it = const_cast<Pending &>(m_pending).find(Converter::toKey(a1));
         bool continuing = it != m_pending.end();
 
         res = continuing ? sysync::LOCERR_OK : m_pre(dynamic_cast<SyncSource &>(m_source), a1, args...);

@@ -372,10 +372,10 @@ class ConfigCache
 
     template<class M> void purge(M &map)
     {
-        typename M::iterator it = map.begin();
+        auto it = map.begin();
         while (it != map.end()) {
             if (!it->second.lock()) {
-                typename M::iterator next = it;
+                auto next = it;
                 ++next;
                 map.erase(it);
                 it = next;

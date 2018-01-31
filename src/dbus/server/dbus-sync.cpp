@@ -79,11 +79,11 @@ DBusSync::DBusSync(const SessionCommon::SyncParams &params,
     setConfigFilter(false, "", filter);
     for (const std::string &source:
                   getSyncSources()) {
-        SessionCommon::SourceFilters_t::const_iterator fit = params.m_sourceFilters.find(source);
+        auto fit = params.m_sourceFilters.find(source);
         filter = fit == params.m_sourceFilters.end() ?
             FilterConfigNode::ConfigFilter() :
             fit->second;
-        SessionCommon::SourceModes_t::const_iterator it = params.m_sourceModes.find(source);
+        auto it = params.m_sourceModes.find(source);
         if (it != params.m_sourceModes.end()) {
             filter["sync"] = it->second;
         }

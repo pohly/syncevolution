@@ -154,7 +154,7 @@ public:
         QStringList content;
         content << detail.definitionName(); // <detail>
         QVariantMap fields = detail.variantValues();
-        for (QVariantMap::const_iterator entry = fields.begin();
+        for (auto entry = fields.begin();
              entry != fields.end();
              ++entry) {
             const QString &fieldName = entry.key();
@@ -237,7 +237,7 @@ public:
         // detail name available?
         if (content.size() > 0) {
             const QString &detailName = content[0];
-            QMap<QString, QContactDetailDefinition>::const_iterator it = m_details.constFind(detailName);
+            auto it = m_details.constFind(detailName);
             // detail still exists?
             if (it != m_details.constEnd()) {
                 const QContactDetailDefinition &definition = *it;
@@ -273,9 +273,8 @@ public:
                     }
 
                     // skip fields which are (no longer) valid, have wrong type or wrong value
-                    QMap<QString, QContactDetailFieldDefinition> fields = definition.fields();
-                    QMap<QString, QContactDetailFieldDefinition>::const_iterator it2 =
-                        fields.constFind(fieldName);
+                    auto fields = definition.fields();
+                    auto it2 = fields.constFind(fieldName);
                     if (it2 != fields.constEnd()) {
                         if (it2->dataType() == value.type()) {
                             QVariantList allowed = it2->allowableValues();

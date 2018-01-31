@@ -288,7 +288,7 @@ RegisterSyncSource::RegisterSyncSource(const string &shortDescr,
     SourceRegistry &registry(SyncSource::getSourceRegistry());
 
     // insert sorted by description to have deterministic ordering
-    for(SourceRegistry::iterator it = registry.begin();
+    for(auto it = registry.begin();
         it != registry.end();
         ++it) {
         if ((*it)->m_shortDescr > shortDescr) {
@@ -1035,7 +1035,7 @@ void ItemCache::reset()
 
 string ItemCache::getFilename(Hash_t hash)
 {
-    Map_t::const_iterator it = m_hash2counter.find(hash);
+    auto it = m_hash2counter.find(hash);
     if (it != m_hash2counter.end()) {
         stringstream dirname;
         dirname << m_dirname << "/" << it->second;
@@ -1197,7 +1197,7 @@ void SyncSourceRevisions::restoreData(const SyncSource::Operations::ConstBackupI
         key.clear();
         key << counter << "-rev";
         string rev = oldBackup.m_node->readProperty(key.str());
-        RevisionMap_t::iterator it = revisions.find(uid);
+        auto it = revisions.find(uid);
         report.incrementItemStat(report.ITEM_LOCAL,
                                  report.ITEM_ANY,
                                  report.ITEM_TOTAL);
@@ -1593,7 +1593,7 @@ sysync::TSyError SyncSourceAdmin::insertMapItem(sysync::cMapID mID)
     mapid2entry(mID, key, value);
 
 #if 0
-    StringMap::iterator it = m_mapping.find(key);
+    auto it = m_mapping.find(key);
     if (it != m_mapping.end()) {
         // error, exists already
         return sysync::DB_Forbidden;
@@ -1612,7 +1612,7 @@ sysync::TSyError SyncSourceAdmin::updateMapItem(sysync::cMapID mID)
     string key, value;
     mapid2entry(mID, key, value);
 
-    ConfigProps::iterator it = m_mapping.find(key);
+    auto it = m_mapping.find(key);
     if (it == m_mapping.end()) {
         // error, does not exist
         return sysync::DB_Forbidden;
@@ -1627,7 +1627,7 @@ sysync::TSyError SyncSourceAdmin::deleteMapItem(sysync::cMapID mID)
     string key, value;
     mapid2entry(mID, key, value);
 
-    ConfigProps::iterator it = m_mapping.find(key);
+    auto it = m_mapping.find(key);
     if (it == m_mapping.end()) {
         // error, does not exist
         return sysync::DB_Forbidden;

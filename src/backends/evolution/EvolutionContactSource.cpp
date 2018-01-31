@@ -538,7 +538,7 @@ void EvolutionContactSource::invalidateCachedContact(const std::string &luid)
 void EvolutionContactSource::invalidateCachedContact(std::shared_ptr<ContactCache> &cache, const std::string &luid)
 {
     if (cache) {
-        ContactCache::iterator it = cache->find(luid);
+        auto it = cache->find(luid);
         if (it != cache->end()) {
             SE_LOG_DEBUG(getDisplayName(), "reading: remove contact %s from cache because of remove or update", luid.c_str());
             // If we happen to read that contact (unlikely), it'll be
@@ -600,7 +600,7 @@ bool EvolutionContactSource::getContactFromCache(const string &luid, EContact **
         checkCacheForError(m_contactCache);
 
         // Does the cache cover our item?
-        ContactCache::const_iterator it = m_contactCache->find(luid);
+        auto it = m_contactCache->find(luid);
         if (it == m_contactCache->end()) {
             if (m_contactCacheNext) {
                 SE_LOG_DEBUG(getDisplayName(), "reading: not in cache, try cache %s",
@@ -686,7 +686,7 @@ std::shared_ptr<ContactCache> EvolutionContactSource::startReading(const std::st
         const Items_t &items = getAllItems();
         const Items_t &newItems = getNewItems();
         const Items_t &updatedItems = getUpdatedItems();
-        Items_t::const_iterator it = items.find(luid);
+        auto it = items.find(luid);
 
         // Always read the requested item, even if not found in item list?
         if (mode == START) {
@@ -718,7 +718,7 @@ std::shared_ptr<ContactCache> EvolutionContactSource::startReading(const std::st
         break;
     }
     case READ_SELECTED_ITEMS: {
-        ReadAheadItems::const_iterator it = boost::find(std::make_pair(m_nextLUIDs.begin(), m_nextLUIDs.end()), luid);
+        auto it = boost::find(std::make_pair(m_nextLUIDs.begin(), m_nextLUIDs.end()), luid);
         // Always read the requested item, even if not found in item list?
         if (mode == START) {
             uids[0] = &luid;
@@ -910,7 +910,7 @@ void EvolutionContactSource::flushItemChanges()
                 // always valid here.
                 SE_LOG_DEBUG(getDisplayName(), "batch add of %d contacts completed", (int)batched->size());
                 m_numRunningOperations--;
-                PendingContainer_t::iterator it = (*batched).begin();
+                auto it = (*batched).begin();
                 GSList *uid = uids;
                 while (it != (*batched).end() && uid) {
                     SE_LOG_DEBUG((*it)->m_name, "completed: %s",
@@ -957,7 +957,7 @@ void EvolutionContactSource::flushItemChanges()
             try {
                 SE_LOG_DEBUG(getDisplayName(), "batch update of %d contacts completed", (int)batched->size());
                 m_numRunningOperations--;
-                PendingContainer_t::iterator it = (*batched).begin();
+                auto it = (*batched).begin();
                 while (it != (*batched).end()) {
                     SE_LOG_DEBUG((*it)->m_name, "completed: %s",
                                  success ? "<<successfully>>" :

@@ -38,7 +38,7 @@ Client::~Client()
 
 void Client::detach(Resource *resource)
 {
-    for (Resources_t::iterator it = m_resources.begin();
+    for (auto it = m_resources.begin();
          it != m_resources.end();
          ++it) {
         if (it->get() == resource) {

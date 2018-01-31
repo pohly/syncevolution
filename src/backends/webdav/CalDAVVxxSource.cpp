@@ -34,7 +34,7 @@ bool CalDAVVxxSource::typeMatches(const StringMap &props) const
     std::string davcomp = StringPrintf("<urn:ietf:params:xml:ns:caldavcomp name='%s'></urn:ietf:params:xml:ns:caldavcomp>",
                                        m_content.c_str());
 
-    StringMap::const_iterator it = props.find("urn:ietf:params:xml:ns:caldav:supported-calendar-component-set");
+    auto it = props.find("urn:ietf:params:xml:ns:caldav:supported-calendar-component-set");
     if (it != props.end() &&
         it->second.find(davcomp) != std::string::npos) {
         return true;

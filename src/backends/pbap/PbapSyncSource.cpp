@@ -365,7 +365,7 @@ void PbapSession::propChangedCb(const GDBusCXX::Path_t &path,
 {
     // Called for a path which matches the current session, so we know
     // that the signal is for our transfer. Only need to check the status.
-    Params::const_iterator it = changed.find("Status");
+    auto it = changed.find("Status");
     if (it != changed.end()) {
         std::string status = boost::get<std::string>(it->second);
         SE_LOG_DEBUG(NULL, "OBEXD transfer %s: %s",
@@ -661,7 +661,7 @@ void PbapSession::initSession(const std::string &address, const std::string &for
             continue;
         }
 
-        Properties::const_iterator entry =
+        auto entry =
             std::find_if(m_filterFields.begin(),
                          m_filterFields.end(),
                          [&prop] (const std::string &other) { return boost::iequals(other, prop, std::locale()); });
@@ -715,7 +715,7 @@ std::shared_ptr<PullAll> PbapSession::startPullAll(const PullParams &pullParams)
         if (filter.empty()) {
             filter = supportedProperties();
         }
-        for (Properties::iterator it = filter.begin();
+        for (auto it = filter.begin();
              it != filter.end();
              ++it) {
             if (*it == "PHOTO") {
@@ -907,7 +907,7 @@ void PbapSession::continuePullAll(PullAll &state)
 
 void PbapSession::checkForError()
 {
-    Transfers::const_iterator it = m_transfers.find(m_currentTransfer);
+    auto it = m_transfers.find(m_currentTransfer);
     if (it != m_transfers.end()) {
         if (!it->second.m_transferErrorCode.empty()) {
             m_parent.throwError(SE_HERE, StringPrintf("%s: %s",
@@ -920,7 +920,7 @@ void PbapSession::checkForError()
 Timespec PbapSession::transferComplete() const
 {
     Timespec res;
-    Transfers::const_iterator it = m_transfers.find(m_currentTransfer);
+    auto it = m_transfers.find(m_currentTransfer);
     if (it != m_transfers.end()) {
         res = it->second.m_transferComplete;
     }
