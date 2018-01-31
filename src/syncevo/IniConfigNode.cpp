@@ -218,7 +218,7 @@ void IniFileConfigNode::removeProperty(const std::string &property)
 {
     std::string value;
 
-    std::list<std::string>::iterator it = m_lines.begin();
+    auto it = m_lines.begin();
     while (it != m_lines.end()) {
         const std::string &line = *it;
         bool isComment;

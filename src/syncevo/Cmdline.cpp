@@ -1198,7 +1198,7 @@ bool Cmdline::run() {
             for (const string &source: configuredSources) {
                 std::shared_ptr<PersistentSyncSourceConfig> sourceConfig(to->getSyncSourceConfig(source));
                 string disable = "";
-                set<string>::iterator entry = sources.find(source);
+                auto entry = sources.find(source);
                 bool selected = entry != sources.end();
 
                 if (!m_sources.empty() &&
@@ -1279,7 +1279,7 @@ bool Cmdline::run() {
                     if (selected) {
                         // user absolutely wants it: enable even if off by default
                         ConfigProps filter = m_props.createSourceFilter(m_server, source);
-                        ConfigProps::const_iterator sync = filter.find("sync");
+                        auto sync = filter.find("sync");
                         syncMode = sync == filter.end() ? "two-way" : sync->second;
                     }
                     if (configureContext) {
@@ -1503,7 +1503,7 @@ bool Cmdline::run() {
                                                                      total, (unsigned long)m_luids.size()));
                             }
                         }
-                        list<string>::const_iterator luidit = m_luids.begin();
+                        auto luidit = m_luids.begin();
                         for (const auto &match: make_iterator_range(boost::make_split_iterator(content, finder))) {
                             string luid;
                             if (m_update) {

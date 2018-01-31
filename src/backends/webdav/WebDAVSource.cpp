@@ -1239,7 +1239,7 @@ bool WebDAVSource::findCollections(const std::function<bool (const std::string &
         }
 
         if (success) {
-            Props_t::iterator pathProps = davProps.find(candidate.m_uri.m_path);
+            auto pathProps = davProps.find(candidate.m_uri.m_path);
             if (pathProps == davProps.end()) {
                 // No reply for requested path? Happens with Yahoo Calendar server,
                 // which returns information about "/dav" when asked about "/".
@@ -2378,7 +2378,7 @@ bool WebDAVSource::isLeafCollection(const StringMap &props) const
 {
     // CardDAV and CalDAV both promise to not contain anything
     // unrelated to them
-    StringMap::const_iterator it = props.find("DAV::resourcetype");
+    auto it = props.find("DAV::resourcetype");
     if (it != props.end()) {
         const std::string &type = it->second;
         // allow parameters (no closing bracket)

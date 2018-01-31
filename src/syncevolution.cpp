@@ -571,7 +571,7 @@ void RemoteDBusServer::attachSync()
                 if (!error.empty()) {
                     SE_LOG_DEBUG(NULL, "Server.GetVersions(): %s", error.c_str());
                 } else {
-                    StringMap::const_iterator it = versions.find("version");
+                    auto it = versions.find("version");
                     if (it != versions.end() &&
                         it->second != VERSION) {
                         SE_LOG_INFO(NULL,
@@ -755,7 +755,7 @@ void RemoteDBusServer::updateSessions(const std::string &session, bool active)
         m_activeSessions.push_back(session);
     } else {
         //if inactive, remove it from active list
-        for(std::vector<std::string>::iterator it = m_activeSessions.begin();
+        for(auto it = m_activeSessions.begin();
                 it != m_activeSessions.end(); ++it) {
             if(boost::equals(session, *it)) {
                 m_activeSessions.erase(it);
@@ -879,10 +879,10 @@ void RemoteSession::executeAsync(const std::vector<std::string> &args)
 
 void RemoteSession::setConfigName(const Config_t &config)
 {
-    Config_t::const_iterator it = config.find("");
+    auto it = config.find("");
     if(it != config.end()) {
         StringMap global = it->second;
-        StringMap::iterator git = global.find("configName");
+        auto git = global.find("configName");
         if(git != global.end()) {
             m_configName = git->second;
         }
@@ -923,7 +923,7 @@ void RemoteSession::infoReq(const std::string &id,
     if (m_runSync && boost::iequals(session, getPath())) {
         //only handle password now
         if (boost::iequals("password", type)) {
-            std::map<std::string, std::shared_ptr<InfoReq> >::iterator it = m_infoReqs.find(id);
+            auto it = m_infoReqs.find(id);
             if (it != m_infoReqs.end()) {
                 it->second->process(id, session, state, handler, type, params);
             } else {
@@ -941,7 +941,7 @@ void RemoteSession::handleInfoReq(const std::string &type, const StringMap &para
         char buffer[256];
 
         std::string descr;
-        StringMap::const_iterator it = params.find("description");
+        auto it = params.find("description");
         if (it != params.end()) {
             descr = it->second;
         }
@@ -962,7 +962,7 @@ void RemoteSession::handleInfoReq(const std::string &type, const StringMap &para
 
 void RemoteSession::removeInfoReq(const std::string &id) 
 {
-    std::map<std::string, std::shared_ptr<InfoReq> >::iterator it = m_infoReqs.find(id);
+    auto it = m_infoReqs.find(id);
     if (it != m_infoReqs.end()) {
         m_infoReqs.erase(it);
     }

@@ -92,7 +92,7 @@ void FileConfigTree::remove(const std::string &path)
 
 void FileConfigTree::reset()
 {
-    for (NodeCache_t::iterator it = m_nodes.begin();
+    for (auto it = m_nodes.begin();
          it != m_nodes.end();
          ++it) {
         if (it->second.use_count() > 1) {
@@ -118,7 +118,7 @@ void FileConfigTree::clearNodes(const std::string &fullpath)
              * containers like list, vector could work! :( 
              * Below is STL recommended usage. 
              */
-            NodeCache_t::iterator erased = it++;
+            auto erased = it++;
             if (erased->second.use_count() > 1) {
                 // same check as in reset()
                 SE_THROW(erased->second->getName() +
@@ -163,7 +163,7 @@ std::shared_ptr<ConfigNode> FileConfigTree::open(const std::string &path,
     }
 
     std::string fullname = normalizePath(fullpath + "/" + filename);
-    NodeCache_t::iterator found = m_nodes.find(fullname);
+    auto found = m_nodes.find(fullname);
     if (found != m_nodes.end()) {
         return found->second;
     } else if(type != other && type != server) {
@@ -178,7 +178,7 @@ std::shared_ptr<ConfigNode> FileConfigTree::open(const std::string &path,
 std::shared_ptr<ConfigNode> FileConfigTree::add(const std::string &path,
                                                   const std::shared_ptr<ConfigNode> &node)
 {
-    NodeCache_t::iterator found = m_nodes.find(path);
+    auto found = m_nodes.find(path);
     if (found != m_nodes.end()) {
         return found->second;
     } else {

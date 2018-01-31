@@ -97,7 +97,7 @@ public:
      * it was referenced not at all or multiple times.
      */
     void detachAll(Resource *resource) {
-        Resources_t::iterator it = m_resources.begin();
+        auto it = m_resources.begin();
         while (it != m_resources.end()) {
             if (it->get() == resource) {
                 it = m_resources.erase(it);
@@ -117,7 +117,7 @@ public:
      */
     std::shared_ptr<Resource> findResource(Resource *resource)
     {
-        for (Resources_t::iterator it = m_resources.begin();
+        for (auto it = m_resources.begin();
              it != m_resources.end();
              ++it) {
             if (it->get() == resource) {

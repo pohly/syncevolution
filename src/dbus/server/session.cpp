@@ -283,7 +283,7 @@ void Session::setNamedConfig(const std::string &configName,
             for(it = sources.begin(); it != sources.end(); ++it) {
                 string source = "source/";
                 source += *it;
-                ReadOperations::Config_t::const_iterator configIt = config.find(source);
+                auto configIt = config.find(source);
                 if(configIt == config.end()) {
                     /** if no config for this source, we remove it */
                     from->removeSyncSource(*it);
@@ -600,7 +600,7 @@ void Session::getProgress(int32_t &progress,
 
 bool Session::getSyncSourceReport(const std::string &sourceName, SyncSourceReport &report) const
 {
-    SyncSourceReports::const_iterator it = m_syncSourceReports.find(sourceName);
+    auto it = m_syncSourceReports.find(sourceName);
     if (it != m_syncSourceReports.end()) {
         report = it->second;
         return true;
@@ -1250,11 +1250,11 @@ void Session::sourceProgress(sysync::TProgressEventEnum type,
         // Helper will create new source entries by sending a
         // sysync::PEV_PREPARING with SYNC_NONE. Must fire progress
         // and status events for such new sources.
-        SourceProgresses_t::iterator pit = m_sourceProgress.find(sourceName);
+        auto pit = m_sourceProgress.find(sourceName);
         bool sourceProgressCreated = pit == m_sourceProgress.end();
         SourceProgress &progress = sourceProgressCreated ? m_sourceProgress[sourceName] : pit->second;
 
-        SourceStatuses_t::iterator sit = m_sourceStatus.find(sourceName);
+        auto sit = m_sourceStatus.find(sourceName);
         bool sourceStatusCreated = sit == m_sourceStatus.end();
         SourceStatus &status = sourceStatusCreated ? m_sourceStatus[sourceName] : sit->second;
 
