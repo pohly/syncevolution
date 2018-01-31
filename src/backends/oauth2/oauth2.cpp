@@ -26,6 +26,8 @@
 #include <syncevo/CurlTransportAgent.h>
 #include <json.h>
 
+#include <sstream>
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
