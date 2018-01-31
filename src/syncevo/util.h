@@ -560,7 +560,7 @@ GetWithDef(const C &map,
            const typename C::key_type &key,
            const typename C::mapped_type &def = {})
 {
-    typename C::const_iterator it = map.find(key);
+    auto it = map.find(key);
     if (it != map.end()) {
         return InitState<typename C::mapped_type>(it->second, true);
     } else {

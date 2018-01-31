@@ -230,7 +230,7 @@ public:
 void PendingChecks::runChecks()
 {
     DynMutex::Guard guard = m_mutex.lock();
-    Checks::iterator it = m_checks.begin();
+    auto it = m_checks.begin();
     bool removed = false;
     while (it != m_checks.end()) {
         bool cont;
@@ -244,7 +244,7 @@ void PendingChecks::runChecks()
 
         if (!cont) {
             // Done with this check
-            Checks::iterator next = it;
+            auto next = it;
             ++next;
             m_checks.erase(it);
             it = next;

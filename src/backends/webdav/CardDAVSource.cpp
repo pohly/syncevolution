@@ -53,7 +53,7 @@ std::string CardDAVSource::getDescription(const string &luid)
 void CardDAVSource::readItemInternal(const std::string &luid, std::string &item, bool raw)
 {
     if (m_cardDAVCache) {
-        CardDAVCache::const_iterator it = m_cardDAVCache->find(luid);
+        auto it = m_cardDAVCache->find(luid);
         if (it != m_cardDAVCache->end()) {
             const std::string *data = boost::get<const std::string>(&it->second);
             if (data) {
@@ -113,7 +113,7 @@ std::shared_ptr<CardDAVCache> CardDAVSource::readBatch(const std::string &luid)
         const Items_t &items = getAllItems();
         const Items_t &newItems = getNewItems();
         const Items_t &updatedItems = getUpdatedItems();
-        Items_t::const_iterator it = items.find(luid);
+        auto it = items.find(luid);
 
         // Always read the requested item, even if not found in item list.
         luids.push_back(&luid);
@@ -223,7 +223,7 @@ std::shared_ptr<CardDAVCache> CardDAVSource::readBatch(const std::string &luid)
 
                 (*cache)[luid] = result;
                 bool found = false;
-                for (BatchLUIDs::iterator it = luids.begin();
+                for (auto it = luids.begin();
                      it != luids.end();
                      ++it) {
                     if (**it == luid) {
@@ -314,7 +314,7 @@ void CardDAVSource::getReadAheadOrder(ReadAheadOrder &order,
 void CardDAVSource::invalidateCachedItem(const std::string &luid)
 {
     if (m_cardDAVCache) {
-        CardDAVCache::iterator it = m_cardDAVCache->find(luid);
+        auto it = m_cardDAVCache->find(luid);
         if (it != m_cardDAVCache->end()) {
             SE_LOG_DEBUG(getDisplayName(), "reading: remove contact %s from cache because of remove or update", luid.c_str());
             // If we happen to read that contact (unlikely), it'll be
@@ -329,7 +329,7 @@ void CardDAVSource::invalidateCachedItem(const std::string &luid)
 
 bool CardDAVSource::typeMatches(const StringMap &props) const
 {
-    StringMap::const_iterator it = props.find("DAV::resourcetype");
+    auto it = props.find("DAV::resourcetype");
     if (it != props.end()) {
         const std::string &type = it->second;
         // allow parameters (no closing bracket)

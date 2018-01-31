@@ -384,7 +384,7 @@ void AutoSyncManager::sessionStarted(const std::shared_ptr<Session> &session)
 {
     // Do we have a task for this config?
     std::string configName = session->getConfigName();
-    PeerMap::iterator it = m_peerMap.find(configName);
+    auto it = m_peerMap.find(configName);
     if (it == m_peerMap.end()) {
         SE_LOG_DEBUG(NULL, "auto sync: ignore running sync %s without config",
                      configName.c_str());

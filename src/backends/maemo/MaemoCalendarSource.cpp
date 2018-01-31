@@ -278,7 +278,7 @@ TrackingSyncSource::InsertItemResult MaemoCalendarSource::insertItem(const strin
                 throwError(SE_HERE, string("no events in ical: ") + item);
             }
         }
-        vector< CComponent * >::iterator it = comps.begin();
+        vector< CComponent * auto it = comps.begin();
         if (comps.size() > 1) {
             for (; it != comps.end(); ++it) {
                 delete (*it);
