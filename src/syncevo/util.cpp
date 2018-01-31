@@ -889,7 +889,7 @@ std::vector<std::string> unescapeJoinedString (const std::string& src, char sep)
         if (!((s1.length() - ((pos == s1.npos) ? 0: pos-1)) &1 )) {
             s2="";
             boost::trim (s1);
-            for (std::string::iterator i = s1.begin(); i != s1.end(); ++i) {
+            for (auto i = s1.begin(); i != s1.end(); ++i) {
                 //unescape characters
                 if (*i == '\\') {
                     if(++i == s1.end()) {

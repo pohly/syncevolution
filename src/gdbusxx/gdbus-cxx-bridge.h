@@ -1762,7 +1762,7 @@ template<class K, class V, class C> struct dbus_traits< std::map<K, V, C> > : pu
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
 
-        for(typename host_type::const_iterator it = dict.begin();
+        for(auto it = dict.begin();
             it != dict.end();
             ++it) {
             g_variant_builder_open(&builder, G_VARIANT_TYPE(getContainedType().c_str()));
@@ -1818,7 +1818,7 @@ template<class C, class V> struct dbus_traits_collection : public dbus_traits_ba
     {
         g_variant_builder_open(&builder, G_VARIANT_TYPE(getType().c_str()));
 
-        for(typename host_type::const_iterator it = array.begin();
+        for(auto it = array.begin();
             it != array.end();
             ++it) {
             dbus_traits<V>::append(builder, *it);

@@ -173,7 +173,7 @@ void Connection::process(const Caller_t &caller,
                     }
 
                     // for Bluetooth transports match against mac address.
-                    StringMap::const_iterator id = m_peer.find("id"),
+                    auto id = m_peer.find("id"),
                         trans = m_peer.find("transport");
                     if (trans != m_peer.end() && id != m_peer.end()) {
                         if (trans->second == "org.openobex.obexd") {

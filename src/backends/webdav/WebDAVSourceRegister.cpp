@@ -265,7 +265,7 @@ public:
         };
         config.m_createSourceA =
             config.m_createSourceB = create;
-        ConfigProps::const_iterator it = m_props.find(m_type + "/testcases");
+        auto it = m_props.find(m_type + "/testcases");
         if (it != m_props.end() ||
             (it = m_props.find("testcases")) != m_props.end()) {
             config.m_testcases = it->second.c_str();

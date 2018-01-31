@@ -122,7 +122,7 @@ public:
 
 void Server::clientGone(Client *c)
 {
-    for (Clients_t::iterator it = m_clients.begin();
+    for (auto it = m_clients.begin();
         it != m_clients.end();
         ++it) {
         if (it->second.get() == c) {
@@ -207,7 +207,7 @@ void Server::setNotifications(bool enabled,
 
 bool Server::notificationsEnabled()
 {
-    for (Clients_t::iterator it = m_clients.begin();
+    for (auto it = m_clients.begin();
         it != m_clients.end();
         ++it) {
         if (!it->second->getNotificationsEnabled()) {
@@ -570,7 +570,7 @@ void Server::run()
  */
 std::shared_ptr<Client> Server::findClient(const Caller_t &ID)
 {
-    for (Clients_t::iterator it = m_clients.begin();
+    for (auto it = m_clients.begin();
         it != m_clients.end();
         ++it) {
         if (it->second->m_ID == ID) {
@@ -609,7 +609,7 @@ void Server::enqueue(const std::shared_ptr<Session> &session)
 {
     bool idle = isIdle();
 
-    WorkQueue_t::iterator it = m_workQueue.end();
+    auto it = m_workQueue.end();
     while (it != m_workQueue.begin()) {
         --it;
         // skip over dead sessions, they will get cleaned up elsewhere
@@ -630,7 +630,7 @@ void Server::enqueue(const std::shared_ptr<Session> &session)
 void Server::killSessionsAsync(const std::string &peerDeviceID,
                                const SimpleResult &onResult)
 {
-    WorkQueue_t::iterator it = m_workQueue.begin();
+    auto it = m_workQueue.begin();
     while (it != m_workQueue.end()) {
         std::shared_ptr<Session> session = it->lock();
         if (session && session->getPeerDeviceID() == peerDeviceID) {
@@ -673,7 +673,7 @@ void Server::dequeue(Session *session)
         return;
     }
 
-    for (WorkQueue_t::iterator it = m_workQueue.begin();
+    for (auto it = m_workQueue.begin();
          it != m_workQueue.end();
          ++it) {
         if (it->lock().get() == session) {
@@ -858,7 +858,7 @@ void Server::passwordResponse(const InfoReq::InfoMap &response,
         return;
     }
 
-    InfoReq::InfoMap::const_iterator it = response.find("password");
+    auto it = response.find("password");
     if (it == response.end()) {
         // no password provided, user wants to abort
         session->passwordResponse(false, true, "");
@@ -894,7 +894,7 @@ void Server::infoResponse(const Caller_t &caller,
                           const std::string &state,
                           const std::map<string, string> &response)
 {
-    InfoReqMap::iterator it = m_infoReqMap.find(id);
+    auto it = m_infoReqMap.find(id);
     // if not found, ignore
     if (it != m_infoReqMap.end()) {
         const std::shared_ptr<InfoReq> infoReq = it->second.lock();
@@ -970,7 +970,7 @@ std::shared_ptr<SyncConfig::TemplateDescription> Server::getPeerTempl(const stri
 {
     std::string lower = peer;
     boost::to_lower(lower);
-    MatchedTemplates::iterator it = m_matchedTempls.find(lower);
+    auto it = m_matchedTempls.find(lower);
     if(it != m_matchedTempls.end()) {
         return it->second;
     } else {

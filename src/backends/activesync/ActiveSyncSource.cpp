@@ -192,7 +192,7 @@ std::string ActiveSyncSource::lookupFolder(const std::string &folder) {
     }
 
     // Lookup folder name
-    FolderPaths::const_iterator entry = m_folderPaths.find(key);
+    auto entry = m_folderPaths.find(key);
     if (entry != m_folderPaths.end()) {
         return entry->second;
     }
@@ -523,7 +523,7 @@ SyncSourceSerialize::InsertItemResult ActiveSyncSource::insertItem(const std::st
 void ActiveSyncSource::readItem(const std::string &luid, std::string &item)
 {
     // return straight from cache?
-    std::map<std::string, std::string>::iterator it = m_items.find(luid);
+    auto it = m_items.find(luid);
     if (it == m_items.end()) {
         // no, must fetch
         EASItemPtr tmp(eas_item_info_new(), "EasItem");

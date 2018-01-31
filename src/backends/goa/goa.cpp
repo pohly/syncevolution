@@ -116,16 +116,16 @@ std::shared_ptr<GOAAccount> GOAManager::lookupAccount(const std::string &usernam
         }
         SE_LOG_DEBUG(NULL, "GOA object %s implements %s", path.c_str(),
                      boost::join(interfaceKeys, ", ").c_str());
-        Interfaces::const_iterator it = interfaces.find(GOA_ACCOUNT_INTERFACE);
+        auto it = interfaces.find(GOA_ACCOUNT_INTERFACE);
         if (it != interfaces.end()) {
             const Properties &properties = it->second;
-            Properties::const_iterator id = properties.find(GOA_ACCOUNT_ID);
-            Properties::const_iterator presentationID = properties.find(GOA_ACCOUNT_PRESENTATION_IDENTITY);
+            auto id = properties.find(GOA_ACCOUNT_ID);
+            auto presentationID = properties.find(GOA_ACCOUNT_PRESENTATION_IDENTITY);
             if (id != properties.end() &&
                 presentationID != properties.end()) {
                 const std::string &idStr = boost::get<std::string>(id->second);
                 const std::string &presentationIDStr = boost::get<std::string>(presentationID->second);
-                Properties::const_iterator provider = properties.find(GOA_ACCOUNT_PROVIDER_NAME);
+                auto provider = properties.find(GOA_ACCOUNT_PROVIDER_NAME);
                 std::string description = StringPrintf("%s, %s = %s",
                                                        provider == properties.end() ? "???" : boost::get<std::string>(provider->second).c_str(),
                                                        presentationIDStr.c_str(),

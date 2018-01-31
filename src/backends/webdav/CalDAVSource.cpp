@@ -169,9 +169,9 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
     }
 
     // remove obsolete entries
-    SubRevisionMap_t::iterator it = revisions.begin();
+    auto it = revisions.begin();
     while (it != revisions.end()) {
-        SubRevisionMap_t::iterator next = it;
+        auto next = it;
         ++next;
         if (items.find(it->first) == items.end()) {
             revisions.erase(it);
@@ -185,7 +185,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
     m_cache.m_initialized = false;
     std::list<std::string> mustRead;
     for (const StringPair &item: items) {
-        SubRevisionMap_t::iterator it = revisions.find(item.first);
+        auto it = revisions.find(item.first);
         if (it == revisions.end() ||
             it->second.m_revision != item.second) {
             // read current information below
@@ -479,7 +479,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
     std::string davLUID = luid;
     std::string knownSubID = callerSubID;
     if (davLUID.empty()) {
-        EventCache::iterator it = m_cache.findByUID(newEvent->m_UID);
+        auto it = m_cache.findByUID(newEvent->m_UID);
         if (it != m_cache.end()) {
             davLUID = it->first;
             knownSubID = subid;
@@ -519,7 +519,7 @@ SubSyncSource::SubItemResult CalDAVSource::insertSubItem(const std::string &luid
         subres.m_subid = subid;
         subres.m_revision = res.m_revision;
 
-        EventCache::iterator it = m_cache.find(res.m_luid);
+        auto it = m_cache.find(res.m_luid);
         if (it != m_cache.end()) {
             // merge into existing Event
             Event &event = loadItem(*it->second);
@@ -837,7 +837,7 @@ void CalDAVSource::Event::unescapeRecurrenceID(std::string &data)
 
 std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string &subid)
 {
-    EventCache::iterator it = m_cache.find(davLUID);
+    auto it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         // gone already
         throwError(SE_HERE, STATUS_NOT_FOUND, "deleting item: " + davLUID);
@@ -947,7 +947,7 @@ std::string CalDAVSource::removeSubItem(const string &davLUID, const std::string
 
 void CalDAVSource::removeMergedItem(const std::string &davLUID)
 {
-    EventCache::iterator it = m_cache.find(davLUID);
+    auto it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         // gone already, no need to do anything
         SE_LOG_DEBUG(getDisplayName(), "%s: ignoring request to delete non-existent item",
@@ -982,7 +982,7 @@ void CalDAVSource::removeMergedItem(const std::string &davLUID)
 void CalDAVSource::flushItem(const string &davLUID)
 {
     // TODO: currently we always flush immediately, so no need to send data here
-    EventCache::iterator it = m_cache.find(davLUID);
+    auto it = m_cache.find(davLUID);
     if (it != m_cache.end()) {
         it->second->m_calendar.set(nullptr);
     }
@@ -990,7 +990,7 @@ void CalDAVSource::flushItem(const string &davLUID)
 
 std::string CalDAVSource::getSubDescription(const string &davLUID, const string &subid)
 {
-    EventCache::iterator it = m_cache.find(davLUID);
+    auto it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         // unknown item, return empty string for fallback
         return "";
@@ -1041,7 +1041,7 @@ std::string CalDAVSource::getDescription(const string &luid)
 
 CalDAVSource::Event &CalDAVSource::findItem(const std::string &davLUID)
 {
-    EventCache::iterator it = m_cache.find(davLUID);
+    auto it = m_cache.find(davLUID);
     if (it == m_cache.end()) {
         throwError(SE_HERE, STATUS_NOT_FOUND, "finding item: " + davLUID);
     }
@@ -1393,7 +1393,7 @@ void CalDAVSource::restoreData(const SyncSource::Operations::ConstBackupInfo &ol
 
 bool CalDAVSource::typeMatches(const StringMap &props) const
 {
-    StringMap::const_iterator it = props.find("urn:ietf:params:xml:ns:caldav:supported-calendar-component-set");
+    auto it = props.find("urn:ietf:params:xml:ns:caldav:supported-calendar-component-set");
     if (it != props.end() &&
         it->second.find("<urn:ietf:params:xml:ns:caldavcomp name='VEVENT'></urn:ietf:params:xml:ns:caldavcomp>") != std::string::npos) {
         return true;
