@@ -42,6 +42,15 @@
                                  // include it to avoid changing code using the time things
 #include <syncevo/Exception.h>   // same for Exception and SE_THROW*
 
+extern template class std::basic_string<char>; // std::string
+extern template class std::vector<std::string>;
+extern template class std::list<std::string>;
+
+// Does not work:
+// undefined reference to `std::pair<...>::pair(...)'
+// extern template struct std::pair<std::string, std::string>;
+// extern template class std::map<std::string, std::string>;
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 

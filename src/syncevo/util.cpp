@@ -64,6 +64,10 @@
 CPPUNIT_REGISTRY_ADD_TO_DEFAULT("SyncEvolution");
 #endif
 
+template class std::basic_string<char>; // std::string
+template class std::vector<std::string>;
+template class std::list<std::string>;
+
 #include <syncevo/declarations.h>
 SE_BEGIN_CXX
 
