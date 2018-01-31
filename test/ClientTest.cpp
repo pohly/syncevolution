@@ -1047,7 +1047,7 @@ void LocalTests::updateManyItems(const CreateSource &createSource, int startInde
     }
     int lastIndex = firstIndex + (numItems >= 1 ? numItems : defNumItems()) - 1;
     std::string revstring = StringPrintf("REVISION #%d", revision);
-    std::list<std::string>::const_iterator it = luids.begin();
+    auto it = luids.begin();
     for (int i = 0; i < offset && it != luids.end(); i++, ++it) {}
     for (int item = firstIndex;
          item <= lastIndex && it != luids.end();
@@ -1066,7 +1066,7 @@ void LocalTests::removeManyItems(const CreateSource &createSource, int numItems,
     TestingSyncSourcePtr source;
     SOURCE_ASSERT_NO_FAILURE(source.get(), source.reset(createSourceA()));
 
-    std::list<std::string>::const_iterator it = luids.begin();
+    auto it = luids.begin();
     for (int i = 0; i < offset && it != luids.end(); i++, ++it) {}
     for (int item = 0;
          item < numItems && it != luids.end();
@@ -2794,7 +2794,7 @@ SyncTests::SyncTests(const std::string &name, ClientTest &cl, std::vector<int> s
     client(cl) {
     sourceArray = new int[sourceIndices.size() + 1];
     int offset = 0;
-    for (std::vector<int>::iterator it = sourceIndices.begin();
+    for (auto it = sourceIndices.begin();
          it != sourceIndices.end();
          ++it) {
         ClientTest::Config config;
@@ -6344,7 +6344,7 @@ void SyncTests::doSync(const SyncOptions &options)
 
     std::string prefix;
     prefix.reserve(80);
-    for (std::list<std::string>::iterator it = logPrefixes.begin();
+    for (auto it = logPrefixes.begin();
          it != logPrefixes.end();
          ++it) {
         prefix += ".";

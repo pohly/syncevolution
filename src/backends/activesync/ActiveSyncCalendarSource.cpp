@@ -298,7 +298,7 @@ std::string ActiveSyncCalendarSource::getDescription(const string &luid)
 
 ActiveSyncCalendarSource::Event &ActiveSyncCalendarSource::findItem(const std::string &easid)
 {
-    EventCache::iterator it = m_cache.find(easid);
+    auto it = m_cache.find(easid);
     if (it == m_cache.end()) {
         throwError(SE_HERE, STATUS_NOT_FOUND, "merged event not found: " + easid);
     }
@@ -444,7 +444,7 @@ SyncSourceRaw::InsertItemResult ActiveSyncCalendarSource::insertItem(const std::
     // our caller didn't.
     std::string knownSubID = callerSubID;
     if (easid.empty()) {
-        EventCache::iterator it = m_cache.findByUID(newEvent->m_uid);
+        auto it = m_cache.findByUID(newEvent->m_uid);
         if (it != m_cache.end()) {
             easid = it->first;
             knownSubID = subid;
@@ -458,7 +458,7 @@ SyncSourceRaw::InsertItemResult ActiveSyncCalendarSource::insertItem(const std::
         InsertItemResult res = ActiveSyncSource::insertItem("", item);
         easid = res.m_luid;
 
-        EventCache::iterator it = m_cache.find(res.m_luid);
+        auto it = m_cache.find(res.m_luid);
         if (it != m_cache.end()) {
             // merge into existing Event
             Event &event = loadItem(*it->second);

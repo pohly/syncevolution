@@ -553,7 +553,7 @@ public:
                 }
                 stringstream path;
                 path << base.str();
-                SeqMap_t::iterator it = dateTimes2Seq.find(path.str());
+                auto it = dateTimes2Seq.find(path.str());
                 if (it != dateTimes2Seq.end()) {
                     path << "-" << (char)('a' + it->second + 1);
                 }
@@ -853,7 +853,7 @@ public:
             if (stat(fullpath.c_str(), &buf)) {
                 Exception::throwError(SE_HERE, fullpath, errno);
             }
-            set<ino_t>::iterator it = firstInodes.find(buf.st_ino);
+            auto it = firstInodes.find(buf.st_ino);
             if (it == firstInodes.end()) {
                 // second dir has different file
                 return true;
@@ -2397,7 +2397,7 @@ string XMLFiles::get(Category category)
 string XMLFiles::get(const string &file)
 {
     string res;
-    StringMap::const_iterator entry = m_files[MAIN].find(file);
+    auto entry = m_files[MAIN].find(file);
     if (entry != m_files[MAIN].end()) {
         ReadFile(entry->second, res);
     }

@@ -107,7 +107,7 @@ TQString TDEPIMAddressBookSource::lastModifiedNormalized(TDEABC::Addressee &e)
 // {
 // 	if ( m_categories.isEmpty() ) return true;  // no filter defined -> match all
 // 	
-// 	for (TQStringList::const_iterator it = list.begin(); it != list.end(); ++it ) {
+// 	for (auto it = list.begin(); it != list.end(); ++it ) {
 // 		if ( m_categories.contains(*it) ) return true;
 // 	}
 // 	return false; // not found
@@ -224,7 +224,7 @@ TrackingSyncSource::InsertItemResult TDEPIMAddressBookSource::insertItem(const s
 	// not contain that category, add the filter-categories so that the address will be
 	// found again on the next sync
 // 	if ( ! hasCategory(addressee.categories()) ) {
-// 		for (TQStringList::const_iterator it = categories.begin(); it != categories.end(); ++it )
+// 		for (auto it = categories.begin(); it != categories.end(); ++it )
 // 			addressee.insertCategory(*it);
 // 	}
 

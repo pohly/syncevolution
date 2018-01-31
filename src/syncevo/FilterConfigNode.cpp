@@ -53,7 +53,7 @@ void FilterConfigNode::setFilter(const ConfigFilter &filter)
 
 InitStateString FilterConfigNode::readProperty(const std::string &property) const
 {
-    ConfigFilter::const_iterator it = m_filter.find(property);
+    auto it = m_filter.find(property);
 
     if (it != m_filter.end()) {
         return it->second;
@@ -66,7 +66,7 @@ void FilterConfigNode::writeProperty(const std::string &property,
                                      const InitStateString &value,
                                      const std::string &comment)
 {
-    ConfigFilter::iterator it = m_filter.find(property);
+    auto it = m_filter.find(property);
 
     if (!m_node.get()) {
         Exception::throwError(SE_HERE, getName() + ": read-only, setting properties not allowed");
@@ -90,7 +90,7 @@ void FilterConfigNode::readProperties(ConfigProps &props) const
 
 void FilterConfigNode::removeProperty(const std::string &property)
 {
-    ConfigFilter::iterator it = m_filter.find(property);
+    auto it = m_filter.find(property);
 
     if (!m_node.get()) {
         Exception::throwError(SE_HERE, getName() + ": read-only, removing properties not allowed");

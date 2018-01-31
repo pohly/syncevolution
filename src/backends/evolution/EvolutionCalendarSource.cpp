@@ -58,7 +58,7 @@ void EvolutionCalendarSource::LUIDs::eraseLUID(const ItemID &id)
 {
     iterator it = find(id.m_uid);
     if (it != end()) {
-        set<string>::iterator it2 = it->second.find(id.m_rid);
+        auto it2 = it->second.find(id.m_rid);
         if (it2 != it->second.end()) {
             it->second.erase(it2);
             if (it->second.empty()) {
@@ -694,7 +694,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
             // Therefore we have to use CALOBJ_MOD_ALL, but that removes
             // children.
             bool hasChildren = false;
-            LUIDs::const_iterator it = m_allLUIDs.find(id.m_uid);
+            auto it = m_allLUIDs.find(id.m_uid);
             if (it != m_allLUIDs.end()) {
                 for (const string &rid: it->second) {
                     if (!rid.empty()) {
@@ -788,7 +788,7 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
 {
     ICalComps_t events;
 
-    LUIDs::const_iterator it = m_allLUIDs.find(uid);
+    auto it = m_allLUIDs.find(uid);
     if (it != m_allLUIDs.end()) {
         for (const string &rid: it->second) {
             ItemID id(uid, rid);

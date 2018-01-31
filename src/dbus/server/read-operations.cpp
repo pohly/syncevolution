@@ -54,7 +54,7 @@ void ReadOperations::getConfigs(bool getTemplates, std::vector<std::string> &con
                 string templName = "Bluetooth_";
                 templName += peer->m_deviceId;
                 templName += "_";
-                std::map<std::string, int>::iterator it = numbers.find(peer->m_deviceId);
+                auto it = numbers.find(peer->m_deviceId);
                 if(it == numbers.end()) {
                     numbers.insert(std::make_pair(peer->m_deviceId, 1));
                     templName += "1";

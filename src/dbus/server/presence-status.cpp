@@ -81,7 +81,7 @@ void PresenceStatus::checkPresence (const string &peer, string& status, std::vec
 }
 
 void PresenceStatus::updateConfigPeers (const std::string &peer, const ReadOperations::Config_t &config) {
-    ReadOperations::Config_t::const_iterator iter = config.find ("");
+    auto iter = config.find ("");
     if (iter != config.end()) {
         //As a simple approach, just reinitialize the whole STATUSMAP
         //it will cause later updatePresenceStatus resend all signals

@@ -143,7 +143,7 @@ void MapSyncSource::detectChanges(SyncSourceRevisions::ChangeMode mode)
         for (const auto &entry: newRevisions) {
             const std::string &mainid = entry.first;
             const SubRevisionEntry &ids = entry.second;
-            SubRevisionMap_t::iterator it = m_revisions.find(entry.first);
+            auto it = m_revisions.find(entry.first);
             if (it == m_revisions.end()) {
                 // all sub-items are added
                 for (const std::string &subid: ids.m_subids) {
@@ -310,7 +310,7 @@ void MapSyncSource::deleteItem(const string &luid)
 {
     StringPair ids = splitLUID(luid);
     std::string rev = m_sub->removeSubItem(ids.first, ids.second);
-    SubRevisionMap_t::iterator it = m_revisions.find(ids.first);
+    auto it = m_revisions.find(ids.first);
     if (it != m_revisions.end()) {
         it->second.m_subids.erase(ids.second);
         if (it->second.m_subids.empty()) {
