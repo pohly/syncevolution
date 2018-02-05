@@ -6,7 +6,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: syncevolution\n"
-"Report-Msgid-Bugs-To: http://moblin.org/projects/syncevolution\n"
+"Report-Msgid-Bugs-To: https://syncevolution.org/\n"
 "POT-Creation-Date: 2009-10-16 11:24+0000\n"
 "PO-Revision-Date: 2009-11-16 16:28+0200\n"
 "Last-Translator: Yousef Abu Al Naser <yousef@itsoftex.com>\n"
