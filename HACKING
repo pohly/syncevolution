@@ -79,8 +79,8 @@ It depends on:
 Checking out the Source
 -----------------------
 
-SyncEvolution is hosted on moblin.org. Anonymous access is via
-  git clone git://git.moblin.org/syncevolution.git
+SyncEvolution is hosted on freedesktop.org. Anonymous access is via
+  git clone git://anongit.freedesktop.org/SyncEvolution/syncevolution
 
 Before using sources checked out from Subversion, invoke "sh
 autogen.sh" with appropriate autotools packages installed.
@@ -94,9 +94,9 @@ faster compilation) and will bundle the Synthesis sources in source
 
 The upstream Synthesis source code is here:
   git://www.synthesis.ch/libsynthesis.git
-The staging area for patches developed as part of Moblin are
+The staging area for patches developed as part of SyncEvolution are
 in the following repository:
-  git://git.moblin.org/libsynthesis.git
+  git://anongit.freedesktop.org/SyncEvolution/libsynthesis
 
 The intention is to include all these patches upstream to
 prevent forking the code. If you want to get patches included
