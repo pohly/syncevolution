@@ -321,6 +321,7 @@ void SuspendFlags::handleSignal(int sig)
             msg[1] = ABORT_MAX;
             break;
         }
+        break;
     default:
         msg[1] = ABORT_MAX;
         break;
