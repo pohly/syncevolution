@@ -1,7 +1,7 @@
-#!/usr/bin/python -u
+#!/usr/bin/python3 -u
 
 """
-Allocates resources from Murphy and/or a make jobserver while running
+Allocates resources from a lock directory with flock and/or a make jobserver while running
 some command.
 """
 
@@ -9,15 +9,16 @@ import time
 import os
 import re
 import subprocess
+import fcntl
 import signal
 from optparse import OptionParser
 
 usage = "usage: %prog [options] [--] command arg1 arg2 ..."
 parser = OptionParser(usage=usage)
-parser.add_option("-r", "--murphy-resource",
+parser.add_option("-r", "--resource",
                   dest="resources",
                   action="append",
-                  help="Name of a Muprhy resource which gets locked while running the command.")
+                  help="Name of a resource which gets locked while running the command.")
 parser.add_option("-j", "--jobs",
                   default=1,
                   type='int',
@@ -28,35 +29,15 @@ parser.add_option("-j", "--jobs",
 
 def log(format, *args):
     now = time.time()
-    print time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
+    print(time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args)
     log.latest = now
 log.start = time.time()
 log.latest = log.start
 
-# Murphy support: as a first step, lock one resource named like the
+# As a first step, lock one resource named like the
 # test before running the test.
 gobject = None
 if options.resources:
-    try:
-        import gobject
-    except ImportError:
-        from gi.repository import GObject as gobject
-    import dbus
-    from dbus.mainloop.glib import DBusGMainLoop
-    DBusGMainLoop(set_as_default=True)
-    if not os.environ.get('DBUS_SESSION_BUS_ADDRESS', None):
-        # Try to set up Murphy with a murphy-launch.py helper script
-        # which is expected to be provided by the test environment
-        # (not included in SyncEvolution).
-        vars = subprocess.check_output(['murphy-launch.py'])
-        for line in vars.split('\n'):
-            if line:
-                var, value = line.split('=', 1)
-                os.environ[var] = value
-    bus = dbus.SessionBus()
-    loop = gobject.MainLoop()
-    murphy = dbus.Interface(bus.get_object('org.Murphy', '/org/murphy/resource'), 'org.murphy.manager')
-
     # Support mapping of resource "foo" to "bar" with RESOURCES_FOO=bar.
     resources = []
     for name in options.resources:
@@ -71,47 +52,17 @@ if options.resources:
 
     if resources:
         log('=== locking resource(s) %s ===', resources)
-        resourcesetpath = murphy.createResourceSet()
-        resourceset = dbus.Interface(bus.get_object('org.Murphy', resourcesetpath), 'org.murphy.resourceset')
-        for name in resources:
-            resourcepath = resourceset.addResource(name)
-            # Allow sharing of the resource. Only works if the resource
-            # was marked as "shareable" in the murphy config, otherwise
-            # we get exclusive access.
-            resource = dbus.Interface(bus.get_object('org.Murphy', resourcepath), 'org.murphy.resource')
-            resource.setProperty('shared', dbus.Boolean(True, variant_level=1))
-
-        # Track pending request separately, because status == 'pending'
-        # either means something else ('unknown'?) or is buggy/unreliable.
-        # See https://github.com/01org/murphy/issues/5
-        pending = False
-        def propertyChanged(prop, value):
-            global pending
-            log('property changed: %s = %s', prop, value)
-            if prop == 'status':
-                if value == 'acquired':
-                    # Success!
-                    loop.quit()
-                elif value == 'lost':
-                    # Not yet?!
-                    log('Murphy request failed, waiting for resource to become available.')
-                    pending = False
-                elif value == 'pending':
-                    pass
-                elif value == 'available':
-                    if not pending:
-                        log('Murphy request may succeed now, try again.')
-                        resourceset.request()
-                        pending = True
-                    else:
-                        log('Unexpected status: %s', value)
-        try:
-            match = bus.add_signal_receiver(propertyChanged, 'propertyChanged', 'org.murphy.resourceset', 'org.Murphy', resourcesetpath)
-            resourceset.request()
-            pending = True
-            loop.run()
-        finally:
-            match.remove()
+        lockdir = os.environ.get('RESOURCES_DIR', None)
+        if lockdir is None:
+            log('RESOURCES_DIR env var not set')
+            exit(1)
+        for resource in resources:
+            log('locking resource %s' % resource)
+            start = time.time()
+            f = open(os.path.join(lockdir, resource), "w")
+            fcntl.lockf(f, fcntl.LOCK_EX)
+            end = time.time()
+            log('locked resource %s, delay %ds' % (resource, end - start))
 
 class Jobserver:
     '''Allocates the given number of job slots from the "make -j"
@@ -148,7 +99,7 @@ class Jobserver:
             self.allocated += n
             n = 0
         except:
-            os.write(self.returnslots, ' ' * n)
+            os.write(self.returnslots, b' ' * n)
             raise
         finally:
             self._unblock()
@@ -158,7 +109,7 @@ class Jobserver:
             return
         try:
             self.allocated -= numjobs
-            os.write(self.returnslots, ' ' * numjobs)
+            os.write(self.returnslots, b' ' * numjobs)
         finally:
             self._unblock()
 
@@ -191,5 +142,5 @@ finally:
     # Return job tokens.
     if jobs:
         jobserver.free(jobs)
-    # We don't need to unlock the Murphy resource. Quitting will do
+    # We don't need to unlock the resources. Quitting will do
     # that automatically.
