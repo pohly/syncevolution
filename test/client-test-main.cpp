@@ -445,7 +445,7 @@ int main(int argc, char* argv[])
       }
       ClientTest::shutdown();
       return failed;
-  } catch (invalid_argument e) {
+  } catch (const invalid_argument &e) {
       // Test path not resolved
       std::cout << std::endl
                 << "ERROR: " << e.what()
