@@ -220,6 +220,7 @@ SYNCEVOLUTION_evolution_DEB_ARGS = \
 	--conflicts=syncevolution-foobar \
 	--replaces=syncevolution-foobar
 SYNCEVOLUTION_evolution_DEB_REQUIRES = \
+        , evolution-data-server \
 	, $(EXTRA_BACKENDS_EBOOK_REQUIRES) \
 	, $(EXTRA_BACKENDS_ECAL_REQUIRES)
 

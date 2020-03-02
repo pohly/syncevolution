@@ -13,6 +13,11 @@ unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID XDG_RUNTIME_DIR
 # Ensure that we have a unique, empty XDG_RUNTIME_DIR.
 export XDG_RUNTIME_DIR=`mktemp -d`
 
+if ! [ -d "$HOME" ] && [ "$HOME_TEMPLATE" ]; then
+    mkdir -p "$(dirname "$HOME")"
+    cp -a "$HOME_TEMPLATE" "$HOME"
+fi
+
 # Start D-Bus session. We want to use the real D-Bus configuration
 # of the host here, because want to use some of its services (GNOME keyring,
 # GNOME/Ubuntu Online Accounts, etc.).
@@ -42,11 +47,14 @@ fi
 # Ensure that XDG dirs exist. Otherwise some daemons do not work correctly.
 createxdg() {
     dir="$1"
-
-    if [ "$dir" ]; then
-        mkdir -p "$dir"
-    fi
+    mkdir -p "$dir"
 }
+: ${XDG_CONFIG_HOME:=$HOME/.config}
+: ${XDG_CACHE_HOME:=$HOME/.cache}
+: ${XDG_DATA_HOME:=$HOME/.local/share}
+
+export XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
+
 createxdg "$XDG_CONFIG_HOME"
 createxdg "$XDG_CACHE_HOME"
 createxdg "$XDG_DATA_HOME"
