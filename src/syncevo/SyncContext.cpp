@@ -4887,6 +4887,7 @@ private:
             }
         }
         list.syncDone(status, &report);
+        va_end(ap);
 
         Logger::instance().setLevel(level);
         return list.getLogdir();
