@@ -3746,7 +3746,7 @@ SyncMLStatus SyncContext::doSync()
         bool status = true;
         try {
             status = sendSAN (version);
-        } catch (TransportException e) {
+        } catch (const TransportException &e) {
             if (!sanFormat.empty()){
                 throw;
             }
@@ -4590,11 +4590,11 @@ bool SyncContext::checkForScriptAbort(SharedSession session)
         SharedKey contextKey = m_engine.OpenKeyByPath(sessionKey, "/sessionvars");
         bool abort = m_engine.GetInt32Value(contextKey, "delayedabort");
         return abort;
-    } catch (NoSuchKey) {
+    } catch (const NoSuchKey &) {
         // this is necessary because the session might already have
         // been closed, which removes the variable
         return false;
-    } catch (BadSynthesisResult) {
+    } catch (const BadSynthesisResult &) {
         return false;
     }
 }
