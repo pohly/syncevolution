@@ -139,7 +139,7 @@ public:
         m_currentTest = test->getName();
         std::cout << m_currentTest << std::flush;
         if (!getenv("SYNCEVOLUTION_DEBUG")) {
-            string logfile = m_currentTest + ".log";
+            string logfile = m_currentTest + ".txt";
             simplifyFilename(logfile);
             m_logger.reset(new LogRedirect(LogRedirect::STDERR_AND_STDOUT, logfile.c_str()));
             m_logger->setLevel(Logger::DEBUG);
@@ -196,12 +196,12 @@ public:
         }
         m_logger.reset();
 
-        string logfile = m_currentTest + ".log";
+        string logfile = m_currentTest + ".txt";
         simplifyFilename(logfile);
         
         const char* compareLog = getenv("CLIENT_TEST_COMPARE_LOG");
         if(compareLog && strlen(compareLog)) {
-            int fd = open("____compare.log", O_RDONLY);
+            int fd = open("____compare.txt", O_RDONLY);
             if (fd >= 0) {
                 int out = open(logfile.c_str(), O_WRONLY|O_APPEND);
                 if (out >= 0) {
@@ -221,7 +221,7 @@ public:
                         }
                     }
                     if (len < 0) {
-                        perror("reading ____compare.log");
+                        perror("reading ____compare.txt");
                     }
                     close(out);
                 }

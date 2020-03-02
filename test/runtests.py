@@ -777,7 +777,7 @@ class GitCopy(GitCheckoutBase, Action):
         self.runner = runner
         self.sourcedir = sourcedir
         self.revision = revision
-        self.patchlog = os.path.join(abspath(workdir), name + "-source.log")
+        self.patchlog = os.path.join(abspath(workdir), name + "-source.txt")
 
         self.__getitem__ = lambda x: getattr(self, x)
 
@@ -997,8 +997,8 @@ class SyncEvolutionTest(Action):
                 context.runCommand(basecmd,
                                    resources=[self.name])
         finally:
-            tocopy = re.compile(r'.*\.log|.*\.client.[AB]|.*\.(cpp|h|c)\.html|.*\.log\.html')
-            toconvert = re.compile(r'Client_.*\.log')
+            tocopy = re.compile(r'.*\.txt|.*\.log|.*\.client.[AB]|.*\.(cpp|h|c)\.html|.*\.txt\.html|.*\.log.html')
+            toconvert = re.compile(r'Client_.*\.txt')
             htaccess = file(os.path.join(resdir, ".htaccess"), "a")
             for f in os.listdir(actiondir):
                 if tocopy.match(f):
@@ -1878,9 +1878,9 @@ class ActiveSyncTest(SyncEvolutionTest):
                                    "Client::Sync::.*::testOneWayFromLocal,"
                                    " "
 
-                                   "CLIENT_TEST_LOG=activesyncd.log "
+                                   "CLIENT_TEST_LOG=activesyncd.txt "
                                    ,
-                                   testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.log" + \
+                                   testPrefix=" ".join(("env EAS_DEBUG_FILE=activesyncd.txt" + \
                                                         ((" GSETTINGS_SCHEMA_DIR=%s" % self.activesyncd_schema_dir) if self.activesyncd_schema_dir else ""),
                                                         os.path.join(sync.basedir, "test", "wrappercheck.sh"),
                                                         options.testprefix,
@@ -1933,21 +1933,21 @@ context.add(test)
 syncevoPrefix=" ".join([os.path.join(sync.basedir, "test", "wrappercheck.sh")] +
                        # redirect output of command run under valgrind (when
                        # using valgrind) or of the whole command (otherwise)
-                       # to syncevohttp.log
+                       # to syncevohttp.txt
                        ( 'valgrindcheck' in options.testprefix and \
-                             [ "VALGRIND_CMD_LOG=syncevohttp.log" ] or \
-                             [ "--daemon-log", "syncevohttp.log" ] ) +
+                             [ "VALGRIND_CMD_LOG=syncevohttp.txt" ] or \
+                             [ "--daemon-log", "syncevohttp.txt" ] ) +
                        [ options.testprefix,
                          os.path.join(compile.installdir, "usr", "libexec", "syncevo-dbus-server"),
                          '--verbosity=3', # Full information about daemon operation.
                          '--dbus-verbosity=1', # Only errors from syncevo-dbus-server and syncing.
-                         '--stdout', '--no-syslog', # Write into same syncevohttp.log as syncevo-http-server.
+                         '--stdout', '--no-syslog', # Write into same syncevohttp.txt as syncevo-http-server.
                          '--duration=unlimited', # Never shut down, even if client is inactive for a while.
                          "--",
                          os.path.join(sync.basedir, "test", "wrappercheck.sh"),
                          # also redirect additional syncevo-http-server
                          # output into the same file
-                         "--daemon-log", "syncevohttp.log",
+                         "--daemon-log", "syncevohttp.txt",
                          "--wait-for-daemon-output", "syncevo-http:.listening.on.port.<httpport>",
                          os.path.join(compile.installdir, "usr", "bin", "syncevo-http-server"),
                          "--debug",
@@ -1963,7 +1963,7 @@ test = SyncEvolutionTest("edsfile",
                          "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
                          [ "eds_event", "eds_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
                          # "CLIENT_TEST_RETRY=t "
@@ -1988,7 +1988,7 @@ test = SyncEvolutionTest("edseds",
                          "Client::Sync::eds_event Client::Sync::eds_contact Client::Sync::eds_event_eds_contact",
                          [ "eds_event", "eds_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
                          # "CLIENT_TEST_RETRY=t "
@@ -2012,7 +2012,7 @@ test = SyncEvolutionTest("edsxfile",
                          "Client::Sync::eds_contact::Retry Client::Sync::eds_contact::Resend Client::Sync::eds_contact::Suspend",
                          [ "eds_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          "CLIENT_TEST_RETRY=t "
                          "CLIENT_TEST_RESEND=t "
                          "CLIENT_TEST_SUSPEND=t "
@@ -2040,7 +2040,7 @@ test = SyncEvolutionTest("davfile",
                          "CLIENT_TEST_SIMPLE_UID=1 " # DAViCal server gets confused by UID with special characters
                          "CLIENT_TEST_WEBDAV='davical caldav caldavtodo carddav' "
                          "CLIENT_TEST_NUM_ITEMS=10 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # could be enabled, but reporting result is currently missing (BMC #1009)
                          # "CLIENT_TEST_RETRY=t "
                          # "CLIENT_TEST_RESEND=t "
@@ -2065,7 +2065,7 @@ test = SyncEvolutionTest("edsdav",
                          [ "eds_event", "eds_contact" ],
                          "CLIENT_TEST_SIMPLE_UID=1 " # DAViCal server gets confused by UID with special characters
                          "CLIENT_TEST_NUM_ITEMS=10 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # could be enabled, but reporting result is currently missing (BMC #1009)
                          # "CLIENT_TEST_RETRY=t "
                          # "CLIENT_TEST_RESEND=t "
@@ -2089,7 +2089,7 @@ test = SyncEvolutionTest("fileeds",
                          "Client::Sync::file_event Client::Sync::file_contact",
                          [ "file_event", "file_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
                          # "CLIENT_TEST_RETRY=t "
@@ -2113,7 +2113,7 @@ test = SyncEvolutionTest("filefile",
                          "Client::Sync::file_event Client::Sync::file_contact",
                          [ "file_event", "file_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
                          # "CLIENT_TEST_RETRY=t "
@@ -2138,7 +2138,7 @@ test = SyncEvolutionTest("kdekde",
                          "Client::Sync::kde_event Client::Sync::kde_contact",
                          [ "kde_event", "kde_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
                          # "CLIENT_TEST_RETRY=t "
@@ -2161,7 +2161,7 @@ test = SyncEvolutionTest("filekde",
                          "Client::Sync::file_event Client::Sync::file_contact",
                          [ "file_event", "file_contact" ],
                          "CLIENT_TEST_NUM_ITEMS=100 "
-                         "CLIENT_TEST_LOG=syncevohttp.log "
+                         "CLIENT_TEST_LOG=syncevohttp.txt "
                          # Slow, and running many syncs still fails when using
                          # valgrind. Tested separately below in "edsxfile".
                          # "CLIENT_TEST_RETRY=t "

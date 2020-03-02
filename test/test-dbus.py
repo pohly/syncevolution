@@ -592,16 +592,16 @@ class DBusUtil(Timeout):
 
         # testAutoSyncFailure (__main__.TestSessionAPIsDummy) => testAutoSyncFailure_TestSessionAPIsDummy
         self.testname = str(self).replace(" ", "_").replace("__main__.", "").replace("(", "").replace(")", "")
-        dbuslog = self.testname + ".dbus.log"
+        dbuslog = self.testname + ".dbus.txt"
         if useGZip:
             dbuslog = dbuslog + ".gz"
-        syncevolog = self.testname + ".syncevo.log"
+        syncevolog = self.testname + ".syncevo.txt"
 
         self.pmonitor = subprocess.Popen(useGZip and ['sh', '-c', 'dbus-monitor | gzip'] or ['dbus-monitor'],
                                          stdout=open(dbuslog, "w"),
                                          stderr=subprocess.STDOUT)
         if usingDLT:
-            dltlog = self.testname + ".dlt.log"
+            dltlog = self.testname + ".dlt.txt"
             # dlt-receive buffers output and doesn't flush when killed.
             # Trick it into writing each line immediately by pretending that
             # it runs interactively. 'script' had side-effects on the calling

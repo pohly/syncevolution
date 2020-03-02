@@ -6728,7 +6728,7 @@ bool ClientTest::compare(ClientTest &client, const std::string &fileA, const std
     if(compareLog && strlen(compareLog))
     {
        std::string cmdstr = std::string("synccompare ") + fileA + " " + fileB;
-       string tmpfile = "____compare.log";
+       string tmpfile = "____compare.txt";
        cmdstr =string("bash -c 'set -o pipefail;") + cmdstr;
        cmdstr += " 2>&1|tee " +tmpfile+"'";
        success = system(cmdstr.c_str()) == 0;
@@ -6805,7 +6805,7 @@ void ClientTest::postSync(int res, const std::string &logname)
         int fd = open(serverLogFileName.c_str(), O_RDWR);
 
         if (fd >= 0) {
-            int out = open((logname + ".server.log").c_str(), O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+            int out = open((logname + ".server.txt").c_str(), O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
             if (out >= 0) {
                 char buffer[4096];
                 bool cont = true;
@@ -6815,7 +6815,7 @@ void ClientTest::postSync(int res, const std::string &logname)
                     while (cont && total < len) {
                         ssize_t written = write(out, buffer, len);
                         if (written < 0) {
-                            perror(("writing " + logname + ".server.log").c_str());
+                            perror(("writing " + logname + ".server.txt").c_str());
                             cont = false;
                         } else {
                             total += written;
