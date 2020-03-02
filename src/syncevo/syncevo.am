@@ -175,11 +175,6 @@ src_syncevo_sources = \
   src/syncevo/TrackingSyncSource.h \
   src/syncevo/TrackingSyncSource.cpp
 
-# Only useful in combination with GDBus GIO.
-src_syncevo_sources += \
-  src/syncevo/gsignond-pipe-stream.h \
-  src/syncevo/gsignond-pipe-stream.cpp
-
 if ENABLE_ICAL
 src_syncevo_sources += \
   src/syncevo/icalstrdup.c \

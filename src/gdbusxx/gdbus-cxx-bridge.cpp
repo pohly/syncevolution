@@ -18,8 +18,9 @@
  */
 
 #include "gdbus-cxx-bridge.h"
+#include <gio/gunixinputstream.h>
+#include <gio/gunixoutputstream.h>
 #include <stdio.h>
-#include <syncevo/gsignond-pipe-stream.h>
 #include <syncevo/GuardFD.h>
 #include <syncevo/GLibSupport.h>
 #include <syncevo/util.h>
@@ -30,7 +31,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-SE_GOBJECT_TYPE(GSignondPipeStream)
+SE_GOBJECT_TYPE(GIOStream)
+SE_GOBJECT_TYPE(GInputStream)
+SE_GOBJECT_TYPE(GOutputStream)
 
 void intrusive_ptr_add_ref(GDBusConnection *con)  { g_object_ref(con); }
 void intrusive_ptr_release(GDBusConnection *con)  { g_object_unref(con); }
@@ -219,18 +222,26 @@ DBusConnectionPtr dbus_get_bus_connection(const char *busType,
     return conn;
 }
 
+static GIOStreamCXX new_stream(int fd)
+{
+    GOutputStreamCXX out(g_unix_output_stream_new(fd, true), TRANSFER_REF);
+    GInputStreamCXX in(g_unix_input_stream_new(fd, false), TRANSFER_REF);
+    GIOStreamCXX stream(g_simple_io_stream_new(in.get(), out.get()), TRANSFER_REF);
+    return stream;
+}
+
 DBusConnectionPtr dbus_get_bus_connection(const std::string &address,
                                           DBusErrorCXX *err)
 {
     // "address" needs to be the file descriptor number set up
     // by DBusServerCXX::listen().
     GuardFD fd(atoi(address.c_str()));
-    GSignondPipeStreamCXX stream(gsignond_pipe_stream_new(fd, fd, true),
-                                 TRANSFER_REF);
+    GIOStreamCXX stream(new_stream(fd));
     fd.release();
+
     GErrorCXX gerror;
     GDBusCXX::DBusConnectionPtr
-        conn(g_dbus_connection_new_sync(G_IO_STREAM(stream.get()),
+        conn(g_dbus_connection_new_sync(stream.get(),
                                         nullptr,
                                         G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
                                         nullptr,
@@ -298,13 +309,12 @@ std::shared_ptr<DBusServerCXX> DBusServerCXX::listen(const NewConnection_t &newC
     std::string address = StringPrintf("%d", childfd.get());
 
     // Transfer ownership of parent fd.
-    GSignondPipeStreamCXX stream(gsignond_pipe_stream_new(parentfd, parentfd, true),
-                                 TRANSFER_REF);
+    GIOStreamCXX stream(new_stream(parentfd));
     parentfd.release();
 
     GErrorCXX gerror;
     GDBusCXX::DBusConnectionPtr
-        connection(g_dbus_connection_new_sync(G_IO_STREAM(stream.get()),
+        connection(g_dbus_connection_new_sync(stream.get(),
                                               nullptr,
                                               G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
                                               nullptr,
