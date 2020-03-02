@@ -72,7 +72,8 @@ public:
         boost::scoped_array<const char *> argv(createArray(m_argv));
         boost::scoped_array<const char *> env(createArray(m_env));
         LogRedirect::reset();
-        if (execve(argv[0], (char *const *)argv.get(), (char *const *)env.get())) {
+        SE_LOG_INFO(NULL, "restarting server binary %s", argv[0]);
+        if (execvpe(argv[0], (char *const *)argv.get(), (char *const *)env.get())) {
             SE_THROW(StringPrintf("restarting syncevo-dbus-server failed: %s", strerror(errno)));
         }
     }
