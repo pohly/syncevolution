@@ -484,6 +484,7 @@ class Context:
             "XDG_CONFIG_HOME",
             "XDG_DATA_HOME",
             "XDG_CACHE_HOME",
+            "RESOURCES_DIR",
             ]
         log('*** ( cd %s; export %s; unset %s; %s )',
             cwd,
