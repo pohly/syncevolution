@@ -722,8 +722,10 @@ class GitCopy(GitCheckoutBase, Action):
                 'if git branch | grep -q -w "^..nightly$"; then git branch -D nightly; fi',
                 # fetch
                 'echo "remove stale merge branches and fetch anew"',
-                'git branch -r -D $( git branch -r | grep -e "/for-%(revision)s/" ) ',
-                'git branch -D $( git branch | grep -e "^  for-%(revision)s/" ) ',
+                'branches=$( git branch -r | grep -e "/for-%(revision)s/"; true )',
+                '( [ ! "$branches" ] || git branch -r -D $branches )',
+                'branches=$( git branch | grep -e "^  for-%(revision)s/"; true )',
+                '( [ ! "$branches" ] || git branch -D $branches )',
                 'git fetch',
                 'git fetch --tags',
                 # pick tag or remote branch
