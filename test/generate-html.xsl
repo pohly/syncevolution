@@ -35,7 +35,7 @@
     <xsl:variable name="invalid-value" select="'invalid-value'"/>
 
     <!-- log file suffix name -->
-    <xsl:variable name="log-file-suffix" select="'.log.html'"/>
+    <xsl:variable name="log-file-suffix" select="'.txt.html'"/>
 	
     <xsl:template match="/">
         <xsl:choose>

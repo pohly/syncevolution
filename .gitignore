@@ -50,8 +50,8 @@ Makefile.in
 
 # src
 /src/autotroll.mk
-/src/Client_Source_*.log
-/src/Client_Sync_*.log
+/src/Client_Source_*.txt
+/src/Client_Sync_*.txt
 /src/Client_Sync_*.A
 /src/client-test
 /src/LogDirTest

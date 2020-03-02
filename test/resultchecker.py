@@ -88,7 +88,7 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     files = os.listdir(resultdir)
     files.sort()
     for source in files:
-        m = re.match('(.*)-source.log', source)
+        m = re.match('(.*)-source.txt', source)
         if m:
             name = m.group(1)
             result.write('   <source name="%s"><description><![CDATA[%s]]></description>\n' %
@@ -324,7 +324,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
             result.write('>\n')
             # sort files by creation time, to preserve run order
             logs = map(lambda file: (os.stat(file).st_mtime, file),
-                       glob.glob(resultdir+'/'+rserver+'/*.log'))
+                       glob.glob(resultdir+'/'+rserver+'/*.txt'))
             logs.sort()
             logs = map(lambda entry: entry[1], logs)
             logdic ={}
@@ -336,7 +336,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 # and "ok" resp. "FAIL/ERROR". Therefore failed tests
                 # are identified not by those words but rather by the separate
                 # error reports at the end of the output. Those reports
-                # are split out into separate .log files for easy viewing
+                # are split out into separate .txt files for easy viewing
                 # via the .html report.
                 #
                 # TestDBusServer.testCapabilities - Server.Capabilities() ... ok
@@ -375,7 +375,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                         # create new (?!) log file
                         cl = m.group("cl")
                         func = m.group("func")
-                        newname = rserver + "/" + cl + "_" + func + ".log"
+                        newname = rserver + "/" + cl + "_" + func + ".txt"
                         if newname != name:
                             name = newname
                             logfile = open(name, "w")
@@ -455,16 +455,16 @@ span.hl { color: #c02020 }
             else:
                 for log in logs:
                     logname = os.path.basename(log)
-                    if logname in ['____compare.log',
-                                   'syncevo.log', # D-Bus server output
-                                   'dbus.log', # dbus-monitor output
+                    if logname in ['____compare.txt',
+                                   'syncevo.txt', # D-Bus server output
+                                   'dbus.txt', # dbus-monitor output
                                    ]:
                         continue
-                    # <path>/Client_Sync_eds_contact_testItems.log
-                    # <path>/SyncEvo_CmdlineTest_testConfigure.log
-                    # <path>/N7SyncEvo11CmdlineTestE_testConfigure.log - C++ name mangling?
-                    m = re.match(r'^(Client_Source_|Client_Sync_|N7SyncEvo\d+|[^_]*_)(.*)_([^_]*)\.log', logname)
-                    if not m or logname.endswith('.server.log'):
+                    # <path>/Client_Sync_eds_contact_testItems.txt
+                    # <path>/SyncEvo_CmdlineTest_testConfigure.txt
+                    # <path>/N7SyncEvo11CmdlineTestE_testConfigure.txt - C++ name mangling?
+                    m = re.match(r'^(Client_Source_|Client_Sync_|N7SyncEvo\d+|[^_]*_)(.*)_([^_]*)\.txt', logname)
+                    if not m or logname.endswith('.server.txt'):
                         print "skipping", logname
                         continue
                     # Client_Sync_, Client_Source_, SyncEvo_, ...
