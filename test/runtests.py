@@ -274,85 +274,9 @@ class Action:
                     if self.needhome and context.home_template:
                         # Clone home directory template?
                         home = os.path.join(context.tmpdir, 'home', self.name)
-                        mapping = [('.cache', 'cache', 'XDG_CACHE_HOME'),
-                                   ('.config', 'config', 'XDG_CONFIG_HOME'),
-                                   ('.local/share', 'data', 'XDG_DATA_HOME')]
-                        if not os.path.isdir(home):\
-                            # Files that we need to handle ourselves.
-                            manual = []
-                            # Ignore special files like sockets (for example,
-                            # .cache/keyring-5sj9Qz/control).
-                            def ignore(path, entries):
-                                exclude = []
-                                for entry in entries:
-                                    mode = os.lstat(os.path.join(path, entry)).st_mode
-                                    if entry in ('akonadi.db',
-                                                 'akonadiserverrc'):
-                                        manual.append((path, entry))
-                                        exclude.append(entry)
-                                    # Copy only regular files. Ignore process id files and socket-<hostname> symlinks created
-                                    # inside the home by a concurrent Akonadi instance.
-                                    # Some files need special processing (see below).
-                                    elif not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)) \
-                                            or entry == 'akonadi.db-shm' \
-                                            or entry == 'akonadiconnectionrc' \
-                                            or entry.endswith('.pid') \
-                                            or entry.startswith('socket-'):
-                                        exclude.append(entry)
-                                return exclude
-                            shutil.copytree(context.home_template, home,
-                                            symlinks=True,
-                                            ignore=ignore)
-
-                            for path, entry in manual:
-                                source = os.path.join(path, entry)
-                                sourceDump = source + '.dump'
-                                target = os.path.join(home, os.path.relpath(path, context.home_template), entry)
-                                if entry == 'akonadi.db':
-                                    # Replace XDG_DATA_HOME paths inside the sqlite3 db.
-                                    # This runs *outside* of the chroot. It relies on
-                                    # compatibility between the sqlite3 inside and outside the chroots.
-                                    #
-                                    # Occasionally in parallel testing, 'sqlite3 .dump' produced
-                                    # incomplete output. Perhaps caused by parallel writes?
-                                    # To work around that, a static dump is used instead if found.
-                                    if os.path.isfile(sourceDump):
-                                        db = open(sourceDump).read()
-                                    else:
-                                        db = subprocess.check_output(['sqlite3', source, '.dump'])
-                                    db = db.replace(os.path.expanduser('~/.local/share/'),
-                                                    os.path.join(context.stripSchrootDir(home), 'data', ''))
-                                    sqlite = subprocess.Popen(['sqlite3', target],
-                                                              stdin=subprocess.PIPE)
-                                    sqlite.communicate(db)
-                                    if sqlite.returncode:
-                                        raise Exception("sqlite3 returned %d for the following input:\n%s" % (sqlite.returncode, db))
-                                    db = subprocess.check_output(['sqlite3', target, '.dump'])
-                                    log('target %s:\n%s', target, db)
-                                elif entry == 'akonadiserverrc':
-                                    # Replace hard-coded path to XDG dirs.
-                                    content = open(source).read()
-                                    for old, new, name in mapping:
-                                        content = content.replace(os.path.expanduser('~/%s/' % old),
-                                                                  os.path.join(context.stripSchrootDir(home), new, ''))
-                                    rc = open(target, 'w')
-                                    rc.write(content)
-                                    rc.close()
-                                    log('target %s:\n%s', target, content)
                         os.environ['HOME'] = context.stripSchrootDir(home)
-                        for old, new, name in mapping:
-                            newdir = os.path.join(home, new)
-                            stripped_newdir = context.stripSchrootDir(newdir)
-                            olddir = os.path.join(home, old)
-                            if not os.path.isdir(olddir):
-                                os.makedirs(olddir)
-                            # Use simpler directory layout to comply with testpim.py expectations.
-                            print 'old', olddir, 'new', newdir
-                            os.rename(olddir, newdir)
-                            # Keep the old names as symlinks, just in case.
-                            os.symlink(stripped_newdir, olddir)
-                            # Now use it via XDG env var *without* the schrootdir.
-                            os.environ[name] = stripped_newdir
+                        # Will be used by dbus-session.sh.
+                        os.environ['HOME_TEMPLATE'] = context.home_template
                     log('=== starting %s ===', self.name)
                     self.execute()
                 except:
@@ -626,7 +550,7 @@ class Context:
         # produce HTML with URLs relative to current directory of the nightly.html
         commands.append("xsltproc -o " + self.resultdir + "/nightly.html --stringparam url . --stringparam cmp_result_file " + self.resultdir + "/cmp_result.xml " + generateHTML + " "+ self.resultdir+"/nightly.xml")
 
-        self.runCommand(" && ".join(commands))
+        self.runCommand(" && ".join(commands), dumpCommands=True)
 
         # report result by email
         server, body, writer = self.startEmail()
@@ -888,38 +812,29 @@ class SyncEvolutionTest(Action):
         actiondir = os.path.join(context.tmpdir, 'tests', self.name)
         if not os.path.isdir(actiondir):
             os.makedirs(actiondir)
-        # The symlinks must be usable inside a chroot, so
-        # remove the chroot prefix that is only visible here
-        # outside the chroot. For copying the original file,
-        # we must remember the file name outside of the chroot.
-        hosttargetdir = self.testdir
-        targetdir = context.stripSchrootDir(hosttargetdir)
-        links = {}
-        for entry in os.listdir(self.testdir):
-            if not entry.startswith('.'):
-                target = os.path.join(targetdir, entry)
-                name = os.path.join(actiondir, entry)
-                os.symlink(target, name)
-                links[entry] = os.path.join(hosttargetdir, entry)
+        # Duplicate all files inside the directory where we run the tests. That way,
+        # different tests are independent from each other. Must run inside the test
+        # environment because the host might not have access to the files.
+        context.runCommand("%s sh -c 'for i in %s/*; do cp -a $i %s/; done'" % (self.runner, self.testdir, actiondir))
         cd(actiondir)
         try:
             # use installed backends if available
             backenddir = os.path.join(self.build.installdir, "usr/lib/syncevolution/backends")
-            if not os.access(backenddir, os.F_OK):
+            if not self.build.installed and not os.access(backenddir, os.F_OK):
                 # fallback: relative to client-test inside the current directory
                 backenddir = "backends"
 
             # same with configs and templates, except that they use the source as fallback
             confdir = os.path.join(self.build.installdir, "usr/share/syncevolution/xml")
-            if not os.access(confdir, os.F_OK):
+            if not self.build.installed and not os.access(confdir, os.F_OK):
                 confdir = os.path.join(sync.basedir, "src/syncevo/configs")
 
             templatedir = os.path.join(self.build.installdir, "usr/share/syncevolution/templates")
-            if not os.access(templatedir, os.F_OK):
+            if not self.build.installed and not os.access(templatedir, os.F_OK):
                 templatedir = os.path.join(sync.basedir, "src/templates")
 
             datadir = os.path.join(self.build.installdir, "usr/share/syncevolution")
-            if not os.access(datadir, os.F_OK):
+            if not self.build.installed and not os.access(datadir, os.F_OK):
                 # fallback works for bluetooth_products.ini but will fail for other files
                 datadir = os.path.join(sync.basedir, "src/dbus/server")
 
@@ -937,7 +852,7 @@ class SyncEvolutionTest(Action):
                 # Translations have no fallback, they must be installed. Leave unset
                 # if not found.
                 localedir = os.path.join(self.build.installdir, "usr/share/locale")
-                if os.access(localedir, os.F_OK):
+                if self.build.installed or os.access(localedir, os.F_OK):
                     installenv = installenv + \
                         ("SYNCEVOLUTION_LOCALE_DIR=%s " % localedir)
 
@@ -1002,13 +917,14 @@ class SyncEvolutionTest(Action):
             htaccess = file(os.path.join(resdir, ".htaccess"), "a")
             for f in os.listdir(actiondir):
                 if tocopy.match(f):
-                    error = copyLog(f in links and links[f] or f, resdir, htaccess, self.lineFilter)
+                    error = copyLog(f, resdir, htaccess, self.lineFilter)
                     if toconvert.match(f):
                         # also convert client-test log files to HTML
                         tohtml = os.path.join(resdir, f + ".html")
                         synclog2html = os.path.join(self.build.installdir, "usr", "bin", "synclog2html")
                         if not os.access(synclog2html, os.F_OK):
-                            synclog2html = os.path.join(sync.basedir, "src", "synclog2html")
+                            # Fall back to the uninstalled script from the source directory.
+                            synclog2html = os.path.join(sync.basedir, "test", "log2html.py")
                         os.system("%s %s >%s" % (synclog2html, f, tohtml))
                         basehtml = f + ".html"
                         if os.path.exists(basehtml):
@@ -1394,20 +1310,32 @@ if options.synthesistag:
 if options.activesyncdtag:
     source.append("--with-activesyncd-src=%s" % activesyncd.basedir)
 
-class InstallPackage(Action):
-    def __init__(self, name, package, runner):
+class InstallPackages(Action):
+    def __init__(self, name, packages, runner):
         """Runs configure from the src directory with the given arguments.
         runner is a prefix for the configure command and can be used to setup the
         environment."""
         Action.__init__(self, name)
-        self.package = package
+        self.packages = packages
         self.runner = runner
 
     def execute(self):
-        # Assume .deb file(s) here.
-        if self.package == '':
+        # Assume .deb file(s) here. No packages is okay, then they have to be installed
+        # outside of this script.
+        if not self.packages:
             raise Exception('No prebuilt packages available. Compilation failed?')
-        context.runCommand("%s env PATH=/sbin:/usr/sbin:$PATH fakeroot dpkg -i %s" % (self.runner, self.package))
+        debs = []
+        pkgs = []
+        for pkg in self.packages:
+            if pkg.endswith('.deb'):
+                debs.append(pkg)
+            else:
+                pkgs.append(pkg)
+        if debs:
+            context.runCommand("%s env PATH=/sbin:/usr/sbin:$PATH sudo dpkg -i %s" % (self.runner, ' '.join(debs)))
+        if pkgs:
+            context.runCommand("%s sudo apt update" % self.runner)
+            context.runCommand("%s sudo apt install -y %s" % (self.runner, ' '.join(pkgs)))
 
 # determine where binaries come from:
 # either compile anew or prebuilt
@@ -1425,17 +1353,23 @@ if options.prebuilt != None:
         compile.installdir = os.path.join(options.prebuilt, "../install")
         compile.installed = False
     else:
-        # Use dist package(s). Copy them first into our own work directory,
+        # Use dist package(s). Copy actual files first into our own work directory,
         # in case that runtest.py has access to it outside of a chroot but not
-        # the dpkg inside it.
+        # the dpkg inside it. Everything else is assumed to be a deb package name.
         pkgs = []
         for pkg in options.prebuilt.split():
-            shutil.copy(pkg, context.workdir)
-            pkgs.append(os.path.join(context.workdir, os.path.basename(pkg)))
-        compile = InstallPackage("compile", ' '.join(pkgs), options.shell)
-        compile.testdir = os.path.join(options.schrootdir, "usr", "lib", "syncevolution", "test")
+            if os.path.isfile(pkg):
+                shutil.copy(pkg, context.workdir)
+                pkgs.append(os.path.join(context.workdir, os.path.basename(pkg)))
+            else:
+                pkgs.append(pkg)
+        shell = options.simpleshell
+        if not shell:
+            shell = options.shell
+        compile = InstallPackages("compile", pkgs, shell)
+        compile.installdir = options.schrootdir or "/"
+        compile.testdir = os.path.join(compile.installdir, "usr", "lib", "syncevolution", "test")
         compile.builddir = compile.testdir
-        compile.installdir = options.schrootdir
         compile.installed = True
 else:
     if enabled.get("compile", None) == "no-tests":
@@ -1447,7 +1381,7 @@ else:
     compile = build("compile",
                     sync.basedir,
                     "%s %s" % (options.configure, " ".join(source)),
-                    options.shell,
+                    options.simpleshell or options.shell,
                     [ libsynthesis.name, sync.name ])
     compile.installed = False
 
