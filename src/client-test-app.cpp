@@ -175,7 +175,7 @@ public:
         /* check sources */
         const char *sourcelist = getenv("CLIENT_TEST_SOURCES");
         set<string> sources;
-        if (sourcelist) {
+        if (sourcelist && sourcelist[0]) {
             boost::split(sources, sourcelist, boost::is_any_of(","));
         } else {
             BOOST_FOREACH(const RegisterSyncSourceTest *test, m_configs) {
