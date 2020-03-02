@@ -61,7 +61,8 @@ public:
         auto argv = AllocStringArray(m_argv);
         auto env = AllocStringArray(m_env);
         LogRedirect::reset();
-        if (execve(argv[0], argv.get(), env.get())) {
+        SE_LOG_INFO(NULL, "restarting server binary %s", argv[0]);
+        if (execvpe(argv[0], argv.get(), env.get())) {
             SE_THROW(StringPrintf("restarting syncevo-dbus-server failed: %s", strerror(errno)));
         }
     }

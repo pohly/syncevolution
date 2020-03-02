@@ -1037,7 +1037,10 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                 # must be syncevo-dbus-server
                 res = match.group(1)
                 if 'syncevo-dbus-server' in res:
-                    return (res, pid)
+                    # We sometimes seemed to get symlinks listed in /proc/*/maps
+                    # that were gone when the binary restarted itself, which broke
+                    # TestFileNotify.testRestart. Normalizing the path avoids this.
+                    return (os.path.realpath(res), pid)
                 # not found, try children
                 for process in os.listdir('/proc'):
                     try:
