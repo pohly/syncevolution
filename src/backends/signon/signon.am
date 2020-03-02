@@ -49,9 +49,9 @@ else
 noinst_LTLIBRARIES += $(src_backends_signon_libs)
 endif
 
-src_backends_signon_common_libadd = $(SYNCEVOLUTION_LIBS) 
+src_backends_signon_common_libadd = $(SYNCEVOLUTION_LIBS) $(PCRECPP_LIBS)
 src_backends_signon_common_ldflags = -module -avoid-version
-src_backends_signon_common_cxxflags = $(SYNCEVOLUTION_CFLAGS)
+src_backends_signon_common_cxxflags = $(SYNCEVOLUTION_CFLAGS) $(PCRECPP_CFLAGS)
 src_backends_signon_common_cppflags = -DUSE_SIGNON -I$(top_srcdir)/test $(BACKEND_CPPFLAGS)
 src_backends_signon_common_dependencies = src/syncevo/libsyncevolution.la
 
