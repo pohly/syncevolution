@@ -65,7 +65,7 @@ createxdg "$XDG_DATA_HOME"
 # See https://launchpad.net/bugs/525642 and
 # https://bugzilla.redhat.com/show_bug.cgi?id=572137
 if [ -x /usr/bin/gnome-keyring-daemon ]; then
-    /usr/bin/gnome-keyring-daemon --start --foreground --components=secrets 1>&2 &
+    /usr/bin/gnome-keyring-daemon --start --foreground --components=secrets 2>gnome-keyring-daemon.txt 1>&2 &
     KEYRING_PID=$!
 fi
 

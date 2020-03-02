@@ -24,6 +24,7 @@ import unittest
 import subprocess
 import time
 import os
+import os.path
 import errno
 import signal
 import shutil
@@ -333,7 +334,9 @@ class Timeout:
     @classmethod
     def removeTimeout(cls, timeout):
         """Remove a timeout returned by a previous addTimeout call.
-        None and timeouts which have already fired are acceptable."""
+        None and timeouts which have already fired are acceptable,
+        but the latter may trigger a glib warning and thus should better be
+        avoided."""
         if timeout == None:
             pass
         elif isinstance(timeout, tuple):
@@ -2301,7 +2304,8 @@ class TestDBusSession(DBusUtil, unittest.TestCase):
             status, error, sources = session.GetStatus(utf8_strings=True)
             self.assertEqual(status, "idle")
         finally:
-            self.removeTimeout(t1)
+            if callback_called.get(1, "") != "callback()":
+                self.removeTimeout(t1)
 
 class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
     """Test session APIs that work with an empty server name. Thus, all of session APIs which
@@ -3167,7 +3171,10 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             timeout = glib.timeout_add(15 * 1000, testDone)
             loop.run()
         finally:
-            glib.source_remove(timeout)
+            # If the timeout has fired, then don't remove the timeout again to
+            # avoid the "Warning: Source ID 4274 was not found when attempting to remove it"
+            if not "test done" in DBusUtil.quit_events:
+                glib.source_remove(timeout)
         self.assertEqual(DBusUtil.quit_events, ["session " + self.auto_sync_session_path + " ready",
                                                 "session " + self.auto_sync_session_path + " done",
                                                 "test done"])
