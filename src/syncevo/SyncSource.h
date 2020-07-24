@@ -907,6 +907,7 @@ template<typename C, typename A1, typename ...A> class OperationWrapperSwitch<bo
                 if (res != sysync::LOCERR_AGAIN) {
                     const_cast<Pending &>(m_pending).erase(it);
                 }
+                exec = OPERATION_FINISHED;
             } else if (m_operation) {
                 try {
                     boost::variant<sysync::TSyError, C> newres = m_operation(a1, args...);
