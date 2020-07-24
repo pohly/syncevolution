@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 '''
  Copyright (C) 2009 Intel Corporation
@@ -41,12 +41,12 @@ def check (resultdir, serverlist,resulturi, srcdir, shellprefix, backenddir):
         servers = serverlist.split(",")
     else:
         servers = []
-    result = open("%s/nightly.xml" % resultdir,"w")
+    result = open("%s/nightly.xml" % resultdir,"w",encoding='utf-8')
     result.write('''<?xml version="1.0" encoding="utf-8" ?>\n''')
     result.write('''<nightly-test>\n''')
     indents=[space]
     if(os.path.isfile(resultdir+"/output.txt")==False):
-        print "main test output file not exist!"
+        print("main test output file not exist!")
     else:
         indents,cont = step1(resultdir,result,indents,resultdir,resulturi, shellprefix, srcdir)
         if (cont):
@@ -62,7 +62,7 @@ patchsummary = re.compile('^Subject: (?:\[PATCH.*?\] )?(.*)\n')
 patchauthor = re.compile('^From: (.*?) <.*>\n')
 def extractPatchSummary(patchfile):
     author = ""
-    for line in open(patchfile):
+    for line in open(patchfile, encoding='utf-8'):
         m = patchauthor.match(line)
         if m:
             author = m.group(1) + " - "
@@ -92,7 +92,7 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
         if m:
             name = m.group(1)
             result.write('   <source name="%s"><description><![CDATA[%s]]></description>\n' %
-                         (name, open(os.path.join(resultdir, source)).read()))
+                         (name, open(os.path.join(resultdir, source), encoding='utf-8').read()))
             result.write('       <patches>\n')
             for patch in files:
                 if fnmatch.fnmatch(patch, name + '-*.patch'):
@@ -106,16 +106,16 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     indent =indents[-1]+space
     indents.append(indent)
     result.write(indent+'''<cpuinfo>\n''')
-    fout=subprocess.check_output('cat /proc/cpuinfo|grep "model name" |uniq', shell=True)
+    fout=subprocess.check_output('cat /proc/cpuinfo|grep "model name" |uniq', shell=True).decode('utf-8')
     result.write(indent+fout)
     result.write(indent+'''</cpuinfo>\n''')
     result.write(indent+'''<memoryinfo>\n''')
-    fout=subprocess.check_output('cat /proc/meminfo|grep "Mem"', shell=True)
+    fout=subprocess.check_output('cat /proc/meminfo|grep "Mem"', shell=True).decode('utf-8')
     for s in fout.split('\n'):
         result.write(indent+s)
     result.write(indent+'''</memoryinfo>\n''')
     result.write(indent+'''<osinfo>\n''')
-    fout=subprocess.check_output('uname -osr'.split())
+    fout=subprocess.check_output('uname -osr'.split()).decode('utf-8')
     result.write(indent+fout)
     result.write(indent+'''</osinfo>\n''')
     if 'schroot' in shellprefix:
@@ -123,9 +123,9 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
         # Don't make assumption about the schroot invocation. Instead
         # extract the schroot name from the environment of the shell.
         name=subprocess.check_output(shellprefix + "sh -c 'echo $SCHROOT_CHROOT_NAME'",
-                                     shell=True)
+                                     shell=True).decode('utf-8')
         info = re.sub(r'schroot .*', 'schroot -i -c ' + name, shellprefix)
-        fout=subprocess.check_output(info, shell=True)
+        fout=subprocess.check_output(info, shell=True).decode('utf-8')
         s = []
         for line in fout.split('\n'):
             m = re.match(r'^\s+(Name|Description)\s+(.*)', line)
@@ -139,7 +139,7 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
     for lib in libs:
         try:
             fout=subprocess.check_output(shellprefix+' pkg-config --modversion '+lib +' |grep -v pkg-config',
-                                         shell=True)
+                                         shell=True).decode('utf-8')
             s = s + lib +': '+fout +'  '
         except subprocess.CalledProcessError:
             pass
@@ -160,10 +160,10 @@ def step1(resultdir, result, indents, dir, resulturi, shellprefix, srcdir):
            'dist':'dist'}
     for tag in tags:
         result.write(indent+'''<'''+tagsp[tag])
-        fout=subprocess.check_output('find `dirname '+input+'` -type d -name *'+tag, shell=True)
+        fout=subprocess.check_output('find `dirname '+input+'` -type d -name *'+tag, shell=True).decode('utf-8')
         s = fout.rpartition('/')[2].rpartition('\n')[0]
         result.write(' path ="'+s+'">')
-	'''check the result'''
+        '''check the result'''
         if 0 == os.system("grep -q '^"+tag+": .*: failed' "+input):
             result.write("failed")
         elif 0 == os.system ("grep -q '^"+tag+" successful' "+input):
@@ -198,9 +198,9 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
         cmd='sed -n '
         for server in servers:
             cmd+= '-e /^'+server+'/p '
-        print "Analyzing overall result %s" % (resultdir+'/output.txt')
+        print("Analyzing overall result %s" % (resultdir+'/output.txt'))
         cmd = cmd +resultdir+'/output.txt'
-        fout=subprocess.check_output(cmd, shell=True)
+        fout=subprocess.check_output(cmd, shell=True).decode('utf-8')
         for line in fout.split('\n'):
             for server in servers:
                 # Find first line with "foobar successful" or "foobar: <command failure>",
@@ -211,7 +211,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                         t=t.partition(':')[2]
                     t = t.strip()
                     if t != 'skipped: disabled in configuration':
-                        print "Result for %s: %s" % (server, t)
+                        print("Result for %s: %s" % (server, t))
                         params[server]=t
 
     indent =indents[-1]+space
@@ -267,7 +267,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
     haveSync = False
     for server in servers:
         matched = False
-	'''Only process servers listed in the input parametr'''
+        '''Only process servers listed in the input parametr'''
         for rserver in runservers:
             if(rserver.find('-')!= -1 and rserver.partition('-')[2] == server):
                 matched = True
@@ -292,7 +292,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 clientSync = re.compile(r' +Client::Sync::(.*?)::(?:(Suspend|Resend|Retry)::)?([^:]+)')
                 for source in ('file_task', 'file_event', 'file_contact', 'eds_contact', 'eds_event'):
                     cmd = shellprefix + " env LD_LIBRARY_PATH=%s/build-synthesis/src/.libs SYNCEVOLUTION_BACKEND_DIR=%s CLIENT_TEST_PEER_CAN_RESTART=1 CLIENT_TEST_RETRY=t CLIENT_TEST_RESEND=t CLIENT_TEST_SUSPEND=t CLIENT_TEST_SOURCES=%s %s/client-test -h" % (srcdir, backenddir, source, srcdir)
-                    fout=subprocess.check_output(cmd, shell=True)
+                    fout=subprocess.check_output(cmd, shell=True).decode('utf-8')
                     for line in fout.split('\n'):
                         m = clientSync.match(line)
                         if m:
@@ -323,10 +323,9 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                     result.write('result="%s"' % m.group(1))
             result.write('>\n')
             # sort files by creation time, to preserve run order
-            logs = map(lambda file: (os.stat(file).st_mtime, file),
-                       glob.glob(resultdir+'/'+rserver+'/*.txt'))
+            logs = [(os.stat(file).st_mtime, file) for file in glob.glob(resultdir+'/'+rserver+'/*.txt')]
             logs.sort()
-            logs = map(lambda entry: entry[1], logs)
+            logs = [entry[1] for entry in logs]
             logdic ={}
             logprefix ={}
             if server in ('dbus', 'pim'):
@@ -364,7 +363,7 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                 logfile = None
                 htmlfile = None
                 linetype = None
-                for line in open(rserver + "/output.txt"):
+                for line in open(rserver + "/output.txt", encoding='utf-8'):
                     m = test_start.search(line)
                     if m:
                         is_okay = True
@@ -378,12 +377,12 @@ def step2(resultdir, result, servers, indents, srcdir, shellprefix, backenddir):
                         newname = rserver + "/" + cl + "_" + func + ".txt"
                         if newname != name:
                             name = newname
-                            logfile = open(name, "w")
+                            logfile = open(name, "w", encoding='utf-8')
                             if htmlfile:
                                 htmlfile.write('</pre></body')
                                 htmlfile.close()
                                 htmlfile = None
-                            htmlfile = open(name + ".html", "w")
+                            htmlfile = open(name + ".html", "w", encoding='utf-8')
                             htmlfile.write('''<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
 <head>
@@ -465,7 +464,7 @@ span.hl { color: #c02020 }
                     # <path>/N7SyncEvo11CmdlineTestE_testConfigure.txt - C++ name mangling?
                     m = re.match(r'^(Client_Source_|Client_Sync_|N7SyncEvo\d+|[^_]*_)(.*)_([^_]*)\.txt', logname)
                     if not m or logname.endswith('.server.txt'):
-                        print "skipping", logname
+                        print("skipping", logname)
                         continue
                     # Client_Sync_, Client_Source_, SyncEvo_, ...
                     prefix = m.group(1)
@@ -482,7 +481,7 @@ span.hl { color: #c02020 }
                         casename = m.group(2) + '::' + casename
                         if '.' in casename:
                             # Ignore sub logs.
-                            print "skipping", logname
+                            print("skipping", logname)
                             continue
                     # Another special case: suspend/resend/retry uses an intermediate grouping
                     # which we can ignore because the name is repeated in the test case name.
@@ -495,12 +494,12 @@ span.hl { color: #c02020 }
                     #         # Ignore sub logs.
                     #         print "skipping", logname
                     #         continue
-                    print "analyzing log %s: prefix %s, subset %s, testcase %s" % (logname, prefix, format, casename)
+                    print("analyzing log %s: prefix %s, subset %s, testcase %s" % (logname, prefix, format, casename))
                     if(format not in logdic):
                         logdic[format]=[]
                     logdic[format].append((casename, log))
                     logprefix[format]=prefix
-            for format in logdic.keys():
+            for format in list(logdic.keys()):
                 indent +=space
                 indents.append(indent)
                 prefix = logprefix[format]
@@ -554,6 +553,6 @@ if(__name__ == "__main__"):
     if (len(sys.argv)!=7):
         # srcdir and basedir must be usable inside the shell started by shellprefix (typically
         # the chroot).
-        print "usage: python resultchecker.py resultdir servers resulturi srcdir shellprefix backenddir"
+        print("usage: python resultchecker.py resultdir servers resulturi srcdir shellprefix backenddir")
     else:
         check(*sys.argv[1:])
